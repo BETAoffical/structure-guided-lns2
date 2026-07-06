@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <random>
 #include <string>
 #include <utility>
@@ -30,6 +31,11 @@ struct SolverMetrics {
     int makespan = 0;
     int sum_of_costs = 0;
     double runtime_ms = 0.0;
+    double search_runtime_ms = 0.0;
+    double guidance_runtime_ms = 0.0;
+    int guidance_requests = 0;
+    int guidance_used = 0;
+    int guidance_fallbacks = 0;
 };
 
 enum class ConflictKind {
@@ -55,6 +61,7 @@ struct ConflictEvent {
 struct IterationTrace {
     int iteration = 0;
     std::pair<int, int> seed_conflict = {-1, -1};
+    std::vector<int> baseline_neighborhood;
     std::vector<int> neighborhood;
     int conflicting_pairs_before = 0;
     int conflicting_pairs_after = -1;
@@ -67,6 +74,13 @@ struct IterationTrace {
     std::vector<ConflictEvent> conflict_events_after;
     Paths neighborhood_paths_before;
     Paths neighborhood_paths_after;
+    bool guidance_requested = false;
+    bool guidance_used = false;
+    bool guidance_out_of_distribution = false;
+    double guidance_effective_probability = -1.0;
+    double guidance_nearest_distance = -1.0;
+    double guidance_runtime_ms = 0.0;
+    std::string guidance_fallback_reason;
 };
 
 struct SolveResult {
@@ -75,9 +89,32 @@ struct SolveResult {
     std::vector<IterationTrace> trace;
 };
 
+struct GuidanceRequest {
+    int iteration = 0;
+    std::pair<int, int> seed_conflict = {-1, -1};
+    std::vector<int> baseline_neighborhood;
+    std::vector<ConflictEvent> conflict_events;
+    Paths paths;
+};
+
+struct GuidanceResponse {
+    bool use_guidance = false;
+    bool out_of_distribution = false;
+    double effective_probability = -1.0;
+    double nearest_distance = -1.0;
+    std::vector<int> agents;
+    std::string fallback_reason;
+};
+
+using GuidanceCallback =
+    std::function<GuidanceResponse(const GuidanceRequest&)>;
+
 class Solver {
 public:
-    Solver(const Instance& instance, SolverOptions options);
+    Solver(
+        const Instance& instance,
+        SolverOptions options,
+        GuidanceCallback guidance = {});
 
     SolveResult solve();
     static std::vector<ConflictEvent> conflict_events(const Paths& paths);
@@ -109,6 +146,7 @@ private:
     SolverOptions options_;
     std::mt19937 random_;
     std::chrono::steady_clock::time_point deadline_;
+    GuidanceCallback guidance_;
 };
 
 void write_paths(

@@ -88,8 +88,14 @@ int future_goal_conflicts(
 
 }  // namespace
 
-Solver::Solver(const Instance& instance, SolverOptions options)
-    : instance_(instance), options_(options), random_(options.seed) {
+Solver::Solver(
+    const Instance& instance,
+    SolverOptions options,
+    GuidanceCallback guidance)
+    : instance_(instance),
+      options_(options),
+      random_(options.seed),
+      guidance_(std::move(guidance)) {
     options_.neighborhood_size =
         std::max(1, std::min(
                         options_.neighborhood_size,
@@ -396,6 +402,7 @@ SolveResult Solver::solve() {
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start_time)
                 .count();
+        result.metrics.search_runtime_ms = result.metrics.runtime_ms;
         return result;
     }
 
@@ -411,10 +418,86 @@ SolveResult Solver::solve() {
            result.metrics.iterations < options_.max_iterations &&
            !timed_out()) {
         ++result.metrics.iterations;
-        const auto selection = select_neighborhood(conflicts);
+        auto selection = select_neighborhood(conflicts);
         IterationTrace trace;
         trace.iteration = result.metrics.iterations;
         trace.seed_conflict = selection.seed_conflict;
+        trace.baseline_neighborhood = selection.agents;
+        if (guidance_) {
+            trace.guidance_requested = true;
+            ++result.metrics.guidance_requests;
+            const auto guidance_start =
+                std::chrono::steady_clock::now();
+            GuidanceResponse response;
+            try {
+                response = guidance_(
+                    {trace.iteration,
+                     selection.seed_conflict,
+                     selection.agents,
+                     current_events,
+                     result.paths});
+            } catch (const std::exception& error) {
+                response.fallback_reason =
+                    std::string("callback_error:") + error.what();
+            } catch (...) {
+                response.fallback_reason = "callback_error";
+            }
+            const auto guidance_duration =
+                std::chrono::steady_clock::now() - guidance_start;
+            deadline_ += guidance_duration;
+            trace.guidance_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    guidance_duration)
+                    .count();
+            result.metrics.guidance_runtime_ms +=
+                trace.guidance_runtime_ms;
+            trace.guidance_out_of_distribution =
+                response.out_of_distribution;
+            trace.guidance_effective_probability =
+                response.effective_probability;
+            trace.guidance_nearest_distance =
+                response.nearest_distance;
+            trace.guidance_fallback_reason =
+                response.fallback_reason;
+
+            bool valid = response.use_guidance;
+            const int expected_size = options_.neighborhood_size;
+            if (valid &&
+                static_cast<int>(response.agents.size()) != expected_size) {
+                valid = false;
+                trace.guidance_fallback_reason = "wrong_size";
+            }
+            std::vector<bool> seen(instance_.agents().size(), false);
+            for (const int agent : response.agents) {
+                if (agent < 0 ||
+                    agent >= static_cast<int>(seen.size()) ||
+                    seen[agent]) {
+                    valid = false;
+                    trace.guidance_fallback_reason = "invalid_agents";
+                    break;
+                }
+                seen[agent] = true;
+            }
+            if (valid &&
+                (!seen[selection.seed_conflict.first] ||
+                 !seen[selection.seed_conflict.second])) {
+                valid = false;
+                trace.guidance_fallback_reason = "seed_pair_missing";
+            }
+            if (valid) {
+                selection.agents = std::move(response.agents);
+                trace.guidance_used = true;
+                ++result.metrics.guidance_used;
+            } else {
+                if (trace.guidance_fallback_reason.empty()) {
+                    trace.guidance_fallback_reason =
+                        response.out_of_distribution
+                            ? "out_of_distribution"
+                            : "guidance_declined";
+                }
+                ++result.metrics.guidance_fallbacks;
+            }
+        }
         trace.neighborhood = selection.agents;
         trace.conflict_events_before = current_events;
         for (const int agent : selection.agents) {
@@ -478,7 +561,10 @@ SolveResult Solver::solve() {
     result.metrics.runtime_ms =
         std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - start_time)
-            .count();
+                .count();
+    result.metrics.search_runtime_ms =
+        result.metrics.runtime_ms -
+        result.metrics.guidance_runtime_ms;
     return result;
 }
 
@@ -581,6 +667,28 @@ void write_trace_jsonl(
         throw std::runtime_error("cannot write trace: " + path);
     }
     output << std::boolalpha << std::fixed << std::setprecision(3);
+    const int schema_version =
+        result.metrics.guidance_requests > 0 ? 3 : 2;
+    const auto write_int_array = [&](const std::vector<int>& values) {
+        output << '[';
+        for (std::size_t index = 0; index < values.size(); ++index) {
+            if (index > 0) {
+                output << ',';
+            }
+            output << values[index];
+        }
+        output << ']';
+    };
+    const auto write_json_string = [&](const std::string& value) {
+        output << '"';
+        for (const char character : value) {
+            if (character == '"' || character == '\\') {
+                output << '\\';
+            }
+            output << character;
+        }
+        output << '"';
+    };
     const auto write_path_json = [&](const Path& value) {
         output << '[';
         for (std::size_t index = 0; index < value.size(); ++index) {
@@ -637,21 +745,17 @@ void write_trace_jsonl(
             output << ']';
         };
     for (const auto& trace : result.trace) {
-        output << "{\"schema_version\":2,\"event_type\":\"iteration\""
+        output << "{\"schema_version\":" << schema_version
+               << ",\"event_type\":\"iteration\""
                << ",\"solver_seed\":" << options.seed
                << ",\"iteration\":" << trace.iteration
                << ",\"seed_conflict\":[" << trace.seed_conflict.first
                << ',' << trace.seed_conflict.second << ']'
-               << ",\"neighborhood\":[";
-        for (std::size_t index = 0;
-             index < trace.neighborhood.size();
-             ++index) {
-            if (index > 0) {
-                output << ',';
-            }
-            output << trace.neighborhood[index];
-        }
-        output << ']'
+               << ",\"baseline_neighborhood\":";
+        write_int_array(trace.baseline_neighborhood);
+        output << ",\"neighborhood\":";
+        write_int_array(trace.neighborhood);
+        output
                << ",\"conflicting_pairs_before\":"
                << trace.conflicting_pairs_before
                << ",\"conflicting_pairs_after\":"
@@ -664,7 +768,20 @@ void write_trace_jsonl(
                << ",\"accepted\":" << trace.accepted
                << ",\"replan_runtime_ms\":"
                << trace.replan_runtime_ms
-               << ",\"conflict_events_before\":";
+               << ",\"guidance_requested\":"
+               << trace.guidance_requested
+               << ",\"guidance_used\":" << trace.guidance_used
+               << ",\"guidance_out_of_distribution\":"
+               << trace.guidance_out_of_distribution
+               << ",\"guidance_effective_probability\":"
+               << trace.guidance_effective_probability
+               << ",\"guidance_nearest_distance\":"
+               << trace.guidance_nearest_distance
+               << ",\"guidance_runtime_ms\":"
+               << trace.guidance_runtime_ms
+               << ",\"guidance_fallback_reason\":";
+        write_json_string(trace.guidance_fallback_reason);
+        output << ",\"conflict_events_before\":";
         write_conflict_events(trace.conflict_events_before);
         output << ",\"conflict_events_after\":";
         write_conflict_events(trace.conflict_events_after);
@@ -679,7 +796,8 @@ void write_trace_jsonl(
         output << "}\n";
     }
     const auto& metrics = result.metrics;
-    output << "{\"schema_version\":2,\"event_type\":\"summary\""
+    output << "{\"schema_version\":" << schema_version
+           << ",\"event_type\":\"summary\""
            << ",\"solver_seed\":" << options.seed
            << ",\"success\":" << metrics.success
            << ",\"initial_conflicting_pairs\":"
@@ -691,7 +809,16 @@ void write_trace_jsonl(
            << metrics.accepted_iterations
            << ",\"makespan\":" << metrics.makespan
            << ",\"sum_of_costs\":" << metrics.sum_of_costs
-           << ",\"runtime_ms\":" << metrics.runtime_ms << "}\n";
+           << ",\"runtime_ms\":" << metrics.runtime_ms
+           << ",\"search_runtime_ms\":"
+           << metrics.search_runtime_ms
+           << ",\"guidance_runtime_ms\":"
+           << metrics.guidance_runtime_ms
+           << ",\"guidance_requests\":"
+           << metrics.guidance_requests
+           << ",\"guidance_used\":" << metrics.guidance_used
+           << ",\"guidance_fallbacks\":"
+           << metrics.guidance_fallbacks << "}\n";
 }
 
 }  // namespace lns2

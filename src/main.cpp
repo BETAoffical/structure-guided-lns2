@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -22,7 +23,104 @@ void usage(const char* executable) {
         << "Usage: " << executable
         << " --instance FILE [--seed N] [--neighborhood N]"
            " [--iterations N] [--time-limit-ms N] [--paths FILE]"
-           " [--trace FILE]\n";
+           " [--trace FILE] [--guidance-stdio]\n";
+}
+
+lns2::GuidanceResponse request_guidance(
+    const lns2::Instance& instance,
+    const lns2::GuidanceRequest& request) {
+    std::cout << "GUIDANCE_REQUEST {\"iteration\":"
+              << request.iteration << ",\"seed_conflict\":["
+              << request.seed_conflict.first << ','
+              << request.seed_conflict.second
+              << "],\"baseline_neighborhood\":[";
+    for (std::size_t index = 0;
+         index < request.baseline_neighborhood.size();
+         ++index) {
+        if (index > 0) {
+            std::cout << ',';
+        }
+        std::cout << request.baseline_neighborhood[index];
+    }
+    std::cout << "],\"conflict_events\":[";
+    for (std::size_t index = 0;
+         index < request.conflict_events.size();
+         ++index) {
+        if (index > 0) {
+            std::cout << ',';
+        }
+        const auto& event = request.conflict_events[index];
+        std::cout << "{\"agents\":[" << event.first_agent << ','
+                  << event.second_agent << "],\"timestep\":"
+                  << event.timestep << ",\"type\":\""
+                  << (event.kind == lns2::ConflictKind::Vertex
+                          ? "vertex"
+                          : "edge_swap")
+                  << "\",\"cells\":[";
+        for (std::size_t cell_index = 0;
+             cell_index < event.cells.size();
+             ++cell_index) {
+            if (cell_index > 0) {
+                std::cout << ',';
+            }
+            const auto [row, col] =
+                instance.coordinate(event.cells[cell_index]);
+            std::cout << '[' << row << ',' << col << ']';
+        }
+        std::cout << "]}";
+    }
+    std::cout << "],\"paths\":[";
+    for (std::size_t agent = 0; agent < request.paths.size(); ++agent) {
+        if (agent > 0) {
+            std::cout << ',';
+        }
+        std::cout << '[';
+        for (std::size_t index = 0;
+             index < request.paths[agent].size();
+             ++index) {
+            if (index > 0) {
+                std::cout << ',';
+            }
+            const auto [row, col] =
+                instance.coordinate(request.paths[agent][index]);
+            std::cout << '[' << row << ',' << col << ']';
+        }
+        std::cout << ']';
+    }
+    std::cout << "]}" << std::endl;
+
+    std::string line;
+    if (!std::getline(std::cin, line)) {
+        return {false, false, -1.0, -1.0, {}, "guidance_eof"};
+    }
+    std::istringstream response(line);
+    std::string tag;
+    response >> tag;
+    if (tag != "GUIDANCE") {
+        return {false, false, -1.0, -1.0, {}, "invalid_response"};
+    }
+    int use_guidance = 0;
+    int out_of_distribution = 0;
+    std::string reason;
+    lns2::GuidanceResponse result;
+    if (!(response >> use_guidance
+          >> result.effective_probability
+          >> result.nearest_distance
+          >> out_of_distribution
+          >> reason)) {
+        result.fallback_reason = "invalid_response";
+        return result;
+    }
+    result.use_guidance = use_guidance != 0;
+    result.out_of_distribution = out_of_distribution != 0;
+    if (reason != "-") {
+        result.fallback_reason = reason;
+    }
+    int agent = -1;
+    while (response >> agent) {
+        result.agents.push_back(agent);
+    }
+    return result;
 }
 
 }  // namespace
@@ -31,6 +129,7 @@ int main(int argc, char** argv) {
     std::string instance_path;
     std::string output_path;
     std::string trace_path;
+    bool guidance_stdio = false;
     lns2::SolverOptions options;
 
     try {
@@ -51,6 +150,8 @@ int main(int argc, char** argv) {
                 output_path = argv[++i];
             } else if (option == "--trace" && i + 1 < argc) {
                 trace_path = argv[++i];
+            } else if (option == "--guidance-stdio") {
+                guidance_stdio = true;
             } else {
                 usage(argv[0]);
                 return 2;
@@ -62,11 +163,45 @@ int main(int argc, char** argv) {
         }
 
         const auto instance = lns2::Instance::load(instance_path);
-        lns2::Solver solver(instance, options);
+        lns2::GuidanceCallback guidance;
+        if (guidance_stdio) {
+            guidance = [&](const lns2::GuidanceRequest& request) {
+                return request_guidance(instance, request);
+            };
+        }
+        lns2::Solver solver(instance, options, guidance);
         const auto result = solver.solve();
 
-        std::cout << std::boolalpha << std::fixed << std::setprecision(3)
-                  << "{\n"
+        std::cout << std::boolalpha << std::fixed << std::setprecision(3);
+        if (guidance_stdio) {
+            std::cout << "RESULT {"
+                      << "\"success\":" << result.metrics.success
+                      << ",\"initial_conflicting_pairs\":"
+                      << result.metrics.initial_conflicting_pairs
+                      << ",\"final_conflicting_pairs\":"
+                      << result.metrics.final_conflicting_pairs
+                      << ",\"iterations\":"
+                      << result.metrics.iterations
+                      << ",\"accepted_iterations\":"
+                      << result.metrics.accepted_iterations
+                      << ",\"makespan\":" << result.metrics.makespan
+                      << ",\"sum_of_costs\":"
+                      << result.metrics.sum_of_costs
+                      << ",\"runtime_ms\":"
+                      << result.metrics.runtime_ms
+                      << ",\"search_runtime_ms\":"
+                      << result.metrics.search_runtime_ms
+                      << ",\"guidance_runtime_ms\":"
+                      << result.metrics.guidance_runtime_ms
+                      << ",\"guidance_requests\":"
+                      << result.metrics.guidance_requests
+                      << ",\"guidance_used\":"
+                      << result.metrics.guidance_used
+                      << ",\"guidance_fallbacks\":"
+                      << result.metrics.guidance_fallbacks
+                      << "}\n";
+        } else {
+            std::cout << "{\n"
                   << "  \"success\": " << result.metrics.success << ",\n"
                   << "  \"initial_conflicting_pairs\": "
                   << result.metrics.initial_conflicting_pairs << ",\n"
@@ -80,7 +215,19 @@ int main(int argc, char** argv) {
                   << "  \"sum_of_costs\": "
                   << result.metrics.sum_of_costs << ",\n"
                   << "  \"runtime_ms\": " << result.metrics.runtime_ms
+                  << ",\n"
+                  << "  \"search_runtime_ms\": "
+                  << result.metrics.search_runtime_ms << ",\n"
+                  << "  \"guidance_runtime_ms\": "
+                  << result.metrics.guidance_runtime_ms << ",\n"
+                  << "  \"guidance_requests\": "
+                  << result.metrics.guidance_requests << ",\n"
+                  << "  \"guidance_used\": "
+                  << result.metrics.guidance_used << ",\n"
+                  << "  \"guidance_fallbacks\": "
+                  << result.metrics.guidance_fallbacks
                   << "\n}\n";
+        }
 
         if (!output_path.empty()) {
             lns2::write_paths(

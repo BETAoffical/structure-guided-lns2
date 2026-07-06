@@ -13,7 +13,7 @@ modify or import the previous `LNS2-RL` repository.
 | 2 | Complete | Trace V2 and raw solver-run collection |
 | 3 | Complete | Structured LNS repair cases and conflict heatmaps |
 | 4 | Complete | Feature normalization, kNN retrieval, and offline guidance |
-| 5 | Not started | Planner integration and comparative evaluation |
+| 5 | Complete (negative result) | Closed-loop Repair guidance and paired evaluation |
 
 No RL or learned neighborhood policy is used in the current feasibility
 experiment.
@@ -159,6 +159,46 @@ Stage 4 predicts sparse conflict heatmaps, repair effectiveness, and
 transferable neighborhood role templates. It does not map those roles to
 concrete Agents or demonstrate an improvement in solver performance. Those
 experiments belong to Stage 5. See [Stage 4](docs/STAGE4.md).
+
+## Stage 5: guided simplified LNS2
+
+Stage 5 compares the existing simplified LNS2 baseline with a closed-loop
+Repair-guided variant. It does not claim to reproduce or improve the complete
+official MAPF-LNS2 solver.
+
+Validation selects the confidence threshold:
+
+```powershell
+python scripts/run_stage5_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --index build/stage4-index `
+  --evaluation build/stage4-evaluation `
+  --split validation `
+  --seeds 1,2,3 `
+  --thresholds 0.8 `
+  --output build/stage5-validation-paired
+```
+
+Test uses only the frozen Validation configuration:
+
+```powershell
+python scripts/run_stage5_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --index build/stage4-index `
+  --evaluation build/stage4-evaluation `
+  --split test `
+  --seeds 1,2,3 `
+  --config build/stage5-validation-paired/selected_config.json `
+  --output build/stage5-test
+```
+
+On 144 paired Test runs, both strategies solved 128 runs and retained 77
+conflicting pairs in total. Guided LNS2 recorded 6 paired wins, 4 losses, and
+134 ties; the exact sign-test p-value was `0.754`. The current Repair guidance
+therefore does not show a statistically significant overall improvement. See
+[Stage 5](docs/STAGE5.md).
 
 ## Reproducibility
 

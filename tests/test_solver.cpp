@@ -151,6 +151,65 @@ void run_case(
     }
 }
 
+void test_guidance_boundary() {
+    const auto path =
+        std::string(TEST_DATA_DIR) + "/lns_required.mapf";
+    const auto instance = lns2::Instance::load(path);
+    lns2::SolverOptions options;
+    options.seed = 1;
+    options.neighborhood_size = 2;
+    options.max_iterations = 100;
+    options.time_limit_ms = 3000;
+
+    lns2::Solver guided(
+        instance,
+        options,
+        [](const lns2::GuidanceRequest& request) {
+            lns2::GuidanceResponse response;
+            response.use_guidance = true;
+            response.effective_probability = 0.9;
+            response.nearest_distance = 0.1;
+            response.agents = request.baseline_neighborhood;
+            return response;
+        });
+    const auto guided_result = guided.solve();
+    require(guided_result.metrics.success, "guided boundary did not solve");
+    require(
+        guided_result.metrics.guidance_requests > 0 &&
+            guided_result.metrics.guidance_used ==
+                guided_result.metrics.guidance_requests &&
+            guided_result.metrics.guidance_fallbacks == 0,
+        "valid guidance was not used");
+    require(
+        guided_result.trace.front().guidance_requested &&
+            guided_result.trace.front().guidance_used,
+        "guided trace omitted guidance status");
+
+    lns2::Solver invalid(
+        instance,
+        options,
+        [](const lns2::GuidanceRequest& request) {
+            lns2::GuidanceResponse response;
+            response.use_guidance = true;
+            response.agents = {
+                request.seed_conflict.first,
+                request.seed_conflict.first};
+            return response;
+        });
+    const auto fallback_result = invalid.solve();
+    require(fallback_result.metrics.success, "fallback boundary did not solve");
+    require(
+        fallback_result.metrics.guidance_requests > 0 &&
+            fallback_result.metrics.guidance_used == 0 &&
+            fallback_result.metrics.guidance_fallbacks ==
+                fallback_result.metrics.guidance_requests,
+        "invalid guidance did not fall back");
+    require(
+        fallback_result.trace.front().neighborhood ==
+            fallback_result.trace.front().baseline_neighborhood,
+        "fallback changed the baseline neighborhood");
+}
+
 }  // namespace
 
 int main() {
@@ -158,6 +217,7 @@ int main() {
         run_case("crossing", 2, 100);
         run_case("lns_required", 2, 100, true, 1);
         run_case("warehouse_small", 6, 500);
+        test_guidance_boundary();
         std::cout << "all tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
