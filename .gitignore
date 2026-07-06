@@ -1,0 +1,6 @@
+/build/
+/data/
+__pycache__/
+*.py[cod]
+*.txt
+!CMakeLists.txt
