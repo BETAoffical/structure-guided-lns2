@@ -12,7 +12,7 @@ modify or import the previous `LNS2-RL` repository.
 | 1 | Complete (MVP active) | Three controlled layouts and two task scenarios |
 | 2 | Complete | Trace V2 and raw solver-run collection |
 | 3 | Complete | Structured LNS repair cases and conflict heatmaps |
-| 4 | Not started | Feature normalization, kNN retrieval, and guidance |
+| 4 | Complete | Feature normalization, kNN retrieval, and offline guidance |
 | 5 | Not started | Planner integration and comparative evaluation |
 
 No RL or learned neighborhood policy is used in the current feasibility
@@ -119,6 +119,46 @@ python scripts/build_repair_experience.py `
 The output contains iteration-level repair cases, run-level aggregates,
 sparse conflict heatmaps, Agent descriptors, and successful/neutral/failed
 neighborhood labels. See [Stage 3](docs/STAGE3.md).
+
+## Stage 4: offline retrieval
+
+Collect and convert Validation queries without adding them to memory:
+
+```powershell
+python scripts/collect_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --split validation `
+  --seeds 1,2,3 `
+  --neighborhood 6 `
+  --iterations 500 `
+  --time-limit-ms 5000 `
+  --output build/stage4-validation-collection
+
+python scripts/build_query_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage4-validation-collection `
+  --split validation `
+  --output build/stage4-validation-experience
+```
+
+Build the Train-only index and evaluate it:
+
+```powershell
+python scripts/build_retrieval_index.py `
+  --memory build/repair-experience `
+  --output build/stage4-index
+
+python scripts/evaluate_retrieval.py `
+  --index build/stage4-index `
+  --queries build/stage4-validation-experience `
+  --output build/stage4-evaluation
+```
+
+Stage 4 predicts sparse conflict heatmaps, repair effectiveness, and
+transferable neighborhood role templates. It does not map those roles to
+concrete Agents or demonstrate an improvement in solver performance. Those
+experiments belong to Stage 5. See [Stage 4](docs/STAGE4.md).
 
 ## Reproducibility
 

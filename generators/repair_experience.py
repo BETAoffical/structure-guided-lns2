@@ -267,14 +267,15 @@ def _agent_descriptors(
     return result
 
 
-def build_repair_experience(
+def _build_experience(
     dataset: str | Path,
     collection: str | Path,
     output: str | Path,
-    split: str = "train",
+    split: str,
+    usage: str,
 ) -> dict[str, Any]:
-    if split != "train":
-        raise ValueError("repair experience may only be built from train")
+    if usage not in {"memory", "evaluation"}:
+        raise ValueError(f"unsupported experience usage: {usage}")
     dataset_root = Path(dataset).resolve()
     collection_root = Path(collection).resolve()
     output_root = Path(output).resolve()
@@ -302,7 +303,9 @@ def build_repair_experience(
 
     for run in collection_rows:
         if run["split"] != split:
-            raise ValueError("collection contains a non-train run")
+            raise ValueError(
+                f"collection contains a run outside split {split}"
+            )
         if run["status"] == "error" or run.get("result") is None:
             raise ValueError("collection contains an invalid solver run")
         task_id = str(run["task_id"])
@@ -443,6 +446,7 @@ def build_repair_experience(
             repair_cases.append(
                 {
                     "schema_version": 1,
+                    "usage": usage,
                     "case_id": (
                         f"{run_id}__iteration_"
                         f"{int(iteration['iteration']):04d}"
@@ -497,6 +501,7 @@ def build_repair_experience(
         run_cases.append(
             {
                 "schema_version": 1,
+                "usage": usage,
                 "run_id": run_id,
                 "split": split,
                 "map_id": map_id,
@@ -534,6 +539,7 @@ def build_repair_experience(
         "schema_version": 1,
         "source_trace_schema_version": 2,
         "split": split,
+        "usage": usage,
         "run_count": len(run_cases),
         "repair_case_count": len(repair_cases),
         "map_count": len({row["map_id"] for row in run_cases}),
@@ -552,3 +558,39 @@ def build_repair_experience(
         encoding="utf-8",
     )
     return summary
+
+
+def build_repair_experience(
+    dataset: str | Path,
+    collection: str | Path,
+    output: str | Path,
+    split: str = "train",
+) -> dict[str, Any]:
+    if split != "train":
+        raise ValueError("repair experience may only be built from train")
+    return _build_experience(
+        dataset=dataset,
+        collection=collection,
+        output=output,
+        split=split,
+        usage="memory",
+    )
+
+
+def build_query_experience(
+    dataset: str | Path,
+    collection: str | Path,
+    output: str | Path,
+    split: str = "validation",
+) -> dict[str, Any]:
+    if split != "validation":
+        raise ValueError(
+            "query experience may only be built from validation"
+        )
+    return _build_experience(
+        dataset=dataset,
+        collection=collection,
+        output=output,
+        split=split,
+        usage="evaluation",
+    )

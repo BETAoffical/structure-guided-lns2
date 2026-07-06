@@ -48,5 +48,6 @@ and per-Agent selection/effectiveness counts.
 
 ## Data boundary
 
-The builder rejects any split other than `train`. Validation remains reserved
-for Stage 4 retrieval tuning, and Test remains reserved for final evaluation.
+The memory builder rejects any split other than `train`. Stage 4 uses a
+separate evaluation builder for Validation, and Test remains reserved for
+final evaluation.
