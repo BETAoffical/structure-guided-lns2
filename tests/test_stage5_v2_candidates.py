@@ -10,6 +10,8 @@ from generators.candidate_retrieval import (
     evaluate_candidate_retrieval,
 )
 from generators.candidate_guided_solver import CandidateGuide
+from generators.candidate_diagnostics import build_candidate_diagnostics
+from generators.candidate_experience import _aggregate_order_outcomes
 
 
 def _write_json(path: Path, value: dict) -> None:
@@ -64,6 +66,7 @@ def _cases(split: str, state_count: int) -> list[dict]:
                     "task_id": f"{split}_task_{state:02d}",
                     "solver_seed": 1,
                     "candidate_index": candidate,
+                    "generator": f"generator_{candidate}",
                     "features": features,
                     "outcome": {
                         "candidate_valid": valid,
@@ -268,6 +271,109 @@ class CandidateRetrievalTests(unittest.TestCase):
                     index,
                     config,
                 )
+
+    def test_order_trial_outcomes_are_aggregated(self) -> None:
+        aggregate = _aggregate_order_outcomes(
+            [
+                {
+                    "candidate_valid": True,
+                    "conflicting_pairs_before": 5,
+                    "conflicting_pairs_after": 3,
+                    "conflict_reduction": 2,
+                    "sum_of_costs_before": 100,
+                    "sum_of_costs_after": 98,
+                    "cost_improvement": 2,
+                    "replan_runtime_ms": 10.0,
+                    "total_runtime_ms": 11.0,
+                },
+                {
+                    "candidate_valid": True,
+                    "conflicting_pairs_before": 5,
+                    "conflicting_pairs_after": 5,
+                    "conflict_reduction": 0,
+                    "sum_of_costs_before": 100,
+                    "sum_of_costs_after": 99,
+                    "cost_improvement": 1,
+                    "replan_runtime_ms": 12.0,
+                    "total_runtime_ms": 13.0,
+                },
+                {
+                    "candidate_valid": False,
+                    "conflicting_pairs_before": 5,
+                    "conflicting_pairs_after": -1,
+                    "conflict_reduction": None,
+                    "sum_of_costs_before": 100,
+                    "sum_of_costs_after": -1,
+                    "cost_improvement": None,
+                    "replan_runtime_ms": 8.0,
+                    "total_runtime_ms": 9.0,
+                },
+            ]
+        )
+        self.assertTrue(aggregate["candidate_valid"])
+        self.assertAlmostEqual(aggregate["valid_probability"], 2 / 3)
+        self.assertAlmostEqual(aggregate["conflict_reduction"], 2 / 3)
+        self.assertAlmostEqual(
+            aggregate["mean_valid_conflict_reduction"], 1.0
+        )
+        self.assertAlmostEqual(aggregate["cost_improvement"], 1.0)
+        self.assertEqual(aggregate["order_trial_count"], 3)
+
+    def test_candidate_diagnostics_reports_oracle_and_order_noise(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            memory = root / "memory"
+            output = root / "diagnostics"
+            cases = _cases("train", 3)
+            order_cases = []
+            for case in cases[:8]:
+                for seed in (0, 1):
+                    order_cases.append(
+                        {
+                            **case,
+                            "case_id": (
+                                f"{case['case_id']}__order_{seed:04d}"
+                            ),
+                            "order_seed": seed,
+                            "outcome": {
+                                **case["outcome"],
+                                "conflict_reduction": (
+                                    (case["outcome"][
+                                        "conflict_reduction"
+                                    ] or 0)
+                                    + seed
+                                ),
+                            },
+                        }
+                    )
+            _write_jsonl(memory / "candidate_cases.jsonl", cases)
+            _write_jsonl(
+                memory / "candidate_order_cases.jsonl", order_cases
+            )
+            _write_json(
+                memory / "candidate_summary.json",
+                {"split": "train", "usage": "memory"},
+            )
+
+            summary = build_candidate_diagnostics(memory, output)
+            self.assertEqual(summary["oracle"]["state_count"], 3)
+            self.assertGreater(
+                summary["oracle"][
+                    "states_with_better_alternative_ratio"
+                ],
+                0.0,
+            )
+            self.assertGreater(
+                summary["order_noise"][
+                    "candidate_with_multiple_orders"
+                ],
+                0,
+            )
+            self.assertTrue(
+                (output / "candidate_diagnostics.md").is_file()
+            )
 
 
 if __name__ == "__main__":

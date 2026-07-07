@@ -222,6 +222,7 @@ void test_candidate_trials_are_isolated_and_deterministic() {
     options.time_limit_ms = 3000;
     options.candidate_count = 8;
     options.candidate_trial_limit_ms = 200;
+    options.candidate_replan_order_seeds = {0, 1, 2};
 
     options.seed = 1;
     options.candidate_mode = lns2::CandidateMode::Disabled;
@@ -259,10 +260,10 @@ void test_candidate_trials_are_isolated_and_deterministic() {
             "candidate trials changed a main LNS decision");
         require(
             trial.paths_before.size() == instance.agents().size(),
-            "Trace V4 omitted full current paths");
+            "Trace V5 omitted full current paths");
         require(
             trial.candidate_trials.size() == 8,
-            "Trace V4 did not contain eight candidates");
+            "Trace V5 did not contain eight candidates");
         std::set<std::vector<int>> unique_sets;
         for (std::size_t candidate_index = 0;
              candidate_index < trial.candidate_trials.size();
@@ -275,11 +276,14 @@ void test_candidate_trials_are_isolated_and_deterministic() {
             std::sort(key.begin(), key.end());
             require(
                 unique_sets.insert(key).second,
-                "Trace V4 contains duplicate candidate sets");
+                "Trace V5 contains duplicate candidate sets");
             require(
                 candidate.agents.size() == 6 &&
                     candidate.replan_order.size() == 6,
                 "candidate has the wrong size");
+            require(
+                candidate.order_trials.size() == 3,
+                "candidate did not record three order trials");
             require(
                 std::find(
                     candidate.agents.begin(),
@@ -308,6 +312,33 @@ void test_candidate_trials_are_isolated_and_deterministic() {
                     candidate.sum_of_costs_after ==
                         repeated_candidate.sum_of_costs_after,
                 "candidate non-timing fields are not deterministic");
+            for (std::size_t order_index = 0;
+                 order_index < candidate.order_trials.size();
+                 ++order_index) {
+                const auto& order_trial =
+                    candidate.order_trials[order_index];
+                const auto& repeated_order_trial =
+                    repeated_candidate.order_trials[order_index];
+                auto order_key = order_trial.replan_order;
+                std::sort(order_key.begin(), order_key.end());
+                require(
+                    order_key == key &&
+                        order_trial.trial_performed,
+                    "candidate order trial is invalid or skipped");
+                require(
+                    order_trial.order_seed ==
+                            static_cast<int>(order_index) &&
+                        order_trial.replan_order ==
+                            repeated_order_trial.replan_order &&
+                        order_trial.candidate_valid ==
+                            repeated_order_trial.candidate_valid &&
+                        order_trial.conflicting_pairs_after ==
+                            repeated_order_trial
+                                .conflicting_pairs_after &&
+                        order_trial.sum_of_costs_after ==
+                            repeated_order_trial.sum_of_costs_after,
+                    "candidate order trial is not deterministic");
+            }
         }
     }
 }

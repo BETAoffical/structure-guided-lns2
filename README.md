@@ -305,6 +305,37 @@ still did not show an aggregate solver improvement: candidate-guided solved
 104/144 versus 106/144 for the controlled baseline, with 10 guided wins, 9
 controlled wins, and 125 ties.
 
+Stage 5 v2.2 reduces label noise by collecting three deterministic replanning
+orders per candidate:
+
+```powershell
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v2-2-train-collection `
+  --split train `
+  --candidate-replan-order-seeds 0,1,2
+
+python scripts/build_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v2-2-train-collection `
+  --output build/stage5-v2-2-train-experience `
+  --split train
+
+python scripts/diagnose_candidate_experience.py `
+  --memory build/stage5-v2-2-train-experience `
+  --dataset build/feasibility-dataset `
+  --output build/stage5-v2-2-candidate-diagnostics
+```
+
+V2.2 writes Trace V5, `candidate_cases.jsonl` with aggregated expected
+labels, and `candidate_order_cases.jsonl` with the per-order labels.
+Validation improved again (`dedup20` top1 gain `0.414`, oracle regret
+`0.945`), but Test still did not improve overall: candidate-guided solved
+106/144 versus 107/144 for the controlled baseline, with 8 guided wins, 12
+controlled wins, and 124 ties. Dense and compartmentalized cases improved
+locally; regular beltway and clustered tasks still regressed.
+
 ## Reproducibility
 
 Map, task, and solver decisions are deterministic for a fixed implementation,

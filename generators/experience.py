@@ -18,6 +18,34 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def _result_from_trace(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    rows = _read_jsonl(path)
+    if not rows or rows[-1].get("event_type") != "summary":
+        return None
+    summary = rows[-1]
+    required = {
+        "success",
+        "initial_conflicting_pairs",
+        "final_conflicting_pairs",
+        "iterations",
+        "accepted_iterations",
+        "makespan",
+        "sum_of_costs",
+        "runtime_ms",
+        "search_runtime_ms",
+        "guidance_runtime_ms",
+        "counterfactual_runtime_ms",
+        "guidance_requests",
+        "guidance_used",
+        "guidance_fallbacks",
+    }
+    if not required.issubset(summary):
+        return None
+    return {key: summary[key] for key in sorted(required)}
+
+
 def collect_experience(
     dataset: str | Path,
     solver: str | Path,
@@ -31,6 +59,7 @@ def collect_experience(
     candidate_trials: bool = False,
     candidate_count: int = 8,
     candidate_trial_limit_ms: int = 2000,
+    candidate_replan_order_seeds: list[int] | None = None,
 ) -> dict[str, Any]:
     dataset_root = Path(dataset).resolve()
     solver_path = Path(solver).resolve()
@@ -57,6 +86,14 @@ def collect_experience(
     solver_seeds = [int(value) for value in (seeds or [seed])]
     if not solver_seeds or len(solver_seeds) != len(set(solver_seeds)):
         raise ValueError("solver seeds must be non-empty and unique")
+    replan_order_seeds = [
+        int(value) for value in (candidate_replan_order_seeds or [0])
+    ]
+    if (
+        not replan_order_seeds
+        or len(replan_order_seeds) != len(set(replan_order_seeds))
+    ):
+        raise ValueError("candidate replan order seeds must be unique")
 
     for row in rows:
         task_id = str(row["task_id"])
@@ -67,6 +104,46 @@ def collect_experience(
             trace_path = (
                 trace_root / f"{task_id}__seed_{solver_seed:04d}.jsonl"
             )
+            result = _result_from_trace(trace_path)
+            if result is not None:
+                status = "solved" if result["success"] else "unsolved"
+                error = None
+                return_code = 0 if result["success"] else 1
+                collected.append(
+                    {
+                        "schema_version": 1,
+                        "task_id": task_id,
+                        "map_id": row["map_id"],
+                        "split": split,
+                        "layout_mode": row["layout_mode"],
+                        "layout_variant": row.get("layout_variant"),
+                        "scenario_type": row["scenario_type"],
+                        "task_variant": row.get("task_variant"),
+                        "instance_file": str(instance_path),
+                        "trace_file": str(trace_path),
+                        "solver_seed": solver_seed,
+                        "neighborhood_size": neighborhood,
+                        "max_iterations": iterations,
+                        "time_limit_ms": time_limit_ms,
+                        "candidate_trials": candidate_trials,
+                        "candidate_count": (
+                            candidate_count if candidate_trials else 0
+                        ),
+                        "candidate_trial_limit_ms": (
+                            candidate_trial_limit_ms
+                            if candidate_trials
+                            else 0
+                        ),
+                        "candidate_replan_order_seeds": (
+                            replan_order_seeds if candidate_trials else []
+                        ),
+                        "status": status,
+                        "return_code": return_code,
+                        "result": result,
+                        "error": error,
+                    }
+                )
+                continue
             command = [
                 str(solver_path),
                 "--instance",
@@ -91,6 +168,10 @@ def collect_experience(
                         str(candidate_count),
                         "--candidate-trial-limit-ms",
                         str(candidate_trial_limit_ms),
+                        "--candidate-replan-order-seeds",
+                        ",".join(
+                            str(value) for value in replan_order_seeds
+                        ),
                     ]
                 )
             try:
@@ -166,6 +247,9 @@ def collect_experience(
                         if candidate_trials
                         else 0
                     ),
+                    "candidate_replan_order_seeds": (
+                        replan_order_seeds if candidate_trials else []
+                    ),
                     "status": status,
                     "return_code": return_code,
                     "result": result,
@@ -210,6 +294,9 @@ def collect_experience(
                 candidate_trial_limit_ms
                 if candidate_trials
                 else 0
+            ),
+            "candidate_replan_order_seeds": (
+                replan_order_seeds if candidate_trials else []
             ),
         },
         "pressure_metrics": {

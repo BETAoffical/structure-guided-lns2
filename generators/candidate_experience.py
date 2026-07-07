@@ -318,6 +318,124 @@ def _validate_candidate(
         raise ValueError("candidate trial was not performed")
 
 
+def _candidate_outcome_from_trial(
+    trial: dict[str, Any],
+    candidate: dict[str, Any],
+    iteration: dict[str, Any],
+    task_document: dict[str, Any],
+    map_document: dict[str, Any],
+    agent_count: int,
+) -> dict[str, Any]:
+    candidate_valid = bool(trial["candidate_valid"])
+    if candidate_valid:
+        after_paths = {
+            int(item["agent"]): item["path"]
+            for item in trial["neighborhood_paths_after"]
+        }
+        if set(after_paths) != set(candidate["agents"]):
+            raise ValueError("valid candidate omitted repaired paths")
+        for agent, path in after_paths.items():
+            _validate_path(
+                path,
+                task_document["starts"][agent],
+                task_document["goals"][agent],
+                map_document["grid"],
+            )
+        _validate_conflict_events(
+            trial["conflict_events_after"],
+            map_document,
+            agent_count,
+        )
+        if len(trial["conflict_events_after"]) != int(
+            trial["conflicting_pairs_after"]
+        ):
+            raise ValueError("candidate conflict events do not match count")
+        conflict_reduction = (
+            int(iteration["conflicting_pairs_before"])
+            - int(trial["conflicting_pairs_after"])
+        )
+        cost_improvement = (
+            int(iteration["sum_of_costs_before"])
+            - int(trial["sum_of_costs_after"])
+        )
+    else:
+        if trial["neighborhood_paths_after"]:
+            raise ValueError("invalid candidate retained repaired paths")
+        conflict_reduction = None
+        cost_improvement = None
+    return {
+        "candidate_valid": candidate_valid,
+        "conflicting_pairs_before": int(
+            iteration["conflicting_pairs_before"]
+        ),
+        "conflicting_pairs_after": int(
+            trial["conflicting_pairs_after"]
+        ),
+        "conflict_reduction": conflict_reduction,
+        "sum_of_costs_before": int(iteration["sum_of_costs_before"]),
+        "sum_of_costs_after": int(trial["sum_of_costs_after"]),
+        "cost_improvement": cost_improvement,
+        "replan_runtime_ms": float(trial["replan_runtime_ms"]),
+        "total_runtime_ms": float(trial["total_runtime_ms"]),
+    }
+
+
+def _aggregate_order_outcomes(
+    outcomes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not outcomes:
+        raise ValueError("candidate has no order trials")
+    valid_count = sum(outcome["candidate_valid"] for outcome in outcomes)
+    count = len(outcomes)
+
+    def expected(name: str) -> float:
+        return sum(
+            float(outcome[name])
+            if outcome["candidate_valid"] and outcome[name] is not None
+            else 0.0
+            for outcome in outcomes
+        ) / count
+
+    def valid_mean(name: str) -> float | None:
+        values = [
+            float(outcome[name])
+            for outcome in outcomes
+            if outcome["candidate_valid"] and outcome[name] is not None
+        ]
+        if not values:
+            return None
+        return sum(values) / len(values)
+
+    return {
+        "candidate_valid": valid_count > 0,
+        "valid_probability": valid_count / count,
+        "order_trial_count": count,
+        "valid_order_trial_count": valid_count,
+        "conflicting_pairs_before": outcomes[0][
+            "conflicting_pairs_before"
+        ],
+        "conflicting_pairs_after": valid_mean(
+            "conflicting_pairs_after"
+        ),
+        "conflict_reduction": expected("conflict_reduction"),
+        "mean_valid_conflict_reduction": valid_mean(
+            "conflict_reduction"
+        ),
+        "sum_of_costs_before": outcomes[0]["sum_of_costs_before"],
+        "sum_of_costs_after": valid_mean("sum_of_costs_after"),
+        "cost_improvement": expected("cost_improvement"),
+        "mean_valid_cost_improvement": valid_mean("cost_improvement"),
+        "replan_runtime_ms": sum(
+            float(outcome["replan_runtime_ms"]) for outcome in outcomes
+        )
+        / count,
+        "total_runtime_ms": sum(
+            float(outcome["total_runtime_ms"]) for outcome in outcomes
+        )
+        / count,
+    }
+
+
 def build_candidate_experience(
     dataset: str | Path,
     collection: str | Path,
@@ -340,8 +458,11 @@ def build_candidate_experience(
     )
     task_rows = {str(row["task_id"]): row for row in dataset_rows}
     cases: list[dict[str, Any]] = []
+    order_cases: list[dict[str, Any]] = []
     state_count = 0
     valid_count = 0
+    valid_order_count = 0
+    trace_schema_versions: set[int] = set()
     map_cache: dict[str, dict[str, Any]] = {}
     task_cache: dict[str, dict[str, Any]] = {}
 
@@ -371,13 +492,16 @@ def build_candidate_experience(
         task_document = task_cache[task_id]
         agent_count = int(task_document["metadata"]["agent_count"])
         trace = _read_jsonl(Path(run["trace_file"]))
+        trace_schema_versions.update(
+            int(row.get("schema_version", -1)) for row in trace
+        )
         if (
             not trace
             or trace[-1].get("event_type") != "summary"
-            or any(row.get("schema_version") != 4 for row in trace)
+            or any(row.get("schema_version") not in {4, 5} for row in trace)
             or trace[-1].get("candidate_mode") != "collect"
         ):
-            raise ValueError("candidate collection requires Trace V4")
+            raise ValueError("candidate collection requires Trace V4 or V5")
         run_id = (
             f"{task_id}__seed_{int(run['solver_seed']):04d}"
         )
@@ -419,52 +543,98 @@ def build_candidate_experience(
                 if key in normalized_sets:
                     raise ValueError("state contains duplicate candidates")
                 normalized_sets.add(key)
-                candidate_valid = bool(candidate["candidate_valid"])
-                if candidate_valid:
-                    after_paths = {
-                        int(item["agent"]): item["path"]
-                        for item in candidate[
+                raw_order_trials = candidate.get("order_trials") or [
+                    {
+                        "order_seed": 0,
+                        "replan_order": candidate["replan_order"],
+                        "trial_performed": candidate[
+                            "trial_performed"
+                        ],
+                        "candidate_valid": candidate[
+                            "candidate_valid"
+                        ],
+                        "conflicting_pairs_after": candidate[
+                            "conflicting_pairs_after"
+                        ],
+                        "sum_of_costs_after": candidate[
+                            "sum_of_costs_after"
+                        ],
+                        "replan_runtime_ms": candidate[
+                            "replan_runtime_ms"
+                        ],
+                        "total_runtime_ms": candidate[
+                            "total_runtime_ms"
+                        ],
+                        "conflict_events_after": candidate[
+                            "conflict_events_after"
+                        ],
+                        "neighborhood_paths_after": candidate[
                             "neighborhood_paths_after"
-                        ]
+                        ],
                     }
-                    if set(after_paths) != set(candidate["agents"]):
-                        raise ValueError(
-                            "valid candidate omitted repaired paths"
-                        )
-                    for agent, path in after_paths.items():
-                        _validate_path(
-                            path,
-                            task_document["starts"][agent],
-                            task_document["goals"][agent],
-                            map_document["grid"],
-                        )
-                    _validate_conflict_events(
-                        candidate["conflict_events_after"],
+                ]
+                order_outcomes = []
+                for order_trial in raw_order_trials:
+                    _validate_candidate(
+                        {
+                            **candidate,
+                            "replan_order": order_trial[
+                                "replan_order"
+                            ],
+                            "trial_performed": order_trial[
+                                "trial_performed"
+                            ],
+                        },
+                        iteration["seed_conflict"],
+                        agent_count,
+                        int(run["neighborhood_size"]),
+                    )
+                    outcome = _candidate_outcome_from_trial(
+                        order_trial,
+                        candidate,
+                        iteration,
+                        task_document,
                         map_document,
                         agent_count,
                     )
-                    if len(candidate["conflict_events_after"]) != int(
-                        candidate["conflicting_pairs_after"]
-                    ):
-                        raise ValueError(
-                            "candidate conflict events do not match count"
-                        )
-                    valid_count += 1
-                    conflict_reduction = (
-                        int(iteration["conflicting_pairs_before"])
-                        - int(candidate["conflicting_pairs_after"])
+                    order_outcomes.append(outcome)
+                    valid_order_count += outcome["candidate_valid"]
+                    order_cases.append(
+                        {
+                            "schema_version": 1,
+                            "usage": usage,
+                            "split": split,
+                            "case_id": (
+                                f"{state_id}__candidate_"
+                                f"{int(candidate['candidate_index']):02d}"
+                                f"__order_"
+                                f"{int(order_trial['order_seed']):04d}"
+                            ),
+                            "state_id": state_id,
+                            "run_id": run_id,
+                            "map_id": map_id,
+                            "task_id": task_id,
+                            "solver_seed": int(run["solver_seed"]),
+                            "iteration": int(iteration["iteration"]),
+                            "candidate_index": int(
+                                candidate["candidate_index"]
+                            ),
+                            "order_seed": int(
+                                order_trial["order_seed"]
+                            ),
+                            "generator": str(candidate["generator"]),
+                            "seed_conflict": iteration[
+                                "seed_conflict"
+                            ],
+                            "agents": candidate["agents"],
+                            "replan_order": order_trial[
+                                "replan_order"
+                            ],
+                            "outcome": outcome,
+                        }
                     )
-                    cost_improvement = (
-                        int(iteration["sum_of_costs_before"])
-                        - int(candidate["sum_of_costs_after"])
-                    )
-                else:
-                    if candidate["neighborhood_paths_after"]:
-                        raise ValueError(
-                            "invalid candidate retained repaired paths"
-                        )
-                    conflict_reduction = None
-                    cost_improvement = None
+                outcome = _aggregate_order_outcomes(order_outcomes)
+                valid_count += outcome["candidate_valid"]
                 cases.append(
                     {
                         "schema_version": 1,
@@ -496,49 +666,31 @@ def build_candidate_experience(
                             iteration["seed_conflict"],
                             candidate,
                         ),
-                        "outcome": {
-                            "candidate_valid": candidate_valid,
-                            "conflicting_pairs_before": int(
-                                iteration[
-                                    "conflicting_pairs_before"
-                                ]
-                            ),
-                            "conflicting_pairs_after": int(
-                                candidate[
-                                    "conflicting_pairs_after"
-                                ]
-                            ),
-                            "conflict_reduction": conflict_reduction,
-                            "sum_of_costs_before": int(
-                                iteration["sum_of_costs_before"]
-                            ),
-                            "sum_of_costs_after": int(
-                                candidate["sum_of_costs_after"]
-                            ),
-                            "cost_improvement": cost_improvement,
-                            "replan_runtime_ms": float(
-                                candidate["replan_runtime_ms"]
-                            ),
-                            "total_runtime_ms": float(
-                                candidate["total_runtime_ms"]
-                            ),
-                        },
+                        "outcome": outcome,
                     }
                 )
 
     cases.sort(key=lambda row: str(row["case_id"]))
+    order_cases.sort(key=lambda row: str(row["case_id"]))
     _write_jsonl(output_root / "candidate_cases.jsonl", cases)
+    _write_jsonl(output_root / "candidate_order_cases.jsonl", order_cases)
     summary = {
         "schema_version": 1,
-        "source_trace_schema_version": 4,
+        "source_trace_schema_version": max(trace_schema_versions),
+        "source_trace_schema_versions": sorted(trace_schema_versions),
         "split": split,
         "usage": usage,
         "collection_run_count": len(collection_rows),
         "state_run_count": len({row["run_id"] for row in cases}),
         "state_count": state_count,
         "candidate_case_count": len(cases),
+        "candidate_order_case_count": len(order_cases),
         "candidate_count_per_state": 8,
         "valid_candidate_count": valid_count,
+        "valid_order_case_count": valid_order_count,
+        "candidate_replan_order_seeds": sorted(
+            {int(row["order_seed"]) for row in order_cases}
+        ),
         "map_count": len({row["map_id"] for row in cases}),
         "task_count": len({row["task_id"] for row in cases}),
         "feature_count": CANDIDATE_FEATURE_COUNT,

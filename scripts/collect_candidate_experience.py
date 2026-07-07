@@ -14,7 +14,7 @@ from generators.experience import collect_experience  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Collect Trace V4 counterfactual neighborhood trials for "
+            "Collect Trace V4/V5 counterfactual neighborhood trials for "
             "Train or Validation."
         )
     )
@@ -32,10 +32,20 @@ def main() -> int:
     parser.add_argument(
         "--candidate-trial-limit-ms", type=int, default=2000
     )
+    parser.add_argument(
+        "--candidate-replan-order-seeds",
+        default="0,1,2",
+        help="Comma-separated deterministic order seeds for each candidate.",
+    )
     arguments = parser.parse_args()
     seeds = [
         int(value.strip())
         for value in arguments.seeds.split(",")
+        if value.strip()
+    ]
+    replan_order_seeds = [
+        int(value.strip())
+        for value in arguments.candidate_replan_order_seeds.split(",")
         if value.strip()
     ]
     summary = collect_experience(
@@ -50,6 +60,7 @@ def main() -> int:
         candidate_trials=True,
         candidate_count=arguments.candidate_count,
         candidate_trial_limit_ms=arguments.candidate_trial_limit_ms,
+        candidate_replan_order_seeds=replan_order_seeds,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 1 if summary["error_count"] else 0

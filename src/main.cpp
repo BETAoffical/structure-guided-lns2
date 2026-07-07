@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -18,6 +19,24 @@ int parse_int(const char* value, const std::string& option) {
     }
 }
 
+std::vector<int> parse_int_list(
+    const char* value,
+    const std::string& option) {
+    std::vector<int> result;
+    std::stringstream stream(value);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+        if (item.empty()) {
+            throw std::runtime_error("invalid value for " + option);
+        }
+        result.push_back(parse_int(item.c_str(), option));
+    }
+    if (result.empty()) {
+        throw std::runtime_error("invalid value for " + option);
+    }
+    return result;
+}
+
 void usage(const char* executable) {
     std::cerr
         << "Usage: " << executable
@@ -26,6 +45,7 @@ void usage(const char* executable) {
            " [--trace FILE] [--guidance-stdio]"
            " [--candidate-mode collect|controlled|guided]"
            " [--candidate-count N] [--candidate-trial-limit-ms N]"
+           " [--candidate-replan-order-seeds A,B,C]"
            " [--candidate-guidance-stdio]\n";
 }
 
@@ -305,6 +325,11 @@ int main(int argc, char** argv) {
                 i + 1 < argc) {
                 options.candidate_trial_limit_ms =
                     parse_int(argv[++i], option);
+            } else if (
+                option == "--candidate-replan-order-seeds" &&
+                i + 1 < argc) {
+                options.candidate_replan_order_seeds =
+                    parse_int_list(argv[++i], option);
             } else if (option == "--candidate-guidance-stdio") {
                 candidate_guidance_stdio = true;
                 options.candidate_mode =

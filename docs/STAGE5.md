@@ -164,3 +164,43 @@ solved 106/144 runs and candidate-guided solved 104/144, with 10 guided wins,
 overall but used more iterations and more wall time. The useful signal is still
 local rather than general: compartmentalized and dense cases improved in some
 paired outcomes, while regular beltway and clustered tasks regressed.
+
+## Stage 5 v2.2 replan-order labels
+
+V2.2 keeps the eight candidate neighborhoods but evaluates each candidate
+under three deterministic replanning orders, `0,1,2`. Trace V5 stores the
+per-order trials and the experience builder aggregates them into expected
+candidate labels. The collector is resumable: complete traces are reused when
+a long collection command is restarted.
+
+Train produced 201 conflict states, 1608 aggregated candidate cases, and 4824
+per-order cases. Validation produced 62 states, 496 aggregated candidate
+cases, and 1488 per-order cases. The candidate diagnostics confirmed high
+label noise: the average utility range across the three orders for the same
+state/candidate was `1.79`, and 87.1% of Train states still had some candidate
+better than candidate zero under the aggregated label.
+
+| Profile | Features | Validation top1 gain | Oracle regret | Top-1 acc. | Rank acc. |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `full` | 34 | 0.246 | 1.113 | 25.8% | 55.5% |
+| `dedup20` | 20 | 0.414 | 0.945 | 24.2% | 53.5% |
+
+`dedup20` was selected for the V2.2 Test run. The aggregate Test result is
+still negative:
+
+| Metric | Controlled | Candidate-guided |
+| --- | ---: | ---: |
+| Solved | 107/144 | 106/144 |
+| Final conflicting pairs | 162 | 160 |
+| LNS iterations | 135 | 157 |
+| Mean search time | 1587.8 ms | 1631.7 ms |
+| Mean wall time | 1587.9 ms | 1742.3 ms |
+
+Paired outcomes were 8 guided wins, 12 controlled wins, and 124 ties. The
+success McNemar p-value was `1.0`; paired outcome sign-test p-value was
+`0.503`. Guidance was used 82 times and all 82 choices changed neighborhood
+membership, but only 28 were effective repairs. Dense tasks and
+compartmentalized layouts retained a useful local signal, while clustered
+tasks and regular beltway layouts offset the gains. The conclusion is that
+multi-order labels reduce one source of noise, but kNN ranking still is not
+strong enough to improve the simplified LNS2 solver overall.

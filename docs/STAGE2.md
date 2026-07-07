@@ -26,7 +26,7 @@ If replanning cannot produce complete candidate paths, `candidate_valid` is
 false and the after fields are `-1`. Omitting `--trace` does not change solver
 behavior.
 
-## Trace V4 extension
+## Trace V4/V5 extension
 
 Stage 5 v2 adds opt-in `--candidate-mode collect` tracing. The solver keeps
 the legacy main trajectory but evaluates eight deterministic neighborhoods
@@ -37,6 +37,13 @@ search budget.
 Trace V4 adds full current paths, candidate membership, explicit replanning
 orders, validity, conflict/cost outcomes, and repaired candidate paths. The
 ordinary Stage 2 command remains Trace V2 and is unchanged.
+
+Stage 5 v2.2 adds `--candidate-replan-order-seeds A,B,C`. When more than one
+order seed is supplied, candidate collection writes Trace V5. The top-level
+candidate fields remain the `order_seed=0` trial for compatibility, while
+`order_trials` records every deterministic replanning order and its outcome.
+The Python collector aggregates these order trials into expected candidate
+labels and also writes `candidate_order_cases.jsonl` for label-noise analysis.
 
 ## Batch collection
 

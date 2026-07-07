@@ -30,6 +30,7 @@ struct SolverOptions {
     CandidateMode candidate_mode = CandidateMode::Disabled;
     int candidate_count = 8;
     int candidate_trial_limit_ms = 2000;
+    std::vector<int> candidate_replan_order_seeds = {0};
 };
 
 struct SolverMetrics {
@@ -70,6 +71,19 @@ struct ConflictEvent {
 };
 
 struct CandidateTrial {
+    struct OrderTrial {
+        int order_seed = 0;
+        std::vector<int> replan_order;
+        bool trial_performed = false;
+        bool candidate_valid = false;
+        int conflicting_pairs_after = -1;
+        int sum_of_costs_after = -1;
+        double replan_runtime_ms = 0.0;
+        double total_runtime_ms = 0.0;
+        std::vector<ConflictEvent> conflict_events_after;
+        Paths neighborhood_paths_after;
+    };
+
     int candidate_index = -1;
     std::string generator;
     std::vector<int> agents;
@@ -82,6 +96,7 @@ struct CandidateTrial {
     double total_runtime_ms = 0.0;
     std::vector<ConflictEvent> conflict_events_after;
     Paths neighborhood_paths_after;
+    std::vector<OrderTrial> order_trials;
 };
 
 struct IterationTrace {

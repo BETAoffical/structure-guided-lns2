@@ -228,7 +228,11 @@ def prediction_from_neighbors(
     neighbors: list[tuple[dict[str, Any], float]],
 ) -> dict[str, Any]:
     valid_probability = _weighted_mean(
-        neighbors, lambda entry: entry["outcome"]["candidate_valid"]
+        neighbors,
+        lambda entry: entry["outcome"].get(
+            "valid_probability",
+            entry["outcome"]["candidate_valid"],
+        ),
     )
     conflict_reduction = _weighted_mean(
         neighbors,
@@ -295,6 +299,22 @@ def predict_candidate(
 
 
 def actual_utility(outcome: dict[str, Any]) -> float:
+    if "valid_probability" in outcome:
+        return (
+            4.0 * (float(outcome["valid_probability"]) - 0.5)
+            + 2.0 * float(outcome["conflict_reduction"])
+            + 0.02 * float(outcome["cost_improvement"])
+            - min(
+                2000.0,
+                float(
+                    outcome.get(
+                        "total_runtime_ms",
+                        outcome["replan_runtime_ms"],
+                    )
+                ),
+            )
+            / 20000.0
+        )
     if not outcome["candidate_valid"]:
         return -4.0
     return (

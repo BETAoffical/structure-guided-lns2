@@ -678,38 +678,87 @@ double Solver::run_candidate_trials(
     std::vector<CandidateTrial>* candidates) {
     double total_runtime_ms = 0.0;
     for (auto& trial : *candidates) {
-        const auto trial_start = std::chrono::steady_clock::now();
-        const auto main_deadline = deadline_;
-        deadline_ = trial_start +
-                    std::chrono::milliseconds(
-                        options_.candidate_trial_limit_ms);
-        auto candidate = replan_neighborhood_fixed(
-            current, trial.agents, trial.replan_order);
-        const auto replan_end = std::chrono::steady_clock::now();
-        trial.trial_performed = true;
-        trial.replan_runtime_ms =
-            std::chrono::duration<double, std::milli>(
-                replan_end - trial_start)
-                .count();
-        if (!candidate.empty()) {
-            trial.candidate_valid = true;
-            trial.conflict_events_after = conflict_events(candidate);
-            trial.conflicting_pairs_after =
-                static_cast<int>(trial.conflict_events_after.size());
-            trial.sum_of_costs_after = path_cost(candidate);
-            for (const int agent : trial.agents) {
-                trial.neighborhood_paths_after.push_back(
-                    candidate[agent]);
-            }
+        trial.order_trials.clear();
+        auto order_seeds = options_.candidate_replan_order_seeds;
+        if (order_seeds.empty()) {
+            order_seeds.push_back(0);
         }
-        const auto trial_duration =
-            std::chrono::steady_clock::now() - trial_start;
-        deadline_ = main_deadline + trial_duration;
-        trial.total_runtime_ms =
-            std::chrono::duration<double, std::milli>(
-                trial_duration)
-                .count();
-        total_runtime_ms += trial.total_runtime_ms;
+        for (const int order_seed : order_seeds) {
+            CandidateTrial::OrderTrial order_trial;
+            order_trial.order_seed = order_seed;
+            order_trial.replan_order = trial.replan_order;
+            if (order_seed != 0) {
+                std::uint32_t derived_seed =
+                    options_.seed ^
+                    (0x85ebca6bU *
+                     static_cast<std::uint32_t>(
+                         trial.candidate_index + 1));
+                derived_seed ^= static_cast<std::uint32_t>(
+                    order_seed * 0xc2b2ae35U);
+                for (const int agent : trial.agents) {
+                    derived_seed ^= static_cast<std::uint32_t>(
+                        (agent + 1) * 0x27d4eb2dU);
+                    derived_seed =
+                        (derived_seed << 13U) | (derived_seed >> 19U);
+                }
+                std::mt19937 order_random(derived_seed);
+                std::shuffle(
+                    order_trial.replan_order.begin(),
+                    order_trial.replan_order.end(),
+                    order_random);
+            }
+
+            const auto trial_start =
+                std::chrono::steady_clock::now();
+            const auto main_deadline = deadline_;
+            deadline_ = trial_start +
+                        std::chrono::milliseconds(
+                            options_.candidate_trial_limit_ms);
+            auto candidate = replan_neighborhood_fixed(
+                current, trial.agents, order_trial.replan_order);
+            const auto replan_end = std::chrono::steady_clock::now();
+            order_trial.trial_performed = true;
+            order_trial.replan_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    replan_end - trial_start)
+                    .count();
+            if (!candidate.empty()) {
+                order_trial.candidate_valid = true;
+                order_trial.conflict_events_after =
+                    conflict_events(candidate);
+                order_trial.conflicting_pairs_after =
+                    static_cast<int>(
+                        order_trial.conflict_events_after.size());
+                order_trial.sum_of_costs_after = path_cost(candidate);
+                for (const int agent : trial.agents) {
+                    order_trial.neighborhood_paths_after.push_back(
+                        candidate[agent]);
+                }
+            }
+            const auto trial_duration =
+                std::chrono::steady_clock::now() - trial_start;
+            deadline_ = main_deadline + trial_duration;
+            order_trial.total_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    trial_duration)
+                    .count();
+            total_runtime_ms += order_trial.total_runtime_ms;
+            trial.order_trials.push_back(std::move(order_trial));
+        }
+        if (!trial.order_trials.empty()) {
+            const auto& primary = trial.order_trials.front();
+            trial.trial_performed = primary.trial_performed;
+            trial.candidate_valid = primary.candidate_valid;
+            trial.conflicting_pairs_after =
+                primary.conflicting_pairs_after;
+            trial.sum_of_costs_after = primary.sum_of_costs_after;
+            trial.replan_runtime_ms = primary.replan_runtime_ms;
+            trial.total_runtime_ms = primary.total_runtime_ms;
+            trial.conflict_events_after =
+                primary.conflict_events_after;
+            trial.neighborhood_paths_after =
+                primary.neighborhood_paths_after;
+        }
     }
     return total_runtime_ms;
 }
@@ -1146,7 +1195,7 @@ void write_trace_jsonl(
     output << std::boolalpha << std::fixed << std::setprecision(3);
     const int schema_version =
         options.candidate_mode != CandidateMode::Disabled
-            ? 4
+            ? options.candidate_replan_order_seeds.size() > 1 ? 5 : 4
             : result.metrics.guidance_requests > 0 ? 3 : 2;
     const auto write_int_array = [&](const std::vector<int>& values) {
         output << '[';
@@ -1270,6 +1319,41 @@ void write_trace_jsonl(
                 write_neighborhood_paths(
                     candidate.agents,
                     candidate.neighborhood_paths_after);
+                output << ",\"order_trials\":[";
+                for (std::size_t order_index = 0;
+                     order_index < candidate.order_trials.size();
+                     ++order_index) {
+                    if (order_index > 0) {
+                        output << ',';
+                    }
+                    const auto& order_trial =
+                        candidate.order_trials[order_index];
+                    output << "{\"order_seed\":"
+                           << order_trial.order_seed
+                           << ",\"replan_order\":";
+                    write_int_array(order_trial.replan_order);
+                    output << ",\"trial_performed\":"
+                           << order_trial.trial_performed
+                           << ",\"candidate_valid\":"
+                           << order_trial.candidate_valid
+                           << ",\"conflicting_pairs_after\":"
+                           << order_trial.conflicting_pairs_after
+                           << ",\"sum_of_costs_after\":"
+                           << order_trial.sum_of_costs_after
+                           << ",\"replan_runtime_ms\":"
+                           << order_trial.replan_runtime_ms
+                           << ",\"total_runtime_ms\":"
+                           << order_trial.total_runtime_ms
+                           << ",\"conflict_events_after\":";
+                    write_conflict_events(
+                        order_trial.conflict_events_after);
+                    output << ",\"neighborhood_paths_after\":";
+                    write_neighborhood_paths(
+                        candidate.agents,
+                        order_trial.neighborhood_paths_after);
+                    output << '}';
+                }
+                output << ']';
                 output << '}';
             }
             output << ']';
@@ -1361,6 +1445,9 @@ void write_trace_jsonl(
            << ",\"guidance_used\":" << metrics.guidance_used
            << ",\"guidance_fallbacks\":"
            << metrics.guidance_fallbacks
+           << ",\"candidate_replan_order_seeds\":";
+    write_int_array(options.candidate_replan_order_seeds);
+    output
            << ",\"candidate_mode\":\""
            << (options.candidate_mode == CandidateMode::Collect
                    ? "collect"
