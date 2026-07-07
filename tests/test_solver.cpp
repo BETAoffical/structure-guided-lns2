@@ -1,8 +1,10 @@
 #include "lns2/instance.hpp"
 #include "lns2/solver.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <stdexcept>
 #include <string>
 
@@ -210,6 +212,106 @@ void test_guidance_boundary() {
         "fallback changed the baseline neighborhood");
 }
 
+void test_candidate_trials_are_isolated_and_deterministic() {
+    const auto path =
+        std::string(TEST_DATA_DIR) + "/candidate_required.mapf";
+    const auto instance = lns2::Instance::load(path);
+    lns2::SolverOptions options;
+    options.neighborhood_size = 6;
+    options.max_iterations = 100;
+    options.time_limit_ms = 3000;
+    options.candidate_count = 8;
+    options.candidate_trial_limit_ms = 200;
+
+    options.seed = 1;
+    options.candidate_mode = lns2::CandidateMode::Disabled;
+    const auto baseline = lns2::Solver(instance, options).solve();
+    require(
+        baseline.metrics.initial_conflicting_pairs > 0,
+        "candidate test could not find a conflicting seed");
+
+    options.candidate_mode = lns2::CandidateMode::Collect;
+    const auto collected = lns2::Solver(instance, options).solve();
+    const auto repeated = lns2::Solver(instance, options).solve();
+    require(
+        collected.paths == baseline.paths,
+        "candidate trials changed the main solution");
+    require(
+        collected.trace.size() == baseline.trace.size(),
+        "candidate trials changed the main trajectory length");
+    require(
+        repeated.paths == collected.paths &&
+            repeated.trace.size() == collected.trace.size(),
+        "candidate collection is not deterministic");
+
+    for (std::size_t index = 0; index < collected.trace.size(); ++index) {
+        const auto& original = baseline.trace[index];
+        const auto& trial = collected.trace[index];
+        const auto& repeat = repeated.trace[index];
+        require(
+            original.seed_conflict == trial.seed_conflict &&
+                original.neighborhood == trial.neighborhood &&
+                original.replan_order == trial.replan_order &&
+                original.conflicting_pairs_after ==
+                    trial.conflicting_pairs_after &&
+                original.sum_of_costs_after ==
+                    trial.sum_of_costs_after,
+            "candidate trials changed a main LNS decision");
+        require(
+            trial.paths_before.size() == instance.agents().size(),
+            "Trace V4 omitted full current paths");
+        require(
+            trial.candidate_trials.size() == 8,
+            "Trace V4 did not contain eight candidates");
+        std::set<std::vector<int>> unique_sets;
+        for (std::size_t candidate_index = 0;
+             candidate_index < trial.candidate_trials.size();
+             ++candidate_index) {
+            const auto& candidate =
+                trial.candidate_trials[candidate_index];
+            const auto& repeated_candidate =
+                repeat.candidate_trials[candidate_index];
+            auto key = candidate.agents;
+            std::sort(key.begin(), key.end());
+            require(
+                unique_sets.insert(key).second,
+                "Trace V4 contains duplicate candidate sets");
+            require(
+                candidate.agents.size() == 6 &&
+                    candidate.replan_order.size() == 6,
+                "candidate has the wrong size");
+            require(
+                std::find(
+                    candidate.agents.begin(),
+                    candidate.agents.end(),
+                    trial.seed_conflict.first) !=
+                    candidate.agents.end() &&
+                    std::find(
+                        candidate.agents.begin(),
+                        candidate.agents.end(),
+                        trial.seed_conflict.second) !=
+                        candidate.agents.end(),
+                "candidate omitted the seed conflict");
+            auto order = candidate.replan_order;
+            std::sort(order.begin(), order.end());
+            require(
+                order == key && candidate.trial_performed,
+                "candidate order is invalid or trial was skipped");
+            require(
+                candidate.agents == repeated_candidate.agents &&
+                    candidate.replan_order ==
+                        repeated_candidate.replan_order &&
+                    candidate.candidate_valid ==
+                        repeated_candidate.candidate_valid &&
+                    candidate.conflicting_pairs_after ==
+                        repeated_candidate.conflicting_pairs_after &&
+                    candidate.sum_of_costs_after ==
+                        repeated_candidate.sum_of_costs_after,
+                "candidate non-timing fields are not deterministic");
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -218,6 +320,7 @@ int main() {
         run_case("lns_required", 2, 100, true, 1);
         run_case("warehouse_small", 6, 500);
         test_guidance_boundary();
+        test_candidate_trials_are_isolated_and_deterministic();
         std::cout << "all tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {

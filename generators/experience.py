@@ -28,6 +28,9 @@ def collect_experience(
     neighborhood: int = 6,
     iterations: int = 500,
     time_limit_ms: int = 3000,
+    candidate_trials: bool = False,
+    candidate_count: int = 8,
+    candidate_trial_limit_ms: int = 2000,
 ) -> dict[str, Any]:
     dataset_root = Path(dataset).resolve()
     solver_path = Path(solver).resolve()
@@ -37,7 +40,13 @@ def collect_experience(
         raise ValueError(f"dataset manifest does not exist: {manifest_path}")
     if not solver_path.is_file():
         raise ValueError(f"solver does not exist: {solver_path}")
-    if neighborhood <= 0 or iterations < 0 or time_limit_ms <= 0:
+    if (
+        neighborhood <= 0
+        or iterations < 0
+        or time_limit_ms <= 0
+        or candidate_count <= 0
+        or candidate_trial_limit_ms <= 0
+    ):
         raise ValueError("invalid solver limits")
 
     rows = _read_jsonl(manifest_path)
@@ -73,13 +82,31 @@ def collect_experience(
                 "--trace",
                 str(trace_path),
             ]
+            if candidate_trials:
+                command.extend(
+                    [
+                        "--candidate-mode",
+                        "collect",
+                        "--candidate-count",
+                        str(candidate_count),
+                        "--candidate-trial-limit-ms",
+                        str(candidate_trial_limit_ms),
+                    ]
+                )
             try:
                 completed = subprocess.run(
                     command,
                     check=False,
                     capture_output=True,
                     text=True,
-                    timeout=max(10.0, time_limit_ms / 1000.0 + 10.0),
+                    timeout=(
+                        max(300.0, time_limit_ms / 1000.0 + 30.0)
+                        if candidate_trials
+                        else max(
+                            10.0,
+                            time_limit_ms / 1000.0 + 10.0,
+                        )
+                    ),
                 )
                 result = None
                 if completed.stdout.strip():
@@ -130,6 +157,15 @@ def collect_experience(
                     "neighborhood_size": neighborhood,
                     "max_iterations": iterations,
                     "time_limit_ms": time_limit_ms,
+                    "candidate_trials": candidate_trials,
+                    "candidate_count": (
+                        candidate_count if candidate_trials else 0
+                    ),
+                    "candidate_trial_limit_ms": (
+                        candidate_trial_limit_ms
+                        if candidate_trials
+                        else 0
+                    ),
                     "status": status,
                     "return_code": return_code,
                     "result": result,
@@ -166,6 +202,15 @@ def collect_experience(
             "neighborhood_size": neighborhood,
             "max_iterations": iterations,
             "time_limit_ms": time_limit_ms,
+            "candidate_trials": candidate_trials,
+            "candidate_count": (
+                candidate_count if candidate_trials else 0
+            ),
+            "candidate_trial_limit_ms": (
+                candidate_trial_limit_ms
+                if candidate_trials
+                else 0
+            ),
         },
         "pressure_metrics": {
             "initial_conflict_run_count": conflict_run_count,

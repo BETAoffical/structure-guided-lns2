@@ -1,6 +1,7 @@
 #include "lns2/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -11,6 +12,7 @@
 #include <set>
 #include <stdexcept>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace lns2 {
@@ -91,17 +93,27 @@ int future_goal_conflicts(
 Solver::Solver(
     const Instance& instance,
     SolverOptions options,
-    GuidanceCallback guidance)
+    GuidanceCallback guidance,
+    CandidateGuidanceCallback candidate_guidance)
     : instance_(instance),
       options_(options),
       random_(options.seed),
-      guidance_(std::move(guidance)) {
+      guidance_(std::move(guidance)),
+      candidate_guidance_(std::move(candidate_guidance)) {
     options_.neighborhood_size =
         std::max(1, std::min(
                         options_.neighborhood_size,
                         static_cast<int>(instance_.agents().size())));
     options_.max_iterations = std::max(0, options_.max_iterations);
     options_.time_limit_ms = std::max(1, options_.time_limit_ms);
+    options_.candidate_count = std::max(1, options_.candidate_count);
+    options_.candidate_trial_limit_ms =
+        std::max(1, options_.candidate_trial_limit_ms);
+    if (options_.candidate_mode != CandidateMode::Disabled &&
+        options_.neighborhood_size < 2) {
+        throw std::runtime_error(
+            "candidate modes require a neighborhood of at least two agents");
+    }
 }
 
 Path Solver::plan_agent(int agent_id, const Paths& fixed_paths) {
@@ -363,12 +375,40 @@ Solver::NeighborhoodSelection Solver::select_neighborhood(
 
 Paths Solver::replan_neighborhood(
     const Paths& current,
-    const std::vector<int>& neighborhood) {
+    const std::vector<int>& neighborhood,
+    std::vector<int>* actual_order) {
+    auto order = neighborhood;
+    std::shuffle(order.begin(), order.end(), random_);
+    if (actual_order != nullptr) {
+        *actual_order = order;
+    }
+    return replan_neighborhood_fixed(current, neighborhood, order);
+}
+
+Paths Solver::replan_neighborhood_fixed(
+    const Paths& current,
+    const std::vector<int>& neighborhood,
+    const std::vector<int>& order) {
     Paths candidate = current;
     std::vector<bool> selected(current.size(), false);
     for (const int agent : neighborhood) {
+        if (agent < 0 || agent >= static_cast<int>(current.size()) ||
+            selected[agent]) {
+            return {};
+        }
         selected[agent] = true;
         candidate[agent].clear();
+    }
+    if (order.size() != neighborhood.size()) {
+        return {};
+    }
+    std::vector<bool> ordered(current.size(), false);
+    for (const int agent : order) {
+        if (agent < 0 || agent >= static_cast<int>(current.size()) ||
+            !selected[agent] || ordered[agent]) {
+            return {};
+        }
+        ordered[agent] = true;
     }
 
     Paths fixed;
@@ -378,8 +418,6 @@ Paths Solver::replan_neighborhood(
         }
     }
 
-    auto order = neighborhood;
-    std::shuffle(order.begin(), order.end(), random_);
     for (const int agent : order) {
         candidate[agent] = plan_agent(agent, fixed);
         if (candidate[agent].empty()) {
@@ -388,6 +426,292 @@ Paths Solver::replan_neighborhood(
         fixed.push_back(candidate[agent]);
     }
     return candidate;
+}
+
+std::vector<CandidateTrial> Solver::generate_candidates(
+    int iteration,
+    const NeighborhoodSelection& baseline,
+    const std::vector<ConflictEvent>& events,
+    const Paths& paths) const {
+    const int agent_count = static_cast<int>(instance_.agents().size());
+    const int target_size = options_.neighborhood_size;
+    std::vector<std::vector<int>> graph(agent_count);
+    std::vector<int> degree(agent_count, 0);
+    std::unordered_set<Location> conflict_cells;
+    for (const auto& event : events) {
+        graph[event.first_agent].push_back(event.second_agent);
+        graph[event.second_agent].push_back(event.first_agent);
+        ++degree[event.first_agent];
+        ++degree[event.second_agent];
+        conflict_cells.insert(event.cells.begin(), event.cells.end());
+    }
+    for (auto& neighbors : graph) {
+        std::sort(neighbors.begin(), neighbors.end());
+        neighbors.erase(
+            std::unique(neighbors.begin(), neighbors.end()),
+            neighbors.end());
+    }
+
+    std::uint32_t derived_seed =
+        options_.seed ^ (0x9e3779b9U * static_cast<std::uint32_t>(iteration));
+    derived_seed ^= static_cast<std::uint32_t>(
+        baseline.seed_conflict.first * 73856093U);
+    derived_seed ^= static_cast<std::uint32_t>(
+        baseline.seed_conflict.second * 19349663U);
+    std::mt19937 local_random(derived_seed);
+
+    std::vector<int> global_priority(agent_count);
+    std::iota(global_priority.begin(), global_priority.end(), 0);
+    std::stable_sort(
+        global_priority.begin(),
+        global_priority.end(),
+        [&](int left, int right) {
+            return std::tie(degree[left], right) >
+                   std::tie(degree[right], left);
+        });
+    std::unordered_map<int, int> priority_rank;
+    for (int index = 0; index < agent_count; ++index) {
+        priority_rank[global_priority[index]] = index;
+    }
+
+    auto force_seed_pair = [&](const std::vector<int>& ranking) {
+        std::vector<int> selected;
+        std::vector<bool> seen(agent_count, false);
+        const auto add = [&](int agent) {
+            if (agent >= 0 && agent < agent_count && !seen[agent] &&
+                static_cast<int>(selected.size()) < target_size) {
+                seen[agent] = true;
+                selected.push_back(agent);
+            }
+        };
+        add(baseline.seed_conflict.first);
+        add(baseline.seed_conflict.second);
+        for (const int agent : ranking) {
+            add(agent);
+        }
+        for (const int agent : global_priority) {
+            add(agent);
+        }
+        return selected;
+    };
+    auto fixed_order = [&](const std::vector<int>& agents) {
+        auto result = agents;
+        std::stable_sort(
+            result.begin(), result.end(),
+            [&](int left, int right) {
+                return std::tie(priority_rank[left], left) <
+                       std::tie(priority_rank[right], right);
+            });
+        return result;
+    };
+
+    std::vector<CandidateTrial> result;
+    std::set<std::vector<int>> unique_sets;
+    auto add_candidate =
+        [&](const std::string& generator,
+            const std::vector<int>& ranking) {
+            if (static_cast<int>(result.size()) >=
+                options_.candidate_count) {
+                return;
+            }
+            auto agents = force_seed_pair(ranking);
+            if (static_cast<int>(agents.size()) != target_size) {
+                return;
+            }
+            auto key = agents;
+            std::sort(key.begin(), key.end());
+            if (!unique_sets.insert(key).second) {
+                return;
+            }
+            CandidateTrial candidate;
+            candidate.candidate_index =
+                static_cast<int>(result.size());
+            candidate.generator = generator;
+            candidate.agents = std::move(agents);
+            candidate.replan_order = fixed_order(candidate.agents);
+            result.push_back(std::move(candidate));
+        };
+
+    add_candidate("baseline_bfs", baseline.agents);
+
+    auto bfs_ranking = [&](int start, bool reverse) {
+        std::vector<int> ranking;
+        std::vector<bool> visited(agent_count, false);
+        std::queue<int> open;
+        visited[start] = true;
+        open.push(start);
+        while (!open.empty()) {
+            const int current = open.front();
+            open.pop();
+            ranking.push_back(current);
+            auto neighbors = graph[current];
+            if (reverse) {
+                std::reverse(neighbors.begin(), neighbors.end());
+            }
+            for (const int next : neighbors) {
+                if (!visited[next]) {
+                    visited[next] = true;
+                    open.push(next);
+                }
+            }
+        }
+        ranking.insert(
+            ranking.end(), global_priority.begin(), global_priority.end());
+        return ranking;
+    };
+    add_candidate(
+        "alternate_endpoint_bfs",
+        bfs_ranking(baseline.seed_conflict.second, true));
+
+    auto random_walk_ranking = [&](std::uint32_t salt) {
+        std::mt19937 walk_random(derived_seed ^ salt);
+        std::vector<int> ranking = {
+            baseline.seed_conflict.first,
+            baseline.seed_conflict.second};
+        int current = (salt & 1U) == 0
+                          ? baseline.seed_conflict.first
+                          : baseline.seed_conflict.second;
+        for (int step = 0; step < agent_count * 3; ++step) {
+            if (graph[current].empty()) {
+                current = std::uniform_int_distribution<int>(
+                    0, agent_count - 1)(walk_random);
+            } else {
+                current = graph[current][
+                    std::uniform_int_distribution<int>(
+                        0,
+                        static_cast<int>(graph[current].size()) - 1)(
+                        walk_random)];
+            }
+            ranking.push_back(current);
+        }
+        auto remaining = global_priority;
+        std::shuffle(remaining.begin(), remaining.end(), walk_random);
+        ranking.insert(ranking.end(), remaining.begin(), remaining.end());
+        return ranking;
+    };
+    add_candidate(
+        "conflict_random_walk_a",
+        random_walk_ranking(0xa511e9b3U));
+    add_candidate(
+        "conflict_random_walk_b",
+        random_walk_ranking(0x63d83595U));
+
+    add_candidate("highest_conflict_degree", global_priority);
+
+    std::vector<int> overlap_ranking(agent_count);
+    std::iota(overlap_ranking.begin(), overlap_ranking.end(), 0);
+    std::vector<int> overlap(agent_count, 0);
+    for (int agent = 0; agent < agent_count; ++agent) {
+        for (const auto cell : paths[agent]) {
+            overlap[agent] += conflict_cells.count(cell) > 0 ? 1 : 0;
+        }
+    }
+    std::stable_sort(
+        overlap_ranking.begin(), overlap_ranking.end(),
+        [&](int left, int right) {
+            return std::tie(overlap[left], degree[left], right) >
+                   std::tie(overlap[right], degree[right], left);
+        });
+    add_candidate("path_conflict_overlap", overlap_ranking);
+
+    std::vector<int> blocker_ranking(agent_count);
+    std::iota(blocker_ranking.begin(), blocker_ranking.end(), 0);
+    std::vector<int> blocker_score(agent_count, 0);
+    for (int agent = 0; agent < agent_count; ++agent) {
+        const auto start = instance_.agents()[agent].start;
+        const auto goal = instance_.agents()[agent].goal;
+        for (int other = 0; other < agent_count; ++other) {
+            if (other == agent) {
+                continue;
+            }
+            blocker_score[agent] += static_cast<int>(
+                std::count(paths[other].begin(), paths[other].end(), start));
+            blocker_score[agent] += static_cast<int>(
+                std::count(paths[other].begin(), paths[other].end(), goal));
+        }
+    }
+    std::stable_sort(
+        blocker_ranking.begin(), blocker_ranking.end(),
+        [&](int left, int right) {
+            return std::tie(
+                       blocker_score[left], degree[left], right) >
+                   std::tie(
+                       blocker_score[right], degree[right], left);
+        });
+    add_candidate("start_goal_blocker", blocker_ranking);
+
+    std::vector<int> weighted_random;
+    weighted_random.reserve(agent_count);
+    std::vector<std::pair<double, int>> weighted_keys;
+    std::uniform_real_distribution<double> unit(1e-12, 1.0);
+    for (int agent = 0; agent < agent_count; ++agent) {
+        const double key =
+            -std::log(unit(local_random)) /
+            static_cast<double>(degree[agent] + 1);
+        weighted_keys.emplace_back(key, agent);
+    }
+    std::sort(weighted_keys.begin(), weighted_keys.end());
+    for (const auto& [key, agent] : weighted_keys) {
+        (void)key;
+        weighted_random.push_back(agent);
+    }
+    add_candidate("degree_weighted_random", weighted_random);
+
+    for (int attempt = 0;
+         static_cast<int>(result.size()) < options_.candidate_count &&
+         attempt < 512;
+         ++attempt) {
+        auto ranking = global_priority;
+        std::shuffle(ranking.begin(), ranking.end(), local_random);
+        add_candidate(
+            "deterministic_fill_" + std::to_string(attempt), ranking);
+    }
+    if (static_cast<int>(result.size()) != options_.candidate_count) {
+        throw std::runtime_error(
+            "could not generate the requested number of unique candidates");
+    }
+    return result;
+}
+
+double Solver::run_candidate_trials(
+    const Paths& current,
+    std::vector<CandidateTrial>* candidates) {
+    double total_runtime_ms = 0.0;
+    for (auto& trial : *candidates) {
+        const auto trial_start = std::chrono::steady_clock::now();
+        const auto main_deadline = deadline_;
+        deadline_ = trial_start +
+                    std::chrono::milliseconds(
+                        options_.candidate_trial_limit_ms);
+        auto candidate = replan_neighborhood_fixed(
+            current, trial.agents, trial.replan_order);
+        const auto replan_end = std::chrono::steady_clock::now();
+        trial.trial_performed = true;
+        trial.replan_runtime_ms =
+            std::chrono::duration<double, std::milli>(
+                replan_end - trial_start)
+                .count();
+        if (!candidate.empty()) {
+            trial.candidate_valid = true;
+            trial.conflict_events_after = conflict_events(candidate);
+            trial.conflicting_pairs_after =
+                static_cast<int>(trial.conflict_events_after.size());
+            trial.sum_of_costs_after = path_cost(candidate);
+            for (const int agent : trial.agents) {
+                trial.neighborhood_paths_after.push_back(
+                    candidate[agent]);
+            }
+        }
+        const auto trial_duration =
+            std::chrono::steady_clock::now() - trial_start;
+        deadline_ = main_deadline + trial_duration;
+        trial.total_runtime_ms =
+            std::chrono::duration<double, std::milli>(
+                trial_duration)
+                .count();
+        total_runtime_ms += trial.total_runtime_ms;
+    }
+    return total_runtime_ms;
 }
 
 SolveResult Solver::solve() {
@@ -423,7 +747,116 @@ SolveResult Solver::solve() {
         trace.iteration = result.metrics.iterations;
         trace.seed_conflict = selection.seed_conflict;
         trace.baseline_neighborhood = selection.agents;
-        if (guidance_) {
+        const bool candidate_mode =
+            options_.candidate_mode != CandidateMode::Disabled;
+        if (candidate_mode) {
+            const auto capture_start =
+                std::chrono::steady_clock::now();
+            trace.paths_before = result.paths;
+            const auto capture_duration =
+                std::chrono::steady_clock::now() - capture_start;
+            deadline_ += capture_duration;
+            result.metrics.counterfactual_runtime_ms +=
+                std::chrono::duration<double, std::milli>(
+                    capture_duration)
+                    .count();
+            if (options_.candidate_mode != CandidateMode::Collect) {
+                const auto generation_start =
+                    std::chrono::steady_clock::now();
+                trace.candidate_trials = generate_candidates(
+                    trace.iteration,
+                    selection,
+                    current_events,
+                    result.paths);
+                const auto generation_duration =
+                    std::chrono::steady_clock::now() -
+                    generation_start;
+                deadline_ += generation_duration;
+                trace.candidate_generation_runtime_ms =
+                    std::chrono::duration<double, std::milli>(
+                        generation_duration)
+                        .count();
+                result.metrics.counterfactual_runtime_ms +=
+                    trace.candidate_generation_runtime_ms;
+                trace.selected_candidate_index = 0;
+                selection.agents =
+                    trace.candidate_trials.front().agents;
+            }
+        }
+        if (options_.candidate_mode == CandidateMode::Guided) {
+            trace.guidance_requested = true;
+            ++result.metrics.guidance_requests;
+            CandidateGuidanceResponse response;
+            const auto guidance_start =
+                std::chrono::steady_clock::now();
+            try {
+                if (!candidate_guidance_) {
+                    response.fallback_reason =
+                        "candidate_callback_missing";
+                } else {
+                    response = candidate_guidance_(
+                        {trace.iteration,
+                         selection.seed_conflict,
+                         current_events,
+                         result.paths,
+                         trace.candidate_trials});
+                }
+            } catch (const std::exception& error) {
+                response.fallback_reason =
+                    std::string("callback_error:") + error.what();
+            } catch (...) {
+                response.fallback_reason = "callback_error";
+            }
+            const auto guidance_duration =
+                std::chrono::steady_clock::now() - guidance_start;
+            deadline_ += guidance_duration;
+            trace.guidance_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    guidance_duration)
+                    .count();
+            result.metrics.guidance_runtime_ms +=
+                trace.guidance_runtime_ms;
+            trace.guidance_out_of_distribution =
+                response.out_of_distribution;
+            trace.guidance_effective_probability =
+                response.predicted_valid_probability;
+            trace.guidance_nearest_distance =
+                response.nearest_distance;
+            trace.guidance_fallback_reason =
+                response.fallback_reason;
+
+            bool valid = response.use_guidance;
+            if (valid &&
+                (response.candidate_index <= 0 ||
+                 response.candidate_index >= static_cast<int>(
+                     trace.candidate_trials.size()))) {
+                valid = false;
+                trace.guidance_fallback_reason =
+                    "invalid_candidate_index";
+            }
+            if (valid) {
+                trace.selected_candidate_index =
+                    response.candidate_index;
+                selection.agents = trace.candidate_trials[
+                    response.candidate_index]
+                                       .agents;
+                trace.guidance_used = true;
+                ++result.metrics.guidance_used;
+            } else {
+                trace.selected_candidate_index = 0;
+                selection.agents =
+                    trace.candidate_trials.front().agents;
+                if (trace.guidance_fallback_reason.empty()) {
+                    trace.guidance_fallback_reason =
+                        response.out_of_distribution
+                            ? "out_of_distribution"
+                            : "guidance_declined";
+                }
+                ++result.metrics.guidance_fallbacks;
+            }
+        } else if (
+            options_.candidate_mode == CandidateMode::Disabled &&
+            guidance_) {
             trace.guidance_requested = true;
             ++result.metrics.guidance_requests;
             const auto guidance_start =
@@ -509,8 +942,25 @@ SolveResult Solver::solve() {
             static_cast<int>(conflicts.size());
         trace.sum_of_costs_before = path_cost(result.paths);
         const auto replan_start = std::chrono::steady_clock::now();
-        auto candidate =
-            replan_neighborhood(result.paths, selection.agents);
+        Paths candidate;
+        if (options_.candidate_mode == CandidateMode::Controlled ||
+            options_.candidate_mode == CandidateMode::Guided) {
+            const auto& selected_candidate =
+                trace.candidate_trials[
+                    trace.selected_candidate_index < 0
+                        ? 0
+                        : trace.selected_candidate_index];
+            trace.replan_order = selected_candidate.replan_order;
+            candidate = replan_neighborhood_fixed(
+                result.paths,
+                selection.agents,
+                trace.replan_order);
+        } else {
+            candidate = replan_neighborhood(
+                result.paths,
+                selection.agents,
+                &trace.replan_order);
+        }
         trace.replan_runtime_ms =
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - replan_start)
@@ -552,6 +1002,32 @@ SolveResult Solver::solve() {
         result.trace.push_back(std::move(trace));
     }
 
+    if (options_.candidate_mode == CandidateMode::Collect) {
+        for (auto& trace : result.trace) {
+            const NeighborhoodSelection baseline = {
+                trace.seed_conflict,
+                trace.baseline_neighborhood};
+            const auto generation_start =
+                std::chrono::steady_clock::now();
+            trace.candidate_trials = generate_candidates(
+                trace.iteration,
+                baseline,
+                trace.conflict_events_before,
+                trace.paths_before);
+            const auto generation_duration =
+                std::chrono::steady_clock::now() - generation_start;
+            trace.candidate_generation_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    generation_duration)
+                    .count();
+            result.metrics.counterfactual_runtime_ms +=
+                trace.candidate_generation_runtime_ms;
+            result.metrics.counterfactual_runtime_ms +=
+                run_candidate_trials(
+                    trace.paths_before, &trace.candidate_trials);
+        }
+    }
+
     result.metrics.final_conflicting_pairs =
         static_cast<int>(conflicts.size());
     result.metrics.success =
@@ -564,7 +1040,8 @@ SolveResult Solver::solve() {
                 .count();
     result.metrics.search_runtime_ms =
         result.metrics.runtime_ms -
-        result.metrics.guidance_runtime_ms;
+        result.metrics.guidance_runtime_ms -
+        result.metrics.counterfactual_runtime_ms;
     return result;
 }
 
@@ -668,7 +1145,9 @@ void write_trace_jsonl(
     }
     output << std::boolalpha << std::fixed << std::setprecision(3);
     const int schema_version =
-        result.metrics.guidance_requests > 0 ? 3 : 2;
+        options.candidate_mode != CandidateMode::Disabled
+            ? 4
+            : result.metrics.guidance_requests > 0 ? 3 : 2;
     const auto write_int_array = [&](const std::vector<int>& values) {
         output << '[';
         for (std::size_t index = 0; index < values.size(); ++index) {
@@ -744,6 +1223,57 @@ void write_trace_jsonl(
             }
             output << ']';
         };
+    const auto write_paths_json = [&](const Paths& paths) {
+        output << '[';
+        for (std::size_t index = 0; index < paths.size(); ++index) {
+            if (index > 0) {
+                output << ',';
+            }
+            write_path_json(paths[index]);
+        }
+        output << ']';
+    };
+    const auto write_candidate_trials =
+        [&](const std::vector<CandidateTrial>& candidates) {
+            output << '[';
+            for (std::size_t index = 0;
+                 index < candidates.size();
+                 ++index) {
+                if (index > 0) {
+                    output << ',';
+                }
+                const auto& candidate = candidates[index];
+                output << "{\"candidate_index\":"
+                       << candidate.candidate_index
+                       << ",\"generator\":";
+                write_json_string(candidate.generator);
+                output << ",\"agents\":";
+                write_int_array(candidate.agents);
+                output << ",\"replan_order\":";
+                write_int_array(candidate.replan_order);
+                output << ",\"trial_performed\":"
+                       << candidate.trial_performed
+                       << ",\"candidate_valid\":"
+                       << candidate.candidate_valid
+                       << ",\"conflicting_pairs_after\":"
+                       << candidate.conflicting_pairs_after
+                       << ",\"sum_of_costs_after\":"
+                       << candidate.sum_of_costs_after
+                       << ",\"replan_runtime_ms\":"
+                       << candidate.replan_runtime_ms
+                       << ",\"total_runtime_ms\":"
+                       << candidate.total_runtime_ms
+                       << ",\"conflict_events_after\":";
+                write_conflict_events(
+                    candidate.conflict_events_after);
+                output << ",\"neighborhood_paths_after\":";
+                write_neighborhood_paths(
+                    candidate.agents,
+                    candidate.neighborhood_paths_after);
+                output << '}';
+            }
+            output << ']';
+        };
     for (const auto& trace : result.trace) {
         output << "{\"schema_version\":" << schema_version
                << ",\"event_type\":\"iteration\""
@@ -755,7 +1285,13 @@ void write_trace_jsonl(
         write_int_array(trace.baseline_neighborhood);
         output << ",\"neighborhood\":";
         write_int_array(trace.neighborhood);
+        output << ",\"replan_order\":";
+        write_int_array(trace.replan_order);
         output
+               << ",\"selected_candidate_index\":"
+               << trace.selected_candidate_index
+               << ",\"candidate_generation_runtime_ms\":"
+               << trace.candidate_generation_runtime_ms
                << ",\"conflicting_pairs_before\":"
                << trace.conflicting_pairs_before
                << ",\"conflicting_pairs_after\":"
@@ -785,6 +1321,8 @@ void write_trace_jsonl(
         write_conflict_events(trace.conflict_events_before);
         output << ",\"conflict_events_after\":";
         write_conflict_events(trace.conflict_events_after);
+        output << ",\"paths_before\":";
+        write_paths_json(trace.paths_before);
         output << ",\"neighborhood_paths_before\":";
         write_neighborhood_paths(
             trace.neighborhood, trace.neighborhood_paths_before
@@ -793,6 +1331,8 @@ void write_trace_jsonl(
         write_neighborhood_paths(
             trace.neighborhood, trace.neighborhood_paths_after
         );
+        output << ",\"candidate_trials\":";
+        write_candidate_trials(trace.candidate_trials);
         output << "}\n";
     }
     const auto& metrics = result.metrics;
@@ -814,11 +1354,22 @@ void write_trace_jsonl(
            << metrics.search_runtime_ms
            << ",\"guidance_runtime_ms\":"
            << metrics.guidance_runtime_ms
+           << ",\"counterfactual_runtime_ms\":"
+           << metrics.counterfactual_runtime_ms
            << ",\"guidance_requests\":"
            << metrics.guidance_requests
            << ",\"guidance_used\":" << metrics.guidance_used
            << ",\"guidance_fallbacks\":"
-           << metrics.guidance_fallbacks << "}\n";
+           << metrics.guidance_fallbacks
+           << ",\"candidate_mode\":\""
+           << (options.candidate_mode == CandidateMode::Collect
+                   ? "collect"
+                   : options.candidate_mode == CandidateMode::Controlled
+                   ? "controlled"
+                   : options.candidate_mode == CandidateMode::Guided
+                   ? "guided"
+                   : "disabled")
+           << "\"}\n";
 }
 
 }  // namespace lns2

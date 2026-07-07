@@ -26,6 +26,18 @@ If replanning cannot produce complete candidate paths, `candidate_valid` is
 false and the after fields are `-1`. Omitting `--trace` does not change solver
 behavior.
 
+## Trace V4 extension
+
+Stage 5 v2 adds opt-in `--candidate-mode collect` tracing. The solver keeps
+the legacy main trajectory but evaluates eight deterministic neighborhoods
+with one shared Agent priority. Each trial has an independent two-second
+limit, consumes no main RNG state, and is excluded from the five-second main
+search budget.
+
+Trace V4 adds full current paths, candidate membership, explicit replanning
+orders, validity, conflict/cost outcomes, and repaired candidate paths. The
+ordinary Stage 2 command remains Trace V2 and is unchanged.
+
 ## Batch collection
 
 ```powershell

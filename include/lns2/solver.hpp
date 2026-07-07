@@ -15,11 +15,21 @@ namespace lns2 {
 using Path = std::vector<Location>;
 using Paths = std::vector<Path>;
 
+enum class CandidateMode {
+    Disabled,
+    Collect,
+    Controlled,
+    Guided,
+};
+
 struct SolverOptions {
     std::uint32_t seed = 1234;
     int neighborhood_size = 8;
     int max_iterations = 1000;
     int time_limit_ms = 5000;
+    CandidateMode candidate_mode = CandidateMode::Disabled;
+    int candidate_count = 8;
+    int candidate_trial_limit_ms = 2000;
 };
 
 struct SolverMetrics {
@@ -33,6 +43,7 @@ struct SolverMetrics {
     double runtime_ms = 0.0;
     double search_runtime_ms = 0.0;
     double guidance_runtime_ms = 0.0;
+    double counterfactual_runtime_ms = 0.0;
     int guidance_requests = 0;
     int guidance_used = 0;
     int guidance_fallbacks = 0;
@@ -58,11 +69,27 @@ struct ConflictEvent {
     }
 };
 
+struct CandidateTrial {
+    int candidate_index = -1;
+    std::string generator;
+    std::vector<int> agents;
+    std::vector<int> replan_order;
+    bool trial_performed = false;
+    bool candidate_valid = false;
+    int conflicting_pairs_after = -1;
+    int sum_of_costs_after = -1;
+    double replan_runtime_ms = 0.0;
+    double total_runtime_ms = 0.0;
+    std::vector<ConflictEvent> conflict_events_after;
+    Paths neighborhood_paths_after;
+};
+
 struct IterationTrace {
     int iteration = 0;
     std::pair<int, int> seed_conflict = {-1, -1};
     std::vector<int> baseline_neighborhood;
     std::vector<int> neighborhood;
+    std::vector<int> replan_order;
     int conflicting_pairs_before = 0;
     int conflicting_pairs_after = -1;
     int sum_of_costs_before = 0;
@@ -72,8 +99,11 @@ struct IterationTrace {
     double replan_runtime_ms = 0.0;
     std::vector<ConflictEvent> conflict_events_before;
     std::vector<ConflictEvent> conflict_events_after;
+    Paths paths_before;
     Paths neighborhood_paths_before;
     Paths neighborhood_paths_after;
+    std::vector<CandidateTrial> candidate_trials;
+    double candidate_generation_runtime_ms = 0.0;
     bool guidance_requested = false;
     bool guidance_used = false;
     bool guidance_out_of_distribution = false;
@@ -81,6 +111,7 @@ struct IterationTrace {
     double guidance_nearest_distance = -1.0;
     double guidance_runtime_ms = 0.0;
     std::string guidance_fallback_reason;
+    int selected_candidate_index = -1;
 };
 
 struct SolveResult {
@@ -109,12 +140,37 @@ struct GuidanceResponse {
 using GuidanceCallback =
     std::function<GuidanceResponse(const GuidanceRequest&)>;
 
+struct CandidateGuidanceRequest {
+    int iteration = 0;
+    std::pair<int, int> seed_conflict = {-1, -1};
+    std::vector<ConflictEvent> conflict_events;
+    Paths paths;
+    std::vector<CandidateTrial> candidates;
+};
+
+struct CandidateGuidanceResponse {
+    bool use_guidance = false;
+    bool out_of_distribution = false;
+    int candidate_index = 0;
+    double predicted_valid_probability = -1.0;
+    double predicted_conflict_reduction = 0.0;
+    double predicted_cost_improvement = 0.0;
+    double predicted_runtime_ms = -1.0;
+    double nearest_distance = -1.0;
+    std::string fallback_reason;
+};
+
+using CandidateGuidanceCallback =
+    std::function<CandidateGuidanceResponse(
+        const CandidateGuidanceRequest&)>;
+
 class Solver {
 public:
     Solver(
         const Instance& instance,
         SolverOptions options,
-        GuidanceCallback guidance = {});
+        GuidanceCallback guidance = {},
+        CandidateGuidanceCallback candidate_guidance = {});
 
     SolveResult solve();
     static std::vector<ConflictEvent> conflict_events(const Paths& paths);
@@ -134,9 +190,22 @@ private:
     Paths initial_solution();
     NeighborhoodSelection select_neighborhood(
         const std::vector<std::pair<int, int>>& conflicts);
+    std::vector<CandidateTrial> generate_candidates(
+        int iteration,
+        const NeighborhoodSelection& baseline,
+        const std::vector<ConflictEvent>& events,
+        const Paths& paths) const;
     Paths replan_neighborhood(
         const Paths& current,
-        const std::vector<int>& neighborhood);
+        const std::vector<int>& neighborhood,
+        std::vector<int>* actual_order = nullptr);
+    Paths replan_neighborhood_fixed(
+        const Paths& current,
+        const std::vector<int>& neighborhood,
+        const std::vector<int>& order);
+    double run_candidate_trials(
+        const Paths& current,
+        std::vector<CandidateTrial>* candidates);
 
     int path_cost(const Paths& paths) const;
     int makespan(const Paths& paths) const;
@@ -147,6 +216,7 @@ private:
     std::mt19937 random_;
     std::chrono::steady_clock::time_point deadline_;
     GuidanceCallback guidance_;
+    CandidateGuidanceCallback candidate_guidance_;
 };
 
 void write_paths(

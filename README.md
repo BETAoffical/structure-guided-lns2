@@ -10,10 +10,11 @@ modify or import the previous `LNS2-RL` repository.
 | --- | --- | --- |
 | 0 | Complete | Dependency-free LNS2 baseline and path validation |
 | 1 | Complete (MVP active) | Three controlled layouts and two task scenarios |
-| 2 | Complete | Trace V2 and raw solver-run collection |
-| 3 | Complete | Structured LNS repair cases and conflict heatmaps |
-| 4 | Complete | Feature normalization, kNN retrieval, and offline guidance |
-| 5 | Complete (negative result) | Closed-loop Repair guidance and paired evaluation |
+| 2 | Complete, extended | Trace V2 plus isolated Trace V4 candidate trials |
+| 3 | Complete, extended | Repair cases plus candidate-action experience |
+| 4 | Complete, extended | State retrieval plus candidate-aware kNN ranking |
+| 5 v1 | Complete (negative result) | Role-template guidance and paired evaluation |
+| 5 v2 | Complete (negative overall) | Candidate-aware three-arm evaluation |
 
 No RL or learned neighborhood policy is used in the current feasibility
 experiment.
@@ -199,6 +200,110 @@ conflicting pairs in total. Guided LNS2 recorded 6 paired wins, 4 losses, and
 134 ties; the exact sign-test p-value was `0.754`. The current Repair guidance
 therefore does not show a statistically significant overall improvement. See
 [Stage 5](docs/STAGE5.md).
+
+## Stage 5 v2: candidate-aware guidance
+
+Stage 5 v2 fixes the central limitation found in v1: one conflict state now
+evaluates eight concrete neighborhoods under one deterministic replanning
+priority. Counterfactual trials do not consume the main solver RNG or its
+five-second search budget, and the main collection trajectory remains the
+legacy baseline.
+
+Collect and convert Train and Validation candidate experience:
+
+```powershell
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v2-train-collection `
+  --split train
+
+python scripts/build_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v2-train-collection `
+  --output build/stage5-v2-train-experience `
+  --split train
+
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v2-validation-collection `
+  --split validation
+
+python scripts/build_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v2-validation-collection `
+  --output build/stage5-v2-validation-experience `
+  --split validation
+```
+
+Fit on Train and tune only on Validation:
+
+```powershell
+python scripts/build_candidate_index.py `
+  --memory build/stage5-v2-train-experience `
+  --output build/stage5-v2-index `
+  --feature-profile full
+
+python scripts/evaluate_candidate_retrieval.py `
+  --index build/stage5-v2-index `
+  --queries build/stage5-v2-validation-experience `
+  --output build/stage5-v2-evaluation
+```
+
+Stage 5 v2.1 can rebuild the same Train memory with lower-dimensional
+profiles before rerunning Validation tuning. `full` keeps the original
+Train-fitted feature set after zero-variance filtering, `dedup20` removes
+strongly redundant aggregates, and `core12` keeps only a compact diagnostic
+subset:
+
+```powershell
+python scripts/build_candidate_index.py `
+  --memory build/stage5-v2-train-experience `
+  --output build/stage5-v2-index-dedup20 `
+  --feature-profile dedup20
+
+python scripts/evaluate_candidate_retrieval.py `
+  --index build/stage5-v2-index-dedup20 `
+  --queries build/stage5-v2-validation-experience `
+  --output build/stage5-v2-evaluation-dedup20
+```
+
+Run the frozen three-arm Test experiment:
+
+```powershell
+python scripts/run_stage5_v2_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --index build/stage5-v2-index `
+  --config build/stage5-v2-evaluation/selected_config.json `
+  --output build/stage5-v2-test `
+  --split test `
+  --seeds 1,2,3
+```
+
+The three arms are the untouched legacy baseline, a controlled-order
+baseline, and candidate-guided LNS2. Only the controlled/guided comparison
+tests the candidate-ranking hypothesis; the legacy/controlled comparison
+measures the effect of removing random replanning order.
+
+The balanced Test experiment produced 9 guided wins, 9 controlled-baseline
+wins, and 126 ties. Guided solving completed 110/144 runs versus 112/144 for
+the controlled baseline; both retained 104 conflict pairs. No primary
+confidence interval excluded zero. Every one of the 121 accepted guidance
+decisions changed the Agent set, so v1's ineffective role-mapping failure was
+fixed, but candidate ranking still did not improve aggregate solver quality.
+
+The legacy randomized-order baseline solved 130/144 runs, substantially more
+than the controlled-order baseline's 112/144. Fixed replanning order is
+therefore an experimental control, not a recommended replacement for legacy
+LNS2.
+
+Stage 5 v2.1 tested lower-dimensional candidate features. `dedup20` improved
+offline Validation utility from `0.106` to `0.213`, but the rerun Test result
+still did not show an aggregate solver improvement: candidate-guided solved
+104/144 versus 106/144 for the controlled baseline, with 10 guided wins, 9
+controlled wins, and 125 ties.
 
 ## Reproducibility
 
