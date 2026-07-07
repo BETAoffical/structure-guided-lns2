@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from .candidate_experience import candidate_raw_features
+from .candidate_ranker import (
+    CandidateRanker,
+    predict_ranker_state,
+)
 from .candidate_retrieval import (
     predict_candidate,
     vectorize,
@@ -179,6 +183,116 @@ class CandidateGuide:
                 best["utility"] - baseline["utility"]
             ),
             "predictions": predictions,
+            "python_runtime_ms": (
+                time.perf_counter() - started
+            )
+            * 1000.0,
+        }
+
+
+class RankerCandidateGuide:
+    def __init__(
+        self,
+        dataset: str | Path,
+        split: str,
+        task_id: str,
+        ranker: str | Path,
+        config: str | Path,
+    ) -> None:
+        if split not in {"validation", "test"}:
+            raise ValueError("candidate guidance cannot read Train")
+        self.dataset_root = Path(dataset).resolve()
+        self.split = split
+        self.task_id = task_id
+        self.ranker_root = Path(ranker).resolve()
+        rows = _read_jsonl(
+            self.dataset_root / split / "manifest.jsonl"
+        )
+        try:
+            self.manifest = next(
+                row for row in rows if row["task_id"] == task_id
+            )
+        except StopIteration as error:
+            raise ValueError(f"unknown task: {task_id}") from error
+        self.map_document = _read_json(
+            self.dataset_root / split / self.manifest["map_file"]
+        )
+        self.task_document = _read_json(
+            self.dataset_root / split / self.manifest["task_file"]
+        )
+        self.ranker_summary = _read_json(
+            self.ranker_root / "ranker_summary.json"
+        )
+        if self.ranker_summary.get("fit_split") != "train":
+            raise ValueError("candidate ranker is not Train-only")
+        parameters = _read_json(Path(config).resolve())
+        if (
+            parameters.get("selected_on_split") != "validation"
+            or parameters.get("test_data_read", True)
+        ):
+            raise ValueError(
+                "candidate guidance requires frozen Validation parameters"
+            )
+        if parameters.get("guide_type") != "ranker":
+            raise ValueError("ranker guidance requires a ranker config")
+        ranker_profile = str(
+            self.ranker_summary.get("feature_profile", "full")
+        )
+        config_profile = str(
+            parameters.get("feature_profile", "full")
+        )
+        if ranker_profile != config_profile:
+            raise ValueError(
+                "candidate ranker/config feature profiles do not match"
+            )
+        self.minimum_margin = float(parameters["minimum_margin"])
+        self.model_type = str(parameters["model_type"])
+        trained_models = {
+            str(model["model_type"])
+            for model in self.ranker_summary.get("models", [])
+        }
+        if self.model_type not in trained_models:
+            raise ValueError("selected ranker model was not trained")
+        self.ranker = CandidateRanker(self.ranker_root, self.model_type)
+
+    def decide(self, request: dict[str, Any]) -> dict[str, Any]:
+        started = time.perf_counter()
+        candidate_features = []
+        candidate_indices = []
+        for candidate in request["candidates"]:
+            candidate_indices.append(int(candidate["candidate_index"]))
+            candidate_features.append(
+                candidate_raw_features(
+                    self.map_document,
+                    self.task_document,
+                    self.manifest,
+                    request["conflict_events"],
+                    request["paths"],
+                    request["seed_conflict"],
+                    candidate,
+                )
+            )
+        decision = predict_ranker_state(
+            self.ranker,
+            candidate_features,
+            candidate_indices,
+            self.minimum_margin,
+        )
+        best_score = float(decision["predicted_score"])
+        return {
+            "use_guidance": bool(decision["use_guidance"]),
+            "candidate_index": int(decision["candidate_index"]),
+            "out_of_distribution": False,
+            "fallback_reason": decision["fallback_reason"],
+            "predicted_valid_probability": 1.0 / (
+                1.0 + math.exp(-max(-40.0, min(40.0, best_score)))
+            ),
+            "predicted_conflict_reduction": best_score,
+            "predicted_cost_improvement": 0.0,
+            "predicted_runtime_ms": 0.0,
+            "nearest_distance": 0.0,
+            "predicted_margin": float(decision["predicted_margin"]),
+            "predictions": decision["predictions"],
             "python_runtime_ms": (
                 time.perf_counter() - started
             )

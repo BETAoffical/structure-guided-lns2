@@ -9,9 +9,13 @@ from generators.candidate_retrieval import (
     build_candidate_index,
     evaluate_candidate_retrieval,
 )
-from generators.candidate_guided_solver import CandidateGuide
+from generators.candidate_guided_solver import CandidateGuide, RankerCandidateGuide
 from generators.candidate_diagnostics import build_candidate_diagnostics
 from generators.candidate_experience import _aggregate_order_outcomes
+from generators.candidate_ranker import (
+    evaluate_candidate_ranker,
+    train_candidate_ranker,
+)
 
 
 def _write_json(path: Path, value: dict) -> None:
@@ -374,6 +378,146 @@ class CandidateRetrievalTests(unittest.TestCase):
             self.assertTrue(
                 (output / "candidate_diagnostics.md").is_file()
             )
+
+    def test_candidate_ranker_trains_and_tunes_without_test(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            memory = root / "memory"
+            queries = root / "queries"
+            ranker = root / "ranker"
+            evaluation = root / "evaluation"
+            _write_jsonl(memory / "candidate_cases.jsonl", _cases("train", 8))
+            _write_json(
+                memory / "candidate_summary.json",
+                {"split": "train", "usage": "memory"},
+            )
+            _write_jsonl(
+                queries / "candidate_cases.jsonl",
+                _cases("validation", 4),
+            )
+            _write_json(
+                queries / "candidate_summary.json",
+                {"split": "validation", "usage": "evaluation"},
+            )
+
+            train_summary = train_candidate_ranker(
+                memory,
+                ranker,
+                feature_profile="dedup20",
+                models=["pairwise_linear"],
+            )
+            eval_summary = evaluate_candidate_ranker(
+                ranker,
+                queries,
+                evaluation,
+            )
+            self.assertEqual(train_summary["fit_split"], "train")
+            self.assertFalse(train_summary["test_data_read"])
+            self.assertEqual(eval_summary["ranker_split"], "train")
+            self.assertEqual(eval_summary["query_split"], "validation")
+            self.assertFalse(eval_summary["test_data_read"])
+            config = json.loads(
+                (evaluation / "selected_config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(config["guide_type"], "ranker")
+            self.assertEqual(config["feature_profile"], "dedup20")
+            self.assertEqual(config["model_type"], "pairwise_linear")
+
+            repeat = root / "repeat"
+            repeated = evaluate_candidate_ranker(ranker, queries, repeat)
+            self.assertEqual(
+                eval_summary["selected_parameters"],
+                repeated["selected_parameters"],
+            )
+            self.assertEqual(
+                (evaluation / "ranker_guidance.jsonl").read_text(
+                    encoding="utf-8"
+                ),
+                (repeat / "ranker_guidance.jsonl").read_text(
+                    encoding="utf-8"
+                ),
+            )
+
+    def test_candidate_ranker_rejects_non_train_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            memory = root / "memory"
+            _write_jsonl(
+                memory / "candidate_cases.jsonl", _cases("validation", 1)
+            )
+            _write_json(
+                memory / "candidate_summary.json",
+                {"split": "validation", "usage": "evaluation"},
+            )
+            with self.assertRaisesRegex(ValueError, "Train"):
+                train_candidate_ranker(memory, root / "ranker")
+
+    def test_ranker_guide_rejects_profile_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dataset = root / "dataset"
+            split_root = dataset / "test"
+            split_root.mkdir(parents=True)
+            _write_jsonl(
+                split_root / "manifest.jsonl",
+                [
+                    {
+                        "task_id": "test_task_000",
+                        "map_file": "map.json",
+                        "task_file": "task.json",
+                    }
+                ],
+            )
+            _write_json(split_root / "map.json", {"rows": 1, "cols": 1})
+            _write_json(split_root / "task.json", {"metadata": {}})
+            ranker = root / "ranker"
+            _write_json(
+                ranker / "ranker_summary.json",
+                {
+                    "fit_split": "train",
+                    "feature_profile": "dedup20",
+                    "models": [{"model_type": "pairwise_linear"}],
+                },
+            )
+            _write_json(
+                ranker / "normalizer.json",
+                {
+                    "fit_split": "train",
+                    "feature_profile": "dedup20",
+                    "features": [],
+                },
+            )
+            _write_json(
+                ranker / "pairwise_linear.json",
+                {
+                    "model_type": "pairwise_linear",
+                    "weights": [],
+                    "bias": 0.0,
+                },
+            )
+            config = root / "selected_config.json"
+            _write_json(
+                config,
+                {
+                    "selected_on_split": "validation",
+                    "test_data_read": False,
+                    "guide_type": "ranker",
+                    "feature_profile": "core12",
+                    "model_type": "pairwise_linear",
+                    "minimum_margin": 0.0,
+                },
+            )
+
+            with self.assertRaisesRegex(ValueError, "profiles"):
+                RankerCandidateGuide(
+                    dataset,
+                    "test",
+                    "test_task_000",
+                    ranker,
+                    config,
+                )
 
 
 if __name__ == "__main__":

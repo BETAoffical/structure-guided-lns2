@@ -336,6 +336,43 @@ Validation improved again (`dedup20` top1 gain `0.414`, oracle regret
 controlled wins, and 124 ties. Dense and compartmentalized cases improved
 locally; regular beltway and clustered tasks still regressed.
 
+Stage 5 v3 replaces kNN with supervised candidate ranking. It reuses the
+existing V2.2 candidate experience; no new Trace collection is required:
+
+```powershell
+python scripts/train_candidate_ranker.py `
+  --memory build/stage5-v2-2-train-experience `
+  --output build/stage5-v3-ranker `
+  --feature-profile dedup20 `
+  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
+
+python scripts/evaluate_candidate_ranker.py `
+  --ranker build/stage5-v3-ranker `
+  --queries build/stage5-v2-2-validation-experience `
+  --output build/stage5-v3-validation
+
+python scripts/run_stage5_v3_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --knn-index build/stage5-v2-2-index-dedup20 `
+  --knn-config build/stage5-v2-2-evaluation-dedup20/selected_config.json `
+  --ranker build/stage5-v3-ranker `
+  --ranker-config build/stage5-v3-validation/selected_config.json `
+  --output build/stage5-v3-test `
+  --split test
+```
+
+The pure Python `pairwise_linear` ranker is the dependency-free baseline.
+`sklearn_*` models are optional comparisons and are skipped only if the local
+environment cannot import scikit-learn.
+
+The current V3 run selected `sklearn_forest` on Validation. Its offline
+Validation top1 gain was `0.165`, below the V2.2 kNN gain of `0.414`. Test
+also remained negative: ranker-guided solved 109/144 runs versus 114/144 for
+the controlled baseline, with 19 ranker wins, 23 controlled wins, and 102
+ties. The ranker used guidance more often and produced more effective local
+repairs than kNN, but that did not improve aggregate solver performance.
+
 ## Reproducibility
 
 Map, task, and solver decisions are deterministic for a fixed implementation,

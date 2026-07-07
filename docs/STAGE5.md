@@ -204,3 +204,79 @@ compartmentalized layouts retained a useful local signal, while clustered
 tasks and regular beltway layouts offset the gains. The conclusion is that
 multi-order labels reduce one source of noise, but kNN ranking still is not
 strong enough to improve the simplified LNS2 solver overall.
+
+## Stage 5 v3 supervised candidate ranking
+
+V3 keeps the V2.2 candidate traces and labels but changes the decision model.
+The task is treated as supervised ranking inside one conflict state: among the
+eight candidate neighborhoods, predict which one has the highest aggregated
+utility. The implementation trains on Train candidate cases only, selects the
+model and replacement margin on Validation only, and reads Test only for the
+final frozen experiment.
+
+The default model is `pairwise_linear`, a dependency-free pairwise linear
+ranker trained from candidate utility differences. Optional scikit-learn
+comparisons are available when the local environment provides sklearn:
+`sklearn_logistic`, `sklearn_forest`, and `sklearn_gbdt`. All models use the
+same Train-fitted feature normalizer and the same feature profiles as V2.1.
+Agent IDs, absolute coordinates, generator names, post-repair paths, and
+outcome labels remain excluded from input features.
+
+The V3 final protocol compares four arms when the kNN reference is provided:
+
+1. legacy neighborhood and randomized replanning order;
+2. controlled baseline neighborhood and controlled replanning order;
+3. V2.2 kNN-guided candidate neighborhood;
+4. V3 ranker-guided candidate neighborhood.
+
+The primary comparison is controlled baseline versus ranker-guided. The kNN
+arm is a secondary reference to determine whether supervised ranking improves
+over retrieval. If Validation does not improve over kNN, the negative result
+is still reported rather than hidden.
+
+Reproduction commands:
+
+```powershell
+python scripts/train_candidate_ranker.py `
+  --memory build/stage5-v2-2-train-experience `
+  --output build/stage5-v3-ranker `
+  --feature-profile dedup20 `
+  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
+
+python scripts/evaluate_candidate_ranker.py `
+  --ranker build/stage5-v3-ranker `
+  --queries build/stage5-v2-2-validation-experience `
+  --output build/stage5-v3-validation
+
+python scripts/run_stage5_v3_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --knn-index build/stage5-v2-2-index-dedup20 `
+  --knn-config build/stage5-v2-2-evaluation-dedup20/selected_config.json `
+  --ranker build/stage5-v3-ranker `
+  --ranker-config build/stage5-v3-validation/selected_config.json `
+  --output build/stage5-v3-test `
+  --split test
+```
+
+The first V3 run selected `sklearn_forest` with zero replacement margin.
+Validation was worse than the V2.2 kNN reference: top1 gain `0.165` versus
+`0.414`, oracle regret `1.194` versus `0.945`, and Top-1 accuracy `22.6%`
+versus `24.2%`.
+
+The Test result remained negative:
+
+| Metric | Controlled | Ranker-guided |
+| --- | ---: | ---: |
+| Solved | 114/144 | 109/144 |
+| Final conflicting pairs | 100 | 102 |
+| LNS iterations | 214 | 258 |
+| Mean wall time | 1454.1 ms | 1769.1 ms |
+
+Paired outcomes were 19 ranker wins, 23 controlled wins, and 102 ties. The
+paired outcome sign-test p-value was `0.644`, and the success McNemar exact
+p-value was `0.302`. Ranker guidance was used 207 times and produced 68
+effective guided iterations, compared with 130 uses and 33 effective
+iterations for the kNN reference in the same V3 run. The local repair signal is
+therefore stronger, but it still does not translate into better aggregate
+solver quality.
