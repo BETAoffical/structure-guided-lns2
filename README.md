@@ -163,11 +163,17 @@ experiments belong to Stage 5. See [Stage 4](docs/STAGE4.md).
 
 ## Stage 5: guided simplified LNS2
 
-Stage 5 compares the existing simplified LNS2 baseline with a closed-loop
-Repair-guided variant. It does not claim to reproduce or improve the complete
-official MAPF-LNS2 solver.
+Stage 5 compares the existing simplified LNS2 baseline with candidate-guided
+variants. It does not claim to reproduce or improve the complete official
+MAPF-LNS2 solver.
 
-Validation selects the confidence threshold:
+The original Repair-role guidance (`guided_solver.py`, `stage5.py`, and
+`run_stage5_experiment.py`) is kept only as a legacy reproduction path. It is
+not part of the default workflow because the paired Test run did not show a
+statistically significant improvement. The current workflow starts from
+candidate collection and closed-loop rollout labels.
+
+Legacy v1 reproduction command:
 
 ```powershell
 python scripts/run_stage5_experiment.py `
@@ -372,6 +378,84 @@ also remained negative: ranker-guided solved 109/144 runs versus 114/144 for
 the controlled baseline, with 19 ranker wins, 23 controlled wins, and 102
 ties. The ranker used guidance more often and produced more effective local
 repairs than kNN, but that did not improve aggregate solver performance.
+
+Stage 5 v4 changes the label from one-step repair quality to closed-loop
+rollout quality. Candidate collection can now write Trace V6. The default
+fast loop uses the `core5` candidate generator profile, two replanning orders,
+two rollout horizons, and optional high-pressure filters:
+
+```powershell
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v4-train-collection `
+  --split train `
+  --candidate-generator-profile core5 `
+  --candidate-replan-order-seeds 0,1 `
+  --candidate-rollout-horizons 10,25 `
+  --layout-modes compartmentalized,dead_end_aisles `
+  --task-variants balanced_dense,balanced_clustered `
+  --workers 4
+
+python scripts/build_rollout_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v4-train-collection `
+  --output build/stage5-v4-train-experience `
+  --split train
+```
+
+Run the same fast collection for Validation, then train and tune:
+
+```powershell
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v4-validation-collection `
+  --split validation `
+  --candidate-generator-profile core5 `
+  --candidate-replan-order-seeds 0,1 `
+  --candidate-rollout-horizons 10,25 `
+  --layout-modes compartmentalized,dead_end_aisles `
+  --task-variants balanced_dense,balanced_clustered `
+  --workers 4
+
+python scripts/build_rollout_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v4-validation-collection `
+  --output build/stage5-v4-validation-experience `
+  --split validation
+
+python scripts/train_candidate_ranker.py `
+  --memory build/stage5-v4-train-experience `
+  --output build/stage5-v4-ranker `
+  --feature-profile rollout22 `
+  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
+
+python scripts/evaluate_candidate_ranker.py `
+  --ranker build/stage5-v4-ranker `
+  --queries build/stage5-v4-validation-experience `
+  --output build/stage5-v4-validation `
+  --conservative-gates
+
+python scripts/run_stage5_v4_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --rollout-ranker build/stage5-v4-ranker `
+  --rollout-config build/stage5-v4-validation/selected_config.json `
+  --candidate-generator-profile core5 `
+  --output build/stage5-v4-test `
+  --split test
+```
+
+For final reproduction, rerun collection with
+`--candidate-generator-profile full8`, `--candidate-replan-order-seeds 0,1,2`,
+and `--candidate-rollout-horizons 10,25,50`. Optional `--knn-*` and `--v3-*`
+arguments on `run_stage5_v4_experiment.py` add secondary comparison arms but
+are no longer part of the default run.
+
+V4 is implemented and smoke-tested, but the full `10,25,50` rollout
+collection is intentionally not bundled as source because it is an expensive
+generated artifact.
 
 ## Reproducibility
 

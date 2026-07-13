@@ -29,10 +29,13 @@ behavior.
 ## Trace V4/V5 extension
 
 Stage 5 v2 adds opt-in `--candidate-mode collect` tracing. The solver keeps
-the legacy main trajectory but evaluates eight deterministic neighborhoods
-with one shared Agent priority. Each trial has an independent two-second
-limit, consumes no main RNG state, and is excluded from the five-second main
-search budget.
+the legacy main trajectory but evaluates deterministic candidate
+neighborhoods with one shared Agent priority. Use
+`--candidate-generator-profile full8` to reproduce the original eight
+candidate pool, or `--candidate-generator-profile core5` for the current
+faster five-candidate pool. Each trial has an independent two-second limit,
+consumes no main RNG state, and is excluded from the five-second main search
+budget.
 
 Trace V4 adds full current paths, candidate membership, explicit replanning
 orders, validity, conflict/cost outcomes, and repaired candidate paths. The
@@ -44,6 +47,14 @@ candidate fields remain the `order_seed=0` trial for compatibility, while
 `order_trials` records every deterministic replanning order and its outcome.
 The Python collector aggregates these order trials into expected candidate
 labels and also writes `candidate_order_cases.jsonl` for label-noise analysis.
+
+Stage 5 v4 adds optional `--candidate-rollout-horizons A,B,C`. When supplied,
+candidate collection writes Trace V6. Every valid candidate/order trial first
+performs the one-step repair, then continues an isolated short LNS rollout to
+the requested horizons. The rollout labels record horizon, solved flag,
+iterations, accepted iterations, remaining conflicts, cost, and runtime.
+Rollout simulation uses an isolated RNG and does not change the main solver
+trajectory.
 
 ## Batch collection
 
@@ -63,7 +74,8 @@ produce 216 runs. Exit codes `0` and `1` are valid experiment results (solved
 and unsolved); process or input errors are collection errors.
 
 The collector writes one trace per task/seed pair,
-`collection_manifest.jsonl`, and `collection_summary.json`. The summary also
-reports conflict-run ratio, total initial conflicts, LNS iterations, and
-unsolved ratio. A later stage may enrich these records with local map
-structure and use them for retrieval or learned selection.
+`collection_manifest.jsonl`, and `collection_summary.json`. Candidate
+collection also records candidate profile, replanning-order seeds, rollout
+horizons, filter settings, worker count, and an estimated count of candidate
+trials and rollout labels. A later stage may enrich these records with local
+map structure and use them for retrieval or learned selection.

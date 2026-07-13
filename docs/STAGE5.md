@@ -280,3 +280,92 @@ effective guided iterations, compared with 130 uses and 33 effective
 iterations for the kNN reference in the same V3 run. The local repair signal is
 therefore stronger, but it still does not translate into better aggregate
 solver quality.
+
+## Stage 5 v4 rollout labels
+
+V4 addresses the V3 label mismatch by replacing one-step repair labels with
+closed-loop rollout labels. Trace V6 is enabled with
+`--candidate-rollout-horizons`; for every valid candidate/order trial, the C++
+solver continues an isolated short LNS rollout from the repaired paths and
+records remaining conflicts, cost, solved flag, iterations, accepted
+iterations, and runtime at each horizon. The rollout does not consume the main
+solver RNG or alter the main trajectory.
+
+`build_rollout_candidate_experience.py` converts Trace V6 into
+`rollout_candidate_cases.jsonl` and a compatibility `candidate_cases.jsonl`
+for the existing ranker trainer. The `rollout22` feature profile adds rollout
+horizon and one-step repair deltas to the previous candidate feature set.
+Validation can tune conservative gates with `--conservative-gates`; these add
+extra replacement margin for regular beltway maps, low-conflict states, and
+clustered tasks.
+
+Fast-loop commands:
+
+```powershell
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v4-train-collection `
+  --split train `
+  --candidate-generator-profile core5 `
+  --candidate-replan-order-seeds 0,1 `
+  --candidate-rollout-horizons 10,25 `
+  --layout-modes compartmentalized,dead_end_aisles `
+  --task-variants balanced_dense,balanced_clustered `
+  --workers 4
+
+python scripts/build_rollout_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v4-train-collection `
+  --output build/stage5-v4-train-experience `
+  --split train
+
+python scripts/collect_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --output build/stage5-v4-validation-collection `
+  --split validation `
+  --candidate-generator-profile core5 `
+  --candidate-replan-order-seeds 0,1 `
+  --candidate-rollout-horizons 10,25 `
+  --layout-modes compartmentalized,dead_end_aisles `
+  --task-variants balanced_dense,balanced_clustered `
+  --workers 4
+
+python scripts/build_rollout_candidate_experience.py `
+  --dataset build/feasibility-dataset `
+  --collection build/stage5-v4-validation-collection `
+  --output build/stage5-v4-validation-experience `
+  --split validation
+
+python scripts/train_candidate_ranker.py `
+  --memory build/stage5-v4-train-experience `
+  --output build/stage5-v4-ranker `
+  --feature-profile rollout22 `
+  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
+
+python scripts/evaluate_candidate_ranker.py `
+  --ranker build/stage5-v4-ranker `
+  --queries build/stage5-v4-validation-experience `
+  --output build/stage5-v4-validation `
+  --conservative-gates
+
+python scripts/run_stage5_v4_experiment.py `
+  --dataset build/feasibility-dataset `
+  --solver build/windows/Release/lns2_cli.exe `
+  --rollout-ranker build/stage5-v4-ranker `
+  --rollout-config build/stage5-v4-validation/selected_config.json `
+  --candidate-generator-profile core5 `
+  --output build/stage5-v4-test `
+  --split test
+```
+
+For final reproduction, collect both Train and Validation with
+`--candidate-generator-profile full8`, `--candidate-replan-order-seeds 0,1,2`,
+and `--candidate-rollout-horizons 10,25,50`. The v4 test runner compares only
+controlled baseline and rollout-guided by default; pass optional `--knn-*` and
+`--v3-*` arguments only when those secondary arms are needed.
+
+V4 has been smoke-tested on a small dataset. The full `10,25,50` rollout
+collection is expected to be substantially more expensive than V2.2 collection
+and should be treated as generated build output.

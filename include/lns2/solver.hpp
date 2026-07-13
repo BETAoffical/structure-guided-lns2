@@ -29,8 +29,10 @@ struct SolverOptions {
     int time_limit_ms = 5000;
     CandidateMode candidate_mode = CandidateMode::Disabled;
     int candidate_count = 8;
+    std::string candidate_generator_profile = "full8";
     int candidate_trial_limit_ms = 2000;
     std::vector<int> candidate_replan_order_seeds = {0};
+    std::vector<int> candidate_rollout_horizons;
 };
 
 struct SolverMetrics {
@@ -71,6 +73,16 @@ struct ConflictEvent {
 };
 
 struct CandidateTrial {
+    struct RolloutResult {
+        int horizon = 0;
+        bool solved = false;
+        int iterations = 0;
+        int accepted_iterations = 0;
+        int conflicting_pairs_after = -1;
+        int sum_of_costs_after = -1;
+        double runtime_ms = 0.0;
+    };
+
     struct OrderTrial {
         int order_seed = 0;
         std::vector<int> replan_order;
@@ -82,6 +94,7 @@ struct CandidateTrial {
         double total_runtime_ms = 0.0;
         std::vector<ConflictEvent> conflict_events_after;
         Paths neighborhood_paths_after;
+        std::vector<RolloutResult> rollouts;
     };
 
     int candidate_index = -1;
@@ -96,6 +109,7 @@ struct CandidateTrial {
     double total_runtime_ms = 0.0;
     std::vector<ConflictEvent> conflict_events_after;
     Paths neighborhood_paths_after;
+    std::vector<RolloutResult> rollouts;
     std::vector<OrderTrial> order_trials;
 };
 
@@ -218,6 +232,9 @@ private:
         const Paths& current,
         const std::vector<int>& neighborhood,
         const std::vector<int>& order);
+    std::vector<CandidateTrial::RolloutResult> rollout_candidate(
+        const Paths& candidate,
+        int order_seed);
     double run_candidate_trials(
         const Paths& current,
         std::vector<CandidateTrial>* candidates);

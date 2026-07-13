@@ -17,6 +17,32 @@ from .candidate_retrieval import (
 
 
 MARGIN_OPTIONS = (0.0, 0.25, 0.5, 1.0)
+CONSERVATIVE_GATE_OPTIONS = (
+    {
+        "regular_beltway_margin_bonus": 0.0,
+        "low_conflict_margin_bonus": 0.0,
+        "low_conflict_threshold": 0,
+        "clustered_margin_bonus": 0.0,
+    },
+    {
+        "regular_beltway_margin_bonus": 0.5,
+        "low_conflict_margin_bonus": 0.5,
+        "low_conflict_threshold": 1,
+        "clustered_margin_bonus": 0.0,
+    },
+    {
+        "regular_beltway_margin_bonus": 1.0,
+        "low_conflict_margin_bonus": 0.5,
+        "low_conflict_threshold": 1,
+        "clustered_margin_bonus": 0.5,
+    },
+    {
+        "regular_beltway_margin_bonus": 1.0,
+        "low_conflict_margin_bonus": 1.0,
+        "low_conflict_threshold": 2,
+        "clustered_margin_bonus": 1.0,
+    },
+)
 LINEAR_EPOCHS = 80
 LINEAR_LEARNING_RATE = 0.05
 LINEAR_L2 = 0.0001
@@ -69,10 +95,12 @@ def _group_by_state(cases: list[dict[str, Any]]) -> dict[str, list[dict[str, Any
     for case in cases:
         grouped[str(case["state_id"])].append(case)
     for state_id, rows in grouped.items():
-        if len(rows) != 8:
-            raise ValueError(f"state {state_id} does not contain eight candidates")
+        if len(rows) < 2:
+            raise ValueError(
+                f"state {state_id} does not contain enough candidates"
+            )
         indices = sorted(int(row["candidate_index"]) for row in rows)
-        if indices != list(range(8)):
+        if indices != list(range(len(rows))):
             raise ValueError(f"state {state_id} candidate indices are invalid")
         rows.sort(key=lambda row: int(row["candidate_index"]))
     return dict(sorted(grouped.items()))
@@ -280,6 +308,7 @@ def train_candidate_ranker(
         "schema_version": 1,
         "fit_split": "train",
         "test_data_read": False,
+        "label_source": summary.get("label_source", "single_step"),
         "feature_profile": feature_profile,
         "feature_count": normalizer["feature_count"],
         "feature_names": [entry["name"] for entry in normalizer["features"]],
@@ -411,6 +440,25 @@ def _state_metrics(
     }
 
 
+def _effective_margin(
+    case: dict[str, Any],
+    base_margin: float,
+    gate: dict[str, Any],
+) -> float:
+    margin = base_margin
+    if case.get("layout_mode") == "regular_beltway":
+        margin += float(gate.get("regular_beltway_margin_bonus", 0.0))
+    if case.get("task_variant") == "balanced_clustered":
+        margin += float(gate.get("clustered_margin_bonus", 0.0))
+    threshold = int(gate.get("low_conflict_threshold", 0))
+    conflict_count = int(
+        case.get("outcome", {}).get("conflicting_pairs_before", 0)
+    )
+    if threshold > 0 and conflict_count <= threshold:
+        margin += float(gate.get("low_conflict_margin_bonus", 0.0))
+    return margin
+
+
 def _aggregate_metrics(states: list[dict[str, Any]]) -> dict[str, Any]:
     count = max(1, len(states))
     return {
@@ -443,6 +491,7 @@ def evaluate_candidate_ranker(
     ranker: str | Path,
     queries: str | Path,
     output: str | Path,
+    conservative_gates: bool = False,
 ) -> dict[str, Any]:
     ranker_root = Path(ranker).resolve()
     query_root = Path(queries).resolve()
@@ -462,41 +511,57 @@ def evaluate_candidate_ranker(
     selected: dict[str, Any] | None = None
     selected_states: list[dict[str, Any]] = []
     best_key: tuple[float, ...] | None = None
+    gate_options = (
+        CONSERVATIVE_GATE_OPTIONS
+        if conservative_gates
+        else CONSERVATIVE_GATE_OPTIONS[:1]
+    )
     for model in ranker_summary["models"]:
         model_type = str(model["model_type"])
         candidate_ranker = CandidateRanker(ranker_root, model_type)
         for margin in MARGIN_OPTIONS:
-            states = []
-            for state_id, state_cases in grouped.items():
-                vectors = [
-                    candidate_ranker.vectorize(case["features"])
-                    for case in state_cases
-                ]
-                raw_scores = candidate_ranker.score_vectors(vectors)
-                scores = {
-                    int(case["candidate_index"]): float(score)
-                    for case, score in zip(state_cases, raw_scores)
+            for gate in gate_options:
+                states = []
+                for state_id, state_cases in grouped.items():
+                    vectors = [
+                        candidate_ranker.vectorize(case["features"])
+                        for case in state_cases
+                    ]
+                    raw_scores = candidate_ranker.score_vectors(vectors)
+                    scores = {
+                        int(case["candidate_index"]): float(score)
+                        for case, score in zip(state_cases, raw_scores)
+                    }
+                    states.append(
+                        _state_metrics(
+                            state_cases,
+                            scores,
+                            _effective_margin(
+                                state_cases[0], margin, gate
+                            ),
+                        )
+                    )
+                metrics = _aggregate_metrics(states)
+                row = {
+                    "model_type": model_type,
+                    "minimum_margin": margin,
+                    **gate,
+                    "metrics": metrics,
                 }
-                states.append(_state_metrics(state_cases, scores, margin))
-            metrics = _aggregate_metrics(states)
-            row = {
-                "model_type": model_type,
-                "minimum_margin": margin,
-                "metrics": metrics,
-            }
-            evaluations.append(row)
-            key = (
-                metrics["top1_gain"],
-                -metrics["oracle_regret"],
-                metrics["ranking_accuracy"],
-                metrics["top1_accuracy"],
-                -margin,
-                model_type,
-            )
-            if best_key is None or key > best_key:
-                best_key = key
-                selected = row
-                selected_states = states
+                evaluations.append(row)
+                key = (
+                    metrics["top1_gain"],
+                    -metrics["oracle_regret"],
+                    metrics["ranking_accuracy"],
+                    metrics["top1_accuracy"],
+                    -metrics["guidance_use_rate"],
+                    -margin,
+                    model_type,
+                )
+                if best_key is None or key > best_key:
+                    best_key = key
+                    selected = row
+                    selected_states = states
     assert selected is not None
     selected_config = {
         "schema_version": 1,
@@ -506,6 +571,14 @@ def evaluate_candidate_ranker(
         "feature_profile": ranker_summary["feature_profile"],
         "model_type": selected["model_type"],
         "minimum_margin": selected["minimum_margin"],
+        "regular_beltway_margin_bonus": selected[
+            "regular_beltway_margin_bonus"
+        ],
+        "low_conflict_margin_bonus": selected[
+            "low_conflict_margin_bonus"
+        ],
+        "low_conflict_threshold": selected["low_conflict_threshold"],
+        "clustered_margin_bonus": selected["clustered_margin_bonus"],
     }
     _write_jsonl(output_root / "ranker_guidance.jsonl", selected_states)
     _write_json(output_root / "selected_config.json", selected_config)

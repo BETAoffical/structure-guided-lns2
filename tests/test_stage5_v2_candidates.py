@@ -16,6 +16,8 @@ from generators.candidate_ranker import (
     evaluate_candidate_ranker,
     train_candidate_ranker,
 )
+from generators.experience import _result_from_trace
+from generators.rollout_experience import _aggregate_rollouts
 
 
 def _write_json(path: Path, value: dict) -> None:
@@ -89,6 +91,53 @@ def _cases(split: str, state_count: int) -> list[dict]:
 
 
 class CandidateRetrievalTests(unittest.TestCase):
+    def test_trace_resume_rejects_candidate_profile_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            trace = Path(directory) / "trace.jsonl"
+            _write_jsonl(
+                trace,
+                [
+                    {
+                        "schema_version": 6,
+                        "event_type": "summary",
+                        "success": True,
+                        "initial_conflicting_pairs": 1,
+                        "final_conflicting_pairs": 0,
+                        "iterations": 1,
+                        "accepted_iterations": 1,
+                        "makespan": 4,
+                        "sum_of_costs": 8,
+                        "runtime_ms": 1.0,
+                        "search_runtime_ms": 1.0,
+                        "guidance_runtime_ms": 0.0,
+                        "counterfactual_runtime_ms": 0.0,
+                        "guidance_requests": 0,
+                        "guidance_used": 0,
+                        "guidance_fallbacks": 0,
+                        "candidate_generator_profile": "full8",
+                        "candidate_replan_order_seeds": [0, 1, 2],
+                        "candidate_rollout_horizons": [10, 25, 50],
+                    }
+                ],
+            )
+
+            self.assertIsNotNone(
+                _result_from_trace(
+                    trace,
+                    expected_candidate_generator_profile="full8",
+                    expected_replan_order_seeds=[0, 1, 2],
+                    expected_rollout_horizons=[10, 25, 50],
+                )
+            )
+            self.assertIsNone(
+                _result_from_trace(
+                    trace,
+                    expected_candidate_generator_profile="core5",
+                    expected_replan_order_seeds=[0, 1, 2],
+                    expected_rollout_horizons=[10, 25, 50],
+                )
+            )
+
     def test_train_index_and_validation_tuning_are_isolated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -518,6 +567,55 @@ class CandidateRetrievalTests(unittest.TestCase):
                     ranker,
                     config,
                 )
+
+    def test_rollout_outcomes_aggregate_closed_loop_labels(self) -> None:
+        aggregated = _aggregate_rollouts(
+            [
+                {
+                    "candidate_valid": True,
+                    "conflicting_pairs_before": 5,
+                    "sum_of_costs_before": 100,
+                    "one_step_conflict_reduction": 1,
+                    "one_step_cost_improvement": -2,
+                    "rollouts": [
+                        {
+                            "horizon": 10,
+                            "solved": False,
+                            "iterations": 10,
+                            "accepted_iterations": 3,
+                            "conflicting_pairs_after": 2,
+                            "sum_of_costs_after": 110,
+                            "runtime_ms": 20.0,
+                        }
+                    ],
+                },
+                {
+                    "candidate_valid": True,
+                    "conflicting_pairs_before": 5,
+                    "sum_of_costs_before": 100,
+                    "one_step_conflict_reduction": 0,
+                    "one_step_cost_improvement": 1,
+                    "rollouts": [
+                        {
+                            "horizon": 10,
+                            "solved": True,
+                            "iterations": 4,
+                            "accepted_iterations": 2,
+                            "conflicting_pairs_after": 0,
+                            "sum_of_costs_after": 99,
+                            "runtime_ms": 10.0,
+                        }
+                    ],
+                },
+            ]
+        )
+        outcome = aggregated[10]
+        self.assertAlmostEqual(outcome["conflict_reduction"], 4.0)
+        self.assertAlmostEqual(outcome["cost_improvement"], -4.5)
+        self.assertAlmostEqual(outcome["solved_probability"], 0.5)
+        self.assertAlmostEqual(
+            outcome["one_step_conflict_reduction"], 0.5
+        )
 
 
 if __name__ == "__main__":

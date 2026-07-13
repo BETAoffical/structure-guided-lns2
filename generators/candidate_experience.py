@@ -498,10 +498,10 @@ def build_candidate_experience(
         if (
             not trace
             or trace[-1].get("event_type") != "summary"
-            or any(row.get("schema_version") not in {4, 5} for row in trace)
+            or any(row.get("schema_version") not in {4, 5, 6} for row in trace)
             or trace[-1].get("candidate_mode") != "collect"
         ):
-            raise ValueError("candidate collection requires Trace V4 or V5")
+            raise ValueError("candidate collection requires Trace V4, V5, or V6")
         run_id = (
             f"{task_id}__seed_{int(run['solver_seed']):04d}"
         )
@@ -525,8 +525,10 @@ def build_candidate_experience(
                 )
             candidates = iteration["candidate_trials"]
             expected_count = int(run.get("candidate_count", 8))
-            if expected_count != 8 or len(candidates) != 8:
-                raise ValueError("state does not contain eight candidates")
+            if expected_count <= 0 or len(candidates) != expected_count:
+                raise ValueError(
+                    "state does not contain the expected candidate count"
+                )
             normalized_sets: set[tuple[int, ...]] = set()
             state_id = (
                 f"{run_id}__iteration_"
@@ -685,7 +687,18 @@ def build_candidate_experience(
         "state_count": state_count,
         "candidate_case_count": len(cases),
         "candidate_order_case_count": len(order_cases),
-        "candidate_count_per_state": 8,
+        "candidate_count_per_state": (
+            len({int(row["candidate_index"]) for row in cases})
+            if cases
+            else 0
+        ),
+        "candidate_generator_profiles": sorted(
+            {
+                str(row.get("candidate_generator_profile", "full8"))
+                for row in collection_rows
+                if row.get("candidate_trials")
+            }
+        ),
         "valid_candidate_count": valid_count,
         "valid_order_case_count": valid_order_count,
         "candidate_replan_order_seeds": sorted(

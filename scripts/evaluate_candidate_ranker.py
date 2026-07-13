@@ -18,11 +18,17 @@ def main() -> int:
     parser.add_argument("--ranker", required=True)
     parser.add_argument("--queries", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--conservative-gates",
+        action="store_true",
+        help="Tune regular/low-conflict/clustered fallback margins.",
+    )
     arguments = parser.parse_args()
     summary = evaluate_candidate_ranker(
         arguments.ranker,
         arguments.queries,
         arguments.output,
+        conservative_gates=arguments.conservative_gates,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0

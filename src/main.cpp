@@ -45,7 +45,9 @@ void usage(const char* executable) {
            " [--trace FILE] [--guidance-stdio]"
            " [--candidate-mode collect|controlled|guided]"
            " [--candidate-count N] [--candidate-trial-limit-ms N]"
+           " [--candidate-generator-profile full8|core5]"
            " [--candidate-replan-order-seeds A,B,C]"
+           " [--candidate-rollout-horizons A,B,C]"
            " [--candidate-guidance-stdio]\n";
 }
 
@@ -321,6 +323,10 @@ int main(int argc, char** argv) {
                 options.candidate_count =
                     parse_int(argv[++i], option);
             } else if (
+                option == "--candidate-generator-profile" &&
+                i + 1 < argc) {
+                options.candidate_generator_profile = argv[++i];
+            } else if (
                 option == "--candidate-trial-limit-ms" &&
                 i + 1 < argc) {
                 options.candidate_trial_limit_ms =
@@ -329,6 +335,11 @@ int main(int argc, char** argv) {
                 option == "--candidate-replan-order-seeds" &&
                 i + 1 < argc) {
                 options.candidate_replan_order_seeds =
+                    parse_int_list(argv[++i], option);
+            } else if (
+                option == "--candidate-rollout-horizons" &&
+                i + 1 < argc) {
+                options.candidate_rollout_horizons =
                     parse_int_list(argv[++i], option);
             } else if (option == "--candidate-guidance-stdio") {
                 candidate_guidance_stdio = true;

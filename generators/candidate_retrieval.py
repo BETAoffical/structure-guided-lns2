@@ -56,6 +56,30 @@ FEATURE_PROFILES = {
         "candidate.temporal_overlap",
         "candidate.mean_path_stretch",
     ),
+    "rollout22": (
+        "map.shelf_coverage",
+        "map.gate_ratio",
+        "map.dead_end_ratio",
+        "map.maximum_prior",
+        "task.agent_count",
+        "task.density_service",
+        "task.hotspot_skew",
+        "task.mean_shortest_distance",
+        "state.conflict_density",
+        "state.maximum_conflict_degree",
+        "state.vertex_ratio",
+        "state.mean_conflict_time",
+        "candidate.conflict_edge_coverage",
+        "candidate.induced_edge_density",
+        "candidate.path_conflict_overlap",
+        "candidate.temporal_overlap",
+        "candidate.start_goal_blocker_ratio",
+        "candidate.mean_path_stretch",
+        "candidate.mean_structural_prior",
+        "candidate.cross_zone_ratio",
+        "candidate.one_step_conflict_reduction",
+        "rollout.horizon",
+    ),
 }
 
 
@@ -300,8 +324,10 @@ def predict_candidate(
 
 def actual_utility(outcome: dict[str, Any]) -> float:
     if "valid_probability" in outcome:
+        solved_bonus = 4.0 * float(outcome.get("solved_probability", 0.0))
         return (
-            4.0 * (float(outcome["valid_probability"]) - 0.5)
+            solved_bonus
+            + 4.0 * (float(outcome["valid_probability"]) - 0.5)
             + 2.0 * float(outcome["conflict_reduction"])
             + 0.02 * float(outcome["cost_improvement"])
             - min(
@@ -589,8 +615,17 @@ def evaluate_candidate_retrieval(
     )
     for case in cases:
         grouped[str(case["state_id"])].append(case)
-    if any(len(values) != 8 for values in grouped.values()):
-        raise ValueError("each Validation state must have eight candidates")
+    for state_id, values in grouped.items():
+        if len(values) < 2:
+            raise ValueError(
+                f"Validation state {state_id} has fewer than two candidates"
+            )
+        indices = sorted(int(row["candidate_index"]) for row in values)
+        if indices != list(range(len(values))):
+            raise ValueError(
+                f"Validation state {state_id} candidate indices are invalid"
+            )
+        values.sort(key=lambda row: int(row["candidate_index"]))
 
     evaluations = []
     best_key: tuple[float, ...] | None = None

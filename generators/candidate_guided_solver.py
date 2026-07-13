@@ -246,6 +246,18 @@ class RankerCandidateGuide:
                 "candidate ranker/config feature profiles do not match"
             )
         self.minimum_margin = float(parameters["minimum_margin"])
+        self.regular_beltway_margin_bonus = float(
+            parameters.get("regular_beltway_margin_bonus", 0.0)
+        )
+        self.low_conflict_margin_bonus = float(
+            parameters.get("low_conflict_margin_bonus", 0.0)
+        )
+        self.low_conflict_threshold = int(
+            parameters.get("low_conflict_threshold", 0)
+        )
+        self.clustered_margin_bonus = float(
+            parameters.get("clustered_margin_bonus", 0.0)
+        )
         self.model_type = str(parameters["model_type"])
         trained_models = {
             str(model["model_type"])
@@ -276,7 +288,7 @@ class RankerCandidateGuide:
             self.ranker,
             candidate_features,
             candidate_indices,
-            self.minimum_margin,
+            self._effective_margin(request),
         )
         best_score = float(decision["predicted_score"])
         return {
@@ -299,6 +311,20 @@ class RankerCandidateGuide:
             * 1000.0,
         }
 
+    def _effective_margin(self, request: dict[str, Any]) -> float:
+        margin = self.minimum_margin
+        if self.manifest.get("layout_mode") == "regular_beltway":
+            margin += self.regular_beltway_margin_bonus
+        if self.manifest.get("task_variant") == "balanced_clustered":
+            margin += self.clustered_margin_bonus
+        if (
+            self.low_conflict_threshold > 0
+            and len(request.get("conflict_events", []))
+            <= self.low_conflict_threshold
+        ):
+            margin += self.low_conflict_margin_bonus
+        return margin
+
 
 def run_candidate_guided_instance(
     solver: str | Path,
@@ -309,7 +335,9 @@ def run_candidate_guided_instance(
     neighborhood: int = 6,
     iterations: int = 500,
     time_limit_ms: int = 5000,
+    candidate_generator_profile: str = "full8",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    candidate_count = 5 if candidate_generator_profile == "core5" else 8
     command = [
         str(Path(solver).resolve()),
         "--instance",
@@ -325,7 +353,9 @@ def run_candidate_guided_instance(
         "--trace",
         str(Path(trace).resolve()),
         "--candidate-count",
-        "8",
+        str(candidate_count),
+        "--candidate-generator-profile",
+        candidate_generator_profile,
         "--candidate-guidance-stdio",
     ]
     process = subprocess.Popen(

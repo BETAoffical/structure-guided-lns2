@@ -223,6 +223,7 @@ void test_candidate_trials_are_isolated_and_deterministic() {
     options.candidate_count = 8;
     options.candidate_trial_limit_ms = 200;
     options.candidate_replan_order_seeds = {0, 1, 2};
+    options.candidate_rollout_horizons = {2, 4};
 
     options.seed = 1;
     options.candidate_mode = lns2::CandidateMode::Disabled;
@@ -260,10 +261,10 @@ void test_candidate_trials_are_isolated_and_deterministic() {
             "candidate trials changed a main LNS decision");
         require(
             trial.paths_before.size() == instance.agents().size(),
-            "Trace V5 omitted full current paths");
+            "candidate trace omitted full current paths");
         require(
             trial.candidate_trials.size() == 8,
-            "Trace V5 did not contain eight candidates");
+            "candidate trace did not contain eight candidates");
         std::set<std::vector<int>> unique_sets;
         for (std::size_t candidate_index = 0;
              candidate_index < trial.candidate_trials.size();
@@ -284,6 +285,9 @@ void test_candidate_trials_are_isolated_and_deterministic() {
             require(
                 candidate.order_trials.size() == 3,
                 "candidate did not record three order trials");
+            require(
+                candidate.rollouts.size() == 2,
+                "candidate did not record rollout labels");
             require(
                 std::find(
                     candidate.agents.begin(),
@@ -338,9 +342,75 @@ void test_candidate_trials_are_isolated_and_deterministic() {
                         order_trial.sum_of_costs_after ==
                             repeated_order_trial.sum_of_costs_after,
                     "candidate order trial is not deterministic");
+                require(
+                    order_trial.rollouts.size() == 2 &&
+                        repeated_order_trial.rollouts.size() == 2,
+                    "candidate order trial omitted rollout labels");
+                for (std::size_t rollout_index = 0;
+                     rollout_index < order_trial.rollouts.size();
+                     ++rollout_index) {
+                    const auto& rollout =
+                        order_trial.rollouts[rollout_index];
+                    const auto& repeated_rollout =
+                        repeated_order_trial.rollouts[rollout_index];
+                    require(
+                        rollout.horizon == repeated_rollout.horizon &&
+                            rollout.solved == repeated_rollout.solved &&
+                            rollout.iterations ==
+                                repeated_rollout.iterations &&
+                            rollout.accepted_iterations ==
+                                repeated_rollout.accepted_iterations &&
+                            rollout.conflicting_pairs_after ==
+                                repeated_rollout
+                                    .conflicting_pairs_after &&
+                            rollout.sum_of_costs_after ==
+                                repeated_rollout.sum_of_costs_after,
+                        "candidate rollout labels are not deterministic");
+                }
             }
         }
     }
+}
+
+void test_core5_candidate_profile() {
+    const auto path =
+        std::string(TEST_DATA_DIR) + "/candidate_required.mapf";
+    const auto instance = lns2::Instance::load(path);
+    lns2::SolverOptions options;
+    options.seed = 1;
+    options.neighborhood_size = 6;
+    options.max_iterations = 100;
+    options.time_limit_ms = 3000;
+    options.candidate_mode = lns2::CandidateMode::Collect;
+    options.candidate_generator_profile = "core5";
+    options.candidate_replan_order_seeds = {0};
+
+    const auto result = lns2::Solver(instance, options).solve();
+    require(
+        !result.trace.empty(),
+        "core5 candidate test did not produce a trace");
+    const auto& candidates = result.trace.front().candidate_trials;
+    require(candidates.size() == 5, "core5 did not produce five candidates");
+
+    std::set<std::string> generators;
+    for (const auto& candidate : candidates) {
+        generators.insert(candidate.generator);
+        require(
+            candidate.generator.find("deterministic_fill") ==
+                std::string::npos,
+            "core5 used a deterministic fill candidate");
+        require(
+            candidate.agents.size() == 6,
+            "core5 candidate has the wrong neighborhood size");
+    }
+    require(
+        generators.count("baseline_bfs") == 1,
+        "core5 omitted the baseline candidate");
+    require(
+        generators.count("path_conflict_overlap") == 1 ||
+            generators.count("start_goal_blocker") == 1 ||
+            generators.count("degree_weighted_random") == 1,
+        "core5 omitted all non-baseline core generators");
 }
 
 }  // namespace
@@ -352,6 +422,7 @@ int main() {
         run_case("warehouse_small", 6, 500);
         test_guidance_boundary();
         test_candidate_trials_are_isolated_and_deterministic();
+        test_core5_candidate_profile();
         std::cout << "all tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {

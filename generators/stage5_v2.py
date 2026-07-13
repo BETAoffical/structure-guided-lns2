@@ -28,7 +28,9 @@ def _run_controlled(
     neighborhood: int,
     iterations: int,
     time_limit_ms: int,
+    candidate_generator_profile: str = "full8",
 ) -> dict[str, Any]:
+    candidate_count = 5 if candidate_generator_profile == "core5" else 8
     trace.parent.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(
         [
@@ -48,7 +50,9 @@ def _run_controlled(
             "--candidate-mode",
             "controlled",
             "--candidate-count",
-            "8",
+            str(candidate_count),
+            "--candidate-generator-profile",
+            candidate_generator_profile,
         ],
         capture_output=True,
         text=True,
