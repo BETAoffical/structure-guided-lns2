@@ -88,6 +88,12 @@ RepairAction parseAction(const py::dict& value)
         action.seed_agent = py::cast<int>(value["seed_agent"]);
     if (value.contains("neighborhood_size"))
         action.neighborhood_size = py::cast<int>(value["neighborhood_size"]);
+    if (value.contains("random_seed"))
+    {
+        action.random_seed = py::cast<int>(value["random_seed"]);
+        if (action.random_seed < 0)
+            throw py::value_error("random_seed must be non-negative");
+    }
     if (value.contains("agents"))
         action.agents = py::cast<vector<int>>(value["agents"]);
     return action;
@@ -99,6 +105,7 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["iteration"] = transition.iteration;
     result["requested_mode"] = repairActionModeName(transition.requested_action.mode);
     result["requested_heuristic"] = repairHeuristicName(transition.requested_action.heuristic);
+    result["requested_random_seed"] = transition.requested_action.random_seed;
     result["applied_heuristic"] = repairHeuristicName(transition.applied_heuristic);
     result["action_valid"] = transition.action_valid;
     result["generated"] = transition.generated;

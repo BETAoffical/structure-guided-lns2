@@ -27,6 +27,10 @@ Each observation includes:
   "neighborhood_size": 8}` fixes the seed and lets an official generator complete the neighborhood.
 - `{"mode": "explicit_neighborhood", "agents": [2, 7, 9]}` requests a complete subset.
 
+Any action can add `"random_seed": 123` to start a controlled per-action random stream. Omitting this
+field consumes random numbers in the original official order and preserves upstream parity. The
+requested seed is returned as `requested_random_seed` and written into JSONL actions.
+
 Seed actions must reference a currently conflicting agent. Explicit sets must contain unique valid IDs
 and touch the current conflict graph. Invalid external actions fall back to official selection and expose
 `action_valid=false`.

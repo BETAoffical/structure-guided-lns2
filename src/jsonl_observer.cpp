@@ -26,6 +26,7 @@ void JsonlRepairObserver::writeAction(const RepairAction& action)
            << "\",\"heuristic\":\"" << repairHeuristicName(action.heuristic)
            << "\",\"seed_agent\":" << action.seed_agent
            << ",\"neighborhood_size\":" << action.neighborhood_size
+           << ",\"random_seed\":" << action.random_seed
            << ",\"agents\":";
     writeIntArray(output, action.agents);
     output << '}';

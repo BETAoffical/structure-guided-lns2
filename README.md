@@ -94,6 +94,9 @@ Supported modes are `official`, `seed`, and `explicit_neighborhood`. Invalid ext
 to the official selector and are marked with `action_valid=false`. The binding returns raw transition
 metrics; reward design stays in Python experiment code.
 
+External actions may include `random_seed` for deterministic counterfactual branches. Leaving it absent
+preserves the original official random stream.
+
 ## Structured warehouse data
 
 The retained generator creates controlled warehouse layouts and task-flow variants. Every map/task pair
@@ -113,6 +116,23 @@ Manifests expose `map_file`, `scenario_file`, `map_metadata_file`, and `task_fil
 converted from `(row, col)` to MovingAI `(x, y)`, and scenario rows contain exact single-agent shortest
 distances.
 
+## Repair experience
+
+The transfer pilot contains 102 instances with separate ID, unseen-layout, unseen-task, unseen-density,
+and joint-OOD evaluation splits. The CPU-only collector records four official repair baselines and
+replays controlled seed/heuristic/size actions from exact Adaptive states.
+
+```bash
+PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
+  --dataset build/repair-transfer-pilot \
+  --config configs/repair_collection_pilot.json \
+  --output build/repair-experience-pilot \
+  --phase all --workers 4
+```
+
+See [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md) for split definitions, smoke overrides,
+resume behavior, and the versioned output contract.
+
 ## Tests
 
 ```powershell
@@ -131,6 +151,7 @@ task-flow, metadata, MovingAI export, and split determinism.
 
 - [`docs/RESEARCH_ROADMAP.md`](docs/RESEARCH_ROADMAP.md): research stages and paper-code reuse.
 - [`docs/TRACE_AND_POLICY_API.md`](docs/TRACE_AND_POLICY_API.md): observation, action, and JSONL schema.
+- [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md): qualification, baselines, and counterfactual data.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

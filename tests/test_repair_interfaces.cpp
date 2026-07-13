@@ -23,6 +23,7 @@ struct Snapshot
 {
     int conflicts = 0;
     vector<vector<int>> paths;
+    vector<int> neighborhood;
 };
 
 Snapshot initializeWithSeed(int seed)
@@ -42,6 +43,37 @@ Snapshot initializeWithSeed(int seed)
         snapshot.paths.push_back(agent.path);
     return snapshot;
 }
+
+Snapshot stepWithActionSeed(int solver_seed, int action_seed)
+{
+    Instance instance(TEST_MAP, TEST_SCEN, 200);
+    vector<Agent> agents;
+    agents.reserve(200);
+    for (int id = 0; id < 200; id++)
+        agents.emplace_back(instance, id, true);
+    srand(solver_seed);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    assert(solver.initialize());
+    RepairState state = solver.getRepairState();
+    assert(!state.conflict_edges.empty());
+
+    RepairAction action;
+    action.mode = RepairActionMode::SEED;
+    action.heuristic = RepairHeuristic::COLLISION;
+    action.seed_agent = state.conflict_edges.front().first;
+    action.neighborhood_size = 8;
+    action.random_seed = action_seed;
+    assert(solver.step(action));
+
+    Snapshot snapshot;
+    state = solver.getRepairState();
+    snapshot.conflicts = state.num_of_colliding_pairs;
+    snapshot.neighborhood = solver.getLastTransition().neighborhood;
+    assert(solver.getLastTransition().requested_action.random_seed == action_seed);
+    for (const auto& agent : state.agents)
+        snapshot.paths.push_back(agent.path);
+    return snapshot;
+}
 }
 
 int main()
@@ -50,6 +82,12 @@ int main()
     const Snapshot second = initializeWithSeed(7);
     assert(first.conflicts == second.conflicts);
     assert(first.paths == second.paths);
+
+    const Snapshot seeded_first = stepWithActionSeed(29, 12345);
+    const Snapshot seeded_second = stepWithActionSeed(29, 12345);
+    assert(seeded_first.conflicts == seeded_second.conflicts);
+    assert(seeded_first.neighborhood == seeded_second.neighborhood);
+    assert(seeded_first.paths == seeded_second.paths);
 
     Instance instance(TEST_MAP, TEST_SCEN, 80);
     vector<Agent> agents;

@@ -66,6 +66,12 @@ add_test(NAME lns2_python_env COMMAND
 set_tests_properties(lns2_python_env PROPERTIES ENVIRONMENT
     "PYTHONPATH=$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
 )
+add_test(NAME lns2_repair_collection_native COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_repair_collection_native.py"
+)
+set_tests_properties(lns2_repair_collection_native PROPERTIES ENVIRONMENT
+    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+)
 
 set(TRACE_TEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/repair-trace-test.jsonl")
 add_test(NAME lns2_trace_run COMMAND lns2_repair

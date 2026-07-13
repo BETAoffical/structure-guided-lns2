@@ -56,3 +56,7 @@ low-level generated/expanded nodes, repair iterations, neighborhood size, and fe
 Required baselines are official Adaptive, fixed Target/Collision/Random, random valid actions, a
 contextual bandit, an ADDRESS-inspired seed policy adapted to InitLNS, supervised ranking, and contextual
 RL. All methods use identical instances, seeds, time budgets, low-level repair, and failure accounting.
+
+The trusted baseline and first experience-collection infrastructure are implemented. The active pilot
+uses transfer-aware ID, unseen-layout, unseen-task, unseen-density, and joint-OOD splits; model training
+starts only after collection quality and replay determinism are verified.

@@ -54,10 +54,12 @@ class RepairEnvironmentTests(unittest.TestCase):
                 "heuristic": "collision",
                 "seed_agent": 10_000,
                 "neighborhood_size": 8,
+                "random_seed": 123,
             }
         )
         self.assertFalse(result["metrics"]["action_valid"])
         self.assertTrue(result["metrics"]["generated"])
+        self.assertEqual(result["metrics"]["requested_random_seed"], 123)
 
         state = result["observation"]
         if state["done"] or not state["conflict_edges"]:

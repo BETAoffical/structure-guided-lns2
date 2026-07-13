@@ -102,6 +102,9 @@ bool InitLNS::step(const RepairAction& action)
     transition.sum_of_costs_before = sum_of_costs;
     transition.runtime_before = runtime;
 
+    if (action.random_seed >= 0)
+        srand(action.random_seed);
+
     bool action_valid = true;
     RepairHeuristic applied_heuristic = currentRepairHeuristic();
     bool succ = generateNeighborhood(action, applied_heuristic, action_valid);

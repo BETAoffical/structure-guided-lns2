@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "master_seed": 20260714,
+  "output_dir": "build/repair-transfer-pilot",
+  "tasks_per_map": 4,
+  "task_variants": [
+    {
+      "name": "balanced_80",
+      "task": {
+        "agent_count": 80,
+        "scenario_type": "balanced_bidirectional"
+      }
+    },
+    {
+      "name": "balanced_100",
+      "task": {
+        "agent_count": 100,
+        "scenario_type": "balanced_bidirectional"
+      }
+    },
+    {
+      "name": "clustered_100",
+      "task": {
+        "agent_count": 100,
+        "scenario_type": "balanced_bidirectional",
+        "hotspot_skew": 0.7,
+        "origin_cluster_count": 2,
+        "goal_cluster_count": 2,
+        "cluster_radius": 4
+      }
+    },
+    {
+      "name": "bottleneck_100",
+      "task": {
+        "agent_count": 100,
+        "scenario_type": "bottleneck_pressure",
+        "required_bottleneck_crossing_ratio": 0.1,
+        "shared_corridor_ratio": 0.1
+      }
+    }
+  ],
+  "layout_variants": {
+    "compartmentalized": [
+      {
+        "name": "cross_four_gate",
+        "map": {"divider_template": "cross_four_gate"}
+      },
+      {
+        "name": "double_horizontal",
+        "map": {"divider_template": "double_horizontal"}
+      },
+      {
+        "name": "double_vertical",
+        "map": {"divider_template": "double_vertical"}
+      }
+    ],
+    "partial_beltway": [
+      {
+        "name": "partial_segments",
+        "map": {
+          "beltway_mode": "partial",
+          "beltway_narrow_segment_count": 2,
+          "beltway_blocked_segment_count": 1
+        }
+      }
+    ],
+    "wall_shelves": [
+      {
+        "name": "wall_extensions",
+        "map": {"wall_shelf_extension_count": 2}
+      }
+    ],
+    "partial_cross_aisles": [
+      {
+        "name": "cross_aisle_closures",
+        "map": {
+          "cross_aisle_closure_count": 2,
+          "cross_aisle_span_blocks": 2
+        }
+      }
+    ],
+    "mixed_width": [
+      {
+        "name": "variable_aisles",
+        "map": {"variable_vertical_aisle_width": [1, 3]}
+      }
+    ],
+    "asymmetric": [
+      {
+        "name": "trimmed_right",
+        "map": {"asymmetric_trim_width": 2}
+      }
+    ],
+    "station_centric": [
+      {
+        "name": "clustered_stations",
+        "map": {
+          "station_count": 3,
+          "station_placement": "clustered",
+          "station_cluster_count": 1
+        }
+      }
+    ]
+  },
+  "map": {
+    "layout_mode": "regular_beltway",
+    "rows": 28,
+    "cols": 39,
+    "shelf_block_height": 2,
+    "shelf_block_width": [6, 8],
+    "horizontal_aisle_width": 2,
+    "vertical_aisle_width": 2,
+    "outer_beltway_width": 2,
+    "beltway_mode": "full",
+    "wall_clearance": 0,
+    "dead_end_aisle_count": 4,
+    "dead_end_orientation_counts": {"vertical": 2, "horizontal": 2},
+    "dead_end_depth": 4,
+    "gate_count": 2,
+    "gate_width": 1,
+    "divider_template": "single",
+    "divider_orientation": "vertical",
+    "divider_thickness": 1,
+    "combine_layout_features": false,
+    "station_count": 2,
+    "station_sides": ["left", "right"],
+    "station_clearance": 3,
+    "station_placement": "opposite_sides",
+    "station_cluster_count": 1,
+    "station_entrance_width": 1,
+    "station_queue_depth": 2,
+    "station_queue_width": 1,
+    "station_demand_distribution": "uniform",
+    "layout_jitter": 0.0,
+    "generation_attempts": 40,
+    "topology_constraints": {"minimum_average_degree": 1.5}
+  },
+  "task": {
+    "agent_count": 100,
+    "scenario_type": "balanced_bidirectional",
+    "dominant_flow_ratio": 1.0,
+    "background_flow": "random",
+    "opposing_flow_ratio": 0.5,
+    "origin_cluster_count": 0,
+    "goal_cluster_count": 0,
+    "cluster_radius": 2,
+    "hotspot_skew": 0.0,
+    "hotspot_distribution": "uniform",
+    "required_bottleneck_crossing_ratio": 0.0,
+    "shared_corridor_ratio": 0.0,
+    "swap_pair_ratio": 0.0,
+    "minimum_shortest_distance": 6,
+    "maximum_shortest_distance": 60,
+    "max_sampling_attempts": 50000
+  },
+  "splits": {
+    "train": {
+      "layout_counts": {
+        "regular_beltway": 2,
+        "compartmentalized": 2,
+        "dead_end_aisles": 2
+      }
+    },
+    "validation": {
+      "layout_counts": {
+        "regular_beltway": 1,
+        "compartmentalized": 1,
+        "dead_end_aisles": 1
+      }
+    },
+    "test_id": {
+      "layout_counts": {
+        "regular_beltway": 1,
+        "compartmentalized": 1,
+        "dead_end_aisles": 1
+      }
+    },
+    "test_ood_layout": {
+      "layout_counts": {
+        "partial_beltway": 1,
+        "wall_shelves": 1,
+        "partial_cross_aisles": 1,
+        "mixed_width": 1,
+        "asymmetric": 1,
+        "station_centric": 1
+      }
+    },
+    "test_ood_task": {
+      "layout_counts": {
+        "regular_beltway": 1,
+        "compartmentalized": 1,
+        "dead_end_aisles": 1
+      },
+      "task_variants": [
+        {
+          "name": "uniform_100",
+          "task": {"agent_count": 100, "scenario_type": "uniform_random"}
+        },
+        {
+          "name": "intersection_100",
+          "task": {"agent_count": 100, "scenario_type": "intersection_crossing"}
+        },
+        {
+          "name": "cross_zone_100",
+          "task": {"agent_count": 100, "scenario_type": "cross_zone_exchange"}
+        },
+        {
+          "name": "swap_pairs_100",
+          "task": {
+            "agent_count": 100,
+            "scenario_type": "balanced_bidirectional",
+            "swap_pair_ratio": 0.5
+          }
+        }
+      ]
+    },
+    "test_ood_density": {
+      "tasks_per_map": 2,
+      "layout_counts": {
+        "regular_beltway": 1,
+        "compartmentalized": 1,
+        "dead_end_aisles": 1
+      },
+      "task_variants": [
+        {
+          "name": "balanced_60",
+          "task": {"agent_count": 60, "scenario_type": "balanced_bidirectional"}
+        },
+        {
+          "name": "balanced_120",
+          "task": {"agent_count": 120, "scenario_type": "balanced_bidirectional"}
+        }
+      ]
+    },
+    "test_joint_ood": {
+      "tasks_per_map": 2,
+      "layout_counts": {
+        "partial_beltway": 1,
+        "wall_shelves": 1,
+        "partial_cross_aisles": 1,
+        "mixed_width": 1,
+        "asymmetric": 1,
+        "station_centric": 1
+      },
+      "task_variants": [
+        {
+          "name": "intersection_120",
+          "task": {"agent_count": 120, "scenario_type": "intersection_crossing"}
+        },
+        {
+          "name": "cross_zone_120",
+          "task": {"agent_count": 120, "scenario_type": "cross_zone_exchange"}
+        }
+      ]
+    }
+  }
+}

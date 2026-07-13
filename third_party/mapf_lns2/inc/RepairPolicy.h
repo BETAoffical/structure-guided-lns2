@@ -25,6 +25,7 @@ struct RepairAction
     RepairHeuristic heuristic = RepairHeuristic::ADAPTIVE;
     int seed_agent = -1;
     int neighborhood_size = 0;
+    int random_seed = -1;
     vector<int> agents;
 };
 
