@@ -1,77 +1,104 @@
-# Structure-Guided LNS2
+# Structure-Guided MAPF-LNS2
 
-Independent C++17/Python project for testing whether warehouse structure and
-past LNS repair outcomes can improve neighborhood selection. It does not
-modify or import the previous `LNS2-RL` repository.
+Research infrastructure for context-aware neighborhood control during the collision-repair phase of
+MAPF-LNS2. The active solver is now the complete official MAPF-LNS2 codebase, not the former
+dependency-free approximation.
 
-## Project status
+## Research target
 
-| Stage | Status | Contents |
-| --- | --- | --- |
-| 0 | Complete | Dependency-free LNS2 baseline and path validation |
-| 1 | Complete (MVP active) | Three controlled layouts and two task scenarios |
-| 2 | Complete, extended | Trace V2 plus isolated Trace V4 candidate trials |
-| 3 | Complete, extended | Repair cases plus candidate-action experience |
-| 4 | Complete, extended | State retrieval plus candidate-aware kNN ranking |
-| 5 v1 | Complete (negative result) | Role-template guidance and paired evaluation |
-| 5 v2 | Complete (negative overall) | Candidate-aware three-arm evaluation |
+The first research question is deliberately narrow:
 
-No RL or learned neighborhood policy is used in the current feasibility
-experiment.
+> Can map structure, task flow, agent density, the current conflict graph, and repair history reduce
+> time-to-feasible on unseen MAPF domains without reducing success rate?
 
-## Stage 0: LNS2 baseline
+Primary metrics are time-to-feasible, conflict-pair AUC, and success under a fixed time budget. Final
+sum-of-costs is secondary. The first learning action space chooses a seed agent, destroy heuristic, and
+neighborhood size. Explicit agent subsets are supported for later autoregressive policies, but are not
+the starting point.
 
-The solver builds an initial solution with randomized prioritized planning,
-detects vertex and edge conflicts, selects a neighborhood from the conflict
-graph, and replans that neighborhood with space-time search. A candidate is
-accepted when `(conflicting pairs, sum of costs)` does not worsen.
+## Solver provenance
 
-The `.mapf` format is:
+The complete [Jiaoyang-Li/MAPF-LNS2](https://github.com/Jiaoyang-Li/MAPF-LNS2) `init-LNS` source is
+vendored at commit `1369823985a15944f9a339226d521f61605a6d17`. It includes `InitLNS`, MAPF-LNS,
+SIPPS, path/constraint tables, CBS-family repair, and PIBT-family initial solvers. See
+[`third_party/mapf_lns2/UPSTREAM.md`](third_party/mapf_lns2/UPSTREAM.md) and the USC Research License.
 
-```text
-ROWS COLS
-....@
-.....
-AGENT_COUNT
-START_ROW START_COL GOAL_ROW GOAL_COL
-...
+Project changes are limited to a step-wise repair API, policy/observer hooks, low-level counters, and a
+repair-only switch. With the same 200-agent benchmark, seed, and parameters, the extended `official`
+mode produces byte-identical paths to the untouched upstream commit.
+
+## Build on Ubuntu/WSL
+
+Required packages are CMake, a C++14 compiler, Boost program-options/system/filesystem, Eigen3,
+Python development headers, and pybind11 development headers. Inspect installed packages before adding
+anything; the current Ubuntu 22.04 environment already contains every required dependency.
+
+From an Ubuntu shell in this repository:
+
+```bash
+cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux/project --parallel 4
+ctest --test-dir build/linux/project --output-on-failure
 ```
 
-### Native Windows build
+Build targets:
 
-Run these commands in a Visual Studio 2022 Developer PowerShell:
+- `lns_official`: complete MAPF-LNS2 CLI, including optional anytime optimization.
+- `lns2_repair`: PP + InitLNS repair, stopping at the first feasible solution.
+- `lns2_env`: Python step environment for future contextual RL.
 
-```powershell
-cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
-cmake --build build/windows --config Release --parallel
-ctest --test-dir build/windows -C Release --output-on-failure
+## Run repair-only LNS2
+
+```bash
+build/linux/project/lns2_repair \
+  --map third_party/mapf_lns2/random-32-32-20.map \
+  --agents third_party/mapf_lns2/random-32-32-20-random-1.scen \
+  --agentNum 200 \
+  --cutoffTime 60 \
+  --neighborSize 8 \
+  --initDestroyStrategy Adaptive \
+  --replanAlgo PP \
+  --seed 0 \
+  --trace build/linux/repair-trace.jsonl \
+  --outputPaths build/linux/repair-paths.txt
 ```
 
-Run one instance and save its raw LNS trace:
+`Adaptive`, `Target`, `Collision`, and `Random` are available for the InitLNS destroy strategy. The
+official CLI also keeps `RandomWalk`, `Intersection`, `Random`, and `Adaptive` for feasible-solution
+MAPF-LNS optimization.
 
-```powershell
-build/windows/Release/lns2_cli.exe `
-  --instance tests/data/warehouse_small.mapf `
-  --seed 1234 `
-  --neighborhood 6 `
-  --iterations 500 `
-  --time-limit-ms 3000 `
-  --trace build/example-trace.jsonl
+## Python environment
+
+```bash
+PYTHONPATH=build/linux/project python3 - <<'PY'
+import lns2_env
+
+env = lns2_env.LNS2RepairEnv(
+    "third_party/mapf_lns2/random-32-32-20.map",
+    "third_party/mapf_lns2/random-32-32-20-random-1.scen",
+    agent_count=200,
+    context={"layout_mode": "random", "task_flow": "benchmark"},
+)
+state = env.reset(seed=0)
+result = env.step({
+    "mode": "seed",
+    "heuristic": "collision",
+    "seed_agent": state["conflict_edges"][0][0],
+    "neighborhood_size": 8,
+})
+print(result["metrics"])
+PY
 ```
 
-## Stage 1: feasibility dataset
+Supported modes are `official`, `seed`, and `explicit_neighborhood`. Invalid external actions fall back
+to the official selector and are marked with `action_valid=false`. The binding returns raw transition
+metrics; reward design stays in Python experiment code.
 
-The active dataset deliberately limits variation:
+## Structured warehouse data
 
-- layouts: `regular_beltway`, `compartmentalized`, `dead_end_aisles`;
-- map size: `28 x 39`;
-- compartment templates: cross, two horizontal walls, or two vertical walls;
-- dead-end maps: two horizontal and two vertical shelf-connected caps;
-- four tasks per map: 36-Agent baseline, 60-Agent dense, 48-Agent
-  clustered, and 36-Agent random control;
-- 18/6/12 train/validation/test maps, producing 144 instances.
-
-Generate and inspect it:
+The retained generator creates controlled warehouse layouts and task-flow variants. Every map/task pair
+now includes standard MovingAI `.map/.scen`, JSON metadata, text/SVG previews, and the legacy `.mapf`
+file for archived experiments.
 
 ```powershell
 python scripts/generate_dataset.py `
@@ -80,387 +107,35 @@ python scripts/generate_dataset.py `
 
 python scripts/inspect_dataset.py --dataset build/feasibility-dataset
 python scripts/generate_gallery.py
-python -m unittest tests.test_stage1_generators -v
 ```
 
-See [Stage 1](docs/STAGE1.md) and the
-[configuration reference](docs/CONFIGURATION.md).
+Manifests expose `map_file`, `scenario_file`, `map_metadata_file`, and `task_file`. Coordinates are
+converted from `(row, col)` to MovingAI `(x, y)`, and scenario rows contain exact single-agent shortest
+distances.
 
-## Stage 2: raw experience
-
-Collect traces for the 72 training instances:
+## Tests
 
 ```powershell
-python scripts/collect_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --split train `
-  --seeds 1,2,3 `
-  --time-limit-ms 5000 `
-  --output build/experience
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Every task/solver-seed pair receives an independent JSONL file, producing 216
-training runs. Each iteration records the seed conflict, selected agents,
-before/after conflict locations, neighborhood paths, costs, acceptance, and
-replanning time. See [Stage 2](docs/STAGE2.md).
-
-## Stage 3: repair experience
-
-Build the Train-only repair memory from Trace V2:
-
-```powershell
-python scripts/build_repair_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/experience `
-  --split train `
-  --output build/repair-experience
+```bash
+ctest --test-dir build/linux/project --output-on-failure
 ```
 
-The output contains iteration-level repair cases, run-level aggregates,
-sparse conflict heatmaps, Agent descriptors, and successful/neutral/failed
-neighborhood labels. See [Stage 3](docs/STAGE3.md).
+The Linux suite covers official C++ interfaces, repair-only execution, deterministic reset, seed and
+explicit actions, fallback behavior, and the native Python module. The Windows Python suite covers map,
+task-flow, metadata, MovingAI export, and split determinism.
 
-## Stage 4: offline retrieval
+## Documentation
 
-Collect and convert Validation queries without adding them to memory:
+- [`docs/RESEARCH_ROADMAP.md`](docs/RESEARCH_ROADMAP.md): research stages and paper-code reuse.
+- [`docs/TRACE_AND_POLICY_API.md`](docs/TRACE_AND_POLICY_API.md): observation, action, and JSONL schema.
+- [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
+- [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
+- [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
 
-```powershell
-python scripts/collect_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --split validation `
-  --seeds 1,2,3 `
-  --neighborhood 6 `
-  --iterations 500 `
-  --time-limit-ms 5000 `
-  --output build/stage4-validation-collection
+## License
 
-python scripts/build_query_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage4-validation-collection `
-  --split validation `
-  --output build/stage4-validation-experience
-```
-
-Build the Train-only index and evaluate it:
-
-```powershell
-python scripts/build_retrieval_index.py `
-  --memory build/repair-experience `
-  --output build/stage4-index
-
-python scripts/evaluate_retrieval.py `
-  --index build/stage4-index `
-  --queries build/stage4-validation-experience `
-  --output build/stage4-evaluation
-```
-
-Stage 4 predicts sparse conflict heatmaps, repair effectiveness, and
-transferable neighborhood role templates. It does not map those roles to
-concrete Agents or demonstrate an improvement in solver performance. Those
-experiments belong to Stage 5. See [Stage 4](docs/STAGE4.md).
-
-## Stage 5: guided simplified LNS2
-
-Stage 5 compares the existing simplified LNS2 baseline with candidate-guided
-variants. It does not claim to reproduce or improve the complete official
-MAPF-LNS2 solver.
-
-The original Repair-role guidance (`guided_solver.py`, `stage5.py`, and
-`run_stage5_experiment.py`) is kept only as a legacy reproduction path. It is
-not part of the default workflow because the paired Test run did not show a
-statistically significant improvement. The current workflow starts from
-candidate collection and closed-loop rollout labels.
-
-Legacy v1 reproduction command:
-
-```powershell
-python scripts/run_stage5_experiment.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --index build/stage4-index `
-  --evaluation build/stage4-evaluation `
-  --split validation `
-  --seeds 1,2,3 `
-  --thresholds 0.8 `
-  --output build/stage5-validation-paired
-```
-
-Test uses only the frozen Validation configuration:
-
-```powershell
-python scripts/run_stage5_experiment.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --index build/stage4-index `
-  --evaluation build/stage4-evaluation `
-  --split test `
-  --seeds 1,2,3 `
-  --config build/stage5-validation-paired/selected_config.json `
-  --output build/stage5-test
-```
-
-On 144 paired Test runs, both strategies solved 128 runs and retained 77
-conflicting pairs in total. Guided LNS2 recorded 6 paired wins, 4 losses, and
-134 ties; the exact sign-test p-value was `0.754`. The current Repair guidance
-therefore does not show a statistically significant overall improvement. See
-[Stage 5](docs/STAGE5.md).
-
-## Stage 5 v2: candidate-aware guidance
-
-Stage 5 v2 fixes the central limitation found in v1: one conflict state now
-evaluates eight concrete neighborhoods under one deterministic replanning
-priority. Counterfactual trials do not consume the main solver RNG or its
-five-second search budget, and the main collection trajectory remains the
-legacy baseline.
-
-Collect and convert Train and Validation candidate experience:
-
-```powershell
-python scripts/collect_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --output build/stage5-v2-train-collection `
-  --split train
-
-python scripts/build_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage5-v2-train-collection `
-  --output build/stage5-v2-train-experience `
-  --split train
-
-python scripts/collect_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --output build/stage5-v2-validation-collection `
-  --split validation
-
-python scripts/build_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage5-v2-validation-collection `
-  --output build/stage5-v2-validation-experience `
-  --split validation
-```
-
-Fit on Train and tune only on Validation:
-
-```powershell
-python scripts/build_candidate_index.py `
-  --memory build/stage5-v2-train-experience `
-  --output build/stage5-v2-index `
-  --feature-profile full
-
-python scripts/evaluate_candidate_retrieval.py `
-  --index build/stage5-v2-index `
-  --queries build/stage5-v2-validation-experience `
-  --output build/stage5-v2-evaluation
-```
-
-Stage 5 v2.1 can rebuild the same Train memory with lower-dimensional
-profiles before rerunning Validation tuning. `full` keeps the original
-Train-fitted feature set after zero-variance filtering, `dedup20` removes
-strongly redundant aggregates, and `core12` keeps only a compact diagnostic
-subset:
-
-```powershell
-python scripts/build_candidate_index.py `
-  --memory build/stage5-v2-train-experience `
-  --output build/stage5-v2-index-dedup20 `
-  --feature-profile dedup20
-
-python scripts/evaluate_candidate_retrieval.py `
-  --index build/stage5-v2-index-dedup20 `
-  --queries build/stage5-v2-validation-experience `
-  --output build/stage5-v2-evaluation-dedup20
-```
-
-Run the frozen three-arm Test experiment:
-
-```powershell
-python scripts/run_stage5_v2_experiment.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --index build/stage5-v2-index `
-  --config build/stage5-v2-evaluation/selected_config.json `
-  --output build/stage5-v2-test `
-  --split test `
-  --seeds 1,2,3
-```
-
-The three arms are the untouched legacy baseline, a controlled-order
-baseline, and candidate-guided LNS2. Only the controlled/guided comparison
-tests the candidate-ranking hypothesis; the legacy/controlled comparison
-measures the effect of removing random replanning order.
-
-The balanced Test experiment produced 9 guided wins, 9 controlled-baseline
-wins, and 126 ties. Guided solving completed 110/144 runs versus 112/144 for
-the controlled baseline; both retained 104 conflict pairs. No primary
-confidence interval excluded zero. Every one of the 121 accepted guidance
-decisions changed the Agent set, so v1's ineffective role-mapping failure was
-fixed, but candidate ranking still did not improve aggregate solver quality.
-
-The legacy randomized-order baseline solved 130/144 runs, substantially more
-than the controlled-order baseline's 112/144. Fixed replanning order is
-therefore an experimental control, not a recommended replacement for legacy
-LNS2.
-
-Stage 5 v2.1 tested lower-dimensional candidate features. `dedup20` improved
-offline Validation utility from `0.106` to `0.213`, but the rerun Test result
-still did not show an aggregate solver improvement: candidate-guided solved
-104/144 versus 106/144 for the controlled baseline, with 10 guided wins, 9
-controlled wins, and 125 ties.
-
-Stage 5 v2.2 reduces label noise by collecting three deterministic replanning
-orders per candidate:
-
-```powershell
-python scripts/collect_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --output build/stage5-v2-2-train-collection `
-  --split train `
-  --candidate-replan-order-seeds 0,1,2
-
-python scripts/build_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage5-v2-2-train-collection `
-  --output build/stage5-v2-2-train-experience `
-  --split train
-
-python scripts/diagnose_candidate_experience.py `
-  --memory build/stage5-v2-2-train-experience `
-  --dataset build/feasibility-dataset `
-  --output build/stage5-v2-2-candidate-diagnostics
-```
-
-V2.2 writes Trace V5, `candidate_cases.jsonl` with aggregated expected
-labels, and `candidate_order_cases.jsonl` with the per-order labels.
-Validation improved again (`dedup20` top1 gain `0.414`, oracle regret
-`0.945`), but Test still did not improve overall: candidate-guided solved
-106/144 versus 107/144 for the controlled baseline, with 8 guided wins, 12
-controlled wins, and 124 ties. Dense and compartmentalized cases improved
-locally; regular beltway and clustered tasks still regressed.
-
-Stage 5 v3 replaces kNN with supervised candidate ranking. It reuses the
-existing V2.2 candidate experience; no new Trace collection is required:
-
-```powershell
-python scripts/train_candidate_ranker.py `
-  --memory build/stage5-v2-2-train-experience `
-  --output build/stage5-v3-ranker `
-  --feature-profile dedup20 `
-  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
-
-python scripts/evaluate_candidate_ranker.py `
-  --ranker build/stage5-v3-ranker `
-  --queries build/stage5-v2-2-validation-experience `
-  --output build/stage5-v3-validation
-
-python scripts/run_stage5_v3_experiment.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --knn-index build/stage5-v2-2-index-dedup20 `
-  --knn-config build/stage5-v2-2-evaluation-dedup20/selected_config.json `
-  --ranker build/stage5-v3-ranker `
-  --ranker-config build/stage5-v3-validation/selected_config.json `
-  --output build/stage5-v3-test `
-  --split test
-```
-
-The pure Python `pairwise_linear` ranker is the dependency-free baseline.
-`sklearn_*` models are optional comparisons and are skipped only if the local
-environment cannot import scikit-learn.
-
-The current V3 run selected `sklearn_forest` on Validation. Its offline
-Validation top1 gain was `0.165`, below the V2.2 kNN gain of `0.414`. Test
-also remained negative: ranker-guided solved 109/144 runs versus 114/144 for
-the controlled baseline, with 19 ranker wins, 23 controlled wins, and 102
-ties. The ranker used guidance more often and produced more effective local
-repairs than kNN, but that did not improve aggregate solver performance.
-
-Stage 5 v4 changes the label from one-step repair quality to closed-loop
-rollout quality. Candidate collection can now write Trace V6. The default
-fast loop uses the `core5` candidate generator profile, two replanning orders,
-two rollout horizons, and optional high-pressure filters:
-
-```powershell
-python scripts/collect_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --output build/stage5-v4-train-collection `
-  --split train `
-  --candidate-generator-profile core5 `
-  --candidate-replan-order-seeds 0,1 `
-  --candidate-rollout-horizons 10,25 `
-  --layout-modes compartmentalized,dead_end_aisles `
-  --task-variants balanced_dense,balanced_clustered `
-  --workers 4
-
-python scripts/build_rollout_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage5-v4-train-collection `
-  --output build/stage5-v4-train-experience `
-  --split train
-```
-
-Run the same fast collection for Validation, then train and tune:
-
-```powershell
-python scripts/collect_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --output build/stage5-v4-validation-collection `
-  --split validation `
-  --candidate-generator-profile core5 `
-  --candidate-replan-order-seeds 0,1 `
-  --candidate-rollout-horizons 10,25 `
-  --layout-modes compartmentalized,dead_end_aisles `
-  --task-variants balanced_dense,balanced_clustered `
-  --workers 4
-
-python scripts/build_rollout_candidate_experience.py `
-  --dataset build/feasibility-dataset `
-  --collection build/stage5-v4-validation-collection `
-  --output build/stage5-v4-validation-experience `
-  --split validation
-
-python scripts/train_candidate_ranker.py `
-  --memory build/stage5-v4-train-experience `
-  --output build/stage5-v4-ranker `
-  --feature-profile rollout22 `
-  --models pairwise_linear,sklearn_logistic,sklearn_forest,sklearn_gbdt
-
-python scripts/evaluate_candidate_ranker.py `
-  --ranker build/stage5-v4-ranker `
-  --queries build/stage5-v4-validation-experience `
-  --output build/stage5-v4-validation `
-  --conservative-gates
-
-python scripts/run_stage5_v4_experiment.py `
-  --dataset build/feasibility-dataset `
-  --solver build/windows/Release/lns2_cli.exe `
-  --rollout-ranker build/stage5-v4-ranker `
-  --rollout-config build/stage5-v4-validation/selected_config.json `
-  --candidate-generator-profile core5 `
-  --output build/stage5-v4-test `
-  --split test
-```
-
-For final reproduction, rerun collection with
-`--candidate-generator-profile full8`, `--candidate-replan-order-seeds 0,1,2`,
-and `--candidate-rollout-horizons 10,25,50`. Optional `--knn-*` and `--v3-*`
-arguments on `run_stage5_v4_experiment.py` add secondary comparison arms but
-are no longer part of the default run.
-
-V4 is implemented and smoke-tested, but the full `10,25,50` rollout
-collection is intentionally not bundled as source because it is an expensive
-generated artifact.
-
-## Reproducibility
-
-Map, task, and solver decisions are deterministic for a fixed implementation,
-seed, and C++ standard library. Runtime fields vary. The C++ standard does not
-guarantee identical `std::shuffle` sequences across different standard library
-implementations, so Windows and Linux runs should be treated as separate
-reproducibility environments.
+Project-owned code follows the repository license policy. Vendored MAPF-LNS2 is subject to the USC
+Research License in `third_party/mapf_lns2/license.txt`; commercial use requires separate permission.

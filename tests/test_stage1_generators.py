@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from generators.dataset import generate_dataset
-from generators.io import write_instance_bundle
+from generators.io import write_instance_bundle, write_map_bundle
 from generators.task_flows import generate_tasks
 from generators.validation import validate_map, validate_task
 from generators.visualization import ascii_preview, svg_preview
@@ -238,12 +238,31 @@ class WarehouseGeneratorTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
+            write_map_bundle(output, map_data)
             write_instance_bundle(output, map_data, task_data)
             mapf = (output / "export_task.mapf").read_text(
                 encoding="utf-8"
             )
             self.assertTrue(mapf.startswith("28 39\n"))
             self.assertIn("\n5\n", mapf)
+            moving_map = (output / "export_map.map").read_text(
+                encoding="utf-8"
+            )
+            self.assertTrue(
+                moving_map.startswith("type octile\nheight 28\nwidth 39\nmap\n")
+            )
+            scenario_lines = (output / "export_task.scen").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            self.assertEqual(scenario_lines[0], "version 1")
+            self.assertEqual(len(scenario_lines), 6)
+            fields = scenario_lines[1].split("\t")
+            start = task_data.starts[0]
+            goal = task_data.goals[0]
+            self.assertEqual(fields[1], "export_map.map")
+            self.assertEqual((int(fields[4]), int(fields[5])), (start[1], start[0]))
+            self.assertEqual((int(fields[6]), int(fields[7])), (goal[1], goal[0]))
+            self.assertGreater(int(fields[8]), 0)
             self.assertIn("<svg", svg_preview(map_data, task_data))
             self.assertNotIn("#e8f5e9", svg_preview(map_data, task_data))
             self.assertNotIn("high prior", svg_preview(map_data, task_data))
@@ -314,10 +333,20 @@ class WarehouseGeneratorTests(unittest.TestCase):
                 for seed in split["map_seeds"]
             ]
             self.assertEqual(len(seeds), len(set(seeds)))
-            manifest = (
+            manifest_text = (
                 Path(directory) / "train" / "manifest.jsonl"
             ).read_text(encoding="utf-8")
-            self.assertEqual(len(manifest.splitlines()), 20)
+            self.assertEqual(len(manifest_text.splitlines()), 20)
+            first_row = json.loads(manifest_text.splitlines()[0])
+            self.assertTrue(first_row["map_file"].endswith(".map"))
+            self.assertTrue(first_row["scenario_file"].endswith(".scen"))
+            self.assertTrue(first_row["map_metadata_file"].endswith(".json"))
+            self.assertTrue(
+                (Path(directory) / "train" / first_row["map_file"]).is_file()
+            )
+            self.assertTrue(
+                (Path(directory) / "train" / first_row["scenario_file"]).is_file()
+            )
 
 
 if __name__ == "__main__":

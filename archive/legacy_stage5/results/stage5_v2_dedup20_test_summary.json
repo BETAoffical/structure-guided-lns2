@@ -1,0 +1,801 @@
+{
+  "schema_version": 2,
+  "split": "test",
+  "test_data_read": true,
+  "task_count": 48,
+  "solver_seeds": [
+    1,
+    2,
+    3
+  ],
+  "total_run_count": 432,
+  "solver_options": {
+    "neighborhood_size": 6,
+    "max_iterations": 500,
+    "time_limit_ms": 5000,
+    "candidate_count": 8
+  },
+  "primary_comparison_controlled_vs_guided": {
+    "baseline": {
+      "run_count": 144,
+      "solved_count": 106,
+      "solved_ratio": 0.736111,
+      "final_conflicting_pairs": 129,
+      "iterations": 125,
+      "accepted_iterations": 65,
+      "mean_runtime_ms": 1612.122313,
+      "mean_search_runtime_ms": 1612.009222,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1454.754717,
+      "mean_makespan_solved": 54.962264,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "guided": {
+      "run_count": 144,
+      "solved_count": 104,
+      "solved_ratio": 0.722222,
+      "final_conflicting_pairs": 128,
+      "iterations": 152,
+      "accepted_iterations": 85,
+      "mean_runtime_ms": 1815.748257,
+      "mean_search_runtime_ms": 1673.050806,
+      "mean_guidance_runtime_ms": 142.570667,
+      "mean_sum_of_costs_solved": 1463.682692,
+      "mean_makespan_solved": 55.028846,
+      "guidance_requests": 152,
+      "guidance_used": 95,
+      "guidance_fallbacks": 57,
+      "effective_guided_iterations": 31
+    },
+    "paired_outcomes": {
+      "guided_win": 10,
+      "baseline_win": 9,
+      "tie": 125
+    },
+    "paired_statistics": {
+      "difference_definition": "guided_minus_baseline",
+      "bootstrap_95_percent": {
+        "solved_indicator": {
+          "mean": -0.013889,
+          "ci95_low": -0.048611,
+          "ci95_high": 0.020833
+        },
+        "final_conflicting_pairs": {
+          "mean": -0.006944,
+          "ci95_low": -0.0625,
+          "ci95_high": 0.041667
+        },
+        "iterations": {
+          "mean": 0.1875,
+          "ci95_low": 0.0625,
+          "ci95_high": 0.333333
+        },
+        "search_runtime_ms": {
+          "mean": 61.041583,
+          "ci95_low": -26.917243,
+          "ci95_high": 152.806382
+        },
+        "wall_runtime_ms": {
+          "mean": 203.625944,
+          "ci95_low": 95.175722,
+          "ci95_high": 323.467382
+        },
+        "sum_of_costs_both_solved": {
+          "mean": -0.127451,
+          "ci95_low": -0.480392,
+          "ci95_high": 0.186275
+        }
+      },
+      "paired_outcome_sign_test_p": 1.0,
+      "success_mcnemar_exact_p": 0.6875,
+      "success_discordant_pairs": {
+        "guided_only": 2,
+        "baseline_only": 4
+      },
+      "execution_order": {
+        "baseline_first": 72,
+        "guided_first": 72
+      }
+    },
+    "by_layout": {
+      "compartmentalized": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 20,
+          "solved_ratio": 0.416667,
+          "final_conflicting_pairs": 110,
+          "iterations": 66,
+          "accepted_iterations": 25,
+          "mean_runtime_ms": 3231.015146,
+          "mean_search_runtime_ms": 3230.829458,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1508.7,
+          "mean_makespan_solved": 71.4,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 21,
+          "solved_ratio": 0.4375,
+          "final_conflicting_pairs": 106,
+          "iterations": 71,
+          "accepted_iterations": 33,
+          "mean_runtime_ms": 3370.728771,
+          "mean_search_runtime_ms": 3179.0125,
+          "mean_guidance_runtime_ms": 191.528542,
+          "mean_sum_of_costs_solved": 1555.47619,
+          "mean_makespan_solved": 70.142857,
+          "guidance_requests": 71,
+          "guidance_used": 20,
+          "guidance_fallbacks": 51,
+          "effective_guided_iterations": 15
+        },
+        "paired_outcomes": {
+          "guided_win": 7,
+          "baseline_win": 1,
+          "tie": 40
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.020833,
+              "ci95_low": -0.041667,
+              "ci95_high": 0.083333
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.083333,
+              "ci95_low": -0.208333,
+              "ci95_high": 0.020833
+            },
+            "iterations": {
+              "mean": 0.104167,
+              "ci95_low": -0.125,
+              "ci95_high": 0.375
+            },
+            "search_runtime_ms": {
+              "mean": -51.816958,
+              "ci95_low": -223.201458,
+              "ci95_high": 76.792708
+            },
+            "wall_runtime_ms": {
+              "mean": 139.713625,
+              "ci95_low": -39.8575,
+              "ci95_high": 298.353729
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -0.947368,
+              "ci95_low": -1.894737,
+              "ci95_high": -0.157895
+            }
+          },
+          "paired_outcome_sign_test_p": 0.0703125,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 2,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "dead_end_aisles": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 42,
+          "solved_ratio": 0.875,
+          "final_conflicting_pairs": 15,
+          "iterations": 32,
+          "accepted_iterations": 21,
+          "mean_runtime_ms": 924.176708,
+          "mean_search_runtime_ms": 924.103396,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1429.642857,
+          "mean_makespan_solved": 51.380952,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 41,
+          "solved_ratio": 0.854167,
+          "final_conflicting_pairs": 16,
+          "iterations": 39,
+          "accepted_iterations": 23,
+          "mean_runtime_ms": 1082.573021,
+          "mean_search_runtime_ms": 987.182646,
+          "mean_guidance_runtime_ms": 95.304292,
+          "mean_sum_of_costs_solved": 1421.804878,
+          "mean_makespan_solved": 51.243902,
+          "guidance_requests": 39,
+          "guidance_used": 35,
+          "guidance_fallbacks": 4,
+          "effective_guided_iterations": 9
+        },
+        "paired_outcomes": {
+          "guided_win": 2,
+          "baseline_win": 3,
+          "tie": 43
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.020833,
+              "ci95_low": -0.0625,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.020833,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0625
+            },
+            "iterations": {
+              "mean": 0.145833,
+              "ci95_low": 0.0,
+              "ci95_high": 0.333333
+            },
+            "search_runtime_ms": {
+              "mean": 63.07925,
+              "ci95_low": -31.259271,
+              "ci95_high": 191.856875
+            },
+            "wall_runtime_ms": {
+              "mean": 158.396312,
+              "ci95_low": 32.626083,
+              "ci95_high": 329.571062
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -0.146341,
+              "ci95_low": -0.682927,
+              "ci95_high": 0.219512
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "regular_beltway": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 44,
+          "solved_ratio": 0.916667,
+          "final_conflicting_pairs": 4,
+          "iterations": 27,
+          "accepted_iterations": 19,
+          "mean_runtime_ms": 681.175083,
+          "mean_search_runtime_ms": 681.094812,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1454.204545,
+          "mean_makespan_solved": 50.909091,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 42,
+          "solved_ratio": 0.875,
+          "final_conflicting_pairs": 6,
+          "iterations": 42,
+          "accepted_iterations": 29,
+          "mean_runtime_ms": 993.942979,
+          "mean_search_runtime_ms": 852.957271,
+          "mean_guidance_runtime_ms": 140.879167,
+          "mean_sum_of_costs_solved": 1458.666667,
+          "mean_makespan_solved": 51.166667,
+          "guidance_requests": 42,
+          "guidance_used": 40,
+          "guidance_fallbacks": 2,
+          "effective_guided_iterations": 7
+        },
+        "paired_outcomes": {
+          "guided_win": 1,
+          "baseline_win": 5,
+          "tie": 42
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.041667,
+              "ci95_low": -0.104167,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.041667,
+              "ci95_low": 0.0,
+              "ci95_high": 0.104167
+            },
+            "iterations": {
+              "mean": 0.3125,
+              "ci95_low": 0.083333,
+              "ci95_high": 0.625
+            },
+            "search_runtime_ms": {
+              "mean": 171.862458,
+              "ci95_low": 13.033187,
+              "ci95_high": 386.556688
+            },
+            "wall_runtime_ms": {
+              "mean": 312.767896,
+              "ci95_low": 98.14675,
+              "ci95_high": 592.917583
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.261905,
+              "ci95_low": -0.142857,
+              "ci95_high": 0.761905
+            }
+          },
+          "paired_outcome_sign_test_p": 0.21875,
+          "success_mcnemar_exact_p": 0.5,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 2
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      }
+    },
+    "by_task_variant": {
+      "balanced_base": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 31,
+          "solved_ratio": 0.861111,
+          "final_conflicting_pairs": 11,
+          "iterations": 21,
+          "accepted_iterations": 10,
+          "mean_runtime_ms": 882.78425,
+          "mean_search_runtime_ms": 882.719333,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1240.806452,
+          "mean_makespan_solved": 50.483871,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 30,
+          "solved_ratio": 0.833333,
+          "final_conflicting_pairs": 12,
+          "iterations": 26,
+          "accepted_iterations": 14,
+          "mean_runtime_ms": 1072.842,
+          "mean_search_runtime_ms": 970.768083,
+          "mean_guidance_runtime_ms": 102.007444,
+          "mean_sum_of_costs_solved": 1244.766667,
+          "mean_makespan_solved": 50.766667,
+          "guidance_requests": 26,
+          "guidance_used": 8,
+          "guidance_fallbacks": 18,
+          "effective_guided_iterations": 0
+        },
+        "paired_outcomes": {
+          "guided_win": 0,
+          "baseline_win": 1,
+          "tie": 35
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.027778,
+              "ci95_low": 0.0,
+              "ci95_high": 0.083333
+            },
+            "iterations": {
+              "mean": 0.138889,
+              "ci95_low": 0.0,
+              "ci95_high": 0.416667
+            },
+            "search_runtime_ms": {
+              "mean": 88.04875,
+              "ci95_low": -3.935306,
+              "ci95_high": 264.367083
+            },
+            "wall_runtime_ms": {
+              "mean": 190.05775,
+              "ci95_low": 41.146,
+              "ci95_high": 442.344778
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.0,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 12
+          }
+        }
+      },
+      "balanced_clustered": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 19,
+          "solved_ratio": 0.527778,
+          "final_conflicting_pairs": 62,
+          "iterations": 54,
+          "accepted_iterations": 35,
+          "mean_runtime_ms": 2865.14575,
+          "mean_search_runtime_ms": 2864.951667,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1746.0,
+          "mean_makespan_solved": 55.421053,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 17,
+          "solved_ratio": 0.472222,
+          "final_conflicting_pairs": 64,
+          "iterations": 70,
+          "accepted_iterations": 40,
+          "mean_runtime_ms": 3373.559639,
+          "mean_search_runtime_ms": 3091.841361,
+          "mean_guidance_runtime_ms": 281.482417,
+          "mean_sum_of_costs_solved": 1753.823529,
+          "mean_makespan_solved": 55.705882,
+          "guidance_requests": 70,
+          "guidance_used": 54,
+          "guidance_fallbacks": 16,
+          "effective_guided_iterations": 17
+        },
+        "paired_outcomes": {
+          "guided_win": 4,
+          "baseline_win": 5,
+          "tie": 27
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.055556,
+              "ci95_low": -0.138889,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.055556,
+              "ci95_low": 0.0,
+              "ci95_high": 0.138889
+            },
+            "iterations": {
+              "mean": 0.444444,
+              "ci95_low": 0.166667,
+              "ci95_high": 0.75
+            },
+            "search_runtime_ms": {
+              "mean": 226.889694,
+              "ci95_low": 28.607528,
+              "ci95_high": 484.063306
+            },
+            "wall_runtime_ms": {
+              "mean": 508.413889,
+              "ci95_low": 253.760417,
+              "ci95_high": 814.884389
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -0.235294,
+              "ci95_low": -2.058824,
+              "ci95_high": 1.470588
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 0.5,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 2
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 12
+          }
+        }
+      },
+      "balanced_dense": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 24,
+          "solved_ratio": 0.666667,
+          "final_conflicting_pairs": 32,
+          "iterations": 33,
+          "accepted_iterations": 18,
+          "mean_runtime_ms": 1937.383278,
+          "mean_search_runtime_ms": 1937.237556,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 2071.083333,
+          "mean_makespan_solved": 52.166667,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 25,
+          "solved_ratio": 0.694444,
+          "final_conflicting_pairs": 29,
+          "iterations": 35,
+          "accepted_iterations": 23,
+          "mean_runtime_ms": 2022.236111,
+          "mean_search_runtime_ms": 1897.774556,
+          "mean_guidance_runtime_ms": 124.313222,
+          "mean_sum_of_costs_solved": 2089.92,
+          "mean_makespan_solved": 53.4,
+          "guidance_requests": 35,
+          "guidance_used": 25,
+          "guidance_fallbacks": 10,
+          "effective_guided_iterations": 9
+        },
+        "paired_outcomes": {
+          "guided_win": 5,
+          "baseline_win": 2,
+          "tie": 29
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.027778,
+              "ci95_low": 0.0,
+              "ci95_high": 0.083333
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.083333,
+              "ci95_low": -0.222222,
+              "ci95_high": 0.0
+            },
+            "iterations": {
+              "mean": 0.055556,
+              "ci95_low": -0.166667,
+              "ci95_high": 0.25
+            },
+            "search_runtime_ms": {
+              "mean": -39.463,
+              "ci95_low": -256.85075,
+              "ci95_high": 96.373111
+            },
+            "wall_runtime_ms": {
+              "mean": 84.852833,
+              "ci95_low": -137.225889,
+              "ci95_high": 257.547111
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -0.375,
+              "ci95_low": -1.041667,
+              "ci95_high": 0.166667
+            }
+          },
+          "paired_outcome_sign_test_p": 0.453125,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 1,
+            "baseline_only": 0
+          },
+          "execution_order": {
+            "baseline_first": 12,
+            "guided_first": 24
+          }
+        }
+      },
+      "uniform_control": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 24,
+          "iterations": 17,
+          "accepted_iterations": 2,
+          "mean_runtime_ms": 763.175972,
+          "mean_search_runtime_ms": 763.128333,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1026.84375,
+          "mean_makespan_solved": 61.125,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 23,
+          "iterations": 21,
+          "accepted_iterations": 8,
+          "mean_runtime_ms": 794.355278,
+          "mean_search_runtime_ms": 731.819222,
+          "mean_guidance_runtime_ms": 62.479583,
+          "mean_sum_of_costs_solved": 1025.53125,
+          "mean_makespan_solved": 59.9375,
+          "guidance_requests": 21,
+          "guidance_used": 8,
+          "guidance_fallbacks": 13,
+          "effective_guided_iterations": 5
+        },
+        "paired_outcomes": {
+          "guided_win": 1,
+          "baseline_win": 1,
+          "tie": 34
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.0,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.083333
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.027778,
+              "ci95_low": -0.166667,
+              "ci95_high": 0.083333
+            },
+            "iterations": {
+              "mean": 0.111111,
+              "ci95_low": -0.055556,
+              "ci95_high": 0.416667
+            },
+            "search_runtime_ms": {
+              "mean": -31.309111,
+              "ci95_low": -146.460111,
+              "ci95_high": 53.238917
+            },
+            "wall_runtime_ms": {
+              "mean": 31.179306,
+              "ci95_low": -73.812889,
+              "ci95_high": 154.727611
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.0,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 1,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 12,
+            "guided_first": 24
+          }
+        }
+      }
+    }
+  },
+  "order_effect_comparison_legacy_vs_controlled": {
+    "baseline": {
+      "run_count": 144,
+      "solved_count": 122,
+      "solved_ratio": 0.847222,
+      "final_conflicting_pairs": 87,
+      "iterations": 133,
+      "accepted_iterations": 90,
+      "mean_runtime_ms": 1472.284937,
+      "mean_search_runtime_ms": 1472.284937,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1514.688525,
+      "mean_makespan_solved": 55.893443,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "guided": {
+      "run_count": 144,
+      "solved_count": 106,
+      "solved_ratio": 0.736111,
+      "final_conflicting_pairs": 129,
+      "iterations": 125,
+      "accepted_iterations": 65,
+      "mean_runtime_ms": 1612.122313,
+      "mean_search_runtime_ms": 1612.009222,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1454.754717,
+      "mean_makespan_solved": 54.962264,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "paired_outcomes": {
+      "guided_win": 13,
+      "baseline_win": 31,
+      "tie": 100
+    },
+    "paired_statistics": {
+      "difference_definition": "guided_minus_baseline",
+      "bootstrap_95_percent": {
+        "solved_indicator": {
+          "mean": -0.111111,
+          "ci95_low": -0.173611,
+          "ci95_high": -0.055556
+        },
+        "final_conflicting_pairs": {
+          "mean": 0.291667,
+          "ci95_low": -0.048611,
+          "ci95_high": 0.611111
+        },
+        "iterations": {
+          "mean": -0.055556,
+          "ci95_low": -0.215278,
+          "ci95_high": 0.097222
+        },
+        "search_runtime_ms": {
+          "mean": 139.724285,
+          "ci95_low": -16.855674,
+          "ci95_high": 298.586299
+        },
+        "wall_runtime_ms": {
+          "mean": 139.837375,
+          "ci95_low": -16.769549,
+          "ci95_high": 298.697625
+        },
+        "sum_of_costs_both_solved": {
+          "mean": 0.413462,
+          "ci95_low": -0.701923,
+          "ci95_high": 1.586538
+        }
+      },
+      "paired_outcome_sign_test_p": 0.009559879,
+      "success_mcnemar_exact_p": 0.000402451,
+      "success_discordant_pairs": {
+        "guided_only": 2,
+        "baseline_only": 18
+      },
+      "execution_order": {
+        "baseline_first": 72,
+        "guided_first": 72
+      }
+    }
+  },
+  "guidance_integrity": {
+    "used_count": 95,
+    "changed_neighborhood_count": 95,
+    "effective_count": 31
+  }
+}

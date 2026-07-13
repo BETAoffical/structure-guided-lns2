@@ -40,7 +40,8 @@ def main() -> int:
     output = Path(arguments.output)
     write_map_bundle(output / "maps", map_data)
     write_instance_bundle(output / "instances", map_data, task_data)
-    print(output / "instances" / f"{task_id}.mapf")
+    print(output / "maps" / f"{map_id}.map")
+    print(output / "instances" / f"{task_id}.scen")
     return 0
 
 

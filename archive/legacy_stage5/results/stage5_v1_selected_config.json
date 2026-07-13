@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "selected_on_split": "validation",
+  "test_data_read": false,
+  "effective_threshold": 0.8,
+  "role_weight": 0.5,
+  "conflict_weight": 0.35,
+  "baseline_weight": 0.15,
+  "neighborhood_size": 6,
+  "max_iterations": 500,
+  "time_limit_ms": 5000
+}

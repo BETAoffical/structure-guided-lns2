@@ -35,7 +35,9 @@ hotspot probability `0.7` and radius `4`.
 
 ## Dataset and metadata
 
-The full dataset contains 36 maps and 144 `.mapf` instances:
+The full dataset contains 36 maps and 144 task instances. MovingAI `.map` and
+`.scen` are the active solver inputs; JSON metadata and legacy `.mapf` are also
+written:
 
 - train: 18 maps, 72 instances;
 - validation: 6 maps, 24 instances;

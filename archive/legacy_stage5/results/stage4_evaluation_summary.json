@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "index_split": "train",
+  "query_split": "validation",
+  "test_data_read": false,
+  "selected_parameters": {
+    "run": {
+      "k": 3,
+      "group_weights": {
+        "map": 1.0,
+        "task": 1.0
+      },
+      "ood_distance_threshold": 0.464735625
+    },
+    "repair": {
+      "k": 3,
+      "group_weights": {
+        "map": 0.5,
+        "task": 2.0,
+        "conflict": 2.0
+      },
+      "ood_distance_threshold": 0.629110967,
+      "effective_threshold": 0.5
+    }
+  },
+  "run_evaluation": {
+    "query_count": 24,
+    "mean_cosine_similarity": 0.347667155,
+    "mean_top10_recall": 0.347337963,
+    "active_query_count": 11,
+    "active_mean_cosine_similarity": 0.031273794,
+    "active_mean_top10_recall": 0.030555556,
+    "zero_heatmap_baseline_mean_cosine": 0.541666667,
+    "out_of_distribution_count": 8,
+    "by_layout": {
+      "compartmentalized": {
+        "count": 8,
+        "mean_cosine_similarity": 0.260961669,
+        "mean_top10_recall": 0.265625
+      },
+      "dead_end_aisles": {
+        "count": 8,
+        "mean_cosine_similarity": 0.269707483,
+        "mean_top10_recall": 0.2625
+      },
+      "regular_beltway": {
+        "count": 8,
+        "mean_cosine_similarity": 0.512332314,
+        "mean_top10_recall": 0.513888889
+      }
+    },
+    "by_task_variant": {
+      "balanced_base": {
+        "count": 6,
+        "mean_cosine_similarity": 0.5,
+        "mean_top10_recall": 0.5
+      },
+      "balanced_clustered": {
+        "count": 6,
+        "mean_cosine_similarity": 0.050777704,
+        "mean_top10_recall": 0.035185185
+      },
+      "balanced_dense": {
+        "count": 6,
+        "mean_cosine_similarity": 0.006557584,
+        "mean_top10_recall": 0.020833333
+      },
+      "uniform_control": {
+        "count": 6,
+        "mean_cosine_similarity": 0.833333333,
+        "mean_top10_recall": 0.833333333
+      }
+    }
+  },
+  "repair_evaluation": {
+    "count": 89,
+    "accuracy": 0.595505618,
+    "precision": 0.573333333,
+    "recall": 0.914893617,
+    "f1": 0.704918033,
+    "true_positive": 43,
+    "false_positive": 32,
+    "false_negative": 4,
+    "true_negative": 10,
+    "majority_baseline": {
+      "count": 89,
+      "accuracy": 0.528089888,
+      "precision": 0.528089888,
+      "recall": 1.0,
+      "f1": 0.691176471,
+      "true_positive": 47,
+      "false_positive": 42,
+      "false_negative": 0,
+      "true_negative": 0
+    },
+    "out_of_distribution_count": 14,
+    "mean_effective_role_overlap": 0.799020022,
+    "by_layout": {
+      "compartmentalized": {
+        "count": 53,
+        "accuracy": 0.547169811,
+        "precision": 0.511627907,
+        "recall": 0.88,
+        "f1": 0.647058824,
+        "true_positive": 22,
+        "false_positive": 21,
+        "false_negative": 3,
+        "true_negative": 7
+      },
+      "dead_end_aisles": {
+        "count": 23,
+        "accuracy": 0.652173913,
+        "precision": 0.681818182,
+        "recall": 0.9375,
+        "f1": 0.789473684,
+        "true_positive": 15,
+        "false_positive": 7,
+        "false_negative": 1,
+        "true_negative": 0
+      },
+      "regular_beltway": {
+        "count": 13,
+        "accuracy": 0.692307692,
+        "precision": 0.6,
+        "recall": 1.0,
+        "f1": 0.75,
+        "true_positive": 6,
+        "false_positive": 4,
+        "false_negative": 0,
+        "true_negative": 3
+      }
+    },
+    "by_task_variant": {
+      "balanced_base": {
+        "count": 2,
+        "accuracy": 0.5,
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.666666667,
+        "true_positive": 1,
+        "false_positive": 1,
+        "false_negative": 0,
+        "true_negative": 0
+      },
+      "balanced_clustered": {
+        "count": 53,
+        "accuracy": 0.698113208,
+        "precision": 0.666666667,
+        "recall": 1.0,
+        "f1": 0.8,
+        "true_positive": 32,
+        "false_positive": 16,
+        "false_negative": 0,
+        "true_negative": 5
+      },
+      "balanced_dense": {
+        "count": 34,
+        "accuracy": 0.441176471,
+        "precision": 0.4,
+        "recall": 0.714285714,
+        "f1": 0.512820513,
+        "true_positive": 10,
+        "false_positive": 15,
+        "false_negative": 4,
+        "true_negative": 5
+      }
+    }
+  },
+  "interpretation": "Offline retrieval metrics do not demonstrate planner improvement; concrete Agent mapping and solver comparison belong to Stage 5."
+}

@@ -249,9 +249,12 @@ def generate_dataset(
                         "task_id": task_id,
                         "map_seed": map_seed,
                         "task_seed": task_seed,
-                        "map_file": f"maps/{map_id}.json",
-                        "instance_file": f"instances/{task_id}.mapf",
+                        "map_file": f"maps/{map_id}.map",
+                        "scenario_file": f"instances/{task_id}.scen",
+                        "instance_file": f"instances/{task_id}.scen",
+                        "map_metadata_file": f"maps/{map_id}.json",
                         "task_file": f"instances/{task_id}.json",
+                        "legacy_instance_file": f"instances/{task_id}.mapf",
                         "map_parameters": map_data.metadata[
                             "sampled_parameters"
                         ],

@@ -1,0 +1,1498 @@
+{
+  "schema_version": 1,
+  "split": "test",
+  "test_data_read": true,
+  "task_count": 48,
+  "solver_seeds": [
+    1,
+    2,
+    3
+  ],
+  "total_run_count": 576,
+  "solver_options": {
+    "neighborhood_size": 6,
+    "max_iterations": 500,
+    "time_limit_ms": 5000,
+    "candidate_count": 8
+  },
+  "primary_comparison_controlled_vs_ranker": {
+    "baseline": {
+      "run_count": 144,
+      "solved_count": 114,
+      "solved_ratio": 0.791667,
+      "final_conflicting_pairs": 100,
+      "iterations": 214,
+      "accepted_iterations": 135,
+      "mean_runtime_ms": 1454.125639,
+      "mean_search_runtime_ms": 1454.000229,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1501.701754,
+      "mean_makespan_solved": 56.578947,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "guided": {
+      "run_count": 144,
+      "solved_count": 109,
+      "solved_ratio": 0.756944,
+      "final_conflicting_pairs": 102,
+      "iterations": 258,
+      "accepted_iterations": 164,
+      "mean_runtime_ms": 1769.149833,
+      "mean_search_runtime_ms": 1531.041215,
+      "mean_guidance_runtime_ms": 237.951771,
+      "mean_sum_of_costs_solved": 1488.211009,
+      "mean_makespan_solved": 55.633028,
+      "guidance_requests": 258,
+      "guidance_used": 207,
+      "guidance_fallbacks": 51,
+      "effective_guided_iterations": 68
+    },
+    "paired_outcomes": {
+      "guided_win": 19,
+      "baseline_win": 23,
+      "tie": 102
+    },
+    "paired_statistics": {
+      "difference_definition": "guided_minus_baseline",
+      "bootstrap_95_percent": {
+        "solved_indicator": {
+          "mean": -0.034722,
+          "ci95_low": -0.083333,
+          "ci95_high": 0.013889
+        },
+        "final_conflicting_pairs": {
+          "mean": 0.013889,
+          "ci95_low": -0.277778,
+          "ci95_high": 0.298611
+        },
+        "iterations": {
+          "mean": 0.305556,
+          "ci95_low": 0.048611,
+          "ci95_high": 0.569444
+        },
+        "search_runtime_ms": {
+          "mean": 77.040986,
+          "ci95_low": -45.828708,
+          "ci95_high": 207.158104
+        },
+        "wall_runtime_ms": {
+          "mean": 315.024194,
+          "ci95_low": 169.168139,
+          "ci95_high": 478.284014
+        },
+        "sum_of_costs_both_solved": {
+          "mean": 0.009615,
+          "ci95_low": -1.192308,
+          "ci95_high": 1.067308
+        }
+      },
+      "paired_outcome_sign_test_p": 0.643968956,
+      "success_mcnemar_exact_p": 0.301757812,
+      "success_discordant_pairs": {
+        "guided_only": 5,
+        "baseline_only": 10
+      },
+      "execution_order": {
+        "baseline_first": 72,
+        "guided_first": 72
+      }
+    },
+    "by_layout": {
+      "compartmentalized": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 27,
+          "solved_ratio": 0.5625,
+          "final_conflicting_pairs": 85,
+          "iterations": 123,
+          "accepted_iterations": 70,
+          "mean_runtime_ms": 3025.851562,
+          "mean_search_runtime_ms": 3025.629292,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1686.333333,
+          "mean_makespan_solved": 74.296296,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 23,
+          "solved_ratio": 0.479167,
+          "final_conflicting_pairs": 85,
+          "iterations": 154,
+          "accepted_iterations": 99,
+          "mean_runtime_ms": 3556.005792,
+          "mean_search_runtime_ms": 3124.861771,
+          "mean_guidance_runtime_ms": 430.861667,
+          "mean_sum_of_costs_solved": 1639.086957,
+          "mean_makespan_solved": 72.652174,
+          "guidance_requests": 154,
+          "guidance_used": 123,
+          "guidance_fallbacks": 31,
+          "effective_guided_iterations": 51
+        },
+        "paired_outcomes": {
+          "guided_win": 13,
+          "baseline_win": 13,
+          "tie": 22
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.083333,
+              "ci95_low": -0.208333,
+              "ci95_high": 0.041667
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.0,
+              "ci95_low": -0.916667,
+              "ci95_high": 0.8125
+            },
+            "iterations": {
+              "mean": 0.645833,
+              "ci95_low": 0.208333,
+              "ci95_high": 1.1875
+            },
+            "search_runtime_ms": {
+              "mean": 99.232479,
+              "ci95_low": -97.928146,
+              "ci95_high": 322.255146
+            },
+            "wall_runtime_ms": {
+              "mean": 530.154229,
+              "ci95_low": 288.134958,
+              "ci95_high": 809.795
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -2.047619,
+              "ci95_low": -6.904762,
+              "ci95_high": 1.857143
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 0.2890625,
+          "success_discordant_pairs": {
+            "guided_only": 2,
+            "baseline_only": 6
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "dead_end_aisles": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 42,
+          "solved_ratio": 0.875,
+          "final_conflicting_pairs": 12,
+          "iterations": 47,
+          "accepted_iterations": 31,
+          "mean_runtime_ms": 807.276625,
+          "mean_search_runtime_ms": 807.198146,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1429.642857,
+          "mean_makespan_solved": 51.380952,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 43,
+          "solved_ratio": 0.895833,
+          "final_conflicting_pairs": 12,
+          "iterations": 43,
+          "accepted_iterations": 27,
+          "mean_runtime_ms": 908.801542,
+          "mean_search_runtime_ms": 793.498604,
+          "mean_guidance_runtime_ms": 115.222104,
+          "mean_sum_of_costs_solved": 1444.209302,
+          "mean_makespan_solved": 51.093023,
+          "guidance_requests": 43,
+          "guidance_used": 35,
+          "guidance_fallbacks": 8,
+          "effective_guided_iterations": 10
+        },
+        "paired_outcomes": {
+          "guided_win": 5,
+          "baseline_win": 5,
+          "tie": 38
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.020833,
+              "ci95_low": -0.0625,
+              "ci95_high": 0.104167
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.0,
+              "ci95_low": -0.125,
+              "ci95_high": 0.125
+            },
+            "iterations": {
+              "mean": -0.083333,
+              "ci95_low": -0.4375,
+              "ci95_high": 0.291667
+            },
+            "search_runtime_ms": {
+              "mean": -13.699542,
+              "ci95_low": -254.437625,
+              "ci95_high": 215.803396
+            },
+            "wall_runtime_ms": {
+              "mean": 101.524917,
+              "ci95_low": -142.046021,
+              "ci95_high": 367.996896
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.1,
+              "ci95_low": -0.1,
+              "ci95_high": 0.35
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 3,
+            "baseline_only": 2
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "regular_beltway": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 45,
+          "solved_ratio": 0.9375,
+          "final_conflicting_pairs": 3,
+          "iterations": 44,
+          "accepted_iterations": 34,
+          "mean_runtime_ms": 529.248729,
+          "mean_search_runtime_ms": 529.17325,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1458.177778,
+          "mean_makespan_solved": 50.8,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 43,
+          "solved_ratio": 0.895833,
+          "final_conflicting_pairs": 5,
+          "iterations": 61,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 842.642167,
+          "mean_search_runtime_ms": 674.763271,
+          "mean_guidance_runtime_ms": 167.771542,
+          "mean_sum_of_costs_solved": 1451.511628,
+          "mean_makespan_solved": 51.069767,
+          "guidance_requests": 61,
+          "guidance_used": 49,
+          "guidance_fallbacks": 12,
+          "effective_guided_iterations": 7
+        },
+        "paired_outcomes": {
+          "guided_win": 1,
+          "baseline_win": 5,
+          "tie": 42
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.041667,
+              "ci95_low": -0.104167,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.041667,
+              "ci95_low": 0.0,
+              "ci95_high": 0.104167
+            },
+            "iterations": {
+              "mean": 0.354167,
+              "ci95_low": 0.020833,
+              "ci95_high": 0.875
+            },
+            "search_runtime_ms": {
+              "mean": 145.590021,
+              "ci95_low": -1.25,
+              "ci95_high": 369.351667
+            },
+            "wall_runtime_ms": {
+              "mean": 313.393438,
+              "ci95_low": 80.036146,
+              "ci95_high": 624.187125
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.930233,
+              "ci95_low": -0.27907,
+              "ci95_high": 2.790698
+            }
+          },
+          "paired_outcome_sign_test_p": 0.21875,
+          "success_mcnemar_exact_p": 0.5,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 2
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      }
+    },
+    "by_task_variant": {
+      "balanced_base": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 9,
+          "iterations": 35,
+          "accepted_iterations": 22,
+          "mean_runtime_ms": 790.737083,
+          "mean_search_runtime_ms": 790.669444,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1265.5,
+          "mean_makespan_solved": 51.8125,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 31,
+          "solved_ratio": 0.861111,
+          "final_conflicting_pairs": 8,
+          "iterations": 47,
+          "accepted_iterations": 28,
+          "mean_runtime_ms": 1102.337611,
+          "mean_search_runtime_ms": 920.552222,
+          "mean_guidance_runtime_ms": 181.680167,
+          "mean_sum_of_costs_solved": 1241.193548,
+          "mean_makespan_solved": 50.483871,
+          "guidance_requests": 47,
+          "guidance_used": 41,
+          "guidance_fallbacks": 6,
+          "effective_guided_iterations": 12
+        },
+        "paired_outcomes": {
+          "guided_win": 2,
+          "baseline_win": 3,
+          "tie": 31
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.027778,
+              "ci95_low": -0.194444,
+              "ci95_high": 0.138889
+            },
+            "iterations": {
+              "mean": 0.333333,
+              "ci95_low": 0.027778,
+              "ci95_high": 0.722222
+            },
+            "search_runtime_ms": {
+              "mean": 129.882778,
+              "ci95_low": 0.158944,
+              "ci95_high": 338.836083
+            },
+            "wall_runtime_ms": {
+              "mean": 311.600528,
+              "ci95_low": 93.701639,
+              "ci95_high": 598.185639
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.387097,
+              "ci95_low": 0.0,
+              "ci95_high": 1.096774
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 30,
+            "guided_first": 6
+          }
+        }
+      },
+      "balanced_clustered": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 23,
+          "solved_ratio": 0.638889,
+          "final_conflicting_pairs": 56,
+          "iterations": 96,
+          "accepted_iterations": 69,
+          "mean_runtime_ms": 2559.871333,
+          "mean_search_runtime_ms": 2559.642306,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1804.869565,
+          "mean_makespan_solved": 58.347826,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 19,
+          "solved_ratio": 0.527778,
+          "final_conflicting_pairs": 53,
+          "iterations": 114,
+          "accepted_iterations": 69,
+          "mean_runtime_ms": 3208.719306,
+          "mean_search_runtime_ms": 2795.087,
+          "mean_guidance_runtime_ms": 413.357583,
+          "mean_sum_of_costs_solved": 1759.947368,
+          "mean_makespan_solved": 56.0,
+          "guidance_requests": 114,
+          "guidance_used": 87,
+          "guidance_fallbacks": 27,
+          "effective_guided_iterations": 32
+        },
+        "paired_outcomes": {
+          "guided_win": 8,
+          "baseline_win": 13,
+          "tie": 15
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.111111,
+              "ci95_low": -0.277778,
+              "ci95_high": 0.055556
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.083333,
+              "ci95_low": -1.138889,
+              "ci95_high": 0.75
+            },
+            "iterations": {
+              "mean": 0.5,
+              "ci95_low": -0.194444,
+              "ci95_high": 1.361111
+            },
+            "search_runtime_ms": {
+              "mean": 235.444694,
+              "ci95_low": -144.69375,
+              "ci95_high": 662.634917
+            },
+            "wall_runtime_ms": {
+              "mean": 648.847972,
+              "ci95_low": 196.5985,
+              "ci95_high": 1161.507028
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 1.6875,
+              "ci95_low": -2.5625,
+              "ci95_high": 6.75
+            }
+          },
+          "paired_outcome_sign_test_p": 0.383310318,
+          "success_mcnemar_exact_p": 0.34375,
+          "success_discordant_pairs": {
+            "guided_only": 3,
+            "baseline_only": 7
+          },
+          "execution_order": {
+            "baseline_first": 18,
+            "guided_first": 18
+          }
+        }
+      },
+      "balanced_dense": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 26,
+          "solved_ratio": 0.722222,
+          "final_conflicting_pairs": 25,
+          "iterations": 57,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 1790.228667,
+          "mean_search_runtime_ms": 1790.070222,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 2122.307692,
+          "mean_makespan_solved": 55.038462,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 27,
+          "solved_ratio": 0.75,
+          "final_conflicting_pairs": 30,
+          "iterations": 59,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 1990.282917,
+          "mean_search_runtime_ms": 1769.841472,
+          "mean_guidance_runtime_ms": 220.26175,
+          "mean_sum_of_costs_solved": 2127.407407,
+          "mean_makespan_solved": 54.777778,
+          "guidance_requests": 59,
+          "guidance_used": 47,
+          "guidance_fallbacks": 12,
+          "effective_guided_iterations": 17
+        },
+        "paired_outcomes": {
+          "guided_win": 6,
+          "baseline_win": 6,
+          "tie": 24
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.027778,
+              "ci95_low": -0.055556,
+              "ci95_high": 0.138889
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.138889,
+              "ci95_low": -0.25,
+              "ci95_high": 0.638889
+            },
+            "iterations": {
+              "mean": 0.055556,
+              "ci95_low": -0.277778,
+              "ci95_high": 0.416667
+            },
+            "search_runtime_ms": {
+              "mean": -20.22875,
+              "ci95_low": -215.446472,
+              "ci95_high": 173.424778
+            },
+            "wall_runtime_ms": {
+              "mean": 200.05425,
+              "ci95_low": 2.663917,
+              "ci95_high": 432.367556
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -1.52,
+              "ci95_low": -5.48,
+              "ci95_high": 1.44
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 2,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 6,
+            "guided_first": 30
+          }
+        }
+      },
+      "uniform_control": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 33,
+          "solved_ratio": 0.916667,
+          "final_conflicting_pairs": 10,
+          "iterations": 26,
+          "accepted_iterations": 6,
+          "mean_runtime_ms": 675.665472,
+          "mean_search_runtime_ms": 675.618944,
+          "mean_guidance_runtime_ms": 0.0,
+          "mean_sum_of_costs_solved": 1030.484848,
+          "mean_makespan_solved": 61.181818,
+          "guidance_requests": 0,
+          "guidance_used": 0,
+          "guidance_fallbacks": 0,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 11,
+          "iterations": 38,
+          "accepted_iterations": 29,
+          "mean_runtime_ms": 775.2595,
+          "mean_search_runtime_ms": 638.684167,
+          "mean_guidance_runtime_ms": 136.507583,
+          "mean_sum_of_costs_solved": 1026.84375,
+          "mean_makespan_solved": 61.125,
+          "guidance_requests": 38,
+          "guidance_used": 32,
+          "guidance_fallbacks": 6,
+          "effective_guided_iterations": 7
+        },
+        "paired_outcomes": {
+          "guided_win": 3,
+          "baseline_win": 1,
+          "tie": 32
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.027778,
+              "ci95_low": -0.388889,
+              "ci95_high": 0.527778
+            },
+            "iterations": {
+              "mean": 0.333333,
+              "ci95_low": -0.027778,
+              "ci95_high": 0.777778
+            },
+            "search_runtime_ms": {
+              "mean": -36.934778,
+              "ci95_low": -138.515972,
+              "ci95_high": 18.811056
+            },
+            "wall_runtime_ms": {
+              "mean": 99.594028,
+              "ci95_low": -47.713583,
+              "ci95_high": 259.780167
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.0,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0
+            }
+          },
+          "paired_outcome_sign_test_p": 0.625,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 18,
+            "guided_first": 18
+          }
+        }
+      }
+    }
+  },
+  "order_effect_comparison_legacy_vs_controlled": {
+    "baseline": {
+      "run_count": 144,
+      "solved_count": 131,
+      "solved_ratio": 0.909722,
+      "final_conflicting_pairs": 54,
+      "iterations": 175,
+      "accepted_iterations": 124,
+      "mean_runtime_ms": 1152.356049,
+      "mean_search_runtime_ms": 1152.356049,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1575.992366,
+      "mean_makespan_solved": 57.70229,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "guided": {
+      "run_count": 144,
+      "solved_count": 114,
+      "solved_ratio": 0.791667,
+      "final_conflicting_pairs": 100,
+      "iterations": 214,
+      "accepted_iterations": 135,
+      "mean_runtime_ms": 1454.125639,
+      "mean_search_runtime_ms": 1454.000229,
+      "mean_guidance_runtime_ms": 0.0,
+      "mean_sum_of_costs_solved": 1501.701754,
+      "mean_makespan_solved": 56.578947,
+      "guidance_requests": 0,
+      "guidance_used": 0,
+      "guidance_fallbacks": 0,
+      "effective_guided_iterations": 0
+    },
+    "paired_outcomes": {
+      "guided_win": 16,
+      "baseline_win": 34,
+      "tie": 94
+    },
+    "paired_statistics": {
+      "difference_definition": "guided_minus_baseline",
+      "bootstrap_95_percent": {
+        "solved_indicator": {
+          "mean": -0.118056,
+          "ci95_low": -0.180556,
+          "ci95_high": -0.055556
+        },
+        "final_conflicting_pairs": {
+          "mean": 0.319444,
+          "ci95_low": 0.118056,
+          "ci95_high": 0.527778
+        },
+        "iterations": {
+          "mean": 0.270833,
+          "ci95_low": 0.0,
+          "ci95_high": 0.576389
+        },
+        "search_runtime_ms": {
+          "mean": 301.644181,
+          "ci95_low": 126.060472,
+          "ci95_high": 487.010486
+        },
+        "wall_runtime_ms": {
+          "mean": 301.76959,
+          "ci95_low": 126.157194,
+          "ci95_high": 487.15216
+        },
+        "sum_of_costs_both_solved": {
+          "mean": 1.756757,
+          "ci95_low": 0.072072,
+          "ci95_high": 3.693694
+        }
+      },
+      "paired_outcome_sign_test_p": 0.015346678,
+      "success_mcnemar_exact_p": 0.000488281,
+      "success_discordant_pairs": {
+        "guided_only": 3,
+        "baseline_only": 20
+      },
+      "execution_order": {
+        "baseline_first": 72,
+        "guided_first": 72
+      }
+    }
+  },
+  "ranker_guidance_integrity": {
+    "used_count": 207,
+    "changed_neighborhood_count": 207,
+    "effective_count": 68
+  },
+  "secondary_comparison_knn_vs_ranker": {
+    "baseline": {
+      "run_count": 144,
+      "solved_count": 111,
+      "solved_ratio": 0.770833,
+      "final_conflicting_pairs": 99,
+      "iterations": 245,
+      "accepted_iterations": 145,
+      "mean_runtime_ms": 1623.818528,
+      "mean_search_runtime_ms": 1505.607792,
+      "mean_guidance_runtime_ms": 118.056479,
+      "mean_sum_of_costs_solved": 1492.135135,
+      "mean_makespan_solved": 56.486486,
+      "guidance_requests": 245,
+      "guidance_used": 130,
+      "guidance_fallbacks": 115,
+      "effective_guided_iterations": 33
+    },
+    "guided": {
+      "run_count": 144,
+      "solved_count": 109,
+      "solved_ratio": 0.756944,
+      "final_conflicting_pairs": 102,
+      "iterations": 258,
+      "accepted_iterations": 164,
+      "mean_runtime_ms": 1769.149833,
+      "mean_search_runtime_ms": 1531.041215,
+      "mean_guidance_runtime_ms": 237.951771,
+      "mean_sum_of_costs_solved": 1488.211009,
+      "mean_makespan_solved": 55.633028,
+      "guidance_requests": 258,
+      "guidance_used": 207,
+      "guidance_fallbacks": 51,
+      "effective_guided_iterations": 68
+    },
+    "paired_outcomes": {
+      "guided_win": 19,
+      "baseline_win": 21,
+      "tie": 104
+    },
+    "paired_statistics": {
+      "difference_definition": "guided_minus_baseline",
+      "bootstrap_95_percent": {
+        "solved_indicator": {
+          "mean": -0.013889,
+          "ci95_low": -0.055556,
+          "ci95_high": 0.020833
+        },
+        "final_conflicting_pairs": {
+          "mean": 0.020833,
+          "ci95_low": -0.263889,
+          "ci95_high": 0.305556
+        },
+        "iterations": {
+          "mean": 0.090278,
+          "ci95_low": -0.125,
+          "ci95_high": 0.319444
+        },
+        "search_runtime_ms": {
+          "mean": 25.433424,
+          "ci95_low": -44.995917,
+          "ci95_high": 95.306292
+        },
+        "wall_runtime_ms": {
+          "mean": 145.331306,
+          "ci95_low": 57.214028,
+          "ci95_high": 237.7075
+        },
+        "sum_of_costs_both_solved": {
+          "mean": -0.330189,
+          "ci95_low": -2.160377,
+          "ci95_high": 1.396226
+        }
+      },
+      "paired_outcome_sign_test_p": 0.874629312,
+      "success_mcnemar_exact_p": 0.7265625,
+      "success_discordant_pairs": {
+        "guided_only": 3,
+        "baseline_only": 5
+      },
+      "execution_order": {
+        "baseline_first": 72,
+        "guided_first": 72
+      }
+    },
+    "by_layout": {
+      "compartmentalized": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 26,
+          "solved_ratio": 0.541667,
+          "final_conflicting_pairs": 81,
+          "iterations": 131,
+          "accepted_iterations": 69,
+          "mean_runtime_ms": 3193.983437,
+          "mean_search_runtime_ms": 3002.554521,
+          "mean_guidance_runtime_ms": 191.170542,
+          "mean_sum_of_costs_solved": 1674.461538,
+          "mean_makespan_solved": 74.384615,
+          "guidance_requests": 131,
+          "guidance_used": 38,
+          "guidance_fallbacks": 93,
+          "effective_guided_iterations": 18
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 23,
+          "solved_ratio": 0.479167,
+          "final_conflicting_pairs": 85,
+          "iterations": 154,
+          "accepted_iterations": 99,
+          "mean_runtime_ms": 3556.005792,
+          "mean_search_runtime_ms": 3124.861771,
+          "mean_guidance_runtime_ms": 430.861667,
+          "mean_sum_of_costs_solved": 1639.086957,
+          "mean_makespan_solved": 72.652174,
+          "guidance_requests": 154,
+          "guidance_used": 123,
+          "guidance_fallbacks": 31,
+          "effective_guided_iterations": 51
+        },
+        "paired_outcomes": {
+          "guided_win": 14,
+          "baseline_win": 14,
+          "tie": 20
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.0625,
+              "ci95_low": -0.145833,
+              "ci95_high": 0.020833
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.083333,
+              "ci95_low": -0.8125,
+              "ci95_high": 0.854167
+            },
+            "iterations": {
+              "mean": 0.479167,
+              "ci95_low": -0.083333,
+              "ci95_high": 1.083333
+            },
+            "search_runtime_ms": {
+              "mean": 122.30725,
+              "ci95_low": -46.653646,
+              "ci95_high": 311.066917
+            },
+            "wall_runtime_ms": {
+              "mean": 362.022354,
+              "ci95_low": 143.478625,
+              "ci95_high": 602.692625
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -3.045455,
+              "ci95_low": -10.954545,
+              "ci95_high": 5.318182
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 0.375,
+          "success_discordant_pairs": {
+            "guided_only": 1,
+            "baseline_only": 4
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "dead_end_aisles": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 41,
+          "solved_ratio": 0.854167,
+          "final_conflicting_pairs": 14,
+          "iterations": 55,
+          "accepted_iterations": 40,
+          "mean_runtime_ms": 934.380896,
+          "mean_search_runtime_ms": 856.789167,
+          "mean_guidance_runtime_ms": 77.486083,
+          "mean_sum_of_costs_solved": 1416.902439,
+          "mean_makespan_solved": 51.121951,
+          "guidance_requests": 55,
+          "guidance_used": 41,
+          "guidance_fallbacks": 14,
+          "effective_guided_iterations": 8
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 43,
+          "solved_ratio": 0.895833,
+          "final_conflicting_pairs": 12,
+          "iterations": 43,
+          "accepted_iterations": 27,
+          "mean_runtime_ms": 908.801542,
+          "mean_search_runtime_ms": 793.498604,
+          "mean_guidance_runtime_ms": 115.222104,
+          "mean_sum_of_costs_solved": 1444.209302,
+          "mean_makespan_solved": 51.093023,
+          "guidance_requests": 43,
+          "guidance_used": 35,
+          "guidance_fallbacks": 8,
+          "effective_guided_iterations": 10
+        },
+        "paired_outcomes": {
+          "guided_win": 4,
+          "baseline_win": 3,
+          "tie": 41
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.041667,
+              "ci95_low": 0.0,
+              "ci95_high": 0.104167
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.041667,
+              "ci95_low": -0.145833,
+              "ci95_high": 0.0625
+            },
+            "iterations": {
+              "mean": -0.25,
+              "ci95_low": -0.583333,
+              "ci95_high": 0.020833
+            },
+            "search_runtime_ms": {
+              "mean": -63.290562,
+              "ci95_low": -183.353979,
+              "ci95_high": 17.256375
+            },
+            "wall_runtime_ms": {
+              "mean": -25.579354,
+              "ci95_low": -142.820354,
+              "ci95_high": 56.684021
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.097561,
+              "ci95_low": 0.0,
+              "ci95_high": 0.292683
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 0.5,
+          "success_discordant_pairs": {
+            "guided_only": 2,
+            "baseline_only": 0
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      },
+      "regular_beltway": {
+        "baseline": {
+          "run_count": 48,
+          "solved_count": 44,
+          "solved_ratio": 0.916667,
+          "final_conflicting_pairs": 4,
+          "iterations": 59,
+          "accepted_iterations": 36,
+          "mean_runtime_ms": 743.09125,
+          "mean_search_runtime_ms": 657.479688,
+          "mean_guidance_runtime_ms": 85.512812,
+          "mean_sum_of_costs_solved": 1454.5,
+          "mean_makespan_solved": 50.909091,
+          "guidance_requests": 59,
+          "guidance_used": 51,
+          "guidance_fallbacks": 8,
+          "effective_guided_iterations": 7
+        },
+        "guided": {
+          "run_count": 48,
+          "solved_count": 43,
+          "solved_ratio": 0.895833,
+          "final_conflicting_pairs": 5,
+          "iterations": 61,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 842.642167,
+          "mean_search_runtime_ms": 674.763271,
+          "mean_guidance_runtime_ms": 167.771542,
+          "mean_sum_of_costs_solved": 1451.511628,
+          "mean_makespan_solved": 51.069767,
+          "guidance_requests": 61,
+          "guidance_used": 49,
+          "guidance_fallbacks": 12,
+          "effective_guided_iterations": 7
+        },
+        "paired_outcomes": {
+          "guided_win": 1,
+          "baseline_win": 4,
+          "tie": 43
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.020833,
+              "ci95_low": -0.0625,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.020833,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0625
+            },
+            "iterations": {
+              "mean": 0.041667,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.166667
+            },
+            "search_runtime_ms": {
+              "mean": 17.283583,
+              "ci95_low": -18.985271,
+              "ci95_high": 66.205937
+            },
+            "wall_runtime_ms": {
+              "mean": 99.550917,
+              "ci95_low": 19.682063,
+              "ci95_high": 199.583417
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.651163,
+              "ci95_low": -0.302326,
+              "ci95_high": 1.953488
+            }
+          },
+          "paired_outcome_sign_test_p": 0.375,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 24
+          }
+        }
+      }
+    },
+    "by_task_variant": {
+      "balanced_base": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 8,
+          "iterations": 38,
+          "accepted_iterations": 22,
+          "mean_runtime_ms": 897.838444,
+          "mean_search_runtime_ms": 821.199667,
+          "mean_guidance_runtime_ms": 76.559472,
+          "mean_sum_of_costs_solved": 1266.6875,
+          "mean_makespan_solved": 51.8125,
+          "guidance_requests": 38,
+          "guidance_used": 8,
+          "guidance_fallbacks": 30,
+          "effective_guided_iterations": 3
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 31,
+          "solved_ratio": 0.861111,
+          "final_conflicting_pairs": 8,
+          "iterations": 47,
+          "accepted_iterations": 28,
+          "mean_runtime_ms": 1102.337611,
+          "mean_search_runtime_ms": 920.552222,
+          "mean_guidance_runtime_ms": 181.680167,
+          "mean_sum_of_costs_solved": 1241.193548,
+          "mean_makespan_solved": 50.483871,
+          "guidance_requests": 47,
+          "guidance_used": 41,
+          "guidance_fallbacks": 6,
+          "effective_guided_iterations": 12
+        },
+        "paired_outcomes": {
+          "guided_win": 4,
+          "baseline_win": 3,
+          "tie": 29
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.0,
+              "ci95_low": -0.166667,
+              "ci95_high": 0.166667
+            },
+            "iterations": {
+              "mean": 0.25,
+              "ci95_low": 0.0,
+              "ci95_high": 0.583333
+            },
+            "search_runtime_ms": {
+              "mean": 99.352556,
+              "ci95_low": 0.407611,
+              "ci95_high": 265.670722
+            },
+            "wall_runtime_ms": {
+              "mean": 204.499167,
+              "ci95_low": 52.707778,
+              "ci95_high": 425.564306
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -0.83871,
+              "ci95_low": -3.225806,
+              "ci95_high": 0.645161
+            }
+          },
+          "paired_outcome_sign_test_p": 1.0,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 30,
+            "guided_first": 6
+          }
+        }
+      },
+      "balanced_clustered": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 20,
+          "solved_ratio": 0.555556,
+          "final_conflicting_pairs": 60,
+          "iterations": 121,
+          "accepted_iterations": 79,
+          "mean_runtime_ms": 3033.816361,
+          "mean_search_runtime_ms": 2810.382583,
+          "mean_guidance_runtime_ms": 223.133028,
+          "mean_sum_of_costs_solved": 1789.4,
+          "mean_makespan_solved": 57.85,
+          "guidance_requests": 121,
+          "guidance_used": 75,
+          "guidance_fallbacks": 46,
+          "effective_guided_iterations": 15
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 19,
+          "solved_ratio": 0.527778,
+          "final_conflicting_pairs": 53,
+          "iterations": 114,
+          "accepted_iterations": 69,
+          "mean_runtime_ms": 3208.719306,
+          "mean_search_runtime_ms": 2795.087,
+          "mean_guidance_runtime_ms": 413.357583,
+          "mean_sum_of_costs_solved": 1759.947368,
+          "mean_makespan_solved": 56.0,
+          "guidance_requests": 114,
+          "guidance_used": 87,
+          "guidance_fallbacks": 27,
+          "effective_guided_iterations": 32
+        },
+        "paired_outcomes": {
+          "guided_win": 8,
+          "baseline_win": 11,
+          "tie": 17
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.138889,
+              "ci95_high": 0.111111
+            },
+            "final_conflicting_pairs": {
+              "mean": -0.194444,
+              "ci95_low": -1.25,
+              "ci95_high": 0.611111
+            },
+            "iterations": {
+              "mean": -0.194444,
+              "ci95_low": -0.75,
+              "ci95_high": 0.305556
+            },
+            "search_runtime_ms": {
+              "mean": -15.295583,
+              "ci95_low": -192.045611,
+              "ci95_high": 126.9725
+            },
+            "wall_runtime_ms": {
+              "mean": 174.902944,
+              "ci95_low": -28.500944,
+              "ci95_high": 361.618194
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 1.0,
+              "ci95_low": -2.352941,
+              "ci95_high": 4.470588
+            }
+          },
+          "paired_outcome_sign_test_p": 0.647605896,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 2,
+            "baseline_only": 3
+          },
+          "execution_order": {
+            "baseline_first": 12,
+            "guided_first": 24
+          }
+        }
+      },
+      "balanced_dense": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 26,
+          "solved_ratio": 0.722222,
+          "final_conflicting_pairs": 21,
+          "iterations": 62,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 1840.037861,
+          "mean_search_runtime_ms": 1711.91175,
+          "mean_guidance_runtime_ms": 127.938556,
+          "mean_sum_of_costs_solved": 2126.884615,
+          "mean_makespan_solved": 55.230769,
+          "guidance_requests": 62,
+          "guidance_used": 47,
+          "guidance_fallbacks": 15,
+          "effective_guided_iterations": 15
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 27,
+          "solved_ratio": 0.75,
+          "final_conflicting_pairs": 30,
+          "iterations": 59,
+          "accepted_iterations": 38,
+          "mean_runtime_ms": 1990.282917,
+          "mean_search_runtime_ms": 1769.841472,
+          "mean_guidance_runtime_ms": 220.26175,
+          "mean_sum_of_costs_solved": 2127.407407,
+          "mean_makespan_solved": 54.777778,
+          "guidance_requests": 59,
+          "guidance_used": 47,
+          "guidance_fallbacks": 12,
+          "effective_guided_iterations": 17
+        },
+        "paired_outcomes": {
+          "guided_win": 4,
+          "baseline_win": 6,
+          "tie": 26
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": 0.027778,
+              "ci95_low": 0.0,
+              "ci95_high": 0.083333
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.25,
+              "ci95_low": -0.027778,
+              "ci95_high": 0.666667
+            },
+            "iterations": {
+              "mean": -0.083333,
+              "ci95_low": -0.5,
+              "ci95_high": 0.361111
+            },
+            "search_runtime_ms": {
+              "mean": 57.929722,
+              "ci95_low": -88.629583,
+              "ci95_high": 223.125833
+            },
+            "wall_runtime_ms": {
+              "mean": 150.245056,
+              "ci95_low": -22.648833,
+              "ci95_high": 358.174389
+            },
+            "sum_of_costs_both_solved": {
+              "mean": -1.0,
+              "ci95_low": -7.384615,
+              "ci95_high": 5.615385
+            }
+          },
+          "paired_outcome_sign_test_p": 0.75390625,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 1,
+            "baseline_only": 0
+          },
+          "execution_order": {
+            "baseline_first": 24,
+            "guided_first": 12
+          }
+        }
+      },
+      "uniform_control": {
+        "baseline": {
+          "run_count": 36,
+          "solved_count": 33,
+          "solved_ratio": 0.916667,
+          "final_conflicting_pairs": 10,
+          "iterations": 24,
+          "accepted_iterations": 6,
+          "mean_runtime_ms": 723.581444,
+          "mean_search_runtime_ms": 678.937167,
+          "mean_guidance_runtime_ms": 44.594861,
+          "mean_sum_of_costs_solved": 1030.484848,
+          "mean_makespan_solved": 61.181818,
+          "guidance_requests": 24,
+          "guidance_used": 0,
+          "guidance_fallbacks": 24,
+          "effective_guided_iterations": 0
+        },
+        "guided": {
+          "run_count": 36,
+          "solved_count": 32,
+          "solved_ratio": 0.888889,
+          "final_conflicting_pairs": 11,
+          "iterations": 38,
+          "accepted_iterations": 29,
+          "mean_runtime_ms": 775.2595,
+          "mean_search_runtime_ms": 638.684167,
+          "mean_guidance_runtime_ms": 136.507583,
+          "mean_sum_of_costs_solved": 1026.84375,
+          "mean_makespan_solved": 61.125,
+          "guidance_requests": 38,
+          "guidance_used": 32,
+          "guidance_fallbacks": 6,
+          "effective_guided_iterations": 7
+        },
+        "paired_outcomes": {
+          "guided_win": 3,
+          "baseline_win": 1,
+          "tie": 32
+        },
+        "paired_statistics": {
+          "difference_definition": "guided_minus_baseline",
+          "bootstrap_95_percent": {
+            "solved_indicator": {
+              "mean": -0.027778,
+              "ci95_low": -0.083333,
+              "ci95_high": 0.0
+            },
+            "final_conflicting_pairs": {
+              "mean": 0.027778,
+              "ci95_low": -0.388889,
+              "ci95_high": 0.527778
+            },
+            "iterations": {
+              "mean": 0.388889,
+              "ci95_low": -0.027778,
+              "ci95_high": 0.916667
+            },
+            "search_runtime_ms": {
+              "mean": -40.253,
+              "ci95_low": -139.876361,
+              "ci95_high": 13.412306
+            },
+            "wall_runtime_ms": {
+              "mean": 51.678056,
+              "ci95_low": -85.313222,
+              "ci95_high": 178.120056
+            },
+            "sum_of_costs_both_solved": {
+              "mean": 0.0,
+              "ci95_low": 0.0,
+              "ci95_high": 0.0
+            }
+          },
+          "paired_outcome_sign_test_p": 0.625,
+          "success_mcnemar_exact_p": 1.0,
+          "success_discordant_pairs": {
+            "guided_only": 0,
+            "baseline_only": 1
+          },
+          "execution_order": {
+            "baseline_first": 6,
+            "guided_first": 30
+          }
+        }
+      }
+    }
+  },
+  "knn_guidance_integrity": {
+    "used_count": 130,
+    "changed_neighborhood_count": 130,
+    "effective_count": 33
+  }
+}
