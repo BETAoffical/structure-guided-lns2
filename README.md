@@ -130,8 +130,13 @@ PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
   --phase all --workers 4
 ```
 
+The expanded Train/Validation calibration uses
+`configs/repair_collection_calibration.json` and is audited with
+`scripts/analyze_repair_experience.py`. It can produce up to 11,664 controlled
+outcomes without using Test/OOD data as labels.
+
 See [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md) for split definitions, smoke overrides,
-resume behavior, and the versioned output contract.
+resume behavior, calibration commands, quality gates, and the versioned output contract.
 
 ## Tests
 

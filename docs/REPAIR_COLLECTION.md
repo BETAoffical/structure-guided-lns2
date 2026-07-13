@@ -63,6 +63,43 @@ PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
   --trials 1 --horizons 1,2
 ```
 
+## Calibration collection
+
+`configs/repair_collection_calibration.json` is the reproducible label-quality
+calibration. It uses only the 24 Train and 12 Validation instances with solver
+seeds 0 and 1, for 72 instance-seed sources and 288 four-policy baseline
+episodes. Test and OOD splits are excluded from counterfactual collection.
+
+Each Adaptive episode contributes up to three evenly spaced repair states. A
+state evaluates up to six conflict seed agents, all Target/Collision/Random
+generators, and neighborhood sizes 4, 8, and 16 at horizons 1 and 4. With one
+trial per candidate, the theoretical maximum is 11,664 outcomes. One trial is
+intended to audit coverage and action separation; stochastic stability remains
+part of the later two-trial collection.
+
+```bash
+PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
+  --dataset build/repair-transfer-pilot-v2 \
+  --config configs/repair_collection_calibration.json \
+  --output build/repair-experience-calibration-v2 \
+  --phase all --splits train,validation --workers 4
+```
+
+The quality analyzer checks collection integrity, coverage, horizon-specific
+outcome diversity, Pareto sets, fixed action-family dominance, and early/middle/
+late repair preferences. It does not synthesize a reward or treat the official
+Adaptive action as a label.
+
+```bash
+python3 scripts/analyze_repair_experience.py \
+  --collection build/repair-experience-calibration-v2
+```
+
+It writes `quality_report.json` and `quality_report.md` into the collection
+directory and returns a nonzero exit status when an acceptance gate fails.
+Future supervised training uses only Train outcomes. Validation remains isolated
+for label/reward audits and model selection.
+
 ## Output contract
 
 - `run_config.json` pins dataset and semantic configuration fingerprints.
@@ -87,6 +124,15 @@ errors. Train was 48/48 repairable; intersection-100/120 and cross-zone-100/120 
 bounded train smoke completed all four official baselines and emitted 36 outcomes from two Adaptive
 states. The OOD smoke wrote 24 baseline traces covering uniform, intersection, and cross-zone tasks,
 and correctly emitted zero counterfactual labels.
+
+The expanded 2026-07-14 calibration completed 72/72 Train/Validation
+qualifications and 288/288 baseline episodes with no runtime errors. The 72
+Adaptive sources produced 200 repair states, 816 seed-agent selections, and
+7,344 outcomes. Prefix replay mismatches, invalid actions, Test/OOD labels,
+seed-coverage failures, and action-family coverage failures were all zero.
+Every Horizon 4 state had more than one outcome, the most dominant fixed action
+family was uniquely Pareto-optimal in 12.5% of states, and the mean Horizon 1/4
+Pareto-set overlap was 50.6%. All quality gates passed.
 
 The original v1 pilot remains under `build/repair-transfer-pilot` for audit only. Its intersection and
 cross-zone names shared nearly identical endpoint logic and must not be used for formal OOD comparison.
