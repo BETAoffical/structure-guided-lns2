@@ -148,10 +148,12 @@ and a route-redundancy proxy.
 
 This mode is used when `scenario_type` is omitted.
 
-## Scenario-level task flow
+## Static OD task modes
 
 `scenario_type` is sampled once per task set. It can be one fixed value,
 a uniformly sampled list, or `mixed` with `scenario_mixture`.
+These modes describe a static origin-destination distribution for one MAPF
+instance. They are not temporal task arrivals.
 
 Supported scenarios:
 
@@ -171,6 +173,12 @@ The active feasibility configuration uses only `balanced_bidirectional` and
 18/18, 30/30, or 24/24 assignments for the active 36-, 60-, and 48-Agent
 variants.
 
+`cross_zone_exchange` assigns exact, seed-deterministic quotas across all six
+directed pairs between the left, center, and right storage zones. Quota counts
+differ by at most one. `intersection_crossing` assigns exact four-way
+left/right and top/bottom traffic and can require a fraction of agents to have
+a shortest path through selected high-priority semantic `X` components.
+
 | Parameter | Meaning |
 | --- | --- |
 | `dominant_flow_ratio` | Fraction following the scenario's principal flow |
@@ -187,6 +195,8 @@ OD zone names currently supported:
 - `left`
 - `center`
 - `right`
+- `top`
+- `bottom`
 
 ## Hotspots and conflict pressure
 
@@ -199,6 +209,8 @@ OD zone names currently supported:
 | `required_bottleneck_crossing_ratio` | Fraction whose shortest path must pass a selected high-risk cell |
 | `shared_corridor_ratio` | Additional shared-bottleneck pressure; currently enforced through the same bottleneck condition |
 | `target_bottleneck_mode` | `articulation` or `highest_prior` |
+| `required_intersection_crossing_ratio` | Fraction whose shortest path must pass its assigned semantic `X` component |
+| `target_intersection_count` | Number of high-priority components shared by constrained four-way traffic |
 | `swap_pair_ratio` | Fraction participating in goal-swap pairs |
 
 ## Fixed invariants
@@ -213,6 +225,9 @@ These are not configurable:
 - endpoints must satisfy shortest-path bounds;
 - semantic layers and structural priors align exactly with the grid.
 
-True directed one-way roads, dynamic closures, release times, and lifelong task
-arrival are intentionally not part of stage 1 because they require changes to
-the instance format and low-level solver.
+Task sidecars use task-semantics version 2 and record requested OD quotas,
+realized flows, candidate and selected intersection components, and per-agent
+intersection requirements. True directed one-way roads, dynamic closures,
+release times, task queues, and lifelong task arrival are intentionally not
+part of this dataset because they require changes to the instance format and
+low-level solver.

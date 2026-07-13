@@ -1392,10 +1392,16 @@ def _generate_warehouse_once(
     right_services = [
         cell for cell in service_cells if cell[1] >= 2 * cols / 3
     ]
+    top_services = [
+        cell for cell in service_cells if cell[0] < rows / 3
+    ]
+    bottom_services = [
+        cell for cell in service_cells if cell[0] >= 2 * rows / 3
+    ]
     station_zone_cells = sorted(station_region)
 
     metadata = {
-        "schema_version": 1,
+        "schema_version": 2,
         "map_type": "warehouse",
         "sampled_parameters": {
             "layout_mode": layout_mode,
@@ -1487,6 +1493,8 @@ def _generate_warehouse_once(
             "left_storage": _cells_to_json(left_services),
             "center_storage": _cells_to_json(center_services),
             "right_storage": _cells_to_json(right_services),
+            "top_storage": _cells_to_json(top_services),
+            "bottom_storage": _cells_to_json(bottom_services),
             "station_approach": _cells_to_json(station_zone_cells),
         },
         "semantic_cell_types": ["".join(row) for row in semantic],

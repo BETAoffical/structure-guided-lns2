@@ -99,7 +99,7 @@ preserves the original official random stream.
 
 ## Structured warehouse data
 
-The retained generator creates controlled warehouse layouts and task-flow variants. Every map/task pair
+The retained generator creates controlled warehouse layouts and static OD task variants. Every map/task pair
 now includes standard MovingAI `.map/.scen`, JSON metadata, text/SVG previews, and the legacy `.mapf`
 file for archived experiments.
 
@@ -124,7 +124,7 @@ replays controlled seed/heuristic/size actions from exact Adaptive states.
 
 ```bash
 PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
-  --dataset build/repair-transfer-pilot \
+  --dataset build/repair-transfer-pilot-v2 \
   --config configs/repair_collection_pilot.json \
   --output build/repair-experience-pilot \
   --phase all --workers 4
@@ -145,7 +145,7 @@ ctest --test-dir build/linux/project --output-on-failure
 
 The Linux suite covers official C++ interfaces, repair-only execution, deterministic reset, seed and
 explicit actions, fallback behavior, and the native Python module. The Windows Python suite covers map,
-task-flow, metadata, MovingAI export, and split determinism.
+static OD semantics, metadata, MovingAI export, and split determinism.
 
 ## Documentation
 

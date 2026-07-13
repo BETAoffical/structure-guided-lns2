@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import collections
+import hashlib
 import json
 import random
-import collections
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,20 @@ from .io import write_instance_bundle, write_map_bundle
 from .task_flows import generate_tasks
 from .validation import validate_map, validate_task
 from .warehouse import generate_warehouse
+
+
+DATASET_SCHEMA_VERSION = 2
+TASK_SEMANTICS_VERSION = 2
+
+
+def _fingerprint(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -146,6 +161,9 @@ def generate_dataset(
         else config.get("output_dir", "data/stage1")
     )
     master_seed = int(config.get("master_seed", 2026))
+    config_schema_version = int(config.get("schema_version", 1))
+    if config_schema_version not in {1, 2}:
+        raise ValueError("dataset config schema_version must be 1 or 2")
     seed_rng = random.Random(master_seed)
     base_map_config = dict(config.get("map", {}))
     base_task_config = dict(config.get("task", {}))
@@ -159,7 +177,10 @@ def generate_dataset(
     )
     variant_indices: collections.Counter[str] = collections.Counter()
     summary: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "config_schema_version": config_schema_version,
+        "task_semantics_version": TASK_SEMANTICS_VERSION,
+        "configuration_fingerprint": _fingerprint(config),
         "master_seed": master_seed,
         "output_dir": str(output_root),
         "splits": {},
@@ -279,6 +300,12 @@ def generate_dataset(
                         "scenario_type": task_data.metadata[
                             "scenario_type"
                         ],
+                        "task_schema_version": task_data.metadata[
+                            "schema_version"
+                        ],
+                        "task_semantics_version": task_data.metadata[
+                            "task_semantics_version"
+                        ],
                         "task_variant": task_variant["name"],
                         "dominant_flow_ratio": task_data.metadata[
                             "dominant_flow_ratio"
@@ -289,6 +316,19 @@ def generate_dataset(
                                 "required_bottleneck_crossing_ratio"
                             ]
                         ),
+                        "required_intersection_crossing_ratio": (
+                            task_data.metadata[
+                                "required_intersection_crossing_ratio"
+                            ]
+                        ),
+                        "realized_intersection_crossing_ratio": (
+                            task_data.metadata[
+                                "realized_intersection_crossing_ratio"
+                            ]
+                        ),
+                        "od_quota_counts": task_data.metadata[
+                            "od_quota_counts"
+                        ],
                         "agent_count": task_data.agent_count,
                         "mean_shortest_distance": task_data.metadata[
                             "mean_shortest_distance"

@@ -12,9 +12,14 @@ and controlled counterfactual branches that later stages can turn into ranking l
 
 - `train`, `validation`, and `test_id` share layout and task families but use disjoint seeds;
 - `test_ood_layout` holds out six layout families;
-- `test_ood_task` holds out uniform, intersection, cross-zone, and swap-pair task flows;
+- `test_ood_task` holds out uniform, four-way intersection, six-pair cross-zone, and swap-pair static OD modes;
 - `test_ood_density` uses 60 and 120 agents outside the 80/100-agent training range;
 - `test_joint_ood` combines unseen layouts, unseen tasks, and 120 agents.
+
+The cross-zone variants keep exact six-pair OD quotas and apply a moderate
+`hotspot_skew=0.5` within each origin/destination zone so that qualification
+contains repair states on open layouts. Intersection variants instead use a
+separate 60% shortest-path-through-intersection constraint.
 
 OOD means out of distribution. Test and OOD splits are evaluation-only and never produce
 counterfactual training labels.
@@ -22,7 +27,7 @@ counterfactual training labels.
 ```powershell
 python scripts/generate_dataset.py `
   --config configs/repair_transfer_pilot.json `
-  --output build/repair-transfer-pilot
+  --output build/repair-transfer-pilot-v2
 ```
 
 ## Collection
@@ -31,7 +36,7 @@ Run the native collector inside Ubuntu after building `lns2_env`:
 
 ```bash
 PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
-  --dataset build/repair-transfer-pilot \
+  --dataset build/repair-transfer-pilot-v2 \
   --config configs/repair_collection_pilot.json \
   --output build/repair-experience-pilot \
   --phase all \
@@ -50,7 +55,7 @@ For a short end-to-end check:
 
 ```bash
 PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
-  --dataset build/repair-transfer-pilot \
+  --dataset build/repair-transfer-pilot-v2 \
   --config configs/repair_collection_pilot.json \
   --output build/repair-experience-smoke \
   --phase all --splits train --workers 4 --max-episodes 1 \
@@ -77,7 +82,13 @@ sum-of-cost changes, low-level search deltas, and branch runtime; no reward is h
 
 ## Acceptance snapshot
 
-The 2026-07-14 local acceptance generated all 102 configured instances. On train, all 48 combinations
-of 24 instances and solver seeds 0/1 entered collision repair, with 12.17 initial colliding pairs on
-average. The bounded smoke run solved all four baseline episodes and emitted 36 outcomes from two
-Adaptive states with no replay or collection errors. Raw data remains under ignored `build/` paths.
+The 2026-07-14 v2 acceptance generated all 102 instances and completed 204 qualification runs with no
+errors. Train was 48/48 repairable; intersection-100/120 and cross-zone-100/120 were each 18/18. The
+bounded train smoke completed all four official baselines and emitted 36 outcomes from two Adaptive
+states. The OOD smoke wrote 24 baseline traces covering uniform, intersection, and cross-zone tasks,
+and correctly emitted zero counterfactual labels.
+
+The original v1 pilot remains under `build/repair-transfer-pilot` for audit only. Its intersection and
+cross-zone names shared nearly identical endpoint logic and must not be used for formal OOD comparison.
+Pilot v2 is written to a separate directory and uses task-semantics version 2; collection fingerprints
+reject attempts to resume a v1 run with v2 data. Raw data remains under ignored `build/` paths.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -49,6 +50,8 @@ class WarehouseGeneratorTests(unittest.TestCase):
             self.assertEqual(parameters["vertical_aisle_width"], 2)
             self.assertEqual(parameters["outer_beltway_width"], 2)
             self.assertEqual(parameters["station_count"], 2)
+            self.assertTrue(first.metadata["zones"]["top_storage"])
+            self.assertTrue(first.metadata["zones"]["bottom_storage"])
             station_columns = sorted(
                 station["cell"][1]
                 for station in first.metadata["stations"]
@@ -195,6 +198,146 @@ class WarehouseGeneratorTests(unittest.TestCase):
         self.assertEqual(len(set(uniform.starts)), 36)
         self.assertEqual(len(set(uniform.goals)), 36)
 
+    def test_cross_zone_exchange_uses_exact_six_pair_quotas(self) -> None:
+        map_data = generate_warehouse(MAP_CONFIG, 3600, "cross_zone_map")
+        config = {
+            **TASK_CONFIG,
+            "agent_count": 60,
+            "scenario_type": "cross_zone_exchange",
+        }
+        task = generate_tasks(map_data, config, 3601, "cross_zone")
+        repeated = generate_tasks(map_data, config, 3601, "cross_zone")
+        validate_task(map_data, task)
+        self.assertEqual(task.starts, repeated.starts)
+        self.assertEqual(task.goals, repeated.goals)
+        expected = {
+            "left_to_center": 10,
+            "center_to_left": 10,
+            "center_to_right": 10,
+            "right_to_center": 10,
+            "left_to_right": 10,
+            "right_to_left": 10,
+        }
+        self.assertEqual(task.metadata["od_quota_counts"], expected)
+        self.assertEqual(task.metadata["realized_flow_counts"], expected)
+
+        zones = {
+            name.removesuffix("_storage"): {
+                tuple(cell) for cell in values
+            }
+            for name, values in map_data.metadata["zones"].items()
+            if name.endswith("_storage")
+        }
+        for start, goal, assignment in zip(
+            task.starts, task.goals, task.metadata["flow_assignments"]
+        ):
+            origin, destination = assignment.split("_to_", 1)
+            self.assertNotEqual(origin, destination)
+            self.assertIn(start, zones[origin])
+            self.assertIn(goal, zones[destination])
+
+    def test_generic_od_matrix_still_overrides_builtin_scenarios(self) -> None:
+        map_data = generate_warehouse(MAP_CONFIG, 3650, "od_override_map")
+        task = generate_tasks(
+            map_data,
+            {
+                **TASK_CONFIG,
+                "agent_count": 12,
+                "scenario_type": "cross_zone_exchange",
+                "od_matrix": {"left->right": 1.0},
+            },
+            3651,
+            "od_override",
+        )
+        validate_task(map_data, task)
+        self.assertIsNone(task.metadata["od_quota_counts"])
+        self.assertEqual(
+            task.metadata["realized_flow_counts"], {"left->right": 12}
+        )
+
+    def test_exact_od_rejects_insufficient_zone_capacity(self) -> None:
+        map_data = generate_warehouse(MAP_CONFIG, 3660, "small_zone_map")
+        map_data = copy.deepcopy(map_data)
+        map_data.metadata["zones"]["left_storage"] = map_data.metadata[
+            "zones"
+        ]["left_storage"][:1]
+        with self.assertRaisesRegex(
+            ValueError, "exact OD schedule requires .* starts in left"
+        ):
+            generate_tasks(
+                map_data,
+                {
+                    **TASK_CONFIG,
+                    "agent_count": 60,
+                    "scenario_type": "cross_zone_exchange",
+                },
+                3661,
+                "insufficient_zone",
+            )
+
+    def test_intersection_crossing_is_four_way_and_hard_constrained(self) -> None:
+        map_data = generate_warehouse(MAP_CONFIG, 3700, "intersection_map")
+        config = {
+            **TASK_CONFIG,
+            "agent_count": 100,
+            "scenario_type": "intersection_crossing",
+            "required_intersection_crossing_ratio": 0.6,
+            "target_intersection_count": 2,
+        }
+        task = generate_tasks(map_data, config, 3701, "intersection")
+        validate_task(map_data, task)
+        self.assertEqual(
+            task.metadata["od_quota_counts"],
+            {
+                "left_to_right": 25,
+                "right_to_left": 25,
+                "top_to_bottom": 25,
+                "bottom_to_top": 25,
+            },
+        )
+        self.assertEqual(
+            task.metadata["realized_flow_counts"],
+            task.metadata["od_quota_counts"],
+        )
+        self.assertEqual(
+            len(task.metadata["selected_intersection_components"]), 2
+        )
+        required = task.metadata["required_intersections"]
+        self.assertEqual(sum(cell is not None for cell in required), 60)
+        self.assertEqual(
+            task.metadata["realized_intersection_crossing_ratio"], 0.6
+        )
+        semantic = map_data.metadata["semantic_cell_types"]
+        for cell in required:
+            if cell is not None:
+                self.assertEqual(semantic[cell[0]][cell[1]], "X")
+
+    def test_intersection_constraints_fail_instead_of_degrading(self) -> None:
+        map_data = generate_warehouse(MAP_CONFIG, 3800, "no_intersections")
+        map_data = copy.deepcopy(map_data)
+        map_data.metadata["semantic_cell_types"] = [
+            row.replace("X", "H")
+            for row in map_data.metadata["semantic_cell_types"]
+        ]
+        config = {
+            **TASK_CONFIG,
+            "agent_count": 40,
+            "scenario_type": "intersection_crossing",
+            "required_intersection_crossing_ratio": 0.6,
+            "target_intersection_count": 2,
+        }
+        with self.assertRaisesRegex(
+            ValueError, "requires 2 feasible intersection components"
+        ):
+            generate_tasks(map_data, config, 3801, "must_fail")
+        with self.assertRaisesRegex(ValueError, "must be between 0 and 1"):
+            generate_tasks(
+                map_data,
+                {**config, "required_intersection_crossing_ratio": 1.1},
+                3802,
+                "invalid_ratio",
+            )
+
     def test_dormant_layouts_have_compatibility_smoke_coverage(self) -> None:
         dormant_modes = (
             "partial_beltway",
@@ -263,6 +406,17 @@ class WarehouseGeneratorTests(unittest.TestCase):
             self.assertEqual((int(fields[4]), int(fields[5])), (start[1], start[0]))
             self.assertEqual((int(fields[6]), int(fields[7])), (goal[1], goal[0]))
             self.assertGreater(int(fields[8]), 0)
+            map_sidecar = json.loads(
+                (output / "export_map.json").read_text(encoding="utf-8")
+            )
+            task_sidecar = json.loads(
+                (output / "export_task.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(map_sidecar["schema_version"], 2)
+            self.assertEqual(task_sidecar["schema_version"], 2)
+            self.assertEqual(
+                task_sidecar["metadata"]["task_semantics_version"], 2
+            )
             self.assertIn("<svg", svg_preview(map_data, task_data))
             self.assertNotIn("#e8f5e9", svg_preview(map_data, task_data))
             self.assertNotIn("high prior", svg_preview(map_data, task_data))
@@ -292,6 +446,9 @@ class WarehouseGeneratorTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as directory:
             summary = generate_dataset(config, directory)
+            self.assertEqual(summary["schema_version"], 2)
+            self.assertEqual(summary["task_semantics_version"], 2)
+            self.assertEqual(len(summary["configuration_fingerprint"]), 64)
             train = summary["splits"]["train"]
             self.assertEqual(train["map_count"], 5)
             self.assertEqual(train["instance_count"], 20)
@@ -341,6 +498,8 @@ class WarehouseGeneratorTests(unittest.TestCase):
             self.assertTrue(first_row["map_file"].endswith(".map"))
             self.assertTrue(first_row["scenario_file"].endswith(".scen"))
             self.assertTrue(first_row["map_metadata_file"].endswith(".json"))
+            self.assertEqual(first_row["task_schema_version"], 2)
+            self.assertEqual(first_row["task_semantics_version"], 2)
             self.assertTrue(
                 (Path(directory) / "train" / first_row["map_file"]).is_file()
             )

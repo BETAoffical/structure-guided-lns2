@@ -11,7 +11,7 @@ from .visualization import ascii_preview, svg_preview
 
 def map_document(map_data: MapData) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": int(map_data.metadata.get("schema_version", 1)),
         "map_id": map_data.map_id,
         "seed": map_data.seed,
         "rows": map_data.rows,
@@ -23,7 +23,7 @@ def map_document(map_data: MapData) -> dict[str, Any]:
 
 def task_document(task_data: TaskData) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": int(task_data.metadata.get("schema_version", 1)),
         "task_id": task_data.task_id,
         "map_id": task_data.map_id,
         "seed": task_data.seed,

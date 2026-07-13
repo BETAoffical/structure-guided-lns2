@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "master_seed": 20260714,
-  "output_dir": "build/repair-transfer-pilot",
+  "output_dir": "build/repair-transfer-pilot-v2",
   "tasks_per_map": 4,
   "task_variants": [
     {
@@ -148,6 +148,8 @@
     "hotspot_distribution": "uniform",
     "required_bottleneck_crossing_ratio": 0.0,
     "shared_corridor_ratio": 0.0,
+    "required_intersection_crossing_ratio": 0.0,
+    "target_intersection_count": 2,
     "swap_pair_ratio": 0.0,
     "minimum_shortest_distance": 6,
     "maximum_shortest_distance": 60,
@@ -198,11 +200,23 @@
         },
         {
           "name": "intersection_100",
-          "task": {"agent_count": 100, "scenario_type": "intersection_crossing"}
+          "task": {
+            "agent_count": 100,
+            "scenario_type": "intersection_crossing",
+            "required_intersection_crossing_ratio": 0.6,
+            "target_intersection_count": 2
+          }
         },
         {
           "name": "cross_zone_100",
-          "task": {"agent_count": 100, "scenario_type": "cross_zone_exchange"}
+          "task": {
+            "agent_count": 100,
+            "scenario_type": "cross_zone_exchange",
+            "hotspot_skew": 0.5,
+            "origin_cluster_count": 2,
+            "goal_cluster_count": 2,
+            "cluster_radius": 4
+          }
         },
         {
           "name": "swap_pairs_100",
@@ -245,11 +259,23 @@
       "task_variants": [
         {
           "name": "intersection_120",
-          "task": {"agent_count": 120, "scenario_type": "intersection_crossing"}
+          "task": {
+            "agent_count": 120,
+            "scenario_type": "intersection_crossing",
+            "required_intersection_crossing_ratio": 0.6,
+            "target_intersection_count": 2
+          }
         },
         {
           "name": "cross_zone_120",
-          "task": {"agent_count": 120, "scenario_type": "cross_zone_exchange"}
+          "task": {
+            "agent_count": 120,
+            "scenario_type": "cross_zone_exchange",
+            "hotspot_skew": 0.5,
+            "origin_cluster_count": 2,
+            "goal_cluster_count": 2,
+            "cluster_radius": 4
+          }
         }
       ]
     }
