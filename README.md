@@ -159,6 +159,15 @@ effectiveness separately from compute and runtime sensitivity. See
 The formal audit also failed its registered recovery gates; the next permitted experiment is a small
 MovingAI mechanism probe, not expanded collection or RL training.
 
+`scripts/prepare_movingai_probe.py` adapts the pinned standard maps into a fingerprinted probe split,
+and `scripts/analyze_movingai_probe.py` separates immediate action effects from dual-trial noise and
+tests map/density oracle heterogeneity at the task-instance level. See
+[`docs/MOVINGAI_MECHANISM_PROBE.md`](docs/MOVINGAI_MECHANISM_PROBE.md).
+The completed probe found 12 unique repair states and 1,368 outcomes. Action and neighborhood diversity
+were real, but action identity explained only 39.2% of conflict variation after duplicate solver states
+were pooled; map/density permutation gates also failed. The active decision is to increase action trials
+before any contextual model or RL training.
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See

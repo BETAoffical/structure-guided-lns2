@@ -56,6 +56,17 @@ The current evidence supports only oracle action heterogeneity, not incremental
 predictive value from the hand-crafted static context. See
 `docs/CONTEXT_SECONDARY_AUDIT.md`.
 
+The subsequent local-representation audit also failed its registered recovery
+gates. Neither pre-generation local features nor realized-neighborhood visibility
+produced a stable map-grouped improvement, although realized context had some
+non-robust point-estimate signal. A bounded MovingAI mechanism probe then found
+real immediate action and realized-neighborhood diversity, but solver seeds 0 and
+1 reproduced identical states. After pooling them as four action trials per unique
+state, action identity explained 39.2% of conflict variation, below the 50% gate;
+map and density permutation percentiles were also below 95%. The registered next
+step is an action-trial stability confirmation on unique states, not contextual
+ranking or RL. See `docs/MOVINGAI_MECHANISM_PROBE.md`.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the
