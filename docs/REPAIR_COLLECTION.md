@@ -47,6 +47,26 @@ Phases are `qualify`, `baseline`, `counterfactual`, and `all`. `--resume` reuses
 instance-seed qualifications, episode traces, and counterfactual episode files. A dataset or semantic
 configuration mismatch is rejected instead of mixing incompatible runs.
 
+The collector holds a workspace-wide process lock and an output-specific lock. A second live
+collector is rejected even when `--resume` is present. Every completed episode atomically updates
+`collection_progress.json` and its phase manifest, so a detached WSL command remains observable and
+does not need a duplicate resume process. A stale lock is archived only after its PID and Linux
+process-start token no longer identify a live owner.
+
+Inspect or stop the exact process recorded by an output lock from the same WSL distribution:
+
+```bash
+python3 scripts/manage_repair_collection.py status \
+  --output build/repair-experience-pilot
+
+python3 scripts/manage_repair_collection.py cancel \
+  --output build/repair-experience-pilot
+```
+
+`SIGINT`, `SIGTERM`, and configured episode timeouts terminate owned child processes. Completed
+episodes remain resumable; an interrupted or timed-out episode has no complete metadata marker and
+is recomputed on the next compatible resume.
+
 The pilot defaults collect Adaptive, Target, Collision, and Random baselines with solver seeds 0 and 1.
 Counterfactual states come only from train/validation Adaptive trajectories. Each candidate controls a
 conflicting seed agent, Target/Collision/Random generator, neighborhood size, and branch random seed.
@@ -62,6 +82,32 @@ PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
   --max-states 2 --max-seed-agents 4 --neighborhood-sizes 4,8 \
   --trials 1 --horizons 1,2
 ```
+
+Use `--task-ids` to select exact task IDs. The sorted selection is included in the run fingerprint.
+`--dry-run` writes no collection files and reports the qualification/baseline job counts and maximum
+counterfactual reset count. Once compatible Adaptive baselines exist, it also reports the exact
+selected state/branch count and a reset-only CPU-time lower bound.
+
+The runner-hardening smoke uses one 100-agent and one 400-agent MovingAI task:
+
+```bash
+PYTHONPATH=build/linux/project python3 scripts/collect_repair_experience.py \
+  --dataset build/movingai-mechanism-probe-v2-dataset \
+  --config configs/repair_collection_hardening_smoke.json \
+  --output build/repair-collector-hardening-smoke \
+  --phase all --workers 2 \
+  --task-ids room-32-32-4__random_02__agents_0100,warehouse-10-20-10-2-1__random_01__agents_0400
+```
+
+The optional `counterfactual.episode_wall_time_limit_seconds` is part of the configuration
+fingerprint. It bounds one source episode, not the complete collection. Runtime comparisons are
+valid only when the workspace lock confirms that no second collector was competing for CPU.
+
+The hardening acceptance selected one 100-agent room task and one 400-agent warehouse task. Dry-run
+predicted 2 states and 48 resets with a 32.4-second reset-only CPU lower bound. The collection
+finished in about 49 seconds with 48 outcomes and no error or timeout. Its manifest became visible
+after the first 24-outcome episode, a live duplicate resume was rejected, exact cancel released both
+locks, no worker remained, and all state/outcome hashes were unchanged by a compatible resume.
 
 ## Calibration collection
 

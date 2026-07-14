@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from experiments.repair_collection import (
+    CollectionLockError,
+    _AtomicProcessLock,
     _counterfactual_source_eligible,
     _counterfactual_source_reason,
     _horizon_outcomes,
     _prepare_run,
+    _run_jobs,
+    _select_task_rows,
+    _validate_config,
     candidate_actions,
     select_seed_agents,
     state_fingerprint,
@@ -18,6 +26,17 @@ from experiments.repair_collection import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _scheduler_worker(job: dict) -> dict:
+    time.sleep(float(job.get("sleep", 0.0)))
+    return {
+        "schema_version": 1,
+        "task_id": job["row"]["task_id"],
+        "solver_seed": job["solver_seed"],
+        "status": "ok",
+        "error": None,
+    }
 
 
 def sample_state() -> dict:
@@ -87,6 +106,128 @@ def sample_state() -> dict:
 
 
 class RepairCollectionTests(unittest.TestCase):
+    def test_atomic_lock_rejects_live_owner_and_recovers_stale_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "active.lock"
+            owner = {
+                "run_id": "first",
+                "pid": os.getpid(),
+                "process_start_token": None,
+                "host": socket.gethostname(),
+                "output_root": directory,
+            }
+            first = _AtomicProcessLock(path, owner)
+            first.acquire()
+            with self.assertRaisesRegex(CollectionLockError, "active"):
+                _AtomicProcessLock(path, {**owner, "run_id": "second"}).acquire()
+            first.release()
+
+            path.write_text(
+                json.dumps(
+                    {
+                        **owner,
+                        "run_id": "stale",
+                        "pid": 2**31 - 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recovered = _AtomicProcessLock(path, {**owner, "run_id": "recovered"})
+            recovered.acquire()
+            self.assertTrue(list(path.parent.glob("active.lock.stale-*")))
+            recovered.release()
+
+    def test_scheduler_reports_timeout_and_updates_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = [
+                {
+                    "row": {
+                        "split": "train",
+                        "map_id": "map",
+                        "task_id": "slow",
+                        "agent_count": 10,
+                    },
+                    "solver_seed": 0,
+                    "sleep": 0.3,
+                }
+            ]
+            results = _run_jobs(
+                _scheduler_worker,
+                jobs,
+                1,
+                phase="timeout-test",
+                output_root=root,
+                run_fingerprint="run",
+                timeout_seconds=0.05,
+            )
+            self.assertEqual(results[0]["status"], "timeout")
+            progress = json.loads(
+                (root / "collection_progress.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(progress["status"], "complete")
+            self.assertEqual(progress["timeout_jobs"], 1)
+            self.assertEqual(progress["completed_jobs"], 1)
+
+    def test_scheduler_emits_each_result_incrementally(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observed = []
+            jobs = [
+                {
+                    "row": {
+                        "split": "train",
+                        "map_id": "map",
+                        "task_id": task_id,
+                        "agent_count": 10,
+                    },
+                    "solver_seed": 0,
+                    "sleep": delay,
+                }
+                for task_id, delay in (("first", 0.01), ("second", 0.1))
+            ]
+            results = _run_jobs(
+                _scheduler_worker,
+                jobs,
+                2,
+                phase="incremental-test",
+                output_root=root,
+                run_fingerprint="run",
+                on_result=lambda row: observed.append(row["task_id"]),
+            )
+            self.assertEqual(len(results), 2)
+            self.assertEqual(observed, ["first", "second"])
+
+    def test_task_filter_rejects_missing_and_preserves_dataset_order(self) -> None:
+        rows = [{"task_id": "a"}, {"task_id": "b"}, {"task_id": "c"}]
+        self.assertEqual(
+            [row["task_id"] for row in _select_task_rows(rows, ["c", "a"])],
+            ["a", "c"],
+        )
+        with self.assertRaisesRegex(ValueError, "absent"):
+            _select_task_rows(rows, ["missing"])
+
+    def test_hardening_smoke_config_has_a_bounded_workload(self) -> None:
+        config = json.loads(
+            (
+                PROJECT_ROOT
+                / "configs"
+                / "repair_collection_hardening_smoke.json"
+            ).read_text(encoding="utf-8")
+        )
+        _validate_config(config)
+        counterfactual = config["counterfactual"]
+        self.assertEqual(counterfactual["maximum_agent_count"], 400)
+        self.assertEqual(counterfactual["episode_wall_time_limit_seconds"], 300)
+        self.assertEqual(
+            counterfactual["max_states_per_episode"]
+            * counterfactual["max_seed_agents"]
+            * len(counterfactual["heuristics"])
+            * len(counterfactual["neighborhood_sizes"])
+            * counterfactual["trials"],
+            24,
+        )
+
     def test_counterfactual_source_filter_bounds_extreme_conflict_episodes(self) -> None:
         configuration = {
             "minimum_initial_conflicts": 2,
@@ -265,8 +406,27 @@ class RepairCollectionTests(unittest.TestCase):
                     resume=True,
                 )
 
-            second_output = root / "second-output"
             stable_config = {"schema_version": 1, "value": "stable"}
+            selected_output = root / "selected-output"
+            _prepare_run(
+                dataset,
+                selected_output,
+                stable_config,
+                ["train"],
+                resume=False,
+                task_ids=["task-a"],
+            )
+            with self.assertRaisesRegex(ValueError, "different dataset or"):
+                _prepare_run(
+                    dataset,
+                    selected_output,
+                    stable_config,
+                    ["train"],
+                    resume=True,
+                    task_ids=["task-b"],
+                )
+
+            second_output = root / "second-output"
             _prepare_run(
                 dataset,
                 second_output,

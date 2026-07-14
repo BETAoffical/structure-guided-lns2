@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import collections
-import concurrent.futures
+import datetime as dt
+import errno
 import hashlib
 import json
 import multiprocessing
 import os
 import random
+import signal
+import socket
 import tempfile
+import threading
+import time
+import uuid
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -21,6 +28,169 @@ POLICY_DESTROY_STRATEGIES = {
     "fixed_collision": "Collision",
     "fixed_random": "Random",
 }
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONTROL_ROOT = PROJECT_ROOT / "build" / ".repair_collection_control"
+LOCK_POLL_SECONDS = 0.05
+PROCESS_STOP_GRACE_SECONDS = 5.0
+
+
+class CollectionLockError(RuntimeError):
+    pass
+
+
+def _utc_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def _process_start_token(pid: int) -> str | None:
+    stat_path = Path("/proc") / str(pid) / "stat"
+    try:
+        fields = stat_path.read_text(encoding="utf-8").split()
+    except (OSError, UnicodeError):
+        return None
+    return fields[21] if len(fields) > 21 else None
+
+
+def _process_matches(owner: dict[str, Any]) -> bool:
+    if str(owner.get("host")) != socket.gethostname():
+        return True
+    try:
+        pid = int(owner["pid"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as error:
+        if error.errno in {errno.ESRCH, errno.EINVAL} or getattr(
+            error, "winerror", None
+        ) == 87:
+            return False
+        raise
+    expected = owner.get("process_start_token")
+    actual = _process_start_token(pid)
+    return expected is None or actual is None or str(expected) == actual
+
+
+def _archive_stale_lock(path: Path) -> None:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    path.replace(path.with_name(f"{path.name}.stale-{stamp}-{uuid.uuid4().hex[:8]}"))
+
+
+class _AtomicProcessLock:
+    def __init__(self, path: Path, owner: dict[str, Any]) -> None:
+        self.path = path
+        self.owner = owner
+        self.acquired = False
+
+    def acquire(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        while True:
+            try:
+                descriptor = os.open(
+                    self.path,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    0o600,
+                )
+            except FileExistsError:
+                try:
+                    existing = _read_json(self.path)
+                except (OSError, ValueError, json.JSONDecodeError) as error:
+                    raise CollectionLockError(
+                        f"collection lock is unreadable: {self.path}: {error}"
+                    ) from error
+                if _process_matches(existing):
+                    raise CollectionLockError(
+                        "another repair collection is active: "
+                        f"pid={existing.get('pid')} output={existing.get('output_root')}"
+                    )
+                _archive_stale_lock(self.path)
+                continue
+            try:
+                with os.fdopen(
+                    descriptor, "w", encoding="utf-8", newline="\n"
+                ) as stream:
+                    json.dump(self.owner, stream, ensure_ascii=False, indent=2, sort_keys=True)
+                    stream.write("\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except BaseException:
+                self.path.unlink(missing_ok=True)
+                raise
+            self.acquired = True
+            return
+
+    def release(self) -> None:
+        if not self.acquired:
+            return
+        try:
+            existing = _read_json(self.path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            existing = {}
+        if existing.get("run_id") == self.owner.get("run_id"):
+            self.path.unlink(missing_ok=True)
+        self.acquired = False
+
+
+class _CollectionRunLock:
+    def __init__(self, output_root: Path, run_fingerprint: str, phase: str) -> None:
+        pid = os.getpid()
+        self.owner = {
+            "schema_version": SCHEMA_VERSION,
+            "run_id": uuid.uuid4().hex,
+            "run_fingerprint": run_fingerprint,
+            "phase": phase,
+            "pid": pid,
+            "process_start_token": _process_start_token(pid),
+            "host": socket.gethostname(),
+            "started_at": _utc_now(),
+            "output_root": str(output_root),
+        }
+        self.global_lock = _AtomicProcessLock(CONTROL_ROOT / "active.lock", self.owner)
+        self.output_lock = _AtomicProcessLock(output_root / ".collection.lock", self.owner)
+
+    def __enter__(self) -> dict[str, Any]:
+        self.global_lock.acquire()
+        try:
+            self.output_lock.acquire()
+        except BaseException:
+            self.global_lock.release()
+            raise
+        return self.owner
+
+    def __exit__(self, *_: Any) -> None:
+        self.output_lock.release()
+        self.global_lock.release()
+
+
+def collection_status(output: str | Path) -> dict[str, Any]:
+    output_root = Path(output).resolve()
+    lock_path = output_root / ".collection.lock"
+    progress_path = output_root / "collection_progress.json"
+    owner = _read_json(lock_path) if lock_path.is_file() else None
+    return {
+        "output_root": str(output_root),
+        "active": bool(owner and _process_matches(owner)),
+        "lock": owner,
+        "progress": _read_json(progress_path) if progress_path.is_file() else None,
+    }
+
+
+def cancel_collection(output: str | Path) -> dict[str, Any]:
+    status = collection_status(output)
+    owner = status.get("lock")
+    if not owner or not status["active"]:
+        return {**status, "cancel_requested": False, "reason": "not_active"}
+    if str(owner.get("host")) != socket.gethostname():
+        raise CollectionLockError("cannot cancel a collection owned by another host")
+    pid = int(owner["pid"])
+    if not _process_matches(owner):
+        return {**status, "cancel_requested": False, "reason": "stale_lock"}
+    os.kill(pid, signal.SIGTERM)
+    return {**status, "cancel_requested": True, "signal": "SIGTERM"}
 
 
 def _plain(value: Any) -> Any:
@@ -587,6 +757,7 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
             metadata = dict(metadata)
             metadata["status"] = "resumed"
             return metadata
+    metadata_path.unlink(missing_ok=True)
     try:
         trace_path = output_root / str(manifest["trace_file"])
         events = _read_jsonl(trace_path)
@@ -771,20 +942,292 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _job_label(job: dict[str, Any]) -> str:
+    if "manifest" in job:
+        return str(job["manifest"]["episode_id"])
+    row = job["row"]
+    if "policy" in job:
+        return _episode_id(row, int(job["solver_seed"]), str(job["policy"]))
+    return f"{row['task_id']}__seed_{int(job['solver_seed']):04d}"
+
+
+def _failed_job_result(
+    job: dict[str, Any], status: str, message: str
+) -> dict[str, Any]:
+    row = job["row"]
+    common = {
+        "schema_version": SCHEMA_VERSION,
+        "split": row["split"],
+        "map_id": row["map_id"],
+        "task_id": row["task_id"],
+        "agent_count": int(row["agent_count"]),
+        "solver_seed": int(job.get("solver_seed", job.get("manifest", {}).get("solver_seed", 0))),
+        "status": status,
+        "error": message,
+    }
+    if "manifest" in job:
+        manifest = job["manifest"]
+        output_root = Path(job["output_root"])
+        metadata_path = (
+            output_root
+            / "counterfactual"
+            / str(manifest["split"])
+            / str(manifest["episode_id"])
+            / "metadata.json"
+        )
+        return {
+            **common,
+            "run_fingerprint": job["run_fingerprint"],
+            "episode_id": str(manifest["episode_id"]),
+            "state_count": 0,
+            "outcome_count": 0,
+            "error_count": 1,
+            "metadata_file": metadata_path.relative_to(output_root).as_posix(),
+            "complete": False,
+        }
+    if "policy" in job:
+        policy = str(job["policy"])
+        return {
+            **common,
+            "episode_id": _episode_id(row, int(job["solver_seed"]), policy),
+            "policy": policy,
+            "trace_file": None,
+            "summary": None,
+        }
+    return {
+        **common,
+        "layout_mode": row.get("layout_mode"),
+        "task_variant": row.get("task_variant"),
+    }
+
+
+def _job_process_entry(
+    worker: Callable[[dict[str, Any]], dict[str, Any]],
+    job: dict[str, Any],
+    connection: Any,
+) -> None:
+    try:
+        connection.send({"ok": True, "result": worker(job)})
+    except BaseException as error:
+        connection.send(
+            {
+                "ok": False,
+                "error": f"{type(error).__name__}: {error}",
+            }
+        )
+    finally:
+        connection.close()
+
+
+def _stop_process(process: multiprocessing.Process) -> None:
+    if not process.is_alive():
+        process.join(timeout=0.1)
+        return
+    process.terminate()
+    process.join(timeout=PROCESS_STOP_GRACE_SECONDS)
+    if process.is_alive():
+        process.kill()
+        process.join(timeout=PROCESS_STOP_GRACE_SECONDS)
+
+
+def _write_progress(
+    path: Path,
+    *,
+    run_fingerprint: str,
+    phase: str,
+    status: str,
+    total: int,
+    completed: int,
+    results: list[dict[str, Any]],
+    active_labels: list[str],
+    started_at: str,
+) -> None:
+    _write_json(
+        path,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run_fingerprint": run_fingerprint,
+            "phase": phase,
+            "status": status,
+            "started_at": started_at,
+            "updated_at": _utc_now(),
+            "total_jobs": total,
+            "completed_jobs": completed,
+            "pending_jobs": max(0, total - completed - len(active_labels)),
+            "active_jobs": sorted(active_labels),
+            "error_jobs": sum(
+                row.get("status") in {"error", "timeout"} for row in results
+            ),
+            "timeout_jobs": sum(row.get("status") == "timeout" for row in results),
+            "state_count": sum(int(row.get("state_count", 0)) for row in results),
+            "outcome_count": sum(int(row.get("outcome_count", 0)) for row in results),
+        },
+    )
+
+
 def _run_jobs(
     worker: Callable[[dict[str, Any]], dict[str, Any]],
     jobs: list[dict[str, Any]],
     workers: int,
+    *,
+    phase: str = "jobs",
+    output_root: Path | None = None,
+    run_fingerprint: str = "untracked",
+    timeout_seconds: float | None = None,
+    on_result: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[dict[str, Any]]:
     if workers <= 0:
         raise ValueError("workers must be positive")
-    if workers == 1 or len(jobs) <= 1:
-        return [worker(job) for job in jobs]
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise ValueError("job timeout must be positive")
+    if not jobs:
+        if output_root is not None:
+            _write_progress(
+                output_root / "collection_progress.json",
+                run_fingerprint=run_fingerprint,
+                phase=phase,
+                status="complete",
+                total=0,
+                completed=0,
+                results=[],
+                active_labels=[],
+                started_at=_utc_now(),
+            )
+        return []
+
     context = multiprocessing.get_context("spawn")
-    with concurrent.futures.ProcessPoolExecutor(
-        max_workers=min(workers, len(jobs)), mp_context=context
-    ) as executor:
-        return list(executor.map(worker, jobs))
+    pending = deque(enumerate(jobs))
+    active: dict[int, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
+    started_at = _utc_now()
+    progress_path = output_root / "collection_progress.json" if output_root else None
+    interrupted_signal: int | None = None
+    previous_handlers: dict[int, Any] = {}
+
+    def handle_signal(signum: int, _frame: Any) -> None:
+        nonlocal interrupted_signal
+        interrupted_signal = signum
+
+    if threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, handle_signal)
+
+    def update_progress(status: str) -> None:
+        if progress_path is None:
+            return
+        _write_progress(
+            progress_path,
+            run_fingerprint=run_fingerprint,
+            phase=phase,
+            status=status,
+            total=len(jobs),
+            completed=len(results),
+            results=results,
+            active_labels=[entry["label"] for entry in active.values()],
+            started_at=started_at,
+        )
+
+    def record(result: dict[str, Any]) -> None:
+        results.append(result)
+        if on_result is not None:
+            on_result(result)
+        update_progress("running")
+
+    update_progress("running")
+    try:
+        while pending or active:
+            if interrupted_signal is not None:
+                update_progress("interrupted")
+                raise KeyboardInterrupt(f"received signal {interrupted_signal}")
+            while pending and len(active) < min(workers, len(jobs)):
+                index, job = pending.popleft()
+                parent_connection, child_connection = context.Pipe(duplex=False)
+                process = context.Process(
+                    target=_job_process_entry,
+                    args=(worker, job, child_connection),
+                    name=f"lns2-{phase}-{index}",
+                )
+                process.start()
+                child_connection.close()
+                active[index] = {
+                    "job": job,
+                    "label": _job_label(job),
+                    "process": process,
+                    "connection": parent_connection,
+                    "started": time.monotonic(),
+                }
+                update_progress("running")
+
+            made_progress = False
+            for index, entry in list(active.items()):
+                process = entry["process"]
+                connection = entry["connection"]
+                payload: dict[str, Any] | None = None
+                if connection.poll():
+                    try:
+                        payload = connection.recv()
+                    except EOFError:
+                        payload = {
+                            "ok": False,
+                            "error": f"worker exited with code {process.exitcode}",
+                        }
+                elif not process.is_alive():
+                    if connection.poll():
+                        try:
+                            payload = connection.recv()
+                        except EOFError:
+                            payload = None
+                    else:
+                        payload = {
+                            "ok": False,
+                            "error": f"worker exited with code {process.exitcode}",
+                        }
+                    if payload is None:
+                        payload = {
+                            "ok": False,
+                            "error": f"worker exited with code {process.exitcode}",
+                        }
+                elif (
+                    timeout_seconds is not None
+                    and time.monotonic() - float(entry["started"]) >= timeout_seconds
+                ):
+                    _stop_process(process)
+                    payload = {
+                        "ok": False,
+                        "timeout": True,
+                        "error": f"episode exceeded {timeout_seconds:.3f} seconds",
+                    }
+                if payload is None:
+                    continue
+                process.join(timeout=0.2)
+                if process.is_alive():
+                    _stop_process(process)
+                connection.close()
+                del active[index]
+                if payload.get("ok"):
+                    result = payload["result"]
+                else:
+                    result = _failed_job_result(
+                        entry["job"],
+                        "timeout" if payload.get("timeout") else "error",
+                        str(payload.get("error", "worker failed")),
+                    )
+                record(result)
+                made_progress = True
+            if not made_progress and (pending or active):
+                time.sleep(LOCK_POLL_SECONDS)
+        update_progress("complete")
+        return results
+    except BaseException:
+        update_progress("interrupted" if interrupted_signal is not None else "error")
+        raise
+    finally:
+        for entry in active.values():
+            _stop_process(entry["process"])
+            entry["connection"].close()
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def _validate_config(config: dict[str, Any]) -> None:
@@ -843,6 +1286,9 @@ def _validate_config(config: dict[str, Any]) -> None:
     maximum_agent_count = counterfactual.get("maximum_agent_count")
     if maximum_agent_count is not None and int(maximum_agent_count) <= 0:
         raise ValueError("counterfactual maximum_agent_count must be positive")
+    episode_timeout = counterfactual.get("episode_wall_time_limit_seconds")
+    if episode_timeout is not None and float(episode_timeout) <= 0:
+        raise ValueError("counterfactual episode wall-time limit must be positive")
     candidate_actions(
         {
             "initialized": True,
@@ -900,6 +1346,10 @@ def _counterfactual_source_reason(
 
 def recover_counterfactual_manifest(output: str | Path) -> dict[str, Any]:
     output_root = Path(output).resolve()
+    if collection_status(output_root)["active"]:
+        raise CollectionLockError(
+            "cannot recover a manifest while its collection is active"
+        )
     run_config = _read_json(output_root / "run_config.json")
     run_fingerprint = str(run_config["run_fingerprint"])
     rows = []
@@ -1007,6 +1457,7 @@ def _effective_config(
     neighborhood_sizes: list[int] | None,
     trials: int | None,
     horizons: list[int] | None,
+    episode_time_limit: float | None,
 ) -> dict[str, Any]:
     value = json.loads(json.dumps(config))
     counterfactual = value["counterfactual"]
@@ -1020,26 +1471,28 @@ def _effective_config(
         counterfactual["trials"] = trials
     if horizons is not None:
         counterfactual["horizons"] = horizons
+    if episode_time_limit is not None:
+        counterfactual["episode_wall_time_limit_seconds"] = episode_time_limit
     _validate_config(value)
     return value
 
 
-def _prepare_run(
+def _run_metadata(
     dataset_root: Path,
-    output_root: Path,
     config: dict[str, Any],
     splits: list[str],
-    resume: bool,
+    task_ids: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     dataset_hash = _dataset_fingerprint(dataset_root)
     configuration_hash = _fingerprint(config)
-    run_fingerprint = _fingerprint(
-        {
-            "dataset_fingerprint": dataset_hash,
-            "configuration_fingerprint": configuration_hash,
-            "splits": splits,
-        }
-    )
+    fingerprint_payload: dict[str, Any] = {
+        "dataset_fingerprint": dataset_hash,
+        "configuration_fingerprint": configuration_hash,
+        "splits": splits,
+    }
+    if task_ids is not None:
+        fingerprint_payload["task_ids"] = task_ids
+    run_fingerprint = _fingerprint(fingerprint_payload)
     run_config = {
         "schema_version": SCHEMA_VERSION,
         "dataset": str(dataset_root),
@@ -1048,7 +1501,29 @@ def _prepare_run(
         "configuration_fingerprint": configuration_hash,
         "splits": splits,
         "run_fingerprint": run_fingerprint,
+        "collection_control": {
+            "workspace_exclusive_lock": True,
+            "incremental_manifests": True,
+            "runtime_scope": "collector-exclusive; external system load is not controlled",
+        },
     }
+    if task_ids is not None:
+        run_config["task_ids"] = task_ids
+    return run_fingerprint, run_config
+
+
+def _prepare_run(
+    dataset_root: Path,
+    output_root: Path,
+    config: dict[str, Any],
+    splits: list[str],
+    resume: bool,
+    task_ids: list[str] | None = None,
+    metadata: tuple[str, dict[str, Any]] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    run_fingerprint, run_config = metadata or _run_metadata(
+        dataset_root, config, splits, task_ids
+    )
     path = output_root / "run_config.json"
     if path.is_file():
         existing = _read_json(path)
@@ -1061,10 +1536,132 @@ def _prepare_run(
     return run_fingerprint, run_config
 
 
+def _select_task_rows(
+    rows: list[dict[str, Any]], task_ids: list[str] | None
+) -> list[dict[str, Any]]:
+    if task_ids is None:
+        return rows
+    if not task_ids or len(task_ids) != len(set(task_ids)):
+        raise ValueError("task_ids must contain unique task identifiers")
+    row_index = {str(row["task_id"]): row for row in rows}
+    missing = sorted(set(task_ids) - set(row_index))
+    if missing:
+        raise ValueError(f"requested task_ids are absent from the dataset: {missing}")
+    selected = set(task_ids)
+    return [row for row in rows if str(row["task_id"]) in selected]
+
+
+def _collection_estimate(
+    output_root: Path,
+    rows: list[dict[str, Any]],
+    config: dict[str, Any],
+    max_episodes: int | None = None,
+) -> dict[str, Any]:
+    counterfactual = config["counterfactual"]
+    solver_seeds = [int(value) for value in config["solver_seeds"]]
+    available_source_pairs = len(rows) * len(solver_seeds)
+    source_pairs = (
+        min(available_source_pairs, max_episodes)
+        if max_episodes is not None
+        else available_source_pairs
+    )
+    branches_per_source_upper = (
+        int(counterfactual["max_states_per_episode"])
+        * int(counterfactual["max_seed_agents"])
+        * len(counterfactual["heuristics"])
+        * len(counterfactual["neighborhood_sizes"])
+        * int(counterfactual["trials"])
+    )
+    result: dict[str, Any] = {
+        "task_count": len(rows),
+        "solver_seed_count": len(solver_seeds),
+        "available_source_pairs": available_source_pairs,
+        "selected_source_pair_upper_bound": source_pairs,
+        "qualification_jobs": source_pairs,
+        "baseline_jobs": source_pairs * len(config["policies"]),
+        "counterfactual_source_upper_bound": source_pairs,
+        "states_per_source_upper_bound": int(
+            counterfactual["max_states_per_episode"]
+        ),
+        "branches_per_source_upper_bound": branches_per_source_upper,
+        "environment_reset_upper_bound": source_pairs * branches_per_source_upper,
+        "exact_from_baseline": False,
+    }
+    manifest_path = output_root / "collection_manifest.jsonl"
+    if not manifest_path.is_file():
+        return result
+    task_ids = {str(row["task_id"]) for row in rows}
+    source_policy = str(counterfactual["source_policy"])
+    eligible_splits = set(counterfactual["eligible_splits"])
+    baseline = [
+        row
+        for row in _read_jsonl(manifest_path)
+        if str(row.get("task_id")) in task_ids
+        and row.get("policy") == source_policy
+        and row.get("split") in eligible_splits
+        and row.get("status") not in {"error", "timeout"}
+        and _counterfactual_source_eligible(row, counterfactual)
+    ]
+    exact_states = 0
+    exact_branches = 0
+    reset_cpu_lower_bound = 0.0
+    for manifest in baseline:
+        trace_path = output_root / str(manifest["trace_file"])
+        if not trace_path.is_file():
+            return result
+        decisions = _select_evenly(
+            _decision_states(_read_jsonl(trace_path)),
+            int(counterfactual["max_states_per_episode"]),
+        )
+        branch_count = 0
+        for decision in decisions:
+            action_count = len(
+                candidate_actions(
+                    decision["state"],
+                    int(counterfactual["max_seed_agents"]),
+                    list(counterfactual["heuristics"]),
+                    [int(value) for value in counterfactual["neighborhood_sizes"]],
+                )
+            )
+            branch_count += action_count * int(counterfactual["trials"])
+        exact_states += len(decisions)
+        exact_branches += branch_count
+        reset_cpu_lower_bound += float(
+            manifest.get("summary", {}).get("initial_runtime", 0.0)
+        ) * branch_count
+    result.update(
+        {
+            "exact_from_baseline": True,
+            "eligible_counterfactual_sources": len(baseline),
+            "selected_state_count": exact_states,
+            "environment_reset_count": exact_branches,
+            "estimated_reset_cpu_seconds_lower_bound": reset_cpu_lower_bound,
+        }
+    )
+    return result
+
+
+def _manifest_accumulator(
+    path: Path,
+    initial_rows: list[dict[str, Any]],
+    key: Callable[[dict[str, Any]], Any],
+) -> tuple[Callable[[dict[str, Any]], None], Callable[[], list[dict[str, Any]]]]:
+    index = {key(row): row for row in initial_rows}
+
+    def rows() -> list[dict[str, Any]]:
+        return sorted(index.values(), key=lambda row: str(key(row)))
+
+    def record(row: dict[str, Any]) -> None:
+        index[key(row)] = row
+        _write_jsonl(path, rows())
+
+    return record, rows
+
+
 def _qualification_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "run_count": len(rows),
-        "error_count": sum(row["status"] == "error" for row in rows),
+        "error_count": sum(row["status"] in {"error", "timeout"} for row in rows),
         "repairable_count": sum(bool(row.get("repairable")) for row in rows),
         "by_split": {},
     }
@@ -1098,7 +1695,9 @@ def _update_summary(output_root: Path) -> dict[str, Any]:
         rows = _read_jsonl(baseline_path)
         summary["baseline"] = {
             "episode_count": len(rows),
-            "error_count": sum(row["status"] == "error" for row in rows),
+            "error_count": sum(
+                row["status"] in {"error", "timeout"} for row in rows
+            ),
             "success_count": sum(
                 bool(row.get("summary", {}).get("success"))
                 for row in rows
@@ -1147,6 +1746,9 @@ def run_collection(
     neighborhood_sizes: list[int] | None = None,
     trials: int | None = None,
     horizons: list[int] | None = None,
+    task_ids: list[str] | None = None,
+    episode_time_limit: float | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     if phase not in {"qualify", "baseline", "counterfactual", "all"}:
         raise ValueError("phase must be qualify, baseline, counterfactual, or all")
@@ -1159,6 +1761,7 @@ def run_collection(
         neighborhood_sizes,
         trials,
         horizons,
+        episode_time_limit,
     )
     dataset_summary = _read_json(dataset_root / "dataset_summary.json")
     available_splits = list(dataset_summary["splits"])
@@ -1166,153 +1769,229 @@ def run_collection(
     if not requested_splits or any(value not in available_splits for value in requested_splits):
         raise ValueError("requested split is not present in the dataset")
     worker_count = int(workers if workers is not None else config.get("workers", 4))
+    if worker_count <= 0:
+        raise ValueError("workers must be positive")
     if max_episodes is not None and max_episodes <= 0:
         raise ValueError("max_episodes must be positive")
     if max_states is not None and max_states <= 0:
         raise ValueError("max_states must be positive")
-    run_fingerprint, _ = _prepare_run(
-        dataset_root, output_root, config, requested_splits, resume
+    normalized_task_ids = sorted(task_ids) if task_ids is not None else None
+    all_rows = _load_dataset_rows(dataset_root, requested_splits)
+    rows = _select_task_rows(all_rows, normalized_task_ids)
+    metadata = _run_metadata(
+        dataset_root, config, requested_splits, normalized_task_ids
     )
-    rows = _load_dataset_rows(dataset_root, requested_splits)
+    run_fingerprint = metadata[0]
+    if dry_run:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "dry_run": True,
+            "run_fingerprint": run_fingerprint,
+            "phase": phase,
+            "workers": worker_count,
+            "estimate": _collection_estimate(
+                output_root, rows, config, max_episodes=max_episodes
+            ),
+        }
+
     environment = dict(config["environment"])
     solver_seeds = [int(value) for value in config["solver_seeds"]]
-
-    if phase in {"qualify", "all"}:
-        qualification_path = output_root / "qualification_manifest.jsonl"
-        existing_qualification = (
-            _read_jsonl(qualification_path)
-            if resume and qualification_path.is_file()
-            else []
+    with _CollectionRunLock(output_root, run_fingerprint, phase):
+        _prepare_run(
+            dataset_root,
+            output_root,
+            config,
+            requested_splits,
+            resume,
+            normalized_task_ids,
+            metadata,
         )
-        existing_index = {
-            (str(row["task_id"]), int(row["solver_seed"])): row
-            for row in existing_qualification
-            if row.get("status") == "ok"
-        }
-        jobs = [
-            {
-                "dataset_root": str(dataset_root),
-                "row": row,
-                "solver_seed": seed,
-                "environment": environment,
-            }
-            for row in rows
-            for seed in solver_seeds
-            if (str(row["task_id"]), seed) not in existing_index
-        ]
-        qualification = list(existing_index.values())
-        qualification.extend(_run_jobs(_qualification_worker, jobs, worker_count))
-        qualification.sort(
-            key=lambda row: (str(row["split"]), str(row["task_id"]), int(row["solver_seed"]))
-        )
-        _write_jsonl(qualification_path, qualification)
 
-    qualification_path = output_root / "qualification_manifest.jsonl"
-    qualification = _read_jsonl(qualification_path) if qualification_path.is_file() else []
-    qualification_index = {
-        (str(row["task_id"]), int(row["solver_seed"])): row
-        for row in qualification
-        if row["status"] == "ok"
-    }
-    pairs = [(row, seed) for row in rows for seed in solver_seeds]
-    if max_episodes is not None:
-        pairs.sort(
-            key=lambda item: (
-                not bool(
-                    qualification_index.get(
-                        (str(item[0]["task_id"]), int(item[1])), {}
-                    ).get("repairable")
-                ),
-                str(item[0]["split"]),
-                str(item[0]["task_id"]),
-                int(item[1]),
+        if phase in {"qualify", "all"}:
+            qualification_path = output_root / "qualification_manifest.jsonl"
+            existing_qualification = (
+                _read_jsonl(qualification_path)
+                if resume and qualification_path.is_file()
+                else []
             )
-        )
-        pairs = pairs[:max_episodes]
-
-    if phase in {"baseline", "all"}:
-        jobs = [
-            {
-                "dataset_root": str(dataset_root),
-                "output_root": str(output_root),
-                "row": row,
-                "solver_seed": seed,
-                "policy": policy,
-                "environment": environment,
-                "run_fingerprint": run_fingerprint,
-                "resume": resume,
+            existing_index = {
+                (str(row["task_id"]), int(row["solver_seed"])): row
+                for row in existing_qualification
+                if row.get("status") == "ok"
             }
-            for row, seed in pairs
-            for policy in config["policies"]
-        ]
-        baseline = _run_jobs(_baseline_worker, jobs, worker_count)
-        baseline.sort(key=lambda row: str(row["episode_id"]))
-        _write_jsonl(output_root / "collection_manifest.jsonl", baseline)
-
-    if phase in {"counterfactual", "all"}:
-        manifest_path = output_root / "collection_manifest.jsonl"
-        if not manifest_path.is_file():
-            raise ValueError("counterfactual phase requires a baseline collection manifest")
-        baseline = _read_jsonl(manifest_path)
-        row_index = {str(row["task_id"]): row for row in rows}
-        eligible_splits = set(config["counterfactual"]["eligible_splits"])
-        source_policy = str(config["counterfactual"]["source_policy"])
-        considered = [
-            row
-            for row in baseline
-            if row["policy"] == source_policy
-            and row["split"] in eligible_splits
-            and row["status"] != "error"
-        ]
-        source_selection = []
-        for row in considered:
-            reason = _counterfactual_source_reason(
-                row, config["counterfactual"]
-            )
-            source_selection.append(
+            jobs = [
                 {
-                    "schema_version": SCHEMA_VERSION,
-                    "episode_id": str(row["episode_id"]),
-                    "split": str(row["split"]),
-                    "map_id": str(row["map_id"]),
-                    "task_id": str(row["task_id"]),
-                    "solver_seed": int(row["solver_seed"]),
-                    "initial_conflicts": int(
-                        row.get("summary", {}).get("initial_conflicts", 0)
-                    ),
-                    "source_success": bool(
-                        row.get("summary", {}).get("success")
-                    ),
-                    "eligible": reason == "eligible",
-                    "reason": reason,
+                    "dataset_root": str(dataset_root),
+                    "row": row,
+                    "solver_seed": seed,
+                    "environment": environment,
                 }
+                for row in rows
+                for seed in solver_seeds
+                if (str(row["task_id"]), seed) not in existing_index
+            ]
+            record, qualification_rows = _manifest_accumulator(
+                qualification_path,
+                existing_qualification,
+                lambda row: (str(row["task_id"]), int(row["solver_seed"])),
             )
-        _write_jsonl(
-            output_root / "counterfactual_source_manifest.jsonl",
-            sorted(source_selection, key=lambda row: str(row["episode_id"])),
-        )
-        selected = [
-            row
-            for row in considered
-            if _counterfactual_source_eligible(row, config["counterfactual"])
-        ]
-        jobs = [
-            {
-                "dataset_root": str(dataset_root),
-                "output_root": str(output_root),
-                "row": row_index[str(manifest["task_id"])],
-                "manifest": manifest,
-                "environment": environment,
-                "counterfactual": config["counterfactual"],
-                "run_fingerprint": run_fingerprint,
-                "resume": resume,
-            }
-            for manifest in selected
-        ]
-        counterfactual = _run_jobs(_counterfactual_worker, jobs, worker_count)
-        counterfactual.sort(key=lambda row: str(row["episode_id"]))
-        _write_jsonl(
-            output_root / "counterfactual_manifest.jsonl", counterfactual
-        )
+            _run_jobs(
+                _qualification_worker,
+                jobs,
+                worker_count,
+                phase="qualify",
+                output_root=output_root,
+                run_fingerprint=run_fingerprint,
+                on_result=record,
+            )
+            _write_jsonl(qualification_path, qualification_rows())
 
-    return _update_summary(output_root)
+        qualification_path = output_root / "qualification_manifest.jsonl"
+        qualification = (
+            _read_jsonl(qualification_path) if qualification_path.is_file() else []
+        )
+        qualification_index = {
+            (str(row["task_id"]), int(row["solver_seed"])): row
+            for row in qualification
+            if row["status"] == "ok"
+        }
+        pairs = [(row, seed) for row in rows for seed in solver_seeds]
+        if max_episodes is not None:
+            pairs.sort(
+                key=lambda item: (
+                    not bool(
+                        qualification_index.get(
+                            (str(item[0]["task_id"]), int(item[1])), {}
+                        ).get("repairable")
+                    ),
+                    str(item[0]["split"]),
+                    str(item[0]["task_id"]),
+                    int(item[1]),
+                )
+            )
+            pairs = pairs[:max_episodes]
+
+        if phase in {"baseline", "all"}:
+            manifest_path = output_root / "collection_manifest.jsonl"
+            existing_baseline = (
+                _read_jsonl(manifest_path)
+                if resume and manifest_path.is_file()
+                else []
+            )
+            jobs = [
+                {
+                    "dataset_root": str(dataset_root),
+                    "output_root": str(output_root),
+                    "row": row,
+                    "solver_seed": seed,
+                    "policy": policy,
+                    "environment": environment,
+                    "run_fingerprint": run_fingerprint,
+                    "resume": resume,
+                }
+                for row, seed in pairs
+                for policy in config["policies"]
+            ]
+            record, baseline_rows = _manifest_accumulator(
+                manifest_path,
+                existing_baseline,
+                lambda row: str(row["episode_id"]),
+            )
+            _run_jobs(
+                _baseline_worker,
+                jobs,
+                worker_count,
+                phase="baseline",
+                output_root=output_root,
+                run_fingerprint=run_fingerprint,
+                on_result=record,
+            )
+            _write_jsonl(manifest_path, baseline_rows())
+
+        if phase in {"counterfactual", "all"}:
+            manifest_path = output_root / "collection_manifest.jsonl"
+            if not manifest_path.is_file():
+                raise ValueError(
+                    "counterfactual phase requires a baseline collection manifest"
+                )
+            baseline = _read_jsonl(manifest_path)
+            row_index = {str(row["task_id"]): row for row in rows}
+            eligible_splits = set(config["counterfactual"]["eligible_splits"])
+            source_policy = str(config["counterfactual"]["source_policy"])
+            considered = [
+                row
+                for row in baseline
+                if row["policy"] == source_policy
+                and row["split"] in eligible_splits
+                and row["status"] not in {"error", "timeout"}
+                and str(row["task_id"]) in row_index
+            ]
+            source_selection = []
+            for row in considered:
+                reason = _counterfactual_source_reason(row, config["counterfactual"])
+                source_selection.append(
+                    {
+                        "schema_version": SCHEMA_VERSION,
+                        "episode_id": str(row["episode_id"]),
+                        "split": str(row["split"]),
+                        "map_id": str(row["map_id"]),
+                        "task_id": str(row["task_id"]),
+                        "solver_seed": int(row["solver_seed"]),
+                        "initial_conflicts": int(
+                            row.get("summary", {}).get("initial_conflicts", 0)
+                        ),
+                        "source_success": bool(
+                            row.get("summary", {}).get("success")
+                        ),
+                        "eligible": reason == "eligible",
+                        "reason": reason,
+                    }
+                )
+            _write_jsonl(
+                output_root / "counterfactual_source_manifest.jsonl",
+                sorted(source_selection, key=lambda row: str(row["episode_id"])),
+            )
+            selected = [
+                row
+                for row in considered
+                if _counterfactual_source_eligible(row, config["counterfactual"])
+            ]
+            jobs = [
+                {
+                    "dataset_root": str(dataset_root),
+                    "output_root": str(output_root),
+                    "row": row_index[str(manifest["task_id"])],
+                    "manifest": manifest,
+                    "environment": environment,
+                    "counterfactual": config["counterfactual"],
+                    "run_fingerprint": run_fingerprint,
+                    "resume": resume,
+                }
+                for manifest in selected
+            ]
+            counterfactual_path = output_root / "counterfactual_manifest.jsonl"
+            existing_counterfactual = (
+                _read_jsonl(counterfactual_path)
+                if resume and counterfactual_path.is_file()
+                else []
+            )
+            record, counterfactual_rows = _manifest_accumulator(
+                counterfactual_path,
+                existing_counterfactual,
+                lambda row: str(row["episode_id"]),
+            )
+            _run_jobs(
+                _counterfactual_worker,
+                jobs,
+                worker_count,
+                phase="counterfactual",
+                output_root=output_root,
+                run_fingerprint=run_fingerprint,
+                timeout_seconds=config["counterfactual"].get(
+                    "episode_wall_time_limit_seconds"
+                ),
+                on_result=record,
+            )
+            _write_jsonl(counterfactual_path, counterfactual_rows())
+
+        return _update_summary(output_root)
