@@ -110,6 +110,47 @@ def _task_schedule(
     ]
 
 
+def _task_schedules(
+    config: dict[str, Any],
+    split_config: dict[str, Any],
+    map_count: int,
+    schedule_seed: int,
+) -> list[list[dict[str, Any]]]:
+    pool_value = split_config.get(
+        "task_variant_pool", config.get("task_variant_pool")
+    )
+    if pool_value is None:
+        schedule = _task_schedule(config, split_config)
+        return [[dict(item) for item in schedule] for _ in range(map_count)]
+
+    tasks_per_map = int(
+        split_config.get("tasks_per_map", config.get("tasks_per_map", 1))
+    )
+    if tasks_per_map <= 0:
+        raise ValueError("tasks_per_map must be positive")
+    pool = [dict(item) for item in list(pool_value)]
+    if tasks_per_map > len(pool):
+        raise ValueError("tasks_per_map must not exceed task_variant_pool length")
+    names = [str(item.get("name", "")) for item in pool]
+    if any(not name for name in names) or len(names) != len(set(names)):
+        raise ValueError(
+            "task_variant_pool must have unique non-empty names"
+        )
+    for item in pool:
+        item["name"] = str(item["name"])
+        item["task"] = dict(item.get("task", {}))
+
+    offset = schedule_seed % len(pool)
+    sequence = [
+        pool[(offset + index) % len(pool)]
+        for index in range(map_count * tasks_per_map)
+    ]
+    return [
+        [dict(item) for item in sequence[start : start + tasks_per_map]]
+        for start in range(0, len(sequence), tasks_per_map)
+    ]
+
+
 def _variant_schedules(
     config: dict[str, Any],
     split_configs: dict[str, Any],
@@ -189,9 +230,14 @@ def generate_dataset(
     for split_name, split_config_value in split_configs.items():
         split_config = dict(split_config_value)
         layout_schedule = _layout_schedule(split_config)
-        task_schedule = _task_schedule(config, split_config)
         map_count = len(layout_schedule)
-        tasks_per_map = len(task_schedule)
+        task_schedules = _task_schedules(
+            config,
+            split_config,
+            map_count,
+            master_seed ^ sum(ord(value) for value in split_name),
+        )
+        tasks_per_map = len(task_schedules[0])
         map_config = merge_dicts(
             base_map_config, split_config.get("map")
         )
@@ -250,7 +296,7 @@ def generate_dataset(
                 )
             )
 
-            for task_index, task_variant in enumerate(task_schedule):
+            for task_index, task_variant in enumerate(task_schedules[map_index]):
                 task_seed = seed_rng.randrange(1, 2**31)
                 task_id = f"{map_id}__task_{task_index:04d}"
                 current_task_config = merge_dicts(

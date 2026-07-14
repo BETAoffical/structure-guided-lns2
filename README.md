@@ -176,6 +176,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 - [`docs/TRACE_AND_POLICY_API.md`](docs/TRACE_AND_POLICY_API.md): observation, action, and JSONL schema.
 - [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md): qualification, baselines, and counterfactual data.
 - [`docs/CONTEXT_AUDIT.md`](docs/CONTEXT_AUDIT.md): pairwise ablations, gates, and current negative result.
+- [`docs/CONTEXT_SECONDARY_AUDIT.md`](docs/CONTEXT_SECONDARY_AUDIT.md): map-grouped diagnostics,
+  context permutations, stopping rule, and the secondary negative result.
 - [`docs/MOVINGAI_BASELINES.md`](docs/MOVINGAI_BASELINES.md): pinned standard data and common GPBS/LNS2 runner.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.

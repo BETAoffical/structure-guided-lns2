@@ -35,10 +35,26 @@ regret by 2.28% instead of improving it by 5%. The paired bootstrap did not show
 significant degradation, but the overall offline gate failed.
 
 Consequently, Validation closed-loop evaluation, the planned 31,104/62,208-
-outcome expansions, semantic v3 data, and RL training are paused. This result
-does not prove context is useless; it says the current Pilot v2 representation,
-Adaptive-state distribution, and GBDT protocol do not establish the required
+outcome expansions, semantic v3 data, and RL training were paused. This result
+did not prove context useless; it said the Pilot v2 representation, Adaptive-
+state distribution, and first GBDT protocol did not establish the required
 incremental value. See `docs/CONTEXT_AUDIT.md`.
+
+A pre-registered secondary diagnostic then merged the old Train/Validation into
+a development set, encoded neighborhood size categorically, added a direct
+Pareto-membership learner, excluded runtime from the primary Pareto relation,
+used map-grouped cross-validation, and compared real context with 500 task-level
+context permutations. Labels, dynamic-state ranking, and oracle heterogeneity
+passed their prerequisites. Static context did not: its top-1 gain was at the
+6.2 percentile of the permutation null and its AUC-regret reduction at the 59.2
+percentile, both below the required 95 percentile. The primary model also retained
+a 91% single-size concentration against a 90% limit.
+
+The secondary gate is therefore **FAIL**. Under the registered stopping rule, the
+new 12/6-map confirmation data and maximum 23,328 outcomes are not generated.
+The current evidence supports only oracle action heterogeneity, not incremental
+predictive value from the hand-crafted static context. See
+`docs/CONTEXT_SECONDARY_AUDIT.md`.
 
 ## Baseline taxonomy
 
@@ -56,8 +72,9 @@ incremental value. See `docs/CONTEXT_AUDIT.md`.
 
 ## Conditional next stages
 
-The following stages resume only after a revised, predeclared context audit
-passes the offline gate:
+The following stages remain inactive. They may resume only after an independently
+justified representation hypothesis and a new predeclared audit, not after tuning
+against the already inspected Pilot v2 development outcomes:
 
 1. Run the learned policy closed-loop on 24 Validation instance-seeds. Successes
    must not fall below Adaptive, and conflict AUC or time-to-feasible must improve
