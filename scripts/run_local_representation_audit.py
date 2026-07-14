@@ -37,7 +37,16 @@ def main() -> int:
         bootstrap_samples=arguments.bootstrap_samples,
         permutations=arguments.permutations,
     )
-    print(json.dumps(report["acceptance"], indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "acceptance": report["acceptance"],
+                "timings_seconds": report["timings_seconds"],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 2 if arguments.strict and not report["acceptance"]["passed"] else 0
 
 

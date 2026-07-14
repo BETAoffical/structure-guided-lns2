@@ -50,6 +50,27 @@ The persisted pairwise models are the three fold-local models for each feature
 profile. They are the exact models used to produce the reported held-out choices;
 the audit does not fit a separate all-data deployment model.
 
+## Implementation hardening
+
+Grid articulation points are computed with an explicit Tarjan DFS stack, so open
+`32x32` and `64x64` maps and long corridors do not depend on Python's recursion
+limit. Conflict components are keyed by recorded agent IDs rather than positional
+indices. The index builder rejects duplicate IDs, malformed grids, illegal path
+cells or moves, unknown conflict endpoints, invalid candidate seeds, and unknown or
+duplicate realized-neighborhood members before extracting any feature.
+
+Pareto-dominance training pairs are precomputed once per map-grouped fold and data
+surface, then reused by all five feature profiles. The report records separate
+timings for indexing, feature diagnostics, pairwise training, sensitivity scoring,
+permutation, auxiliary regression, and artifact writes. Timings are diagnostics
+only and are excluded from every feature, label, gate, and scientific comparison.
+
+The report also lists constant columns and exactly duplicate columns for each
+profile. These columns remain in schema v1 to preserve the registered result. The
+cumulative profile layout repeats many feature values in each JSONL row; a compact
+index v2 is recorded as a separate future storage optimization and is not mixed
+into this audit.
+
 ```powershell
 python scripts/run_local_representation_audit.py `
   --collection build/repair-experience-calibration-v2 `
@@ -94,3 +115,8 @@ effectiveness label and 95.5% after generated nodes were added.
 
 The registered decision is therefore `run_movingai_mechanism_probe_before_more_collection`.
 This result does not justify expanded collection or RL training.
+
+The hardened formal rerun took 746.4 seconds versus 965.9 seconds previously.
+Both index SHA256 values, all 15 persisted model SHA256 values, every registered
+scientific report field, and the final decision were identical to the pre-hardening
+run.

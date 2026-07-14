@@ -8,6 +8,8 @@ import math
 import pickle
 import random
 import statistics
+import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -111,6 +113,9 @@ class StateAnalysis:
 
 
 def reconstruct_conflicts(agents: list[dict[str, Any]]) -> list[ConflictEvent]:
+    agent_ids = [int(agent["id"]) for agent in agents]
+    if len(agent_ids) != len(set(agent_ids)):
+        raise ValueError("state contains duplicate agent ids")
     paths = {int(agent["id"]): [int(cell) for cell in agent["path"]] for agent in agents}
     if any(not path for path in paths.values()):
         raise ValueError("state contains an empty agent path")
@@ -160,31 +165,41 @@ def articulation_cells(rows: int, cols: int, obstacles: list[int]) -> set[int]:
     adjacency = {cell: _grid_neighbors(cell, rows, cols, free) for cell in free}
     discovery: dict[int, int] = {}
     low: dict[int, int] = {}
-    parent: dict[int, int] = {}
+    parent: dict[int, int | None] = {}
+    child_count: collections.Counter[int] = collections.Counter()
     articulation: set[int] = set()
     clock = 0
 
-    def visit(cell: int) -> None:
-        nonlocal clock
-        discovery[cell] = low[cell] = clock
+    for root in sorted(free):
+        if root in discovery:
+            continue
+        parent[root] = None
+        discovery[root] = low[root] = clock
         clock += 1
-        children = 0
-        for neighbor in adjacency[cell]:
+        stack: list[tuple[int, Any]] = [(root, iter(adjacency[root]))]
+        while stack:
+            cell, neighbors = stack[-1]
+            try:
+                neighbor = next(neighbors)
+            except StopIteration:
+                stack.pop()
+                ancestor = parent[cell]
+                if ancestor is None:
+                    if child_count[cell] > 1:
+                        articulation.add(cell)
+                else:
+                    low[ancestor] = min(low[ancestor], low[cell])
+                    if parent[ancestor] is not None and low[cell] >= discovery[ancestor]:
+                        articulation.add(ancestor)
+                continue
             if neighbor not in discovery:
                 parent[neighbor] = cell
-                children += 1
-                visit(neighbor)
-                low[cell] = min(low[cell], low[neighbor])
-                if cell not in parent and children > 1:
-                    articulation.add(cell)
-                if cell in parent and low[neighbor] >= discovery[cell]:
-                    articulation.add(cell)
-            elif parent.get(cell) != neighbor:
+                child_count[cell] += 1
+                discovery[neighbor] = low[neighbor] = clock
+                clock += 1
+                stack.append((neighbor, iter(adjacency[neighbor])))
+            elif parent[cell] != neighbor:
                 low[cell] = min(low[cell], discovery[neighbor])
-
-    for cell in sorted(free):
-        if cell not in discovery:
-            visit(cell)
     return articulation
 
 
@@ -207,11 +222,13 @@ def _obstacle_rates(
 
 
 def _conflict_components(
-    agent_count: int, edges: Iterable[tuple[int, int]]
+    agent_ids: Iterable[int], edges: Iterable[tuple[int, int]]
 ) -> tuple[dict[int, int], dict[int, set[int]]]:
-    adjacency = [set() for _ in range(agent_count)]
+    adjacency = {int(agent_id): set() for agent_id in agent_ids}
     active: set[int] = set()
     for left, right in edges:
+        if left not in adjacency or right not in adjacency:
+            raise ValueError(f"conflict edge references unknown agent: {(left, right)}")
         adjacency[left].add(right)
         adjacency[right].add(left)
         active.update((left, right))
@@ -238,22 +255,60 @@ def _conflict_components(
 def analyze_state(state: dict[str, Any]) -> StateAnalysis:
     rows = int(state["rows"])
     cols = int(state["cols"])
+    if rows <= 0 or cols <= 0:
+        raise ValueError("grid rows and cols must be positive")
     obstacles = [int(value) for value in state["obstacles"]]
     if len(obstacles) != rows * cols:
         raise ValueError("obstacle grid dimensions do not match rows and cols")
+    if any(value not in {0, 1} for value in obstacles):
+        raise ValueError("obstacle grid values must be 0 or 1")
     free = {index for index, blocked in enumerate(obstacles) if not blocked}
+    agents = list(state.get("agents", []))
+    if not agents:
+        raise ValueError("state must contain at least one agent")
+    agent_ids = [int(agent["id"]) for agent in agents]
+    if len(agent_ids) != len(set(agent_ids)):
+        raise ValueError("state contains duplicate agent ids")
+    known_agents = set(agent_ids)
+    for agent in agents:
+        agent_id = int(agent["id"])
+        path = [int(cell) for cell in agent.get("path", [])]
+        if not path:
+            raise ValueError(f"agent {agent_id} has an empty path")
+        if any(cell < 0 or cell >= rows * cols for cell in path):
+            raise ValueError(f"agent {agent_id} path contains an out-of-range cell")
+        if any(cell not in free for cell in path):
+            raise ValueError(f"agent {agent_id} path enters an obstacle")
+        if int(agent.get("start", path[0])) != path[0]:
+            raise ValueError(f"agent {agent_id} path does not start at its start cell")
+        if int(agent.get("goal", path[-1])) != path[-1]:
+            raise ValueError(f"agent {agent_id} path does not end at its goal cell")
+        for previous, current in zip(path, path[1:]):
+            previous_row, previous_col = divmod(previous, cols)
+            current_row, current_col = divmod(current, cols)
+            distance = abs(previous_row - current_row) + abs(previous_col - current_col)
+            if distance not in {0, 1}:
+                raise ValueError(f"agent {agent_id} path contains a non-adjacent move")
+    for edge in state.get("conflict_edges", []):
+        if len(edge) != 2:
+            raise ValueError(f"invalid conflict edge: {edge}")
+        left, right = int(edge[0]), int(edge[1])
+        if left == right:
+            raise ValueError(f"conflict edge contains the same agent twice: {edge}")
+        if left not in known_agents or right not in known_agents:
+            raise ValueError(f"conflict edge references unknown agent: {edge}")
     degrees = {
         cell: len(_grid_neighbors(cell, rows, cols, free)) for cell in free
     }
     visit_heat: collections.Counter[int] = collections.Counter()
     agent_heat: collections.Counter[int] = collections.Counter()
-    for agent in state["agents"]:
+    for agent in agents:
         path = [int(cell) for cell in agent["path"]]
         visit_heat.update(path)
         agent_heat.update(set(path))
-    events = reconstruct_conflicts(list(state["agents"]))
+    events = reconstruct_conflicts(agents)
     pair_set = {(event.left, event.right) for event in events}
-    component_id, component_members = _conflict_components(len(state["agents"]), pair_set)
+    component_id, component_members = _conflict_components(agent_ids, pair_set)
     return StateAnalysis(
         rows=rows,
         cols=cols,
@@ -447,15 +502,19 @@ def _profiles(
     analysis: StateAnalysis,
     neighborhood: list[int],
 ) -> dict[str, dict[str, float]]:
-    base = candidate_features(state_row, outcome, stage, dataset_context)
     action = outcome["candidate_action"]
+    known_agents = {int(agent["id"]) for agent in state_row["state"]["agents"]}
+    seed_id = int(action["seed_agent"])
+    if seed_id not in known_agents:
+        raise ValueError(f"candidate seed references unknown agent: {seed_id}")
     size = int(action["neighborhood_size"])
+    if size <= 0:
+        raise ValueError("candidate neighborhood size must be positive")
+    base = candidate_features(state_row, outcome, stage, dataset_context)
     dynamic = dict(base["dynamic"])
     dynamic.pop("action.neighborhood_size", None)
     dynamic[f"action.neighborhood_size={size}"] = 1.0
-    local = seed_local_features(
-        state_row["state"], analysis, int(action["seed_agent"]), size
-    )
+    local = seed_local_features(state_row["state"], analysis, seed_id, size)
     context = {
         name: float(value)
         for name, value in base["full_context"].items()
@@ -464,7 +523,7 @@ def _profiles(
     realized_features = realized_neighborhood_features(
         state_row["state"],
         analysis,
-        int(action["seed_agent"]),
+        seed_id,
         size,
         neighborhood,
     )
@@ -700,37 +759,44 @@ def _grouped(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     return grouped
 
 
-def _pairwise_examples(
-    rows: list[dict[str, Any]], profile: str, names: list[str], mode: str
-) -> tuple[list[list[float]], list[int]]:
-    examples: list[list[float]] = []
-    labels: list[int] = []
+DominancePair = tuple[dict[str, Any], dict[str, Any], int]
+
+
+def _dominance_pairs(rows: list[dict[str, Any]], mode: str) -> list[DominancePair]:
+    pairs: list[DominancePair] = []
     for candidates in _grouped(rows).values():
         for left_index, left in enumerate(candidates):
             for right in candidates[left_index + 1 :]:
                 if _dominates(left["outcome"], right["outcome"], mode):
-                    label = 1
+                    pairs.append((left, right, 1))
                 elif _dominates(right["outcome"], left["outcome"], mode):
-                    label = 0
-                else:
-                    continue
-                examples.append(_pair_vector(left, right, profile, names))
-                labels.append(label)
-                examples.append(_pair_vector(right, left, profile, names))
-                labels.append(1 - label)
-    if not examples:
+                    pairs.append((left, right, 0))
+    if not pairs:
         raise ValueError("no dominance pairs are available for pairwise training")
+    return pairs
+
+
+def _pairwise_examples(
+    pairs: list[DominancePair], profile: str, names: list[str]
+) -> tuple[list[list[float]], list[int]]:
+    examples: list[list[float]] = []
+    labels: list[int] = []
+    for left, right, label in pairs:
+        examples.append(_pair_vector(left, right, profile, names))
+        labels.append(label)
+        examples.append(_pair_vector(right, left, profile, names))
+        labels.append(1 - label)
     return examples, labels
 
 
 def _train_pairwise(
-    rows: list[dict[str, Any]], profile: str, mode: str
+    rows: list[dict[str, Any]], profile: str, pairs: list[DominancePair]
 ) -> PairwiseModel:
     import numpy as np
     from sklearn.ensemble import HistGradientBoostingClassifier
 
     names = _feature_names(rows, profile)
-    examples, labels = _pairwise_examples(rows, profile, names, mode)
+    examples, labels = _pairwise_examples(pairs, profile, names)
     estimator = HistGradientBoostingClassifier(
         learning_rate=0.05,
         max_iter=100,
@@ -811,19 +877,17 @@ def _map_folds(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _cross_validate(
-    rows: list[dict[str, Any]],
+    labeled: list[dict[str, Any]],
     profile: str,
-    horizon: int,
-    mode: str,
     folds: list[dict[str, Any]],
+    fold_pairs: list[list[DominancePair]],
 ) -> tuple[dict[str, dict[str, Any]], list[PairwiseModel]]:
-    labeled = relabel(rows, horizon, mode)
     records: dict[str, dict[str, Any]] = {}
     models = []
-    for fold in folds:
+    for fold, pairs in zip(folds, fold_pairs):
         train = [row for row in labeled if row["state_id"] in fold["train_states"]]
         validation = [row for row in labeled if row["state_id"] in fold["validation_states"]]
-        model = _train_pairwise(train, profile, mode)
+        model = _train_pairwise(train, profile, pairs)
         models.append(model)
         records.update(_evaluate_pairwise(validation, model))
     return records, models
@@ -891,6 +955,78 @@ def _context_bundle(row: dict[str, Any], profile: str) -> dict[str, float]:
     }
 
 
+def _with_context_bundle(
+    candidates: list[dict[str, Any]],
+    profile: str,
+    bundle: dict[str, float],
+) -> list[dict[str, Any]]:
+    changed = []
+    for source in candidates:
+        row = dict(source)
+        row["features"] = dict(source["features"])
+        features = {
+            name: value
+            for name, value in source["features"][profile].items()
+            if not name.startswith("context.")
+        }
+        features.update(bundle)
+        row["features"][profile] = features
+        changed.append(row)
+    return changed
+
+
+def _permuted_fold_records(
+    validation: list[dict[str, Any]],
+    model: PairwiseModel,
+    fold_number: int,
+    permutations: int,
+    *,
+    use_cache: bool,
+) -> list[dict[str, dict[str, Any]]]:
+    grouped = _grouped(validation)
+    task_sources: dict[str, dict[str, Any]] = {}
+    for row in validation:
+        task_sources.setdefault(str(row["task_id"]), row)
+    tasks = sorted(task_sources)
+    bundles = {
+        task: _context_bundle(task_sources[task], "local_pre_context")
+        for task in tasks
+    }
+    cached: dict[tuple[str, str], dict[str, Any]] = {}
+    if use_cache:
+        for state_id, candidates in grouped.items():
+            for donor_task, bundle in bundles.items():
+                changed = _with_context_bundle(
+                    candidates, "local_pre_context", bundle
+                )
+                cached[(state_id, donor_task)] = _evaluate_pairwise(
+                    changed, model
+                )[state_id]
+
+    records = [dict() for _ in range(permutations)]
+    for permutation in range(permutations):
+        donors = list(tasks)
+        rng = random.Random(
+            MODEL_SEED + permutation * 1009 + int(fold_number) * 9176
+        )
+        rng.shuffle(donors)
+        donor_for = dict(zip(tasks, donors))
+        for state_id, candidates in grouped.items():
+            source_task = str(candidates[0]["task_id"])
+            donor_task = donor_for[source_task]
+            if use_cache:
+                record = cached[(state_id, donor_task)]
+            else:
+                changed = _with_context_bundle(
+                    candidates,
+                    "local_pre_context",
+                    bundles[donor_task],
+                )
+                record = _evaluate_pairwise(changed, model)[state_id]
+            records[permutation][state_id] = record
+    return records
+
+
 def _permutation_test(
     rows: list[dict[str, Any]],
     folds: list[dict[str, Any]],
@@ -903,43 +1039,15 @@ def _permutation_test(
     labeled = relabel(rows, 1, "effectiveness")
     for fold, model in zip(folds, models):
         validation = [row for row in labeled if row["state_id"] in fold["validation_states"]]
-        grouped = _grouped(validation)
-        task_sources: dict[str, dict[str, Any]] = {}
-        for row in validation:
-            task_sources.setdefault(str(row["task_id"]), row)
-        tasks = sorted(task_sources)
-        bundles = {
-            task: _context_bundle(task_sources[task], "local_pre_context")
-            for task in tasks
-        }
-        cached: dict[tuple[str, str], dict[str, Any]] = {}
-        for state_id, candidates in grouped.items():
-            for donor_task, bundle in bundles.items():
-                changed = []
-                for source in candidates:
-                    row = dict(source)
-                    row["features"] = dict(source["features"])
-                    features = {
-                        name: value
-                        for name, value in source["features"]["local_pre_context"].items()
-                        if not name.startswith("context.")
-                    }
-                    features.update(bundle)
-                    row["features"]["local_pre_context"] = features
-                    changed.append(row)
-                cached[(state_id, donor_task)] = _evaluate_pairwise(changed, model)[state_id]
-        for permutation in range(permutations):
-            donors = list(tasks)
-            rng = random.Random(
-                MODEL_SEED + permutation * 1009 + int(fold["fold"]) * 9176
-            )
-            rng.shuffle(donors)
-            donor_for = dict(zip(tasks, donors))
-            for state_id, candidates in grouped.items():
-                source_task = str(candidates[0]["task_id"])
-                null_records[permutation][state_id] = cached[
-                    (state_id, donor_for[source_task])
-                ]
+        fold_records = _permuted_fold_records(
+            validation,
+            model,
+            int(fold["fold"]),
+            permutations,
+            use_cache=True,
+        )
+        for permutation, records in enumerate(fold_records):
+            null_records[permutation].update(records)
     real = _comparison(baseline_records, real_records)
     null = [_comparison(baseline_records, records) for records in null_records]
     hit_values = [value["pareto_top1_gain"] for value in null]
@@ -1087,12 +1195,41 @@ def _run_objective(
     horizon: int,
     mode: str,
     bootstrap_samples: int,
-) -> tuple[dict[str, Any], dict[str, dict[str, dict[str, Any]]], dict[str, list[PairwiseModel]]]:
+) -> tuple[
+    dict[str, Any],
+    dict[str, dict[str, dict[str, Any]]],
+    dict[str, list[PairwiseModel]],
+    dict[str, Any],
+]:
+    labeled_sources = {
+        "action": relabel(action_rows, horizon, mode),
+        "realized": relabel(realized_rows, horizon, mode),
+    }
+    pair_cache: dict[str, list[list[DominancePair]]] = {}
+    pair_diagnostics: dict[str, Any] = {}
+    for source_name, labeled in labeled_sources.items():
+        fold_pairs = []
+        for fold in folds:
+            train = [
+                row for row in labeled if row["state_id"] in fold["train_states"]
+            ]
+            fold_pairs.append(_dominance_pairs(train, mode))
+        pair_cache[source_name] = fold_pairs
+        pair_diagnostics[source_name] = {
+            "dominance_pairs_by_fold": [len(pairs) for pairs in fold_pairs],
+            "symmetric_examples_by_fold": [2 * len(pairs) for pairs in fold_pairs],
+            "dominance_pairs_total": sum(map(len, fold_pairs)),
+        }
     records = {}
     models = {}
     for profile in FEATURE_PROFILES:
-        source = action_rows if profile in ACTION_PROFILES else realized_rows
-        records[profile], models[profile] = _cross_validate(source, profile, horizon, mode, folds)
+        source_name = "action" if profile in ACTION_PROFILES else "realized"
+        records[profile], models[profile] = _cross_validate(
+            labeled_sources[source_name],
+            profile,
+            folds,
+            pair_cache[source_name],
+        )
     comparisons = {}
     for baseline, improved in (
         ("dynamic_action", "local_pre"),
@@ -1115,6 +1252,7 @@ def _run_objective(
         },
         records,
         models,
+        pair_diagnostics,
     )
 
 
@@ -1246,6 +1384,99 @@ def _gate_report(
     }
 
 
+def _profile_feature_diagnostics(
+    rows: list[dict[str, Any]], profile: str
+) -> dict[str, Any]:
+    names = sorted({name for row in rows for name in row["features"][profile]})
+    first_values: dict[str, float] = {}
+    constant = {name: True for name in names}
+    digests = {name: hashlib.sha256() for name in names}
+    for row in rows:
+        features = row["features"][profile]
+        for name in names:
+            value = float(features.get(name, 0.0))
+            if name not in first_values:
+                first_values[name] = value
+            elif value != first_values[name]:
+                constant[name] = False
+            digests[name].update(struct.pack("<d", value))
+    by_digest: dict[str, list[str]] = collections.defaultdict(list)
+    for name, digest in digests.items():
+        by_digest[digest.hexdigest()].append(name)
+    return {
+        "feature_count": len(names),
+        "constant_features": [
+            {"name": name, "value": first_values[name]}
+            for name in names
+            if constant[name]
+        ],
+        "duplicate_feature_groups": [
+            group for group in sorted(by_digest.values()) if len(group) > 1
+        ],
+    }
+
+
+def _index_storage_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    stored_values = 0
+    materialized_values = 0
+    for row in rows:
+        merged: dict[str, float] = {}
+        for features in row["features"].values():
+            stored_values += len(features)
+            for name, raw_value in features.items():
+                value = float(raw_value)
+                if name in merged and merged[name] != value:
+                    raise ValueError(
+                        f"feature {name} has inconsistent values across profiles"
+                    )
+                merged[name] = value
+        materialized_values += len(merged)
+    redundant_values = stored_values - materialized_values
+    return {
+        "row_count": len(rows),
+        "stored_feature_values": stored_values,
+        "unique_materialized_feature_values": materialized_values,
+        "redundant_feature_values": redundant_values,
+        "redundant_fraction": _ratio(redundant_values, stored_values),
+    }
+
+
+def feature_diagnostics(
+    action_rows: list[dict[str, Any]], realized_rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    profiles = {}
+    for profile in FEATURE_PROFILES:
+        source = action_rows if profile in ACTION_PROFILES else realized_rows
+        profiles[profile] = _profile_feature_diagnostics(source, profile)
+    return {
+        "profiles": profiles,
+        "index_storage": {
+            "action_index": _index_storage_diagnostics(action_rows),
+            "realized_index": _index_storage_diagnostics(realized_rows),
+        },
+        "compact_index_v2_deferred": True,
+    }
+
+
+def scientific_result_payload(report: dict[str, Any]) -> dict[str, Any]:
+    """Return report fields whose values define the registered experiment result."""
+    return {
+        name: report[name]
+        for name in (
+            "schema_version",
+            "model_seed",
+            "index_sha256",
+            "integrity",
+            "folds",
+            "pre_registration",
+            "analyses",
+            "context_permutation",
+            "auxiliary_metric_regressors",
+            "acceptance",
+        )
+    }
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     main = report["analyses"]["h1_effectiveness"]
     lines = [
@@ -1275,6 +1506,17 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.extend(["", "## Gates", ""])
     for name, gate in report["acceptance"]["gates"].items():
         lines.append(f"- {name}: **{'PASS' if gate['passed'] else 'FAIL'}**")
+    lines.extend(["", "## Feature diagnostics", ""])
+    for profile in FEATURE_PROFILES:
+        value = report["feature_diagnostics"]["profiles"][profile]
+        lines.append(
+            f"- {profile}: {value['feature_count']} features, "
+            f"{len(value['constant_features'])} constant, "
+            f"{len(value['duplicate_feature_groups'])} duplicate groups"
+        )
+    lines.extend(["", "## Stage timings", ""])
+    for name, value in report["timings_seconds"].items():
+        lines.append(f"- {name}: {value:.3f} s")
     lines.extend(
         [
             "",
@@ -1299,14 +1541,22 @@ def run_local_representation_audit(
 ) -> dict[str, Any]:
     if bootstrap_samples <= 0 or permutations <= 0:
         raise ValueError("bootstrap samples and permutations must be positive")
+    total_started = time.perf_counter()
+    timings: dict[str, float] = {}
     output_root = Path(output).resolve()
     collection_root = Path(collection).resolve()
     resolved_dataset = _dataset_root(collection_root, dataset)
+    stage_started = time.perf_counter()
     action_rows, realized_rows, integrity = build_local_indexes(
         collection_root, resolved_dataset, expected_outcomes
     )
+    timings["index_build"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
+    diagnostics = feature_diagnostics(action_rows, realized_rows)
+    timings["feature_diagnostics"] = time.perf_counter() - stage_started
     folds = _map_folds(action_rows)
-    main_analysis, main_records, main_models = _run_objective(
+    stage_started = time.perf_counter()
+    main_analysis, main_records, main_models, pair_diagnostics = _run_objective(
         action_rows,
         realized_rows,
         folds,
@@ -1314,6 +1564,10 @@ def run_local_representation_audit(
         "effectiveness",
         bootstrap_samples,
     )
+    timings["main_pairwise_training_and_evaluation"] = (
+        time.perf_counter() - stage_started
+    )
+    stage_started = time.perf_counter()
     models_root = output_root / "models"
     for profile, profile_models in main_models.items():
         for fold, model in enumerate(profile_models):
@@ -1321,7 +1575,9 @@ def run_local_representation_audit(
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("wb") as stream:
                 pickle.dump(model, stream)
+    timings["model_artifact_write"] = time.perf_counter() - stage_started
     analyses: dict[str, Any] = {"h1_effectiveness": main_analysis}
+    stage_started = time.perf_counter()
     for horizon, mode, name in (
         (4, "effectiveness", "h4_effectiveness"),
         (1, "compute_aware", "h1_compute_aware"),
@@ -1337,6 +1593,8 @@ def run_local_representation_audit(
             bootstrap_samples,
         )
         analyses[name] = analysis
+    timings["sensitivity_scoring"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
     permutation = _permutation_test(
         action_rows,
         folds,
@@ -1345,7 +1603,11 @@ def run_local_representation_audit(
         main_models["local_pre_context"],
         permutations,
     )
+    timings["context_permutation"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
     auxiliary = _regression_diagnostics(action_rows, realized_rows, folds)
+    timings["auxiliary_regression"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
     acceptance = _gate_report(
         analyses["h1_effectiveness"], analyses["h4_effectiveness"], permutation
     )
@@ -1355,6 +1617,7 @@ def run_local_representation_audit(
             for row in action_rows
         ).encode("utf-8")
     ).hexdigest()
+    timings["report_assembly"] = time.perf_counter() - stage_started
     report = {
         "schema_version": LOCAL_AUDIT_SCHEMA_VERSION,
         "model_seed": MODEL_SEED,
@@ -1382,10 +1645,24 @@ def run_local_representation_audit(
         "analyses": analyses,
         "context_permutation": permutation,
         "auxiliary_metric_regressors": auxiliary,
+        "pairwise_training": pair_diagnostics,
+        "feature_diagnostics": diagnostics,
         "acceptance": acceptance,
+        "timings_seconds": timings,
     }
+    stage_started = time.perf_counter()
     _write_jsonl(output_root / "action_index.jsonl", action_rows)
     _write_jsonl(output_root / "realized_index.jsonl", realized_rows)
+    timings["index_artifact_write"] = time.perf_counter() - stage_started
+    report["timings_seconds"] = timings
+    stage_started = time.perf_counter()
+    _write_json(output_root / "local_representation_audit.json", report)
+    (output_root / "local_representation_audit.md").write_text(
+        render_markdown(report), encoding="utf-8"
+    )
+    timings["report_artifact_write"] = time.perf_counter() - stage_started
+    timings["total"] = time.perf_counter() - total_started
+    report["timings_seconds"] = timings
     _write_json(output_root / "local_representation_audit.json", report)
     (output_root / "local_representation_audit.md").write_text(
         render_markdown(report), encoding="utf-8"

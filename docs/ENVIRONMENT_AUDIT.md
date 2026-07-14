@@ -12,6 +12,8 @@ list even though the real user registration was healthy.
 An approved command running under the interactive user sees `Ubuntu-22.04` normally. The existing
 33.7 GB `ext4.vhdx`, default Linux user `beta`, `/home/beta/LNS2-RL`, Conda environments, and other home
 data are intact. No `wsl --import-in-place`, reinstall, duplicate distro, or registry edit was performed.
+The project CTest suite was rerun through that real-user WSL context and passed all 10 tests, including
+the official MAPF-LNS2 parity check.
 
 ## Existing dependencies
 
