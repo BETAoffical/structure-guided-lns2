@@ -40,6 +40,17 @@ add_executable(lns2_repair
 )
 target_link_libraries(lns2_repair PRIVATE mapf_lns2_core)
 
+set(GPBS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gpbs")
+file(GLOB GPBS_SOURCES CONFIGURE_DEPENDS "${GPBS_ROOT}/src/*.cpp")
+add_executable(gpbs_official ${GPBS_SOURCES})
+target_compile_features(gpbs_official PRIVATE cxx_std_17)
+target_include_directories(gpbs_official PRIVATE "${GPBS_ROOT}/inc")
+target_link_libraries(gpbs_official PRIVATE
+    Boost::program_options
+    Boost::system
+    Boost::filesystem
+)
+
 find_package(pybind11 CONFIG REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 pybind11_add_module(lns2_env src/python_bindings.cpp)
@@ -60,6 +71,28 @@ add_test(NAME lns2_repair_smoke COMMAND lns2_repair
     --cutoffTime 10
     --seed 0
 )
+set(GPBS_TEST_STATS "${CMAKE_CURRENT_BINARY_DIR}/gpbs-smoke.csv")
+add_test(NAME gpbs_official_smoke COMMAND gpbs_official
+    --map "${MAPF_LNS2_ROOT}/random-32-32-20.map"
+    --agents "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    --agentNum 100
+    --cutoffTime 10
+    --seed 0
+    --screen 0
+    --solver GPBS
+    --tr true
+    --ic true
+    --rr true
+    --rth 0
+    --sipp true
+    --output "${GPBS_TEST_STATS}"
+)
+set_tests_properties(gpbs_official_smoke PROPERTIES FIXTURES_SETUP gpbs_stats)
+add_test(NAME gpbs_official_result COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_gpbs_result.py"
+    "${GPBS_TEST_STATS}"
+)
+set_tests_properties(gpbs_official_result PROPERTIES FIXTURES_REQUIRED gpbs_stats)
 add_test(NAME lns2_python_env COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_env.py"
 )

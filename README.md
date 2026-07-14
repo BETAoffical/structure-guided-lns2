@@ -6,10 +6,11 @@ dependency-free approximation.
 
 ## Research target
 
-The first research question is deliberately narrow:
+The active claim is deliberately narrow:
 
-> Can map structure, task flow, agent density, the current conflict graph, and repair history reduce
-> time-to-feasible on unseen MAPF domains without reducing success rate?
+> Learn a map-, static-OD-, density-, and conflict-conditioned InitLNS high-level policy that jointly
+> selects seed agent, Target/Collision/Random generation, and neighborhood size to improve
+> time-to-feasible and cross-distribution generalization.
 
 Primary metrics are time-to-feasible, conflict-pair AUC, and success under a fixed time budget. Final
 sum-of-costs is secondary. The first learning action space chooses a seed agent, destroy heuristic, and
@@ -26,6 +27,10 @@ SIPPS, path/constraint tables, CBS-family repair, and PIBT-family initial solver
 Project changes are limited to a step-wise repair API, policy/observer hooks, low-level counters, and a
 repair-only switch. With the same 200-agent benchmark, seed, and parameters, the extended `official`
 mode produces byte-identical paths to the untouched upstream commit.
+
+Official [GPBS](https://github.com/shchan13/GPBS) is vendored independently at commit
+`43f2a6fea50893871219b674535f83920175ae04` as an end-to-end feasibility baseline. It is not an
+LNS2 destroy heuristic. See [`third_party/gpbs/UPSTREAM.md`](third_party/gpbs/UPSTREAM.md).
 
 ## Build on Ubuntu/WSL
 
@@ -46,6 +51,7 @@ Build targets:
 - `lns_official`: complete MAPF-LNS2 CLI, including optional anytime optimization.
 - `lns2_repair`: PP + InitLNS repair, stopping at the first feasible solution.
 - `lns2_env`: Python step environment for future contextual RL.
+- `gpbs_official`: pinned independent GPBS feasibility solver.
 
 ## Run repair-only LNS2
 
@@ -138,6 +144,18 @@ outcomes without using Test/OOD data as labels.
 See [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md) for split definitions, smoke overrides,
 resume behavior, calibration commands, quality gates, and the versioned output contract.
 
+## Context gate and standard baselines
+
+The 7,344-outcome context audit is implemented by `scripts/run_context_audit.py`. The current Pilot v2
+audit failed its predeclared offline gate: full context gained 4.17 Pareto-hit percentage points over
+the dynamic model but worsened AUC regret by 2.28%. Closed-loop evaluation, expanded collection, and RL
+are intentionally paused. See [`docs/CONTEXT_AUDIT.md`](docs/CONTEXT_AUDIT.md).
+
+`scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
+`scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
+agent-count, time-limit, and seed inputs with common failure accounting. See
+[`docs/MOVINGAI_BASELINES.md`](docs/MOVINGAI_BASELINES.md).
+
 ## Tests
 
 ```powershell
@@ -157,6 +175,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 - [`docs/RESEARCH_ROADMAP.md`](docs/RESEARCH_ROADMAP.md): research stages and paper-code reuse.
 - [`docs/TRACE_AND_POLICY_API.md`](docs/TRACE_AND_POLICY_API.md): observation, action, and JSONL schema.
 - [`docs/REPAIR_COLLECTION.md`](docs/REPAIR_COLLECTION.md): qualification, baselines, and counterfactual data.
+- [`docs/CONTEXT_AUDIT.md`](docs/CONTEXT_AUDIT.md): pairwise ablations, gates, and current negative result.
+- [`docs/MOVINGAI_BASELINES.md`](docs/MOVINGAI_BASELINES.md): pinned standard data and common GPBS/LNS2 runner.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
@@ -164,4 +184,5 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 ## License
 
 Project-owned code follows the repository license policy. Vendored MAPF-LNS2 is subject to the USC
-Research License in `third_party/mapf_lns2/license.txt`; commercial use requires separate permission.
+Research Licenses in `third_party/mapf_lns2/license.txt` and `third_party/gpbs/license.md`; commercial
+use requires separate permission.
