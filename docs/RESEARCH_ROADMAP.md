@@ -112,6 +112,22 @@ criteria passed. The next active stage is therefore a learned ranking audit over
 these concrete candidate sets, beginning with dynamic and realized features;
 static map/OD/density context remains an ablation and RL remains paused.
 
+The ranking audit is now complete. It aggregated all eight PP-order trials for each
+of the 412 explicit neighborhoods and used six leave-one-map-out folds. Adding the
+actual agent-set representation to dynamic proposal features raised Pareto top-1
+from 13.0% to 43.5% and reduced mean conflict regret by 55.6%; all six held-out maps
+were no worse and the map-bootstrap intervals were positive. This passes the
+registered realized-ranking gate and is the first strong learned-ranking signal in
+the current project.
+
+The result does not restore the original static transfer claim. Static context
+added only 4.35 top-1 percentage points, while real-context performance reached the
+92.0 and 74.2 percentiles of the task-context permutation null. The registered
+decision is to advance dynamic-state plus realized-neighborhood ranking and shrink
+the handcrafted map/OD/density claim. RL remains paused. The next permitted gate is
+an independent-map ranking confirmation plus a proposal-only candidate-generation
+interface; see `docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the

@@ -203,7 +203,17 @@ the gate determines whether realized-neighborhood ranking is statistically well-
 The completed explicit replay evaluated 412 concrete neighborhoods over 3,296 outcomes with zero
 errors. Realized-action eta-squared increased from 0.404 to 0.595, rank Spearman reached 0.803, and
 Pareto/best-candidate Jaccard reached 0.518/0.547. Every registered gate passed, so the next permitted
-stage is a realized-neighborhood ranking audit, not RL or expanded static-context collection.
+stage was a realized-neighborhood ranking audit, not RL or expanded static-context collection.
+
+That audit is now implemented by `scripts/run_realized_neighborhood_ranking_audit.py`. It aggregates
+all eight PP-order trials before labeling, trains fixed pairwise GBDTs in six leave-one-map-out folds,
+and compares proposal metadata, explicit-neighborhood structure, and static context. The dynamic plus
+realized profile improved Pareto top-1 from 13.0% to 43.5% and reduced conflict regret by 55.6%, with
+no regression on any held-out map. Static context did not pass its incremental gate: its 4.35-point
+top-1 gain and 92.0%/74.2% permutation percentiles were below the registered requirements. The active
+direction is therefore dynamic-state plus concrete-neighborhood ranking; the static transfer claim and
+RL remain paused. See
+[`docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`](docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
@@ -239,6 +249,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   confirmation, staged collection gates, and registered interpretation.
 - [`docs/REALIZED_NEIGHBORHOOD_PROBE.md`](docs/REALIZED_NEIGHBORHOOD_PROBE.md): explicit-neighborhood
   replay, proposal/evaluation random-seed separation, and ranking-stability gates.
+- [`docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`](docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md):
+  leave-one-map-out explicit-set ranking, static-context ablation, and the current positive/negative result.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

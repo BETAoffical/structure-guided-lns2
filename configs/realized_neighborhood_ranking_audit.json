@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "expected": {
+    "states": 23,
+    "maps": 6,
+    "candidates": 412,
+    "outcomes": 3296,
+    "trials_per_candidate": 8
+  },
+  "model": {
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "l2_regularization": 0.1
+  },
+  "evaluation": {
+    "bootstrap_samples": 2000,
+    "context_permutations": 500
+  },
+  "thresholds": {
+    "minimum_top1_gain": 0.05,
+    "minimum_conflict_regret_reduction": 0.05,
+    "minimum_maps_no_worse": 4,
+    "maximum_size_share": 0.8,
+    "minimum_context_top1_gain": 0.05,
+    "minimum_context_conflict_regret_reduction": 0.05,
+    "minimum_context_permutation_percentile": 0.95
+  }
+}
