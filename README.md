@@ -182,6 +182,18 @@ Jaccard 0.391. Map-specific oracle heterogeneity was detectable, while density a
 one map per layout family this is still not transfer evidence. The next collection must add independent
 layout replicas rather than more repetitions of the same states.
 
+`scripts/analyze_independent_layout_probe.py` implements that bounded confirmation without training a
+model. Six newly seeded maps form a complete layout x OD x density design, qualification gates precede
+all counterfactual work, and eight trials estimate each nominal action as a stochastic generator. The
+analysis adds paired OD/density tests, independent-layout permutations, Holm correction, fixed-family
+dominance, and a non-veto routing rule for realized-neighborhood Jaccard. See
+[`docs/INDEPENDENT_LAYOUT_PROBE.md`](docs/INDEPENDENT_LAYOUT_PROBE.md).
+
+The completed run produced 23 states and 6,480 outcomes with zero errors. Rank Spearman improved to
+0.638, but action eta-squared (0.404) and Pareto-family Jaccard (0.432) failed their registered gates;
+layout, OD, and density also had no Holm-corrected signal. The decision is to stop expansion and
+redefine the action surface around generated-neighborhood ranking, not to begin RL.
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -212,6 +224,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 - [`docs/LOCAL_REPRESENTATION_AUDIT.md`](docs/LOCAL_REPRESENTATION_AUDIT.md): local path features,
   realized-neighborhood ranking, leakage boundary, and pre-registered decision rules.
 - [`docs/MOVINGAI_BASELINES.md`](docs/MOVINGAI_BASELINES.md): pinned standard data and common GPBS/LNS2 runner.
+- [`docs/INDEPENDENT_LAYOUT_PROBE.md`](docs/INDEPENDENT_LAYOUT_PROBE.md): independent layout/OD/density
+  confirmation, staged collection gates, and registered interpretation.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

@@ -85,6 +85,20 @@ runtime sensitivity is invalid because earlier host timeouts left overlapping WS
 collectors. The next useful increase is independent layout-family
 replication and balanced scenario/density coverage, not more trials on these states.
 
+The bounded follow-up was therefore the independent-layout confirmation in
+`docs/INDEPENDENT_LAYOUT_PROBE.md`. It uses two new maps per seen layout family and a
+complete balanced/bottleneck by 80/100 static-task design. Qualification, exact
+paired tests, Holm correction, and eight action trials must pass before the paused
+12/6-map confirmation or any learned policy is allowed to resume.
+
+That confirmation is now complete: 23 states and 6,480 outcomes were collected with
+no errors. Split-rank Spearman reached 0.638, but action eta-squared was 0.404,
+Pareto-family Jaccard was 0.432, and no layout/OD/density test survived Holm
+correction. The registered decision is to stop expansion and redefine the action
+surface. Because realized neighborhoods had Jaccard 0.428, the next admissible
+mechanism study is candidate-neighborhood generation followed by ranking; the
+12/6-map dataset, supervised policy, and RL remain inactive.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the

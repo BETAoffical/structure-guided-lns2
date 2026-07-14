@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "expected_split": "probe",
+  "expected_layouts": {
+    "regular_beltway": 2,
+    "compartmentalized": 2,
+    "dead_end_aisles": 2
+  },
+  "expected_task_variants": [
+    "balanced_80",
+    "balanced_100",
+    "bottleneck_80",
+    "bottleneck_100"
+  ],
+  "expected_solver_seed": 0,
+  "minimum_repairable_tasks": 18,
+  "minimum_repairable_tasks_per_layout": 6,
+  "minimum_labeled_maps_per_layout": 2,
+  "minimum_od_modes_per_map": 2,
+  "minimum_densities_per_map": 2,
+  "minimum_paired_units": 6,
+  "minimum_trials_per_candidate": 8,
+  "minimum_mean_action_eta_squared": 0.5,
+  "minimum_trial_split_spearman": 0.5,
+  "minimum_pareto_family_jaccard": 0.5,
+  "minimum_realized_neighborhood_jaccard": 0.5,
+  "maximum_fixed_unique_pareto_share": 0.8,
+  "maximum_holm_p_value": 0.05,
+  "winner_bootstrap_samples": 500,
+  "map_bootstrap_samples": 2000,
+  "reference_datasets": ["build/repair-transfer-pilot-v2"]
+}
