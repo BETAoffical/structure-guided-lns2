@@ -117,3 +117,16 @@ The registered decision is therefore `increase_trials_before_modeling`. The next
 experiment must add action-level random trials on unique states; changing only the
 solver seed is not useful when it reproduces the same Adaptive trajectory. No
 contextual ranker or RL training is authorized by this result.
+
+## Post-probe quality audit
+
+The follow-up audit found additional design limitations hidden by the outcome-row
+count. Candidate rankings are unstable across the two duplicate-solver trial halves,
+Horizon-1 AUC is algebraically redundant with remaining conflicts, and compute-aware
+Pareto labels differ substantially from effectiveness-only labels. The original
+within-map density statistic is also invariant to swapping a single low/high pair;
+the quality audit replaces it with an exact directional alignment test.
+
+See `docs/MOVINGAI_PROBE_QUALITY.md`. The revised next step combines more action
+trials with independent scenarios. It remains a mechanism confirmation, not a
+transfer-learning result.

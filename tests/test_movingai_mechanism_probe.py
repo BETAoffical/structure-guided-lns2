@@ -187,6 +187,68 @@ class MovingAIProbeDatasetTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                 prepare_probe_dataset(source, config, root / "corrupt")
 
+    def test_preparation_expands_scenario_indices_without_task_id_collisions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            (source / "maps").mkdir(parents=True)
+            (source / "scenarios").mkdir(parents=True)
+            map_path = source / "maps" / "tiny.map"
+            map_path.write_text(
+                "type octile\nheight 1\nwidth 2\nmap\n..\n", encoding="utf-8"
+            )
+            scenarios = []
+            for index in (1, 2):
+                scenario = source / "scenarios" / f"tiny-random-{index}.scen"
+                scenario.write_text(
+                    "version 1\n0\ttiny.map\t2\t1\t0\t0\t1\t0\t1\n",
+                    encoding="utf-8",
+                )
+                scenarios.append(
+                    {
+                        "index": index,
+                        "file": scenario.relative_to(source).as_posix(),
+                        "sha256": hashlib.sha256(scenario.read_bytes()).hexdigest(),
+                    }
+                )
+            manifest = {
+                "id": "tiny",
+                "map_file": "maps/tiny.map",
+                "map_sha256": hashlib.sha256(map_path.read_bytes()).hexdigest(),
+                "scenario_file": scenarios[0]["file"],
+                "scenario_sha256": scenarios[0]["sha256"],
+                "scenarios": scenarios,
+                "agent_counts": [1],
+            }
+            (source / "manifest.jsonl").write_text(
+                json.dumps(manifest) + "\n", encoding="utf-8"
+            )
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "scenario_indices": [1, 2],
+                        "cases": [{"benchmark_id": "tiny", "agent_counts": [1]}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = root / "probe"
+            summary = prepare_probe_dataset(source, config, output)
+            rows = [
+                json.loads(line)
+                for line in (output / "probe" / "manifest.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            self.assertEqual(summary["splits"]["probe"]["scenario_count"], 2)
+            self.assertEqual(len({row["task_id"] for row in rows}), 2)
+            self.assertEqual(
+                {row["scenario_type"] for row in rows},
+                {"movingai_random_1", "movingai_random_2"},
+            )
+
 
 class MovingAIMechanismAnalysisTests(unittest.TestCase):
     def test_mechanism_signal_separates_actions_and_avoids_fixed_dominance(self) -> None:

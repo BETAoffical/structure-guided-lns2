@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "solver_seeds": [0],
+  "policies": ["official_adaptive"],
+  "environment": {
+    "time_limit": 60.0,
+    "max_repair_iterations": 100,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "counterfactual": {
+    "source_policy": "official_adaptive",
+    "eligible_splits": ["probe"],
+    "minimum_initial_conflicts": 1,
+    "maximum_initial_conflicts": 200,
+    "require_source_success": false,
+    "max_states_per_episode": 2,
+    "max_seed_agents": 4,
+    "heuristics": ["target", "collision", "random"],
+    "neighborhood_sizes": [4, 8, 16],
+    "trials": 8,
+    "horizons": [1]
+  },
+  "workers": 4
+}

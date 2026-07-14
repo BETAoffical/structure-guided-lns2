@@ -6,11 +6,14 @@ import unittest
 from pathlib import Path
 
 from experiments.repair_collection import (
+    _counterfactual_source_eligible,
+    _counterfactual_source_reason,
     _horizon_outcomes,
     _prepare_run,
     candidate_actions,
     select_seed_agents,
     state_fingerprint,
+    recover_counterfactual_manifest,
 )
 
 
@@ -84,6 +87,83 @@ def sample_state() -> dict:
 
 
 class RepairCollectionTests(unittest.TestCase):
+    def test_counterfactual_source_filter_bounds_extreme_conflict_episodes(self) -> None:
+        configuration = {
+            "minimum_initial_conflicts": 2,
+            "maximum_initial_conflicts": 200,
+            "require_source_success": False,
+        }
+        row = {
+            "summary": {
+                "repairable": True,
+                "initial_conflicts": 50,
+                "success": False,
+            }
+        }
+        self.assertTrue(_counterfactual_source_eligible(row, configuration))
+        row["summary"]["initial_conflicts"] = 201
+        self.assertFalse(_counterfactual_source_eligible(row, configuration))
+        self.assertEqual(
+            _counterfactual_source_reason(row, configuration),
+            "above_maximum_initial_conflicts",
+        )
+        row["summary"]["initial_conflicts"] = 50
+        configuration["require_source_success"] = True
+        self.assertFalse(_counterfactual_source_eligible(row, configuration))
+        configuration["require_source_success"] = False
+        configuration["maximum_agent_count"] = 400
+        row["agent_count"] = 600
+        self.assertEqual(
+            _counterfactual_source_reason(row, configuration),
+            "above_maximum_agent_count",
+        )
+
+    def test_counterfactual_manifest_recovery_rejects_incomplete_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "run_config.json").write_text(
+                json.dumps({"run_fingerprint": "run"}), encoding="utf-8"
+            )
+            episode = root / "counterfactual" / "train" / "episode"
+            episode.mkdir(parents=True)
+            for name, rows in (
+                ("states.jsonl", [{"state": 1}]),
+                ("outcomes.jsonl", [{"outcome": 1}]),
+                ("errors.jsonl", []),
+            ):
+                (episode / name).write_text(
+                    "".join(json.dumps(row) + "\n" for row in rows),
+                    encoding="utf-8",
+                )
+            metadata = {
+                "complete": True,
+                "episode_id": "episode",
+                "run_fingerprint": "run",
+                "status": "ok",
+                "state_count": 1,
+                "outcome_count": 1,
+                "error_count": 0,
+                "states_file": "counterfactual/train/episode/states.jsonl",
+                "outcomes_file": "counterfactual/train/episode/outcomes.jsonl",
+                "errors_file": "counterfactual/train/episode/errors.jsonl",
+            }
+            (episode / "metadata.json").write_text(
+                json.dumps(metadata), encoding="utf-8"
+            )
+            report = recover_counterfactual_manifest(root)
+            self.assertEqual(report["recovered_count"], 1)
+            self.assertFalse(report["invalid_metadata"])
+            metadata["outcome_count"] = 2
+            (episode / "metadata.json").write_text(
+                json.dumps(metadata), encoding="utf-8"
+            )
+            report = recover_counterfactual_manifest(root)
+            self.assertEqual(report["recovered_count"], 0)
+            self.assertEqual(
+                report["invalid_metadata"][0]["reason"],
+                "count_mismatch_outcomes_file",
+            )
+
     def test_transfer_config_has_exact_splits_and_volume(self) -> None:
         config = json.loads(
             (PROJECT_ROOT / "configs" / "repair_transfer_pilot.json").read_text(

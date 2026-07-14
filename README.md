@@ -168,6 +168,20 @@ were real, but action identity explained only 39.2% of conflict variation after 
 were pooled; map/density permutation gates also failed. The active decision is to increase action trials
 before any contextual model or RL training.
 
+`scripts/audit_movingai_probe_quality.py` performs the follow-up effective-sample and label-stability
+audit. It replaces Monte Carlo context shuffles with exact assignments, reports state-normalized action
+effects, duplicate-episode rank stability, realized-neighborhood Jaccard, and compute-aware Pareto
+sensitivity. The audit shows that 1,368 rows represent only 12 independent states and four trials per
+candidate; the data are not sufficient for a transfer claim. The corrected v2 adapter exposes three
+pinned MovingAI task scenarios and uses one state-acquisition seed plus eight action trials. See
+[`docs/MOVINGAI_PROBE_QUALITY.md`](docs/MOVINGAI_PROBE_QUALITY.md).
+
+The v2 partial confirmation recovered 35 independent states and 7,776 outcomes. Eight trials improved
+split-half rank Spearman to 0.684, but best-candidate overlap remained 0.376 and realized-neighborhood
+Jaccard 0.391. Map-specific oracle heterogeneity was detectable, while density alignment was not; with
+one map per layout family this is still not transfer evidence. The next collection must add independent
+layout replicas rather than more repetitions of the same states.
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See

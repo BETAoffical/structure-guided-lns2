@@ -4,6 +4,7 @@ import collections
 import hashlib
 import json
 import random
+import re
 import shutil
 import statistics
 from pathlib import Path
@@ -13,6 +14,11 @@ from typing import Any, Iterable
 PROBE_SCHEMA_VERSION = 1
 PROBE_SPLIT = "probe"
 MODEL_SEED = 20260714
+
+
+def _scenario_index_from_path(path: str) -> int:
+    match = re.search(r"-random-(\d+)\.scen$", path)
+    return int(match.group(1)) if match is not None else 1
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -184,7 +190,7 @@ def prepare_probe_dataset(
     if len(source_index) != len(source_rows) or not source_index:
         raise ValueError("MovingAI source manifest is empty or contains duplicate ids")
 
-    requested: list[tuple[str, int]] = []
+    requested: list[tuple[str, int, int]] = []
     for case in specification.get("cases", []):
         benchmark_id = str(case["benchmark_id"])
         if benchmark_id not in source_index:
@@ -195,7 +201,41 @@ def prepare_probe_dataset(
             raise ValueError(f"agent counts must be non-empty and unique: {benchmark_id}")
         if any(count not in available for count in counts):
             raise ValueError(f"probe requests an unavailable agent count: {benchmark_id}")
-        requested.extend((benchmark_id, count) for count in counts)
+        source_scenarios = source_index[benchmark_id].get("scenarios")
+        if source_scenarios:
+            available_scenarios = {
+                int(row["index"]): row for row in source_scenarios
+            }
+        else:
+            fallback_index = _scenario_index_from_path(
+                str(source_index[benchmark_id]["scenario_file"])
+            )
+            available_scenarios = {
+                fallback_index: {
+                    "index": fallback_index,
+                    "file": source_index[benchmark_id]["scenario_file"],
+                    "sha256": source_index[benchmark_id]["scenario_sha256"],
+                }
+            }
+        scenario_indices = [
+            int(value)
+            for value in case.get(
+                "scenario_indices", specification.get("scenario_indices", [1])
+            )
+        ]
+        if (
+            not scenario_indices
+            or len(scenario_indices) != len(set(scenario_indices))
+            or any(value not in available_scenarios for value in scenario_indices)
+        ):
+            raise ValueError(
+                f"probe requests unavailable or duplicate scenarios: {benchmark_id}"
+            )
+        requested.extend(
+            (benchmark_id, scenario_index, count)
+            for scenario_index in scenario_indices
+            for count in counts
+        )
     if not requested or len(requested) != len(set(requested)):
         raise ValueError("probe cases must be non-empty and unique")
 
@@ -215,17 +255,28 @@ def prepare_probe_dataset(
     split_root = output_root / PROBE_SPLIT
     manifest: list[dict[str, Any]] = []
     map_metrics: dict[str, dict[str, Any]] = {}
-    for benchmark_id, agent_count in requested:
+    for benchmark_id, scenario_index, agent_count in requested:
         source = source_index[benchmark_id]
         source_map = source_root / str(source["map_file"])
-        source_scenario = source_root / str(source["scenario_file"])
+        fallback_index = _scenario_index_from_path(str(source["scenario_file"]))
+        source_scenarios = source.get("scenarios") or [
+            {
+                "index": fallback_index,
+                "file": source["scenario_file"],
+                "sha256": source["scenario_sha256"],
+            }
+        ]
+        scenario = {
+            int(row["index"]): row for row in source_scenarios
+        }[scenario_index]
+        source_scenario = source_root / str(scenario["file"])
         map_file = Path("maps") / source_map.name
         scenario_file = Path("scenarios") / source_scenario.name
         destination_map = split_root / map_file
         destination_scenario = split_root / scenario_file
         _copy_verified(source_map, destination_map, str(source["map_sha256"]))
         _copy_verified(
-            source_scenario, destination_scenario, str(source["scenario_sha256"])
+            source_scenario, destination_scenario, str(scenario["sha256"])
         )
         if benchmark_id not in map_metrics:
             map_metrics[benchmark_id] = _movingai_map_metrics(destination_map)
@@ -239,16 +290,21 @@ def prepare_probe_dataset(
                     "topology_metrics": map_metrics[benchmark_id],
                 },
             )
-        task_id = f"{benchmark_id}__agents_{agent_count:04d}"
+        task_id = (
+            f"{benchmark_id}__random_{scenario_index:02d}__agents_{agent_count:04d}"
+        )
         task_metrics = _scenario_prefix_metrics(destination_scenario, agent_count)
         task_file = Path("tasks") / f"{task_id}.json"
         _write_json(
             split_root / task_file,
             {
                 "schema_version": PROBE_SCHEMA_VERSION,
-                "task_semantics": "static MovingAI random-1 scenario prefix",
+                "task_semantics": (
+                    f"static MovingAI random-{scenario_index} scenario prefix"
+                ),
                 "benchmark_id": benchmark_id,
-                "scenario_sha256": str(source["scenario_sha256"]),
+                "scenario_index": scenario_index,
+                "scenario_sha256": str(scenario["sha256"]),
                 **task_metrics,
             },
         )
@@ -263,8 +319,8 @@ def prepare_probe_dataset(
                 "task_file": task_file.as_posix(),
                 "layout_mode": "movingai_standard",
                 "layout_variant": benchmark_id,
-                "scenario_type": "movingai_random_1",
-                "task_variant": f"agents_{agent_count}",
+                "scenario_type": f"movingai_random_{scenario_index}",
+                "task_variant": f"random_{scenario_index}_agents_{agent_count}",
                 "agent_count": agent_count,
                 "topology_metrics": map_metrics[benchmark_id],
                 "dominant_flow_ratio": 0.0,
@@ -273,17 +329,26 @@ def prepare_probe_dataset(
                 "mean_shortest_distance": task_metrics["mean_shortest_distance"],
             }
         )
-    manifest.sort(key=lambda row: (str(row["map_id"]), int(row["agent_count"])))
+    manifest.sort(
+        key=lambda row: (
+            str(row["map_id"]),
+            str(row["scenario_type"]),
+            int(row["agent_count"]),
+        )
+    )
     _write_jsonl(split_root / "manifest.jsonl", manifest)
     summary = {
         "schema_version": PROBE_SCHEMA_VERSION,
         "configuration_fingerprint": source_fingerprint,
-        "source": "MovingAI MAPF benchmark random-1 scenarios",
+        "source": "MovingAI MAPF benchmark random scenarios",
         "task_semantics": "static scenario prefixes; no release times or task queues",
         "splits": {
             PROBE_SPLIT: {
                 "map_count": len(map_metrics),
                 "instance_count": len(manifest),
+                "scenario_count": len(
+                    {str(row["scenario_type"]) for row in manifest}
+                ),
                 "agent_count_min": min(int(row["agent_count"]) for row in manifest),
                 "agent_count_max": max(int(row["agent_count"]) for row in manifest),
             }
@@ -435,7 +500,11 @@ def summarize_probe_records(
     counterfactual_error_count: int = 0,
 ) -> dict[str, Any]:
     expected_trials = int(collection_config["counterfactual"]["trials"])
-    expected_tasks = sum(len(case["agent_counts"]) for case in settings["cases"])
+    expected_tasks = sum(
+        len(case["agent_counts"])
+        * len(case.get("scenario_indices", settings.get("scenario_indices", [1])))
+        for case in settings["cases"]
+    )
     expected_maps = len(settings["cases"])
     solver_seeds = [int(value) for value in collection_config["solver_seeds"]]
     expected_qualification = expected_tasks * len(solver_seeds)

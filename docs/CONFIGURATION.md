@@ -1,5 +1,24 @@
 # Stage 1 Configuration Reference
 
+## MovingAI multi-scenario probes
+
+`configs/movingai_devset.json` may declare `scenario_indices`. The fetched manifest
+keeps the legacy `scenario_file` and `scenario_sha256` fields for the first scenario
+and adds a `scenarios` list containing every extracted index, relative path, and
+checksum. Probe cases can override the global scenario list.
+
+Counterfactual collection supports optional source bounds:
+
+- `minimum_initial_conflicts` defaults to `1`;
+- `maximum_initial_conflicts` excludes extreme source episodes when set;
+- `maximum_agent_count` bounds high-agent replay cost when set;
+- `require_source_success` defaults to `false`.
+
+These values participate in the collection fingerprint, so a filtered run cannot
+resume into an unfiltered output directory. Counterfactual runs write
+`counterfactual_source_manifest.jsonl` with an eligibility decision and exclusion
+reason for every considered Adaptive episode.
+
 The active example is `configs/stage1_example.json`.
 
 Numeric configuration values are fixed when written as one number. A

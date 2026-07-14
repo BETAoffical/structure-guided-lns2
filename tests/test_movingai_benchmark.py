@@ -67,6 +67,57 @@ class MovingAIDevsetTests(unittest.TestCase):
             self.assertTrue((root / "output" / manifest[0]["map_file"]).is_file())
             self.assertTrue((root / "output" / manifest[0]["scenario_file"]).is_file())
 
+    def test_fetch_extracts_multiple_pinned_scenario_indices(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            map_zip = root / "map.zip"
+            scenario_zip = root / "scenario.zip"
+            map_hash = _archive(
+                map_zip,
+                "tiny.map",
+                "type octile\nheight 1\nwidth 2\nmap\n..\n",
+            )
+            with zipfile.ZipFile(scenario_zip, "w") as bundle:
+                for index in (1, 2):
+                    bundle.writestr(
+                        f"scen-random/tiny-random-{index}.scen",
+                        "version 1\n0\ttiny.map\t2\t1\t0\t0\t1\t0\t1\n",
+                    )
+            scenario_hash = hashlib.sha256(scenario_zip.read_bytes()).hexdigest()
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "source": "test",
+                        "scenario_indices": [1, 2],
+                        "benchmarks": [
+                            {
+                                "id": "tiny",
+                                "agent_counts": [1],
+                                "map_archive": {
+                                    "url": map_zip.as_uri(),
+                                    "sha256": map_hash,
+                                    "member": "tiny.map",
+                                },
+                                "scenario_archive": {
+                                    "url": scenario_zip.as_uri(),
+                                    "sha256": scenario_hash,
+                                    "member": "scen-random/tiny-random-1.scen",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest = fetch_devset(config, root / "output")
+            self.assertEqual(
+                [row["index"] for row in manifest[0]["scenarios"]], [1, 2]
+            )
+            for row in manifest[0]["scenarios"]:
+                self.assertTrue((root / "output" / row["file"]).is_file())
+
 
 class FeasibilityRunnerTests(unittest.TestCase):
     def test_parses_lns2_and_gpbs_statistics(self) -> None:

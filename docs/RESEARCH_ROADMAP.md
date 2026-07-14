@@ -67,6 +67,24 @@ map and density permutation percentiles were also below 95%. The registered next
 step is an action-trial stability confirmation on unique states, not contextual
 ranking or RL. See `docs/MOVINGAI_MECHANISM_PROBE.md`.
 
+The subsequent quality audit showed why that confirmation cannot simply duplicate
+the existing collection. The 1,368 rows contain only 12 independent states and four
+trials per candidate; split-half action rankings are unstable, actual neighborhoods
+have low overlap, and one scenario per map confounds topology with task realization.
+The corrected v2 mechanism probe therefore uses three MovingAI scenarios, one solver
+seed for state acquisition, eight action trials, and bounded initial-conflict sources.
+Independent maps per layout family are still required before any transfer claim.
+See `docs/MOVINGAI_PROBE_QUALITY.md`.
+
+The v2 partial confirmation then recovered 35 independent states and 7,776 outcomes
+with eight trials per candidate. Candidate-rank stability improved to 0.684, but
+top-1 overlap, realized-neighborhood stability, density alignment, and compute-aware
+label agreement remained weak. One low-conflict 600-agent warehouse episode did not
+complete within a clean 20-minute window and is recorded as a partial-run limitation;
+runtime sensitivity is invalid because earlier host timeouts left overlapping WSL
+collectors. The next useful increase is independent layout-family
+replication and balanced scenario/density coverage, not more trials on these states.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the

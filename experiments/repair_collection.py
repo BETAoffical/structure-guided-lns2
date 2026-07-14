@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import concurrent.futures
 import hashlib
 import json
@@ -830,6 +831,18 @@ def _validate_config(config: dict[str, Any]) -> None:
         or int(counterfactual.get("trials", 0)) <= 0
     ):
         raise ValueError("counterfactual state and trial counts must be positive")
+    minimum_conflicts = int(counterfactual.get("minimum_initial_conflicts", 1))
+    maximum_conflicts = counterfactual.get("maximum_initial_conflicts")
+    if minimum_conflicts <= 0 or (
+        maximum_conflicts is not None
+        and int(maximum_conflicts) < minimum_conflicts
+    ):
+        raise ValueError("counterfactual initial-conflict bounds are invalid")
+    if not isinstance(counterfactual.get("require_source_success", False), bool):
+        raise ValueError("counterfactual require_source_success must be boolean")
+    maximum_agent_count = counterfactual.get("maximum_agent_count")
+    if maximum_agent_count is not None and int(maximum_agent_count) <= 0:
+        raise ValueError("counterfactual maximum_agent_count must be positive")
     candidate_actions(
         {
             "initialized": True,
@@ -853,6 +866,93 @@ def _validate_config(config: dict[str, Any]) -> None:
         list(counterfactual["heuristics"]),
         [int(value) for value in counterfactual["neighborhood_sizes"]],
     )
+
+
+def _counterfactual_source_eligible(
+    row: dict[str, Any], counterfactual: dict[str, Any]
+) -> bool:
+    return _counterfactual_source_reason(row, counterfactual) == "eligible"
+
+
+def _counterfactual_source_reason(
+    row: dict[str, Any], counterfactual: dict[str, Any]
+) -> str:
+    summary = row.get("summary", {})
+    if not bool(summary.get("repairable")):
+        return "not_repairable"
+    initial_conflicts = int(summary.get("initial_conflicts", 0))
+    if initial_conflicts < int(counterfactual.get("minimum_initial_conflicts", 1)):
+        return "below_minimum_initial_conflicts"
+    maximum_conflicts = counterfactual.get("maximum_initial_conflicts")
+    if maximum_conflicts is not None and initial_conflicts > int(maximum_conflicts):
+        return "above_maximum_initial_conflicts"
+    if bool(counterfactual.get("require_source_success", False)) and not bool(
+        summary.get("success")
+    ):
+        return "source_policy_unsolved"
+    maximum_agent_count = counterfactual.get("maximum_agent_count")
+    if maximum_agent_count is not None and int(row.get("agent_count", 0)) > int(
+        maximum_agent_count
+    ):
+        return "above_maximum_agent_count"
+    return "eligible"
+
+
+def recover_counterfactual_manifest(output: str | Path) -> dict[str, Any]:
+    output_root = Path(output).resolve()
+    run_config = _read_json(output_root / "run_config.json")
+    run_fingerprint = str(run_config["run_fingerprint"])
+    rows = []
+    invalid = []
+    pattern = "counterfactual/*/*/metadata.json"
+    for metadata_path in sorted(output_root.glob(pattern)):
+        metadata = _read_json(metadata_path)
+        reason = None
+        if not bool(metadata.get("complete")):
+            reason = "incomplete_metadata"
+        elif str(metadata.get("run_fingerprint")) != run_fingerprint:
+            reason = "run_fingerprint_mismatch"
+        else:
+            for key, count_key in (
+                ("states_file", "state_count"),
+                ("outcomes_file", "outcome_count"),
+                ("errors_file", "error_count"),
+            ):
+                path = output_root / str(metadata.get(key, ""))
+                if not path.is_file():
+                    reason = f"missing_{key}"
+                    break
+                if len(_read_jsonl(path)) != int(metadata.get(count_key, -1)):
+                    reason = f"count_mismatch_{key}"
+                    break
+        if reason is None:
+            rows.append(metadata)
+        else:
+            invalid.append(
+                {
+                    "metadata_file": metadata_path.relative_to(output_root).as_posix(),
+                    "reason": reason,
+                }
+            )
+    rows.sort(key=lambda row: str(row["episode_id"]))
+    _write_jsonl(output_root / "counterfactual_manifest.jsonl", rows)
+    summary = _update_summary(output_root)
+    expected = []
+    source_path = output_root / "counterfactual_source_manifest.jsonl"
+    if source_path.is_file():
+        expected = [
+            str(row["episode_id"])
+            for row in _read_jsonl(source_path)
+            if bool(row.get("eligible"))
+        ]
+    recovered_ids = {str(row["episode_id"]) for row in rows}
+    return {
+        "recovered_count": len(rows),
+        "expected_eligible_count": len(expected),
+        "missing_episode_ids": sorted(set(expected) - recovered_ids),
+        "invalid_metadata": invalid,
+        "summary": summary,
+    }
 
 
 def _dataset_fingerprint(dataset_root: Path) -> str:
@@ -1019,6 +1119,16 @@ def _update_summary(output_root: Path) -> dict[str, Any]:
             "outcome_count": sum(int(row.get("outcome_count", 0)) for row in rows),
             "error_count": sum(int(row.get("error_count", 0)) for row in rows),
         }
+    source_path = output_root / "counterfactual_source_manifest.jsonl"
+    if source_path.is_file():
+        rows = _read_jsonl(source_path)
+        summary["counterfactual_sources"] = {
+            "episode_count": len(rows),
+            "eligible_count": sum(bool(row.get("eligible")) for row in rows),
+            "by_reason": dict(
+                sorted(collections.Counter(str(row["reason"]) for row in rows).items())
+            ),
+        }
     _write_json(output_root / "summary.json", summary)
     return summary
 
@@ -1147,13 +1257,44 @@ def run_collection(
         row_index = {str(row["task_id"]): row for row in rows}
         eligible_splits = set(config["counterfactual"]["eligible_splits"])
         source_policy = str(config["counterfactual"]["source_policy"])
-        selected = [
+        considered = [
             row
             for row in baseline
             if row["policy"] == source_policy
             and row["split"] in eligible_splits
             and row["status"] != "error"
-            and row.get("summary", {}).get("repairable")
+        ]
+        source_selection = []
+        for row in considered:
+            reason = _counterfactual_source_reason(
+                row, config["counterfactual"]
+            )
+            source_selection.append(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "episode_id": str(row["episode_id"]),
+                    "split": str(row["split"]),
+                    "map_id": str(row["map_id"]),
+                    "task_id": str(row["task_id"]),
+                    "solver_seed": int(row["solver_seed"]),
+                    "initial_conflicts": int(
+                        row.get("summary", {}).get("initial_conflicts", 0)
+                    ),
+                    "source_success": bool(
+                        row.get("summary", {}).get("success")
+                    ),
+                    "eligible": reason == "eligible",
+                    "reason": reason,
+                }
+            )
+        _write_jsonl(
+            output_root / "counterfactual_source_manifest.jsonl",
+            sorted(source_selection, key=lambda row: str(row["episode_id"])),
+        )
+        selected = [
+            row
+            for row in considered
+            if _counterfactual_source_eligible(row, config["counterfactual"])
         ]
         jobs = [
             {

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "bootstrap_samples": 2000,
+  "winner_bootstrap_samples": 500,
+  "maximum_exact_assignments": 100000,
+  "monte_carlo_permutations": 10000,
+  "minimum_unique_states": 24,
+  "minimum_repairable_tasks": 12,
+  "minimum_repair_label_maps": 5,
+  "minimum_density_pair_maps": 6,
+  "minimum_scenarios_per_map": 2,
+  "minimum_layout_replicates_per_family": 2,
+  "minimum_trials_per_candidate": 8,
+  "minimum_mean_statewise_action_effect": 0.5,
+  "minimum_trial_split_spearman": 0.5,
+  "minimum_neighborhood_jaccard": 0.5,
+  "maximum_exact_context_p_value": 0.05
+}
