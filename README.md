@@ -194,6 +194,17 @@ The completed run produced 23 states and 6,480 outcomes with zero errors. Rank S
 layout, OD, and density also had no Holm-corrected signal. The decision is to stop expansion and
 redefine the action surface around generated-neighborhood ranking, not to begin RL.
 
+The next bounded experiment is implemented by `scripts/collect_realized_neighborhood_probe.py`. It
+deduplicates actual agent sets from the independent-layout proposals, replays them through the explicit
+neighborhood API, and uses independent seeds to isolate PP repair-order variance. No model is trained;
+the gate determines whether realized-neighborhood ranking is statistically well-defined. See
+[`docs/REALIZED_NEIGHBORHOOD_PROBE.md`](docs/REALIZED_NEIGHBORHOOD_PROBE.md).
+
+The completed explicit replay evaluated 412 concrete neighborhoods over 3,296 outcomes with zero
+errors. Realized-action eta-squared increased from 0.404 to 0.595, rank Spearman reached 0.803, and
+Pareto/best-candidate Jaccard reached 0.518/0.547. Every registered gate passed, so the next permitted
+stage is a realized-neighborhood ranking audit, not RL or expanded static-context collection.
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -226,6 +237,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 - [`docs/MOVINGAI_BASELINES.md`](docs/MOVINGAI_BASELINES.md): pinned standard data and common GPBS/LNS2 runner.
 - [`docs/INDEPENDENT_LAYOUT_PROBE.md`](docs/INDEPENDENT_LAYOUT_PROBE.md): independent layout/OD/density
   confirmation, staged collection gates, and registered interpretation.
+- [`docs/REALIZED_NEIGHBORHOOD_PROBE.md`](docs/REALIZED_NEIGHBORHOOD_PROBE.md): explicit-neighborhood
+  replay, proposal/evaluation random-seed separation, and ranking-stability gates.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

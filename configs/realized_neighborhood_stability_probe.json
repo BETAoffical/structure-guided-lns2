@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source_split": "probe",
+  "candidates_per_family": 2,
+  "evaluation_trials": 8,
+  "workers": 4,
+  "episode_wall_time_limit_seconds": 300.0,
+  "nominal_report": "build/initlns-independent-layout-probe-v1-report/independent_layout_probe.json",
+  "thresholds": {
+    "minimum_state_count": 23,
+    "minimum_candidates_per_state": 9,
+    "minimum_action_eta_squared": 0.5,
+    "minimum_eta_improvement": 0.05,
+    "minimum_trial_split_spearman": 0.5,
+    "minimum_pareto_candidate_jaccard": 0.5,
+    "minimum_best_candidate_jaccard": 0.5,
+    "minimum_distinct_outcome_state_rate": 0.6,
+    "maximum_fixed_proposal_family_share": 0.8
+  }
+}

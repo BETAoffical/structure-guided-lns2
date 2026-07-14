@@ -99,6 +99,19 @@ surface. Because realized neighborhoods had Jaccard 0.428, the next admissible
 mechanism study is candidate-neighborhood generation followed by ranking; the
 12/6-map dataset, supervised policy, and RL remain inactive.
 
+The active mechanism gate is now `docs/REALIZED_NEIGHBORHOOD_PROBE.md`. It selects
+representative agent sets without reading repair outcomes, then evaluates each
+fixed set with independent PP-order seeds. Only a stable improvement over the
+nominal action labels permits a realized-neighborhood ranking audit; otherwise the
+repair order must become part of the action definition.
+
+The gate completed with 23 states, 412 explicit candidates, 3,296 outcomes, and no
+errors. Realized-neighborhood eta-squared rose from 0.404 to 0.595, rank Spearman
+was 0.803, and exact Pareto/best-candidate Jaccard was 0.518/0.547. All registered
+criteria passed. The next active stage is therefore a learned ranking audit over
+these concrete candidate sets, beginning with dynamic and realized features;
+static map/OD/density context remains an ablation and RL remains paused.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the
