@@ -252,7 +252,7 @@ repairable tasks from 13.11s to 0.52s. A 72-episode, 602-transition replay was s
 the registered run; same-run end-to-end time remains about three times Adaptive, so runtime superiority and
 static-context transfer are still not claimed.
 
-The next registered confirmation uses 12 additional maps and solver seeds `[0,1,2]` to test whether that
+The next registered confirmation uses 12 additional maps and solver seeds `[1,2,3]` to test whether that
 closed-loop advantage survives initial PP and repair-order randomness. Solver seeds are repeated
 measurements within map-level bootstrap groups, and the frozen model remains untouched. See
 [`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md).

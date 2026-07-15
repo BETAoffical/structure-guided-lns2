@@ -270,6 +270,42 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             configured_policies({"policies": ["realized_dynamic"]})
 
+    def test_qualification_rejects_duplicate_solver_seed_streams(self) -> None:
+        rows = make_dataset_rows()
+        design = closed_loop_dataset_design(rows, "closed_loop")
+        qualification = []
+        for source in rows:
+            for seed in (0, 1):
+                qualification.append(
+                    {
+                        **source,
+                        "solver_seed": seed,
+                        "initial_conflicts": 5,
+                        "state_fingerprint": f"{source['task_id']}-same",
+                        "status": "ok",
+                        "error": None,
+                    }
+                )
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "solver_seeds": [0, 1],
+                "qualification": {
+                    "minimum_nonzero_states": 1,
+                    "minimum_nonzero_states_per_layout": 1,
+                    "minimum_nonzero_states_per_solver_seed": 1,
+                    "minimum_active_maps": 1,
+                },
+                "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            },
+            design,
+            {"passed": True},
+            formal=True,
+        )
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["duplicate_solver_seed_trajectories"], [[0, 1]])
+
     def test_online_features_equal_the_audited_offline_extractor(self) -> None:
         state = make_state()
         candidate = make_candidate("candidate-a", [0, 1], "target:4")

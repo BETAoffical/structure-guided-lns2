@@ -13,7 +13,7 @@ use static context, or produce RL data.
 - Dataset master seed: `20270123`.
 - Twelve new maps: four each from `regular_beltway`, `compartmentalized` and `dead_end_aisles`.
 - Four unfiltered tasks per map: balanced/bottleneck crossed with 80/100 agents.
-- Solver seeds: `0`, `1`, `2`.
+- Solver seeds: `1`, `2`, `3`.
 - Policies: official Adaptive and the frozen `realized_dynamic` ranker.
 - Total resets: 144; total policy episodes: 288.
 
@@ -22,6 +22,12 @@ conflict resets remain successful PP outcomes; high-conflict resets remain in th
 requires all 144 resets to be valid, at least 108 repairable task-seeds, at least 24 repairable task-seeds
 per layout, at least 30 per solver seed, and at least 10 active maps. Failure is reported as insufficient
 evidence without replacing task seeds.
+
+Pre-outcome amendment: the initial qualification used `[0,1,2]` and revealed that glibc `srand(0)` and
+`srand(1)` expose the same random stream. No policy episode had been run. The registered seeds were changed
+to `[1,2,3]`, and qualification now rejects any pair of solver seeds whose complete vector of initial state
+fingerprints is identical. This corrects duplicate treatment assignment; it does not replace any map or
+task based on its outcome.
 
 ## Analysis
 

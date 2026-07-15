@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -257,6 +258,21 @@ def closed_loop_qualification_report(
     by_layout = collections.Counter(str(row["layout_mode"]) for row in nonzero)
     active_maps = sorted({str(row["map_id"]) for row in nonzero})
     by_solver_seed = collections.Counter(int(row["solver_seed"]) for row in nonzero)
+    fingerprints_by_seed = {
+        seed: tuple(
+            str(row["state_fingerprint"])
+            for row in sorted(
+                (item for item in cohort if int(item["solver_seed"]) == seed),
+                key=lambda item: str(item["task_id"]),
+            )
+        )
+        for seed in solver_seeds
+    }
+    duplicate_seed_streams = [
+        [left, right]
+        for left, right in itertools.combinations(solver_seeds, 2)
+        if fingerprints_by_seed[left] == fingerprints_by_seed[right]
+    ]
     settings = dict(config["qualification"])
     sample_gates = (
         {
@@ -284,6 +300,7 @@ def closed_loop_qualification_report(
         "dataset_design": bool(design["passed"]) if formal else True,
         "seed_isolation": bool(isolation["passed"]),
         "all_resets_valid": len(cohort) == len(rows) * len(solver_seeds) and not errors,
+        "distinct_solver_seed_trajectories": not duplicate_seed_streams,
         **sample_gates,
     }
     grouped = {}
@@ -323,6 +340,7 @@ def closed_loop_qualification_report(
         "nonzero_by_solver_seed": {
             str(seed): by_solver_seed.get(seed, 0) for seed in solver_seeds
         },
+        "duplicate_solver_seed_trajectories": duplicate_seed_streams,
         "active_map_count": len(active_maps),
         "active_maps": active_maps,
         "repairable_task_ids": sorted({str(row["task_id"]) for row in nonzero}),

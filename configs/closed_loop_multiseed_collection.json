@@ -2,7 +2,7 @@
   "schema_version": 1,
   "formal": true,
   "split": "closed_loop_multiseed",
-  "solver_seeds": [0, 1, 2],
+  "solver_seeds": [1, 2, 3],
   "policies": ["official_adaptive", "realized_dynamic"],
   "dataset_design": {
     "map_count": 12,
