@@ -21,6 +21,12 @@ seeds.
 - at most two representative neighborhoods per generator/size family;
 - eight explicit-repair trials per candidate and Horizon 1 effectiveness labels.
 
+The first qualification-only generation used bottleneck crossing and shared-corridor ratios of 0.10.
+Although 39/48 tasks were repairable, only 10/12 maps retained both OD modes and both densities. Before
+any repair outcomes were collected, the single registered pressure correction raised both bottleneck
+ratios to 0.25 and moved all regenerated artifacts to the `v1b` directory. Map seeds, task seeds, frozen
+models, analysis thresholds, and all other task settings remain unchanged.
+
 Qualification precedes all labels. All 48 resets must be valid, at least 36 must have 1-200 initial
 conflicts, every layout must contribute at least 12 repairable tasks, and every map must retain both OD
 modes and both densities. Map and task seeds are checked against Pilot v2 and the previous independent
@@ -41,12 +47,12 @@ generated nodes, and runtime are reported but do not control this gate.
 ## Commands
 
 ```powershell
-python scripts/generate_dataset.py configs/realized_ranking_confirmation_dataset.json
+python scripts/generate_dataset.py --config configs/realized_ranking_confirmation_dataset.json
 python scripts/run_realized_ranking_confirmation.py --mode freeze `
-  --output build/initlns-realized-ranking-confirmation-v1-frozen-models
+  --output build/initlns-realized-ranking-confirmation-v1b-frozen-models
 python scripts/collect_realized_ranking_confirmation.py `
-  --dataset build/initlns-realized-ranking-confirmation-v1 `
-  --output build/initlns-realized-ranking-confirmation-v1-collection `
+  --dataset build/initlns-realized-ranking-confirmation-v1b `
+  --output build/initlns-realized-ranking-confirmation-v1b-collection `
   --phase qualify
 ```
 

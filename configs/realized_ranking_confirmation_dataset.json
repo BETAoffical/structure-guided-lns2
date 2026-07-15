@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "master_seed": 20261031,
-  "output_dir": "build/initlns-realized-ranking-confirmation-v1",
+  "output_dir": "build/initlns-realized-ranking-confirmation-v1b",
   "tasks_per_map": 4,
   "task_variants": [
     {
@@ -17,8 +17,8 @@
       "task": {
         "agent_count": 80,
         "scenario_type": "bottleneck_pressure",
-        "required_bottleneck_crossing_ratio": 0.1,
-        "shared_corridor_ratio": 0.1
+        "required_bottleneck_crossing_ratio": 0.25,
+        "shared_corridor_ratio": 0.25
       }
     },
     {
@@ -26,8 +26,8 @@
       "task": {
         "agent_count": 100,
         "scenario_type": "bottleneck_pressure",
-        "required_bottleneck_crossing_ratio": 0.1,
-        "shared_corridor_ratio": 0.1
+        "required_bottleneck_crossing_ratio": 0.25,
+        "shared_corridor_ratio": 0.25
       }
     }
   ],
