@@ -112,6 +112,18 @@ class StateAnalysis:
     component_members: dict[int, set[int]]
 
 
+@dataclass
+class StaticGridAnalysis:
+    rows: int
+    cols: int
+    obstacles: tuple[int, ...]
+    free_cells: set[int]
+    degrees: dict[int, int]
+    articulation: set[int]
+    obstacle_rate_2: dict[int, float]
+    obstacle_rate_4: dict[int, float]
+
+
 def reconstruct_conflicts(agents: list[dict[str, Any]]) -> list[ConflictEvent]:
     agent_ids = [int(agent["id"]) for agent in agents]
     if len(agent_ids) != len(set(agent_ids)):
@@ -252,17 +264,44 @@ def _conflict_components(
     return component_id, component_members
 
 
-def analyze_state(state: dict[str, Any]) -> StateAnalysis:
+def analyze_static_grid(state: dict[str, Any]) -> StaticGridAnalysis:
     rows = int(state["rows"])
     cols = int(state["cols"])
     if rows <= 0 or cols <= 0:
         raise ValueError("grid rows and cols must be positive")
-    obstacles = [int(value) for value in state["obstacles"]]
+    obstacles = tuple(int(value) for value in state["obstacles"])
     if len(obstacles) != rows * cols:
         raise ValueError("obstacle grid dimensions do not match rows and cols")
     if any(value not in {0, 1} for value in obstacles):
         raise ValueError("obstacle grid values must be 0 or 1")
     free = {index for index, blocked in enumerate(obstacles) if not blocked}
+    return StaticGridAnalysis(
+        rows=rows,
+        cols=cols,
+        obstacles=obstacles,
+        free_cells=free,
+        degrees={cell: len(_grid_neighbors(cell, rows, cols, free)) for cell in free},
+        articulation=articulation_cells(rows, cols, list(obstacles)),
+        obstacle_rate_2=_obstacle_rates(rows, cols, list(obstacles), 2),
+        obstacle_rate_4=_obstacle_rates(rows, cols, list(obstacles), 4),
+    )
+
+
+def analyze_state(
+    state: dict[str, Any], *, static_grid: StaticGridAnalysis | None = None
+) -> StateAnalysis:
+    rows = int(state["rows"])
+    cols = int(state["cols"])
+    obstacles = tuple(int(value) for value in state["obstacles"])
+    if static_grid is None:
+        static_grid = analyze_static_grid(state)
+    elif (
+        rows != static_grid.rows
+        or cols != static_grid.cols
+        or obstacles != static_grid.obstacles
+    ):
+        raise ValueError("cached static grid does not match solver state")
+    free = static_grid.free_cells
     agents = list(state.get("agents", []))
     if not agents:
         raise ValueError("state must contain at least one agent")
@@ -297,9 +336,6 @@ def analyze_state(state: dict[str, Any]) -> StateAnalysis:
             raise ValueError(f"conflict edge contains the same agent twice: {edge}")
         if left not in known_agents or right not in known_agents:
             raise ValueError(f"conflict edge references unknown agent: {edge}")
-    degrees = {
-        cell: len(_grid_neighbors(cell, rows, cols, free)) for cell in free
-    }
     visit_heat: collections.Counter[int] = collections.Counter()
     agent_heat: collections.Counter[int] = collections.Counter()
     for agent in agents:
@@ -313,10 +349,10 @@ def analyze_state(state: dict[str, Any]) -> StateAnalysis:
         rows=rows,
         cols=cols,
         free_cells=free,
-        degrees=degrees,
-        articulation=articulation_cells(rows, cols, obstacles),
-        obstacle_rate_2=_obstacle_rates(rows, cols, obstacles, 2),
-        obstacle_rate_4=_obstacle_rates(rows, cols, obstacles, 4),
+        degrees=static_grid.degrees,
+        articulation=static_grid.articulation,
+        obstacle_rate_2=static_grid.obstacle_rate_2,
+        obstacle_rate_4=static_grid.obstacle_rate_4,
         visit_heat=visit_heat,
         agent_heat=agent_heat,
         events=events,

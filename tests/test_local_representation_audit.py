@@ -14,6 +14,7 @@ from experiments.local_representation_audit import (
     _map_folds,
     _permuted_fold_records,
     analyze_state,
+    analyze_static_grid,
     articulation_cells,
     build_local_indexes,
     feature_diagnostics,
@@ -219,6 +220,23 @@ class LocalRepresentationAuditTests(unittest.TestCase):
         self.assertEqual(features["realized.actual_size"], 2.0)
         self.assertEqual(features["realized.internal_conflict_edges"], 1.0)
         self.assertGreater(features["realized.path_articulation_ratio"], 0.0)
+
+    def test_cached_static_grid_matches_uncached_analysis(self) -> None:
+        state = {
+            "rows": 2,
+            "cols": 3,
+            "obstacles": [0, 0, 1, 0, 0, 0],
+            "agents": [_agent(0, [0, 1, 1]), _agent(1, [4, 1])],
+            "conflict_edges": [[0, 1]],
+        }
+        static_grid = analyze_static_grid(state)
+        self.assertEqual(
+            analyze_state(state), analyze_state(state, static_grid=static_grid)
+        )
+        changed = dict(state)
+        changed["obstacles"] = [0, 0, 0, 0, 0, 0]
+        with self.assertRaisesRegex(ValueError, "cached static grid"):
+            analyze_state(changed, static_grid=static_grid)
 
     def test_iterative_articulation_handles_open_grids_and_long_corridor(self) -> None:
         for side in (32, 64):

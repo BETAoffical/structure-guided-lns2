@@ -14,10 +14,20 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments.context_audit import _pair_vector
-from experiments.local_representation_audit import analyze_state
+from experiments.local_representation_audit import (
+    StaticGridAnalysis,
+    analyze_state,
+    analyze_static_grid,
+)
 from experiments.natural_distribution_confirmation import conflict_density, conflict_severity
 from experiments.realized_neighborhood_probe import select_representative_neighborhoods
-from experiments.realized_neighborhood_ranking_audit import _feature_profiles
+from experiments.realized_neighborhood_ranking_audit import (
+    _feature_profiles,
+    _feature_profiles_from_shared,
+    candidate_feature_cache,
+    state_dynamic_features,
+    static_context_features,
+)
 from experiments.realized_ranking_confirmation import _seed_isolation
 from experiments.repair_collection import (
     SCHEMA_VERSION,
@@ -44,6 +54,29 @@ CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
 EPISODE_SCHEMA = "lns2.closed_loop_episode.v1"
 POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
+CONTROLLER_IMPLEMENTATION_FILES = (
+    "CMakeLists.txt",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/context_audit.py",
+    "experiments/local_representation_audit.py",
+    "experiments/natural_distribution_confirmation.py",
+    "experiments/repair_collection.py",
+    "experiments/realized_neighborhood_ranking_audit.py",
+    "experiments/realized_neighborhood_probe.py",
+    "experiments/realized_ranking_confirmation.py",
+    "src/python_bindings.cpp",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
+
+
+class ClosedLoopTraceError(ValueError):
+    pass
+
+
+class ClosedLoopExecutionError(RuntimeError):
+    def __init__(self, kind: str, message: str) -> None:
+        super().__init__(message)
+        self.kind = kind
 
 
 def _sha256(path: Path) -> str:
@@ -52,6 +85,26 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
+    files = {
+        relative: _sha256(project_root / relative)
+        for relative in CONTROLLER_IMPLEMENTATION_FILES
+    }
+    native_module = None
+    try:
+        import lns2_env
+
+        native_path = Path(str(lns2_env.__file__)).resolve()
+        native_module = {"path": native_path.name, "sha256": _sha256(native_path)}
+    except ImportError:
+        pass
+    return {
+        "sha256": _fingerprint({"files": files, "native_module": native_module}),
+        "files": files,
+        "native_module": native_module,
+    }
 
 
 def _number_summary(values: Iterable[float | int]) -> dict[str, Any]:
@@ -236,8 +289,11 @@ class PortablePairwiseModel:
     feature_names: list[str]
     baseline: float
     trees: list[list[dict[str, Any]]]
+    native_predictor: Any | None = None
 
     def predict_positive(self, vectors: list[list[float]]) -> list[float]:
+        if self.native_predictor is not None:
+            return list(map(float, self.native_predictor.predict_positive(vectors)))
         probabilities = []
         for vector in vectors:
             raw = self.baseline
@@ -278,6 +334,7 @@ def export_portable_policy_bundle(
     }
     output_root = Path(output).resolve()
     exported = []
+    feature_names_by_profile: dict[str, list[str]] = {}
     for profile in LEARNED_POLICIES:
         source = root / str(model_rows[profile]["model_file"])
         source_sha = _sha256(source)
@@ -320,6 +377,7 @@ def export_portable_policy_bundle(
         }
         path = output_root / f"pairwise__{profile}.json"
         _write_json(path, payload)
+        feature_names_by_profile[profile] = list(model.feature_names)
         exported.append(
             {
                 "profile": profile,
@@ -330,10 +388,33 @@ def export_portable_policy_bundle(
                 "tree_count": len(trees),
             }
         )
+    index_path = Path(str(registration["development_index"]))
+    if not index_path.is_absolute():
+        index_path = Path(__file__).resolve().parents[1] / index_path
+    index_path = index_path.resolve()
+    expected_index = str(registration["development_index_sha256"]).lower()
+    if _sha256(index_path) != expected_index:
+        raise ValueError("development ranking index SHA256 mismatch")
+    development_rows = _read_jsonl(index_path)
+    feature_ranges = {}
+    for profile, feature_names in feature_names_by_profile.items():
+        values: dict[str, list[float]] = {name: [] for name in feature_names}
+        for row in development_rows:
+            features = dict(row["features"][profile])
+            for name in feature_names:
+                values[name].append(float(features.get(name, 0.0)))
+        feature_ranges[profile] = {
+            name: [min(numbers), max(numbers)] for name, numbers in values.items()
+        }
     manifest = {
-        "schema": "lns2.portable_pairwise_bundle.v1",
-        "schema_version": 1,
+        "schema": "lns2.portable_pairwise_bundle.v2",
+        "schema_version": 2,
         "models": exported,
+        "feature_ranges": feature_ranges,
+        "development_index_sha256": expected_index,
+        "development_state_count": len({str(row["state_id"]) for row in development_rows}),
+        "development_candidate_count": len(development_rows),
+        "model_parameters": freeze_manifest.get("model_parameters", {}),
         "confirmation_labels_seen": False,
     }
     _write_json(output_root / "portable_manifest.json", manifest)
@@ -362,13 +443,61 @@ def _load_portable_models(
             or str(payload["source_model_sha256"]) != expected_source[profile]
         ):
             raise ValueError(f"portable model provenance mismatch: {profile}")
+        native_predictor = None
+        try:
+            import lns2_env
+
+            predictor_type = getattr(lns2_env, "PortableTreeEnsemble", None)
+            if predictor_type is not None:
+                native_predictor = predictor_type(
+                    float(payload["baseline"]), list(payload["trees"])
+                )
+        except ImportError:
+            pass
         models[profile] = PortablePairwiseModel(
             profile=profile,
             feature_names=list(map(str, payload["feature_names"])),
             baseline=float(payload["baseline"]),
             trees=list(payload["trees"]),
+            native_predictor=native_predictor,
         )
     return models
+
+
+def _load_deployment_policy_bundle(
+    deployment_root: Path, registration: dict[str, Any]
+) -> FrozenPolicyBundle:
+    manifest_path = deployment_root / "portable_manifest.json"
+    expected_manifest_sha = str(registration.get("deployment_manifest_sha256", "")).lower()
+    if not expected_manifest_sha or _sha256(manifest_path) != expected_manifest_sha:
+        raise ValueError("deployment manifest SHA256 mismatch")
+    manifest = _read_json(manifest_path)
+    if int(manifest.get("schema_version", -1)) != 2:
+        raise ValueError("deployment bundle must use portable schema version 2")
+    if str(manifest.get("development_index_sha256", "")).lower() != str(
+        registration["development_index_sha256"]
+    ).lower():
+        raise ValueError("deployment bundle development index provenance mismatch")
+    expected_models = {
+        str(name): str(value).lower()
+        for name, value in dict(registration["model_sha256"]).items()
+    }
+    expected_portable = {
+        str(name): str(value).lower()
+        for name, value in dict(registration["portable_model_sha256"]).items()
+    }
+    models = _load_portable_models(deployment_root, expected_portable, expected_models)
+    stored_ranges = dict(manifest.get("feature_ranges", {}))
+    ranges: dict[str, dict[str, tuple[float, float]]] = {}
+    for profile, model in models.items():
+        profile_ranges = dict(stored_ranges.get(profile, {}))
+        if set(profile_ranges) != set(model.feature_names):
+            raise ValueError(f"deployment feature ranges are incomplete: {profile}")
+        ranges[profile] = {
+            name: (float(profile_ranges[name][0]), float(profile_ranges[name][1]))
+            for name in model.feature_names
+        }
+    return FrozenPolicyBundle(models=models, ranges=ranges, manifest=manifest)
 
 
 def verify_portable_policy_bundle(
@@ -377,7 +506,7 @@ def verify_portable_policy_bundle(
     native_registration = {
         key: value
         for key, value in registration.items()
-        if key not in {"portable_models", "portable_model_sha256"}
+        if key not in {"deployment_bundle", "portable_models", "portable_model_sha256"}
     }
     native = load_frozen_policy_bundle(frozen_root, native_registration)
     portable = load_frozen_policy_bundle(frozen_root, registration)
@@ -464,6 +593,12 @@ def verify_portable_policy_bundle(
 def load_frozen_policy_bundle(
     frozen_root: str | Path, registration: dict[str, Any]
 ) -> FrozenPolicyBundle:
+    deployment_value = registration.get("deployment_bundle")
+    if deployment_value:
+        deployment_root = Path(str(deployment_value))
+        if not deployment_root.is_absolute():
+            deployment_root = Path(__file__).resolve().parents[1] / deployment_root
+        return _load_deployment_policy_bundle(deployment_root.resolve(), registration)
     root = Path(frozen_root).resolve()
     manifest = _read_json(root / "freeze_manifest.json")
     if bool(manifest.get("confirmation_labels_seen", True)):
@@ -584,9 +719,15 @@ def repair_random_seed(
 
 
 def online_candidate_rows(
-    state: dict[str, Any], candidates: list[dict[str, Any]]
+    state: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    *,
+    static_grid: StaticGridAnalysis | None = None,
 ) -> list[dict[str, Any]]:
-    analysis = analyze_state(state)
+    analysis = analyze_state(state, static_grid=static_grid)
+    dynamic = state_dynamic_features(state, analysis)
+    context = static_context_features(state)
+    feature_cache = candidate_feature_cache(state, analysis)
     rows = []
     state_hash = state_fingerprint(state)
     for candidate in candidates:
@@ -596,7 +737,14 @@ def online_candidate_rows(
                 "state_id": state_hash,
                 "candidate_id": candidate_id,
                 "candidate_key": candidate_id,
-                "features": _feature_profiles(state, analysis, candidate),
+                "features": _feature_profiles_from_shared(
+                    state,
+                    analysis,
+                    candidate,
+                    dynamic=dynamic,
+                    context=context,
+                    feature_cache=feature_cache,
+                ),
             }
         )
     return rows
@@ -673,8 +821,7 @@ def generate_online_candidates(
     proposal_config: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     state_hash = state_fingerprint(state)
-    proposals = []
-    proposal_seconds = 0.0
+    requests: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for seed_agent in select_seed_agents(state, int(proposal_config["max_seed_agents"])):
         for heuristic in map(str, proposal_config["heuristics"]):
             for size in map(int, proposal_config["neighborhood_sizes"]):
@@ -689,36 +836,56 @@ def generate_online_candidates(
                         size,
                         trial_index,
                     )
-                    started = time.perf_counter()
-                    result = _plain(
-                        environment.propose(
+                    action = {
+                        "mode": "seed",
+                        "heuristic": heuristic,
+                        "seed_agent": seed_agent,
+                        "neighborhood_size": size,
+                        "random_seed": random_seed,
+                    }
+                    requests.append(
+                        (
+                            action,
                             {
-                                "mode": "seed",
-                                "heuristic": heuristic,
+                                "family": f"{heuristic}:{size}",
                                 "seed_agent": seed_agent,
-                                "neighborhood_size": size,
-                                "random_seed": random_seed,
-                            }
+                                "proposal_seed": random_seed,
+                                "requested_size": size,
+                            },
                         )
                     )
-                    proposal_seconds += time.perf_counter() - started
-                    after = _plain(environment.get_state())
-                    if after != state or state_fingerprint(after) != state_hash:
-                        raise RuntimeError("proposal changed the closed-loop repair state")
-                    if not bool(result.get("action_valid")) or not bool(result.get("generated")):
-                        raise RuntimeError("valid online proposal was rejected")
-                    agents = sorted(map(int, result.get("neighborhood", [])))
-                    if not agents or len(agents) != len(set(agents)):
-                        raise RuntimeError("online proposal returned an invalid neighborhood")
-                    proposals.append(
-                        {
-                            "family": f"{heuristic}:{size}",
-                            "seed_agent": seed_agent,
-                            "proposal_seed": random_seed,
-                            "requested_size": size,
-                            "agents": agents,
-                        }
-                    )
+    actions = [action for action, _ in requests]
+    started = time.perf_counter()
+    propose_batch = getattr(environment, "propose_batch", None)
+    if callable(propose_batch):
+        results = [_plain(value) for value in propose_batch(actions)]
+        backend = "batch"
+    else:
+        results = [_plain(environment.propose(action)) for action in actions]
+        backend = "single_fallback"
+    proposal_seconds = time.perf_counter() - started
+    if len(results) != len(requests):
+        raise RuntimeError("online proposal batch returned an unexpected result count")
+    state_check_started = time.perf_counter()
+    after = _plain(environment.get_state())
+    state_check_seconds = time.perf_counter() - state_check_started
+    if after != state or state_fingerprint(after) != state_hash:
+        raise ClosedLoopExecutionError(
+            "fingerprint_mismatch", "proposal changed the closed-loop repair state"
+        )
+    proposals = []
+    for (_, metadata), result in zip(requests, results):
+        if not bool(result.get("action_valid")) or not bool(result.get("generated")):
+            raise RuntimeError("valid online proposal was rejected")
+        agents = sorted(map(int, result.get("neighborhood", [])))
+        if not agents or len(agents) != len(set(agents)):
+            raise RuntimeError("online proposal returned an invalid neighborhood")
+        proposals.append(
+            {
+                **metadata,
+                "agents": agents,
+            }
+        )
     candidates = select_representative_neighborhoods(
         proposals, int(proposal_config["candidates_per_family"])
     )
@@ -729,6 +896,8 @@ def generate_online_candidates(
         "unique_neighborhood_count": len({tuple(row["agents"]) for row in proposals}),
         "candidate_count": len(candidates),
         "proposal_seconds": proposal_seconds,
+        "state_check_seconds": state_check_seconds,
+        "backend": backend,
     }
 
 
@@ -747,20 +916,172 @@ def _episode_id(row: dict[str, Any], solver_seed: int, policy: str) -> str:
     return f"{row['task_id']}__seed_{solver_seed:04d}__{policy}"
 
 
-def _valid_episode_trace(path: Path, run_fingerprint: str) -> dict[str, Any] | None:
+def validate_closed_loop_trace(
+    path: str | Path,
+    run_fingerprint: str,
+    *,
+    expected_episode_id: str | None = None,
+    expected_policy: str | None = None,
+    expected_solver_seed: int | None = None,
+    metric_iteration_budget: int | None = None,
+) -> dict[str, Any]:
+    trace_path = Path(path)
+    try:
+        rows = _read_jsonl(trace_path)
+    except (OSError, json.JSONDecodeError) as error:
+        raise ClosedLoopTraceError(f"cannot read trace: {error}") from error
+    if len(rows) < 2:
+        raise ClosedLoopTraceError("trace must contain initial and finish events")
+    if any(str(row.get("schema")) != EPISODE_SCHEMA for row in rows):
+        raise ClosedLoopTraceError("trace contains an unexpected event schema")
+    if any(int(row.get("schema_version", -1)) != SCHEMA_VERSION for row in rows):
+        raise ClosedLoopTraceError("trace contains an unsupported schema version")
+    if any(str(row.get("run_fingerprint")) != run_fingerprint for row in rows):
+        raise ClosedLoopTraceError("trace run fingerprint mismatch")
+    if rows[0].get("event") != "initial" or rows[-1].get("event") != "finish":
+        raise ClosedLoopTraceError("trace event boundaries are invalid")
+    if any(row.get("event") != "transition" for row in rows[1:-1]):
+        raise ClosedLoopTraceError("trace contains a non-transition event before finish")
+
+    initial = rows[0]
+    finish = rows[-1]
+    episode_id = str(initial.get("episode_id"))
+    policy = str(initial.get("policy"))
+    solver_seed = int(initial.get("solver_seed", -1))
+    if expected_episode_id is not None and episode_id != expected_episode_id:
+        raise ClosedLoopTraceError("trace episode id mismatch")
+    if expected_policy is not None and policy != expected_policy:
+        raise ClosedLoopTraceError("trace policy mismatch")
+    if expected_solver_seed is not None and solver_seed != expected_solver_seed:
+        raise ClosedLoopTraceError("trace solver seed mismatch")
+    if str(finish.get("episode_id")) != episode_id or str(finish.get("policy")) != policy:
+        raise ClosedLoopTraceError("finish metadata mismatch")
+
+    state = initial.get("state")
+    if not isinstance(state, dict):
+        raise ClosedLoopTraceError("initial event is missing state")
+    initial_hash = state_fingerprint(state)
+    if str(initial.get("state_fingerprint")) != initial_hash:
+        raise ClosedLoopTraceError("initial state fingerprint mismatch")
+    conflicts = [int(state.get("num_of_colliding_pairs", -1))]
+    learned_policy = policy in LEARNED_POLICIES
+    for decision_index, event in enumerate(rows[1:-1]):
+        if str(event.get("episode_id")) != episode_id:
+            raise ClosedLoopTraceError("transition episode id mismatch")
+        if int(event.get("decision_index", -1)) != decision_index:
+            raise ClosedLoopTraceError("transition decision indexes are not contiguous")
+        before_hash = state_fingerprint(state)
+        if str(event.get("before_fingerprint")) != before_hash:
+            raise ClosedLoopTraceError("transition before fingerprint mismatch")
+        after = event.get("after")
+        if not isinstance(after, dict):
+            raise ClosedLoopTraceError("transition is missing after state")
+        after_hash = state_fingerprint(after)
+        if str(event.get("after_fingerprint")) != after_hash:
+            raise ClosedLoopTraceError("transition after fingerprint mismatch")
+        metrics = event.get("metrics")
+        action = event.get("action")
+        if not isinstance(metrics, dict) or not isinstance(action, dict):
+            raise ClosedLoopTraceError("transition is missing action or metrics")
+        if int(metrics.get("conflicts_before", -1)) != conflicts[-1]:
+            raise ClosedLoopTraceError("transition conflicts_before mismatch")
+        after_conflicts = int(after.get("num_of_colliding_pairs", -1))
+        if int(metrics.get("conflicts_after", -1)) != after_conflicts:
+            raise ClosedLoopTraceError("transition conflicts_after mismatch")
+        if event.get("low_level_delta") != _low_level_delta(state, after):
+            raise ClosedLoopTraceError("transition low-level delta mismatch")
+        if bool(event.get("terminated")) != bool(after.get("feasible")):
+            raise ClosedLoopTraceError("transition terminated flag mismatch")
+        if bool(event.get("truncated")) != (
+            bool(after.get("done")) and not bool(after.get("feasible"))
+        ):
+            raise ClosedLoopTraceError("transition truncated flag mismatch")
+        if learned_policy:
+            requested = sorted(map(int, action.get("agents", [])))
+            actual = sorted(map(int, metrics.get("neighborhood", [])))
+            if action.get("mode") != "explicit_neighborhood" or requested != actual:
+                raise ClosedLoopTraceError("learned transition neighborhood mismatch")
+            if int(action.get("random_seed", -1)) < 0:
+                raise ClosedLoopTraceError("learned transition is missing explicit random seed")
+            if int(metrics.get("requested_random_seed", -1)) != int(action["random_seed"]):
+                raise ClosedLoopTraceError("learned transition repair seed mismatch")
+            controller = event.get("controller")
+            if not isinstance(controller, dict):
+                raise ClosedLoopTraceError("learned transition is missing controller data")
+            selected_id = str(controller.get("selected_candidate_id", ""))
+            matching = [
+                candidate
+                for candidate in controller.get("candidate_pool", [])
+                if str(candidate.get("candidate_id")) == selected_id
+            ]
+            if len(matching) != 1 or sorted(map(int, matching[0].get("agents", []))) != requested:
+                raise ClosedLoopTraceError("learned transition selected candidate mismatch")
+        conflicts.append(after_conflicts)
+        state = after
+
+    summary = finish.get("summary")
+    if not isinstance(summary, dict):
+        raise ClosedLoopTraceError("finish event is missing summary")
+    final_hash = state_fingerprint(state)
+    if str(finish.get("final_fingerprint")) != final_hash:
+        raise ClosedLoopTraceError("finish state fingerprint mismatch")
+    if str(summary.get("initial_fingerprint")) != initial_hash:
+        raise ClosedLoopTraceError("summary initial fingerprint mismatch")
+    expected_values = {
+        "initial_conflicts": conflicts[0],
+        "final_conflicts": conflicts[-1],
+        "repair_iterations": len(conflicts) - 1,
+        "conflict_trajectory": conflicts,
+        "final_sum_of_costs": int(state.get("sum_of_costs", -1)),
+        "final_low_level": state.get("low_level"),
+    }
+    for name, value in expected_values.items():
+        if summary.get(name) != value:
+            raise ClosedLoopTraceError(f"summary {name} mismatch")
+    raw_auc = sum(
+        (conflicts[index] + conflicts[index + 1]) / 2.0
+        for index in range(len(conflicts) - 1)
+    )
+    if not math.isclose(float(summary.get("conflict_auc", -1.0)), raw_auc):
+        raise ClosedLoopTraceError("summary conflict AUC mismatch")
+    if metric_iteration_budget is not None:
+        expected_fixed_auc = fixed_budget_conflict_auc(
+            conflicts,
+            metric_iteration_budget,
+            success=bool(summary.get("success")),
+        )
+        if not math.isclose(
+            float(summary.get("fixed_budget_conflict_auc", -1.0)), expected_fixed_auc
+        ):
+            raise ClosedLoopTraceError("summary fixed-budget conflict AUC mismatch")
+    if bool(finish.get("success")) != bool(summary.get("success")):
+        raise ClosedLoopTraceError("finish success flag mismatch")
+    return {"events": rows, "summary": summary}
+
+
+def _valid_episode_trace(
+    path: Path,
+    run_fingerprint: str,
+    *,
+    expected_episode_id: str,
+    expected_policy: str,
+    expected_solver_seed: int,
+    metric_iteration_budget: int,
+) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        rows = _read_jsonl(path)
-    except (OSError, json.JSONDecodeError):
+        validated = validate_closed_loop_trace(
+            path,
+            run_fingerprint,
+            expected_episode_id=expected_episode_id,
+            expected_policy=expected_policy,
+            expected_solver_seed=expected_solver_seed,
+            metric_iteration_budget=metric_iteration_budget,
+        )
+    except ClosedLoopTraceError:
         return None
-    if (
-        not rows
-        or rows[-1].get("event") != "finish"
-        or rows[-1].get("run_fingerprint") != run_fingerprint
-    ):
-        return None
-    return rows[-1].get("summary")
+    return validated["summary"]
 
 
 def _emit(stream: Any, row: dict[str, Any]) -> None:
@@ -778,7 +1099,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     partial_path = trace_path.with_suffix(".partial.jsonl")
     relative_trace = trace_path.relative_to(output_root).as_posix()
     if job["resume"]:
-        summary = _valid_episode_trace(trace_path, job["run_fingerprint"])
+        summary = _valid_episode_trace(
+            trace_path,
+            job["run_fingerprint"],
+            expected_episode_id=episode_id,
+            expected_policy=policy,
+            expected_solver_seed=solver_seed,
+            metric_iteration_budget=int(job["metric_iteration_budget"]),
+        )
         if summary is not None:
             return {
                 "schema_version": SCHEMA_VERSION,
@@ -831,6 +1159,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             external_timeout = False
             max_decisions = int(job["max_decisions"])
             wall_budget = float(job["wall_time_budget_seconds"])
+            static_grid = analyze_static_grid(state) if policy in LEARNED_POLICIES else None
             while not bool(state["done"]) and len(conflicts) - 1 < max_decisions:
                 if time.perf_counter() - started_wall >= wall_budget:
                     external_timeout = True
@@ -853,7 +1182,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                     controller["proposal"] = proposal_metrics
                     feature_started = time.perf_counter()
-                    candidate_rows = online_candidate_rows(state, candidates)
+                    candidate_rows = online_candidate_rows(
+                        state, candidates, static_grid=static_grid
+                    )
                     feature_seconds = time.perf_counter() - feature_started
                     inference_started = time.perf_counter()
                     selected_index, scores, margin = score_online_candidates(
@@ -906,6 +1237,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals["proposal_count"] += int(proposal_metrics["proposal_count"])
                     controller_totals["candidate_count"] += int(proposal_metrics["candidate_count"])
                     controller_totals["proposal_seconds"] += float(proposal_metrics["proposal_seconds"])
+                    controller_totals["state_check_seconds"] += float(
+                        proposal_metrics["state_check_seconds"]
+                    )
+                    controller_totals[f"proposal_backend={proposal_metrics['backend']}"] += 1
                     controller_totals["feature_seconds"] += feature_seconds
                     controller_totals["inference_seconds"] += inference_seconds
                     controller_totals["selected_feature_outside_fraction_sum"] += float(
@@ -921,7 +1256,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     actual = sorted(map(int, metrics.get("neighborhood", [])))
                     if not bool(metrics.get("action_valid")) or actual != sorted(action["agents"]):
                         invalid_actions += 1
-                        raise RuntimeError("explicit closed-loop action was rejected or changed")
+                        raise ClosedLoopExecutionError(
+                            "invalid_action",
+                            "explicit closed-loop action was rejected or changed",
+                        )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 elapsed_wall = time.perf_counter() - started_wall
                 transition = {
@@ -1044,6 +1382,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             else None,
             "status": "error",
             "summary": None,
+            "error_kind": getattr(error, "kind", type(error).__name__),
             "error": f"{type(error).__name__}: {error}",
         }
 
@@ -1093,6 +1432,7 @@ def run_closed_loop_collection(
     bundle = load_frozen_policy_bundle(frozen_root, dict(config["model_registration"]))
     effective_workers = int(workers or config["workers"])
     dataset_fp = _dataset_fingerprint(dataset_root)
+    implementation = controller_implementation_fingerprint(project_root)
     effective = {**config, "task_ids_override": task_ids}
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
@@ -1100,6 +1440,7 @@ def run_closed_loop_collection(
             "dataset_fingerprint": dataset_fp,
             "configuration_fingerprint": config_fp,
             "freeze_manifest": bundle.manifest,
+            "controller_implementation": implementation,
         }
     )
     estimate = {
@@ -1125,6 +1466,7 @@ def run_closed_loop_collection(
             "dataset_design": design,
             "seed_isolation": isolation,
             "frozen_models": bundle.manifest,
+            "controller_implementation": implementation,
             "estimate": estimate,
         }
     run_config = {
@@ -1139,6 +1481,7 @@ def run_closed_loop_collection(
         "dataset_design": design,
         "seed_isolation": isolation,
         "frozen_models": bundle.manifest,
+        "controller_implementation": implementation,
     }
     run_path = output_root / "run_config.json"
     if run_path.is_file():

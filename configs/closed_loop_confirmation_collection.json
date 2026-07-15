@@ -30,6 +30,8 @@
   "workers": 4,
   "frozen_models": "build/initlns-natural-distribution-confirmation-v1-frozen-models",
   "model_registration": {
+    "deployment_bundle": "artifacts/initlns-closed-loop-policy-v1",
+    "deployment_manifest_sha256": "d87b649459cf0dde44ed1491ae32f8bc2397728230c33c15caeb036005e5970d",
     "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
     "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
     "development_candidates": "build/realized-neighborhood-stability-probe-v1/candidates.jsonl",

@@ -25,9 +25,11 @@ two policies selecting the same state and set therefore receive the same repair 
 errors and never fall back to Adaptive.
 
 The WSL system Python intentionally remains dependency-free. `scripts/export_closed_loop_models.py`
-exports the frozen sklearn trees to a numerical JSON representation whose SHA and source-pickle SHA are
-registered in the collection config. Exported probabilities and candidate selections must match sklearn
-on the complete development index before collection starts; no package is installed in WSL.
+exports the frozen sklearn trees to the versioned
+`artifacts/initlns-closed-loop-policy-v1/` bundle. It contains the trees, development feature ranges and
+source provenance needed for collection, so inference does not depend on ignored `build/` files or an
+WSL sklearn installation. Exported probabilities and candidate selections must match sklearn on the
+complete development index before collection starts.
 
 The 300-second end-to-end budget includes reset, proposals, feature extraction, inference and repair.
 Native solver time and controller overhead are also reported separately. Episodes stop after 100 repair
@@ -91,14 +93,29 @@ mismatches. The primary `realized_dynamic` policy passed every registered gate:
   low-level runs by 8.68% relative to Adaptive;
 - `realized_dynamic` also improved AUC by 16.95% over the `proposal_dynamic` ablation.
 
-This is not yet a wall-clock speedup. Mean end-to-end time on repairable tasks rose from 0.42 seconds for
-Adaptive to 13.44 seconds for `realized_dynamic`. Of the learned-policy time, 13.11 seconds was spent
-before repair in candidate control and only 0.13 seconds in the selected low-level repair. The dominant
-cost is the deliberately exhaustive 288-proposal pool and repeated full-state invariance checks, not
-SIPPS or GBDT inference alone.
+The original registered implementation was not a wall-clock speedup. Mean end-to-end time on repairable
+tasks rose from 0.42 seconds for Adaptive to 13.44 seconds for `realized_dynamic`; 13.11 seconds was
+candidate-control overhead.
+
+The subsequent hardening pass does not change that registered scientific result. It adds one native
+proposal batch, a native portable-tree predictor, per-state topology/path caches, strict trace validation,
+implementation fingerprints and an equivalence checker. A complete replay matched all 72 episodes and
+602 transitions exactly, including selected neighborhoods, repair seeds, state fingerprints, conflict
+trajectories and low-level counts. On that replay, mean `realized_dynamic` controller time on the 21
+repairable tasks fell from 13.11 to 0.52 seconds (about 96%), and end-to-end time was 0.72 seconds versus
+0.24 seconds for same-run Adaptive. The controller is therefore practical enough for larger confirmation,
+but it is still about three times slower in wall time and no runtime superiority is claimed.
+
+Reproduce the scientific comparison while excluding timing fields with:
+
+```powershell
+python scripts/verify_closed_loop_equivalence.py `
+  --reference build/initlns-closed-loop-confirmation-v1-collection `
+  --candidate build/initlns-closed-loop-hardening-final-v2
+```
 
 The registered decision is `advance_to_policy_visited_data_and_rl_warm_start`. The result establishes that
 the frozen dynamic realized-neighborhood policy produces substantially better sequential conflict
 trajectories on fresh maps. It does not establish a practical runtime gain, static-context transfer, OOD
 generalization, or an RL result. The next stage must collect policy-visited states and reduce candidate
-control overhead before claiming faster time to feasibility.
+distribution shift with multiple solver seeds before RL warm-start work.

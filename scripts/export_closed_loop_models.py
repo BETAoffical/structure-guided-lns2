@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -12,6 +13,14 @@ from experiments.closed_loop_confirmation import (  # noqa: E402
     export_portable_policy_bundle,
     verify_portable_policy_bundle,
 )
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main() -> int:
@@ -27,20 +36,24 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        default="build/initlns-closed-loop-confirmation-v1-portable-models",
+        default="artifacts/initlns-closed-loop-policy-v1",
     )
     arguments = parser.parse_args()
     config = json.loads(Path(arguments.config).read_text(encoding="utf-8"))
     manifest = export_portable_policy_bundle(
         arguments.frozen_models, config["model_registration"], arguments.output
     )
+    output_root = Path(arguments.output).resolve()
     registration = dict(config["model_registration"])
-    registration["portable_models"] = str(Path(arguments.output).resolve())
+    registration["deployment_bundle"] = str(output_root)
+    registration["deployment_manifest_sha256"] = _sha256(
+        output_root / "portable_manifest.json"
+    )
+    registration["portable_models"] = str(output_root)
     registration["portable_model_sha256"] = {
         row["profile"]: row["sha256"] for row in manifest["models"]
     }
     equivalence = verify_portable_policy_bundle(arguments.frozen_models, registration)
-    output_root = Path(arguments.output).resolve()
     (output_root / "equivalence_report.json").write_text(
         json.dumps(equivalence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

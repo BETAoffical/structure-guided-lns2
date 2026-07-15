@@ -7,7 +7,11 @@ import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments.closed_loop_confirmation import CLOSED_LOOP_SCHEMA, POLICIES
+from experiments.closed_loop_confirmation import (
+    CLOSED_LOOP_SCHEMA,
+    POLICIES,
+    validate_closed_loop_trace,
+)
 from experiments.repair_collection import SCHEMA_VERSION, _read_json, _read_jsonl, _write_json
 
 
@@ -79,6 +83,14 @@ def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "controller_proposal_seconds": sum(
             float(row["summary"].get("controller_totals", {}).get("proposal_seconds", 0.0))
+            for row in valid
+        ),
+        "controller_state_check_seconds": sum(
+            float(
+                row["summary"].get("controller_totals", {}).get(
+                    "state_check_seconds", 0.0
+                )
+            )
             for row in valid
         ),
         "controller_feature_seconds": sum(
@@ -183,6 +195,7 @@ def compare_policies(
     baseline: list[dict[str, Any]],
     primary: list[dict[str, Any]],
     bootstrap_samples: int,
+    metric_iteration_budget: int = 100,
 ) -> dict[str, Any]:
     pairs = _paired_rows(baseline, primary)
     metrics = (
@@ -202,17 +215,58 @@ def compare_policies(
             _mean(value[1] for value in values) <= _mean(value[0] for value in values)
             for values in maps.values()
         )
+        equal_map_baseline = _mean(
+            _mean(value[0] for value in values) for values in maps.values()
+        )
+        equal_map_primary = _mean(
+            _mean(value[1] for value in values) for values in maps.values()
+        )
         comparisons[metric] = {
             "baseline_mean": baseline_mean,
             "primary_mean": primary_mean,
             "relative_improvement": _relative_improvement(baseline_mean, primary_mean),
             "maps_no_worse": maps_no_worse,
             "map_count": len(maps),
+            "task_pairs_no_worse": sum(
+                _metric_value(right, metric) <= _metric_value(left, metric)
+                for left, right in pairs
+            ),
+            "equal_map_weighting": {
+                "baseline_mean": equal_map_baseline,
+                "primary_mean": equal_map_primary,
+                "relative_improvement": _relative_improvement(
+                    equal_map_baseline, equal_map_primary
+                ),
+            },
             "bootstrap": map_paired_bootstrap(
                 pairs, metric, bootstrap_samples, seed=20261219
             ),
         }
-    return {"paired_repairable_count": len(pairs), "metrics": comparisons}
+    normalized = []
+    for left, right in pairs:
+        initial = max(1, int(left["summary"].get("initial_conflicts", 1)))
+        scale = float(metric_iteration_budget * initial)
+        normalized.append(
+            (
+                _metric_value(left, "fixed_budget_conflict_auc") / scale,
+                _metric_value(right, "fixed_budget_conflict_auc") / scale,
+            )
+        )
+    normalized_baseline = _mean(value[0] for value in normalized)
+    normalized_primary = _mean(value[1] for value in normalized)
+    return {
+        "paired_repairable_count": len(pairs),
+        "metrics": comparisons,
+        "normalized_conflict_auc_sensitivity": {
+            "normalization": "fixed_auc/(iteration_budget*initial_conflicts)",
+            "baseline_mean": normalized_baseline,
+            "primary_mean": normalized_primary,
+            "relative_improvement": _relative_improvement(
+                normalized_baseline, normalized_primary
+            ),
+            "task_pairs_no_worse": sum(right <= left for left, right in normalized),
+        },
+    }
 
 
 def _initial_fingerprint_integrity(
@@ -345,6 +399,7 @@ def run_closed_loop_analysis(
         raise ValueError("collection is not a closed-loop confirmation run")
     if not bool(run_config.get("formal")):
         raise ValueError("Pilot data cannot be used for formal closed-loop analysis")
+    collection_config = dict(run_config["configuration"])
     qualification = _read_json(root / "qualification_report.json")
     manifests = {
         policy: _read_jsonl(root / f"{policy}_manifest.jsonl") for policy in POLICIES
@@ -353,7 +408,17 @@ def run_closed_loop_analysis(
         for row in rows:
             if str(row.get("status")) not in {"ok", "resumed"}:
                 continue
-            events = _read_jsonl(root / str(row["trace_file"]))
+            validated = validate_closed_loop_trace(
+                root / str(row["trace_file"]),
+                str(run_config["run_fingerprint"]),
+                expected_episode_id=str(row["episode_id"]),
+                expected_policy=str(row["policy"]),
+                expected_solver_seed=int(row["solver_seed"]),
+                metric_iteration_budget=int(collection_config["metric_iteration_budget"]),
+            )
+            if row.get("summary") != validated["summary"]:
+                raise ValueError(f"manifest summary mismatch: {row['episode_id']}")
+            events = validated["events"]
             transitions = [event for event in events if event.get("event") == "transition"]
             row["trace_timing"] = {
                 "repair_wall_seconds": sum(
@@ -376,10 +441,16 @@ def run_closed_loop_analysis(
     integrity = _initial_fingerprint_integrity(manifests)
     bootstrap_samples = int(config["bootstrap_samples"])
     primary = compare_policies(
-        manifests["official_adaptive"], manifests["realized_dynamic"], bootstrap_samples
+        manifests["official_adaptive"],
+        manifests["realized_dynamic"],
+        bootstrap_samples,
+        int(collection_config["metric_iteration_budget"]),
     )
     proposal = compare_policies(
-        manifests["official_adaptive"], manifests["proposal_dynamic"], bootstrap_samples
+        manifests["official_adaptive"],
+        manifests["proposal_dynamic"],
+        bootstrap_samples,
+        int(collection_config["metric_iteration_budget"]),
     )
     thresholds = dict(config["thresholds"])
     acceptance = closed_loop_acceptance(

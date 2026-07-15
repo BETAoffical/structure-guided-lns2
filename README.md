@@ -245,6 +245,13 @@ slower in wall time (13.44s versus 0.42s), so this is evidence for better sequen
 a deployed speedup. See
 [`docs/CLOSED_LOOP_CONFIRMATION.md`](docs/CLOSED_LOOP_CONFIRMATION.md).
 
+The hardened controller now ships its frozen trees and feature ranges in
+`artifacts/initlns-closed-loop-policy-v1/`, without requiring sklearn in WSL. Native proposal batching,
+native tree inference, feature caches and strict trace validation reduced mean controller overhead on
+repairable tasks from 13.11s to 0.52s. A 72-episode, 602-transition replay was scientifically identical to
+the registered run; same-run end-to-end time remains about three times Adaptive, so runtime superiority and
+static-context transfer are still not claimed.
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See

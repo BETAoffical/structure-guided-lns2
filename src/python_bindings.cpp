@@ -3,10 +3,93 @@
 
 #include "InitLNS.h"
 
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 
 namespace py = pybind11;
+
+struct PortableTreeNode
+{
+    double value = 0;
+    double threshold = 0;
+    int feature = 0;
+    int left = 0;
+    int right = 0;
+    bool missing_go_to_left = false;
+    bool is_leaf = false;
+};
+
+class PortableTreeEnsemble
+{
+public:
+    PortableTreeEnsemble(double baseline, const py::list& tree_values) : baseline(baseline)
+    {
+        trees.reserve(py::len(tree_values));
+        for (const py::handle& tree_value : tree_values)
+        {
+            const py::list node_values = py::cast<py::list>(tree_value);
+            vector<PortableTreeNode> nodes;
+            nodes.reserve(py::len(node_values));
+            for (const py::handle& node_value : node_values)
+            {
+                const py::dict source = py::cast<py::dict>(node_value);
+                PortableTreeNode node;
+                node.value = py::cast<double>(source["value"]);
+                node.is_leaf = py::cast<bool>(source["is_leaf"]);
+                if (!node.is_leaf)
+                {
+                    node.threshold = py::cast<double>(source["num_threshold"]);
+                    node.feature = py::cast<int>(source["feature_idx"]);
+                    node.left = py::cast<int>(source["left"]);
+                    node.right = py::cast<int>(source["right"]);
+                    node.missing_go_to_left = py::cast<bool>(source["missing_go_to_left"]);
+                }
+                nodes.push_back(node);
+            }
+            if (nodes.empty())
+                throw py::value_error("portable tree cannot be empty");
+            trees.push_back(std::move(nodes));
+        }
+    }
+
+    vector<double> predictPositive(const vector<vector<double>>& vectors) const
+    {
+        vector<double> probabilities;
+        probabilities.reserve(vectors.size());
+        for (const auto& values : vectors)
+        {
+            double raw = baseline;
+            for (const auto& nodes : trees)
+            {
+                int index = 0;
+                while (!nodes.at(index).is_leaf)
+                {
+                    const auto& node = nodes.at(index);
+                    if (node.feature < 0 || node.feature >= (int)values.size())
+                        throw py::value_error("portable feature vector is too short");
+                    const double value = values[node.feature];
+                    const bool go_left = (std::isnan(value) && node.missing_go_to_left) ||
+                                         (!std::isnan(value) && value <= node.threshold);
+                    index = go_left ? node.left : node.right;
+                }
+                raw += nodes.at(index).value;
+            }
+            if (raw >= 0)
+                probabilities.push_back(1.0 / (1.0 + std::exp(-raw)));
+            else
+            {
+                const double exponential = std::exp(raw);
+                probabilities.push_back(exponential / (1.0 + exponential));
+            }
+        }
+        return probabilities;
+    }
+
+private:
+    double baseline;
+    vector<vector<PortableTreeNode>> trees;
+};
 
 namespace
 {
@@ -160,6 +243,7 @@ public:
     {
         solver.reset();
         agents.clear();
+        proposal_since_step = false;
         const int count = instance->getDefaultNumberOfAgents();
         if ((int)agents.capacity() < count)
             agents.reserve(count);
@@ -179,7 +263,13 @@ public:
             throw std::runtime_error("reset() must be called before step()");
         if (solver->isDone())
             throw std::runtime_error("the repair episode is already finished");
-        solver->step(parseAction(action_value));
+        RepairAction action = parseAction(action_value);
+        if (proposal_since_step && action.random_seed < 0)
+            throw py::value_error(
+                "step() after propose() requires an explicit random_seed because proposal generation "
+                "advances the process-global LNS2 random stream");
+        solver->step(action);
+        proposal_since_step = false;
         RepairState state = solver->getRepairState();
         py::dict result;
         result["observation"] = stateToPython(state, context);
@@ -193,7 +283,23 @@ public:
     {
         if (!solver)
             throw std::runtime_error("reset() must be called before propose()");
+        proposal_since_step = true;
         return proposalToPython(solver->proposeNeighborhood(parseAction(action_value)));
+    }
+
+    py::list proposeBatch(const py::list& action_values)
+    {
+        if (!solver)
+            throw std::runtime_error("reset() must be called before propose_batch()");
+        if (!action_values.empty())
+            proposal_since_step = true;
+        py::list results;
+        for (const py::handle& value : action_values)
+        {
+            const py::dict action_value = py::cast<py::dict>(value);
+            results.append(proposalToPython(solver->proposeNeighborhood(parseAction(action_value))));
+        }
+        return results;
     }
 
     py::dict getState() const
@@ -215,11 +321,15 @@ private:
     int max_repair_iterations;
     int screen;
     py::dict context;
+    bool proposal_since_step = false;
 };
 
 PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
+    py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
+        .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))
+        .def("predict_positive", &PortableTreeEnsemble::predictPositive, py::arg("vectors"));
     py::class_<LNS2RepairEnv>(module, "LNS2RepairEnv")
         .def(py::init<const std::string&, const std::string&, int, double, int,
                       const std::string&, const std::string&, bool, int, int, py::dict>(),
@@ -230,6 +340,7 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("screen") = 0, py::arg("context") = py::dict())
         .def("reset", &LNS2RepairEnv::reset, py::arg("seed") = 0)
         .def("propose", &LNS2RepairEnv::propose, py::arg("action"))
+        .def("propose_batch", &LNS2RepairEnv::proposeBatch, py::arg("actions"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
         .def("get_state", &LNS2RepairEnv::getState);
 }

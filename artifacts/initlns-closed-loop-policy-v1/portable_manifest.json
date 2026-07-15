@@ -1,0 +1,967 @@
+{
+  "confirmation_labels_seen": false,
+  "development_candidate_count": 412,
+  "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
+  "development_state_count": 23,
+  "feature_ranges": {
+    "proposal_dynamic": {
+      "proposal.actual_size": [
+        1.0,
+        16.0
+      ],
+      "proposal.actual_size=1": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=10": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=11": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=12": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=13": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=14": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=15": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=16": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=2": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=3": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=4": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=5": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=7": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=8": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=9": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size_ratio_agents": [
+        0.0125,
+        0.2
+      ],
+      "proposal.family_count=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=collision:4": [
+        0.0,
+        24.0
+      ],
+      "proposal.family_count=collision:8": [
+        0.0,
+        24.0
+      ],
+      "proposal.family_count=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=target:16": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_count=target:4": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_count=target:8": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_ratio=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=collision:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=collision:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.seed_agent_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.seed_component_size_max": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_mean": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_min": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_std": [
+        0.0,
+        0.0
+      ],
+      "proposal.seed_component_size_sum": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_conflict_degree_max": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_mean": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_min": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_std": [
+        0.0,
+        3.0
+      ],
+      "proposal.seed_conflict_degree_sum": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_delay_max": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_mean": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_min": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_std": [
+        0.0,
+        8.73053390247253
+      ],
+      "proposal.seed_delay_sum": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_path_cost_max": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_mean": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_min": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_std": [
+        0.0,
+        12.5
+      ],
+      "proposal.seed_path_cost_sum": [
+        22.0,
+        139.0
+      ],
+      "proposal.selection_family=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=collision:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=collision:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.support_family_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.total_count": [
+        1.0,
+        24.0
+      ],
+      "proposal.unique_proposal_seed_count": [
+        1.0,
+        24.0
+      ],
+      "state.agent_count": [
+        80.0,
+        100.0
+      ],
+      "state.colliding_pairs": [
+        1.0,
+        159.0
+      ],
+      "state.component_count": [
+        1.0,
+        8.0
+      ],
+      "state.conflict_edge_density": [
+        0.0125,
+        1.59
+      ],
+      "state.conflict_event_count": [
+        1.0,
+        308.0
+      ],
+      "state.conflict_time_mean": [
+        3.5,
+        62.0
+      ],
+      "state.conflict_time_std": [
+        0.0,
+        24.7931346897681
+      ],
+      "state.conflicting_agent_ratio": [
+        0.025,
+        0.84
+      ],
+      "state.degree_max": [
+        1.0,
+        49.0
+      ],
+      "state.degree_mean": [
+        0.025,
+        3.18
+      ],
+      "state.degree_std": [
+        0.15612494995995996,
+        5.61672502442482
+      ],
+      "state.delay_max": [
+        18.0,
+        125.0
+      ],
+      "state.delay_mean": [
+        3.9125,
+        36.83
+      ],
+      "state.delay_std": [
+        4.868264577855234,
+        29.553698584102804
+      ],
+      "state.iteration": [
+        0.0,
+        0.0
+      ],
+      "state.largest_component": [
+        2.0,
+        82.0
+      ],
+      "state.largest_component_ratio": [
+        0.02,
+        0.82
+      ],
+      "state.low_level_generated_per_agent": [
+        234.7625,
+        936.85
+      ],
+      "state.low_level_runs_per_agent": [
+        1.0,
+        1.0
+      ],
+      "state.path_cost_mean": [
+        33.075,
+        72.44
+      ],
+      "state.path_cost_std": [
+        6.794196052514234,
+        30.192820338616926
+      ],
+      "state.path_stretch_mean": [
+        1.130253849354973,
+        2.034260039314799
+      ],
+      "state.path_wait_ratio_mean": [
+        0.034845118233730175,
+        0.28240687526963637
+      ],
+      "state.sum_of_costs_per_agent": [
+        33.075,
+        72.44
+      ],
+      "state.vertex_event_ratio": [
+        0.6,
+        1.0
+      ]
+    },
+    "realized_dynamic": {
+      "proposal.actual_size": [
+        1.0,
+        16.0
+      ],
+      "proposal.actual_size=1": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=10": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=11": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=12": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=13": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=14": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=15": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=16": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=2": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=3": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=4": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=5": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=7": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=8": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size=9": [
+        0.0,
+        1.0
+      ],
+      "proposal.actual_size_ratio_agents": [
+        0.0125,
+        0.2
+      ],
+      "proposal.family_count=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=collision:4": [
+        0.0,
+        24.0
+      ],
+      "proposal.family_count=collision:8": [
+        0.0,
+        24.0
+      ],
+      "proposal.family_count=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_count=target:16": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_count=target:4": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_count=target:8": [
+        0.0,
+        8.0
+      ],
+      "proposal.family_ratio=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=collision:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=collision:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.family_ratio=target:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.seed_agent_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.seed_component_size_max": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_mean": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_min": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_component_size_std": [
+        0.0,
+        0.0
+      ],
+      "proposal.seed_component_size_sum": [
+        2.0,
+        82.0
+      ],
+      "proposal.seed_conflict_degree_max": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_mean": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_min": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_conflict_degree_std": [
+        0.0,
+        3.0
+      ],
+      "proposal.seed_conflict_degree_sum": [
+        1.0,
+        49.0
+      ],
+      "proposal.seed_delay_max": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_mean": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_min": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_delay_std": [
+        0.0,
+        8.73053390247253
+      ],
+      "proposal.seed_delay_sum": [
+        0.0,
+        98.0
+      ],
+      "proposal.seed_path_cost_max": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_mean": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_min": [
+        22.0,
+        134.0
+      ],
+      "proposal.seed_path_cost_std": [
+        0.0,
+        12.5
+      ],
+      "proposal.seed_path_cost_sum": [
+        22.0,
+        139.0
+      ],
+      "proposal.selection_family=collision:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=collision:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=collision:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=random:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:16": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:4": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family=target:8": [
+        0.0,
+        1.0
+      ],
+      "proposal.selection_family_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.support_family_count": [
+        1.0,
+        3.0
+      ],
+      "proposal.total_count": [
+        1.0,
+        24.0
+      ],
+      "proposal.unique_proposal_seed_count": [
+        1.0,
+        24.0
+      ],
+      "realized.actual_size": [
+        1.0,
+        16.0
+      ],
+      "realized.actual_size_ratio_agents": [
+        0.0125,
+        0.2
+      ],
+      "realized.boundary_conflict_edges": [
+        0.0,
+        83.0
+      ],
+      "realized.component_count": [
+        1.0,
+        6.0
+      ],
+      "realized.component_coverage_max": [
+        0.02564102564102564,
+        1.0
+      ],
+      "realized.component_coverage_mean": [
+        0.02564102564102564,
+        1.0
+      ],
+      "realized.conflict_degree_max": [
+        1.0,
+        49.0
+      ],
+      "realized.conflict_degree_mean": [
+        0.0625,
+        14.75
+      ],
+      "realized.conflict_degree_min": [
+        0.0,
+        3.0
+      ],
+      "realized.conflict_degree_std": [
+        0.0,
+        19.929563467371782
+      ],
+      "realized.conflict_degree_sum": [
+        1.0,
+        145.0
+      ],
+      "realized.conflicting_agent_coverage": [
+        0.024390243902439025,
+        1.0
+      ],
+      "realized.conflicting_agent_ratio": [
+        0.0625,
+        1.0
+      ],
+      "realized.delay_max": [
+        1.0,
+        125.0
+      ],
+      "realized.delay_mean": [
+        0.5,
+        62.0
+      ],
+      "realized.delay_min": [
+        0.0,
+        48.0
+      ],
+      "realized.delay_std": [
+        0.0,
+        33.07702894381537
+      ],
+      "realized.delay_sum": [
+        1.0,
+        961.0
+      ],
+      "realized.incident_conflict_coverage": [
+        0.009259259259259259,
+        1.0
+      ],
+      "realized.incident_event_coverage": [
+        0.0049261083743842365,
+        1.0
+      ],
+      "realized.internal_conflict_coverage": [
+        0.0,
+        1.0
+      ],
+      "realized.internal_conflict_edges": [
+        0.0,
+        39.0
+      ],
+      "realized.internal_event_coverage": [
+        0.0,
+        1.0
+      ],
+      "realized.path_articulation_ratio": [
+        0.0,
+        0.18579234972677597
+      ],
+      "realized.path_bbox_area_ratio": [
+        0.21428571428571427,
+        1.0
+      ],
+      "realized.path_cost_max": [
+        30.0,
+        162.0
+      ],
+      "realized.path_cost_mean": [
+        26.25,
+        96.4375
+      ],
+      "realized.path_cost_min": [
+        16.0,
+        91.0
+      ],
+      "realized.path_cost_std": [
+        0.0,
+        30.877783275358354
+      ],
+      "realized.path_cost_sum": [
+        57.0,
+        1543.0
+      ],
+      "realized.path_degree_mean": [
+        2.6819571865443423,
+        3.5326633165829144
+      ],
+      "realized.path_low_degree_ratio": [
+        0.0,
+        0.4525993883792049
+      ],
+      "realized.path_obstacle_rate_r2": [
+        0.23007614213197972,
+        0.5236085626911315
+      ],
+      "realized.path_obstacle_rate_r4": [
+        0.22342595150487343,
+        0.46633591141746084
+      ],
+      "realized.path_overlap_max": [
+        0.0,
+        0.8717948717948718
+      ],
+      "realized.path_overlap_mean": [
+        0.0,
+        0.40975826563064827
+      ],
+      "realized.path_stretch_max": [
+        1.0238095238095237,
+        4.409090909090909
+      ],
+      "realized.path_stretch_mean": [
+        1.0119047619047619,
+        3.372685185185185
+      ],
+      "realized.path_stretch_min": [
+        1.0,
+        2.8055555555555554
+      ],
+      "realized.path_stretch_std": [
+        0.0,
+        1.2360925360998598
+      ],
+      "realized.path_stretch_sum": [
+        2.0238095238095237,
+        42.9515713496952
+      ],
+      "realized.path_union_cell_ratio": [
+        0.055970149253731345,
+        0.4675141242937853
+      ],
+      "realized.path_visit_heat_mean": [
+        5.698630136986301,
+        55.71913580246913
+      ],
+      "realized.path_wait_ratio_mean": [
+        0.0,
+        0.4804097568779063
+      ],
+      "state.agent_count": [
+        80.0,
+        100.0
+      ],
+      "state.colliding_pairs": [
+        1.0,
+        159.0
+      ],
+      "state.component_count": [
+        1.0,
+        8.0
+      ],
+      "state.conflict_edge_density": [
+        0.0125,
+        1.59
+      ],
+      "state.conflict_event_count": [
+        1.0,
+        308.0
+      ],
+      "state.conflict_time_mean": [
+        3.5,
+        62.0
+      ],
+      "state.conflict_time_std": [
+        0.0,
+        24.7931346897681
+      ],
+      "state.conflicting_agent_ratio": [
+        0.025,
+        0.84
+      ],
+      "state.degree_max": [
+        1.0,
+        49.0
+      ],
+      "state.degree_mean": [
+        0.025,
+        3.18
+      ],
+      "state.degree_std": [
+        0.15612494995995996,
+        5.61672502442482
+      ],
+      "state.delay_max": [
+        18.0,
+        125.0
+      ],
+      "state.delay_mean": [
+        3.9125,
+        36.83
+      ],
+      "state.delay_std": [
+        4.868264577855234,
+        29.553698584102804
+      ],
+      "state.iteration": [
+        0.0,
+        0.0
+      ],
+      "state.largest_component": [
+        2.0,
+        82.0
+      ],
+      "state.largest_component_ratio": [
+        0.02,
+        0.82
+      ],
+      "state.low_level_generated_per_agent": [
+        234.7625,
+        936.85
+      ],
+      "state.low_level_runs_per_agent": [
+        1.0,
+        1.0
+      ],
+      "state.path_cost_mean": [
+        33.075,
+        72.44
+      ],
+      "state.path_cost_std": [
+        6.794196052514234,
+        30.192820338616926
+      ],
+      "state.path_stretch_mean": [
+        1.130253849354973,
+        2.034260039314799
+      ],
+      "state.path_wait_ratio_mean": [
+        0.034845118233730175,
+        0.28240687526963637
+      ],
+      "state.sum_of_costs_per_agent": [
+        33.075,
+        72.44
+      ],
+      "state.vertex_event_ratio": [
+        0.6,
+        1.0
+      ]
+    }
+  },
+  "model_parameters": {
+    "l2_regularization": 0.1,
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20
+  },
+  "models": [
+    {
+      "feature_count": 94,
+      "file": "pairwise__proposal_dynamic.json",
+      "profile": "proposal_dynamic",
+      "sha256": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
+      "source_model_sha256": "5e4eaeebf69bf8b660d079d214c50504f9ed5ab4311d9e0c4f58ccc5fee801e4",
+      "tree_count": 100
+    },
+    {
+      "feature_count": 138,
+      "file": "pairwise__realized_dynamic.json",
+      "profile": "realized_dynamic",
+      "sha256": "11d0ad6cbbde0f7f6c598e7ba48026d9e5caabb8046a6c2adf602a99d3b77ee3",
+      "source_model_sha256": "f765fe2fef80ee692aefd9c34abe8b984aa6dfd1ea0ad1ed8e31bb67985b3ccb",
+      "tree_count": 100
+    }
+  ],
+  "schema": "lns2.portable_pairwise_bundle.v2",
+  "schema_version": 2
+}

@@ -171,13 +171,45 @@ def state_dynamic_features(
     return features
 
 
+@dataclass
+class CandidateFeatureCache:
+    by_id: dict[int, dict[str, Any]]
+    active_agents: set[int]
+    paths: dict[int, list[int]]
+    path_sets: dict[int, set[int]]
+
+
+def candidate_feature_cache(
+    state: dict[str, Any], analysis: StateAnalysis
+) -> CandidateFeatureCache:
+    by_id = {int(agent["id"]): agent for agent in state["agents"]}
+    if len(by_id) != len(state["agents"]):
+        raise ValueError("state contains duplicate agent ids")
+    paths = {
+        agent_id: [int(cell) for cell in agent["path"]]
+        for agent_id, agent in by_id.items()
+    }
+    return CandidateFeatureCache(
+        by_id=by_id,
+        active_agents={value for edge in analysis.pair_set for value in edge},
+        paths=paths,
+        path_sets={agent_id: set(path) for agent_id, path in paths.items()},
+    )
+
+
 def proposal_features(
     state: dict[str, Any],
     analysis: StateAnalysis,
     candidate: dict[str, Any],
+    *,
+    feature_cache: CandidateFeatureCache | None = None,
 ) -> dict[str, float]:
     agents = list(state["agents"])
-    by_id = {int(agent["id"]): agent for agent in agents}
+    by_id = (
+        candidate_feature_cache(state, analysis).by_id
+        if feature_cache is None
+        else feature_cache.by_id
+    )
     selected = [int(value) for value in candidate["agents"]]
     if len(selected) != len(set(selected)) or not selected:
         raise ValueError("candidate neighborhood must be non-empty and unique")
@@ -244,10 +276,17 @@ def explicit_neighborhood_features(
     state: dict[str, Any],
     analysis: StateAnalysis,
     neighborhood: list[int],
+    *,
+    feature_cache: CandidateFeatureCache | None = None,
 ) -> dict[str, float]:
     if not neighborhood or len(neighborhood) != len(set(neighborhood)):
         raise ValueError("explicit neighborhood must be non-empty and unique")
-    by_id = {int(agent["id"]): agent for agent in state["agents"]}
+    feature_cache = (
+        candidate_feature_cache(state, analysis)
+        if feature_cache is None
+        else feature_cache
+    )
+    by_id = feature_cache.by_id
     if any(agent_id not in by_id for agent_id in neighborhood):
         raise ValueError("explicit neighborhood contains an unknown agent")
     selected = set(neighborhood)
@@ -257,7 +296,7 @@ def explicit_neighborhood_features(
     boundary_edges = [
         edge for edge in analysis.pair_set if (edge[0] in selected) != (edge[1] in selected)
     ]
-    active_agents = {value for edge in analysis.pair_set for value in edge}
+    active_agents = feature_cache.active_agents
     component_ids = {
         analysis.component_id[agent_id]
         for agent_id in selected
@@ -278,8 +317,9 @@ def explicit_neighborhood_features(
         _ratio(agent.get("path_cost", 0), max(1, agent.get("shortest_path_cost", 0)))
         for agent in selected_agents
     ]
-    paths = [[int(cell) for cell in agent["path"]] for agent in selected_agents]
-    path_sets = [set(path) for path in paths]
+    selected_ids = sorted(selected)
+    paths = [feature_cache.paths[agent_id] for agent_id in selected_ids]
+    path_sets = [feature_cache.path_sets[agent_id] for agent_id in selected_ids]
     overlaps = [
         _ratio(len(left & right), len(left | right))
         for left, right in itertools.combinations(path_sets, 2)
@@ -448,12 +488,29 @@ def _label_rows(rows: list[dict[str, Any]]) -> None:
 def _feature_profiles(
     state: dict[str, Any], analysis: StateAnalysis, candidate: dict[str, Any]
 ) -> dict[str, dict[str, float]]:
-    dynamic = state_dynamic_features(state, analysis)
-    proposal = proposal_features(state, analysis, candidate)
-    realized = explicit_neighborhood_features(
-        state, analysis, [int(value) for value in candidate["agents"]]
+    return _feature_profiles_from_shared(state, analysis, candidate)
+
+
+def _feature_profiles_from_shared(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    candidate: dict[str, Any],
+    *,
+    dynamic: dict[str, float] | None = None,
+    context: dict[str, float] | None = None,
+    feature_cache: CandidateFeatureCache | None = None,
+) -> dict[str, dict[str, float]]:
+    dynamic = state_dynamic_features(state, analysis) if dynamic is None else dynamic
+    proposal = proposal_features(
+        state, analysis, candidate, feature_cache=feature_cache
     )
-    context = static_context_features(state)
+    realized = explicit_neighborhood_features(
+        state,
+        analysis,
+        [int(value) for value in candidate["agents"]],
+        feature_cache=feature_cache,
+    )
+    context = static_context_features(state) if context is None else context
     profiles = {
         "proposal_dynamic": dynamic | proposal,
         "realized_dynamic": dynamic | proposal | realized,

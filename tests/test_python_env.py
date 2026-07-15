@@ -87,9 +87,11 @@ class RepairEnvironmentTests(unittest.TestCase):
         }
         first = env.propose(action)
         second = env.propose(action)
+        batch = env.propose_batch([action, action])
         self.assertTrue(first["action_valid"])
         self.assertTrue(first["generated"])
         self.assertEqual(first["neighborhood"], second["neighborhood"])
+        self.assertEqual(batch, [first, first])
         self.assertEqual(state, env.get_state())
 
         result = env.step(action)
@@ -98,6 +100,45 @@ class RepairEnvironmentTests(unittest.TestCase):
         invalid = env.propose({**action, "heuristic": "adaptive"})
         self.assertFalse(invalid["action_valid"])
         self.assertFalse(invalid["generated"])
+
+    def test_proposal_requires_seeded_followup_repair(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"] or not state["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        edge = list(state["conflict_edges"][0])
+        action = {
+            "mode": "seed",
+            "heuristic": "collision",
+            "seed_agent": edge[0],
+            "neighborhood_size": 8,
+            "random_seed": 31002,
+        }
+        env.propose(action)
+        with self.assertRaises(ValueError):
+            env.step({"mode": "explicit_neighborhood", "agents": edge})
+        result = env.step(
+            {"mode": "explicit_neighborhood", "agents": edge, "random_seed": 31003}
+        )
+        self.assertTrue(result["metrics"]["action_valid"])
+
+    def test_partial_proposal_batch_still_protects_global_rng(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"] or not state["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        edge = list(state["conflict_edges"][0])
+        action = {
+            "mode": "seed",
+            "heuristic": "collision",
+            "seed_agent": edge[0],
+            "neighborhood_size": 8,
+            "random_seed": 32002,
+        }
+        with self.assertRaises((TypeError, ValueError)):
+            env.propose_batch([action, "not-an-action"])
+        with self.assertRaises(ValueError):
+            env.step({"mode": "explicit_neighborhood", "agents": edge})
 
 
 if __name__ == "__main__":

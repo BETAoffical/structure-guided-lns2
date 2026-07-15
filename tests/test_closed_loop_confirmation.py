@@ -13,6 +13,7 @@ import numpy as np
 
 from experiments.closed_loop_confirmation import (
     _closed_loop_episode_worker,
+    ClosedLoopTraceError,
     closed_loop_dataset_design,
     closed_loop_qualification_report,
     feature_range_diagnostic,
@@ -24,6 +25,7 @@ from experiments.closed_loop_confirmation import (
     load_frozen_policy_bundle,
     PortablePairwiseModel,
     score_online_candidates,
+    validate_closed_loop_trace,
 )
 from experiments.closed_loop_confirmation_analysis import (
     closed_loop_acceptance,
@@ -150,6 +152,9 @@ class FakeProposalEnvironment:
             "neighborhood": agents,
         }
 
+    def propose_batch(self, actions: list[dict]) -> list[dict]:
+        return [self.propose(action) for action in actions]
+
     def get_state(self) -> dict:
         return self.state
 
@@ -207,6 +212,18 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         for profile in online.values():
             self.assertFalse(any("conflicts_after" in name for name in profile))
 
+    def test_online_feature_cache_is_seed_and_candidate_independent(self) -> None:
+        state = make_state()
+        candidates = [
+            make_candidate("candidate-a", [0, 1], "target:4"),
+            make_candidate("candidate-b", [1], "collision:4"),
+        ]
+        rows = online_candidate_rows(state, candidates)
+        for row, candidate in zip(rows, candidates):
+            self.assertEqual(
+                row["features"], _feature_profiles(state, analyze_state(state), candidate)
+            )
+
     def test_online_proposals_are_deterministic_and_do_not_change_state(self) -> None:
         state = make_state()
         environment = FakeProposalEnvironment(state)
@@ -235,6 +252,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         )
         self.assertEqual(first, second)
         self.assertEqual(metrics["proposal_count"], 6)
+        self.assertEqual(metrics["backend"], "batch")
+        self.assertEqual(environment.calls, 12)
         self.assertEqual(state_fingerprint(environment.state), state_fingerprint(state))
 
     def test_proposal_and_repair_seeds_are_deterministic_and_disjoint(self) -> None:
@@ -363,6 +382,20 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             )
         self.assertEqual(set(bundle.models), {"proposal_dynamic", "realized_dynamic"})
 
+    def test_tracked_deployment_bundle_does_not_require_build_artifacts(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        config = json.loads(
+            (project_root / "configs" / "closed_loop_confirmation_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bundle = load_frozen_policy_bundle(
+            project_root / "build" / "source-models-intentionally-missing",
+            config["model_registration"],
+        )
+        self.assertEqual(set(bundle.models), {"proposal_dynamic", "realized_dynamic"})
+        self.assertEqual(bundle.manifest["schema_version"], 2)
+
     def test_fixed_budget_auc_penalizes_failure(self) -> None:
         self.assertEqual(fixed_budget_conflict_auc([4, 2, 0], 4, success=True), 4.0)
         self.assertEqual(fixed_budget_conflict_auc([4, 2], 4, success=False), 9.0)
@@ -400,6 +433,62 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["summary"]["success"])
         self.assertEqual(result["summary"]["repair_iterations"], 0)
+
+    def test_trace_validation_rejects_wrong_episode_and_resume_reruns_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=ZeroConflictEnvironment(),
+            ):
+                result = _closed_loop_episode_worker(job)
+            trace = Path(directory) / result["trace_file"]
+            validated = validate_closed_loop_trace(
+                trace,
+                "run",
+                expected_episode_id=result["episode_id"],
+                expected_policy="official_adaptive",
+                expected_solver_seed=0,
+                metric_iteration_budget=100,
+            )
+            self.assertEqual(validated["summary"], result["summary"])
+
+            events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+            events[-1]["episode_id"] = "wrong-episode"
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ClosedLoopTraceError):
+                validate_closed_loop_trace(trace, "run")
+
+            job["resume"] = True
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=ZeroConflictEnvironment(),
+            ):
+                rerun = _closed_loop_episode_worker(job)
+            self.assertEqual(rerun["status"], "ok")
 
     def test_comparison_uses_failure_penalties_and_map_pairing(self) -> None:
         def row(policy: str, map_id: str, task: str, auc: float, seconds: float) -> dict:

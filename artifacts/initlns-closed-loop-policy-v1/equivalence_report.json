@@ -1,0 +1,29 @@
+{
+  "online_feature_parity": {
+    "candidate_count": 412,
+    "mismatch_count": 0,
+    "mismatches": [],
+    "missing": [],
+    "missing_count": 0,
+    "passed": true
+  },
+  "passed": true,
+  "profiles": {
+    "proposal_dynamic": {
+      "maximum_score_delta": 3.552713678800501e-15,
+      "pair_count": 3486,
+      "passed": true,
+      "selection_mismatch_count": 0,
+      "state_count": 23
+    },
+    "realized_dynamic": {
+      "maximum_score_delta": 3.552713678800501e-15,
+      "pair_count": 3486,
+      "passed": true,
+      "selection_mismatch_count": 0,
+      "state_count": 23
+    }
+  },
+  "schema": "lns2.portable_pairwise_equivalence.v1",
+  "schema_version": 1
+}

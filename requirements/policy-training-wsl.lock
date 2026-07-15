@@ -1,0 +1,6 @@
+# Optional training/audit environment. Closed-loop inference does not require these packages.
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.0
+joblib==1.4.2
+threadpoolctl==3.5.0
