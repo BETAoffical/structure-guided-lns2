@@ -480,6 +480,7 @@ def build_ranking_index(
     expected_outcomes: int | None = 3296,
     expected_trials: int = 8,
     expected_maps: int | None = 6,
+    expected_split: str = "probe",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     root = Path(collection).resolve()
     run_config = _read_json(root / "run_config.json")
@@ -493,11 +494,13 @@ def build_ranking_index(
         {
             str(row.get("split", "unknown"))
             for row in candidate_rows
-            if str(row.get("split", "unknown")) != "probe"
+            if str(row.get("split", "unknown")) != expected_split
         }
     )
     if forbidden_splits:
-        raise ValueError(f"ranking audit contains Test/OOD or non-probe splits: {forbidden_splits}")
+        raise ValueError(
+            f"ranking audit contains Test/OOD or non-{expected_split} splits: {forbidden_splits}"
+        )
     manifest_by_state: dict[str, dict[str, Any]] = {}
     outcomes_by_key: dict[tuple[str, str], list[dict[str, Any]]] = collections.defaultdict(list)
     total_outcomes = 0

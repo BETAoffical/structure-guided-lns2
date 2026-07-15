@@ -29,6 +29,15 @@ struct RepairAction
     vector<int> agents;
 };
 
+struct RepairProposal
+{
+    RepairAction requested_action;
+    RepairHeuristic applied_heuristic = RepairHeuristic::COLLISION;
+    vector<int> neighborhood;
+    bool action_valid = false;
+    bool generated = false;
+};
+
 struct RepairAgentState
 {
     int id = -1;

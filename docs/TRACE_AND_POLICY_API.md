@@ -35,6 +35,23 @@ Seed actions must reference a currently conflicting agent. Explicit sets must co
 and touch the current conflict graph. Invalid external actions fall back to official selection and expose
 `action_valid=false`.
 
+## Proposal-only result
+
+`LNS2RepairEnv.propose(action)` generates an agent set without running PP/SIPPS repair. It accepts only
+fixed `seed` actions using `target`, `collision`, or `random`, with a positive neighborhood size and an
+explicit non-negative `random_seed`. Invalid proposal requests return `action_valid=false` and never
+fall back to Adaptive.
+
+The result contains the requested/applied heuristic, requested random seed, validity, generation status,
+and concrete `neighborhood`. Paths, conflicts, iteration, low-level counters, ALNS weights, observers,
+and the last repair transition remain unchanged. The implementation restores its complete internal
+`Neighbor` snapshot before returning.
+
+MAPF-LNS2 uses the process-global C `rand()` stream. A proposal therefore resets and consumes that
+stream even though logical solver state is unchanged. Controllers must provide a seed for every proposal
+and for the subsequent explicit-neighborhood repair. Official execution is unchanged when `propose()` is
+not called.
+
 ## Step result
 
 `step()` returns `observation`, `metrics`, `terminated`, and `truncated`. Metrics contain requested and

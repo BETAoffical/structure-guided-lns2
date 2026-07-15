@@ -62,6 +62,8 @@ target_link_libraries(lns2_interface_tests PRIVATE mapf_lns2_core)
 target_compile_definitions(lns2_interface_tests PRIVATE
     TEST_MAP="${MAPF_LNS2_ROOT}/random-32-32-20.map"
     TEST_SCEN="${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    PROPOSAL_TEST_MAP="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/proposal_required.map"
+    PROPOSAL_TEST_SCEN="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/proposal_required.scen"
 )
 add_test(NAME lns2_interface_tests COMMAND lns2_interface_tests)
 add_test(NAME lns2_repair_smoke COMMAND lns2_repair

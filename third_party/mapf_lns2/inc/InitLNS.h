@@ -19,6 +19,7 @@ public:
     bool initialize();
     bool step();
     bool step(const RepairAction& action);
+    RepairProposal proposeNeighborhood(const RepairAction& action);
     bool run();
     bool isInitialized() const { return initialized; }
     bool isFeasible() const { return initialized && num_of_colliding_pairs == 0; }

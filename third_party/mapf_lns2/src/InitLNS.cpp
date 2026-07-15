@@ -4,6 +4,20 @@
 #include "GCBS.h"
 #include "PBS.h"
 
+namespace
+{
+class NeighborSnapshot
+{
+public:
+    explicit NeighborSnapshot(Neighbor& value) : target(value), saved(value) {}
+    ~NeighborSnapshot() { target = std::move(saved); }
+
+private:
+    Neighbor& target;
+    Neighbor saved;
+};
+}
+
 InitLNS::InitLNS(const Instance& instance, vector<Agent>& agents, double time_limit,
          const string & replan_algo_name, const string & init_destory_name, int neighbor_size, int screen,
          NeighborhoodPolicy* policy, RepairObserver* observer, int max_repair_iterations) :
@@ -77,6 +91,44 @@ bool InitLNS::step()
     if (policy != nullptr)
         action = policy->choose(getRepairState());
     return step(action);
+}
+
+RepairProposal InitLNS::proposeNeighborhood(const RepairAction& action)
+{
+    RepairProposal proposal;
+    proposal.requested_action = action;
+    proposal.applied_heuristic = action.heuristic;
+    if (!initialized || isDone() || action.mode != RepairActionMode::SEED ||
+        action.heuristic == RepairHeuristic::ADAPTIVE || action.random_seed < 0 ||
+        action.neighborhood_size <= 0 || action.seed_agent < 0 ||
+        action.seed_agent >= (int)agents.size() || collision_graph[action.seed_agent].empty())
+        return proposal;
+
+    NeighborSnapshot restore_neighbor(neighbor);
+    srand(action.random_seed);
+    bool generated = false;
+    switch (action.heuristic)
+    {
+        case RepairHeuristic::TARGET:
+            generated = generateNeighborByTarget(action.seed_agent, action.neighborhood_size);
+            break;
+        case RepairHeuristic::COLLISION:
+            generated = generateNeighborByCollisionGraph(action.seed_agent, action.neighborhood_size);
+            break;
+        case RepairHeuristic::RANDOM:
+            generated = generateNeighborRandomly(action.seed_agent, action.neighborhood_size);
+            break;
+        case RepairHeuristic::ADAPTIVE:
+            break;
+    }
+    proposal.action_valid = true;
+    proposal.generated = generated && !neighbor.agents.empty();
+    if (proposal.generated)
+    {
+        proposal.neighborhood = neighbor.agents;
+        std::sort(proposal.neighborhood.begin(), proposal.neighborhood.end());
+    }
+    return proposal;
 }
 
 bool InitLNS::step(const RepairAction& action)

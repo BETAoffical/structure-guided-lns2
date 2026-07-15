@@ -72,6 +72,33 @@ class RepairEnvironmentTests(unittest.TestCase):
         self.assertEqual(sorted(result["metrics"]["neighborhood"]), sorted(edge))
         self.assertNotIn("reward", result)
 
+    def test_proposal_is_deterministic_and_does_not_change_state(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"] or not state["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        seed_agent = state["conflict_edges"][0][0]
+        action = {
+            "mode": "seed",
+            "heuristic": "collision",
+            "seed_agent": seed_agent,
+            "neighborhood_size": 8,
+            "random_seed": 31002,
+        }
+        first = env.propose(action)
+        second = env.propose(action)
+        self.assertTrue(first["action_valid"])
+        self.assertTrue(first["generated"])
+        self.assertEqual(first["neighborhood"], second["neighborhood"])
+        self.assertEqual(state, env.get_state())
+
+        result = env.step(action)
+        self.assertEqual(first["neighborhood"], result["metrics"]["neighborhood"])
+
+        invalid = env.propose({**action, "heuristic": "adaptive"})
+        self.assertFalse(invalid["action_valid"])
+        self.assertFalse(invalid["generated"])
+
 
 if __name__ == "__main__":
     unittest.main()

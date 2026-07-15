@@ -121,6 +121,19 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["step_runtime"] = transition.runtime_after - transition.runtime_before;
     return result;
 }
+
+py::dict proposalToPython(const RepairProposal& proposal)
+{
+    py::dict result;
+    result["requested_mode"] = repairActionModeName(proposal.requested_action.mode);
+    result["requested_heuristic"] = repairHeuristicName(proposal.requested_action.heuristic);
+    result["requested_random_seed"] = proposal.requested_action.random_seed;
+    result["applied_heuristic"] = repairHeuristicName(proposal.applied_heuristic);
+    result["action_valid"] = proposal.action_valid;
+    result["generated"] = proposal.generated;
+    result["neighborhood"] = proposal.neighborhood;
+    return result;
+}
 }
 
 class LNS2RepairEnv
@@ -176,6 +189,13 @@ public:
         return result;
     }
 
+    py::dict propose(const py::dict& action_value)
+    {
+        if (!solver)
+            throw std::runtime_error("reset() must be called before propose()");
+        return proposalToPython(solver->proposeNeighborhood(parseAction(action_value)));
+    }
+
     py::dict getState() const
     {
         if (!solver)
@@ -209,6 +229,7 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("use_sipp") = true, py::arg("max_repair_iterations") = 0,
              py::arg("screen") = 0, py::arg("context") = py::dict())
         .def("reset", &LNS2RepairEnv::reset, py::arg("seed") = 0)
+        .def("propose", &LNS2RepairEnv::propose, py::arg("action"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
         .def("get_state", &LNS2RepairEnv::getState);
 }

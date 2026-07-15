@@ -215,6 +215,14 @@ direction is therefore dynamic-state plus concrete-neighborhood ranking; the sta
 RL remain paused. See
 [`docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`](docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md).
 
+The next registered stage is implemented by `scripts/collect_realized_ranking_confirmation.py` and
+`scripts/run_realized_ranking_confirmation.py`. A proposal-only native API generates candidate agent
+sets without paying for discarded PP/SIPPS repairs. Fixed all-development rankers are then evaluated on
+12 newly seeded maps with complete balanced/bottleneck and 80/100-agent pairing. Confirmation labels
+cannot train or tune the frozen models, static context is exploratory only, and RL remains gated on the
+independent result. See
+[`docs/REALIZED_RANKING_CONFIRMATION.md`](docs/REALIZED_RANKING_CONFIRMATION.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
