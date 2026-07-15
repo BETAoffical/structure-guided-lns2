@@ -943,6 +943,8 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _job_label(job: dict[str, Any]) -> str:
+    if "job_id" in job:
+        return str(job["job_id"])
     if "manifest" in job:
         return str(job["manifest"]["episode_id"])
     row = job["row"]
@@ -965,6 +967,14 @@ def _failed_job_result(
         "status": status,
         "error": message,
     }
+    for key in (
+        "job_id",
+        "state_id",
+        "candidate_id",
+        "evaluation_trial_index",
+    ):
+        if key in job:
+            common[key] = job[key]
     if "manifest" in job:
         manifest = job["manifest"]
         output_root = Path(job["output_root"])

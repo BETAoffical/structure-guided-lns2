@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "development_collection": "build/initlns-realized-neighborhood-stability-probe-v1",
+  "development_audit": "build/initlns-realized-neighborhood-ranking-audit-v1",
+  "expected_development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
+  "expected_development_report_sha256": "99eacd47419f9ca6046b8d92a6ef41b1a54496b96e233114629ca04d023da0f9",
+  "expected_split": "confirmation_v2",
+  "evaluation_trials": 8,
+  "minimum_nonzero_states": 30,
+  "minimum_active_maps": 10,
+  "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+  "bootstrap_samples": 2000,
+  "model": {
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "l2_regularization": 0.1
+  },
+  "thresholds": {
+    "minimum_top1_gain": 0.05,
+    "minimum_conflict_regret_reduction": 0.05,
+    "minimum_map_fraction_no_worse": 0.6666666666666666,
+    "maximum_size_share": 0.8
+  }
+}

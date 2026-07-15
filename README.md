@@ -223,8 +223,14 @@ cannot train or tune the frozen models, static context is exploratory only, and 
 independent result. See
 [`docs/REALIZED_RANKING_CONFIRMATION.md`](docs/REALIZED_RANKING_CONFIRMATION.md).
 The first two qualification-only generations stopped at 10/12 and 11/12 paired-map coverage,
-respectively; no independent repair outcomes were collected. The next data revision will use fixed maps
-and a deterministic task-seed qualification pool instead of further global pressure tuning.
+respectively; no independent repair outcomes were collected. A proposed task-seed qualification pool was
+rejected because it would select away the layout-dependent conflict distribution the project needs to
+measure.
+
+The replacement natural-distribution confirmation keeps zero-conflict tasks as successful PP outcomes and
+keeps high-conflict tasks as repair states. The inspected 12-map set is a Pilot only; a new 12-map formal
+set uses fixed frozen rankers and per-trial timeout/resume isolation. See
+[`docs/NATURAL_DISTRIBUTION_CONFIRMATION.md`](docs/NATURAL_DISTRIBUTION_CONFIRMATION.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
