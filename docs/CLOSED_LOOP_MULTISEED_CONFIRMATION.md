@@ -50,6 +50,33 @@ more expensive than Adaptive. Static map/OD/density context is excluded, so succ
 realized-neighborhood control across same-family maps and solver randomness, not the original static
 transfer hypothesis or OOD generalization.
 
+## Result
+
+The registered confirmation passed. Qualification produced 144/144 valid resets, 121 repairable
+task-seeds and 23 direct PP successes. All 12 maps contributed repair states, the three solver seeds
+provided 42, 37 and 42 repairable states, and no complete initial-fingerprint vector was duplicated.
+
+Both policies solved 144/144 episodes with zero timeout, invalid action, fingerprint mismatch or
+unexplained error. On the 121 paired repairable episodes, `realized_dynamic` reduced mean fixed 100-step
+conflict AUC from 90.256 to 42.835, a 52.5% improvement. It was no worse on 11/12 maps; the 5,000-sample
+map-level bootstrap 95% interval for relative improvement was [37.4%, 57.1%]. The AUC improvement also
+held separately for solver seeds 1, 2 and 3 at 63.2%, 41.6% and 50.1%, respectively.
+
+The controller did not improve wall time. Mean capped time to feasibility increased from 0.273s to
+0.715s, and it was slower on every map. The result therefore confirms that the frozen dynamic
+realized-neighborhood policy makes substantially better conflict-reduction decisions across unseen
+same-family maps and three independent solver streams, but not that it is a faster deployed solver.
+Static map, OD and density context was not used, so this experiment does not establish the original
+static-context transfer or OOD claim.
+
+The pre-registered decision is `advance_to_policy_visited_data_and_rl_warm_start`: collect labels at
+states reached by the frozen policy, quantify closed-loop distribution shift, and use the validated
+dynamic ranker as a supervised warm start. Static-context claims remain paused unless a later independent
+ablation supplies positive evidence.
+
+The ignored formal report is stored under `build/initlns-closed-loop-multiseed-v1-report`; its JSON SHA256
+is `210fbf10aba04d1e64493d1bd26878eaa6c7e97fec860eef378f139741336840`.
+
 ## Commands
 
 ```powershell
