@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "study_role": "development",
+  "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
+  "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
+  "feature_profiles": ["proposal_dynamic", "realized_dynamic"],
+  "inverse_layout_weighting_sensitivity": true,
+  "model_parameters": {
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "l2_regularization": 0.1,
+    "random_state": 20260714
+  },
+  "bootstrap_samples": 5000,
+  "thresholds": {
+    "minimum_top1_improvement": 0.03,
+    "minimum_conflict_regret_improvement": 0.05,
+    "maximum_top1_degradation": 0.02,
+    "maximum_conflict_regret_degradation": 0.05,
+    "maximum_single_size_share": 0.80,
+    "minimum_closed_loop_auc_improvement_over_adaptive": 0.05,
+    "maximum_closed_loop_auc_degradation_from_v1": 0.05,
+    "minimum_validation_maps_no_worse_than_v1": 4
+  }
+}

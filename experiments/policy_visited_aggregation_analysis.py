@@ -97,6 +97,12 @@ def _validate_analysis_config(config: dict[str, Any]) -> None:
         raise ValueError("pairwise model parameters differ from the registered learner")
     if int(config.get("bootstrap_samples", 0)) != 5000:
         raise ValueError("analysis requires 5,000 map bootstrap samples")
+    if "inverse_layout_weighting_sensitivity" in config and not isinstance(
+        config["inverse_layout_weighting_sensitivity"], bool
+    ):
+        raise ValueError("inverse layout weighting sensitivity must be boolean")
+    if "study_role" in config and str(config["study_role"]) != "development":
+        raise ValueError("policy-visited aggregate training study_role must be development")
 
 
 def _feature_names(rows: list[dict[str, Any]], profile: str) -> list[str]:
@@ -107,6 +113,8 @@ def train_equal_state_pairwise_model(
     rows: list[dict[str, Any]],
     profile: str,
     model_parameters: dict[str, Any],
+    *,
+    state_weight_multipliers: dict[str, float] | None = None,
 ) -> tuple[PairwiseModel, dict[str, Any]]:
     import numpy as np
     from sklearn.ensemble import HistGradientBoostingClassifier
@@ -127,7 +135,10 @@ def train_equal_state_pairwise_model(
         if not pairs:
             continue
         state_pair_counts[state_id] = len(pairs)
-        state_example_weight = 1.0 / (2.0 * len(pairs))
+        multiplier = float((state_weight_multipliers or {}).get(state_id, 1.0))
+        if not math.isfinite(multiplier) or multiplier <= 0.0:
+            raise ValueError(f"invalid state weight multiplier for {state_id}")
+        state_example_weight = multiplier / (2.0 * len(pairs))
         for left, right, label in pairs:
             examples.append(_pair_vector(left, right, profile, names))
             labels.append(label)
@@ -159,6 +170,28 @@ def train_equal_state_pairwise_model(
             math.isclose(value, 1.0, rel_tol=0.0, abs_tol=1e-12)
             for value in state_weights.values()
         ),
+        "state_weighting": (
+            "custom" if state_weight_multipliers is not None else "equal_state"
+        ),
+    }
+
+
+def inverse_layout_state_weights(rows: list[dict[str, Any]]) -> dict[str, float]:
+    state_layout = {}
+    for row in rows:
+        state_id = str(row["state_id"])
+        layout = str(row.get("layout_mode", "unknown"))
+        existing = state_layout.setdefault(state_id, layout)
+        if existing != layout:
+            raise ValueError(f"state {state_id} has multiple layout labels")
+    counts = collections.Counter(state_layout.values())
+    if not counts:
+        raise ValueError("cannot calculate layout weights without states")
+    total = len(state_layout)
+    layout_count = len(counts)
+    return {
+        state_id: total / (layout_count * counts[layout])
+        for state_id, layout in state_layout.items()
     }
 
 
@@ -318,6 +351,17 @@ def run_policy_visited_training(
     run_config = _read_json(collection_root / "run_config.json")
     if str(run_config.get("schema")) != POLICY_VISITED_SCHEMA:
         raise ValueError("training source is not a policy-visited collection")
+    collection_role = str(
+        run_config.get("configuration", {}).get("study_role", "legacy_confirmation")
+    )
+    analysis_role = str(config.get("study_role", collection_role))
+    if collection_role != analysis_role:
+        raise ValueError("analysis and collection study roles differ")
+    qualification = _read_json(collection_root / "qualification_report.json")
+    if not bool(qualification.get("passed")):
+        raise ValueError("training source qualification did not pass")
+    if str(qualification.get("study_role", collection_role)) != collection_role:
+        raise ValueError("qualification and collection study roles differ")
     index, integrity = build_policy_visited_index(collection_root)
     if not integrity["passed"] or integrity["forbidden_split_rows"]:
         raise ValueError("policy-visited index integrity failed")
@@ -360,6 +404,30 @@ def run_policy_visited_training(
         models[profile] = model
         model_paths[profile] = path
         diagnostics[profile] = {**diagnostic, "model_sha256": _sha256(path)}
+    sensitivity_diagnostics = {}
+    sensitivity_paths = {}
+    if bool(config.get("inverse_layout_weighting_sensitivity", False)):
+        layout_weights = inverse_layout_state_weights(train_rows)
+        for profile in ALLOWED_PROFILES:
+            model, diagnostic = train_equal_state_pairwise_model(
+                train_rows,
+                profile,
+                dict(config["model_parameters"]),
+                state_weight_multipliers=layout_weights,
+            )
+            path = (
+                output_root
+                / "sensitivity"
+                / f"pairwise_inverse_layout__{profile}.pkl"
+            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("wb") as stream:
+                pickle.dump(model, stream)
+            sensitivity_paths[profile] = path
+            sensitivity_diagnostics[profile] = {
+                **diagnostic,
+                "model_sha256": _sha256(path),
+            }
     training_metadata = {
         "schema": ANALYSIS_SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -372,6 +440,14 @@ def run_policy_visited_training(
         "validation_state_count": len({str(row["state_id"]) for row in validation}),
         "model_parameters": dict(config["model_parameters"]),
         "validation_labels_used_for_training": False,
+        "study_role": collection_role,
+        "qualification_report_sha256": _sha256(
+            collection_root / "qualification_report.json"
+        ),
+        "primary_state_weighting": "equal_state",
+        "inverse_layout_weighting_is_sensitivity_only": bool(
+            sensitivity_paths
+        ),
     }
     portable_root = output_root / "portable"
     manifest, equivalence = export_aggregated_portable_bundle(
@@ -424,6 +500,15 @@ def run_policy_visited_training(
         "train_candidate_count": len(train_rows),
         "validation_candidate_count": len(validation),
         "model_diagnostics": diagnostics,
+        "sensitivity_model_diagnostics": sensitivity_diagnostics,
+        "sensitivity_models": {
+            profile: {
+                "model_file": path.relative_to(output_root).as_posix(),
+                "model_sha256": _sha256(path),
+                "eligible_for_deployment": False,
+            }
+            for profile, path in sorted(sensitivity_paths.items())
+        },
         "portable_equivalence": equivalence,
         "registration_sha256": _sha256(output_root / "model_registration.json"),
     }
@@ -670,9 +755,18 @@ def run_offline_policy_visited_analysis(
     collection_config = dict(collection_run["configuration"])
     v1_bundle = _native_v1_bundle(collection_config, project_root)
     v2_models = {}
+    sensitivity_models = {}
     for profile in ALLOWED_PROFILES:
         with (training_root / "models" / f"pairwise__{profile}.pkl").open("rb") as stream:
             v2_models[profile] = pickle.load(stream)
+        sensitivity_path = (
+            training_root
+            / "sensitivity"
+            / f"pairwise_inverse_layout__{profile}.pkl"
+        )
+        if sensitivity_path.is_file():
+            with sensitivity_path.open("rb") as stream:
+                sensitivity_models[profile] = pickle.load(stream)
     records = {}
     summaries = {}
     pairwise = {}
@@ -687,6 +781,17 @@ def run_offline_policy_visited_analysis(
         pairwise[v2_name] = pairwise_accuracy(validation, v2_models[profile])
         summaries[v1_name] = summarize_records(records[v1_name], pairwise[v1_name])
         summaries[v2_name] = summarize_records(records[v2_name], pairwise[v2_name])
+        if profile in sensitivity_models:
+            sensitivity_name = f"sensitivity_inverse_layout_{profile}"
+            records[sensitivity_name] = _evaluate_any_model(
+                validation, sensitivity_models[profile], sensitivity_name
+            )
+            pairwise[sensitivity_name] = pairwise_accuracy(
+                validation, sensitivity_models[profile]
+            )
+            summaries[sensitivity_name] = summarize_records(
+                records[sensitivity_name], pairwise[sensitivity_name]
+            )
     bootstrap = _map_bootstrap_offline(
         records["v1_realized_dynamic"],
         records["v2_realized_dynamic"],
@@ -744,6 +849,7 @@ def run_offline_policy_visited_analysis(
         "oracle_size_support": oracle,
         "distribution_shift": shift,
         "offline_acceptance": acceptance,
+        "sensitivity_models_control_acceptance": False,
         "validation_labels_used_for_training": False,
         "static_context_used": False,
     }
@@ -1089,6 +1195,7 @@ def run_final_policy_visited_analysis(
 __all__ = [
     "closed_loop_v2_acceptance",
     "export_aggregated_portable_bundle",
+    "inverse_layout_state_weights",
     "offline_acceptance",
     "run_final_policy_visited_analysis",
     "run_offline_policy_visited_analysis",

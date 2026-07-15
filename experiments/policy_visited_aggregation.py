@@ -59,6 +59,11 @@ POLICY_VISITED_OUTCOME_SCHEMA = "lns2.policy_visited_outcome.v1"
 POLICY_VISITED_INDEX_SCHEMA = "lns2.policy_visited_ranking_index.v1"
 ALLOWED_PROFILES = ("proposal_dynamic", "realized_dynamic")
 SOURCE_POLICIES = ("official_adaptive", "realized_dynamic")
+QUALIFICATION_MODES = (
+    "strict_layout_coverage",
+    "natural_distribution_development",
+    "natural_distribution_confirmation",
+)
 IMPLEMENTATION_FILES = (
     "experiments/policy_visited_aggregation.py",
     "experiments/closed_loop_confirmation.py",
@@ -152,6 +157,22 @@ def _validate_config(config: dict[str, Any]) -> None:
             raise ValueError(f"{name} must be positive")
     if int(config.get("workers", 0)) <= 0:
         raise ValueError("workers must be positive")
+    qualification = dict(config.get("qualification", {}))
+    mode = str(qualification.get("mode", "strict_layout_coverage"))
+    if mode not in QUALIFICATION_MODES:
+        raise ValueError(f"unsupported qualification mode: {mode}")
+    if mode == "natural_distribution_development" and str(
+        config.get("study_role")
+    ) != "development":
+        raise ValueError("natural distribution development requires study_role=development")
+    for field in (
+        "minimum_nonzero_by_split",
+        "minimum_nonzero_per_layout",
+        "minimum_active_maps",
+    ):
+        values = dict(qualification.get(field, {}))
+        if set(values) != set(splits) or any(int(value) < 0 for value in values.values()):
+            raise ValueError(f"qualification {field} must cover both splits")
 
 
 def policy_visited_dataset_design(
@@ -246,6 +267,10 @@ def policy_visited_qualification_report(
         if fingerprints_by_seed[left] == fingerprints_by_seed[right]
     ]
     thresholds = dict(config["qualification"])
+    mode = str(thresholds.get("mode", "strict_layout_coverage"))
+    if mode not in QUALIFICATION_MODES:
+        raise ValueError(f"unsupported qualification mode: {mode}")
+    study_role = str(config.get("study_role", "legacy_confirmation"))
     gates = {
         "dataset_design": bool(design["passed"]),
         "seed_isolation": bool(isolation["passed"]),
@@ -266,16 +291,49 @@ def policy_visited_qualification_report(
             for layout in layouts
         )
     passed = all(gates.values()) if formal else not errors
+    if passed:
+        decision = (
+            "eligible_for_development_collection"
+            if mode == "natural_distribution_development"
+            else "eligible_for_independent_confirmation"
+            if mode == "natural_distribution_confirmation"
+            else "eligible_for_policy_visited_collection"
+        )
+    else:
+        decision = (
+            "inconclusive_development_sample_do_not_resample"
+            if mode == "natural_distribution_development"
+            else "inconclusive_confirmation_sample_do_not_resample"
+            if mode == "natural_distribution_confirmation"
+            else "inconclusive_sample_do_not_resample"
+        )
+    conflict_summaries = {}
+    repairable_rates = {}
+    for split in map(str, config["splits"]):
+        for layout in sorted(config["dataset_design"]["layout_counts"][split]):
+            key = f"{split}/{layout}"
+            values = [
+                int(row.get("initial_conflicts", 0))
+                for row in valid
+                if str(row["split"]) == split and str(row["layout_mode"]) == layout
+            ]
+            conflict_summaries[key] = _number_summary(values)
+            repairable_rates[key] = (
+                sum(value > 0 for value in values) / len(values) if values else 0.0
+            )
     return {
         "schema": POLICY_VISITED_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "formal": formal,
-        "passed": passed,
-        "decision": (
-            "eligible_for_policy_visited_collection"
-            if passed
-            else "inconclusive_sample_do_not_resample"
+        "qualification_mode": mode,
+        "study_role": study_role,
+        "confirmation_evidence": bool(
+            passed
+            and study_role != "development"
+            and mode != "natural_distribution_development"
         ),
+        "passed": passed,
+        "decision": decision,
         "gates": gates,
         "expected_reset_count": len(dataset_rows) * len(seeds),
         "valid_count": len(valid),
@@ -287,6 +345,8 @@ def policy_visited_qualification_report(
             for split in map(str, config["splits"])
             for layout in sorted(config["dataset_design"]["layout_counts"][split])
         },
+        "repairable_rate_by_split_layout": repairable_rates,
+        "initial_conflicts_by_split_layout": conflict_summaries,
         "active_maps": active_maps,
         "duplicate_solver_seed_trajectories": duplicate_streams,
         "repairable_task_seeds": sorted(

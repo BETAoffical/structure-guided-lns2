@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "study_role": "independent_confirmation",
+  "dataset_master_seed": 20270421,
+  "splits": ["policy_confirmation"],
+  "solver_seeds": [1, 2, 3],
+  "dataset_design": {
+    "tasks_per_map": 4,
+    "task_variants": ["balanced_80", "balanced_100", "bottleneck_80", "bottleneck_100"],
+    "layout_counts": {
+      "policy_confirmation": {
+        "regular_beltway": 2,
+        "compartmentalized": 2,
+        "dead_end_aisles": 2
+      }
+    }
+  },
+  "qualification": {
+    "mode": "natural_distribution_confirmation",
+    "minimum_nonzero_by_split": {"policy_confirmation": 36},
+    "minimum_nonzero_per_layout": {"policy_confirmation": 8},
+    "minimum_active_maps": {"policy_confirmation": 5}
+  },
+  "environment": {
+    "time_limit": 300.0,
+    "max_repair_iterations": 100,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "proposal": {
+    "max_seed_agents": 4,
+    "heuristics": ["target", "collision", "random"],
+    "neighborhood_sizes": [4, 8, 16],
+    "trials": 8,
+    "candidates_per_family": 2
+  },
+  "max_decisions": 100,
+  "metric_iteration_budget": 100,
+  "wall_time_budget_seconds": 300.0,
+  "episode_process_timeout_seconds": 360.0,
+  "workers": 4,
+  "bootstrap_samples": 5000,
+  "thresholds": {
+    "minimum_closed_loop_auc_improvement_over_adaptive": 0.05,
+    "maximum_closed_loop_auc_degradation_from_v1": 0.05,
+    "minimum_validation_maps_no_worse_than_v1": 4
+  },
+  "reference_datasets": [
+    "build/repair-transfer-pilot-v2",
+    "build/initlns-independent-layout-probe-v1",
+    "build/initlns-realized-ranking-confirmation-v1b",
+    "build/initlns-natural-distribution-confirmation-v1",
+    "build/initlns-closed-loop-confirmation-v1",
+    "build/initlns-closed-loop-multiseed-v1",
+    "build/initlns-policy-visited-v1"
+  ]
+}
