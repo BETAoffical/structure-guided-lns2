@@ -48,3 +48,8 @@ generation or a return to seed/rule/size-only control.
 
 WSL performs collection with the dependency-free portable model. Supervised fitting uses the existing
 Windows scikit-learn 1.5.0 installation; this stage installs no package.
+
+Pre-data amendment: implementation review found that the historical pairwise learner fixes
+`MODEL_SEED=20260714`; the initial registered analysis JSON contained `20260829`. Before generating a map,
+reset or label, the configuration was corrected to `20260714` so aggregation reuses the original learner
+randomness rather than silently introducing a new training setting.
