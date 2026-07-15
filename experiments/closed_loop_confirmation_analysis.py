@@ -41,6 +41,7 @@ def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for row in repairable:
         size_counts.update(dict(row["summary"].get("selected_size_counts", {})))
         family_counts.update(dict(row["summary"].get("selected_family_counts", {})))
+    low_level_keys = ("expanded", "generated", "reopened", "runs")
     return {
         "episode_count": len(rows),
         "valid_count": len(valid),
@@ -58,6 +59,13 @@ def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_repair_iterations": _mean(
             row["summary"]["repair_iterations"] for row in repairable
         ),
+        "mean_final_low_level": {
+            key: _mean(
+                row["summary"].get("final_low_level", {}).get(key, 0)
+                for row in repairable
+            )
+            for key in low_level_keys
+        },
         "selected_size_counts": dict(sorted(size_counts.items())),
         "selected_family_counts": dict(sorted(family_counts.items())),
         "invalid_action_count": sum(
@@ -80,6 +88,27 @@ def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "controller_inference_seconds": sum(
             float(row["summary"].get("controller_totals", {}).get("inference_seconds", 0.0))
             for row in valid
+        ),
+        "mean_repair_wall_seconds": _mean(
+            row.get("trace_timing", {}).get("repair_wall_seconds", 0.0)
+            for row in repairable
+        ),
+        "mean_controller_before_repair_seconds": _mean(
+            row.get("trace_timing", {}).get("controller_before_repair_seconds", 0.0)
+            for row in repairable
+        ),
+        "mean_other_wall_seconds": _mean(
+            max(
+                0.0,
+                float(row["summary"]["capped_wall_time_to_feasible"])
+                - float(row.get("trace_timing", {}).get("repair_wall_seconds", 0.0))
+                - float(
+                    row.get("trace_timing", {}).get(
+                        "controller_before_repair_seconds", 0.0
+                    )
+                ),
+            )
+            for row in repairable
         ),
         "mean_selected_feature_outside_fraction": _mean(
             row["summary"].get("mean_selected_feature_outside_fraction", 0.0)
@@ -320,6 +349,25 @@ def run_closed_loop_analysis(
     manifests = {
         policy: _read_jsonl(root / f"{policy}_manifest.jsonl") for policy in POLICIES
     }
+    for rows in manifests.values():
+        for row in rows:
+            if str(row.get("status")) not in {"ok", "resumed"}:
+                continue
+            events = _read_jsonl(root / str(row["trace_file"]))
+            transitions = [event for event in events if event.get("event") == "transition"]
+            row["trace_timing"] = {
+                "repair_wall_seconds": sum(
+                    float(event.get("repair_wall_seconds", 0.0)) for event in transitions
+                ),
+                "controller_before_repair_seconds": sum(
+                    float(
+                        event.get("controller", {}).get(
+                            "controller_seconds_before_repair", 0.0
+                        )
+                    )
+                    for event in transitions
+                ),
+            }
     summaries = {policy: summarize_policy(rows) for policy, rows in manifests.items()}
     expected_episodes = int(config["expected_policy_episodes"])
     for policy, summary in summaries.items():

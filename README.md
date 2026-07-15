@@ -237,10 +237,12 @@ to 43.9% and reduced remaining-conflict regret by 33.8%, passing every primary g
 showed no incremental benefit, so the next gate is a fresh-map closed-loop test of the dynamic realized
 ranker; RL remains paused.
 
-The registered closed-loop stage is implemented by `scripts/collect_closed_loop_confirmation.py`. It
-compares official Adaptive with frozen proposal-only and realized-neighborhood rankers on 24 tasks from
-six new maps. Candidate generation, feature extraction and inference are included in the end-to-end time
-budget, and failed episodes remain in fixed-budget metrics. See
+The completed closed-loop stage compares official Adaptive with frozen proposal-only and
+realized-neighborhood rankers on 24 tasks from six new maps. All policies solved 24/24 tasks. The realized
+ranker reduced fixed-budget conflict AUC by 57.3%, repair iterations by 43.8%, and generated nodes by
+19.4%, passing every registered gate on all six maps. Its exhaustive candidate controller was still much
+slower in wall time (13.44s versus 0.42s), so this is evidence for better sequential decisions rather than
+a deployed speedup. See
 [`docs/CLOSED_LOOP_CONFIRMATION.md`](docs/CLOSED_LOOP_CONFIRMATION.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.

@@ -28,6 +28,7 @@ from experiments.closed_loop_confirmation import (
 from experiments.closed_loop_confirmation_analysis import (
     closed_loop_acceptance,
     compare_policies,
+    summarize_policy,
 )
 from experiments.realized_neighborhood_ranking_audit import _feature_profiles
 from experiments.local_representation_audit import analyze_state
@@ -423,6 +424,27 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             report["metrics"]["fixed_budget_conflict_auc"]["relative_improvement"],
             0.2,
         )
+
+    def test_policy_summary_reports_low_level_work(self) -> None:
+        row = {
+            "status": "ok",
+            "summary": {
+                "repairable": True,
+                "success": True,
+                "fixed_budget_conflict_auc": 2.0,
+                "capped_wall_time_to_feasible": 1.0,
+                "conflict_auc": 2.0,
+                "repair_iterations": 1,
+                "final_low_level": {
+                    "expanded": 10,
+                    "generated": 20,
+                    "reopened": 1,
+                    "runs": 4,
+                },
+            },
+        }
+        summary = summarize_policy([row])
+        self.assertEqual(summary["mean_final_low_level"]["generated"], 20.0)
 
     def test_acceptance_requires_success_and_one_complete_metric_gate(self) -> None:
         common = {

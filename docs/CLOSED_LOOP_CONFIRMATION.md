@@ -73,3 +73,32 @@ Before formal collection, the historical 619-conflict task is used for a two-ste
 
 Passing permits policy-visited counterfactual collection and RL warm-start work. Failure keeps RL paused
 and is diagnosed using candidate coverage, feature-range shift and trajectory divergence.
+
+## Formal result
+
+The unfiltered formal cohort passed qualification. All 24 resets were valid, three beltway tasks were
+already feasible, and 21 tasks required repair. Every map contributed repair states. Initial conflicts
+ranged from zero to 98, with 14 low, seven medium and three high-severity tasks.
+
+All three policies solved 24/24 tasks with zero errors, timeouts, invalid actions or initial-fingerprint
+mismatches. The primary `realized_dynamic` policy passed every registered gate:
+
+- fixed-budget conflict AUC fell from 115.12 for Adaptive to 49.21, a 57.25% improvement;
+- all six maps were no worse than Adaptive, and the map-bootstrap 95% improvement interval was
+  `[44.66%, 61.07%]`;
+- mean repair iterations fell from 12.71 to 7.14;
+- mean low-level generated nodes fell by 19.37%, expanded nodes by 23.55%, reopened nodes by 30.07%, and
+  low-level runs by 8.68% relative to Adaptive;
+- `realized_dynamic` also improved AUC by 16.95% over the `proposal_dynamic` ablation.
+
+This is not yet a wall-clock speedup. Mean end-to-end time on repairable tasks rose from 0.42 seconds for
+Adaptive to 13.44 seconds for `realized_dynamic`. Of the learned-policy time, 13.11 seconds was spent
+before repair in candidate control and only 0.13 seconds in the selected low-level repair. The dominant
+cost is the deliberately exhaustive 288-proposal pool and repeated full-state invariance checks, not
+SIPPS or GBDT inference alone.
+
+The registered decision is `advance_to_policy_visited_data_and_rl_warm_start`. The result establishes that
+the frozen dynamic realized-neighborhood policy produces substantially better sequential conflict
+trajectories on fresh maps. It does not establish a practical runtime gain, static-context transfer, OOD
+generalization, or an RL result. The next stage must collect policy-visited states and reduce candidate
+control overhead before claiming faster time to feasibility.
