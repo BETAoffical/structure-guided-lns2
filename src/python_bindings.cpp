@@ -53,10 +53,10 @@ public:
         }
     }
 
-    vector<double> predictPositive(const vector<vector<double>>& vectors) const
+    vector<double> predictRaw(const vector<vector<double>>& vectors) const
     {
-        vector<double> probabilities;
-        probabilities.reserve(vectors.size());
+        vector<double> predictions;
+        predictions.reserve(vectors.size());
         for (const auto& values : vectors)
         {
             double raw = baseline;
@@ -75,6 +75,16 @@ public:
                 }
                 raw += nodes.at(index).value;
             }
+            predictions.push_back(raw);
+        }
+        return predictions;
+    }
+
+    vector<double> predictPositive(const vector<vector<double>>& vectors) const
+    {
+        vector<double> probabilities;
+        for (const double raw : predictRaw(vectors))
+        {
             if (raw >= 0)
                 probabilities.push_back(1.0 / (1.0 + std::exp(-raw)));
             else
@@ -329,6 +339,7 @@ PYBIND11_MODULE(lns2_env, module)
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))
+        .def("predict_raw", &PortableTreeEnsemble::predictRaw, py::arg("vectors"))
         .def("predict_positive", &PortableTreeEnsemble::predictPositive, py::arg("vectors"));
     py::class_<LNS2RepairEnv>(module, "LNS2RepairEnv")
         .def(py::init<const std::string&, const std::string&, int, double, int,

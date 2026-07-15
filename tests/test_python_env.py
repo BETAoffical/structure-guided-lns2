@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import unittest
 
@@ -14,6 +15,29 @@ except ModuleNotFoundError:
     "the native LNS2 module is tested by Linux CTest",
 )
 class RepairEnvironmentTests(unittest.TestCase):
+    def test_portable_tree_supports_raw_and_sigmoid_outputs(self) -> None:
+        trees = [
+            [
+                {
+                    "value": 0.0,
+                    "feature_idx": 0,
+                    "num_threshold": 0.0,
+                    "missing_go_to_left": True,
+                    "left": 1,
+                    "right": 2,
+                    "is_leaf": False,
+                },
+                {"value": -0.5, "is_leaf": True},
+                {"value": 1.5, "is_leaf": True},
+            ]
+        ]
+        predictor = lns2_env.PortableTreeEnsemble(2.0, trees)
+        raw = predictor.predict_raw([[-1.0], [1.0]])
+        positive = predictor.predict_positive([[-1.0], [1.0]])
+        self.assertEqual(raw, [1.5, 3.5])
+        self.assertAlmostEqual(positive[0], 1.0 / (1.0 + math.exp(-1.5)))
+        self.assertAlmostEqual(positive[1], 1.0 / (1.0 + math.exp(-3.5)))
+
     def make_env(self) -> lns2_env.LNS2RepairEnv:
         return lns2_env.LNS2RepairEnv(
             os.environ["LNS2_TEST_MAP"],
