@@ -53,3 +53,10 @@ Pre-data amendment: implementation review found that the historical pairwise lea
 `MODEL_SEED=20260714`; the initial registered analysis JSON contained `20260829`. Before generating a map,
 reset or label, the configuration was corrected to `20260714` so aggregation reuses the original learner
 randomness rather than silently introducing a new training setting.
+
+Pre-data generation amendment: the first deterministic generation attempt stopped before producing a
+dataset manifest, reset or label. On `policy_train_compartmentalized_double_horizontal_0003`, the
+`bottleneck_100` task exhausted valid unique constrained endpoints at agent 24 when both bottleneck ratios
+were `0.25`. A same-map, same-task-seed feasibility probe reproduced the failure at `0.25` and generated
+all 100 agents at `0.20`. Both bottleneck variants therefore use `0.20`; the master, map and task seeds are
+unchanged, and no failed instance is replaced or resampled.

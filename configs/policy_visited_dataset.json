@@ -11,8 +11,8 @@
       "task": {
         "agent_count": 80,
         "scenario_type": "bottleneck_pressure",
-        "required_bottleneck_crossing_ratio": 0.25,
-        "shared_corridor_ratio": 0.25
+        "required_bottleneck_crossing_ratio": 0.20,
+        "shared_corridor_ratio": 0.20
       }
     },
     {
@@ -20,8 +20,8 @@
       "task": {
         "agent_count": 100,
         "scenario_type": "bottleneck_pressure",
-        "required_bottleneck_crossing_ratio": 0.25,
-        "shared_corridor_ratio": 0.25
+        "required_bottleneck_crossing_ratio": 0.20,
+        "shared_corridor_ratio": 0.20
       }
     }
   ],
