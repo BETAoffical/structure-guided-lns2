@@ -398,6 +398,21 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         selected, _, _ = score_online_candidates(rows, tied_model)
         self.assertEqual(selected, 1)
 
+        class NearlyTiedEstimator:
+            def predict_proba(self, values: np.ndarray) -> np.ndarray:
+                probability = np.where(values[:, 0] >= 0.0, 0.5 + 1e-14, 0.5 - 1e-14)
+                return np.column_stack((1.0 - probability, probability))
+
+        nearly_tied_model = SimpleNamespace(
+            profile="realized_dynamic",
+            feature_names=["x"],
+            estimator=NearlyTiedEstimator(),
+        )
+        selected, scores, margin = score_online_candidates(rows, nearly_tied_model)
+        self.assertGreater(scores[0], scores[1])
+        self.assertEqual(selected, 1)
+        self.assertEqual(margin, 0.0)
+
     def test_portable_tree_inference_matches_a_binary_split(self) -> None:
         model = PortablePairwiseModel(
             profile="realized_dynamic",

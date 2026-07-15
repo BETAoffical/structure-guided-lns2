@@ -878,11 +878,19 @@ def score_online_candidates(
         for probability, (left, right) in zip(probabilities, pairs):
             scores[left] += float(probability)
             scores[right] += 1.0 - float(probability)
+    # Native sklearn, Python and the C++ portable evaluator can differ by a
+    # handful of floating-point ulps. Treat those numerically identical scores
+    # as ties so the candidate hash remains the cross-platform decision rule.
+    stable_scores = [round(score, 12) for score in scores]
     order = sorted(
         range(len(rows)),
-        key=lambda index: (-scores[index], str(rows[index]["candidate_key"])),
+        key=lambda index: (-stable_scores[index], str(rows[index]["candidate_key"])),
     )
-    margin = scores[order[0]] - scores[order[1]] if len(order) > 1 else scores[order[0]]
+    margin = (
+        stable_scores[order[0]] - stable_scores[order[1]]
+        if len(order) > 1
+        else stable_scores[order[0]]
+    )
     return order[0], scores, margin
 
 

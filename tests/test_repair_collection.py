@@ -7,10 +7,12 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from experiments.repair_collection import (
     CollectionLockError,
     _AtomicProcessLock,
+    _atomic_write_text,
     _counterfactual_source_eligible,
     _counterfactual_source_reason,
     _horizon_outcomes,
@@ -106,6 +108,29 @@ def sample_state() -> dict:
 
 
 class RepairCollectionTests(unittest.TestCase):
+    def test_atomic_write_retries_transient_permission_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.json"
+            original_replace = Path.replace
+            attempts = 0
+
+            def transient_replace(source: Path, target: Path) -> Path:
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise PermissionError("temporary sharing violation")
+                return original_replace(source, target)
+
+            with (
+                mock.patch.object(Path, "replace", autospec=True, side_effect=transient_replace),
+                mock.patch("experiments.repair_collection.time.sleep") as sleep,
+            ):
+                _atomic_write_text(path, "complete\n")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "complete\n")
+            self.assertEqual(attempts, 3)
+            self.assertEqual(sleep.call_count, 2)
+
     def test_atomic_lock_rejects_live_owner_and_recovers_stale_owner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "active.lock"

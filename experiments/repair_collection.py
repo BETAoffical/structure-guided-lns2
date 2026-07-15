@@ -236,7 +236,17 @@ def _atomic_write_text(path: Path, text: str) -> None:
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
-        temporary.replace(path)
+        # DrvFS can briefly report a sharing violation when Windows tooling is
+        # reading the destination. Keep the atomic replace while tolerating the
+        # transient lock instead of aborting a resumable collection.
+        for attempt in range(8):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(min(0.025 * (2**attempt), 0.5))
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
