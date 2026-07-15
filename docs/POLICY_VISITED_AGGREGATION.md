@@ -46,6 +46,19 @@ warm start and the new data becomes replay data. If both lose the Adaptive advan
 The later RL action is selection among the generated explicit neighborhoods, not raw agent-subset
 generation or a return to seed/rule/size-only control.
 
+## Formal qualification result
+
+The fixed `20270317` dataset generated 18 maps and 72 tasks with no historical map/task seed overlap.
+All 216 resets completed without error, and the three solver streams had distinct initial fingerprints.
+There were 178 nonzero-conflict task-seeds: 115/144 in Train and 63/72 in Validation. Every map supplied
+at least one repair state.
+
+The preregistered per-layout 75% gate did not pass. Train regular beltway supplied 29/48 nonzero states
+(required 36), and Validation dead-end aisles supplied 16/24 (required 18). The other four split/layout
+cells passed. The formal decision is therefore `inconclusive_sample_do_not_resample`. Source trajectory
+collection, counterfactual trials, aggregate training, closed-loop v2 evaluation and RL remain stopped;
+no policy-visited label or fitted v2 model was produced from this dataset.
+
 WSL performs collection with the dependency-free portable model. Supervised fitting uses the existing
 Windows scikit-learn 1.5.0 installation; this stage installs no package.
 
