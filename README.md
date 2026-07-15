@@ -222,6 +222,9 @@ sets without paying for discarded PP/SIPPS repairs. Fixed all-development ranker
 cannot train or tune the frozen models, static context is exploratory only, and RL remains gated on the
 independent result. See
 [`docs/REALIZED_RANKING_CONFIRMATION.md`](docs/REALIZED_RANKING_CONFIRMATION.md).
+The first two qualification-only generations stopped at 10/12 and 11/12 paired-map coverage,
+respectively; no independent repair outcomes were collected. The next data revision will use fixed maps
+and a deterministic task-seed qualification pool instead of further global pressure tuning.
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,

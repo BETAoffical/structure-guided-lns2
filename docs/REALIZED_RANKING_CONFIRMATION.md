@@ -64,3 +64,21 @@ model directory. Generated maps, traces, models, and reports remain under ignore
 A pass permits a separate sequential closed-loop test on another fresh map set. A failure keeps RL
 paused and routes the project back to candidate-pool design, realized-set representation, or PP-order
 control. This confirmation alone is not a final end-to-end or OOD claim.
+
+## Qualification result
+
+Both registered qualification runs stopped before proposal or explicit-repair outcomes were collected.
+The original 0.10-pressure dataset had 48/48 valid resets and 39 eligible tasks, but only 10/12 maps
+retained paired OD and density coverage. The one permitted pressure correction retained 48/48 valid
+resets and 39 eligible tasks and improved map coverage to 11/12, but still failed the 12/12 gate.
+
+The remaining `cross_four_gate` map illustrates why a single global pressure parameter is inadequate:
+its two 100-agent sources had 619 and 293 initial conflicts, above the registered maximum of 200, while
+several more open-layout sources had zero conflicts. No confirmation candidate, repair outcome, or model
+score was produced from either dataset. The frozen development models and the ranking hypothesis are
+therefore still untested on independent labels.
+
+The next data revision must keep the maps fixed and create a predeclared task-seed pool for every
+`(map, OD, density)` cell. It may select the first task whose initial Adaptive reset has 1-200 conflicts,
+but it must not inspect proposal neighborhoods or repair outcomes. This replaces repeated global-pressure
+tuning with a deterministic, qualification-only inclusion rule.
