@@ -270,7 +270,8 @@ def compare_policies(
 
 
 def _initial_fingerprint_integrity(
-    manifests: dict[str, list[dict[str, Any]]]
+    manifests: dict[str, list[dict[str, Any]]],
+    policies: tuple[str, ...] = POLICIES,
 ) -> dict[str, Any]:
     fingerprints: dict[tuple[str, int], dict[str, str]] = collections.defaultdict(dict)
     for policy, rows in manifests.items():
@@ -282,7 +283,7 @@ def _initial_fingerprint_integrity(
     mismatches = []
     incomplete = []
     for key, values in sorted(fingerprints.items()):
-        if set(values) != set(POLICIES):
+        if set(values) != set(policies):
             incomplete.append({"task_seed": list(key), "policies": sorted(values)})
         elif len(set(values.values())) != 1:
             mismatches.append({"task_seed": list(key), "fingerprints": values})
@@ -294,12 +295,45 @@ def _initial_fingerprint_integrity(
     }
 
 
+def compare_solver_seeds(
+    baseline: list[dict[str, Any]],
+    primary: list[dict[str, Any]],
+    bootstrap_samples: int,
+    metric_iteration_budget: int,
+) -> dict[str, Any]:
+    seeds = sorted(
+        {int(row["solver_seed"]) for row in baseline}
+        | {int(row["solver_seed"]) for row in primary}
+    )
+    rows = {}
+    for seed in seeds:
+        left = [row for row in baseline if int(row["solver_seed"]) == seed]
+        right = [row for row in primary if int(row["solver_seed"]) == seed]
+        rows[str(seed)] = {
+            "baseline_success_count": sum(
+                bool(row.get("summary", {}).get("success"))
+                for row in left
+                if str(row.get("status")) in {"ok", "resumed"}
+            ),
+            "primary_success_count": sum(
+                bool(row.get("summary", {}).get("success"))
+                for row in right
+                if str(row.get("status")) in {"ok", "resumed"}
+            ),
+            "comparison": compare_policies(
+                left, right, bootstrap_samples, metric_iteration_budget
+            ),
+        }
+    return {"solver_seed_count": len(seeds), "seeds": rows}
+
+
 def closed_loop_acceptance(
     qualification: dict[str, Any],
     summaries: dict[str, dict[str, Any]],
     comparison: dict[str, Any],
     integrity: dict[str, Any],
     thresholds: dict[str, Any],
+    seed_comparisons: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     adaptive = summaries["official_adaptive"]
     realized = summaries["realized_dynamic"]
@@ -324,11 +358,31 @@ def closed_loop_acceptance(
         "no_invalid_actions": int(realized["invalid_action_count"]) == 0,
         "no_fingerprint_mismatch": int(realized["fingerprint_mismatch_count"]) == 0,
     }
+    seed_diagnostics = None
+    if seed_comparisons is not None:
+        seeds = dict(seed_comparisons["seeds"])
+        minimum_seed_count = int(thresholds["minimum_solver_seeds_improved"])
+        improved = []
+        success_not_below = []
+        for seed, row in sorted(seeds.items()):
+            auc = row["comparison"]["metrics"]["fixed_budget_conflict_auc"]
+            if float(auc["relative_improvement"]) >= minimum_improvement:
+                improved.append(seed)
+            if int(row["primary_success_count"]) >= int(row["baseline_success_count"]):
+                success_not_below.append(seed)
+        gates["minimum_solver_seeds_improved"] = len(improved) >= minimum_seed_count
+        gates["success_not_below_adaptive_per_seed"] = len(success_not_below) == len(seeds)
+        seed_diagnostics = {
+            "minimum_required": minimum_seed_count,
+            "improved_solver_seeds": improved,
+            "success_not_below_solver_seeds": success_not_below,
+        }
     passed = all(gates.values())
     return {
         "passed": passed,
         "gates": gates,
         "qualifying_metrics": qualifying_metrics,
+        "solver_seed_diagnostics": seed_diagnostics,
         "decision": (
             "advance_to_policy_visited_data_and_rl_warm_start"
             if passed
@@ -347,14 +401,15 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "## Cohort",
         "",
-        f"- Valid resets: {report['qualification']['valid_count']}/24",
+        f"- Valid resets: {report['qualification']['valid_count']}/"
+        f"{report['qualification'].get('expected_reset_count', 24)}",
         f"- Initial feasible: {report['qualification']['initial_feasible_count']}",
         f"- Repairable: {report['qualification']['nonzero_state_count']}",
         "",
         "## Policies",
         "",
     ]
-    for policy in POLICIES:
+    for policy in report["pre_registration"].get("policies", POLICIES):
         row = summaries[policy]
         lines.append(
             f"- `{policy}`: success {row['success_count']}/{row['valid_count']}, "
@@ -400,9 +455,12 @@ def run_closed_loop_analysis(
     if not bool(run_config.get("formal")):
         raise ValueError("Pilot data cannot be used for formal closed-loop analysis")
     collection_config = dict(run_config["configuration"])
+    policies = tuple(map(str, collection_config.get("policies", POLICIES)))
+    if "official_adaptive" not in policies or "realized_dynamic" not in policies:
+        raise ValueError("analysis requires Adaptive and realized_dynamic manifests")
     qualification = _read_json(root / "qualification_report.json")
     manifests = {
-        policy: _read_jsonl(root / f"{policy}_manifest.jsonl") for policy in POLICIES
+        policy: _read_jsonl(root / f"{policy}_manifest.jsonl") for policy in policies
     }
     for rows in manifests.values():
         for row in rows:
@@ -438,7 +496,7 @@ def run_closed_loop_analysis(
     for policy, summary in summaries.items():
         if int(summary["episode_count"]) != expected_episodes:
             raise ValueError(f"{policy} does not contain {expected_episodes} episodes")
-    integrity = _initial_fingerprint_integrity(manifests)
+    integrity = _initial_fingerprint_integrity(manifests, policies)
     bootstrap_samples = int(config["bootstrap_samples"])
     primary = compare_policies(
         manifests["official_adaptive"],
@@ -446,15 +504,30 @@ def run_closed_loop_analysis(
         bootstrap_samples,
         int(collection_config["metric_iteration_budget"]),
     )
-    proposal = compare_policies(
+    proposal = (
+        compare_policies(
+            manifests["official_adaptive"],
+            manifests["proposal_dynamic"],
+            bootstrap_samples,
+            int(collection_config["metric_iteration_budget"]),
+        )
+        if "proposal_dynamic" in manifests
+        else None
+    )
+    seed_comparisons = compare_solver_seeds(
         manifests["official_adaptive"],
-        manifests["proposal_dynamic"],
+        manifests["realized_dynamic"],
         bootstrap_samples,
         int(collection_config["metric_iteration_budget"]),
     )
     thresholds = dict(config["thresholds"])
     acceptance = closed_loop_acceptance(
-        qualification, summaries, primary, integrity, thresholds
+        qualification,
+        summaries,
+        primary,
+        integrity,
+        thresholds,
+        seed_comparisons if "minimum_solver_seeds_improved" in thresholds else None,
     )
     report = {
         "schema": CLOSED_LOOP_SCHEMA,
@@ -467,6 +540,8 @@ def run_closed_loop_analysis(
             "primary_baseline": "official_adaptive",
             "proposal_dynamic_role": "representation_ablation",
             "static_context_role": "excluded",
+            "policies": list(policies),
+            "solver_seeds": list(collection_config.get("solver_seeds", [collection_config.get("solver_seed", 0)])),
         },
         "qualification": qualification,
         "frozen_models": run_config["frozen_models"],
@@ -474,8 +549,13 @@ def run_closed_loop_analysis(
         "policy_summaries": summaries,
         "comparisons": {
             "realized_dynamic_vs_official_adaptive": primary,
-            "proposal_dynamic_vs_official_adaptive": proposal,
+            **(
+                {"proposal_dynamic_vs_official_adaptive": proposal}
+                if proposal is not None
+                else {}
+            ),
         },
+        "solver_seed_comparisons": seed_comparisons,
         "acceptance": acceptance,
     }
     output_root = Path(output).resolve()
@@ -488,6 +568,7 @@ def run_closed_loop_analysis(
 
 __all__ = [
     "closed_loop_acceptance",
+    "compare_solver_seeds",
     "compare_policies",
     "map_paired_bootstrap",
     "render_markdown",

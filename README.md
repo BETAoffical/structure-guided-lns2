@@ -252,6 +252,11 @@ repairable tasks from 13.11s to 0.52s. A 72-episode, 602-transition replay was s
 the registered run; same-run end-to-end time remains about three times Adaptive, so runtime superiority and
 static-context transfer are still not claimed.
 
+The next registered confirmation uses 12 additional maps and solver seeds `[0,1,2]` to test whether that
+closed-loop advantage survives initial PP and repair-order randomness. Solver seeds are repeated
+measurements within map-level bootstrap groups, and the frozen model remains untouched. See
+[`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -290,6 +295,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   leave-one-map-out explicit-set ranking, static-context ablation, and the current positive/negative result.
 - [`docs/CLOSED_LOOP_CONFIRMATION.md`](docs/CLOSED_LOOP_CONFIRMATION.md): frozen pairwise policy,
   sequential candidate generation, failure accounting, and the final gate before RL warm-start work.
+- [`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md): independent
+  12-map, three-solver-seed confirmation with map-grouped inference.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "formal": true,
+  "split": "closed_loop_multiseed",
+  "solver_seeds": [0, 1, 2],
+  "policies": ["official_adaptive", "realized_dynamic"],
+  "dataset_design": {
+    "map_count": 12,
+    "tasks_per_map": 4,
+    "task_variants": ["balanced_80", "balanced_100", "bottleneck_80", "bottleneck_100"],
+    "layout_counts": {
+      "regular_beltway": 4,
+      "compartmentalized": 4,
+      "dead_end_aisles": 4
+    }
+  },
+  "environment": {
+    "time_limit": 300.0,
+    "max_repair_iterations": 100,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "qualification": {
+    "minimum_nonzero_states": 108,
+    "minimum_nonzero_states_per_layout": 24,
+    "minimum_nonzero_states_per_solver_seed": 30,
+    "minimum_active_maps": 10
+  },
+  "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+  "proposal": {
+    "max_seed_agents": 4,
+    "heuristics": ["target", "collision", "random"],
+    "neighborhood_sizes": [4, 8, 16],
+    "trials": 8,
+    "candidates_per_family": 2
+  },
+  "max_decisions": 100,
+  "metric_iteration_budget": 100,
+  "wall_time_budget_seconds": 300.0,
+  "episode_process_timeout_seconds": 360.0,
+  "workers": 4,
+  "frozen_models": "build/initlns-natural-distribution-confirmation-v1-frozen-models",
+  "model_registration": {
+    "deployment_bundle": "artifacts/initlns-closed-loop-policy-v1",
+    "deployment_manifest_sha256": "d87b649459cf0dde44ed1491ae32f8bc2397728230c33c15caeb036005e5970d",
+    "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
+    "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
+    "development_candidates": "build/realized-neighborhood-stability-probe-v1/candidates.jsonl",
+    "development_candidates_sha256": "6faef4cd6bcba0e79c30790a287142cee4ce580163d02e40cd740e16ac77ebd2",
+    "portable_models": "build/initlns-closed-loop-confirmation-v1-portable-models",
+    "portable_model_sha256": {
+      "proposal_dynamic": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
+      "realized_dynamic": "11d0ad6cbbde0f7f6c598e7ba48026d9e5caabb8046a6c2adf602a99d3b77ee3"
+    },
+    "model_sha256": {
+      "proposal_dynamic": "5e4eaeebf69bf8b660d079d214c50504f9ed5ab4311d9e0c4f58ccc5fee801e4",
+      "realized_dynamic": "f765fe2fef80ee692aefd9c34abe8b984aa6dfd1ea0ad1ed8e31bb67985b3ccb"
+    }
+  },
+  "reference_datasets": [
+    "build/repair-transfer-pilot-v2",
+    "build/initlns-independent-layout-probe-v1",
+    "build/initlns-realized-ranking-confirmation-v1b",
+    "build/initlns-natural-distribution-confirmation-v1",
+    "build/initlns-closed-loop-confirmation-v1"
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": 2,
+  "master_seed": 20270123,
+  "output_dir": "build/initlns-closed-loop-multiseed-v1",
+  "tasks_per_map": 4,
+  "task_variants": [
+    {"name": "balanced_80", "task": {"agent_count": 80, "scenario_type": "balanced_bidirectional"}},
+    {"name": "balanced_100", "task": {"agent_count": 100, "scenario_type": "balanced_bidirectional"}},
+    {
+      "name": "bottleneck_80",
+      "task": {
+        "agent_count": 80,
+        "scenario_type": "bottleneck_pressure",
+        "required_bottleneck_crossing_ratio": 0.25,
+        "shared_corridor_ratio": 0.25
+      }
+    },
+    {
+      "name": "bottleneck_100",
+      "task": {
+        "agent_count": 100,
+        "scenario_type": "bottleneck_pressure",
+        "required_bottleneck_crossing_ratio": 0.25,
+        "shared_corridor_ratio": 0.25
+      }
+    }
+  ],
+  "layout_variants": {
+    "compartmentalized": [
+      {"name": "cross_four_gate", "map": {"divider_template": "cross_four_gate"}},
+      {"name": "double_horizontal", "map": {"divider_template": "double_horizontal"}}
+    ]
+  },
+  "map": {
+    "layout_mode": "regular_beltway",
+    "rows": 28,
+    "cols": 39,
+    "shelf_block_height": 2,
+    "shelf_block_width": [6, 8],
+    "horizontal_aisle_width": 2,
+    "vertical_aisle_width": 2,
+    "outer_beltway_width": 2,
+    "beltway_mode": "full",
+    "wall_clearance": 0,
+    "dead_end_aisle_count": 4,
+    "dead_end_orientation_counts": {"vertical": 2, "horizontal": 2},
+    "dead_end_depth": 4,
+    "gate_count": 2,
+    "gate_width": 1,
+    "divider_template": "single",
+    "divider_orientation": "vertical",
+    "divider_thickness": 1,
+    "combine_layout_features": false,
+    "station_count": 2,
+    "station_sides": ["left", "right"],
+    "station_clearance": 3,
+    "station_placement": "opposite_sides",
+    "station_cluster_count": 1,
+    "station_entrance_width": 1,
+    "station_queue_depth": 2,
+    "station_queue_width": 1,
+    "station_demand_distribution": "uniform",
+    "layout_jitter": 0.0,
+    "generation_attempts": 40,
+    "topology_constraints": {"minimum_average_degree": 1.5}
+  },
+  "task": {
+    "agent_count": 100,
+    "scenario_type": "balanced_bidirectional",
+    "dominant_flow_ratio": 1.0,
+    "background_flow": "random",
+    "opposing_flow_ratio": 0.5,
+    "origin_cluster_count": 0,
+    "goal_cluster_count": 0,
+    "cluster_radius": 2,
+    "hotspot_skew": 0.0,
+    "hotspot_distribution": "uniform",
+    "required_bottleneck_crossing_ratio": 0.0,
+    "shared_corridor_ratio": 0.0,
+    "required_intersection_crossing_ratio": 0.0,
+    "target_intersection_count": 2,
+    "swap_pair_ratio": 0.0,
+    "minimum_shortest_distance": 6,
+    "maximum_shortest_distance": 60,
+    "max_sampling_attempts": 50000
+  },
+  "splits": {
+    "closed_loop_multiseed": {
+      "layout_counts": {
+        "regular_beltway": 4,
+        "compartmentalized": 4,
+        "dead_end_aisles": 4
+      }
+    }
+  }
+}

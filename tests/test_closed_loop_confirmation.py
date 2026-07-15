@@ -16,6 +16,8 @@ from experiments.closed_loop_confirmation import (
     ClosedLoopTraceError,
     closed_loop_dataset_design,
     closed_loop_qualification_report,
+    configured_policies,
+    configured_solver_seeds,
     feature_range_diagnostic,
     fixed_budget_conflict_auc,
     generate_online_candidates,
@@ -30,6 +32,7 @@ from experiments.closed_loop_confirmation import (
 from experiments.closed_loop_confirmation_analysis import (
     closed_loop_acceptance,
     compare_policies,
+    compare_solver_seeds,
     summarize_policy,
 )
 from experiments.realized_neighborhood_ranking_audit import _feature_profiles
@@ -104,18 +107,20 @@ def make_candidate(identifier: str, agents: list[int], family: str) -> dict:
     }
 
 
-def make_dataset_rows() -> list[dict]:
+def make_dataset_rows(
+    *, replicates: int = 2, split: str = "closed_loop"
+) -> list[dict]:
     rows = []
     variants = ("balanced_80", "balanced_100", "bottleneck_80", "bottleneck_100")
     for layout_number, layout in enumerate(
         ("regular_beltway", "compartmentalized", "dead_end_aisles")
     ):
-        for map_number in range(2):
-            map_id = f"closed_loop_{layout}_{map_number:04d}"
+        for map_number in range(replicates):
+            map_id = f"{split}_{layout}_{map_number:04d}"
             for variant in variants:
                 rows.append(
                     {
-                        "split": "closed_loop",
+                        "split": split,
                         "map_id": map_id,
                         "task_id": f"{map_id}__{variant}",
                         "layout_mode": layout,
@@ -202,6 +207,68 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["initial_feasible_count"], 3)
         self.assertEqual(report["nonzero_state_count"], 21)
+
+    def test_multiseed_design_and_qualification_keep_repeated_measurements_grouped(self) -> None:
+        rows = make_dataset_rows(replicates=4, split="closed_loop_multiseed")
+        design = closed_loop_dataset_design(
+            rows,
+            "closed_loop_multiseed",
+            {
+                "map_count": 12,
+                "tasks_per_map": 4,
+                "layout_counts": {
+                    "regular_beltway": 4,
+                    "compartmentalized": 4,
+                    "dead_end_aisles": 4,
+                },
+            },
+        )
+        self.assertTrue(design["passed"])
+        qualification = []
+        for source in rows:
+            for seed in (0, 1, 2):
+                qualification.append(
+                    {
+                        **source,
+                        "solver_seed": seed,
+                        "initial_conflicts": 0 if seed == 2 and source is rows[0] else 5,
+                        "state_fingerprint": f"{source['task_id']}-{seed}",
+                        "status": "ok",
+                        "error": None,
+                    }
+                )
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "solver_seeds": [0, 1, 2],
+                "qualification": {
+                    "minimum_nonzero_states": 108,
+                    "minimum_nonzero_states_per_layout": 24,
+                    "minimum_nonzero_states_per_solver_seed": 30,
+                    "minimum_active_maps": 10,
+                },
+                "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            },
+            design,
+            {"passed": True},
+            formal=True,
+        )
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["valid_count"], 144)
+        self.assertEqual(report["expected_reset_count"], 144)
+        self.assertEqual(report["nonzero_by_solver_seed"], {"0": 48, "1": 48, "2": 47})
+
+    def test_multiseed_policy_configuration_is_validated(self) -> None:
+        self.assertEqual(configured_solver_seeds({"solver_seeds": [0, 1, 2]}), (0, 1, 2))
+        self.assertEqual(
+            configured_policies({"policies": ["official_adaptive", "realized_dynamic"]}),
+            ("official_adaptive", "realized_dynamic"),
+        )
+        with self.assertRaises(ValueError):
+            configured_solver_seeds({"solver_seeds": [0, 0]})
+        with self.assertRaises(ValueError):
+            configured_policies({"policies": ["realized_dynamic"]})
 
     def test_online_features_equal_the_audited_offline_extractor(self) -> None:
         state = make_state()
@@ -569,6 +636,49 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         )
         self.assertTrue(report["passed"])
         self.assertEqual(report["qualifying_metrics"], ["fixed_budget_conflict_auc"])
+
+    def test_multiseed_acceptance_requires_seed_level_stability(self) -> None:
+        def row(policy: str, seed: int, auc: float) -> dict:
+            return {
+                "policy": policy,
+                "map_id": f"map-{seed}",
+                "task_id": f"task-{seed}",
+                "solver_seed": seed,
+                "status": "ok",
+                "summary": {
+                    "repairable": True,
+                    "success": True,
+                    "fixed_budget_conflict_auc": auc,
+                    "capped_wall_time_to_feasible": auc,
+                },
+            }
+
+        adaptive = [row("official_adaptive", seed, 100.0) for seed in range(3)]
+        realized = [row("realized_dynamic", seed, value) for seed, value in enumerate((80, 90, 101))]
+        seeds = compare_solver_seeds(adaptive, realized, 20, 100)
+        common = {
+            "error_count": 0,
+            "success_count": 3,
+            "invalid_action_count": 0,
+            "fingerprint_mismatch_count": 0,
+        }
+        aggregate = compare_policies(adaptive, realized, 20)
+        report = closed_loop_acceptance(
+            {"passed": True},
+            {"official_adaptive": common, "realized_dynamic": common},
+            aggregate,
+            {"passed": True},
+            {
+                "minimum_metric_improvement": 0.05,
+                "minimum_maps_no_worse": 2,
+                "minimum_solver_seeds_improved": 2,
+            },
+            seeds,
+        )
+        self.assertTrue(report["passed"])
+        self.assertEqual(
+            report["solver_seed_diagnostics"]["improved_solver_seeds"], ["0", "1"]
+        )
 
 
 if __name__ == "__main__":

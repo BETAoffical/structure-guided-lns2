@@ -120,13 +120,22 @@ def _number_summary(values: Iterable[float | int]) -> dict[str, Any]:
     }
 
 
-def closed_loop_dataset_design(rows: list[dict[str, Any]], split: str) -> dict[str, Any]:
-    expected_tasks = {
-        "balanced_80",
-        "balanced_100",
-        "bottleneck_80",
-        "bottleneck_100",
-    }
+def closed_loop_dataset_design(
+    rows: list[dict[str, Any]],
+    split: str,
+    registered: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    settings = dict(registered or {})
+    expected_tasks = set(
+        map(
+            str,
+            settings.get(
+                "task_variants",
+                ("balanced_80", "balanced_100", "bottleneck_80", "bottleneck_100"),
+            ),
+        )
+    )
+    tasks_per_map = int(settings.get("tasks_per_map", len(expected_tasks)))
     errors: list[str] = []
     if any(str(row.get("split")) != split for row in rows):
         errors.append("dataset contains a non-closed-loop split")
@@ -140,21 +149,32 @@ def closed_loop_dataset_design(rows: list[dict[str, Any]], split: str) -> dict[s
             errors.append(f"{map_id}: inconsistent layout")
             continue
         layout_counts[next(iter(layouts))] += 1
-        if {str(row.get("task_variant")) for row in tasks} != expected_tasks or len(tasks) != 4:
-            errors.append(f"{map_id}: incomplete four-task pairing")
+        if (
+            {str(row.get("task_variant")) for row in tasks} != expected_tasks
+            or len(tasks) != tasks_per_map
+        ):
+            errors.append(f"{map_id}: incomplete registered task pairing")
         if len({int(row["map_seed"]) for row in tasks}) != 1:
             errors.append(f"{map_id}: inconsistent map seed")
         if len({int(row["task_seed"]) for row in tasks}) != 4:
             errors.append(f"{map_id}: repeated task seed")
-    expected_layouts = {
-        "regular_beltway": 2,
-        "compartmentalized": 2,
-        "dead_end_aisles": 2,
-    }
+    expected_layouts = dict(
+        settings.get(
+            "layout_counts",
+            {
+                "regular_beltway": 2,
+                "compartmentalized": 2,
+                "dead_end_aisles": 2,
+            },
+        )
+    )
+    expected_layouts = {str(name): int(count) for name, count in expected_layouts.items()}
     if dict(sorted(layout_counts.items())) != expected_layouts:
-        errors.append("layout replication is not the registered 2/2/2 design")
-    if len(rows) != 24 or len(by_map) != 6:
-        errors.append("dataset is not the registered 6-map/24-task design")
+        errors.append("layout replication does not match the registered design")
+    expected_maps = int(settings.get("map_count", sum(expected_layouts.values())))
+    expected_rows = expected_maps * tasks_per_map
+    if len(rows) != expected_rows or len(by_map) != expected_maps:
+        errors.append("dataset dimensions do not match the registered design")
     return {
         "passed": not errors,
         "errors": errors,
@@ -162,6 +182,31 @@ def closed_loop_dataset_design(rows: list[dict[str, Any]], split: str) -> dict[s
         "task_count": len(rows),
         "layout_counts": dict(sorted(layout_counts.items())),
     }
+
+
+def configured_solver_seeds(config: dict[str, Any]) -> tuple[int, ...]:
+    values = config.get("solver_seeds")
+    seeds = (
+        tuple(map(int, values))
+        if values is not None
+        else (int(config.get("solver_seed", 0)),)
+    )
+    if not seeds or len(seeds) != len(set(seeds)) or any(seed < 0 for seed in seeds):
+        raise ValueError("solver seeds must be unique non-negative integers")
+    return seeds
+
+
+def configured_policies(config: dict[str, Any]) -> tuple[str, ...]:
+    policies = tuple(map(str, config.get("policies", POLICIES)))
+    if (
+        not policies
+        or len(policies) != len(set(policies))
+        or any(policy not in POLICIES for policy in policies)
+    ):
+        raise ValueError("closed-loop policies are invalid or repeated")
+    if "official_adaptive" not in policies or "realized_dynamic" not in policies:
+        raise ValueError("closed-loop confirmation requires Adaptive and realized_dynamic")
+    return policies
 
 
 def closed_loop_qualification_report(
@@ -173,7 +218,11 @@ def closed_loop_qualification_report(
     *,
     formal: bool,
 ) -> dict[str, Any]:
-    indexed = {str(row["task_id"]): row for row in qualification}
+    solver_seeds = configured_solver_seeds(config)
+    indexed = {
+        (str(row["task_id"]), int(row.get("solver_seed", solver_seeds[0]))): row
+        for row in qualification
+    }
     errors = [
         str(row.get("error"))
         for row in qualification
@@ -182,29 +231,32 @@ def closed_loop_qualification_report(
     cohort = []
     thresholds = dict(config["severity_thresholds"])
     for source in rows:
-        result = indexed.get(str(source["task_id"]))
-        if result is None or str(result.get("status")) != "ok":
-            continue
-        conflicts = int(result["initial_conflicts"])
-        agents = int(source["agent_count"])
-        density = conflict_density(conflicts, agents)
-        cohort.append(
-            {
-                "map_id": str(source["map_id"]),
-                "task_id": str(source["task_id"]),
-                "layout_mode": str(source["layout_mode"]),
-                "task_variant": str(source["task_variant"]),
-                "agent_count": agents,
-                "initial_conflicts": conflicts,
-                "initial_feasible": conflicts == 0,
-                "conflict_density": density,
-                "conflict_severity": conflict_severity(density, thresholds),
-                "state_fingerprint": str(result["state_fingerprint"]),
-            }
-        )
+        for solver_seed in solver_seeds:
+            result = indexed.get((str(source["task_id"]), solver_seed))
+            if result is None or str(result.get("status")) != "ok":
+                continue
+            conflicts = int(result["initial_conflicts"])
+            agents = int(source["agent_count"])
+            density = conflict_density(conflicts, agents)
+            cohort.append(
+                {
+                    "map_id": str(source["map_id"]),
+                    "task_id": str(source["task_id"]),
+                    "solver_seed": solver_seed,
+                    "layout_mode": str(source["layout_mode"]),
+                    "task_variant": str(source["task_variant"]),
+                    "agent_count": agents,
+                    "initial_conflicts": conflicts,
+                    "initial_feasible": conflicts == 0,
+                    "conflict_density": density,
+                    "conflict_severity": conflict_severity(density, thresholds),
+                    "state_fingerprint": str(result["state_fingerprint"]),
+                }
+            )
     nonzero = [row for row in cohort if int(row["initial_conflicts"]) > 0]
     by_layout = collections.Counter(str(row["layout_mode"]) for row in nonzero)
     active_maps = sorted({str(row["map_id"]) for row in nonzero})
+    by_solver_seed = collections.Counter(int(row["solver_seed"]) for row in nonzero)
     settings = dict(config["qualification"])
     sample_gates = (
         {
@@ -214,22 +266,34 @@ def closed_loop_qualification_report(
                 for layout in ("regular_beltway", "compartmentalized", "dead_end_aisles")
             ),
             "minimum_active_maps": len(active_maps) >= int(settings["minimum_active_maps"]),
+            "minimum_nonzero_per_solver_seed": all(
+                by_solver_seed.get(seed, 0)
+                >= int(settings.get("minimum_nonzero_states_per_solver_seed", 0))
+                for seed in solver_seeds
+            ),
         }
         if formal
         else {
             "minimum_nonzero_states": bool(nonzero),
             "minimum_nonzero_per_layout": True,
             "minimum_active_maps": True,
+            "minimum_nonzero_per_solver_seed": True,
         }
     )
     gates = {
         "dataset_design": bool(design["passed"]) if formal else True,
         "seed_isolation": bool(isolation["passed"]),
-        "all_resets_valid": len(cohort) == len(rows) and not errors,
+        "all_resets_valid": len(cohort) == len(rows) * len(solver_seeds) and not errors,
         **sample_gates,
     }
     grouped = {}
-    for field in ("layout_mode", "task_variant", "agent_count", "conflict_severity"):
+    for field in (
+        "layout_mode",
+        "task_variant",
+        "agent_count",
+        "conflict_severity",
+        "solver_seed",
+    ):
         groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
         for row in cohort:
             groups[str(row[field])].append(row)
@@ -251,14 +315,22 @@ def closed_loop_qualification_report(
         "decision": "eligible_for_closed_loop" if passed else "inconclusive_do_not_resample",
         "gates": gates,
         "valid_count": len(cohort),
+        "expected_reset_count": len(rows) * len(solver_seeds),
+        "solver_seeds": list(solver_seeds),
         "initial_feasible_count": len(cohort) - len(nonzero),
         "nonzero_state_count": len(nonzero),
         "nonzero_by_layout": dict(sorted(by_layout.items())),
+        "nonzero_by_solver_seed": {
+            str(seed): by_solver_seed.get(seed, 0) for seed in solver_seeds
+        },
         "active_map_count": len(active_maps),
         "active_maps": active_maps,
-        "repairable_task_ids": sorted(str(row["task_id"]) for row in nonzero),
+        "repairable_task_ids": sorted({str(row["task_id"]) for row in nonzero}),
+        "repairable_episode_keys": sorted(
+            [str(row["task_id"]), int(row["solver_seed"])] for row in nonzero
+        ),
         "zero_conflict_task_ids": sorted(
-            str(row["task_id"]) for row in cohort if int(row["initial_conflicts"]) == 0
+            {str(row["task_id"]) for row in cohort if int(row["initial_conflicts"]) == 0}
         ),
         "severity_thresholds": thresholds,
         "natural_distribution": {
@@ -268,7 +340,9 @@ def closed_loop_qualification_report(
                 sorted(collections.Counter(str(row["conflict_severity"]) for row in cohort).items())
             ),
             "grouped": grouped,
-            "tasks": sorted(cohort, key=lambda row: str(row["task_id"])),
+            "tasks": sorted(
+                cohort, key=lambda row: (str(row["task_id"]), int(row["solver_seed"]))
+            ),
         },
         "errors": errors,
         "dataset_design": design,
@@ -1409,9 +1483,6 @@ def run_closed_loop_collection(
     dry_run: bool = False,
     task_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    phases = {"qualify", "official_adaptive", "proposal_dynamic", "realized_dynamic", "all"}
-    if phase not in phases:
-        raise ValueError(f"unsupported closed-loop phase: {phase}")
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
     output_root = Path(output).resolve()
@@ -1419,10 +1490,17 @@ def run_closed_loop_collection(
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError("unsupported closed-loop config")
     split = str(config["split"])
+    solver_seeds = configured_solver_seeds(config)
+    policies = configured_policies(config)
+    phases = {"qualify", "all", *policies}
+    if phase not in phases:
+        raise ValueError(f"unsupported closed-loop phase: {phase}")
     all_rows = _load_dataset_rows(dataset_root, [split])
     rows = _selected_rows(all_rows, task_ids)
     formal = task_ids is None and bool(config.get("formal", True))
-    design = closed_loop_dataset_design(all_rows, split)
+    design = closed_loop_dataset_design(
+        all_rows, split, dict(config.get("dataset_design", {}))
+    )
     isolation = _seed_isolation(
         all_rows, list(config.get("reference_datasets", [])), project_root
     )
@@ -1445,7 +1523,10 @@ def run_closed_loop_collection(
     )
     estimate = {
         "task_count": len(rows),
-        "policy_episode_count": len(rows) * len(POLICIES),
+        "reset_count": len(rows) * len(solver_seeds),
+        "solver_seeds": list(solver_seeds),
+        "policies": list(policies),
+        "policy_episode_count": len(rows) * len(solver_seeds) * len(policies),
         "maximum_decisions_per_episode": int(config["max_decisions"]),
         "maximum_proposals_per_decision": int(config["proposal"]["max_seed_agents"])
         * len(config["proposal"]["heuristics"])
@@ -1492,9 +1573,9 @@ def run_closed_loop_collection(
             raise ValueError("output already exists; pass resume to continue")
     output_root.mkdir(parents=True, exist_ok=True)
     _write_json(run_path, run_config)
-    sequence = POLICIES if phase == "all" else (phase,)
+    sequence = policies if phase == "all" else (phase,)
     if phase == "all":
-        sequence = ("qualify",) + POLICIES
+        sequence = ("qualify",) + policies
     summary: dict[str, Any] = {
         "schema": CLOSED_LOOP_SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -1507,11 +1588,12 @@ def run_closed_loop_collection(
             jobs = [
                 {
                     "row": row,
-                    "solver_seed": int(config["solver_seed"]),
+                    "solver_seed": solver_seed,
                     "dataset_root": str(dataset_root),
                     "environment": config["environment"],
                 }
                 for row in rows
+                for solver_seed in solver_seeds
             ]
             with _CollectionRunLock(output_root, run_fp, "closed-loop-qualification"):
                 results = _run_jobs(
@@ -1546,7 +1628,7 @@ def run_closed_loop_collection(
             {
                 "row": row,
                 "policy": current,
-                "solver_seed": int(config["solver_seed"]),
+                "solver_seed": solver_seed,
                 "dataset_root": str(dataset_root),
                 "environment": config["environment"],
                 "proposal": config["proposal"],
@@ -1560,6 +1642,7 @@ def run_closed_loop_collection(
                 "resume": resume,
             }
             for row in rows
+            for solver_seed in solver_seeds
         ]
         with _CollectionRunLock(output_root, run_fp, f"closed-loop-{current}"):
             results = _run_jobs(
@@ -1591,6 +1674,8 @@ __all__ = [
     "POLICIES",
     "closed_loop_dataset_design",
     "closed_loop_qualification_report",
+    "configured_policies",
+    "configured_solver_seeds",
     "feature_range_diagnostic",
     "export_portable_policy_bundle",
     "fixed_budget_conflict_auc",
