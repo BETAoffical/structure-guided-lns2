@@ -59,5 +59,38 @@ three candidates had mean remaining-conflict values of 516, 557.5 and 595. Trial
 state hash on disk to remain below Windows path limits while preserving the complete state ID in JSON.
 These outcomes validate the mechanism only and are forbidden from formal model evaluation.
 
-No RL training occurs in this stage. A pass permits a separate fresh-map closed-loop test; a failure keeps
-RL paused and redirects work toward candidate construction or PP repair-order control.
+## Formal result
+
+The unfiltered formal cohort passed qualification: all 48 resets were valid, seven PP initializations were
+already feasible, and 41 required repair. All 12 maps contributed repair states, with 12, 15 and 14
+nonzero states from `regular_beltway`, `compartmentalized` and `dead_end_aisles`, respectively. Initial
+conflicts ranged from zero to 265. The natural severity distribution contained 23 low, 21 medium and four
+high tasks, including zero-conflict tasks in the low end-to-end stratum.
+
+Official Adaptive solved all 48 tasks. The mean time to feasibility was 0.273 seconds and the mean repair
+count was 10.75 iterations. The conditional ranking cohort contained 41 states, 733 explicit neighborhoods
+and 5,864 isolated trials. Collection completed with no errors, timeouts, missing trials or orphaned
+outcomes; a resume audit recovered all 5,864 jobs without repeating repair work.
+
+The frozen `realized_dynamic` ranker passed every registered primary gate against `proposal_dynamic`:
+
+- Pareto top-1 increased from 19.51% to 43.90%, a gain of 24.39 percentage points.
+- Mean remaining-conflict regret decreased from 0.5074 to 0.3357, a relative reduction of 33.83%.
+- The map bootstrap intervals were positive for both top-1 gain `[0.0833, 0.3889]` and conflict-regret
+  improvement `[0.0018, 0.3584]`.
+- It was no worse on 10 of 12 maps, exceeded uniform random and internal-conflict coverage, and selected
+  one neighborhood size in only 65.85% of states.
+
+The improvement was strongest in medium and high conflict states. In the low stratum, top-1 changed from
+31.25% to 37.50%; in medium it changed from 14.29% to 42.86%; in high it changed from 0% to 75%. The high
+stratum contains only four states, so it is descriptive rather than stand-alone evidence.
+
+Adding static layout, OD and density context did not add reliable value: `realized_context` reached 41.46%
+top-1 versus 43.90% for `realized_dynamic`, while its conflict-regret reduction was only 0.39%. The formal
+result therefore supports dynamic-state plus explicit-neighborhood ranking on unseen maps, but does not
+restore the static transfer claim.
+
+No RL training occurred in this stage. The registered decision is
+`proceed_to_fresh_closed_loop_confirmation`: next, the frozen `realized_dynamic` ranker must choose an
+explicit neighborhood at every repair step on another fresh map cohort and be compared end to end with
+official Adaptive. RL remains paused until that closed-loop test succeeds.

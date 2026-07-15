@@ -231,6 +231,11 @@ The replacement natural-distribution confirmation keeps zero-conflict tasks as s
 keeps high-conflict tasks as repair states. The inspected 12-map set is a Pilot only; a new 12-map formal
 set uses fixed frozen rankers and per-trial timeout/resume isolation. See
 [`docs/NATURAL_DISTRIBUTION_CONFIRMATION.md`](docs/NATURAL_DISTRIBUTION_CONFIRMATION.md).
+The formal run retained all 48 tasks, produced 41 repair states, 733 explicit neighborhoods and 5,864
+isolated trials with no failures. The frozen realized-neighborhood ranker improved Pareto top-1 from 19.5%
+to 43.9% and reduced remaining-conflict regret by 33.8%, passing every primary gate. Static context still
+showed no incremental benefit, so the next gate is a fresh-map closed-loop test of the dynamic realized
+ranker; RL remains paused.
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
