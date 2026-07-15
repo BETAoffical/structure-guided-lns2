@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "expected_policy_episodes": 24,
+  "bootstrap_samples": 2000,
+  "thresholds": {
+    "minimum_metric_improvement": 0.05,
+    "minimum_maps_no_worse": 4
+  }
+}

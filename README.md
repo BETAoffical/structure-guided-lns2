@@ -237,6 +237,12 @@ to 43.9% and reduced remaining-conflict regret by 33.8%, passing every primary g
 showed no incremental benefit, so the next gate is a fresh-map closed-loop test of the dynamic realized
 ranker; RL remains paused.
 
+The registered closed-loop stage is implemented by `scripts/collect_closed_loop_confirmation.py`. It
+compares official Adaptive with frozen proposal-only and realized-neighborhood rankers on 24 tasks from
+six new maps. Candidate generation, feature extraction and inference are included in the end-to-end time
+budget, and failed episodes remain in fixed-budget metrics. See
+[`docs/CLOSED_LOOP_CONFIRMATION.md`](docs/CLOSED_LOOP_CONFIRMATION.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -273,6 +279,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   replay, proposal/evaluation random-seed separation, and ranking-stability gates.
 - [`docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`](docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md):
   leave-one-map-out explicit-set ranking, static-context ablation, and the current positive/negative result.
+- [`docs/CLOSED_LOOP_CONFIRMATION.md`](docs/CLOSED_LOOP_CONFIRMATION.md): frozen pairwise policy,
+  sequential candidate generation, failure accounting, and the final gate before RL warm-start work.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
