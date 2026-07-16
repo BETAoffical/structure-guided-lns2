@@ -286,6 +286,11 @@ order selector with leave-one-map-out evaluation. It improved normalized H4 AUC 
 failed and no independent maps were generated. See
 [`docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md`](docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md).
 
+The next frozen-policy gate is a preregistered MovingAI OOD closed-loop confirmation over 12 untouched
+standard maps, five layout families, two random scenarios, and three solver seeds. It compares Adaptive,
+fixed Target/Collision/Random, and frozen `realized_dynamic` without retraining. See
+[`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -336,6 +341,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   trials, and the mechanism gate for redefining the InitLNS action.
 - [`docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md`](docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md): Train-only contextual
   repair-order selection, map-held-out gates, and the independent-confirmation boundary.
+- [`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md): frozen-v1 standard-layout OOD
+  qualification, five-policy closed-loop comparison, and cross-layout stopping rule.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

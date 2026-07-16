@@ -25,7 +25,16 @@ def main() -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument(
         "--phase",
-        choices=("qualify", "official_adaptive", "proposal_dynamic", "realized_dynamic", "all"),
+        choices=(
+            "qualify",
+            "official_adaptive",
+            "fixed_target",
+            "fixed_collision",
+            "fixed_random",
+            "proposal_dynamic",
+            "realized_dynamic",
+            "all",
+        ),
         default="all",
     )
     parser.add_argument("--workers", type=int)

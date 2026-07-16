@@ -40,6 +40,7 @@ from experiments.repair_collection import (
     _low_level_delta,
     _make_environment,
     _plain,
+    POLICY_DESTROY_STRATEGIES,
     _qualification_worker,
     _read_json,
     _read_jsonl,
@@ -53,7 +54,9 @@ from experiments.repair_collection import (
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
 EPISODE_SCHEMA = "lns2.closed_loop_episode.v1"
+FIXED_POLICIES = ("fixed_target", "fixed_collision", "fixed_random")
 POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
+SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
@@ -127,6 +130,8 @@ def closed_loop_dataset_design(
     registered: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     settings = dict(registered or {})
+    if str(settings.get("mode", "structured")) == "movingai_ood":
+        return movingai_ood_dataset_design(rows, split, settings)
     expected_tasks = set(
         map(
             str,
@@ -185,6 +190,64 @@ def closed_loop_dataset_design(
     }
 
 
+def movingai_ood_dataset_design(
+    rows: list[dict[str, Any]], split: str, settings: dict[str, Any]
+) -> dict[str, Any]:
+    errors: list[str] = []
+    if any(str(row.get("split")) != split for row in rows):
+        errors.append("dataset contains a non-OOD split")
+    registered_maps = {
+        str(row["map_id"]): {
+            "layout_family": str(row["layout_family"]),
+            "agent_counts": set(map(int, row["agent_counts"])),
+        }
+        for row in settings.get("maps", [])
+    }
+    by_map: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in rows:
+        by_map[str(row["map_id"])].append(row)
+    if set(by_map) != set(registered_maps):
+        errors.append("MovingAI map IDs differ from the registration")
+    family_counts: collections.Counter[str] = collections.Counter()
+    scenario_indices = set(map(int, settings.get("scenario_indices", [4, 5])))
+    for map_id, tasks in sorted(by_map.items()):
+        registered = registered_maps.get(map_id)
+        if registered is None:
+            continue
+        layouts = {str(row.get("layout_mode")) for row in tasks}
+        if layouts != {registered["layout_family"]}:
+            errors.append(f"{map_id}: layout family differs from registration")
+        family_counts[registered["layout_family"]] += 1
+        observed = {
+            (int(str(row.get("scenario_type", "")).rsplit("_", 1)[-1]), int(row["agent_count"]))
+            for row in tasks
+        }
+        expected = {
+            (scenario, agents)
+            for scenario in scenario_indices
+            for agents in registered["agent_counts"]
+        }
+        if observed != expected or len(tasks) != len(expected):
+            errors.append(f"{map_id}: scenario/agent pairing differs from registration")
+    expected_families = {
+        str(name): int(count)
+        for name, count in dict(settings.get("layout_family_counts", {})).items()
+    }
+    if dict(sorted(family_counts.items())) != dict(sorted(expected_families.items())):
+        errors.append("MovingAI layout-family replication differs from registration")
+    expected_tasks = int(settings.get("task_count", 0))
+    if len(rows) != expected_tasks or len(by_map) != int(settings.get("map_count", 0)):
+        errors.append("MovingAI dataset dimensions differ from registration")
+    return {
+        "passed": not errors,
+        "errors": errors,
+        "mode": "movingai_ood",
+        "map_count": len(by_map),
+        "task_count": len(rows),
+        "layout_counts": dict(sorted(family_counts.items())),
+    }
+
+
 def configured_solver_seeds(config: dict[str, Any]) -> tuple[int, ...]:
     values = config.get("solver_seeds")
     seeds = (
@@ -202,7 +265,7 @@ def configured_policies(config: dict[str, Any]) -> tuple[str, ...]:
     if (
         not policies
         or len(policies) != len(set(policies))
-        or any(policy not in POLICIES for policy in policies)
+        or any(policy not in SUPPORTED_POLICIES for policy in policies)
     ):
         raise ValueError("closed-loop policies are invalid or repeated")
     if "official_adaptive" not in policies or "realized_dynamic" not in policies:
@@ -274,7 +337,21 @@ def closed_loop_qualification_report(
         if fingerprints_by_seed[left] == fingerprints_by_seed[right]
     ]
     settings = dict(config["qualification"])
-    sample_gates = (
+    qualification_mode = str(settings.get("mode", "structured"))
+    if formal and qualification_mode == "movingai_ood":
+        required_families = set(map(str, settings["required_layout_families"]))
+        active_families = {
+            str(row["layout_mode"]) for row in nonzero
+        }
+        sample_gates = {
+            "minimum_nonzero_states": len(nonzero)
+            >= int(settings["minimum_nonzero_states"]),
+            "minimum_active_maps": len(active_maps)
+            >= int(settings["minimum_active_maps"]),
+            "required_layout_families_active": required_families.issubset(active_families),
+        }
+    else:
+        sample_gates = (
         {
             "minimum_nonzero_states": len(nonzero) >= int(settings["minimum_nonzero_states"]),
             "minimum_nonzero_per_layout": all(
@@ -295,7 +372,7 @@ def closed_loop_qualification_report(
             "minimum_active_maps": True,
             "minimum_nonzero_per_solver_seed": True,
         }
-    )
+        )
     gates = {
         "dataset_design": bool(design["passed"]) if formal else True,
         "seed_isolation": bool(isolation["passed"]),
@@ -1232,8 +1309,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     partial_path.unlink(missing_ok=True)
     started_wall = time.perf_counter()
     try:
+        destroy_strategy = POLICY_DESTROY_STRATEGIES.get(policy, "Adaptive")
         environment = _make_environment(
-            job["dataset_root"], row, job["environment"], "Adaptive"
+            job["dataset_root"], row, job["environment"], destroy_strategy
         )
         with partial_path.open("w", encoding="utf-8", newline="\n") as stream:
             state = _plain(environment.reset(seed=solver_seed))
@@ -1268,7 +1346,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before_hash = state_fingerprint(before)
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
-                if policy == "official_adaptive":
+                if policy == "official_adaptive" or policy in FIXED_POLICIES:
                     action = {"mode": "official"}
                 else:
                     proposal_started = time.perf_counter()
@@ -1527,9 +1605,20 @@ def run_closed_loop_collection(
     design = closed_loop_dataset_design(
         all_rows, split, dict(config.get("dataset_design", {}))
     )
-    isolation = _seed_isolation(
-        all_rows, list(config.get("reference_datasets", [])), project_root
-    )
+    if str(config.get("dataset_design", {}).get("mode", "structured")) == "movingai_ood":
+        registered_ids = set(map(str, config["dataset_design"].get("historical_map_ids", [])))
+        current_ids = {str(row["map_id"]) for row in all_rows}
+        overlap = sorted(current_ids & registered_ids)
+        isolation = {
+            "passed": not overlap,
+            "mode": "movingai_map_id",
+            "current_map_ids": sorted(current_ids),
+            "historical_overlap": overlap,
+        }
+    else:
+        isolation = _seed_isolation(
+            all_rows, list(config.get("reference_datasets", [])), project_root
+        )
     frozen_root = Path(str(config["frozen_models"]))
     if not frozen_root.is_absolute():
         frozen_root = project_root / frozen_root
@@ -1697,8 +1786,11 @@ __all__ = [
     "CLOSED_LOOP_SCHEMA",
     "CollectionLockError",
     "LEARNED_POLICIES",
+    "FIXED_POLICIES",
     "POLICIES",
+    "SUPPORTED_POLICIES",
     "closed_loop_dataset_design",
+    "movingai_ood_dataset_design",
     "closed_loop_qualification_report",
     "configured_policies",
     "configured_solver_seeds",

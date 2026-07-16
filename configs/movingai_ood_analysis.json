@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "expected_policy_episodes": 144,
+  "bootstrap_samples": 5000,
+  "thresholds": {
+    "minimum_metric_improvement": 0.05,
+    "minimum_maps_no_worse": 8
+  },
+  "ood_thresholds": {
+    "minimum_auc_improvement": 0.05,
+    "bootstrap_lower_bound": 0.0,
+    "minimum_maps_no_worse": 8,
+    "minimum_layout_families_no_worse": 4
+  }
+}

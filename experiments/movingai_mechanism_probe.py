@@ -184,6 +184,9 @@ def prepare_probe_dataset(
     specification = _read_json(config_path)
     if int(specification.get("schema_version", -1)) != PROBE_SCHEMA_VERSION:
         raise ValueError("unsupported MovingAI mechanism probe config schema")
+    split = str(specification.get("split", PROBE_SPLIT))
+    if not split or "/" in split or "\\" in split:
+        raise ValueError("MovingAI output split must be one path-safe component")
     source_manifest_path = source_root / "manifest.jsonl"
     source_rows = _read_jsonl(source_manifest_path)
     source_index = {str(row["id"]): row for row in source_rows}
@@ -191,8 +194,12 @@ def prepare_probe_dataset(
         raise ValueError("MovingAI source manifest is empty or contains duplicate ids")
 
     requested: list[tuple[str, int, int]] = []
+    case_by_benchmark: dict[str, dict[str, Any]] = {}
     for case in specification.get("cases", []):
         benchmark_id = str(case["benchmark_id"])
+        if benchmark_id in case_by_benchmark:
+            raise ValueError(f"duplicate MovingAI benchmark case: {benchmark_id}")
+        case_by_benchmark[benchmark_id] = dict(case)
         if benchmark_id not in source_index:
             raise ValueError(f"unknown MovingAI benchmark in probe config: {benchmark_id}")
         available = {int(value) for value in source_index[benchmark_id]["agent_counts"]}
@@ -252,7 +259,7 @@ def prepare_probe_dataset(
         if existing.get("configuration_fingerprint") != source_fingerprint:
             raise ValueError("probe output contains a different dataset configuration")
 
-    split_root = output_root / PROBE_SPLIT
+    split_root = output_root / split
     manifest: list[dict[str, Any]] = []
     map_metrics: dict[str, dict[str, Any]] = {}
     for benchmark_id, scenario_index, agent_count in requested:
@@ -310,14 +317,18 @@ def prepare_probe_dataset(
         )
         manifest.append(
             {
-                "split": PROBE_SPLIT,
+                "split": split,
                 "map_id": benchmark_id,
                 "task_id": task_id,
                 "map_file": map_file.as_posix(),
                 "scenario_file": scenario_file.as_posix(),
                 "map_metadata_file": f"maps/{benchmark_id}.json",
                 "task_file": task_file.as_posix(),
-                "layout_mode": "movingai_standard",
+                "layout_mode": str(
+                    case_by_benchmark[benchmark_id].get(
+                        "layout_family", "movingai_standard"
+                    )
+                ),
                 "layout_variant": benchmark_id,
                 "scenario_type": f"movingai_random_{scenario_index}",
                 "task_variant": f"random_{scenario_index}_agents_{agent_count}",
@@ -343,7 +354,7 @@ def prepare_probe_dataset(
         "source": "MovingAI MAPF benchmark random scenarios",
         "task_semantics": "static scenario prefixes; no release times or task queues",
         "splits": {
-            PROBE_SPLIT: {
+            split: {
                 "map_count": len(map_metrics),
                 "instance_count": len(manifest),
                 "scenario_count": len(
