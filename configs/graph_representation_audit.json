@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "study_role": "development_graph_representation_audit",
+  "models": ["flat_mlp", "agent_deepsets", "conflict_gnn"],
+  "torch_version": "2.12.1+cu126",
+  "numpy_version": "1.26.4",
+  "device": "cuda",
+  "random_seeds": [20260714, 20260715, 20260716],
+  "training": {
+    "hidden_size": 64,
+    "flat_hidden_sizes": [128, 64],
+    "message_passing_layers": 2,
+    "dropout": 0.1,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "gradient_clip": 1.0,
+    "batch_states": 64,
+    "minimum_epochs": 20,
+    "maximum_epochs": 200,
+    "early_stopping_patience": 20
+  },
+  "bootstrap_samples": 5000,
+  "thresholds": {
+    "minimum_top1_improvement": 0.03,
+    "minimum_conflict_regret_improvement": 0.05,
+    "maximum_top1_degradation": 0.02,
+    "maximum_conflict_regret_degradation": 0.05,
+    "maximum_single_size_share": 0.8,
+    "minimum_train_maps_no_worse": 8,
+    "minimum_validation_maps_no_worse": 4
+  },
+  "expected_current_lomo": {
+    "pareto_top1_hit_rate": 0.4965277777777778,
+    "mean_conflict_regret": 0.2824386911712655,
+    "absolute_tolerance": 1e-12
+  },
+  "registered_inputs": {
+    "current_lomo_predictions_sha256": "04e61100de39bcfe8fc261d5c46fc19e5ee545eb824864885ee40e880e148ce4",
+    "policy_states_sha256": "1d2ccdc1d64c476921c8a39d6e18802ee955c754188d4ad4a442ba831e12695a",
+    "policy_candidates_sha256": "917e3180660bd6e6db04fa34c17aa92fe0738c4d51929723b07e66c0fa637416",
+    "historical_candidates_sha256": "6faef4cd6bcba0e79c30790a287142cee4ce580163d02e40cd740e16ac77ebd2",
+    "aggregate_train_index_sha256": "b586f5a7ef58f27241d0d2028a2358d971babb0e55febf7ea9ecef025dbce3be",
+    "validation_index_sha256": "07f1cbffed1335d24c586320b9f50c316129f601975b28d1a514e7c1e623fffb",
+    "validation_gbdt_predictions_sha256": "2bfb04728ed8e776b0df0cac0e28d4d1b3c3c111ad758c70a7406ba9053e99ed"
+  }
+}
