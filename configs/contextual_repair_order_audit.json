@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "formal": true,
+  "study_role": "train_only_contextual_repair_order_audit",
+  "source": {
+    "root": "build/initlns-repair-order-probe-v1",
+    "selected_states": "selected_states.jsonl",
+    "selected_states_sha256": "d794ce80ecf977b8234aa0db76b713cf3b42e8a36eb17e41e50ea60db647b4ed",
+    "condition_index": "condition_index.jsonl",
+    "condition_index_sha256": "29fa2206ac04f4b63f40aff5476a44d9c75298a973338f28972a9ea1f1d5d293",
+    "trial_manifest": "trial_manifest.jsonl",
+    "trial_manifest_sha256": "69cfdd1c2aa9945bd418d8cdfc29c8ddc19223030bb466034ebe427a5b24f3cd",
+    "report": "repair_order_report.json",
+    "report_sha256": "142b4e69d87f78fc8b1393978033e53bc0d7ac1bffc2b31021a09542de1bfcca",
+    "run_config": "run_config.json",
+    "run_config_sha256": "40da8f5582e765bdf795e1fba18046ad43d4ce8bbf1f3b08cf5e8a0c79a06b52"
+  },
+  "horizon": 4,
+  "policies": [
+    "agent_id_ascending",
+    "conflict_degree_descending",
+    "delay_descending",
+    "path_length_descending"
+  ],
+  "model_parameters": {
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "l2_regularization": 0.1,
+    "random_state": 20260714
+  },
+  "bootstrap_samples": 5000,
+  "bootstrap_seed": 20270501,
+  "permutation_samples": 500,
+  "permutation_seed": 20270502,
+  "thresholds": {
+    "minimum_auc_improvement": 0.05,
+    "bootstrap_lower_bound": 0.0,
+    "minimum_maps_no_worse": 8,
+    "near_oracle_normalized_regret": 0.05,
+    "minimum_near_oracle_gain": 0.05,
+    "maximum_policy_share": 0.8,
+    "minimum_permutation_percentile": 0.95,
+    "maximum_feasibility_drop": 0.02,
+    "maximum_final_conflict_degradation": 0.05
+  },
+  "independent_confirmation": {
+    "master_seed": 20270519,
+    "map_count": 12,
+    "layout_counts": {
+      "regular_beltway": 4,
+      "compartmentalized": 4,
+      "dead_end_aisles": 4
+    },
+    "task_variants": ["balanced_80", "balanced_100", "bottleneck_80", "bottleneck_100"],
+    "solver_seeds": [1, 2, 3],
+    "source_episode_count": 144,
+    "selected_state_count": 24,
+    "candidates_per_state": 6,
+    "trial_count": 576
+  }
+}

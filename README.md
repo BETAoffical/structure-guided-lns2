@@ -280,6 +280,11 @@ the best covered only 61.8% within the registered tolerance. The decision is the
 any RL work; static transfer and OOD claims remain paused. See
 [`docs/REPAIR_ORDER_PROBE.md`](docs/REPAIR_ORDER_PROBE.md).
 
+The preregistered contextual repair-order audit uses the existing Train-only probe outcomes to test a
+four-rule PP order selector with leave-one-map-out evaluation. Its sequence features are computed before
+repair, and independent-map collection is hard-gated on the Train audit. See
+[`docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md`](docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -328,6 +333,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   Horizon-4 collection, split-trial stability, and sequential-credit gates before any RL work.
 - [`docs/REPAIR_ORDER_PROBE.md`](docs/REPAIR_ORDER_PROBE.md): explicit PP order control, common-random-number
   trials, and the mechanism gate for redefining the InitLNS action.
+- [`docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md`](docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md): Train-only contextual
+  repair-order selection, map-held-out gates, and the independent-confirmation boundary.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
