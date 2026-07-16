@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import collections
 import itertools
-import json
 import math
-import os
 import pickle
 import random
 import statistics
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import (
+    feature_names as _feature_names,
+    mean as _mean,
+    quantile as _quantile,
+    relative_improvement as _relative_improvement,
+)
 from experiments.closed_loop_confirmation import (
     PortablePairwiseModel,
     _closed_loop_episode_worker,
@@ -33,14 +37,12 @@ from experiments.policy_visited_aggregation import (
 from experiments.realized_neighborhood_ranking_audit import (
     _grouped,
     _selection_record,
-    dominance_pairs,
     effectiveness_dominates,
     pairwise_accuracy,
     summarize_records,
 )
 from experiments.repair_collection import (
     SCHEMA_VERSION,
-    CollectionLockError,
     _CollectionRunLock,
     _dataset_fingerprint,
     _fingerprint,
@@ -55,28 +57,6 @@ from experiments.repair_collection import (
 
 ANALYSIS_SCHEMA = "lns2.policy_visited_analysis.v1"
 V2_VALIDATION_SCHEMA = "lns2.policy_visited_v2_validation.v1"
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _quantile(values: list[float], fraction: float) -> float:
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    position = (len(ordered) - 1) * fraction
-    lower = int(math.floor(position))
-    upper = min(lower + 1, len(ordered) - 1)
-    weight = position - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
-
-
-def _relative_improvement(baseline: float, primary: float) -> float:
-    if baseline == 0.0:
-        return 0.0 if primary == 0.0 else -float("inf")
-    return (baseline - primary) / baseline
 
 
 def _validate_analysis_config(config: dict[str, Any]) -> None:
@@ -103,10 +83,6 @@ def _validate_analysis_config(config: dict[str, Any]) -> None:
         raise ValueError("inverse layout weighting sensitivity must be boolean")
     if "study_role" in config and str(config["study_role"]) != "development":
         raise ValueError("policy-visited aggregate training study_role must be development")
-
-
-def _feature_names(rows: list[dict[str, Any]], profile: str) -> list[str]:
-    return sorted({name for row in rows for name in row["features"][profile]})
 
 
 def train_equal_state_pairwise_model(

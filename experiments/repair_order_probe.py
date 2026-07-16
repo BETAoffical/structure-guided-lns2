@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import collections
-import json
 import math
-import os
 import random
 import statistics
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import append_jsonl_fsync as _append_jsonl
 from experiments.closed_loop_confirmation import (
     fixed_budget_conflict_auc,
     generate_online_candidates,
@@ -26,7 +25,7 @@ from experiments.repair_collection import (
     _CollectionRunLock,
     _dataset_fingerprint,
     _fingerprint,
-    _load_dataset_rows,
+    _policy_train_dataset_lookup as _dataset_lookup,
     _low_level_delta,
     _make_environment,
     _plain,
@@ -57,6 +56,7 @@ TRIAL_SCHEMA = "lns2.repair_order_trial.v1"
 REPORT_SCHEMA = "lns2.repair_order_report.v1"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENTATION_FILES = (
+    "experiments/_common.py",
     "experiments/repair_order_probe.py",
     "experiments/sequential_credit_audit.py",
     "experiments/closed_loop_confirmation.py",
@@ -631,22 +631,6 @@ def _trial_path(output_root: Path, job: dict[str, Any]) -> Path:
         / str(job["candidate_id"])
         / f"{job['condition_id']}.json"
     )
-
-
-def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as stream:
-        stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-        stream.flush()
-        os.fsync(stream.fileno())
-
-
-def _dataset_lookup(dataset_root: Path) -> dict[str, dict[str, Any]]:
-    rows = _load_dataset_rows(dataset_root, ["policy_train"])
-    lookup = {str(row["task_id"]): row for row in rows}
-    if len(lookup) != len(rows):
-        raise ValueError("policy_train dataset contains duplicate task IDs")
-    return lookup
 
 
 def _prepare_states(

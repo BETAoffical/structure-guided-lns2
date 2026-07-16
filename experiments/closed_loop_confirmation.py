@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import collections
-import hashlib
 import itertools
 import json
 import math
 import os
 import pickle
-import random
 import statistics
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    episode_id as _episode_id,
+    select_rows_by_task_id as _selected_rows,
+    sha256_file as _sha256,
+)
 from experiments.context_audit import _pair_vector
 from experiments.local_representation_audit import (
     StaticGridAnalysis,
@@ -23,7 +26,6 @@ from experiments.local_representation_audit import (
 from experiments.natural_distribution_confirmation import conflict_density, conflict_severity
 from experiments.realized_neighborhood_probe import select_representative_neighborhoods
 from experiments.realized_neighborhood_ranking_audit import (
-    _feature_profiles,
     _feature_profiles_from_shared,
     candidate_feature_cache,
     state_dynamic_features,
@@ -60,6 +62,7 @@ SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", 
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
+    "experiments/_common.py",
     "experiments/closed_loop_confirmation.py",
     "experiments/context_audit.py",
     "experiments/local_representation_audit.py",
@@ -81,14 +84,6 @@ class ClosedLoopExecutionError(RuntimeError):
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
         self.kind = kind
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
@@ -1089,10 +1084,6 @@ def fixed_budget_conflict_auc(
     return sum((values[index] + values[index + 1]) / 2.0 for index in range(budget))
 
 
-def _episode_id(row: dict[str, Any], solver_seed: int, policy: str) -> str:
-    return f"{row['task_id']}__seed_{solver_seed:04d}__{policy}"
-
-
 def validate_closed_loop_trace(
     path: str | Path,
     run_fingerprint: str,
@@ -1563,17 +1554,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             "error_kind": getattr(error, "kind", type(error).__name__),
             "error": f"{type(error).__name__}: {error}",
         }
-
-
-def _selected_rows(rows: list[dict[str, Any]], task_ids: list[str] | None) -> list[dict[str, Any]]:
-    if task_ids is None:
-        return rows
-    requested = list(dict.fromkeys(map(str, task_ids)))
-    indexed = {str(row["task_id"]): row for row in rows}
-    missing = sorted(set(requested) - set(indexed))
-    if missing:
-        raise ValueError(f"unknown task ids: {missing}")
-    return [indexed[task_id] for task_id in requested]
 
 
 def run_closed_loop_collection(

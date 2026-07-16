@@ -1,45 +1,20 @@
 from __future__ import annotations
 
 import collections
-import json
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    read_collection_jsonl as _read_jsonl,
+    read_json as _read_json,
+    resolve_within as _resolve,
+    write_json as _write_json,
+)
+
 
 QUALITY_SCHEMA_VERSION = 1
 COMPLETE_STATUSES = {"ok", "resumed"}
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        raise ValueError(f"missing collection file: {path}")
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
-def _write_json(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _resolve(root: Path, relative: str) -> Path:
-    path = (root / relative).resolve()
-    try:
-        path.relative_to(root.resolve())
-    except ValueError as error:
-        raise ValueError(f"collection path escapes its root: {relative}") from error
-    return path
 
 
 def _number_summary(values: Iterable[float | int]) -> dict[str, Any]:

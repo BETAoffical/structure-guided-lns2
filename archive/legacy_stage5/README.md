@@ -8,6 +8,7 @@ candidate, and rollout experiments that were built around its trace schema. Thes
 as negative findings and implementation history, but they are not active MAPF-LNS2 baselines and are
 excluded from the root CMake build, package exports, and default tests.
 
-The ignored `build/` directory was deliberately left untouched because it contains raw experiment
-artifacts. The authoritative remote backup branch is
-`codex/pre-official-lns2-backup-2026-07-13`.
+The authoritative source checkpoint and result summaries remain here, and the
+remote backup branch is `codex/pre-official-lns2-backup-2026-07-13`. Temporary
+Stage 4-5 build collections may be removed by the repository hygiene process;
+they are not part of the active formal evidence ledger.

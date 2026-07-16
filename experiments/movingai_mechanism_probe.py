@@ -6,9 +6,16 @@ import json
 import random
 import re
 import shutil
-import statistics
 from pathlib import Path
 from typing import Any, Iterable
+
+from experiments._common import (
+    action_family as _family,
+    mean as _mean,
+    ratio as _ratio,
+    read_optional_jsonl as _read_jsonl,
+    sha256_file as _sha256,
+)
 
 
 PROBE_SCHEMA_VERSION = 1
@@ -28,16 +35,6 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
 def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -53,26 +50,9 @@ def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _fingerprint(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _ratio(numerator: float | int, denominator: float | int) -> float:
-    return float(numerator) / float(denominator) if denominator else 0.0
 
 
 def _movingai_map_metrics(path: Path) -> dict[str, Any]:
@@ -374,10 +354,6 @@ def _candidate_key(action: dict[str, Any]) -> str:
         f"{int(action['seed_agent'])}:{str(action['heuristic'])}:"
         f"{int(action['neighborhood_size'])}"
     )
-
-
-def _family(action: dict[str, Any]) -> str:
-    return f"{str(action['heuristic'])}:{int(action['neighborhood_size'])}"
 
 
 def _horizon_one(outcome: dict[str, Any]) -> dict[str, Any]:

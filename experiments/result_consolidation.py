@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import html
 import io
 import json
@@ -10,6 +9,8 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
+
+from experiments._common import read_json as _read_json, sha256_file
 
 
 SCHEMA = "lns2.result_consolidation.v1"
@@ -43,10 +44,6 @@ class EvidenceVerificationError(ValueError):
     pass
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -59,14 +56,6 @@ def _write_json(path: Path, value: Any) -> None:
         path,
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
     )
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _repository_path(root: Path, relative: str) -> Path:

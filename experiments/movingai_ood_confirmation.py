@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import collections
-import json
-import statistics
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import mean as _mean
 from experiments.closed_loop_confirmation_analysis import (
     _paired_rows,
     compare_policies,
@@ -16,11 +15,6 @@ from experiments.repair_collection import SCHEMA_VERSION, _read_json, _read_json
 
 SCHEMA = "lns2.movingai_ood_closed_loop.v1"
 FIXED_POLICIES = ("fixed_target", "fixed_collision", "fixed_random")
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
 
 
 def family_auc_comparison(

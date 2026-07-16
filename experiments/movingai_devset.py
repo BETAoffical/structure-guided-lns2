@@ -9,13 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+from experiments._common import sha256_file
 
 
 def _download(url: str, destination: Path) -> None:

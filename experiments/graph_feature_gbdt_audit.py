@@ -3,12 +3,12 @@ from __future__ import annotations
 import collections
 import math
 import os
-import statistics
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import mean as _mean, ratio as _ratio
 from experiments.closed_loop_confirmation import _sha256, score_online_candidates
 from experiments.local_representation_audit import ConflictEvent, analyze_state
 from experiments.policy_visited_aggregation_analysis import (
@@ -117,15 +117,6 @@ COMPACT_RETAINED_FIELDS = (
     "trial_count",
     "neighborhood_sha256",
 )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _ratio(numerator: float | int, denominator: float | int) -> float:
-    return float(numerator) / float(denominator) if denominator else 0.0
 
 
 def _validate_config(config: dict[str, Any]) -> None:

@@ -8,8 +8,14 @@ import random
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import (
+    feature_names,
+    mean as _mean,
+    quantile as _quantile,
+    relative_improvement as _relative_improvement,
+)
 from experiments.closed_loop_confirmation import (
     _sha256,
     score_online_candidates,
@@ -41,28 +47,6 @@ PROFILE = "realized_dynamic"
 METHODS = ("equal_pairwise", "impact_pairwise", "dual_outcome")
 
 
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _quantile(values: list[float], fraction: float) -> float:
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    position = (len(ordered) - 1) * fraction
-    lower = int(math.floor(position))
-    upper = min(lower + 1, len(ordered) - 1)
-    weight = position - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
-
-
-def _relative_improvement(baseline: float, challenger: float) -> float:
-    if baseline == 0.0:
-        return 0.0 if challenger == 0.0 else -float("inf")
-    return (baseline - challenger) / baseline
-
-
 def _validate_config(config: dict[str, Any]) -> None:
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError("unsupported ranking-objective audit config")
@@ -88,10 +72,6 @@ def _validate_config(config: dict[str, Any]) -> None:
         raise ValueError("objective audit requires 5,000 map bootstrap samples")
 
 
-def _feature_names(rows: list[dict[str, Any]]) -> list[str]:
-    return sorted({name for row in rows for name in row["features"][PROFILE]})
-
-
 def _state_conflicts(candidates: list[dict[str, Any]]) -> float:
     values = {
         float(row["features"][PROFILE]["state.colliding_pairs"])
@@ -108,7 +88,7 @@ def train_impact_pairwise_model(
     import numpy as np
     from sklearn.ensemble import HistGradientBoostingClassifier
 
-    names = _feature_names(rows)
+    names = feature_names(rows, PROFILE)
     examples: list[list[float]] = []
     labels: list[int] = []
     weights: list[float] = []
@@ -237,7 +217,7 @@ def train_dual_outcome_model(
     import numpy as np
     from sklearn.ensemble import HistGradientBoostingRegressor
 
-    names = _feature_names(rows)
+    names = feature_names(rows, PROFILE)
     solved: list[float] = []
     residual: list[float] = []
     weights: list[float] = []

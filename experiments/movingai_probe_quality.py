@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import collections
 import itertools
-import json
 import math
 import random
 import statistics
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from experiments._common import quantile as _quantile
 from experiments.movingai_mechanism_probe import (
     MODEL_SEED,
     _actual_neighborhood,
@@ -31,19 +31,6 @@ QUALITY_SCHEMA_VERSION = 1
 def _median(values: Iterable[float | int]) -> float:
     numbers = [float(value) for value in values]
     return statistics.median(numbers) if numbers else 0.0
-
-
-def _quantile(values: list[float], probability: float) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    position = probability * (len(ordered) - 1)
-    lower = int(math.floor(position))
-    upper = int(math.ceil(position))
-    if lower == upper:
-        return ordered[lower]
-    fraction = position - lower
-    return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
 
 
 def _jaccard(left: Iterable[Any], right: Iterable[Any]) -> float:

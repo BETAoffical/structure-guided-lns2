@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import pickle
 import time
 from pathlib import Path
 from typing import Any
 
+from experiments._common import sha256_file as _sha256
 from experiments.realized_neighborhood_ranking_audit import (
-    FEATURE_PROFILES,
     _beats_simple_baseline,
     _oracle_support,
     _read_json,
@@ -32,14 +30,6 @@ from experiments.realized_neighborhood_ranking_audit import (
 
 SCHEMA_VERSION = 1
 PRIMARY_PROFILES = ("proposal_dynamic", "realized_dynamic", "realized_context")
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _resolve(project_root: Path, value: str) -> Path:

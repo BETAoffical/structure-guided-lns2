@@ -3,13 +3,19 @@ from __future__ import annotations
 import collections
 import json
 import math
-import os
 import random
-import statistics
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    append_jsonl_fsync as _append_jsonl,
+    mean as _mean,
+    quantile as _quantile,
+    sha256_file as _sha256,
+    state_storage_id as _state_storage_id,
+    trial_job_id as _trial_job_id,
+)
 from experiments.closed_loop_confirmation import (
     feature_range_diagnostic,
     fixed_budget_conflict_auc,
@@ -28,7 +34,7 @@ from experiments.repair_collection import (
     _CollectionRunLock,
     _dataset_fingerprint,
     _fingerprint,
-    _load_dataset_rows,
+    _policy_train_dataset_lookup as _dataset_lookup,
     _low_level_delta,
     _make_environment,
     _plain,
@@ -48,6 +54,7 @@ INDEX_SCHEMA = "lns2.sequential_credit_index.v1"
 REPORT_SCHEMA = "lns2.sequential_credit_report.v1"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENTATION_FILES = (
+    "experiments/_common.py",
     "experiments/sequential_credit_audit.py",
     "experiments/closed_loop_confirmation.py",
     "experiments/policy_visited_aggregation.py",
@@ -55,37 +62,9 @@ IMPLEMENTATION_FILES = (
 )
 
 
-def _sha256(path: Path) -> str:
-    import hashlib
-
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _resolve(path: str | Path, *, base: Path = PROJECT_ROOT) -> Path:
     value = Path(path)
     return value.resolve() if value.is_absolute() else (base / value).resolve()
-
-
-def _mean(values: Iterable[float | int | bool]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _quantile(values: Iterable[float], probability: float) -> float:
-    ordered = sorted(map(float, values))
-    if not ordered:
-        return 0.0
-    position = probability * (len(ordered) - 1)
-    lower = int(math.floor(position))
-    upper = int(math.ceil(position))
-    if lower == upper:
-        return ordered[lower]
-    fraction = position - lower
-    return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
 
 
 def _jaccard(left: Iterable[str], right: Iterable[str]) -> float:
@@ -383,10 +362,6 @@ def _source_integrity(
     }
 
 
-def _state_storage_id(state_id: str) -> str:
-    return f"state-{_fingerprint({'state_id': state_id})[:16]}"
-
-
 def _prepare_path(output_root: Path, state_id: str) -> Path:
     return output_root / "prepared_states" / f"{_state_storage_id(state_id)}.json"
 
@@ -455,10 +430,6 @@ def _prepare_state_worker(job: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": 0,
             "error": f"{type(error).__name__}: {error}",
         }
-
-
-def _trial_job_id(state_id: str, candidate_id: str, trial_index: int) -> str:
-    return f"{_state_storage_id(state_id)}__{candidate_id}__trial_{trial_index:04d}"
 
 
 def _trial_path(output_root: Path, job: dict[str, Any]) -> Path:
@@ -697,27 +668,11 @@ def _trial_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as stream:
-        stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-        stream.flush()
-        os.fsync(stream.fileno())
-
-
 def _load_source(config: dict[str, Any], registered: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     states = _read_jsonl(Path(registered["paths"]["selected_states"]))
     candidates = _read_jsonl(Path(registered["paths"]["candidates"]))
     _source_integrity(states, candidates)
     return states, candidates
-
-
-def _dataset_lookup(dataset_root: Path) -> dict[str, dict[str, Any]]:
-    rows = _load_dataset_rows(dataset_root, ["policy_train"])
-    lookup = {str(row["task_id"]): row for row in rows}
-    if len(lookup) != len(rows):
-        raise ValueError("policy_train dataset contains duplicate task IDs")
-    return lookup
 
 
 def _run_metadata(

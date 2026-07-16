@@ -1,0 +1,95 @@
+{
+  "schema": "lns2.repository_hygiene.v1",
+  "schema_version": 1,
+  "result_consolidation_config": "configs/result_consolidation.json",
+  "production_python_roots": [
+    "experiments",
+    "generators",
+    "scripts"
+  ],
+  "tracked_roles": {
+    "archive": "historical reproducibility",
+    "artifacts": "frozen models and compact evidence",
+    "configs": "versioned experiment registrations",
+    "docs": "research and operational documentation",
+    "experiments": "official-kernel experiment implementations",
+    "generators": "map and static OD generation",
+    "include": "C++ public interfaces",
+    "requirements": "environment specifications",
+    "scripts": "stable command-line entry points",
+    "src": "C++ implementation and bindings",
+    "tests": "active regression coverage",
+    "third_party": "pinned licensed upstream sources"
+  },
+  "tracked_root_files": [
+    ".gitattributes",
+    ".gitignore",
+    "CMakeLists.txt",
+    "README.md"
+  ],
+  "forbidden_tracked_parts": [
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache"
+  ],
+  "forbidden_tracked_suffixes": [
+    ".pyc",
+    ".pyo",
+    ".tmp",
+    ".part"
+  ],
+  "maximum_tracked_file_bytes": 2097152,
+  "absolute_path_scan_roots": [
+    "configs",
+    "artifacts"
+  ],
+  "build": {
+    "fixed_protected_roots": [
+      "venv-graph",
+      "linux",
+      "windows",
+      "movingai-downloads",
+      "movingai-ood-dev",
+      "gpbs-upstream",
+      "initlns-movingai-ood-dataset-v1",
+      "initlns-movingai-ood-collection-v1",
+      "initlns-sequential-credit-audit-v1",
+      "initlns-policy-visited-natural-v2-collection",
+      "repair-experience-calibration-v2"
+    ],
+    "temporary_name_patterns": [
+      "(^|[-_])(smoke|verify|verification|preregister|dry[-_]?run|repeat|diagnostic|check)([-_]|$)",
+      "^stage[345]($|[-_])"
+    ],
+    "temporary_exact_roots": [
+      ".repair_collection_control",
+      "experience",
+      "repair-experience",
+      "initlns-context-audit",
+      "initlns-context-audit-final",
+      "initlns-graph-representation-audit-v1",
+      "movingai-mechanism-probe-report"
+    ],
+    "cache_directory_names": [
+      "__pycache__",
+      ".pytest_cache",
+      ".mypy_cache",
+      ".ruff_cache"
+    ],
+    "incomplete_file_suffixes": [
+      ".tmp",
+      ".part"
+    ],
+    "dependency_metadata_names": [
+      "run_config.json",
+      "run_status.json",
+      "collection_summary.json",
+      "qualification_report.json",
+      "portable_manifest.json",
+      "registration.json",
+      "metadata.json"
+    ],
+    "maximum_dependency_json_bytes": 16777216
+  }
+}

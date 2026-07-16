@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import collections
 import itertools
-import json
-import math
 import random
 import statistics
 from pathlib import Path
@@ -22,7 +20,6 @@ from experiments.movingai_probe_quality import (
     _aggregate_candidate,
     _build_quality_rows,
     _candidate_trial_stability,
-    _jaccard,
     _neighborhood_quality,
     _pareto_keys,
     _pareto_sensitivity,

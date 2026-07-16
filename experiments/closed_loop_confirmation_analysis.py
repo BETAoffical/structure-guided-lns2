@@ -1,40 +1,21 @@
 from __future__ import annotations
 
 import collections
-import json
 import random
-import statistics
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import (
+    mean as _mean,
+    quantile as _quantile,
+    relative_improvement as _relative_improvement,
+)
 from experiments.closed_loop_confirmation import (
     CLOSED_LOOP_SCHEMA,
     POLICIES,
     validate_closed_loop_trace,
 )
 from experiments.repair_collection import SCHEMA_VERSION, _read_json, _read_jsonl, _write_json
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _quantile(values: list[float], fraction: float) -> float:
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    position = (len(ordered) - 1) * fraction
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    weight = position - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
-
-
-def _relative_improvement(baseline: float, primary: float) -> float:
-    if baseline == 0.0:
-        return 0.0 if primary == 0.0 else -float("inf")
-    return (baseline - primary) / baseline
 
 
 def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:

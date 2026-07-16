@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    read_optional_jsonl as _read_jsonl,
+    sha256_file as _sha256,
+)
+
 
 @dataclass(frozen=True)
 class BenchmarkCase:
@@ -23,24 +28,6 @@ class BenchmarkCase:
             f"{solver}__{self.benchmark_id}__agents_{self.agent_count:04d}"
             f"__seed_{self.seed:04d}"
         )
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def load_cases(dataset: str | Path, seeds: Iterable[int]) -> list[BenchmarkCase]:

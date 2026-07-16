@@ -9,8 +9,9 @@ import statistics
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import mean as _mean, quantile as _quantile
 from experiments.closed_loop_confirmation import _sha256
 from experiments.local_representation_audit import analyze_state
 from experiments.realized_neighborhood_ranking_audit import effectiveness_dominates
@@ -57,22 +58,6 @@ def input_feature_is_forbidden(name: str) -> bool:
     return "generated" in normalized and not normalized.startswith(
         "state.low_level_generated"
     )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _quantile(values: list[float], fraction: float) -> float:
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    position = (len(ordered) - 1) * fraction
-    lower = int(math.floor(position))
-    upper = min(lower + 1, len(ordered) - 1)
-    weight = position - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
 def _path_wait_ratio(path: list[int]) -> float:

@@ -5,11 +5,15 @@ import hashlib
 import json
 import pickle
 import random
-import statistics
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import (
+    mean as _mean,
+    write_json as _write_json,
+    write_jsonl as _write_jsonl,
+)
 from experiments.context_audit import (
     FEATURE_PROFILES,
     MODEL_SEED,
@@ -28,26 +32,6 @@ SECONDARY_AUDIT_SCHEMA_VERSION = 1
 OBJECTIVE_MODES = ("primary", "runtime_sensitivity")
 LEARNERS = ("pairwise", "pareto_member")
 PRIMARY_LEARNER = "pareto_member"
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _write_json(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _write_jsonl(path: Path, values: Iterable[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as stream:
-        for value in values:
-            stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _categoricalize_sizes(index: list[dict[str, Any]]) -> list[dict[str, Any]]:

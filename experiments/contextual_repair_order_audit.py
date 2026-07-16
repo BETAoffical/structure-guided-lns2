@@ -3,11 +3,14 @@ from __future__ import annotations
 import collections
 import math
 import random
-import statistics
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from experiments._common import (
+    mean as _mean,
+    relative_improvement as _relative_improvement,
+)
 from experiments.closed_loop_confirmation import online_candidate_rows
 from experiments.repair_collection import (
     SCHEMA_VERSION,
@@ -39,17 +42,6 @@ FORBIDDEN_FEATURE_PARTS = (
     "final_conflicts",
     "feasible",
 )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _relative_improvement(baseline: float, challenger: float) -> float:
-    if baseline == 0.0:
-        return 0.0 if challenger == 0.0 else -float("inf")
-    return (baseline - challenger) / baseline
 
 
 def _resolve(value: str | Path) -> Path:

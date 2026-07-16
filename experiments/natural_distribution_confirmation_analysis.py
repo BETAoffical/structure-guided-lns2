@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments.natural_distribution_confirmation import (
+    _number_summary,
     conflict_density,
     conflict_severity,
 )
@@ -35,25 +36,6 @@ from experiments.repair_collection import _read_json, _read_jsonl, _write_json, 
 
 
 SCHEMA_VERSION = 1
-
-
-def _number_summary(values: list[float]) -> dict[str, Any]:
-    ordered = sorted(float(value) for value in values)
-    if not ordered:
-        return {"count": 0, "min": None, "median": None, "mean": None, "max": None}
-    middle = len(ordered) // 2
-    median = (
-        ordered[middle]
-        if len(ordered) % 2
-        else (ordered[middle - 1] + ordered[middle]) / 2.0
-    )
-    return {
-        "count": len(ordered),
-        "min": ordered[0],
-        "median": median,
-        "mean": sum(ordered) / len(ordered),
-        "max": ordered[-1],
-    }
 
 
 def _baseline_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:

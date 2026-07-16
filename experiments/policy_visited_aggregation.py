@@ -3,15 +3,15 @@ from __future__ import annotations
 import collections
 import hashlib
 import itertools
-import json
 import math
-import os
-import pickle
-import random
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    state_storage_id as _state_storage_id,
+    trial_job_id as _trial_job_id,
+)
 from experiments.closed_loop_confirmation import (
     _closed_loop_episode_worker,
     _sha256,
@@ -20,17 +20,14 @@ from experiments.closed_loop_confirmation import (
     load_frozen_policy_bundle,
     validate_closed_loop_trace,
 )
-from experiments.local_representation_audit import analyze_state, analyze_static_grid
+from experiments.local_representation_audit import analyze_state
 from experiments.realized_neighborhood_probe import evaluation_seed
 from experiments.realized_neighborhood_ranking_audit import (
-    INDEX_SCHEMA,
-    PairwiseModel,
     _aggregate_outcomes,
     _feature_profiles_from_shared,
     _label_rows,
     candidate_feature_cache,
     state_dynamic_features,
-    train_pairwise_model,
 )
 from experiments.realized_ranking_confirmation import _seed_isolation
 from experiments.repair_collection import (
@@ -65,6 +62,7 @@ QUALIFICATION_MODES = (
     "natural_distribution_confirmation",
 )
 IMPLEMENTATION_FILES = (
+    "experiments/_common.py",
     "experiments/policy_visited_aggregation.py",
     "experiments/closed_loop_confirmation.py",
     "experiments/local_representation_audit.py",
@@ -486,10 +484,6 @@ def _source_state_rows(
     return sorted(rows, key=lambda value: str(value["state_id"]))
 
 
-def _state_storage_id(state_id: str) -> str:
-    return f"state-{_fingerprint({'state_id': state_id})[:16]}"
-
-
 def _proposal_worker(job: dict[str, Any]) -> dict[str, Any]:
     state_row = job["state_row"]
     output_root = Path(job["output_root"])
@@ -576,10 +570,6 @@ def _proposal_worker(job: dict[str, Any]) -> dict[str, Any]:
             "status": "error",
             "error": f"{type(error).__name__}: {error}",
         }
-
-
-def _trial_job_id(state_id: str, candidate_id: str, trial_index: int) -> str:
-    return f"{_state_storage_id(state_id)}__{candidate_id}__trial_{trial_index:04d}"
 
 
 def _trial_result_path(output_root: Path, job: dict[str, Any]) -> Path:

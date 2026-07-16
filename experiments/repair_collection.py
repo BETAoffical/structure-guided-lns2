@@ -18,6 +18,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from experiments._common import episode_id as _episode_id, read_jsonl as _read_jsonl
+
 
 SCHEMA_VERSION = 1
 EPISODE_SCHEMA = "lns2.repair_episode.v1"
@@ -222,11 +224,6 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as stream:
-        return [json.loads(line) for line in stream if line.strip()]
-
-
 def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -428,10 +425,6 @@ def _conflict_auc(values: list[int]) -> float:
         (float(values[index]) + float(values[index + 1])) / 2.0
         for index in range(len(values) - 1)
     )
-
-
-def _episode_id(row: dict[str, Any], solver_seed: int, policy: str) -> str:
-    return f"{row['task_id']}__seed_{solver_seed:04d}__{policy}"
 
 
 def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
@@ -1468,6 +1461,14 @@ def _load_dataset_rows(dataset_root: Path, splits: list[str]) -> list[dict[str, 
                 raise ValueError(f"manifest row crosses split boundary: {manifest_path}")
             rows.append(row)
     return rows
+
+
+def _policy_train_dataset_lookup(dataset_root: Path) -> dict[str, dict[str, Any]]:
+    rows = _load_dataset_rows(dataset_root, ["policy_train"])
+    lookup = {str(row["task_id"]): row for row in rows}
+    if len(lookup) != len(rows):
+        raise ValueError("policy_train dataset contains duplicate task IDs")
+    return lookup
 
 
 def _effective_config(

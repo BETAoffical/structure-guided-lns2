@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import collections
 import itertools
-import json
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import action_family as _family
 from experiments.independent_layout_probe import _map_bootstrap
 from experiments.movingai_mechanism_probe import _mean
 from experiments.movingai_probe_quality import (
@@ -52,10 +52,6 @@ def _actual_neighborhood(outcome: dict[str, Any]) -> tuple[int, ...]:
     if len(values) != len(set(values)):
         raise ValueError("proposal neighborhood contains duplicate agents")
     return values
-
-
-def _family(action: dict[str, Any]) -> str:
-    return f"{str(action['heuristic'])}:{int(action['neighborhood_size'])}"
 
 
 def _candidate_id(agents: Iterable[int]) -> str:

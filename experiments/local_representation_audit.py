@@ -3,17 +3,22 @@ from __future__ import annotations
 import collections
 import hashlib
 import itertools
-import json
 import math
 import pickle
 import random
-import statistics
 import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    mean as _mean,
+    population_std as _std,
+    ratio as _ratio,
+    write_json as _write_json,
+    write_jsonl as _write_jsonl,
+)
 from experiments.context_audit import (
     MODEL_SEED,
     PairwiseModel,
@@ -55,35 +60,6 @@ FORBIDDEN_FEATURE_FRAGMENTS = (
     "outcome",
     "post_repair",
 )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _std(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.pstdev(numbers) if len(numbers) > 1 else 0.0
-
-
-def _ratio(numerator: float | int, denominator: float | int) -> float:
-    return float(numerator) / float(denominator) if denominator else 0.0
-
-
-def _write_json(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as stream:
-        for row in rows:
-            stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 @dataclass(frozen=True)

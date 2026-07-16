@@ -7,13 +7,22 @@ import json
 import math
 import pickle
 import random
-import statistics
 import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import (
+    add_categorical_feature as _categorical,
+    feature_names as _feature_names,
+    mean as _mean,
+    population_std as _std,
+    ratio as _ratio,
+    resolve_within as _resolve,
+    write_json as _write_json,
+    write_jsonl as _write_jsonl,
+)
 from experiments.context_audit import MODEL_SEED, PairwiseModel, _pair_vector
 from experiments.local_representation_audit import StateAnalysis, analyze_state
 
@@ -35,25 +44,6 @@ FORBIDDEN_FEATURE_FRAGMENTS = (
     "branch_runtime",
     "step_runtime",
 )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _std(values: Iterable[float | int]) -> float:
-    numbers = [float(value) for value in values]
-    return statistics.pstdev(numbers) if len(numbers) > 1 else 0.0
-
-
-def _ratio(numerator: float | int, denominator: float | int) -> float:
-    return float(numerator) / float(denominator) if denominator else 0.0
-
-
-def _categorical(features: dict[str, float], prefix: str, value: Any) -> None:
-    normalized = str(value or "unknown").strip().lower().replace(" ", "_")
-    features[f"{prefix}={normalized}"] = 1.0
 
 
 def _aggregate(prefix: str, values: Iterable[float | int]) -> dict[str, float]:
@@ -81,30 +71,6 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-
-
-def _write_json(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as stream:
-        for row in rows:
-            stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def _resolve(root: Path, relative: str) -> Path:
-    path = (root / relative).resolve()
-    try:
-        path.relative_to(root.resolve())
-    except ValueError as error:
-        raise ValueError(f"collection path escapes its root: {relative}") from error
-    return path
 
 
 def _path_wait_ratio(path: list[int]) -> float:
@@ -742,10 +708,6 @@ def dominance_pairs(rows: list[dict[str, Any]]) -> list[DominancePair]:
     if not result:
         raise ValueError("no effectiveness dominance pairs are available")
     return result
-
-
-def _feature_names(rows: list[dict[str, Any]], profile: str) -> list[str]:
-    return sorted({name for row in rows for name in row["features"][profile]})
 
 
 def train_pairwise_model(

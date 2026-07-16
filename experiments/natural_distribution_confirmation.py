@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import collections
-import math
 from pathlib import Path
 from typing import Any
 
+from experiments._common import (
+    select_rows_by_task_id as _selected_rows,
+    state_storage_id as _state_storage_id,
+)
 from experiments.realized_neighborhood_probe import evaluation_seed
 from experiments.realized_ranking_confirmation import (
     _dataset_design,
@@ -202,10 +205,6 @@ def natural_qualification_report(
 
 def _trial_job_id(state_id: str, candidate_id: str, trial_index: int) -> str:
     return f"{state_id}__{candidate_id}__trial_{trial_index:04d}"
-
-
-def _state_storage_id(state_id: str) -> str:
-    return f"state-{_fingerprint({'state_id': state_id})[:16]}"
 
 
 def _trial_result_path(output_root: Path, job: dict[str, Any]) -> Path:
@@ -451,19 +450,6 @@ def _aggregate_trial_results(
     manifests.sort(key=lambda row: str(row["state_id"]))
     _write_jsonl(output_root / "collection_manifest.jsonl", manifests)
     return manifests
-
-
-def _selected_rows(
-    rows: list[dict[str, Any]], task_ids: list[str] | None
-) -> list[dict[str, Any]]:
-    if task_ids is None:
-        return rows
-    requested = list(dict.fromkeys(map(str, task_ids)))
-    indexed = {str(row["task_id"]): row for row in rows}
-    missing = sorted(set(requested) - set(indexed))
-    if missing:
-        raise ValueError(f"unknown task ids: {missing}")
-    return [indexed[task_id] for task_id in requested]
 
 
 def run_natural_confirmation_collection(

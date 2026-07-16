@@ -318,6 +318,16 @@ The Linux suite covers official C++ interfaces, repair-only execution, determini
 explicit actions, fallback behavior, and the native Python module. The Windows Python suite covers map,
 static OD semantics, metadata, MovingAI export, and split determinism.
 
+Repository ownership, duplicate implementations, formal evidence hashes, and a read-only local build
+cleanup plan can be checked with:
+
+```powershell
+python scripts/audit_repository_hygiene.py --check
+python scripts/audit_repository_hygiene.py --emit-build-plan build/repository-hygiene-20260717
+```
+
+The audit never deletes files. See [`docs/REPOSITORY_HYGIENE.md`](docs/REPOSITORY_HYGIENE.md).
+
 ## Documentation
 
 - [`docs/INITLNS_RESEARCH_REPORT_ZH.md`](docs/INITLNS_RESEARCH_REPORT_ZH.md): frozen Chinese research
@@ -354,6 +364,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
 - [`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md): frozen-v1 standard-layout OOD
   qualification, five-policy closed-loop comparison, and cross-layout stopping rule.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
+- [`docs/REPOSITORY_HYGIENE.md`](docs/REPOSITORY_HYGIENE.md): code ownership, evidence protection,
+  duplicate-helper consolidation, and the read-only build cleanup policy.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
 

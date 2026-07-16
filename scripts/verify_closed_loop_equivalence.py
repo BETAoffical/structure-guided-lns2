@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 from pathlib import Path
 from typing import Any
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
+from experiments._common import read_jsonl as _read_jsonl  # noqa: E402
 POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 SUMMARY_FIELDS = (
     "success",
@@ -47,11 +51,6 @@ METRIC_FIELDS = (
     "sum_of_costs_before",
     "sum_of_costs_after",
 )
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as stream:
-        return [json.loads(line) for line in stream if line.strip()]
 
 
 def _manifest(root: Path, policy: str) -> dict[str, dict[str, Any]]:
