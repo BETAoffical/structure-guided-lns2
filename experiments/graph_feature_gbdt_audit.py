@@ -102,6 +102,21 @@ FORBIDDEN_FEATURE_FRAGMENTS = (
     "agent_density",
     "context.",
 )
+COMPACT_RETAINED_FIELDS = (
+    "state_id",
+    "candidate_id",
+    "candidate_key",
+    "map_id",
+    "task_id",
+    "split",
+    "agents",
+    "actual_size",
+    "selection_families",
+    "outcome",
+    "labels",
+    "trial_count",
+    "neighborhood_sha256",
+)
 
 
 def _mean(values: Iterable[float | int]) -> float:
@@ -579,14 +594,15 @@ def build_graph_feature_index(
             }
             if set(base) & set(graph_features):
                 raise ValueError("graph features overwrite registered dynamic features")
-            augmented = dict(row)
-            augmented["schema"] = "lns2.graph_feature_candidate.v1"
-            augmented["features"] = dict(row["features"])
-            augmented["features"][PROFILE] = {**base, **graph_features}
+            augmented = {
+                name: row[name] for name in COMPACT_RETAINED_FIELDS if name in row
+            }
+            augmented["schema"] = "lns2.graph_feature_candidate.v2"
+            augmented["schema_version"] = SCHEMA_VERSION
+            augmented["features"] = {PROFILE: {**base, **graph_features}}
             indexed.append(augmented)
     output_root.mkdir(parents=True, exist_ok=True)
     index_path = output_root / "graph_feature_index.jsonl"
-    _write_jsonl(index_path, indexed)
     grouped = _grouped(indexed)
     state_split = {
         state_id: str(rows[0]["split"]) for state_id, rows in grouped.items()
@@ -605,9 +621,17 @@ def build_graph_feature_index(
         raise ValueError(
             f"graph-feature columns duplicate registered inputs: {duplicate_base_columns}"
         )
+    compact_rows = []
+    for row in indexed:
+        compact = {name: value for name, value in row.items() if name != "features"}
+        compact["feature_values"] = [
+            float(row["features"][PROFILE].get(name, 0.0)) for name in feature_names
+        ]
+        compact_rows.append(compact)
+    _write_jsonl(index_path, compact_rows)
     manifest = {
-        "schema": "lns2.graph_feature_index_manifest.v1",
-        "schema_version": SCHEMA_VERSION,
+        "schema": "lns2.graph_feature_index_manifest.v2",
+        "schema_version": 2,
         "state_count": len(grouped),
         "candidate_count": len(indexed),
         "trial_count": sum(int(row["outcome"]["trial_count"]) for row in indexed),
@@ -631,6 +655,7 @@ def build_graph_feature_index(
         "structural_feature_names": list(STRUCTURAL_FEATURE_NAMES),
         "temporal_feature_names": list(TEMPORAL_FEATURE_NAMES),
         "feature_names": feature_names,
+        "index_encoding": "ordered_feature_vector",
         "duplicate_base_columns": duplicate_base_columns,
         "registered_inputs": registered,
         "index_sha256": _sha256(index_path),
@@ -649,6 +674,26 @@ def build_graph_feature_index(
         raise ValueError("graph-feature registered data counts changed")
     _write_json(output_root / "index_manifest.json", manifest)
     return manifest
+
+
+def load_graph_feature_index(index_root: Path) -> list[dict[str, Any]]:
+    manifest = _read_json(index_root / "index_manifest.json")
+    if (
+        str(manifest.get("schema")) != "lns2.graph_feature_index_manifest.v2"
+        or str(manifest.get("index_encoding")) != "ordered_feature_vector"
+    ):
+        raise ValueError("unsupported graph-feature index encoding")
+    names = list(map(str, manifest["feature_names"]))
+    rows = []
+    for compact in _read_jsonl(index_root / "graph_feature_index.jsonl"):
+        values = list(map(float, compact.pop("feature_values")))
+        if len(values) != len(names):
+            raise ValueError("graph-feature vector length differs from manifest")
+        compact["features"] = {PROFILE: dict(zip(names, values))}
+        rows.append(compact)
+    if len(rows) != int(manifest["candidate_count"]):
+        raise ValueError("graph-feature compact index row count changed")
+    return rows
 
 
 def _baseline_records(path: Path, *, expected_states: int, expected_maps: int) -> dict[str, dict[str, Any]]:
@@ -690,13 +735,18 @@ def _feature_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _duplicate_base_columns(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     base_names = sorted(
-        {name for row in rows for name in row["features"][BASELINE_PROFILE]}
+        {
+            name
+            for row in rows
+            for name in row["features"][PROFILE]
+            if name not in GRAPH_FEATURE_NAMES
+        }
     )
     base_columns: dict[tuple[float, ...], list[str]] = collections.defaultdict(list)
     for name in base_names:
         base_columns[
             tuple(
-                float(row["features"][BASELINE_PROFILE].get(name, 0.0))
+                float(row["features"][PROFILE].get(name, 0.0))
                 for row in rows
             )
         ].append(name)
@@ -714,7 +764,7 @@ def run_train_audit(
     config: dict[str, Any],
     output_root: Path,
 ) -> tuple[dict[str, Any], Any | None]:
-    rows = _read_jsonl(index_root / "graph_feature_index.jsonl")
+    rows = load_graph_feature_index(index_root)
     train = [row for row in rows if str(row["split"]) == "policy_train"]
     anchors = [
         row
@@ -816,7 +866,7 @@ def run_validation_audit(
     output_root: Path,
     model: Any,
 ) -> dict[str, Any]:
-    rows = _read_jsonl(index_root / "graph_feature_index.jsonl")
+    rows = load_graph_feature_index(index_root)
     validation = [row for row in rows if str(row["split"]) == "policy_validation"]
     if len(_grouped(validation)) != 154 or len(
         {str(row["map_id"]) for row in validation}
@@ -1003,6 +1053,7 @@ __all__ = [
     "build_conflict_graph",
     "build_graph_feature_index",
     "extract_graph_features",
+    "load_graph_feature_index",
     "run_graph_feature_gbdt_audit",
     "validate_registered_inputs",
 ]

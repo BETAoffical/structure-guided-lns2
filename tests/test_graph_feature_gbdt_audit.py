@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from experiments.graph_feature_gbdt_audit import (
     _validate_config,
     build_conflict_graph,
     extract_graph_features,
+    load_graph_feature_index,
 )
 
 
@@ -99,6 +101,17 @@ class GraphFeatureGbdtAuditTests(unittest.TestCase):
         self.assertEqual(bridges, {(10, 20), (20, 30), (40, 50)})
         self.assertEqual(_core_numbers(nodes, adjacency), {10: 1, 20: 1, 30: 1, 40: 1, 50: 1})
 
+        triangle_with_tail = {
+            1: {2, 3, 4},
+            2: {1, 3},
+            3: {1, 2},
+            4: {1},
+        }
+        self.assertEqual(
+            _core_numbers(triangle_with_tail, triangle_with_tail),
+            {1: 2, 2: 2, 3: 2, 4: 1},
+        )
+
     def test_candidate_order_is_irrelevant_and_unknown_agent_is_rejected(self) -> None:
         graph = build_conflict_graph(waiting_conflict_state())
         self.assertEqual(
@@ -133,6 +146,27 @@ class GraphFeatureGbdtAuditTests(unittest.TestCase):
         features = extract_graph_features(build_conflict_graph(waiting_conflict_state()), [10])
         self.assertEqual(set(features), set(GRAPH_FEATURE_NAMES))
         self.assertTrue(all(math.isfinite(value) for value in features.values()))
+
+    def test_compact_index_rejects_feature_vector_length_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "index_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "lns2.graph_feature_index_manifest.v2",
+                        "index_encoding": "ordered_feature_vector",
+                        "feature_names": ["a", "b"],
+                        "candidate_count": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "graph_feature_index.jsonl").write_text(
+                json.dumps({"state_id": "s", "feature_values": [1.0]}) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "vector length"):
+                load_graph_feature_index(root)
 
 
 if __name__ == "__main__":

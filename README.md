@@ -257,7 +257,9 @@ solved 144/144 episodes; the frozen realized-neighborhood ranker reduced fixed-b
 52.5%, was no worse on 11/12 maps, and improved AUC separately for all three solver seeds. Its mean wall
 time remained slower (0.715s versus 0.273s), and static context was excluded. The result supports dynamic
 realized-neighborhood control across same-family maps and solver randomness, not static-context transfer
-or OOD generalization. The next stage collects policy-visited states before RL warm start. See
+or OOD generalization. The subsequent policy-visited aggregation, objective-alignment, capacity, and graph
+representation audits did not pass their registered incremental gates. The final conflict-graph feature
+GBDT also failed on Train, so Validation remained sealed and RL warm-start work is paused. See
 [`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
@@ -300,6 +302,10 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   sequential candidate generation, failure accounting, and the final gate before RL warm-start work.
 - [`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md): independent
   12-map, three-solver-seed confirmation with map-grouped inference.
+- [`docs/GRAPH_REPRESENTATION_AUDIT.md`](docs/GRAPH_REPRESENTATION_AUDIT.md): neural flat, agent-set,
+  and conflict-GNN comparison against the registered GBDT.
+- [`docs/GRAPH_FEATURE_GBDT_AUDIT.md`](docs/GRAPH_FEATURE_GBDT_AUDIT.md): deterministic structural and
+  temporal conflict-graph feature bridge and its final negative Train result.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.
