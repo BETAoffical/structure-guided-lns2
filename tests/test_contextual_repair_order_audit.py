@@ -91,6 +91,7 @@ class ContextualRepairOrderAuditTests(unittest.TestCase):
         self.assertEqual(summary["maps_no_worse"], 2)
         self.assertEqual(summary["maximum_policy_share"], 1.0)
         self.assertAlmostEqual(summary["model_vs_fixed_auc_improvement"], 0.2)
+        self.assertAlmostEqual(summary["bootstrap"]["mean"], 0.2)
 
     def test_order_features_do_not_read_outcomes(self) -> None:
         baseline = _ordered_features(state(), [10, 20, 30], POLICIES[0])

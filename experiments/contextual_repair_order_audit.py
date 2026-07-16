@@ -432,20 +432,64 @@ def _predict_records(
 
 
 def _map_bootstrap(records: list[dict[str, Any]], samples: int, seed: int) -> dict[str, Any]:
-    by_map: dict[str, list[float]] = collections.defaultdict(list)
+    by_map: dict[str, list[tuple[float, float]]] = collections.defaultdict(list)
     for row in records:
         fixed = float(row["fixed"]["normalized_h4_auc"])
         model = float(row["model"]["normalized_h4_auc"])
-        by_map[str(row["map_id"])].append(_relative_improvement(fixed, model))
-    means = {name: _mean(values) for name, values in by_map.items()}
+        by_map[str(row["map_id"])].append((fixed, model))
+    means = {
+        name: _relative_improvement(
+            _mean(fixed for fixed, _ in values),
+            _mean(model for _, model in values),
+        )
+        for name, values in by_map.items()
+    }
     rng = random.Random(seed)
-    estimates = [_mean(means[rng.choice(sorted(means))] for _ in means) for _ in range(samples)]
+    maps = sorted(by_map)
+    estimates = []
+    for _ in range(samples):
+        sampled = [rng.choice(maps) for _ in maps]
+        fixed = [value for name in sampled for value, _ in by_map[name]]
+        model = [value for name in sampled for _, value in by_map[name]]
+        estimates.append(_relative_improvement(_mean(fixed), _mean(model)))
     return {
         "unit": "map_id",
         "samples": samples,
-        "mean": _mean(means.values()),
+        "mean": _relative_improvement(
+            _mean(value for values in by_map.values() for value, _ in values),
+            _mean(value for values in by_map.values() for _, value in values),
+        ),
         "ci95": [_quantile(estimates, 0.025), _quantile(estimates, 0.975)],
         "by_map": dict(sorted(means.items())),
+    }
+
+
+def _registered_gates(summary: dict[str, Any], config: dict[str, Any]) -> dict[str, bool]:
+    thresholds = dict(config["thresholds"])
+    fixed_final = float(summary["fixed_final_conflicts"])
+    final_degradation = (
+        (float(summary["model_final_conflicts"]) - fixed_final) / fixed_final
+        if fixed_final > 0.0
+        else (0.0 if float(summary["model_final_conflicts"]) == 0.0 else float("inf"))
+    )
+    return {
+        "auc_improvement": float(summary["model_vs_fixed_auc_improvement"])
+        >= float(thresholds["minimum_auc_improvement"]),
+        "bootstrap": float(summary["bootstrap"]["ci95"][0])
+        >= float(thresholds["bootstrap_lower_bound"]),
+        "map_consistency": int(summary["maps_no_worse"])
+        >= int(thresholds["minimum_maps_no_worse"]),
+        "near_oracle": float(summary["near_oracle_share_gain"])
+        >= float(thresholds["minimum_near_oracle_gain"]),
+        "no_action_collapse": float(summary["maximum_policy_share"])
+        <= float(thresholds["maximum_policy_share"]),
+        "context_permutation": float(summary["context_permutation"]["real_percentile"])
+        >= float(thresholds["minimum_permutation_percentile"]),
+        "feasibility": float(summary["model_feasible_rate"])
+        >= float(summary["fixed_feasible_rate"])
+        - float(thresholds["maximum_feasibility_drop"]),
+        "final_conflicts": final_degradation
+        <= float(thresholds["maximum_final_conflict_degradation"]),
     }
 
 
@@ -545,23 +589,7 @@ def cross_validate(rows: list[dict[str, Any]], config: dict[str, Any]) -> dict[s
             "p95": _quantile(permutation_improvements, 0.95),
         },
     }
-    thresholds = dict(config["thresholds"])
-    fixed_final = float(summary["fixed_final_conflicts"])
-    final_degradation = (
-        (float(summary["model_final_conflicts"]) - fixed_final) / fixed_final
-        if fixed_final > 0.0
-        else (0.0 if float(summary["model_final_conflicts"]) == 0.0 else float("inf"))
-    )
-    gates = {
-        "auc_improvement": real >= float(thresholds["minimum_auc_improvement"]),
-        "bootstrap": float(summary["bootstrap"]["ci95"][0]) >= float(thresholds["bootstrap_lower_bound"]),
-        "map_consistency": int(summary["maps_no_worse"]) >= int(thresholds["minimum_maps_no_worse"]),
-        "near_oracle": float(summary["near_oracle_share_gain"]) >= float(thresholds["minimum_near_oracle_gain"]),
-        "no_action_collapse": float(summary["maximum_policy_share"]) <= float(thresholds["maximum_policy_share"]),
-        "context_permutation": float(summary["context_permutation"]["real_percentile"]) >= float(thresholds["minimum_permutation_percentile"]),
-        "feasibility": float(summary["model_feasible_rate"]) >= float(summary["fixed_feasible_rate"]) - float(thresholds["maximum_feasibility_drop"]),
-        "final_conflicts": final_degradation <= float(thresholds["maximum_final_conflict_degradation"]),
-    }
+    gates = _registered_gates(summary, config)
     return {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
