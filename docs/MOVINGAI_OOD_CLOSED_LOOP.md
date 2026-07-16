@@ -60,3 +60,38 @@ Policy execution is allowed only after qualification passes. Analyze the complet
 python scripts/analyze_movingai_ood_confirmation.py `
   --collection build/initlns-movingai-ood-collection-v1 --strict
 ```
+
+## Formal Result
+
+The study was preregistered and pushed at commit `606374a` before qualification or policy outcomes were
+read. All 12 archives and extracted maps/scenarios matched their registered SHA256 values. Qualification
+passed with 144/144 valid resets, 74 nonzero-conflict episodes, nine active maps, and at least one active
+map in every registered layout family. All five policies then completed 144 episodes with zero timeout,
+invalid action, initial-fingerprint mismatch, model error, or unexplained failure.
+
+| Policy | Successes | Mean fixed 100-step AUC |
+| --- | ---: | ---: |
+| Adaptive | 123/144 | 65,981.05 |
+| Fixed Target | 122/144 | 66,027.09 |
+| Fixed Collision | 126/144 | 67,155.55 |
+| Fixed Random | 114/144 | 68,541.21 |
+| Frozen `realized_dynamic` v1 | 131/144 | 63,272.41 |
+
+Frozen v1 improved aggregate fixed-budget AUC by `4.105%`, just below the preregistered `5%` gate.
+The map-paired bootstrap interval was positive at `[2.15%, 66.86%]`; all 9/9 active maps and all 5/5
+layout families were no worse than Adaptive. Family improvements were 49.4% on Game, 2.3% on Maze,
+51.5% on Random, 64.9% on Room, and 93.3% on Warehouse. The initial-conflict-normalized sensitivity
+improved by 32.4%, and success increased by eight episodes. Mean capped wall time fell from 88.81s to
+62.18s, but its bootstrap interval crossed zero and wall time remained diagnostic only. About 19.6% of
+selected v1 features were outside the development range.
+
+The strict decision is `stop_cross_layout_claim_and_consolidate_results` because every gate must pass and
+the primary aggregate AUC improvement missed 5%. The result is therefore strong, broad OOD evidence but
+not a confirmed preregistered cross-layout claim. It does not restore the static-context migration claim
+and does not authorize RL or another tuned model. The confirmed headline remains same-family, multi-seed
+generalization; the MovingAI result is reported as a near-threshold external-layout result.
+
+The generated traces occupy about 15.13 GiB because every transition stores full paths, observations,
+and candidate features. Full trace validation took about 43 minutes in one Python process. Interrupting
+the Codex turn did not stop that child process; it continued normally and wrote the final report. The
+formal JSON SHA256 is `e931721f0cdc08df6eaf9de75843e0a58c86e19f009195e675f3b358c156b46e`.

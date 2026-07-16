@@ -286,9 +286,11 @@ order selector with leave-one-map-out evaluation. It improved normalized H4 AUC 
 failed and no independent maps were generated. See
 [`docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md`](docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md).
 
-The next frozen-policy gate is a preregistered MovingAI OOD closed-loop confirmation over 12 untouched
-standard maps, five layout families, two random scenarios, and three solver seeds. It compares Adaptive,
-fixed Target/Collision/Random, and frozen `realized_dynamic` without retraining. See
+The frozen-policy MovingAI OOD confirmation completed 720 policy episodes over 12 untouched standard
+maps. Frozen `realized_dynamic` increased successes from 123 to 131, was no worse on all nine active maps
+and all five layout families, and improved aggregate fixed-budget AUC by 4.11% with a positive map-level
+bootstrap interval. Because the preregistered primary threshold was 5%, the strict gate failed and the
+cross-layout claim is not confirmed; no RL or further tuned model is authorized. See
 [`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
