@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="420" viewBox="0 0 920 420" role="img">
+<title>MovingAI OOD：144 个 episode 的成功数</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="28" y="38" font-family="sans-serif" font-size="22" font-weight="700" letter-spacing="0" fill="#17212b">MovingAI OOD：144 个 episode 的成功数</text>
+<text x="246" y="106" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">官方 Adaptive</text>
+<rect x="260" y="84" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="84" width="503.958" height="28" fill="#8a6d1d"/>
+<text x="772.958" y="104" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">123.00</text>
+<text x="246" y="160" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">固定 Target</text>
+<rect x="260" y="138" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="138" width="499.861" height="28" fill="#6f56a5"/>
+<text x="768.861" y="158" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">122.00</text>
+<text x="246" y="214" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">固定 Collision</text>
+<rect x="260" y="192" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="192" width="516.250" height="28" fill="#6f56a5"/>
+<text x="785.250" y="212" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">126.00</text>
+<text x="246" y="268" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">固定 Random</text>
+<rect x="260" y="246" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="246" width="467.083" height="28" fill="#6f56a5"/>
+<text x="736.083" y="266" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">114.00</text>
+<text x="246" y="322" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">冻结 realized_dynamic v1</text>
+<rect x="260" y="300" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="300" width="536.736" height="28" fill="#2878b5"/>
+<text x="805.736" y="320" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">131.00</text>
+</svg>

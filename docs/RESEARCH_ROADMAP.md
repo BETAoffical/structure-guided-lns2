@@ -2,20 +2,26 @@
 
 ## Scoped contribution
 
-The active claim is deliberately narrow:
+The completed evidence supports a narrower contribution than the original plan:
 
-> Learn an InitLNS high-level policy conditioned on map topology, static OD
-> semantics, density, and the current conflict state. The policy jointly selects
-> a conflicting seed agent, Target/Collision/Random neighborhood generation, and
-> neighborhood size to improve first-feasible-solution efficiency and
-> cross-distribution generalization.
+> During InitLNS first-feasible repair, rank concrete agent neighborhoods produced
+> by the official Target/Collision/Random generators using the current dynamic
+> conflict state, selected-agent path statistics and local topology.
 
 The official neighborhood generators and PP+SIPPS repair remain unchanged. The
-project does not claim to be the first learned neighborhood method, variable-size
-LNS, or RL extension of LNS2. Complete autoregressive agent-subset generation is
-outside the current contribution.
+frozen policy is confirmed on unseen maps from the three development layout
+families and across solver seeds 1, 2 and 3. Static map/OD/density context did not
+show reliable incremental value. No RL policy or autoregressive agent-subset
+generator was trained, and the project does not claim to be the first learned
+neighborhood method, variable-size LNS, or RL extension of LNS2.
 
-## Evidence gate
+The standard MovingAI test increased success from 123/144 to 131/144 and improved
+fixed-budget conflict AUC by 4.105%, with positive map bootstrap evidence and no
+average regression on any active map or layout family. It nevertheless missed the
+preregistered 5% primary gate, so strict cross-layout generalization is not
+confirmed. See `docs/INITLNS_RESEARCH_REPORT_ZH.md` for the frozen evidence ledger.
+
+## Historical evidence chain
 
 Before collecting more data or training RL, the project asks whether static
 context adds measurable predictive value beyond the action, seed, and dynamic
@@ -128,6 +134,26 @@ the handcrafted map/OD/density claim. RL remains paused. The next permitted gate
 an independent-map ranking confirmation plus a proposal-only candidate-generation
 interface; see `docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`.
 
+The natural-distribution confirmation then retained zero-conflict and high-conflict
+tasks without resampling. On 12 fresh maps, the frozen realized-neighborhood ranker
+raised top-1 from 19.5% to 43.9% and reduced conflict regret by 33.8%. A separate
+six-map closed-loop test reduced fixed-budget conflict AUC by 57.3%, and the
+12-map, three-seed confirmation reduced it by 52.5% while preserving 144/144
+successes. These experiments confirm dynamic realized-neighborhood control within
+the three registered layout families.
+
+Policy-visited aggregation, objective alignment, greater GBDT capacity, neural
+agent/graph encoders and deterministic graph features did not pass their Train or
+Validation gates. Horizon-4 outcomes contained oracle opportunity but were not
+split-half stable. PP repair order materially changed outcomes, but the contextual
+order selector also failed. These stopping results prevent RL warm-start or further
+model tuning on the inspected data.
+
+Finally, the frozen v1 policy was evaluated without retraining on 12 untouched
+MovingAI maps from five layout families. It produced broad positive evidence but
+missed the registered 5% AUC gate at 4.105%. The registered decision is therefore
+to consolidate results rather than modify the model against these OOD outcomes.
+
 ## Baseline taxonomy
 
 - **Official MAPF-LNS2 Adaptive and fixed Target/Collision/Random:** isolate the
@@ -142,29 +168,17 @@ interface; see `docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`.
   version applied to InitLNS must be labeled an adapted baseline because the
   original method did not directly evaluate this exact InitLNS control problem.
 
-## Conditional next stages
+## Frozen boundary and possible follow-up
 
-The following stages remain inactive. They may resume only after an independently
-justified representation hypothesis and a new predeclared audit, not after tuning
-against the already inspected Pilot v2 development outcomes:
+The current experiment sequence is closed. Existing MovingAI labels may not be
+used to retune the frozen model or lower the registered gate. The next independent
+research question, if opened, should be outcome-blind candidate pruning and batch
+scoring: preserve the frozen v1 candidate choice or conflict trajectory while
+reducing proposal, feature and pairwise-inference cost. A new spatiotemporal model
+or RL study requires new preregistered data and cannot rewrite the current OOD
+decision.
 
-1. Run the learned policy closed-loop on 24 Validation instance-seeds. Successes
-   must not fall below Adaptive, and conflict AUC or time-to-feasible must improve
-   by at least 5%.
-2. Create semantic v3 with 12 Train maps, 6 Validation maps, and 132 ID/OOD test
-   instances.
-3. Collect up to four repair phases, six seeds, three rules, three sizes, and two
-   trials per Train/Validation episode, then collect a second round from states
-   visited by the supervised policy.
-4. Use supervised ranking only as warm start. Train contextual RL with conflict-
-   graph and static-context encoders plus conditional seed/rule/size heads.
-5. Reward normalized collision reduction and feasibility while penalizing
-   low-level generated nodes; select coefficients only on Validation.
-6. Evaluate official strategies, random legal actions, contextual bandit,
-   ADDRESS-inspired InitLNS, supervised policy, RL, and GPBS on ID and every OOD
-   split.
-
-Primary metrics are success, time-to-feasible, conflict AUC, SIPPS calls/nodes,
+Primary metrics remain success, time-to-feasible, conflict AUC, SIPPS calls/nodes
 and runtime. Sum of costs is secondary because the research target ends at the
 first feasible solution.
 

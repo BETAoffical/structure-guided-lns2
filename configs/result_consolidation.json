@@ -1,0 +1,773 @@
+{
+  "schema": "lns2.result_consolidation.v1",
+  "schema_version": 1,
+  "snapshot_date": "2026-07-17",
+  "active_claim_zh": "基于当前动态冲突状态和实际 agent 邻域的 InitLNS 高层控制，在同族未见地图和多 solver seed 上得到闭环验证；标准 MovingAI 跨布局实验表现出广泛正信号，但未达到预注册的 5% 主门槛；静态地图、OD 和密度上下文的增量价值尚未得到证明。",
+  "report_figure_prefix": "../artifacts/initlns-research-evidence-v1/figures",
+  "research_boundary": {
+    "phase": "InitLNS first-feasible repair",
+    "static_context_increment_confirmed": false,
+    "same_family_generalization_confirmed": true,
+    "movingai_cross_layout_confirmed": false,
+    "rl_trained": false,
+    "autoregressive_agent_subset_trained": false
+  },
+  "solver_baseline": {
+    "upstream": "Jiaoyang-Li/MAPF-LNS2",
+    "upstream_commit": "1369823985a15944f9a339226d521f61605a6d17",
+    "parity_source": "CMakeLists.txt",
+    "expected_path_sha256": "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf"
+  },
+  "related_work": [
+    {
+      "name": "MAPF-ML-LNS",
+      "url": "https://ojs.aaai.org/index.php/AAAI/article/view/21168",
+      "method_zh": "监督排序由规则生成的候选 agent 集合，主要优化已有可行解的 cost",
+      "boundary_zh": "最接近显式邻域排序，但不是 InitLNS 首次可行修复"
+    },
+    {
+      "name": "NNS",
+      "url": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/d41f8403e9bb5141bc2c81fad7658185-Abstract-Conference.html",
+      "method_zh": "卷积与注意力编码路径时空交互并选择邻域",
+      "boundary_zh": "表示更强，研究阶段和跨尺寸迁移边界不同"
+    },
+    {
+      "name": "BALANCE",
+      "url": "https://arxiv.org/abs/2312.16767",
+      "method_zh": "非上下文 bandit 联合选择 destroy heuristic 与邻域大小",
+      "boundary_zh": "动作维度相近，但面向 anytime LNS 且不读取丰富当前状态"
+    },
+    {
+      "name": "ADDRESS",
+      "url": "https://arxiv.org/abs/2408.02960",
+      "method_zh": "delay 启发式与 Thompson sampling 选择 seed",
+      "boundary_zh": "使用动态 delay，但没有显式候选集合排序"
+    },
+    {
+      "name": "LNS2+RL",
+      "url": "https://arxiv.org/abs/2405.17794",
+      "method_zh": "RL 替换早期低层 repair planner，之后切回 PP+SIPPS",
+      "boundary_zh": "修改低层修复器，不是高层 agent 邻域选择"
+    },
+    {
+      "name": "DiffLNS",
+      "url": "https://arxiv.org/abs/2605.13296",
+      "method_zh": "扩散模型生成更好的初始化路径，再交给 LNS2",
+      "boundary_zh": "改进初始化而非 InitLNS 高层修复动作"
+    }
+  ],
+  "experiments": [
+    {
+      "id": "context_primary_audit",
+      "title_zh": "静态上下文首次可学习性审计",
+      "category": "static_context",
+      "status": "unsupported",
+      "decision": "fail_context_gate",
+      "data_boundary": "Pilot v2 Train/Validation；7344 个候选结果；Validation 不参与训练",
+      "claim": "完整上下文相对动态状态仅增加 4.17 个百分点，AUC regret 反而恶化，未通过门槛。",
+      "document": "docs/CONTEXT_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "060904d"
+      },
+      "source": {
+        "path": "build/initlns-context-audit-v2/context_audit.json",
+        "sha256": "ae140b32fe45b5198229c1cb61248d00593747524dbc8bef9ffc4f8e8c55f2e0"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": false}
+      ],
+      "metrics": [
+        {"id": "candidate_rows", "label_zh": "候选结果数", "json_path": "counts.candidate_rows", "value": 7344, "unit": "outcomes", "role": "coverage"},
+        {"id": "dynamic_top1", "label_zh": "动态状态 top-1", "json_path": "profiles.dynamic.pareto_top1_hit_rate", "value": 0.1111111111111111, "unit": "ratio", "role": "primary"},
+        {"id": "full_top1", "label_zh": "完整上下文 top-1", "json_path": "profiles.full_context.pareto_top1_hit_rate", "value": 0.1527777777777778, "unit": "ratio", "role": "primary"},
+        {"id": "top1_gain", "label_zh": "上下文 top-1 增益", "json_path": "comparison.full_context_minus_dynamic_hit_rate", "value": 0.041666666666666685, "unit": "ratio", "role": "gate"},
+        {"id": "auc_regret_reduction", "label_zh": "AUC regret 相对下降", "json_path": "comparison.relative_auc_regret_reduction", "value": -0.02277625068529649, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "context_secondary_audit",
+      "title_zh": "静态上下文二次验证",
+      "category": "static_context",
+      "status": "unsupported",
+      "decision": "stop_before_independent_confirmation",
+      "data_boundary": "旧 Train/Validation 合并开发集；按地图三折；500 次任务上下文置换",
+      "claim": "真实上下文 top-1 与 AUC 指标仅处于置换分布第 6.2% 和 59.2%，并出现 91% size 集中。",
+      "document": "docs/CONTEXT_SECONDARY_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "008dc54"
+      },
+      "source": {
+        "path": "build/initlns-context-secondary-final/secondary_audit.json",
+        "sha256": "f5f58590e9b2107baf0e674e701a20e36f91a9809d005b68ea4f7d098a4d21cc"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": false}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "开发状态数", "json_path": "objectives.primary.oracle.state_count", "value": 200, "unit": "states", "role": "coverage"},
+        {"id": "hit_permutation_percentile", "label_zh": "真实上下文 top-1 置换百分位", "json_path": "objectives.primary.permutation.hit_gain_percentile", "value": 0.062, "unit": "ratio", "role": "gate"},
+        {"id": "auc_permutation_percentile", "label_zh": "AUC regret 置换百分位", "json_path": "objectives.primary.permutation.auc_reduction_percentile", "value": 0.592, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "local_representation_audit",
+      "title_zh": "局部表示恢复审计",
+      "category": "representation",
+      "status": "unsupported",
+      "decision": "run_movingai_mechanism_probe_before_more_collection",
+      "data_boundary": "同一 7344 结果；按地图三折；H1/H4 与 compute/runtime 敏感性分离",
+      "claim": "local_pre、realized 和静态上下文均未通过预注册恢复门槛；局部表示存在点估计信号但地图间不稳定。",
+      "document": "docs/LOCAL_REPRESENTATION_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "dc527dd"
+      },
+      "source": {
+        "path": "build/initlns-local-representation-audit/local_representation_audit.json",
+        "sha256": "732c8fde28297f535917ad090bdc7db4c87fb61499590ba1af488434e324c4a7"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": false},
+        {"json_path": "acceptance.decision", "expected": "run_movingai_mechanism_probe_before_more_collection"}
+      ],
+      "metrics": [
+        {"id": "local_top1_gain", "label_zh": "local_pre top-1 增益", "json_path": "acceptance.gates.local_representation.actual.pareto_top1_gain", "value": 0.019999999999999962, "unit": "ratio", "role": "gate"},
+        {"id": "realized_regret_reduction", "label_zh": "realized AUC regret 下降", "json_path": "acceptance.gates.observability.actual.relative_auc_regret_reduction", "value": 0.07251896584904838, "unit": "ratio", "role": "diagnostic"},
+        {"id": "context_hit_percentile", "label_zh": "上下文 top-1 置换百分位", "json_path": "context_permutation.hit_gain_percentile", "value": 0.312, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "movingai_mechanism_probe_v1",
+      "title_zh": "MovingAI 初始机制探针",
+      "category": "action_mechanism",
+      "status": "mechanism",
+      "decision": "increase_trials_before_modeling",
+      "data_boundary": "6 张标准地图；12 个去重状态；重复 solver 轨迹合并",
+      "claim": "动作和邻域确有差异，但独立状态和 trial 不足，不能训练迁移模型。",
+      "document": "docs/MOVINGAI_MECHANISM_PROBE.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "d0b75b9"
+      },
+      "source": {
+        "path": "build/movingai-mechanism-probe-report-deduplicated/movingai_mechanism_probe.json",
+        "sha256": "8aa38bc4e9f8e043a9e08a298bcba82c54a32c9c6a0abfae83d47d7e7f87620b"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "increase_trials_before_modeling"}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "独立状态数", "json_path": "mechanism.state_count", "value": 12, "unit": "states", "role": "coverage"},
+        {"id": "map_percentile", "label_zh": "地图置换百分位", "json_path": "context_signal.map_percentile", "value": 0.9, "unit": "ratio", "role": "diagnostic"},
+        {"id": "density_percentile", "label_zh": "密度置换百分位", "json_path": "context_signal.density_percentile", "value": 0.0, "unit": "ratio", "role": "diagnostic"}
+      ]
+    },
+    {
+      "id": "movingai_probe_quality_v1",
+      "title_zh": "MovingAI 首轮标签质量审计",
+      "category": "label_quality",
+      "status": "unsupported",
+      "decision": "expand_independent_context_coverage_and_action_trials",
+      "data_boundary": "12 独立状态；每名义候选四个 pooled trials；一张地图/布局族",
+      "claim": "结果行数掩盖了有效样本不足，rank、最佳集合和实际邻域稳定性均未通过。",
+      "document": "docs/MOVINGAI_PROBE_QUALITY.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "05170c9"
+      },
+      "source": {
+        "path": "build/movingai-probe-quality-audit/movingai_probe_quality.json",
+        "sha256": "617575d7d57d304e1451eaccb8641ea1650f2267ea0963b459d0d8b0794fddc1"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "expand_independent_context_coverage_and_action_trials"}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "split-half 状态数", "json_path": "trial_stability.split_state_count", "value": 12, "unit": "states", "role": "coverage"},
+        {"id": "rank_spearman", "label_zh": "split-half Spearman", "json_path": "trial_stability.mean_rank_spearman", "value": 0.42401762855276726, "unit": "ratio", "role": "stability"},
+        {"id": "pareto_jaccard", "label_zh": "Pareto-family Jaccard", "json_path": "trial_stability.mean_pareto_family_jaccard", "value": 0.2738095238095238, "unit": "ratio", "role": "stability"},
+        {"id": "best_jaccard", "label_zh": "最佳候选 Jaccard", "json_path": "trial_stability.mean_best_candidate_jaccard", "value": 0.1863425925925926, "unit": "ratio", "role": "stability"},
+        {"id": "realized_jaccard", "label_zh": "实际邻域 Jaccard", "json_path": "realized_neighborhood.mean_pairwise_jaccard", "value": 0.3857664295758613, "unit": "ratio", "role": "stability"}
+      ]
+    },
+    {
+      "id": "movingai_probe_quality_v2",
+      "title_zh": "MovingAI 八 trial 标签质量审计",
+      "category": "label_quality",
+      "status": "mechanism",
+      "decision": "expand_independent_maps_and_scenarios_before_modeling",
+      "data_boundary": "35 独立状态；8 trials；一个超时来源未纳入，runtime 失效",
+      "claim": "排序 Spearman 提高到 0.684，但最佳集合与实际邻域稳定性仍不足，需独立地图。",
+      "document": "docs/MOVINGAI_PROBE_QUALITY.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "05170c9"
+      },
+      "source": {
+        "path": "build/movingai-mechanism-probe-v2-quality/movingai_probe_quality.json",
+        "sha256": "df5cc26b4b76b265d768e643186c263f6502f2ca57abaae1303fa8c289b5db73"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "expand_independent_maps_and_scenarios_before_modeling"}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "split-half 状态数", "json_path": "trial_stability.split_state_count", "value": 35, "unit": "states", "role": "coverage"},
+        {"id": "rank_spearman", "label_zh": "split-half Spearman", "json_path": "trial_stability.mean_rank_spearman", "value": 0.6835597309030264, "unit": "ratio", "role": "stability"},
+        {"id": "best_jaccard", "label_zh": "最佳集合 Jaccard", "json_path": "trial_stability.mean_best_candidate_jaccard", "value": 0.3764625850340136, "unit": "ratio", "role": "stability"},
+        {"id": "realized_jaccard", "label_zh": "实际邻域 Jaccard", "json_path": "realized_neighborhood.mean_pairwise_jaccard", "value": 0.3910808266277181, "unit": "ratio", "role": "stability"}
+      ]
+    },
+    {
+      "id": "independent_layout_probe",
+      "title_zh": "独立布局名义动作确认",
+      "category": "action_mechanism",
+      "status": "unsupported",
+      "decision": "stop_and_redefine_action_space",
+      "data_boundary": "6 张新地图；23 状态；6480 outcomes；8 trials",
+      "claim": "名义动作 eta-squared 和 Pareto-family 稳定性未通过，动作需重定义为实际 agent 集合。",
+      "document": "docs/INDEPENDENT_LAYOUT_PROBE.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "62faca3"
+      },
+      "source": {
+        "path": "build/initlns-independent-layout-probe-v1-report/independent_layout_probe.json",
+        "sha256": "834a9f0fe096beabd3356c32265b1609126ad57f509995209c8d058ffc4344ea"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_and_redefine_action_space"}
+      ],
+      "metrics": [
+        {"id": "action_eta", "label_zh": "名义动作 eta-squared", "json_path": "action_effect.mean_eta_squared", "value": 0.4037548061629365, "unit": "ratio", "role": "gate"},
+        {"id": "rank_spearman", "label_zh": "split-half Spearman", "json_path": "trial_stability.mean_rank_spearman", "value": 0.637933769999257, "unit": "ratio", "role": "gate"},
+        {"id": "pareto_jaccard", "label_zh": "Pareto-family Jaccard", "json_path": "trial_stability.mean_pareto_family_jaccard", "value": 0.43219461697722567, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "realized_neighborhood_stability",
+      "title_zh": "显式 agent 邻域稳定性探针",
+      "category": "action_mechanism",
+      "status": "confirmed",
+      "decision": "proceed_to_realized_neighborhood_ranking_audit",
+      "data_boundary": "23 状态；412 个去重实际邻域；每候选 8 个独立 repair-order trials",
+      "claim": "固定实际 agent 集合后，动作效应和标签稳定性通过全部预注册门槛。",
+      "document": "docs/REALIZED_NEIGHBORHOOD_PROBE.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "5c43d75"
+      },
+      "source": {
+        "path": "build/realized-neighborhood-stability-probe-v1-report/realized_neighborhood_probe.json",
+        "sha256": "f5997317c02f9a8e61e8ade7196b7b45e311c8b8424446d95cceb3fb2965e7c9"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": true},
+        {"json_path": "integrity.passed", "expected": true},
+        {"json_path": "decision", "expected": "proceed_to_realized_neighborhood_ranking_audit"}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "状态数", "json_path": "integrity.state_count", "value": 23, "unit": "states", "role": "coverage"},
+        {"id": "candidate_count", "label_zh": "实际邻域数", "json_path": "integrity.candidate_count", "value": 412, "unit": "candidates", "role": "coverage"},
+        {"id": "outcome_count", "label_zh": "修复结果数", "json_path": "integrity.outcome_count", "value": 3296, "unit": "outcomes", "role": "coverage"},
+        {"id": "realized_eta", "label_zh": "实际邻域 eta-squared", "json_path": "action_effect.realized_eta_squared", "value": 0.5945527732937206, "unit": "ratio", "role": "gate"},
+        {"id": "rank_spearman", "label_zh": "split-half Spearman", "json_path": "trial_stability.mean_rank_spearman", "value": 0.8025998963931612, "unit": "ratio", "role": "gate"},
+        {"id": "pareto_jaccard", "label_zh": "Pareto Jaccard", "json_path": "trial_stability.mean_pareto_family_jaccard", "value": 0.5175983436853002, "unit": "ratio", "role": "gate"},
+        {"id": "best_jaccard", "label_zh": "最佳候选 Jaccard", "json_path": "trial_stability.mean_best_candidate_jaccard", "value": 0.546583850931677, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "realized_neighborhood_ranking",
+      "title_zh": "显式邻域排序可学习性审计",
+      "category": "offline_learning",
+      "status": "confirmed",
+      "decision": "advance_dynamic_realized_ranking_and_shrink_static_transfer_claim",
+      "data_boundary": "6 折 leave-one-map-out；23 独立状态；8 trials 聚合后标注",
+      "claim": "实际集合表示显著超过 proposal；静态上下文的独立增量门槛失败。",
+      "document": "docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "2405b35"
+      },
+      "source": {
+        "path": "build/initlns-realized-neighborhood-ranking-audit-v1/realized_neighborhood_ranking_audit.json",
+        "sha256": "99eacd47419f9ca6046b8d92a6ef41b1a54496b96e233114629ca04d023da0f9"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": true},
+        {"json_path": "acceptance.static_transfer_passed", "expected": false},
+        {"json_path": "acceptance.decision", "expected": "advance_dynamic_realized_ranking_and_shrink_static_transfer_claim"}
+      ],
+      "metrics": [
+        {"id": "proposal_top1", "label_zh": "proposal top-1", "json_path": "summaries.proposal_dynamic.pareto_top1_hit_rate", "value": 0.13043478260869565, "unit": "ratio", "role": "primary"},
+        {"id": "realized_top1", "label_zh": "realized top-1", "json_path": "summaries.realized_dynamic.pareto_top1_hit_rate", "value": 0.43478260869565216, "unit": "ratio", "role": "primary"},
+        {"id": "regret_reduction", "label_zh": "冲突 regret 下降", "json_path": "comparisons.realized_dynamic_vs_proposal_dynamic.relative_conflict_regret_reduction", "value": 0.5556783061387315, "unit": "ratio", "role": "gate"},
+        {"id": "context_top1_gain", "label_zh": "静态上下文 top-1 增益", "json_path": "comparisons.realized_context_vs_realized_dynamic.pareto_top1_gain", "value": 0.043478260869565244, "unit": "ratio", "role": "static_context_ablation"},
+        {"id": "context_hit_percentile", "label_zh": "静态上下文置换百分位", "json_path": "context_permutation.hit_gain_percentile", "value": 0.92, "unit": "ratio", "role": "static_context_gate"}
+      ]
+    },
+    {
+      "id": "ranking_confirmation_qualification",
+      "title_zh": "首次独立确认 qualification",
+      "category": "data_design",
+      "status": "inconclusive",
+      "decision": "stop_before_labels",
+      "data_boundary": "12 张固定地图；仅 qualification；未生成候选修复结果",
+      "claim": "48/48 reset 有效，但只有 11/12 地图满足成对覆盖，按规则停止且未重抽 seed。",
+      "document": "docs/REALIZED_RANKING_CONFIRMATION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "6501821",
+        "amendment_commit": "5dfd360",
+        "result_commit": "42005fa"
+      },
+      "source": {
+        "path": "build/initlns-realized-ranking-confirmation-v1b-collection/qualification_report.json",
+        "sha256": "1c43756588d3f5be69939743c58f6dea59f6abf9888c6553cdd1688cafc2bb43"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false}
+      ],
+      "metrics": [
+        {"id": "valid_resets", "label_zh": "有效 reset", "json_path": "valid_count", "value": 48, "unit": "episodes", "role": "coverage"},
+        {"id": "paired_maps", "label_zh": "成对覆盖地图", "json_path": "paired_map_count", "value": 11, "unit": "maps", "role": "gate"}
+      ]
+    },
+    {
+      "id": "natural_distribution_confirmation",
+      "title_zh": "自然冲突分布独立确认",
+      "category": "offline_learning",
+      "status": "confirmed",
+      "decision": "proceed_to_fresh_closed_loop_confirmation",
+      "data_boundary": "12 张全新同族地图；48 个未筛选任务；41 个非零状态；8 trials",
+      "claim": "冻结 realized_dynamic 在未见地图上通过全部离线门槛；静态上下文仍无增量。",
+      "document": "docs/NATURAL_DISTRIBUTION_CONFIRMATION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "6b91104",
+        "result_commit": "f907eda"
+      },
+      "source": {
+        "path": "build/initlns-natural-distribution-confirmation-v1-report/natural_distribution_confirmation.json",
+        "sha256": "846f0e7809b966cba6cd3045de66dfd3e0d173fc8daf44c9bd1de98c405fe396"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": true},
+        {"json_path": "acceptance.decision", "expected": "proceed_to_fresh_closed_loop_confirmation"},
+        {"json_path": "integrity.passed", "expected": true},
+        {"json_path": "qualification.seed_isolation.passed", "expected": true},
+        {"json_path": "frozen_models.confirmation_labels_seen", "expected": false}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "非零状态数", "json_path": "integrity.state_count", "value": 41, "unit": "states", "role": "coverage"},
+        {"id": "proposal_top1", "label_zh": "proposal top-1", "json_path": "summaries.proposal_dynamic.pareto_top1_hit_rate", "value": 0.1951219512195122, "unit": "ratio", "role": "primary"},
+        {"id": "realized_top1", "label_zh": "realized top-1", "json_path": "summaries.realized_dynamic.pareto_top1_hit_rate", "value": 0.43902439024390244, "unit": "ratio", "role": "primary"},
+        {"id": "context_top1", "label_zh": "realized+context top-1", "json_path": "summaries.realized_context.pareto_top1_hit_rate", "value": 0.4146341463414634, "unit": "ratio", "role": "static_context_ablation"},
+        {"id": "regret_reduction", "label_zh": "冲突 regret 下降", "json_path": "comparisons.realized_dynamic_vs_proposal_dynamic.relative_conflict_regret_reduction", "value": 0.3383246079868717, "unit": "ratio", "role": "gate"},
+        {"id": "maps_no_worse", "label_zh": "不劣地图数", "json_path": "comparisons.realized_dynamic_vs_proposal_dynamic.maps_no_worse", "value": 10, "unit": "maps", "role": "gate"}
+      ]
+    },
+    {
+      "id": "closed_loop_confirmation",
+      "title_zh": "冻结显式邻域排序器闭环确认",
+      "category": "closed_loop",
+      "status": "confirmed",
+      "decision": "advance_to_policy_visited_data_and_rl_warm_start",
+      "data_boundary": "6 张全新同族地图；24 个未筛选任务；solver seed 0",
+      "claim": "冻结策略保持 24/24 成功并将固定预算冲突 AUC 降低 57.25%，6/6 地图不劣。",
+      "document": "docs/CLOSED_LOOP_CONFIRMATION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "4b7028a",
+        "result_commit": "b5d76da"
+      },
+      "source": {
+        "path": "build/initlns-closed-loop-confirmation-v1-report/closed_loop_confirmation.json",
+        "sha256": "ac7031374ed380b79440e3aee4f9a7ad5358796a67a55bdf3ac356e3e360aff3"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": true},
+        {"json_path": "acceptance.decision", "expected": "advance_to_policy_visited_data_and_rl_warm_start"},
+        {"json_path": "integrity.passed", "expected": true},
+        {"json_path": "qualification.seed_isolation.passed", "expected": true},
+        {"json_path": "frozen_models.confirmation_labels_seen", "expected": false}
+      ],
+      "metrics": [
+        {"id": "adaptive_successes", "label_zh": "Adaptive 成功数", "json_path": "policy_summaries.official_adaptive.success_count", "value": 24, "unit": "episodes", "role": "primary"},
+        {"id": "realized_successes", "label_zh": "冻结策略成功数", "json_path": "policy_summaries.realized_dynamic.success_count", "value": 24, "unit": "episodes", "role": "primary"},
+        {"id": "auc_improvement", "label_zh": "冲突 AUC 改善", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.relative_improvement", "value": 0.5724922440537745, "unit": "ratio", "role": "gate"},
+        {"id": "maps_no_worse", "label_zh": "不劣地图数", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.maps_no_worse", "value": 6, "unit": "maps", "role": "gate"},
+        {"id": "adaptive_wall", "label_zh": "Adaptive 平均墙钟", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.capped_wall_time_to_feasible.baseline_mean", "value": 0.42415869566666636, "unit": "seconds", "role": "diagnostic"},
+        {"id": "realized_wall", "label_zh": "冻结策略平均墙钟", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.capped_wall_time_to_feasible.primary_mean", "value": 13.439182716428572, "unit": "seconds", "role": "diagnostic"}
+      ]
+    },
+    {
+      "id": "closed_loop_hardening",
+      "title_zh": "闭环控制器等价加速",
+      "category": "engineering",
+      "status": "engineering",
+      "decision": "scientifically_equivalent_and_faster_controller",
+      "data_boundary": "重放已登记 72 个策略 episode；不产生新科学标签",
+      "claim": "原生 proposal、特征缓存和 portable tree 推理保持结果逐 transition 一致，并显著降低控制开销。",
+      "document": "docs/CLOSED_LOOP_CONFIRMATION.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "da91471"
+      },
+      "source": {
+        "path": "build/initlns-closed-loop-hardening-final-v2/equivalence_report.json",
+        "sha256": "0d02a6d24c8e9e1537ffa3c334e5b7f876494c32547c412b439e93bc5d98114d"
+      },
+      "checks": [
+        {"json_path": "exact", "expected": true},
+        {"json_path": "mismatch_count", "expected": 0}
+      ],
+      "metrics": [
+        {"id": "reference_controller_seconds", "label_zh": "旧控制器平均时间", "json_path": "policies.realized_dynamic.reference_timing.mean_controller_seconds", "value": 11.473336090041675, "unit": "seconds", "role": "engineering"},
+        {"id": "candidate_controller_seconds", "label_zh": "新控制器平均时间", "json_path": "policies.realized_dynamic.candidate_timing.mean_controller_seconds", "value": 0.45497945141667034, "unit": "seconds", "role": "engineering"},
+        {"id": "matching_episodes", "label_zh": "完全匹配 episode", "json_path": "policies.realized_dynamic.matching_episode_count", "value": 24, "unit": "episodes", "role": "integrity"},
+        {"id": "matching_transitions", "label_zh": "完全匹配 transition", "json_path": "policies.realized_dynamic.transition_count", "value": 150, "unit": "transitions", "role": "integrity"}
+      ]
+    },
+    {
+      "id": "closed_loop_multiseed",
+      "title_zh": "同族新地图多 seed 闭环确认",
+      "category": "closed_loop",
+      "status": "confirmed",
+      "decision": "advance_to_policy_visited_data_and_rl_warm_start",
+      "data_boundary": "12 张全新同族地图；4 任务/图；solver seeds 1/2/3；144 episode/策略",
+      "claim": "冻结策略保持 144/144 成功，AUC 改善 52.54%，11/12 地图不劣且三个 seed 均改善。",
+      "document": "docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "a51c6f9",
+        "amendment_commit": "7532591",
+        "result_commit": "2ae6b19"
+      },
+      "source": {
+        "path": "build/initlns-closed-loop-multiseed-v1-report/closed_loop_confirmation.json",
+        "sha256": "210fbf10aba04d1e64493d1bd26878eaa6c7e97fec860eef378f139741336840"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": true},
+        {"json_path": "integrity.passed", "expected": true},
+        {"json_path": "qualification.seed_isolation.passed", "expected": true},
+        {"json_path": "frozen_models.confirmation_labels_seen", "expected": false}
+      ],
+      "metrics": [
+        {"id": "repairable_count", "label_zh": "需修复 episode", "json_path": "qualification.nonzero_state_count", "value": 121, "unit": "episodes", "role": "coverage"},
+        {"id": "adaptive_successes", "label_zh": "Adaptive 成功数", "json_path": "policy_summaries.official_adaptive.success_count", "value": 144, "unit": "episodes", "role": "primary"},
+        {"id": "realized_successes", "label_zh": "冻结策略成功数", "json_path": "policy_summaries.realized_dynamic.success_count", "value": 144, "unit": "episodes", "role": "primary"},
+        {"id": "auc_improvement", "label_zh": "冲突 AUC 改善", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.relative_improvement", "value": 0.5254097610108965, "unit": "ratio", "role": "gate"},
+        {"id": "maps_no_worse", "label_zh": "不劣地图数", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.maps_no_worse", "value": 11, "unit": "maps", "role": "gate"},
+        {"id": "adaptive_wall", "label_zh": "Adaptive 平均墙钟", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.capped_wall_time_to_feasible.baseline_mean", "value": 0.27284703538843036, "unit": "seconds", "role": "diagnostic"},
+        {"id": "realized_wall", "label_zh": "冻结策略平均墙钟", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.capped_wall_time_to_feasible.primary_mean", "value": 0.7152553154214873, "unit": "seconds", "role": "diagnostic"}
+      ]
+    },
+    {
+      "id": "policy_visited_qualification",
+      "title_zh": "策略访问状态首次 qualification",
+      "category": "data_design",
+      "status": "inconclusive",
+      "decision": "inconclusive_sample_do_not_resample",
+      "data_boundary": "18 张地图；216 reset；未采集 policy-visited 标签",
+      "claim": "总非零状态足够，但两个 split/layout 单元未达到不合理的 75% 门槛，按规则未重抽。",
+      "document": "docs/POLICY_VISITED_AGGREGATION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "d33177b",
+        "amendment_commit": "e8cf65c",
+        "result_commit": "e4810a3"
+      },
+      "source": {
+        "path": "build/initlns-policy-visited-v1-collection/qualification_report.json",
+        "sha256": "7ab77f75c4d8ff29403e5614d29855377fff521c1053c7e40e3d5be8f29897fb"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "inconclusive_sample_do_not_resample"}
+      ],
+      "metrics": [
+        {"id": "valid_resets", "label_zh": "有效 reset", "json_path": "valid_count", "value": 216, "unit": "episodes", "role": "coverage"},
+        {"id": "nonzero_states", "label_zh": "非零冲突 episode", "json_path": "nonzero_state_count", "value": 178, "unit": "episodes", "role": "coverage"}
+      ]
+    },
+    {
+      "id": "policy_visited_aggregation",
+      "title_zh": "自然分布策略访问状态聚合",
+      "category": "offline_learning",
+      "status": "unsupported",
+      "decision": "stop_before_independent_confirmation",
+      "data_boundary": "288 Train 状态训练；154 Validation 状态一次冻结评估；每候选 4 trials",
+      "claim": "v2 top-1 与 v1 相同，regret 仅改善 4.9993% 且地图 bootstrap 跨零，未推广模型。",
+      "document": "docs/POLICY_VISITED_NATURAL_DISTRIBUTION.md",
+      "registration": {
+        "status": "separate",
+        "commit": "9dce805",
+        "result_commit": "873a083"
+      },
+      "source": {
+        "path": "build/initlns-policy-visited-natural-v2-offline/offline_report.json",
+        "sha256": "856c6a2174133aca884aeac087eea7c2be8fadb4cc8a5eb65874496b1d24a73b"
+      },
+      "checks": [
+        {"json_path": "offline_acceptance.passed", "expected": false},
+        {"json_path": "validation_labels_used_for_training", "expected": false}
+      ],
+      "metrics": [
+        {"id": "validation_states", "label_zh": "Validation 状态", "json_path": "validation_state_count", "value": 154, "unit": "states", "role": "coverage"},
+        {"id": "v1_top1", "label_zh": "v1 top-1", "json_path": "summaries.v1_realized_dynamic.pareto_top1_hit_rate", "value": 0.35064935064935066, "unit": "ratio", "role": "primary"},
+        {"id": "v2_top1", "label_zh": "v2 top-1", "json_path": "summaries.v2_realized_dynamic.pareto_top1_hit_rate", "value": 0.35064935064935066, "unit": "ratio", "role": "primary"},
+        {"id": "regret_improvement", "label_zh": "v2 regret 改善", "json_path": "offline_acceptance.conflict_regret_improvement", "value": 0.04999341548648934, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "ranking_objective_audit",
+      "title_zh": "排序目标对齐审计",
+      "category": "model_diagnosis",
+      "status": "unsupported",
+      "decision": "stop_objective_alignment",
+      "data_boundary": "12 Train 地图 LOMO；Validation 封存；不采集新数据",
+      "claim": "效果差加权 pairwise 与双头 outcome 模型均低于原 v1，目标替换未解决跨地图 top-1。",
+      "document": "docs/RANKING_OBJECTIVE_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "e3565cb"
+      },
+      "source": {
+        "path": "build/initlns-ranking-objective-audit-v1/audit_report.json",
+        "sha256": "352baf6b150d39ad215d47e7485654154d6d90fcf5fa87f2723c0ed62634a914"
+      },
+      "checks": [
+        {"json_path": "cross_validation.passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_objective_alignment"},
+        {"json_path": "validation_evaluated", "expected": false}
+      ],
+      "metrics": [
+        {"id": "baseline_top1", "label_zh": "原 pairwise top-1", "json_path": "cross_validation.summaries.equal_pairwise.pareto_top1_hit_rate", "value": 0.4965277777777778, "unit": "ratio", "role": "baseline"},
+        {"id": "impact_top1", "label_zh": "效果差加权 top-1", "json_path": "cross_validation.summaries.impact_pairwise.pareto_top1_hit_rate", "value": 0.4722222222222222, "unit": "ratio", "role": "challenger"},
+        {"id": "dual_top1", "label_zh": "双头 outcome top-1", "json_path": "cross_validation.summaries.dual_outcome.pareto_top1_hit_rate", "value": 0.4548611111111111, "unit": "ratio", "role": "challenger"}
+      ]
+    },
+    {
+      "id": "model_capacity_audit",
+      "title_zh": "GBDT 容量曲线审计",
+      "category": "model_diagnosis",
+      "status": "unsupported",
+      "decision": "stop_tabular_capacity_tuning",
+      "data_boundary": "12 Train 地图 LOMO；4 档冻结容量；Validation 封存",
+      "claim": "更大模型提高训练拟合却显著降低留图表现，诊断为过拟合而非容量不足。",
+      "document": "docs/MODEL_CAPACITY_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "2b3df80"
+      },
+      "source": {
+        "path": "build/initlns-model-capacity-audit-v1/capacity_audit_report.json",
+        "sha256": "76d5233b4b4525498764501d02c8d17b897fe7029006ba76265468362becae08"
+      },
+      "checks": [
+        {"json_path": "cross_validation.passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_tabular_capacity_tuning"},
+        {"json_path": "diagnosis", "expected": "overfit"}
+      ],
+      "metrics": [
+        {"id": "current_top1", "label_zh": "current LOMO top-1", "json_path": "cross_validation.summaries.current.pareto_top1_hit_rate", "value": 0.4965277777777778, "unit": "ratio", "role": "baseline"},
+        {"id": "large_top1", "label_zh": "large LOMO top-1", "json_path": "cross_validation.summaries.large.pareto_top1_hit_rate", "value": 0.4340277777777778, "unit": "ratio", "role": "challenger"},
+        {"id": "very_large_top1", "label_zh": "very-large LOMO top-1", "json_path": "cross_validation.summaries.very_large.pareto_top1_hit_rate", "value": 0.3854166666666667, "unit": "ratio", "role": "challenger"}
+      ]
+    },
+    {
+      "id": "graph_representation_audit",
+      "title_zh": "冲突图神经表示审计",
+      "category": "model_diagnosis",
+      "status": "unsupported",
+      "decision": "stop_supervised_representation_expansion",
+      "data_boundary": "12 Train 地图 LOMO；3 seeds；108 次模型训练；Validation 封存",
+      "claim": "冲突边相对 DeepSets 有信息，但 MLP、DeepSets 和 GNN 均未超过原 GBDT。",
+      "document": "docs/GRAPH_REPRESENTATION_AUDIT.md",
+      "registration": {
+        "status": "same_commit",
+        "result_commit": "a0b4b40"
+      },
+      "source": {
+        "path": "build/initlns-graph-representation-audit-v2/graph_representation_audit.json",
+        "sha256": "5485182f9c4ca75ec567f0066df9ba0dda853e647b74da7462f8a97fa3b2d4ad"
+      },
+      "checks": [
+        {"json_path": "cross_validation.passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_supervised_representation_expansion"},
+        {"json_path": "validation_evaluated", "expected": false}
+      ],
+      "metrics": [
+        {"id": "gbdt_top1", "label_zh": "GBDT top-1", "json_path": "cross_validation.baseline.pareto_top1_hit_rate", "value": 0.4965277777777778, "unit": "ratio", "role": "baseline"},
+        {"id": "mlp_top1", "label_zh": "Flat MLP top-1", "json_path": "cross_validation.summaries.flat_mlp.pareto_top1_hit_rate", "value": 0.4201388888888889, "unit": "ratio", "role": "challenger"},
+        {"id": "deepsets_top1", "label_zh": "DeepSets top-1", "json_path": "cross_validation.summaries.agent_deepsets.pareto_top1_hit_rate", "value": 0.2638888888888889, "unit": "ratio", "role": "challenger"},
+        {"id": "gnn_top1", "label_zh": "Conflict GNN top-1", "json_path": "cross_validation.summaries.conflict_gnn.pareto_top1_hit_rate", "value": 0.4201388888888889, "unit": "ratio", "role": "challenger"}
+      ]
+    },
+    {
+      "id": "graph_feature_gbdt_audit",
+      "title_zh": "冲突图统计特征 GBDT 审计",
+      "category": "model_diagnosis",
+      "status": "unsupported",
+      "decision": "stop_supervised_representation_expansion",
+      "data_boundary": "442 状态；51 个新增图/时间特征；12 Train 地图 LOMO；Validation 封存",
+      "claim": "新增图特征略提高 pairwise accuracy，但 top-1 与 regret 均未改善，停止监督表示扩展。",
+      "document": "docs/GRAPH_FEATURE_GBDT_AUDIT.md",
+      "registration": {
+        "status": "separate",
+        "commit": "7139ca9",
+        "result_commit": "e9a7269"
+      },
+      "source": {
+        "path": "build/initlns-graph-feature-gbdt-audit-v1/graph_feature_gbdt_audit.json",
+        "sha256": "196dd55ebc49b3cc99c6906301957c5497677e7940cd66d7709a3172554e7456"
+      },
+      "checks": [
+        {"json_path": "train.passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_supervised_representation_expansion"},
+        {"json_path": "validation_evaluated", "expected": false}
+      ],
+      "metrics": [
+        {"id": "baseline_top1", "label_zh": "原 GBDT top-1", "json_path": "train.baseline.pareto_top1_hit_rate", "value": 0.4965277777777778, "unit": "ratio", "role": "baseline"},
+        {"id": "graph_top1", "label_zh": "图增强 GBDT top-1", "json_path": "train.challenger.pareto_top1_hit_rate", "value": 0.4791666666666667, "unit": "ratio", "role": "challenger"},
+        {"id": "regret_improvement", "label_zh": "冲突 regret 改善", "json_path": "train.comparison.conflict_regret_improvement", "value": -0.017127788484135716, "unit": "ratio", "role": "gate"}
+      ]
+    },
+    {
+      "id": "sequential_credit_audit",
+      "title_zh": "Policy-visited Horizon-4 长期信用审计",
+      "category": "sequential_credit",
+      "status": "unsupported",
+      "decision": "stop_h4_labels_unstable",
+      "data_boundary": "96 Train-only 状态；1718 候选；6872 trials；Validation/OOD 封存",
+      "claim": "H4 oracle 机会存在，但长期标签 split-half 稳定性与 H1/H4 差异门槛失败。",
+      "document": "docs/SEQUENTIAL_CREDIT_AUDIT.md",
+      "registration": {
+        "status": "separate",
+        "commit": "6f3a33b",
+        "result_commit": "7ef46b8"
+      },
+      "source": {
+        "path": "build/initlns-sequential-credit-audit-v1/sequential_credit_audit.json",
+        "sha256": "4baeb9e4e6caf0ca5f26767760319c28d9c90ff749573a0db95b5bdb9fd32a57"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_h4_labels_unstable"}
+      ],
+      "metrics": [
+        {"id": "state_count", "label_zh": "状态数", "json_path": "metrics.state_count", "value": 96, "unit": "states", "role": "coverage"},
+        {"id": "rank_spearman", "label_zh": "H4 split-half Spearman", "json_path": "metrics.split_half.mean_spearman", "value": 0.35751797645640176, "unit": "ratio", "role": "gate"},
+        {"id": "pareto_jaccard", "label_zh": "H4 Pareto Jaccard", "json_path": "metrics.split_half.mean_pareto_jaccard", "value": 0.38553174256299255, "unit": "ratio", "role": "gate"},
+        {"id": "h1_h4_jaccard", "label_zh": "H1/H4 Pareto Jaccard", "json_path": "metrics.long_term_difference.mean_h1_h4_pareto_jaccard", "value": 0.7213541666666666, "unit": "ratio", "role": "gate"},
+        {"id": "oracle_auc_improvement", "label_zh": "H4 oracle AUC 机会", "json_path": "metrics.long_term_opportunity.mean_oracle_auc_improvement", "value": 0.2365661809226588, "unit": "ratio", "role": "diagnostic"}
+      ]
+    },
+    {
+      "id": "repair_order_probe",
+      "title_zh": "PP repair order 机制探针",
+      "category": "repair_order",
+      "status": "mechanism",
+      "decision": "advance_to_contextual_repair_order",
+      "data_boundary": "24 Train-only 状态；4 个确定性顺序；2304 common-random-number trials",
+      "claim": "repair order 对结果有实质影响且无固定顺序支配，但随机顺序标签仍不稳定。",
+      "document": "docs/REPAIR_ORDER_PROBE.md",
+      "registration": {
+        "status": "separate",
+        "commit": "66b37a1",
+        "result_commit": "5c6a869"
+      },
+      "source": {
+        "path": "build/initlns-repair-order-probe-v1/repair_order_report.json",
+        "sha256": "142b4e69d87f78fc8b1393978033e53bc0d7ac1bffc2b31021a09542de1bfcca"
+      },
+      "checks": [
+        {"json_path": "decision", "expected": "advance_to_contextual_repair_order"},
+        {"json_path": "gates.integrity", "expected": true},
+        {"json_path": "gates.repair_order_material", "expected": true}
+      ],
+      "metrics": [
+        {"id": "solution_divergence", "label_zh": "顺序导致解分歧比例", "json_path": "metrics.order_effect.solution_divergence_fraction", "value": 0.9375, "unit": "ratio", "role": "mechanism"},
+        {"id": "oracle_auc_improvement", "label_zh": "顺序 oracle AUC 机会", "json_path": "metrics.order_effect.mean_oracle_auc_improvement", "value": 0.2789555184037246, "unit": "ratio", "role": "mechanism"},
+        {"id": "best_fixed_share", "label_zh": "最佳固定顺序覆盖", "json_path": "metrics.fixed_rules.best_share", "value": 0.6180555555555556, "unit": "ratio", "role": "mechanism"}
+      ]
+    },
+    {
+      "id": "contextual_repair_order_audit",
+      "title_zh": "上下文 repair-order selector 审计",
+      "category": "repair_order",
+      "status": "unsupported",
+      "decision": "stop_before_independent_confirmation",
+      "data_boundary": "144 Train LOMO decisions；12 地图；500 上下文置换；Validation 未生成",
+      "claim": "selector 仅改善 1.16% AUC、置换百分位 55.2%，并将可行率从 66.7% 降至 59.7%。",
+      "document": "docs/CONTEXTUAL_REPAIR_ORDER_AUDIT.md",
+      "registration": {
+        "status": "separate",
+        "commit": "c982e2d",
+        "result_commit": "920d338"
+      },
+      "source": {
+        "path": "build/initlns-contextual-repair-order-audit-v1/contextual_repair_order_audit.json",
+        "sha256": "a169d30abfc21e8336bf02778d5042cf54e9f3c7cda56567b6d730f977b248fa"
+      },
+      "checks": [
+        {"json_path": "passed", "expected": false},
+        {"json_path": "decision", "expected": "stop_before_independent_confirmation"}
+      ],
+      "metrics": [
+        {"id": "auc_improvement", "label_zh": "模型相对固定顺序 AUC 改善", "json_path": "metrics.model_vs_fixed_auc_improvement", "value": 0.011609011258199506, "unit": "ratio", "role": "gate"},
+        {"id": "context_percentile", "label_zh": "上下文置换百分位", "json_path": "metrics.context_permutation.real_percentile", "value": 0.552, "unit": "ratio", "role": "gate"},
+        {"id": "fixed_feasible_rate", "label_zh": "固定顺序可行率", "json_path": "metrics.fixed_feasible_rate", "value": 0.6666666666666666, "unit": "ratio", "role": "primary"},
+        {"id": "model_feasible_rate", "label_zh": "模型顺序可行率", "json_path": "metrics.model_feasible_rate", "value": 0.5972222222222222, "unit": "ratio", "role": "primary"}
+      ]
+    },
+    {
+      "id": "movingai_ood_closed_loop",
+      "title_zh": "冻结 V1 MovingAI 跨布局闭环确认",
+      "category": "external_generalization",
+      "status": "external_support",
+      "decision": "stop_cross_layout_claim_and_consolidate_results",
+      "data_boundary": "12 个未见标准地图；5 地图族；48 tasks；3 solver seeds；144 episode/策略",
+      "claim": "成功数和所有有效地图/地图族均有正信号，但主 AUC 改善 4.105% 未达到预注册 5%。",
+      "document": "docs/MOVINGAI_OOD_CLOSED_LOOP.md",
+      "registration": {
+        "status": "separate",
+        "commit": "606374a",
+        "result_commit": "d726450"
+      },
+      "source": {
+        "path": "build/initlns-movingai-ood-report-v1/movingai_ood_confirmation.json",
+        "sha256": "e931721f0cdc08df6eaf9de75843e0a58c86e19f009195e675f3b358c156b46e"
+      },
+      "checks": [
+        {"json_path": "acceptance.passed", "expected": false},
+        {"json_path": "acceptance.decision", "expected": "stop_cross_layout_claim_and_consolidate_results"},
+        {"json_path": "acceptance.gates.auc_improvement", "expected": false},
+        {"json_path": "integrity.passed", "expected": true},
+        {"json_path": "qualification.seed_isolation.passed", "expected": true},
+        {"json_path": "frozen_models.confirmation_labels_seen", "expected": false},
+        {"json_path": "pre_registration.models_retrained", "expected": false}
+      ],
+      "metrics": [
+        {"id": "repairable_count", "label_zh": "需修复 episode", "json_path": "qualification.nonzero_state_count", "value": 74, "unit": "episodes", "role": "coverage"},
+        {"id": "adaptive_successes", "label_zh": "Adaptive 成功数", "json_path": "policy_summaries.official_adaptive.success_count", "value": 123, "unit": "episodes", "role": "primary"},
+        {"id": "target_successes", "label_zh": "Target 成功数", "json_path": "policy_summaries.fixed_target.success_count", "value": 122, "unit": "episodes", "role": "baseline"},
+        {"id": "collision_successes", "label_zh": "Collision 成功数", "json_path": "policy_summaries.fixed_collision.success_count", "value": 126, "unit": "episodes", "role": "baseline"},
+        {"id": "random_successes", "label_zh": "Random 成功数", "json_path": "policy_summaries.fixed_random.success_count", "value": 114, "unit": "episodes", "role": "baseline"},
+        {"id": "realized_successes", "label_zh": "冻结策略成功数", "json_path": "policy_summaries.realized_dynamic.success_count", "value": 131, "unit": "episodes", "role": "primary"},
+        {"id": "auc_improvement", "label_zh": "冲突 AUC 改善", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.relative_improvement", "value": 0.04105191539422247, "unit": "ratio", "role": "gate"},
+        {"id": "maps_no_worse", "label_zh": "不劣有效地图数", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.metrics.fixed_budget_conflict_auc.maps_no_worse", "value": 9, "unit": "maps", "role": "gate"},
+        {"id": "families_no_worse", "label_zh": "不劣地图族数", "json_path": "acceptance.layout_family_comparison.families_no_worse", "value": 5, "unit": "families", "role": "gate"},
+        {"id": "normalized_auc_improvement", "label_zh": "初始冲突归一化 AUC 改善", "json_path": "comparisons.realized_dynamic_vs_official_adaptive.normalized_conflict_auc_sensitivity.relative_improvement", "value": 0.3242555271725184, "unit": "ratio", "role": "sensitivity"},
+        {"id": "feature_outside_fraction", "label_zh": "被选特征超范围比例", "json_path": "policy_summaries.realized_dynamic.mean_selected_feature_outside_fraction", "value": 0.19642351887329432, "unit": "ratio", "role": "diagnostic"}
+      ]
+    }
+  ]
+}

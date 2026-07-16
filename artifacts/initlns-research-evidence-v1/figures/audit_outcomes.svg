@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="474" viewBox="0 0 920 474" role="img">
+<title>冻结证据登记：实验结论数量（不是效果量）</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="28" y="38" font-family="sans-serif" font-size="22" font-weight="700" letter-spacing="0" fill="#17212b">冻结证据登记：实验结论数量（不是效果量）</text>
+<text x="246" y="106" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">已确认</text>
+<rect x="260" y="84" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="84" width="245.833" height="28" fill="#19764a"/>
+<text x="514.833" y="104" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">5.00</text>
+<text x="246" y="160" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">外部支持但未确认</text>
+<rect x="260" y="138" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="138" width="49.167" height="28" fill="#2878b5"/>
+<text x="318.167" y="158" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">1.00</text>
+<text x="246" y="214" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">机制证据</text>
+<rect x="260" y="192" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="192" width="147.500" height="28" fill="#6f56a5"/>
+<text x="416.500" y="212" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">3.00</text>
+<text x="246" y="268" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">工程结果</text>
+<rect x="260" y="246" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="246" width="49.167" height="28" fill="#3d6f79"/>
+<text x="318.167" y="266" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">1.00</text>
+<text x="246" y="322" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">证据不足</text>
+<rect x="260" y="300" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="300" width="98.333" height="28" fill="#8a6d1d"/>
+<text x="367.333" y="320" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">2.00</text>
+<text x="246" y="376" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">未通过</text>
+<rect x="260" y="354" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="354" width="590.000" height="28" fill="#bd3b32"/>
+<text x="858.000" y="374" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">12.00</text>
+</svg>

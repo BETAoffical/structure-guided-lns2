@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="312" viewBox="0 0 920 312" role="img">
+<title>自然分布独立确认：Pareto top-1 命中率</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="28" y="38" font-family="sans-serif" font-size="22" font-weight="700" letter-spacing="0" fill="#17212b">自然分布独立确认：Pareto top-1 命中率</text>
+<text x="246" y="106" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">仅候选来源特征</text>
+<rect x="260" y="84" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="84" width="209.313" height="28" fill="#bd3b32"/>
+<text x="478.313" y="104" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">19.51%</text>
+<text x="246" y="160" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">动态状态 + 实际邻域</text>
+<rect x="260" y="138" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="138" width="470.953" height="28" fill="#19764a"/>
+<text x="739.953" y="158" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">43.90%</text>
+<text x="246" y="214" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="0" fill="#263542">再加入静态上下文</text>
+<rect x="260" y="192" width="590" height="28" fill="#edf1f4"/>
+<rect x="260" y="192" width="444.789" height="28" fill="#2878b5"/>
+<text x="713.789" y="212" font-family="sans-serif" font-size="14" letter-spacing="0" fill="#17212b">41.46%</text>
+</svg>

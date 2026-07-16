@@ -1,0 +1,106 @@
+experiment_id,category,status,metric_id,label_zh,value,unit,role
+context_primary_audit,static_context,unsupported,candidate_rows,候选结果数,7344,outcomes,coverage
+context_primary_audit,static_context,unsupported,dynamic_top1,动态状态 top-1,0.111111111111111,ratio,primary
+context_primary_audit,static_context,unsupported,full_top1,完整上下文 top-1,0.152777777777778,ratio,primary
+context_primary_audit,static_context,unsupported,top1_gain,上下文 top-1 增益,0.0416666666666667,ratio,gate
+context_primary_audit,static_context,unsupported,auc_regret_reduction,AUC regret 相对下降,-0.0227762506852965,ratio,gate
+context_secondary_audit,static_context,unsupported,state_count,开发状态数,200,states,coverage
+context_secondary_audit,static_context,unsupported,hit_permutation_percentile,真实上下文 top-1 置换百分位,0.062,ratio,gate
+context_secondary_audit,static_context,unsupported,auc_permutation_percentile,AUC regret 置换百分位,0.592,ratio,gate
+local_representation_audit,representation,unsupported,local_top1_gain,local_pre top-1 增益,0.02,ratio,gate
+local_representation_audit,representation,unsupported,realized_regret_reduction,realized AUC regret 下降,0.0725189658490484,ratio,diagnostic
+local_representation_audit,representation,unsupported,context_hit_percentile,上下文 top-1 置换百分位,0.312,ratio,gate
+movingai_mechanism_probe_v1,action_mechanism,mechanism,state_count,独立状态数,12,states,coverage
+movingai_mechanism_probe_v1,action_mechanism,mechanism,map_percentile,地图置换百分位,0.9,ratio,diagnostic
+movingai_mechanism_probe_v1,action_mechanism,mechanism,density_percentile,密度置换百分位,0,ratio,diagnostic
+movingai_probe_quality_v1,label_quality,unsupported,state_count,split-half 状态数,12,states,coverage
+movingai_probe_quality_v1,label_quality,unsupported,rank_spearman,split-half Spearman,0.424017628552767,ratio,stability
+movingai_probe_quality_v1,label_quality,unsupported,pareto_jaccard,Pareto-family Jaccard,0.273809523809524,ratio,stability
+movingai_probe_quality_v1,label_quality,unsupported,best_jaccard,最佳候选 Jaccard,0.186342592592593,ratio,stability
+movingai_probe_quality_v1,label_quality,unsupported,realized_jaccard,实际邻域 Jaccard,0.385766429575861,ratio,stability
+movingai_probe_quality_v2,label_quality,mechanism,state_count,split-half 状态数,35,states,coverage
+movingai_probe_quality_v2,label_quality,mechanism,rank_spearman,split-half Spearman,0.683559730903026,ratio,stability
+movingai_probe_quality_v2,label_quality,mechanism,best_jaccard,最佳集合 Jaccard,0.376462585034014,ratio,stability
+movingai_probe_quality_v2,label_quality,mechanism,realized_jaccard,实际邻域 Jaccard,0.391080826627718,ratio,stability
+independent_layout_probe,action_mechanism,unsupported,action_eta,名义动作 eta-squared,0.403754806162937,ratio,gate
+independent_layout_probe,action_mechanism,unsupported,rank_spearman,split-half Spearman,0.637933769999257,ratio,gate
+independent_layout_probe,action_mechanism,unsupported,pareto_jaccard,Pareto-family Jaccard,0.432194616977226,ratio,gate
+realized_neighborhood_stability,action_mechanism,confirmed,state_count,状态数,23,states,coverage
+realized_neighborhood_stability,action_mechanism,confirmed,candidate_count,实际邻域数,412,candidates,coverage
+realized_neighborhood_stability,action_mechanism,confirmed,outcome_count,修复结果数,3296,outcomes,coverage
+realized_neighborhood_stability,action_mechanism,confirmed,realized_eta,实际邻域 eta-squared,0.594552773293721,ratio,gate
+realized_neighborhood_stability,action_mechanism,confirmed,rank_spearman,split-half Spearman,0.802599896393161,ratio,gate
+realized_neighborhood_stability,action_mechanism,confirmed,pareto_jaccard,Pareto Jaccard,0.5175983436853,ratio,gate
+realized_neighborhood_stability,action_mechanism,confirmed,best_jaccard,最佳候选 Jaccard,0.546583850931677,ratio,gate
+realized_neighborhood_ranking,offline_learning,confirmed,proposal_top1,proposal top-1,0.130434782608696,ratio,primary
+realized_neighborhood_ranking,offline_learning,confirmed,realized_top1,realized top-1,0.434782608695652,ratio,primary
+realized_neighborhood_ranking,offline_learning,confirmed,regret_reduction,冲突 regret 下降,0.555678306138731,ratio,gate
+realized_neighborhood_ranking,offline_learning,confirmed,context_top1_gain,静态上下文 top-1 增益,0.0434782608695652,ratio,static_context_ablation
+realized_neighborhood_ranking,offline_learning,confirmed,context_hit_percentile,静态上下文置换百分位,0.92,ratio,static_context_gate
+ranking_confirmation_qualification,data_design,inconclusive,valid_resets,有效 reset,48,episodes,coverage
+ranking_confirmation_qualification,data_design,inconclusive,paired_maps,成对覆盖地图,11,maps,gate
+natural_distribution_confirmation,offline_learning,confirmed,state_count,非零状态数,41,states,coverage
+natural_distribution_confirmation,offline_learning,confirmed,proposal_top1,proposal top-1,0.195121951219512,ratio,primary
+natural_distribution_confirmation,offline_learning,confirmed,realized_top1,realized top-1,0.439024390243902,ratio,primary
+natural_distribution_confirmation,offline_learning,confirmed,context_top1,realized+context top-1,0.414634146341463,ratio,static_context_ablation
+natural_distribution_confirmation,offline_learning,confirmed,regret_reduction,冲突 regret 下降,0.338324607986872,ratio,gate
+natural_distribution_confirmation,offline_learning,confirmed,maps_no_worse,不劣地图数,10,maps,gate
+closed_loop_confirmation,closed_loop,confirmed,adaptive_successes,Adaptive 成功数,24,episodes,primary
+closed_loop_confirmation,closed_loop,confirmed,realized_successes,冻结策略成功数,24,episodes,primary
+closed_loop_confirmation,closed_loop,confirmed,auc_improvement,冲突 AUC 改善,0.572492244053775,ratio,gate
+closed_loop_confirmation,closed_loop,confirmed,maps_no_worse,不劣地图数,6,maps,gate
+closed_loop_confirmation,closed_loop,confirmed,adaptive_wall,Adaptive 平均墙钟,0.424158695666666,seconds,diagnostic
+closed_loop_confirmation,closed_loop,confirmed,realized_wall,冻结策略平均墙钟,13.4391827164286,seconds,diagnostic
+closed_loop_hardening,engineering,engineering,reference_controller_seconds,旧控制器平均时间,11.4733360900417,seconds,engineering
+closed_loop_hardening,engineering,engineering,candidate_controller_seconds,新控制器平均时间,0.45497945141667,seconds,engineering
+closed_loop_hardening,engineering,engineering,matching_episodes,完全匹配 episode,24,episodes,integrity
+closed_loop_hardening,engineering,engineering,matching_transitions,完全匹配 transition,150,transitions,integrity
+closed_loop_multiseed,closed_loop,confirmed,repairable_count,需修复 episode,121,episodes,coverage
+closed_loop_multiseed,closed_loop,confirmed,adaptive_successes,Adaptive 成功数,144,episodes,primary
+closed_loop_multiseed,closed_loop,confirmed,realized_successes,冻结策略成功数,144,episodes,primary
+closed_loop_multiseed,closed_loop,confirmed,auc_improvement,冲突 AUC 改善,0.525409761010897,ratio,gate
+closed_loop_multiseed,closed_loop,confirmed,maps_no_worse,不劣地图数,11,maps,gate
+closed_loop_multiseed,closed_loop,confirmed,adaptive_wall,Adaptive 平均墙钟,0.27284703538843,seconds,diagnostic
+closed_loop_multiseed,closed_loop,confirmed,realized_wall,冻结策略平均墙钟,0.715255315421487,seconds,diagnostic
+policy_visited_qualification,data_design,inconclusive,valid_resets,有效 reset,216,episodes,coverage
+policy_visited_qualification,data_design,inconclusive,nonzero_states,非零冲突 episode,178,episodes,coverage
+policy_visited_aggregation,offline_learning,unsupported,validation_states,Validation 状态,154,states,coverage
+policy_visited_aggregation,offline_learning,unsupported,v1_top1,v1 top-1,0.350649350649351,ratio,primary
+policy_visited_aggregation,offline_learning,unsupported,v2_top1,v2 top-1,0.350649350649351,ratio,primary
+policy_visited_aggregation,offline_learning,unsupported,regret_improvement,v2 regret 改善,0.0499934154864893,ratio,gate
+ranking_objective_audit,model_diagnosis,unsupported,baseline_top1,原 pairwise top-1,0.496527777777778,ratio,baseline
+ranking_objective_audit,model_diagnosis,unsupported,impact_top1,效果差加权 top-1,0.472222222222222,ratio,challenger
+ranking_objective_audit,model_diagnosis,unsupported,dual_top1,双头 outcome top-1,0.454861111111111,ratio,challenger
+model_capacity_audit,model_diagnosis,unsupported,current_top1,current LOMO top-1,0.496527777777778,ratio,baseline
+model_capacity_audit,model_diagnosis,unsupported,large_top1,large LOMO top-1,0.434027777777778,ratio,challenger
+model_capacity_audit,model_diagnosis,unsupported,very_large_top1,very-large LOMO top-1,0.385416666666667,ratio,challenger
+graph_representation_audit,model_diagnosis,unsupported,gbdt_top1,GBDT top-1,0.496527777777778,ratio,baseline
+graph_representation_audit,model_diagnosis,unsupported,mlp_top1,Flat MLP top-1,0.420138888888889,ratio,challenger
+graph_representation_audit,model_diagnosis,unsupported,deepsets_top1,DeepSets top-1,0.263888888888889,ratio,challenger
+graph_representation_audit,model_diagnosis,unsupported,gnn_top1,Conflict GNN top-1,0.420138888888889,ratio,challenger
+graph_feature_gbdt_audit,model_diagnosis,unsupported,baseline_top1,原 GBDT top-1,0.496527777777778,ratio,baseline
+graph_feature_gbdt_audit,model_diagnosis,unsupported,graph_top1,图增强 GBDT top-1,0.479166666666667,ratio,challenger
+graph_feature_gbdt_audit,model_diagnosis,unsupported,regret_improvement,冲突 regret 改善,-0.0171277884841357,ratio,gate
+sequential_credit_audit,sequential_credit,unsupported,state_count,状态数,96,states,coverage
+sequential_credit_audit,sequential_credit,unsupported,rank_spearman,H4 split-half Spearman,0.357517976456402,ratio,gate
+sequential_credit_audit,sequential_credit,unsupported,pareto_jaccard,H4 Pareto Jaccard,0.385531742562993,ratio,gate
+sequential_credit_audit,sequential_credit,unsupported,h1_h4_jaccard,H1/H4 Pareto Jaccard,0.721354166666667,ratio,gate
+sequential_credit_audit,sequential_credit,unsupported,oracle_auc_improvement,H4 oracle AUC 机会,0.236566180922659,ratio,diagnostic
+repair_order_probe,repair_order,mechanism,solution_divergence,顺序导致解分歧比例,0.9375,ratio,mechanism
+repair_order_probe,repair_order,mechanism,oracle_auc_improvement,顺序 oracle AUC 机会,0.278955518403725,ratio,mechanism
+repair_order_probe,repair_order,mechanism,best_fixed_share,最佳固定顺序覆盖,0.618055555555556,ratio,mechanism
+contextual_repair_order_audit,repair_order,unsupported,auc_improvement,模型相对固定顺序 AUC 改善,0.0116090112581995,ratio,gate
+contextual_repair_order_audit,repair_order,unsupported,context_percentile,上下文置换百分位,0.552,ratio,gate
+contextual_repair_order_audit,repair_order,unsupported,fixed_feasible_rate,固定顺序可行率,0.666666666666667,ratio,primary
+contextual_repair_order_audit,repair_order,unsupported,model_feasible_rate,模型顺序可行率,0.597222222222222,ratio,primary
+movingai_ood_closed_loop,external_generalization,external_support,repairable_count,需修复 episode,74,episodes,coverage
+movingai_ood_closed_loop,external_generalization,external_support,adaptive_successes,Adaptive 成功数,123,episodes,primary
+movingai_ood_closed_loop,external_generalization,external_support,target_successes,Target 成功数,122,episodes,baseline
+movingai_ood_closed_loop,external_generalization,external_support,collision_successes,Collision 成功数,126,episodes,baseline
+movingai_ood_closed_loop,external_generalization,external_support,random_successes,Random 成功数,114,episodes,baseline
+movingai_ood_closed_loop,external_generalization,external_support,realized_successes,冻结策略成功数,131,episodes,primary
+movingai_ood_closed_loop,external_generalization,external_support,auc_improvement,冲突 AUC 改善,0.0410519153942225,ratio,gate
+movingai_ood_closed_loop,external_generalization,external_support,maps_no_worse,不劣有效地图数,9,maps,gate
+movingai_ood_closed_loop,external_generalization,external_support,families_no_worse,不劣地图族数,5,families,gate
+movingai_ood_closed_loop,external_generalization,external_support,normalized_auc_improvement,初始冲突归一化 AUC 改善,0.324255527172518,ratio,sensitivity
+movingai_ood_closed_loop,external_generalization,external_support,feature_outside_fraction,被选特征超范围比例,0.196423518873294,ratio,diagnostic

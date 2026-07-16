@@ -1,0 +1,152 @@
+{
+  "commit_count": 37,
+  "parity_hash_registered": true,
+  "source_count": 24,
+  "sources": [
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "context_primary_audit",
+      "path": "build/initlns-context-audit-v2/context_audit.json",
+      "sha256": "ae140b32fe45b5198229c1cb61248d00593747524dbc8bef9ffc4f8e8c55f2e0"
+    },
+    {
+      "checked_json_paths": 4,
+      "experiment_id": "context_secondary_audit",
+      "path": "build/initlns-context-secondary-final/secondary_audit.json",
+      "sha256": "f5f58590e9b2107baf0e674e701a20e36f91a9809d005b68ea4f7d098a4d21cc"
+    },
+    {
+      "checked_json_paths": 5,
+      "experiment_id": "local_representation_audit",
+      "path": "build/initlns-local-representation-audit/local_representation_audit.json",
+      "sha256": "732c8fde28297f535917ad090bdc7db4c87fb61499590ba1af488434e324c4a7"
+    },
+    {
+      "checked_json_paths": 5,
+      "experiment_id": "movingai_mechanism_probe_v1",
+      "path": "build/movingai-mechanism-probe-report-deduplicated/movingai_mechanism_probe.json",
+      "sha256": "8aa38bc4e9f8e043a9e08a298bcba82c54a32c9c6a0abfae83d47d7e7f87620b"
+    },
+    {
+      "checked_json_paths": 7,
+      "experiment_id": "movingai_probe_quality_v1",
+      "path": "build/movingai-probe-quality-audit/movingai_probe_quality.json",
+      "sha256": "617575d7d57d304e1451eaccb8641ea1650f2267ea0963b459d0d8b0794fddc1"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "movingai_probe_quality_v2",
+      "path": "build/movingai-mechanism-probe-v2-quality/movingai_probe_quality.json",
+      "sha256": "df5cc26b4b76b265d768e643186c263f6502f2ca57abaae1303fa8c289b5db73"
+    },
+    {
+      "checked_json_paths": 5,
+      "experiment_id": "independent_layout_probe",
+      "path": "build/initlns-independent-layout-probe-v1-report/independent_layout_probe.json",
+      "sha256": "834a9f0fe096beabd3356c32265b1609126ad57f509995209c8d058ffc4344ea"
+    },
+    {
+      "checked_json_paths": 10,
+      "experiment_id": "realized_neighborhood_stability",
+      "path": "build/realized-neighborhood-stability-probe-v1-report/realized_neighborhood_probe.json",
+      "sha256": "f5997317c02f9a8e61e8ade7196b7b45e311c8b8424446d95cceb3fb2965e7c9"
+    },
+    {
+      "checked_json_paths": 8,
+      "experiment_id": "realized_neighborhood_ranking",
+      "path": "build/initlns-realized-neighborhood-ranking-audit-v1/realized_neighborhood_ranking_audit.json",
+      "sha256": "99eacd47419f9ca6046b8d92a6ef41b1a54496b96e233114629ca04d023da0f9"
+    },
+    {
+      "checked_json_paths": 3,
+      "experiment_id": "ranking_confirmation_qualification",
+      "path": "build/initlns-realized-ranking-confirmation-v1b-collection/qualification_report.json",
+      "sha256": "1c43756588d3f5be69939743c58f6dea59f6abf9888c6553cdd1688cafc2bb43"
+    },
+    {
+      "checked_json_paths": 11,
+      "experiment_id": "natural_distribution_confirmation",
+      "path": "build/initlns-natural-distribution-confirmation-v1-report/natural_distribution_confirmation.json",
+      "sha256": "846f0e7809b966cba6cd3045de66dfd3e0d173fc8daf44c9bd1de98c405fe396"
+    },
+    {
+      "checked_json_paths": 11,
+      "experiment_id": "closed_loop_confirmation",
+      "path": "build/initlns-closed-loop-confirmation-v1-report/closed_loop_confirmation.json",
+      "sha256": "ac7031374ed380b79440e3aee4f9a7ad5358796a67a55bdf3ac356e3e360aff3"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "closed_loop_hardening",
+      "path": "build/initlns-closed-loop-hardening-final-v2/equivalence_report.json",
+      "sha256": "0d02a6d24c8e9e1537ffa3c334e5b7f876494c32547c412b439e93bc5d98114d"
+    },
+    {
+      "checked_json_paths": 11,
+      "experiment_id": "closed_loop_multiseed",
+      "path": "build/initlns-closed-loop-multiseed-v1-report/closed_loop_confirmation.json",
+      "sha256": "210fbf10aba04d1e64493d1bd26878eaa6c7e97fec860eef378f139741336840"
+    },
+    {
+      "checked_json_paths": 4,
+      "experiment_id": "policy_visited_qualification",
+      "path": "build/initlns-policy-visited-v1-collection/qualification_report.json",
+      "sha256": "7ab77f75c4d8ff29403e5614d29855377fff521c1053c7e40e3d5be8f29897fb"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "policy_visited_aggregation",
+      "path": "build/initlns-policy-visited-natural-v2-offline/offline_report.json",
+      "sha256": "856c6a2174133aca884aeac087eea7c2be8fadb4cc8a5eb65874496b1d24a73b"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "ranking_objective_audit",
+      "path": "build/initlns-ranking-objective-audit-v1/audit_report.json",
+      "sha256": "352baf6b150d39ad215d47e7485654154d6d90fcf5fa87f2723c0ed62634a914"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "model_capacity_audit",
+      "path": "build/initlns-model-capacity-audit-v1/capacity_audit_report.json",
+      "sha256": "76d5233b4b4525498764501d02c8d17b897fe7029006ba76265468362becae08"
+    },
+    {
+      "checked_json_paths": 7,
+      "experiment_id": "graph_representation_audit",
+      "path": "build/initlns-graph-representation-audit-v2/graph_representation_audit.json",
+      "sha256": "5485182f9c4ca75ec567f0066df9ba0dda853e647b74da7462f8a97fa3b2d4ad"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "graph_feature_gbdt_audit",
+      "path": "build/initlns-graph-feature-gbdt-audit-v1/graph_feature_gbdt_audit.json",
+      "sha256": "196dd55ebc49b3cc99c6906301957c5497677e7940cd66d7709a3172554e7456"
+    },
+    {
+      "checked_json_paths": 7,
+      "experiment_id": "sequential_credit_audit",
+      "path": "build/initlns-sequential-credit-audit-v1/sequential_credit_audit.json",
+      "sha256": "4baeb9e4e6caf0ca5f26767760319c28d9c90ff749573a0db95b5bdb9fd32a57"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "repair_order_probe",
+      "path": "build/initlns-repair-order-probe-v1/repair_order_report.json",
+      "sha256": "142b4e69d87f78fc8b1393978033e53bc0d7ac1bffc2b31021a09542de1bfcca"
+    },
+    {
+      "checked_json_paths": 6,
+      "experiment_id": "contextual_repair_order_audit",
+      "path": "build/initlns-contextual-repair-order-audit-v1/contextual_repair_order_audit.json",
+      "sha256": "a169d30abfc21e8336bf02778d5042cf54e9f3c7cda56567b6d730f977b248fa"
+    },
+    {
+      "checked_json_paths": 18,
+      "experiment_id": "movingai_ood_closed_loop",
+      "path": "build/initlns-movingai-ood-report-v1/movingai_ood_confirmation.json",
+      "sha256": "e931721f0cdc08df6eaf9de75843e0a58c86e19f009195e675f3b358c156b46e"
+    }
+  ],
+  "status": "passed"
+}
