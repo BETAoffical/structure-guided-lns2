@@ -262,11 +262,13 @@ representation audits did not pass their registered incremental gates. The final
 GBDT also failed on Train, so Validation remained sealed and RL warm-start work is paused. See
 [`docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md`](docs/CLOSED_LOOP_MULTISEED_CONFIRMATION.md).
 
-The next preregistered audit does not add another supervised model. It replays 96 Train-only states
-actually visited by frozen v1 and evaluates every explicit candidate for four repair steps, with four
-independent PP-order trials. This tests whether stable long-term action value exists but was hidden by the
-Horizon-1 labels used by the failed rankers. Validation, Test/OOD, static transfer claims, and RL remain
-sealed until all stability, H1/H4-difference, and H4-oracle-opportunity gates pass. See
+The completed sequential-credit audit replayed 96 Train-only states actually visited by frozen v1 and
+evaluated 1,718 explicit candidates for four repair steps with four independent PP-order trials. All 6,872
+trials completed without integrity errors, and an H4 oracle showed an apparent 23.7% AUC opportunity.
+However, split-half rank, Pareto, and best-set stability were all below the registered 0.5 threshold;
+policy-visited H1/H4 Pareto overlap was 0.721 and only 35.4% of states changed best sets. The decision is
+therefore `stop_h4_labels_unstable`: no long-term ranker or RL is trained, and Validation, Test/OOD, and
+static transfer claims remain sealed. See
 [`docs/SEQUENTIAL_CREDIT_AUDIT.md`](docs/SEQUENTIAL_CREDIT_AUDIT.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.

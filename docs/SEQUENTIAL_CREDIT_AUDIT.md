@@ -83,3 +83,40 @@ python3 scripts/run_sequential_credit_audit.py --phase all --workers 4 \
 All generated states, trials, indices, and reports remain under ignored
 `build/`; only code, configuration, tests, and the final written conclusion are
 versioned.
+
+## Formal Result
+
+The preregistration was pushed at commit `6f3a33b` before formal labels were
+generated. Collection then completed all 96 states, 1,718 explicit candidates,
+and 6,872 isolated trials in about 24 minutes. All 96 candidate pools reproduced
+the source trace exactly. There were zero timeouts, replay mismatches, rejected
+or changed actions, unexplained errors, and non-Train labels.
+
+| Gate metric | Required | Observed | Pass |
+| --- | ---: | ---: | :---: |
+| Split-half rank Spearman | >= 0.50 | 0.3575 | no |
+| Split-half Pareto Jaccard | >= 0.50 | 0.3855 | no |
+| Split-half best-set Jaccard | >= 0.50 | 0.3725 | no |
+| H1/H4 Pareto Jaccard | <= 0.70 | 0.7214 | no |
+| States with changed H1/H4 best set | >= 50% | 35.42% | no |
+| H4 oracle AUC improvement | >= 5% | 23.66% | yes |
+| States with positive H4 opportunity | >= 60% | 63.54% | yes |
+| Maps non-worse | >= 8/12 | 12/12 | yes |
+
+The map-bootstrap 95% interval for apparent oracle AUC improvement was
+`[18.09%, 29.73%]`. However, this opportunity cannot be used as a learning
+target because the independent trial halves disagree on candidate ranking,
+Pareto membership, and the best set. Selecting the best of many candidates
+under this instability also makes the raw oracle estimate optimistic.
+
+The policy-visited H1 and H4 labels were more similar than the earlier
+calibration labels: mean Pareto Jaccard increased from `0.5061` to `0.7214`, and
+only about one third of states changed best sets. Thus the formal decision is
+`stop_h4_labels_unstable`. Per the preregistration, the project does not add
+trials after seeing this result, train a long-term ranker, or enter RL.
+
+This result rejects the tested four-trial Horizon-4 route, not all possible
+sequential control. The next research step must change the action/value
+definition or use a lower-variance evaluation design justified independently;
+it cannot present the observed oracle gap as evidence that the current H4
+labels are learnable.
