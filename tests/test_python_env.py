@@ -146,6 +146,90 @@ class RepairEnvironmentTests(unittest.TestCase):
         )
         self.assertTrue(result["metrics"]["action_valid"])
 
+    def test_explicit_repair_order_is_applied_and_deterministic(self) -> None:
+        def run(order_seed: int) -> tuple[dict, dict]:
+            env = self.make_env()
+            state = env.reset(seed=29)
+            if state["done"] or not state["conflict_edges"]:
+                self.skipTest("initial soft PP was already feasible")
+            agents = list(state["conflict_edges"][0])
+            order = list(reversed(agents))
+            result = env.step(
+                {
+                    "mode": "explicit_neighborhood",
+                    "agents": agents,
+                    "repair_order": order,
+                    "random_seed": order_seed,
+                }
+            )
+            self.assertTrue(result["metrics"]["action_valid"])
+            self.assertEqual(result["metrics"]["requested_repair_order"], order)
+            self.assertEqual(result["metrics"]["repair_order"], order)
+            return result["observation"], result["metrics"]
+
+        first, _ = run(33001)
+        second, _ = run(33001)
+        self.assertEqual(
+            [agent["path"] for agent in first["agents"]],
+            [agent["path"] for agent in second["agents"]],
+        )
+
+        for case in ("incomplete", "duplicate", "unknown", "seed_mode"):
+            env = self.make_env()
+            state = env.reset(seed=29)
+            if state["done"] or not state["conflict_edges"]:
+                return
+            agents = list(state["conflict_edges"][0])
+            order = list(agents)
+            mode = "explicit_neighborhood"
+            if case == "incomplete":
+                order = agents[:1]
+            elif case == "duplicate":
+                order = [agents[0], agents[0]]
+            elif case == "unknown":
+                order = [agents[0], 10_000]
+            else:
+                mode = "seed"
+            action = {
+                "mode": mode,
+                "agents": agents,
+                "repair_order": order,
+                "random_seed": 33002,
+            }
+            if mode == "seed":
+                action.update(
+                    {
+                        "heuristic": "collision",
+                        "seed_agent": agents[0],
+                        "neighborhood_size": 8,
+                    }
+                )
+            invalid = env.step(action)
+            self.assertFalse(invalid["metrics"]["action_valid"], case)
+
+        gcbs = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            time_limit=30.0,
+            neighborhood_size=8,
+            replan_algorithm="GCBS",
+            max_repair_iterations=1,
+            context={},
+        )
+        state = gcbs.reset(seed=29)
+        if not state["done"] and state["conflict_edges"]:
+            agents = list(state["conflict_edges"][0])
+            invalid = gcbs.step(
+                {
+                    "mode": "explicit_neighborhood",
+                    "agents": agents,
+                    "repair_order": agents,
+                    "random_seed": 33003,
+                }
+            )
+            self.assertFalse(invalid["metrics"]["action_valid"])
+
     def test_partial_proposal_batch_still_protects_global_rng(self) -> None:
         env = self.make_env()
         state = env.reset(seed=29)

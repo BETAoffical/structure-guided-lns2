@@ -27,6 +27,7 @@ struct RepairAction
     int neighborhood_size = 0;
     int random_seed = -1;
     vector<int> agents;
+    vector<int> repair_order;
 };
 
 struct RepairProposal
@@ -76,6 +77,7 @@ struct RepairTransition
     RepairAction requested_action;
     RepairHeuristic applied_heuristic = RepairHeuristic::COLLISION;
     vector<int> neighborhood;
+    vector<int> repair_order;
     bool action_valid = true;
     bool generated = false;
     bool replan_success = false;

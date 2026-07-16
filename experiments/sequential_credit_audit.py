@@ -124,8 +124,10 @@ def _average_ranks(values: list[tuple[float, ...]]) -> list[float]:
 
 
 def _spearman_effectiveness(
-    left: list[dict[str, Any]], right: list[dict[str, Any]]
+    left: list[dict[str, Any]], right: list[dict[str, Any]], horizon: str = "h4"
 ) -> float:
+    if horizon not in {"h1", "h4"}:
+        raise ValueError("effectiveness horizon must be h1 or h4")
     left_by_id = {str(row["candidate_id"]): row for row in left}
     right_by_id = {str(row["candidate_id"]): row for row in right}
     candidate_ids = sorted(left_by_id)
@@ -136,7 +138,7 @@ def _spearman_effectiveness(
         result = []
         for key in candidate_ids:
             row = rows[key]
-            metrics = row.get("h4", row)
+            metrics = row.get(horizon, row)
             result.append(
                 (
                     -float(metrics["feasible_rate"]),

@@ -112,6 +112,73 @@ Snapshot stepWithActionSeed(int solver_seed, int action_seed)
     return snapshot;
 }
 
+Snapshot stepWithExplicitOrder(int solver_seed, int action_seed)
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(solver_seed);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    require(solver.initialize(), "failed to initialize explicit-order source");
+    RepairState state = solver.getRepairState();
+    require(!state.conflict_edges.empty(), "explicit-order source has no conflicts");
+
+    RepairAction proposal_action;
+    proposal_action.mode = RepairActionMode::SEED;
+    proposal_action.heuristic = RepairHeuristic::COLLISION;
+    proposal_action.seed_agent = state.conflict_edges.front().first;
+    proposal_action.neighborhood_size = 8;
+    proposal_action.random_seed = action_seed;
+    const RepairProposal proposal = solver.proposeNeighborhood(proposal_action);
+    require(proposal.action_valid && proposal.generated, "explicit-order proposal failed");
+
+    RepairAction action;
+    action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    action.agents = proposal.neighborhood;
+    action.repair_order = proposal.neighborhood;
+    std::reverse(action.repair_order.begin(), action.repair_order.end());
+    action.random_seed = action_seed + 1;
+    require(solver.step(action), "explicit-order step did not execute");
+    const RepairTransition& transition = solver.getLastTransition();
+    require(transition.action_valid, "valid explicit repair order was rejected");
+    require(transition.repair_order == action.repair_order,
+            "actual PP repair order differs from the request");
+
+    Snapshot snapshot;
+    state = solver.getRepairState();
+    snapshot.conflicts = state.num_of_colliding_pairs;
+    snapshot.neighborhood = transition.neighborhood;
+    for (const auto& agent : state.agents)
+        snapshot.paths.push_back(agent.path);
+    return snapshot;
+}
+
+void requireInvalidOrderFallback(int solver_seed, int action_seed)
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(solver_seed);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    require(solver.initialize(), "failed to initialize invalid-order source");
+    RepairState state = solver.getRepairState();
+    require(!state.conflict_edges.empty(), "invalid-order source has no conflicts");
+
+    RepairAction action;
+    action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    action.agents = {state.conflict_edges.front().first, state.conflict_edges.front().second};
+    action.repair_order = {action.agents.front()};
+    action.random_seed = action_seed;
+    require(solver.step(action), "invalid explicit-order fallback did not execute");
+    require(!solver.getLastTransition().action_valid, "incomplete repair order was accepted");
+}
+
 bool sameState(const RepairState& left, const RepairState& right)
 {
     if (left.initialized != right.initialized ||
@@ -157,6 +224,16 @@ int main()
             "seeded repair neighborhood is not deterministic");
     require(seeded_first.paths == seeded_second.paths,
             "seeded repair paths are not deterministic");
+
+    const Snapshot ordered_first = stepWithExplicitOrder(0, 23456);
+    const Snapshot ordered_second = stepWithExplicitOrder(0, 23456);
+    require(ordered_first.conflicts == ordered_second.conflicts,
+            "explicit repair order conflict count is not deterministic");
+    require(ordered_first.neighborhood == ordered_second.neighborhood,
+            "explicit repair order changed the neighborhood");
+    require(ordered_first.paths == ordered_second.paths,
+            "explicit repair order paths are not deterministic");
+    requireInvalidOrderFallback(0, 34567);
 
     Instance instance(TEST_MAP, TEST_SCEN, 80);
     vector<Agent> agents;

@@ -189,6 +189,8 @@ RepairAction parseAction(const py::dict& value)
     }
     if (value.contains("agents"))
         action.agents = py::cast<vector<int>>(value["agents"]);
+    if (value.contains("repair_order"))
+        action.repair_order = py::cast<vector<int>>(value["repair_order"]);
     return action;
 }
 
@@ -199,11 +201,13 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["requested_mode"] = repairActionModeName(transition.requested_action.mode);
     result["requested_heuristic"] = repairHeuristicName(transition.requested_action.heuristic);
     result["requested_random_seed"] = transition.requested_action.random_seed;
+    result["requested_repair_order"] = transition.requested_action.repair_order;
     result["applied_heuristic"] = repairHeuristicName(transition.applied_heuristic);
     result["action_valid"] = transition.action_valid;
     result["generated"] = transition.generated;
     result["replan_success"] = transition.replan_success;
     result["neighborhood"] = transition.neighborhood;
+    result["repair_order"] = transition.repair_order;
     result["conflicts_before"] = transition.conflicts_before;
     result["conflicts_after"] = transition.conflicts_after;
     result["conflict_delta"] = transition.conflicts_before - transition.conflicts_after;
@@ -221,6 +225,7 @@ py::dict proposalToPython(const RepairProposal& proposal)
     result["requested_mode"] = repairActionModeName(proposal.requested_action.mode);
     result["requested_heuristic"] = repairHeuristicName(proposal.requested_action.heuristic);
     result["requested_random_seed"] = proposal.requested_action.random_seed;
+    result["requested_repair_order"] = proposal.requested_action.repair_order;
     result["applied_heuristic"] = repairHeuristicName(proposal.applied_heuristic);
     result["action_valid"] = proposal.action_valid;
     result["generated"] = proposal.generated;

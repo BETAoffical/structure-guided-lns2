@@ -234,7 +234,10 @@ bool InitLNS::step(const RepairAction& action)
     }
 
     if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
-        succ = runPP();
+    {
+        const vector<int> requested_order = action_valid ? action.repair_order : vector<int>();
+        succ = runPP(requested_order, transition.repair_order);
+    }
     else if (replan_algo_name == "GCBS")
         succ = runGCBS();
     else if (replan_algo_name == "PBS")
@@ -405,10 +408,17 @@ bool InitLNS::runPBS()
         return false;
     }
 }
-bool InitLNS::runPP()
+bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_order)
 {
-    auto shuffled_agents = neighbor.agents;
-    std::random_shuffle(shuffled_agents.begin(), shuffled_agents.end());
+    vector<int> shuffled_agents;
+    if (requested_order.empty())
+    {
+        shuffled_agents = neighbor.agents;
+        std::random_shuffle(shuffled_agents.begin(), shuffled_agents.end());
+    }
+    else
+        shuffled_agents = requested_order;
+    applied_order = shuffled_agents;
     if (screen >= 2) {
         cout<<"Neighbors_set: ";
         for (auto id : shuffled_agents)
@@ -682,6 +692,20 @@ bool InitLNS::validateExplicitNeighborhood(const vector<int>& values) const
     return touches_conflict;
 }
 
+bool InitLNS::validateRepairOrder(const vector<int>& order,
+                                  const vector<int>& neighborhood) const
+{
+    if (order.empty())
+        return true;
+    if (order.size() != neighborhood.size())
+        return false;
+    vector<int> ordered = order;
+    vector<int> expected = neighborhood;
+    std::sort(ordered.begin(), ordered.end());
+    std::sort(expected.begin(), expected.end());
+    return ordered == expected && std::adjacent_find(ordered.begin(), ordered.end()) == ordered.end();
+}
+
 bool InitLNS::generateOfficialNeighborhood(RepairHeuristic& applied_heuristic)
 {
     if (ALNS)
@@ -700,12 +724,19 @@ bool InitLNS::generateNeighborhood(const RepairAction& action, RepairHeuristic& 
                                    bool& action_valid)
 {
     action_valid = true;
+    if (!action.repair_order.empty() &&
+        (action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD || replan_algo_name != "PP"))
+    {
+        action_valid = false;
+        return generateOfficialNeighborhood(applied_heuristic);
+    }
     if (action.mode == RepairActionMode::OFFICIAL)
         return generateOfficialNeighborhood(applied_heuristic);
 
     if (action.mode == RepairActionMode::EXPLICIT_NEIGHBORHOOD)
     {
-        if (!validateExplicitNeighborhood(action.agents))
+        if (!validateExplicitNeighborhood(action.agents) ||
+            !validateRepairOrder(action.repair_order, action.agents))
         {
             action_valid = false;
             return generateOfficialNeighborhood(applied_heuristic);

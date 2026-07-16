@@ -29,6 +29,8 @@ void JsonlRepairObserver::writeAction(const RepairAction& action)
            << ",\"random_seed\":" << action.random_seed
            << ",\"agents\":";
     writeIntArray(output, action.agents);
+    output << ",\"repair_order\":";
+    writeIntArray(output, action.repair_order);
     output << '}';
 }
 
@@ -106,6 +108,8 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
            << ",\"replan_success\":" << (transition.replan_success ? "true" : "false")
            << ",\"neighborhood\":";
     writeIntArray(output, transition.neighborhood);
+    output << ",\"repair_order\":";
+    writeIntArray(output, transition.repair_order);
     output << ",\"metrics\":{\"iteration\":" << transition.iteration
            << ",\"conflicts_before\":" << transition.conflicts_before
            << ",\"conflicts_after\":" << transition.conflicts_after

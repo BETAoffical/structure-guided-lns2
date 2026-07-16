@@ -271,6 +271,12 @@ therefore `stop_h4_labels_unstable`: no long-term ranker or RL is trained, and V
 static transfer claims remain sealed. See
 [`docs/SEQUENTIAL_CREDIT_AUDIT.md`](docs/SEQUENTIAL_CREDIT_AUDIT.md).
 
+The next bounded mechanism probe controls PP repair order inside a concrete neighborhood. It compares
+state-level common random numbers with four deterministic order rules on 24 Train-only states. The probe
+tests whether H4 instability comes from an incomplete action definition before any further model or RL
+work; official behavior remains byte-for-byte unchanged when no explicit order is requested. See
+[`docs/REPAIR_ORDER_PROBE.md`](docs/REPAIR_ORDER_PROBE.md).
+
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
 `scripts/run_feasibility_benchmark.py` gives `lns2_repair` and `gpbs_official` identical map, scenario,
 agent-count, time-limit, and seed inputs with common failure accounting. See
@@ -317,6 +323,8 @@ static OD semantics, metadata, MovingAI export, and split determinism.
   temporal conflict-graph feature bridge and its final negative Train result.
 - [`docs/SEQUENTIAL_CREDIT_AUDIT.md`](docs/SEQUENTIAL_CREDIT_AUDIT.md): Train-only frozen-policy
   Horizon-4 collection, split-trial stability, and sequential-credit gates before any RL work.
+- [`docs/REPAIR_ORDER_PROBE.md`](docs/REPAIR_ORDER_PROBE.md): explicit PP order control, common-random-number
+  trials, and the mechanism gate for redefining the InitLNS action.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.
 - [`archive/legacy_stage5/`](archive/legacy_stage5/): simplified solver and negative Stage 3-5 results.

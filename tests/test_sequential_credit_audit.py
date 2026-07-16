@@ -253,6 +253,17 @@ class SequentialCreditAuditTests(unittest.TestCase):
         ]
         self.assertAlmostEqual(_spearman_effectiveness(first, list(reversed(first))), 1.0)
 
+    def test_split_half_spearman_accepts_h1_nested_metrics(self) -> None:
+        first = [
+            {"candidate_id": "a", "h1": {"feasible_rate": 1.0, "final_conflicts": 0.0, "conflict_auc": 1.0}},
+            {"candidate_id": "b", "h1": {"feasible_rate": 0.0, "final_conflicts": 2.0, "conflict_auc": 2.0}},
+        ]
+        self.assertAlmostEqual(
+            _spearman_effectiveness(first, list(reversed(first)), horizon="h1"), 1.0
+        )
+        with self.assertRaisesRegex(ValueError, "horizon"):
+            _spearman_effectiveness(first, first, horizon="h8")
+
     def test_four_trial_aggregation_and_analysis(self) -> None:
         source = make_source(0, 0)
         second = make_candidate("second")
