@@ -62,3 +62,39 @@ Native collection runs in WSL:
 PYTHONPATH=build/linux/project python3 scripts/run_repair_order_probe.py \
   --phase all --output build/initlns-repair-order-probe-v1
 ```
+
+## Formal Result
+
+The preregistration was pushed at commit `66b37a1` before formal outcomes were generated. All 24 states,
+144 neighborhoods and 2,304 trials completed with zero timeout, replay mismatch, invalid action or
+unexplained error. Every deterministic duplicate reproduced the same actual order, C1/H4 solution
+fingerprints and conflict trajectory. All 192 state/trial CRN seeds were shared exactly across the six
+candidate neighborhoods.
+
+Random-order expected neighborhood value remained unstable:
+
+| Metric | Required | Observed | Pass |
+| --- | ---: | ---: | :---: |
+| CRN split-half Spearman | >= 0.50 | 0.2238 | no |
+| CRN Pareto Jaccard | >= 0.50 | 0.4958 | no |
+| CRN best-set Jaccard | >= 0.50 | 0.4063 | no |
+
+Repair order itself passed every materiality gate:
+
+| Metric | Required | Observed | Pass |
+| --- | ---: | ---: | :---: |
+| C1 solution divergence | >= 50% | 93.75% | yes |
+| C1 conflict divergence | >= 30% | 53.47% | yes |
+| Deterministic oracle H4 AUC improvement | >= 5% | 27.90% | yes |
+| Positive opportunity | >= 60% | 84.72% | yes |
+| Map-bootstrap improvement CI | lower >= 0 | [20.61%, 35.54%] | yes |
+
+No fixed rule reached the 80% dominance gate. Path-length descending had the highest near-oracle share at
+61.81%; the other rules ranged from 54.17% to 58.33%. The strongest fixed rule improved mean H4 AUC by
+only about 9% relative to random order, while selecting the best rule per neighborhood exposed 27.9%
+opportunity. All four rules were uniquely best for some neighborhoods.
+
+The registered decision is `advance_to_contextual_repair_order`. This establishes that PP order is a
+missing and controllable action variable, not that its best rule can already be predicted on unseen maps.
+The next stage must test a small supervised four-rule selector on disjoint Train/Validation states before
+any RL work. Static map/OD/density transfer and OOD claims remain paused.

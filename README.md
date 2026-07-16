@@ -271,10 +271,13 @@ therefore `stop_h4_labels_unstable`: no long-term ranker or RL is trained, and V
 static transfer claims remain sealed. See
 [`docs/SEQUENTIAL_CREDIT_AUDIT.md`](docs/SEQUENTIAL_CREDIT_AUDIT.md).
 
-The next bounded mechanism probe controls PP repair order inside a concrete neighborhood. It compares
-state-level common random numbers with four deterministic order rules on 24 Train-only states. The probe
-tests whether H4 instability comes from an incomplete action definition before any further model or RL
-work; official behavior remains byte-for-byte unchanged when no explicit order is requested. See
+The completed PP repair-order probe controlled four deterministic order rules and state-level common
+random numbers on 24 Train-only states. All 2,304 trials passed integrity checks. Random-order candidate
+ranking remained unstable, but repair order changed the C1 solution for 93.8% of neighborhoods and exposed
+27.9% mean H4 AUC oracle opportunity with a positive map-bootstrap interval. No fixed order dominated:
+the best covered only 61.8% within the registered tolerance. The decision is therefore
+`advance_to_contextual_repair_order`, meaning a four-rule selector must pass disjoint validation before
+any RL work; static transfer and OOD claims remain paused. See
 [`docs/REPAIR_ORDER_PROBE.md`](docs/REPAIR_ORDER_PROBE.md).
 
 `scripts/fetch_movingai_devset.py` verifies and extracts six pinned MovingAI development maps.
