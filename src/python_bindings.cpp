@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "InitLNS.h"
+#include "online_features.h"
 
 #include <cmath>
 #include <memory>
@@ -259,6 +260,7 @@ public:
         solver.reset();
         agents.clear();
         proposal_since_step = false;
+        state_revision = 0;
         const int count = instance->getDefaultNumberOfAgents();
         if ((int)agents.capacity() < count)
             agents.reserve(count);
@@ -269,6 +271,7 @@ public:
                                  destroy_strategy, neighborhood_size, screen,
                                  nullptr, nullptr, max_repair_iterations));
         solver->initialize();
+        state_revision = 1;
         return stateToPython(solver->getRepairState(), context);
     }
 
@@ -285,6 +288,7 @@ public:
                 "advances the process-global LNS2 random stream");
         solver->step(action);
         proposal_since_step = false;
+        state_revision++;
         RepairState state = solver->getRepairState();
         py::dict result;
         result["observation"] = stateToPython(state, context);
@@ -324,6 +328,13 @@ public:
         return stateToPython(solver->getRepairState(), context);
     }
 
+    uint64_t getStateRevision() const
+    {
+        if (!solver)
+            throw std::runtime_error("reset() must be called before get_state_revision()");
+        return state_revision;
+    }
+
 private:
     std::unique_ptr<Instance> instance;
     vector<Agent> agents;
@@ -337,6 +348,7 @@ private:
     int screen;
     py::dict context;
     bool proposal_since_step = false;
+    uint64_t state_revision = 0;
 };
 
 PYBIND11_MODULE(lns2_env, module)
@@ -358,5 +370,10 @@ PYBIND11_MODULE(lns2_env, module)
         .def("propose", &LNS2RepairEnv::propose, py::arg("action"))
         .def("propose_batch", &LNS2RepairEnv::proposeBatch, py::arg("actions"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
-        .def("get_state", &LNS2RepairEnv::getState);
+        .def("get_state", &LNS2RepairEnv::getState)
+        .def("get_state_revision", &LNS2RepairEnv::getStateRevision);
+    module.def("batch_online_features", &batchOnlineFeatures,
+               py::arg("state"), py::arg("candidates"), py::arg("static_grid"),
+               py::arg("include_realized") = true,
+               py::arg("required_features") = py::dict());
 }

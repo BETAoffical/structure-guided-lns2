@@ -30,6 +30,21 @@ POLICY_DESTROY_STRATEGIES = {
     "fixed_collision": "Collision",
     "fixed_random": "Random",
 }
+STATE_FINGERPRINT_KEYS = (
+    "initialized",
+    "initial_solution_complete",
+    "feasible",
+    "done",
+    "iteration",
+    "rows",
+    "cols",
+    "sum_of_costs",
+    "num_of_colliding_pairs",
+    "low_level",
+    "obstacles",
+    "conflict_edges",
+    "agents",
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONTROL_ROOT = PROJECT_ROOT / "build" / ".repair_collection_control"
 LOCK_POLL_SECONDS = 0.05
@@ -269,22 +284,7 @@ def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
 def state_fingerprint(state: dict[str, Any]) -> str:
     """Hash deterministic solver state while excluding wall-clock and context."""
 
-    keys = (
-        "initialized",
-        "initial_solution_complete",
-        "feasible",
-        "done",
-        "iteration",
-        "rows",
-        "cols",
-        "sum_of_costs",
-        "num_of_colliding_pairs",
-        "low_level",
-        "obstacles",
-        "conflict_edges",
-        "agents",
-    )
-    return _fingerprint({key: _plain(state[key]) for key in keys})
+    return _fingerprint({key: state[key] for key in STATE_FINGERPRINT_KEYS})
 
 
 def select_seed_agents(state: dict[str, Any], maximum: int) -> list[int]:

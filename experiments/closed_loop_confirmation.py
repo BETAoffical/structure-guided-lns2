@@ -18,12 +18,48 @@ from experiments._common import (
     sha256_file as _sha256,
 )
 from experiments.context_audit import _pair_vector
+from experiments.candidate_pruning import (
+    CandidatePruner,
+    expected_families_from_proposal_config,
+    no_pruning_metrics,
+)
+from experiments.balanced_controller import (
+    BalancedControllerConfig,
+    load_balanced_controller,
+)
+from experiments.closed_loop_trace_storage import (
+    EPISODE_SCHEMA_V1,
+    EPISODE_SCHEMA_V2,
+    TRACE_FORMAT_DELTA_GZIP_V2,
+    TRACE_FORMAT_FULL_V1,
+    TRACE_FORMATS,
+    TraceStorageError,
+    apply_extras_delta,
+    apply_state_delta,
+    encode_finish_event,
+    encode_initial_event,
+    encode_transition_event,
+    open_trace_text,
+    partial_trace_path,
+    read_state_blob,
+    read_trace_events,
+    resolve_state_blob,
+    storage_fingerprint,
+    trace_file_metadata,
+    trace_suffix,
+)
+from experiments.compact_controller_model import (
+    compact_runtime_model,
+    load_controller_bundle,
+)
+from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
 from experiments.local_representation_audit import (
     StaticGridAnalysis,
     analyze_state,
     analyze_static_grid,
 )
 from experiments.natural_distribution_confirmation import conflict_density, conflict_severity
+from experiments.online_feature_engine import FEATURE_BACKENDS, OnlineFeatureEngine
 from experiments.realized_neighborhood_probe import select_representative_neighborhoods
 from experiments.realized_neighborhood_ranking_audit import (
     _feature_profiles_from_shared,
@@ -55,23 +91,32 @@ from experiments.repair_collection import (
 
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
-EPISODE_SCHEMA = "lns2.closed_loop_episode.v1"
+EPISODE_SCHEMA = EPISODE_SCHEMA_V1
 FIXED_POLICIES = ("fixed_target", "fixed_collision", "fixed_random")
 POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
+CONTROLLER_MODES = ("v1-full", "v2-full", "v2-cascade", "v2-balanced")
+DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
+    "experiments/balanced_controller.py",
     "experiments/closed_loop_confirmation.py",
+    "experiments/candidate_pruning.py",
+    "experiments/compact_controller_model.py",
     "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
     "experiments/local_representation_audit.py",
     "experiments/natural_distribution_confirmation.py",
+    "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
     "experiments/realized_neighborhood_ranking_audit.py",
     "experiments/realized_neighborhood_probe.py",
     "experiments/realized_ranking_confirmation.py",
     "src/python_bindings.cpp",
+    "src/online_features.cpp",
+    "src/online_features.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
 )
 
@@ -104,6 +149,38 @@ def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
         "files": files,
         "native_module": native_module,
     }
+
+
+def _controller_bundle_path(
+    project_root: Path, controller_bundle: str | Path | None
+) -> Path:
+    value = Path(str(controller_bundle or DEFAULT_CONTROLLER_BUNDLE))
+    return value.resolve() if value.is_absolute() else (project_root / value).resolve()
+
+
+def resolve_controller_mode(
+    project_root: Path,
+    controller: str | None,
+    controller_bundle: str | Path | None = None,
+) -> tuple[str, Path, dict[str, Any] | None]:
+    bundle_path = _controller_bundle_path(project_root, controller_bundle)
+    loaded = None
+    if (bundle_path / "controller_manifest.json").is_file():
+        loaded = load_controller_bundle(bundle_path)
+    if controller is None:
+        mode = (
+            str(loaded.manifest.get("default_controller", "v1-full"))
+            if loaded is not None
+            else "v1-full"
+        )
+    else:
+        mode = str(controller)
+    if mode not in CONTROLLER_MODES:
+        raise ValueError(f"unsupported controller mode: {mode}")
+    if mode == "v2-cascade":
+        if loaded is None or loaded.pruner_model is None:
+            raise ValueError("v2-cascade requires a validated controller-v2 bundle")
+    return mode, bundle_path, loaded.manifest if loaded is not None else None
 
 
 def _number_summary(values: Iterable[float | int]) -> dict[str, Any]:
@@ -923,19 +1000,25 @@ def score_online_candidates(
     vectors = []
     reverse_vectors = []
     pairs = []
+    pair_vector = getattr(model, "pair_vector", None)
     for left in range(len(rows)):
         for right in range(left + 1, len(rows)):
-            vectors.append(
-                _pair_vector(rows[left], rows[right], model.profile, model.feature_names)
-            )
-            reverse_vectors.append(
-                _pair_vector(rows[right], rows[left], model.profile, model.feature_names)
-            )
+            if callable(pair_vector):
+                vectors.append(pair_vector(rows[left], rows[right]))
+                reverse_vectors.append(pair_vector(rows[right], rows[left]))
+            else:
+                vectors.append(
+                    _pair_vector(rows[left], rows[right], model.profile, model.feature_names)
+                )
+                reverse_vectors.append(
+                    _pair_vector(rows[right], rows[left], model.profile, model.feature_names)
+                )
             pairs.append((left, right))
     if vectors:
-        if isinstance(model, PortablePairwiseModel):
-            forward = model.predict_positive(vectors)
-            reverse = model.predict_positive(reverse_vectors)
+        predict_positive = getattr(model, "predict_positive", None)
+        if callable(predict_positive):
+            forward = predict_positive(vectors)
+            reverse = predict_positive(reverse_vectors)
         else:
             import numpy as np
 
@@ -991,8 +1074,12 @@ def generate_online_candidates(
     solver_seed: int,
     decision_index: int,
     proposal_config: dict[str, Any],
+    state_hash: str | None = None,
+    verify_full_state: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    state_hash = state_fingerprint(state)
+    state_hash = state_fingerprint(state) if state_hash is None else str(state_hash)
+    get_revision = getattr(environment, "get_state_revision", None)
+    revision_before = int(get_revision()) if callable(get_revision) else None
     requests: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for seed_agent in select_seed_agents(state, int(proposal_config["max_seed_agents"])):
         for heuristic in map(str, proposal_config["heuristics"]):
@@ -1039,12 +1126,19 @@ def generate_online_candidates(
     if len(results) != len(requests):
         raise RuntimeError("online proposal batch returned an unexpected result count")
     state_check_started = time.perf_counter()
-    after = _plain(environment.get_state())
-    state_check_seconds = time.perf_counter() - state_check_started
-    if after != state or state_fingerprint(after) != state_hash:
+    revision_after = int(get_revision()) if callable(get_revision) else None
+    if revision_before is not None and revision_after != revision_before:
         raise ClosedLoopExecutionError(
-            "fingerprint_mismatch", "proposal changed the closed-loop repair state"
+            "revision_mismatch", "proposal changed the structural state revision"
         )
+    full_state_verified = bool(verify_full_state or revision_before is None)
+    if full_state_verified:
+        after = _plain(environment.get_state())
+        if after != state or state_fingerprint(after) != state_hash:
+            raise ClosedLoopExecutionError(
+                "fingerprint_mismatch", "proposal changed the closed-loop repair state"
+            )
+    state_check_seconds = time.perf_counter() - state_check_started
     proposals = []
     for (_, metadata), result in zip(requests, results):
         if not bool(result.get("action_valid")) or not bool(result.get("generated")):
@@ -1069,6 +1163,13 @@ def generate_online_candidates(
         "candidate_count": len(candidates),
         "proposal_seconds": proposal_seconds,
         "state_check_seconds": state_check_seconds,
+        "state_check_backend": (
+            "revision_and_full" if revision_before is not None and full_state_verified
+            else "revision" if revision_before is not None
+            else "full_state"
+        ),
+        "full_state_verified": full_state_verified,
+        "state_revision": revision_after,
         "backend": backend,
     }
 
@@ -1092,18 +1193,34 @@ def validate_closed_loop_trace(
     expected_policy: str | None = None,
     expected_solver_seed: int | None = None,
     metric_iteration_budget: int | None = None,
+    collection_root: str | Path | None = None,
 ) -> dict[str, Any]:
     trace_path = Path(path)
     try:
-        rows = _read_jsonl(trace_path)
-    except (OSError, json.JSONDecodeError) as error:
+        rows = read_trace_events(trace_path)
+    except TraceStorageError as error:
         raise ClosedLoopTraceError(f"cannot read trace: {error}") from error
     if len(rows) < 2:
         raise ClosedLoopTraceError("trace must contain initial and finish events")
-    if any(str(row.get("schema")) != EPISODE_SCHEMA for row in rows):
+    event_schema = str(rows[0].get("schema"))
+    if event_schema == EPISODE_SCHEMA_V1:
+        trace_format = TRACE_FORMAT_FULL_V1
+        expected_schema_version = SCHEMA_VERSION
+    elif event_schema == EPISODE_SCHEMA_V2:
+        trace_format = TRACE_FORMAT_DELTA_GZIP_V2
+        expected_schema_version = 2
+    else:
         raise ClosedLoopTraceError("trace contains an unexpected event schema")
-    if any(int(row.get("schema_version", -1)) != SCHEMA_VERSION for row in rows):
+    if any(str(row.get("schema")) != event_schema for row in rows):
+        raise ClosedLoopTraceError("trace contains an unexpected event schema")
+    if any(int(row.get("schema_version", -1)) != expected_schema_version for row in rows):
         raise ClosedLoopTraceError("trace contains an unsupported schema version")
+    if trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
+        expected_storage = storage_fingerprint(trace_format)
+        if any(str(row.get("trace_format")) != trace_format for row in rows):
+            raise ClosedLoopTraceError("compact trace format marker mismatch")
+        if any(str(row.get("storage_fingerprint")) != expected_storage for row in rows):
+            raise ClosedLoopTraceError("compact trace storage fingerprint mismatch")
     if any(str(row.get("run_fingerprint")) != run_fingerprint for row in rows):
         raise ClosedLoopTraceError("trace run fingerprint mismatch")
     if rows[0].get("event") != "initial" or rows[-1].get("event") != "finish":
@@ -1125,14 +1242,38 @@ def validate_closed_loop_trace(
     if str(finish.get("episode_id")) != episode_id or str(finish.get("policy")) != policy:
         raise ClosedLoopTraceError("finish metadata mismatch")
 
-    state = initial.get("state")
-    if not isinstance(state, dict):
-        raise ClosedLoopTraceError("initial event is missing state")
+    initial_state_ref = None
+    if trace_format == TRACE_FORMAT_FULL_V1:
+        state = initial.get("state")
+        if not isinstance(state, dict):
+            raise ClosedLoopTraceError("initial event is missing state")
+    else:
+        initial_state_ref = str(initial.get("state_blob", ""))
+        if not initial_state_ref:
+            raise ClosedLoopTraceError("compact initial event is missing state blob")
+        try:
+            blob_path = resolve_state_blob(
+                trace_path,
+                initial_state_ref,
+                Path(collection_root).resolve() if collection_root is not None else None,
+            )
+            state = read_state_blob(blob_path)
+        except TraceStorageError as error:
+            raise ClosedLoopTraceError(str(error)) from error
+        extras = initial.get("state_extras")
+        if not isinstance(extras, dict):
+            raise ClosedLoopTraceError("compact initial event has invalid state extras")
+        if any(key in state for key in extras):
+            raise ClosedLoopTraceError("compact initial state extras overlap fingerprint fields")
+        state.update(extras)
     initial_hash = state_fingerprint(state)
     if str(initial.get("state_fingerprint")) != initial_hash:
         raise ClosedLoopTraceError("initial state fingerprint mismatch")
     conflicts = [int(state.get("num_of_colliding_pairs", -1))]
     learned_policy = policy in LEARNED_POLICIES
+    route_counts: collections.Counter[str] = collections.Counter()
+    previous_route: str | None = None
+    route_switch_count = 0
     for decision_index, event in enumerate(rows[1:-1]):
         if str(event.get("episode_id")) != episode_id:
             raise ClosedLoopTraceError("transition episode id mismatch")
@@ -1141,9 +1282,20 @@ def validate_closed_loop_trace(
         before_hash = state_fingerprint(state)
         if str(event.get("before_fingerprint")) != before_hash:
             raise ClosedLoopTraceError("transition before fingerprint mismatch")
-        after = event.get("after")
-        if not isinstance(after, dict):
-            raise ClosedLoopTraceError("transition is missing after state")
+        if trace_format == TRACE_FORMAT_FULL_V1:
+            after = event.get("after")
+            if not isinstance(after, dict):
+                raise ClosedLoopTraceError("transition is missing after state")
+        else:
+            try:
+                after = apply_state_delta(state, event.get("state_delta"))
+                after.update(
+                    apply_extras_delta(state, event.get("state_extras_delta"))
+                )
+            except (TraceStorageError, TypeError, ValueError) as error:
+                raise ClosedLoopTraceError(
+                    f"transition state delta is invalid: {error}"
+                ) from error
         after_hash = state_fingerprint(after)
         if str(event.get("after_fingerprint")) != after_hash:
             raise ClosedLoopTraceError("transition after fingerprint mismatch")
@@ -1165,25 +1317,40 @@ def validate_closed_loop_trace(
         ):
             raise ClosedLoopTraceError("transition truncated flag mismatch")
         if learned_policy:
-            requested = sorted(map(int, action.get("agents", [])))
-            actual = sorted(map(int, metrics.get("neighborhood", [])))
-            if action.get("mode") != "explicit_neighborhood" or requested != actual:
-                raise ClosedLoopTraceError("learned transition neighborhood mismatch")
-            if int(action.get("random_seed", -1)) < 0:
-                raise ClosedLoopTraceError("learned transition is missing explicit random seed")
-            if int(metrics.get("requested_random_seed", -1)) != int(action["random_seed"]):
-                raise ClosedLoopTraceError("learned transition repair seed mismatch")
             controller = event.get("controller")
             if not isinstance(controller, dict):
                 raise ClosedLoopTraceError("learned transition is missing controller data")
-            selected_id = str(controller.get("selected_candidate_id", ""))
-            matching = [
-                candidate
-                for candidate in controller.get("candidate_pool", [])
-                if str(candidate.get("candidate_id")) == selected_id
-            ]
-            if len(matching) != 1 or sorted(map(int, matching[0].get("agents", []))) != requested:
-                raise ClosedLoopTraceError("learned transition selected candidate mismatch")
+            route = str(controller.get("route", "model"))
+            if route not in {"model", "official_adaptive"}:
+                raise ClosedLoopTraceError("learned transition has an invalid route")
+            route_counts[route] += 1
+            if previous_route is not None and previous_route != route:
+                route_switch_count += 1
+            previous_route = route
+            actual = sorted(map(int, metrics.get("neighborhood", [])))
+            if route == "official_adaptive":
+                if action.get("mode") != "official":
+                    raise ClosedLoopTraceError("official route did not use an official action")
+                if controller.get("selected_candidate_id") is not None:
+                    raise ClosedLoopTraceError("official route unexpectedly selected a candidate")
+            else:
+                requested = sorted(map(int, action.get("agents", [])))
+                if action.get("mode") != "explicit_neighborhood" or requested != actual:
+                    raise ClosedLoopTraceError("learned transition neighborhood mismatch")
+                if int(action.get("random_seed", -1)) < 0:
+                    raise ClosedLoopTraceError("learned transition is missing explicit random seed")
+                if int(metrics.get("requested_random_seed", -1)) != int(action["random_seed"]):
+                    raise ClosedLoopTraceError("learned transition repair seed mismatch")
+                selected_id = str(controller.get("selected_candidate_id", ""))
+                matching = [
+                    candidate
+                    for candidate in controller.get("candidate_pool", [])
+                    if str(candidate.get("candidate_id")) == selected_id
+                ]
+                if len(matching) != 1 or sorted(
+                    map(int, matching[0].get("agents", []))
+                ) != requested:
+                    raise ClosedLoopTraceError("learned transition selected candidate mismatch")
         conflicts.append(after_conflicts)
         state = after
 
@@ -1206,6 +1373,27 @@ def validate_closed_loop_trace(
     for name, value in expected_values.items():
         if summary.get(name) != value:
             raise ClosedLoopTraceError(f"summary {name} mismatch")
+    if summary.get("balanced_controller") is not None:
+        expected_routes = {
+            "model_decision_count": int(route_counts["model"]),
+            "official_decision_count": int(route_counts["official_adaptive"]),
+            "route_switch_count": route_switch_count,
+        }
+        for name, value in expected_routes.items():
+            if int(summary.get(name, -1)) != value:
+                raise ClosedLoopTraceError(f"summary {name} mismatch")
+        total_routes = sum(expected_routes[name] for name in (
+            "model_decision_count", "official_decision_count"
+        ))
+        expected_fraction = (
+            expected_routes["model_decision_count"] / total_routes
+            if total_routes
+            else 0.0
+        )
+        if not math.isclose(
+            float(summary.get("model_route_fraction", -1.0)), expected_fraction
+        ):
+            raise ClosedLoopTraceError("summary model_route_fraction mismatch")
     raw_auc = sum(
         (conflicts[index] + conflicts[index + 1]) / 2.0
         for index in range(len(conflicts) - 1)
@@ -1224,7 +1412,13 @@ def validate_closed_loop_trace(
             raise ClosedLoopTraceError("summary fixed-budget conflict AUC mismatch")
     if bool(finish.get("success")) != bool(summary.get("success")):
         raise ClosedLoopTraceError("finish success flag mismatch")
-    return {"events": rows, "summary": summary}
+    return {
+        "events": rows,
+        "summary": summary,
+        "trace_format": trace_format,
+        "initial_state_ref": initial_state_ref,
+        "event_count": len(rows),
+    }
 
 
 def _valid_episode_trace(
@@ -1249,7 +1443,7 @@ def _valid_episode_trace(
         )
     except ClosedLoopTraceError:
         return None
-    return validated["summary"]
+    return validated
 
 
 def _emit(stream: Any, row: dict[str, Any]) -> None:
@@ -1263,11 +1457,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     solver_seed = int(job["solver_seed"])
     episode_id = _episode_id(row, solver_seed, policy)
     output_root = Path(job["output_root"])
-    trace_path = output_root / "episodes" / str(row["split"]) / policy / f"{episode_id}.jsonl"
-    partial_path = trace_path.with_suffix(".partial.jsonl")
+    trace_format = str(job.get("trace_format", TRACE_FORMAT_DELTA_GZIP_V2))
+    if trace_format not in TRACE_FORMATS:
+        raise ValueError(f"unsupported trace format: {trace_format}")
+    storage_fp = str(job.get("storage_fingerprint", storage_fingerprint(trace_format)))
+    if storage_fp != storage_fingerprint(trace_format):
+        raise ValueError("trace storage fingerprint does not match the selected format")
+    trace_path = (
+        output_root
+        / "episodes"
+        / str(row["split"])
+        / policy
+        / f"{episode_id}{trace_suffix(trace_format)}"
+    )
+    partial_path = partial_trace_path(trace_path)
     relative_trace = trace_path.relative_to(output_root).as_posix()
     if job["resume"]:
-        summary = _valid_episode_trace(
+        validated = _valid_episode_trace(
             trace_path,
             job["run_fingerprint"],
             expected_episode_id=episode_id,
@@ -1275,7 +1481,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             expected_solver_seed=solver_seed,
             metric_iteration_budget=int(job["metric_iteration_budget"]),
         )
-        if summary is not None:
+        if validated is not None:
+            metadata = trace_file_metadata(trace_path)
             return {
                 "schema_version": SCHEMA_VERSION,
                 "schema": CLOSED_LOOP_SCHEMA,
@@ -1289,13 +1496,79 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "solver_seed": solver_seed,
                 "policy": policy,
                 "trace_file": relative_trace,
+                "trace_format": trace_format,
+                "storage_fingerprint": storage_fp,
+                **metadata,
+                "trace_event_count": int(validated["event_count"]),
+                "initial_state_ref": validated.get("initial_state_ref"),
                 "status": "resumed",
-                "summary": summary,
+                "summary": validated["summary"],
                 "error": None,
             }
     bundle = None
+    controller_mode = str(job.get("controller", "v1-full"))
+    feature_backend = str(job.get("feature_backend", "auto"))
+    balanced_config: BalancedControllerConfig | None = None
+    if controller_mode == "v2-balanced":
+        raw_balanced = job.get("balanced_config")
+        if raw_balanced is None:
+            raise ValueError("v2-balanced requires a frozen balanced controller config")
+        balanced_config = load_balanced_controller(raw_balanced)
+    runtime_models: dict[str, Any] = {}
+    runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
+    shadow_models: dict[str, Any] = {}
+    candidate_pruner: CandidatePruner | None = None
     if policy in LEARNED_POLICIES:
         bundle = load_frozen_policy_bundle(job["frozen_models"], job["model_registration"])
+        if controller_mode == "v1-full":
+            runtime_models = bundle.models
+            runtime_ranges = bundle.ranges
+        else:
+            if bool(job.get("feature_shadow_validation", False)):
+                shadow_models = bundle.models
+            controller_path = Path(str(job["controller_bundle"]))
+            if (controller_path / "controller_manifest.json").is_file():
+                compact_bundle = load_controller_bundle(controller_path)
+                runtime_models = compact_bundle.main_models
+                runtime_ranges = compact_bundle.main_ranges
+                requested_pruner_threshold = (
+                    balanced_config.pruner_threshold
+                    if balanced_config is not None
+                    else compact_bundle.pruner_threshold
+                )
+                if controller_mode == "v2-cascade" or requested_pruner_threshold is not None:
+                    if (
+                        compact_bundle.pruner_model is None
+                        or requested_pruner_threshold is None
+                    ):
+                        raise ValueError(
+                            f"{controller_mode} requests a pruner but the bundle does not contain one"
+                        )
+                    candidate_pruner = CandidatePruner(
+                        model=compact_bundle.pruner_model,
+                        threshold=requested_pruner_threshold,
+                        ranges=compact_bundle.pruner_ranges,
+                        expected_families=expected_families_from_proposal_config(
+                            job["proposal"]
+                        ),
+                    )
+            else:
+                if controller_mode == "v2-cascade" or (
+                    balanced_config is not None
+                    and balanced_config.pruner_threshold is not None
+                ):
+                    raise ValueError("v2-cascade controller bundle is missing")
+                runtime_models = {
+                    name: compact_runtime_model(model)
+                    for name, model in bundle.models.items()
+                }
+                runtime_ranges = {
+                    name: {
+                        feature: bundle.ranges[name][feature]
+                        for feature in model.base_feature_names
+                    }
+                    for name, model in runtime_models.items()
+                }
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path.unlink(missing_ok=True)
     started_wall = time.perf_counter()
@@ -1304,7 +1577,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         environment = _make_environment(
             job["dataset_root"], row, job["environment"], destroy_strategy
         )
-        with partial_path.open("w", encoding="utf-8", newline="\n") as stream:
+        initial_state_ref: str | None = None
+        with open_trace_text(partial_path, "w") as stream:
             state = _plain(environment.reset(seed=solver_seed))
             initial_fingerprint = state_fingerprint(state)
             conflicts = [int(state["num_of_colliding_pairs"])]
@@ -1319,6 +1593,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "state_fingerprint": initial_fingerprint,
                 "state": state,
             }
+            if trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
+                initial_event, initial_state_ref = encode_initial_event(
+                    initial_event, state, output_root
+                )
             _emit(stream, initial_event)
             controller_totals = collections.Counter()
             selected_sizes: collections.Counter[int] = collections.Counter()
@@ -1326,9 +1604,37 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             invalid_actions = 0
             fingerprint_mismatches = 0
             external_timeout = False
+            total_repair_wall_seconds = 0.0
             max_decisions = int(job["max_decisions"])
             wall_budget = float(job["wall_time_budget_seconds"])
-            static_grid = analyze_static_grid(state) if policy in LEARNED_POLICIES else None
+            static_grid = (
+                analyze_static_grid(state)
+                if policy in LEARNED_POLICIES and controller_mode == "v1-full"
+                else None
+            )
+            def make_feature_engine(current_state: dict[str, Any]) -> OnlineFeatureEngine:
+                return OnlineFeatureEngine(
+                    current_state,
+                    backend=feature_backend,
+                    shadow_validation=bool(job.get("feature_shadow_validation", False)),
+                    required_features={
+                        policy: runtime_models[policy].base_feature_names,
+                        **(
+                            {"proposal_dynamic": tuple(candidate_pruner.ranges)}
+                            if candidate_pruner is not None
+                            else {}
+                        ),
+                    },
+                )
+
+            feature_engine = (
+                make_feature_engine(state)
+                if policy in LEARNED_POLICIES
+                and controller_mode not in {"v1-full", "v2-balanced"}
+                else None
+            )
+            pending_changed_agents: set[int] = set()
+            previous_route: str | None = None
             while not bool(state["done"]) and len(conflicts) - 1 < max_decisions:
                 if time.perf_counter() - started_wall >= wall_budget:
                     external_timeout = True
@@ -1337,10 +1643,37 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before_hash = state_fingerprint(before)
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
-                if policy == "official_adaptive" or policy in FIXED_POLICIES:
+                route = (
+                    balanced_config.route(int(state["num_of_colliding_pairs"]))
+                    if balanced_config is not None and policy == "realized_dynamic"
+                    else "model" if policy in LEARNED_POLICIES
+                    else "official_adaptive"
+                )
+                route_started = time.perf_counter()
+                if route == "official_adaptive":
                     action = {"mode": "official"}
+                    controller_seconds_before_repair = time.perf_counter() - route_started
+                    controller.update(
+                        {
+                            "controller_mode": controller_mode,
+                            "route": route,
+                            "route_conflicts": int(state["num_of_colliding_pairs"]),
+                            "route_conflict_threshold": (
+                                balanced_config.conflict_threshold
+                                if balanced_config is not None
+                                else None
+                            ),
+                            "controller_seconds_before_repair": controller_seconds_before_repair,
+                        }
+                    )
                 else:
                     proposal_started = time.perf_counter()
+                    verification_mode = str(
+                        job.get("proposal_state_verification", "always")
+                    )
+                    verify_full_state = verification_mode == "always" or (
+                        verification_mode == "sampled" and decision_index % 20 == 0
+                    )
                     candidates, proposal_metrics = generate_online_candidates(
                         environment,
                         state,
@@ -1348,20 +1681,151 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         solver_seed=solver_seed,
                         decision_index=decision_index,
                         proposal_config=job["proposal"],
+                        state_hash=before_hash,
+                        verify_full_state=verify_full_state,
                     )
                     controller["proposal"] = proposal_metrics
-                    feature_started = time.perf_counter()
-                    candidate_rows = online_candidate_rows(
-                        state, candidates, static_grid=static_grid
-                    )
-                    feature_seconds = time.perf_counter() - feature_started
+                    state_feature_metrics: dict[str, Any] = {}
+                    proposal_feature_metrics = {"proposal_feature_seconds": 0.0}
+                    realized_feature_metrics = {"realized_feature_seconds": 0.0}
+                    pruning_metrics = no_pruning_metrics(len(candidates))
+                    retained_indices = list(range(len(candidates)))
+                    proposal_rows: list[dict[str, Any]] | None = None
+                    feature_engine_created = False
+                    if controller_mode == "v1-full":
+                        feature_started = time.perf_counter()
+                        candidate_rows = online_candidate_rows(
+                            state, candidates, static_grid=static_grid
+                        )
+                        feature_seconds = time.perf_counter() - feature_started
+                    else:
+                        if feature_engine is None:
+                            feature_engine = make_feature_engine(state)
+                            feature_engine_created = True
+                        if feature_engine_created or decision_index == 0:
+                            state_feature_metrics = dict(
+                                feature_engine.last_prepare_metrics
+                            )
+                        else:
+                            state_feature_metrics = feature_engine.prepare(
+                                state,
+                                changed_agents=sorted(pending_changed_agents),
+                            )
+                        pending_changed_agents.clear()
+                        if policy == "realized_dynamic" and candidate_pruner is None:
+                            proposal_rows = None
+                        else:
+                            proposal_rows, proposal_feature_metrics = (
+                                feature_engine.proposal_rows(
+                                    candidates, state_hash=before_hash
+                                )
+                            )
+                        if policy == "realized_dynamic" and candidate_pruner is not None:
+                            assert proposal_rows is not None
+                            retained_indices, pruning_metrics = candidate_pruner.prune(
+                                candidates, proposal_rows
+                            )
+                        elif controller_mode == "v2-cascade":
+                            pruning_metrics = no_pruning_metrics(
+                                len(candidates), "policy_not_cascade_eligible"
+                            )
+                        retained_candidates = [
+                            candidates[index] for index in retained_indices
+                        ]
+                        if policy == "realized_dynamic":
+                            candidate_rows, realized_feature_metrics = (
+                                feature_engine.realized_rows(
+                                    retained_candidates, state_hash=before_hash
+                                )
+                            )
+                        else:
+                            assert proposal_rows is not None
+                            candidate_rows = [
+                                proposal_rows[index] for index in retained_indices
+                            ]
+                        feature_seconds = (
+                            float(
+                                state_feature_metrics.get(
+                                    "state_analysis_seconds", 0.0
+                                )
+                            )
+                            + float(
+                                proposal_feature_metrics.get(
+                                    "proposal_feature_seconds", 0.0
+                                )
+                            )
+                            + float(
+                                realized_feature_metrics.get(
+                                    "realized_feature_seconds", 0.0
+                                )
+                            )
+                        )
                     inference_started = time.perf_counter()
-                    selected_index, scores, margin = score_online_candidates(
-                        candidate_rows, bundle.models[policy]
+                    selected_local_index, scores, margin = score_online_candidates(
+                        candidate_rows, runtime_models[policy]
                     )
                     inference_seconds = time.perf_counter() - inference_started
+                    if shadow_models:
+                        assert feature_engine is not None
+                        shadow_rows = feature_engine.last_shadow_rows.get(policy)
+                        if shadow_rows is None or len(shadow_rows) != len(candidate_rows):
+                            raise ClosedLoopExecutionError(
+                                "controller_shadow_mismatch",
+                                "v1/v2 shadow candidate rows are incomplete",
+                            )
+                        shadow_index, shadow_scores, shadow_margin = (
+                            score_online_candidates(shadow_rows, shadow_models[policy])
+                        )
+                        maximum_score_delta = max(
+                            (
+                                abs(float(left) - float(right))
+                                for left, right in zip(scores, shadow_scores)
+                            ),
+                            default=0.0,
+                        )
+
+                        def ranking_order(
+                            rows: list[dict[str, Any]], values: list[float]
+                        ) -> list[str]:
+                            return [
+                                str(rows[index]["candidate_key"])
+                                for index in sorted(
+                                    range(len(rows)),
+                                    key=lambda index: (
+                                        -round(float(values[index]), 12),
+                                        str(rows[index]["candidate_key"]),
+                                    ),
+                                )
+                            ]
+
+                        ranking_matches = ranking_order(
+                            candidate_rows, scores
+                        ) == ranking_order(shadow_rows, shadow_scores)
+                        if (
+                            selected_local_index != shadow_index
+                            or not ranking_matches
+                            or maximum_score_delta > 1e-12
+                        ):
+                            raise ClosedLoopExecutionError(
+                                "controller_shadow_mismatch",
+                                "v1/v2 score, ranking, or selected candidate differs",
+                            )
+                        controller["v1_v2_shadow"] = {
+                            "passed": True,
+                            "candidate_count": len(candidate_rows),
+                            "maximum_score_delta": maximum_score_delta,
+                            "selected_candidate_matches": True,
+                            "ranking_matches": True,
+                            "margin_delta": abs(float(margin) - float(shadow_margin)),
+                        }
+                        controller_totals["shadow_validation_count"] += 1
+                        controller_totals["shadow_score_max_delta"] = max(
+                            float(controller_totals["shadow_score_max_delta"]),
+                            maximum_score_delta,
+                        )
+                    selected_index = retained_indices[selected_local_index]
                     selected = candidates[selected_index]
-                    selected_row = candidate_rows[selected_index]
+                    selected_row = candidate_rows[selected_local_index]
                     random_seed = repair_random_seed(
                         str(row["task_id"]),
                         solver_seed,
@@ -1376,28 +1840,86 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "random_seed": random_seed,
                     }
                     diagnostic = feature_range_diagnostic(
-                        selected_row, policy, bundle.ranges[policy]
+                        selected_row, policy, runtime_ranges[policy]
+                    )
+                    retained_positions = {
+                        global_index: local_index
+                        for local_index, global_index in enumerate(retained_indices)
+                    }
+                    candidate_pool = []
+                    for index, candidate in enumerate(candidates):
+                        local_index = retained_positions.get(index)
+                        candidate_pool.append(
+                            {
+                                **candidate,
+                                "retained": local_index is not None,
+                                "score": (
+                                    scores[local_index]
+                                    if local_index is not None
+                                    else None
+                                ),
+                                "feature_out_of_range_fraction": (
+                                    feature_range_diagnostic(
+                                        candidate_rows[local_index],
+                                        policy,
+                                        runtime_ranges[policy],
+                                    )["outside_fraction"]
+                                    if local_index is not None
+                                    else None
+                                ),
+                            }
+                        )
+                    controller_seconds_before_repair = max(
+                        time.perf_counter() - proposal_started,
+                        float(proposal_metrics["proposal_seconds"])
+                        + float(proposal_metrics["state_check_seconds"])
+                        + feature_seconds
+                        + float(pruning_metrics["pruner_seconds"])
+                        + inference_seconds,
                     )
                     controller.update(
                         {
-                            "candidate_pool": [
-                                {
-                                    **candidate,
-                                    "score": scores[index],
-                                    "feature_out_of_range_fraction": feature_range_diagnostic(
-                                        candidate_rows[index], policy, bundle.ranges[policy]
-                                    )["outside_fraction"],
-                                }
-                                for index, candidate in enumerate(candidates)
-                            ],
+                            "controller_mode": controller_mode,
+                            "route": route,
+                            "route_conflicts": int(state["num_of_colliding_pairs"]),
+                            "route_conflict_threshold": (
+                                balanced_config.conflict_threshold
+                                if balanced_config is not None
+                                else None
+                            ),
+                            "feature_backend": (
+                                feature_engine.backend
+                                if feature_engine is not None
+                                else "reference-v1"
+                            ),
+                            "inference_backend": getattr(
+                                runtime_models[policy],
+                                "inference_backend",
+                                (
+                                    "native-portable-tree"
+                                    if getattr(
+                                        runtime_models[policy],
+                                        "native_predictor",
+                                        None,
+                                    )
+                                    is not None
+                                    else "python-portable-tree"
+                                ),
+                            ),
+                            "candidate_pool": candidate_pool,
+                            "pruning": pruning_metrics,
+                            "feature_timings": {
+                                **state_feature_metrics,
+                                **proposal_feature_metrics,
+                                **realized_feature_metrics,
+                            },
                             "selected_candidate_id": selected["candidate_id"],
-                            "selected_score": scores[selected_index],
+                            "selected_score": scores[selected_local_index],
                             "score_margin": margin,
                             "selected_feature_range": diagnostic,
                             "feature_seconds": feature_seconds,
                             "inference_seconds": inference_seconds,
-                            "controller_seconds_before_repair": time.perf_counter()
-                            - proposal_started,
+                            "controller_seconds_before_repair": controller_seconds_before_repair,
                         }
                     )
                     selected_sizes[len(selected["agents"])] += 1
@@ -1405,30 +1927,103 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         selected_families[str(family)] += 1
                     controller_totals["proposal_count"] += int(proposal_metrics["proposal_count"])
                     controller_totals["candidate_count"] += int(proposal_metrics["candidate_count"])
+                    controller_totals["candidate_count_before_pruning"] += int(
+                        pruning_metrics["candidate_count_before"]
+                    )
+                    controller_totals["candidate_count_after_pruning"] += int(
+                        pruning_metrics["candidate_count_after"]
+                    )
+                    controller_totals["candidate_reduction_fraction_sum"] += float(
+                        pruning_metrics["reduction_fraction"]
+                    )
+                    controller_totals["pruner_fallback_count"] += int(
+                        bool(pruning_metrics["fallback"])
+                    )
+                    controller_totals["pruner_ood_fallback_count"] += int(
+                        pruning_metrics.get("fallback_reason")
+                        in {
+                            "feature_out_of_range",
+                            "non_finite_feature",
+                            "unsupported_actual_size",
+                        }
+                    )
+                    controller_totals["pruner_seconds"] += float(
+                        pruning_metrics["pruner_seconds"]
+                    )
                     controller_totals["proposal_seconds"] += float(proposal_metrics["proposal_seconds"])
                     controller_totals["state_check_seconds"] += float(
                         proposal_metrics["state_check_seconds"]
                     )
                     controller_totals[f"proposal_backend={proposal_metrics['backend']}"] += 1
+                    controller_totals[
+                        f"state_check_backend={proposal_metrics['state_check_backend']}"
+                    ] += 1
+                    controller_totals["full_state_verification_count"] += int(
+                        bool(proposal_metrics["full_state_verified"])
+                    )
                     controller_totals["feature_seconds"] += feature_seconds
                     controller_totals["inference_seconds"] += inference_seconds
+                    controller_totals["controller_seconds_before_repair"] += (
+                        controller_seconds_before_repair
+                    )
+                    for metrics in (
+                        state_feature_metrics,
+                        proposal_feature_metrics,
+                        realized_feature_metrics,
+                    ):
+                        for key, value in metrics.items():
+                            if key.endswith("_seconds"):
+                                controller_totals[key] += float(value)
                     controller_totals["selected_feature_outside_fraction_sum"] += float(
                         diagnostic["outside_fraction"]
                     )
                     controller_totals["learned_decisions"] += 1
+                if balanced_config is not None and policy == "realized_dynamic":
+                    route_prefix = "official" if route == "official_adaptive" else "model"
+                    controller_totals[f"{route_prefix}_decision_count"] += 1
+                    controller_totals[f"{route_prefix}_controller_seconds"] += float(
+                        controller.get("controller_seconds_before_repair", 0.0)
+                    )
+                    if route == "official_adaptive":
+                        controller_totals["controller_seconds_before_repair"] += float(
+                            controller.get("controller_seconds_before_repair", 0.0)
+                        )
+                    if previous_route is not None and previous_route != route:
+                        controller_totals["route_switch_count"] += 1
+                    previous_route = route
                 repair_started = time.perf_counter()
                 result = _plain(environment.step(action))
                 repair_wall_seconds = time.perf_counter() - repair_started
+                total_repair_wall_seconds += repair_wall_seconds
                 state = result["observation"]
                 metrics = result["metrics"]
-                if policy in LEARNED_POLICIES:
-                    actual = sorted(map(int, metrics.get("neighborhood", [])))
+                actual = sorted(map(int, metrics.get("neighborhood", [])))
+                if policy in LEARNED_POLICIES and route == "model":
                     if not bool(metrics.get("action_valid")) or actual != sorted(action["agents"]):
                         invalid_actions += 1
                         raise ClosedLoopExecutionError(
                             "invalid_action",
                             "explicit closed-loop action was rejected or changed",
                         )
+                elif not bool(metrics.get("action_valid", True)):
+                    invalid_actions += 1
+                    raise ClosedLoopExecutionError(
+                        "invalid_action", "official closed-loop action was rejected"
+                    )
+                pending_changed_agents.update(actual)
+                if balanced_config is not None and policy == "realized_dynamic":
+                    route_prefix = "official" if route == "official_adaptive" else "model"
+                    route_controller_seconds = float(
+                        controller.get("controller_seconds_before_repair", 0.0)
+                    )
+                    controller["repair_wall_seconds"] = repair_wall_seconds
+                    controller["total_decision_seconds"] = (
+                        route_controller_seconds + repair_wall_seconds
+                    )
+                    controller_totals[f"{route_prefix}_repair_seconds"] += repair_wall_seconds
+                    controller_totals[f"{route_prefix}_total_decision_seconds"] += (
+                        route_controller_seconds + repair_wall_seconds
+                    )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 elapsed_wall = time.perf_counter() - started_wall
                 transition = {
@@ -1450,6 +2045,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     "truncated": bool(result["truncated"]),
                     "after": state,
                 }
+                if trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
+                    transition = encode_transition_event(transition, before, state)
                 _emit(stream, transition)
                 if elapsed_wall >= wall_budget and not bool(state["done"]):
                     external_timeout = True
@@ -1464,6 +2061,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             fixed_auc = fixed_budget_conflict_auc(
                 conflicts, int(job["metric_iteration_budget"]), success=success
             )
+            model_decisions = int(controller_totals["model_decision_count"])
+            official_decisions = int(controller_totals["official_decision_count"])
+            if (
+                balanced_config is not None
+                and policy == "realized_dynamic"
+                and model_decisions + official_decisions != len(conflicts) - 1
+            ):
+                raise ClosedLoopExecutionError(
+                    "route_accounting_mismatch",
+                    "balanced route counts do not equal repair iterations",
+                )
             summary = {
                 "initial_fingerprint": initial_fingerprint,
                 "initial_conflicts": conflicts[0],
@@ -1484,7 +2092,50 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if success
                 else wall_budget,
                 "native_time_to_feasible": float(state["runtime"]) if success else None,
+                "repair_wall_seconds": total_repair_wall_seconds,
+                "controller_mode": controller_mode,
+                "feature_backend": (
+                    feature_engine.backend
+                    if feature_engine is not None
+                    else "reference-v1"
+                    if policy in LEARNED_POLICIES and controller_mode == "v1-full"
+                    else "not_used"
+                    if policy in LEARNED_POLICIES
+                    else None
+                ),
                 "controller_totals": dict(controller_totals),
+                "model_decision_count": model_decisions,
+                "official_decision_count": official_decisions,
+                "model_route_fraction": (
+                    model_decisions / (model_decisions + official_decisions)
+                    if model_decisions + official_decisions
+                    else 0.0
+                ),
+                "route_switch_count": int(controller_totals["route_switch_count"]),
+                "balanced_controller": (
+                    balanced_config.payload()
+                    if balanced_config is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "candidate_reduction_fraction": (
+                    1.0
+                    - float(controller_totals["candidate_count_after_pruning"])
+                    / float(controller_totals["candidate_count_before_pruning"])
+                    if controller_totals["candidate_count_before_pruning"]
+                    else 0.0
+                ),
+                "pruner_fallback_fraction": (
+                    float(controller_totals["pruner_fallback_count"])
+                    / float(controller_totals["learned_decisions"])
+                    if controller_totals["learned_decisions"]
+                    else 0.0
+                ),
+                "pruner_ood_fallback_fraction": (
+                    float(controller_totals["pruner_ood_fallback_count"])
+                    / float(controller_totals["learned_decisions"])
+                    if controller_totals["learned_decisions"]
+                    else 0.0
+                ),
                 "mean_selected_feature_outside_fraction": (
                     float(controller_totals["selected_feature_outside_fraction_sum"])
                     / float(controller_totals["learned_decisions"])
@@ -1500,21 +2151,33 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "final_sum_of_costs": int(state["sum_of_costs"]),
                 "final_low_level": state["low_level"],
             }
-            _emit(
-                stream,
-                {
-                    "schema": EPISODE_SCHEMA,
-                    "schema_version": SCHEMA_VERSION,
-                    "run_fingerprint": job["run_fingerprint"],
-                    "event": "finish",
-                    "episode_id": episode_id,
-                    "policy": policy,
-                    "success": success,
-                    "final_fingerprint": state_fingerprint(state),
-                    "summary": summary,
-                },
-            )
+            finish_event = {
+                "schema": EPISODE_SCHEMA,
+                "schema_version": SCHEMA_VERSION,
+                "run_fingerprint": job["run_fingerprint"],
+                "event": "finish",
+                "episode_id": episode_id,
+                "policy": policy,
+                "success": success,
+                "final_fingerprint": state_fingerprint(state),
+                "summary": summary,
+            }
+            if trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
+                finish_event = encode_finish_event(finish_event)
+            _emit(stream, finish_event)
+        validated = validate_closed_loop_trace(
+            partial_path,
+            job["run_fingerprint"],
+            expected_episode_id=episode_id,
+            expected_policy=policy,
+            expected_solver_seed=solver_seed,
+            metric_iteration_budget=int(job["metric_iteration_budget"]),
+            collection_root=output_root,
+        )
+        if validated["summary"] != summary:
+            raise ClosedLoopTraceError("new trace summary mismatch")
         os.replace(partial_path, trace_path)
+        metadata = trace_file_metadata(trace_path)
         return {
             "schema_version": SCHEMA_VERSION,
             "schema": CLOSED_LOOP_SCHEMA,
@@ -1528,6 +2191,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             "solver_seed": solver_seed,
             "policy": policy,
             "trace_file": relative_trace,
+            "trace_format": trace_format,
+            "storage_fingerprint": storage_fp,
+            **metadata,
+            "trace_event_count": int(validated["event_count"]),
+            "initial_state_ref": initial_state_ref,
             "status": "ok",
             "summary": summary,
             "error": None,
@@ -1545,6 +2213,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             "agent_count": int(row["agent_count"]),
             "solver_seed": solver_seed,
             "policy": policy,
+            "trace_format": trace_format,
+            "storage_fingerprint": storage_fp,
             "trace_file": None,
             "partial_trace_file": partial_path.relative_to(output_root).as_posix()
             if partial_path.is_file()
@@ -1566,6 +2236,13 @@ def run_closed_loop_collection(
     resume: bool = False,
     dry_run: bool = False,
     task_ids: list[str] | None = None,
+    trace_format: str = TRACE_FORMAT_DELTA_GZIP_V2,
+    controller: str | None = None,
+    feature_backend: str = "auto",
+    controller_bundle: str | Path | None = None,
+    feature_shadow_validation: bool = False,
+    balanced_config: str | Path | dict[str, Any] | None = None,
+    job_keys: set[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -1573,6 +2250,21 @@ def run_closed_loop_collection(
     config = _read_json(Path(config_path).resolve())
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError("unsupported closed-loop config")
+    if trace_format not in TRACE_FORMATS:
+        raise ValueError(f"unsupported trace format: {trace_format}")
+    if feature_backend not in FEATURE_BACKENDS:
+        raise ValueError(f"unsupported feature backend: {feature_backend}")
+    controller_mode, controller_root, controller_manifest = resolve_controller_mode(
+        project_root, controller, controller_bundle
+    )
+    balanced_payload: dict[str, Any] | None = None
+    if controller_mode == "v2-balanced":
+        if balanced_config is None:
+            raise ValueError("v2-balanced requires --balanced-config")
+        balanced_payload = load_balanced_controller(balanced_config).payload()
+    elif balanced_config is not None:
+        raise ValueError("balanced_config is only valid with v2-balanced")
+    storage_fp = storage_fingerprint(trace_format)
     split = str(config["split"])
     solver_seeds = configured_solver_seeds(config)
     policies = configured_policies(config)
@@ -1581,6 +2273,19 @@ def run_closed_loop_collection(
         raise ValueError(f"unsupported closed-loop phase: {phase}")
     all_rows = _load_dataset_rows(dataset_root, [split])
     rows = _selected_rows(all_rows, task_ids)
+    available_job_keys = {
+        (str(row["task_id"]), int(solver_seed))
+        for row in rows
+        for solver_seed in solver_seeds
+    }
+    normalized_job_keys = (
+        {(str(task_id), int(seed)) for task_id, seed in job_keys}
+        if job_keys is not None
+        else None
+    )
+    if normalized_job_keys is not None and not normalized_job_keys <= available_job_keys:
+        unknown = sorted(normalized_job_keys - available_job_keys)
+        raise ValueError(f"closed-loop job filter contains unknown task/seed pairs: {unknown}")
     formal = task_ids is None and bool(config.get("formal", True))
     design = closed_loop_dataset_design(
         all_rows, split, dict(config.get("dataset_design", {}))
@@ -1603,16 +2308,34 @@ def run_closed_loop_collection(
     if not frozen_root.is_absolute():
         frozen_root = project_root / frozen_root
     bundle = load_frozen_policy_bundle(frozen_root, dict(config["model_registration"]))
+    if controller_manifest is not None:
+        expected_source_manifest = str(
+            config["model_registration"].get("deployment_manifest_sha256", "")
+        ).lower()
+        actual_source_manifest = str(
+            controller_manifest.get("source_bundle", {}).get("manifest_sha256", "")
+        ).lower()
+        if actual_source_manifest != expected_source_manifest:
+            raise ValueError("controller-v2 was built from a different v1 deployment bundle")
     effective_workers = int(workers or config["workers"])
     dataset_fp = _dataset_fingerprint(dataset_root)
     implementation = controller_implementation_fingerprint(project_root)
-    effective = {**config, "task_ids_override": task_ids}
+    effective = {
+        **config,
+        "task_ids_override": task_ids,
+        "controller": controller_mode,
+        "feature_backend": feature_backend,
+        "controller_bundle": str(controller_root),
+        "feature_shadow_validation": bool(feature_shadow_validation),
+        "balanced_config": balanced_payload,
+    }
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
         {
             "dataset_fingerprint": dataset_fp,
             "configuration_fingerprint": config_fp,
             "freeze_manifest": bundle.manifest,
+            "controller_bundle_manifest": controller_manifest,
             "controller_implementation": implementation,
         }
     )
@@ -1631,6 +2354,8 @@ def run_closed_loop_collection(
         * len(config["proposal"]["neighborhood_sizes"])
         * int(config["proposal"]["candidates_per_family"]),
         "workers": effective_workers,
+        "controller": controller_mode,
+        "feature_backend": feature_backend,
     }
     if dry_run:
         return {
@@ -1639,9 +2364,21 @@ def run_closed_loop_collection(
             "dry_run": True,
             "formal": formal,
             "run_fingerprint": run_fp,
+            "trace_format": trace_format,
+            "storage_fingerprint": storage_fp,
             "dataset_design": design,
             "seed_isolation": isolation,
             "frozen_models": bundle.manifest,
+            "controller": controller_mode,
+            "feature_backend": feature_backend,
+            "feature_schema_id": (
+                FEATURE_SCHEMA_ID if controller_mode != "v1-full" else None
+            ),
+            "feature_schema_sha256": (
+                FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
+            ),
+            "controller_bundle": controller_manifest,
+            "balanced_config": balanced_payload,
             "controller_implementation": implementation,
             "estimate": estimate,
         }
@@ -1653,10 +2390,22 @@ def run_closed_loop_collection(
         "configuration": effective,
         "configuration_fingerprint": config_fp,
         "run_fingerprint": run_fp,
+        "trace_format": trace_format,
+        "storage_fingerprint": storage_fp,
         "formal": formal,
         "dataset_design": design,
         "seed_isolation": isolation,
         "frozen_models": bundle.manifest,
+        "controller": controller_mode,
+        "feature_backend": feature_backend,
+        "feature_schema_id": (
+            FEATURE_SCHEMA_ID if controller_mode != "v1-full" else None
+        ),
+        "feature_schema_sha256": (
+            FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
+        ),
+        "controller_bundle": controller_manifest,
+        "balanced_config": balanced_payload,
         "controller_implementation": implementation,
     }
     run_path = output_root / "run_config.json"
@@ -1664,6 +2413,12 @@ def run_closed_loop_collection(
         existing = _read_json(run_path)
         if str(existing.get("run_fingerprint")) != run_fp:
             raise ValueError("output contains a different closed-loop run")
+        existing_format = str(existing.get("trace_format", TRACE_FORMAT_FULL_V1))
+        existing_storage = str(
+            existing.get("storage_fingerprint", storage_fingerprint(existing_format))
+        )
+        if existing_format != trace_format or existing_storage != storage_fp:
+            raise ValueError("output contains a different closed-loop trace format")
         if not resume:
             raise ValueError("output already exists; pass resume to continue")
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1675,7 +2430,11 @@ def run_closed_loop_collection(
         "schema": CLOSED_LOOP_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "run_fingerprint": run_fp,
+        "trace_format": trace_format,
+        "storage_fingerprint": storage_fp,
         "formal": formal,
+        "controller": controller_mode,
+        "feature_backend": feature_backend,
         "estimate": estimate,
     }
     for current in sequence:
@@ -1689,6 +2448,8 @@ def run_closed_loop_collection(
                 }
                 for row in rows
                 for solver_seed in solver_seeds
+                if normalized_job_keys is None
+                or (str(row["task_id"]), int(solver_seed)) in normalized_job_keys
             ]
             with _CollectionRunLock(output_root, run_fp, "closed-loop-qualification"):
                 results = _run_jobs(
@@ -1700,7 +2461,24 @@ def run_closed_loop_collection(
                     run_fingerprint=run_fp,
                     timeout_seconds=float(config["episode_process_timeout_seconds"]),
                 )
-            _write_jsonl(output_root / "qualification_manifest.jsonl", results)
+            qualification_manifest = output_root / "qualification_manifest.jsonl"
+            existing_results = (
+                _read_jsonl(qualification_manifest)
+                if qualification_manifest.is_file()
+                else []
+            )
+            merged = {
+                (str(value["task_id"]), int(value["solver_seed"])): value
+                for value in existing_results
+            }
+            merged.update(
+                {
+                    (str(value["task_id"]), int(value["solver_seed"])): value
+                    for value in results
+                }
+            )
+            results = [merged[key] for key in sorted(merged)]
+            _write_jsonl(qualification_manifest, results)
             report = closed_loop_qualification_report(
                 rows, results, config, design, isolation, formal=formal
             )
@@ -1734,10 +2512,22 @@ def run_closed_loop_collection(
                 "model_registration": config["model_registration"],
                 "output_root": str(output_root),
                 "run_fingerprint": run_fp,
+                "trace_format": trace_format,
+                "storage_fingerprint": storage_fp,
+                "controller": controller_mode,
+                "feature_backend": feature_backend,
+                "controller_bundle": str(controller_root),
+                "feature_shadow_validation": bool(feature_shadow_validation),
+                "balanced_config": balanced_payload,
+                "proposal_state_verification": (
+                    "sampled" if formal else "always"
+                ),
                 "resume": resume,
             }
             for row in rows
             for solver_seed in solver_seeds
+            if normalized_job_keys is None
+            or (str(row["task_id"]), int(solver_seed)) in normalized_job_keys
         ]
         with _CollectionRunLock(output_root, run_fp, f"closed-loop-{current}"):
             results = _run_jobs(
@@ -1749,7 +2539,22 @@ def run_closed_loop_collection(
                 run_fingerprint=run_fp,
                 timeout_seconds=float(config["episode_process_timeout_seconds"]),
             )
-        _write_jsonl(output_root / f"{current}_manifest.jsonl", results)
+        policy_manifest = output_root / f"{current}_manifest.jsonl"
+        existing_results = (
+            _read_jsonl(policy_manifest) if policy_manifest.is_file() else []
+        )
+        merged = {
+            (str(value["task_id"]), int(value["solver_seed"])): value
+            for value in existing_results
+        }
+        merged.update(
+            {
+                (str(value["task_id"]), int(value["solver_seed"])): value
+                for value in results
+            }
+        )
+        results = [merged[key] for key in sorted(merged)]
+        _write_jsonl(policy_manifest, results)
         summary[current] = {
             "episode_count": len(results),
             "success_count": sum(bool(row.get("summary", {}).get("success")) for row in results),
@@ -1764,6 +2569,8 @@ def run_closed_loop_collection(
 
 __all__ = [
     "CLOSED_LOOP_SCHEMA",
+    "CONTROLLER_MODES",
+    "DEFAULT_CONTROLLER_BUNDLE",
     "CollectionLockError",
     "LEARNED_POLICIES",
     "FIXED_POLICIES",
@@ -1783,6 +2590,7 @@ __all__ = [
     "PortablePairwiseModel",
     "proposal_random_seed",
     "repair_random_seed",
+    "resolve_controller_mode",
     "run_closed_loop_collection",
     "score_online_candidates",
     "verify_portable_policy_bundle",

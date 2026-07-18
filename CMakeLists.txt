@@ -53,7 +53,7 @@ target_link_libraries(gpbs_official PRIVATE
 
 find_package(pybind11 CONFIG REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-pybind11_add_module(lns2_env src/python_bindings.cpp)
+pybind11_add_module(lns2_env src/python_bindings.cpp src/online_features.cpp)
 target_link_libraries(lns2_env PRIVATE mapf_lns2_core)
 
 enable_testing()

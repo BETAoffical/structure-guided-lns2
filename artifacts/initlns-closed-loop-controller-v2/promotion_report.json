@@ -1,0 +1,74 @@
+{
+  "default_controller": "v2-full",
+  "exact_acceleration_passed": true,
+  "feature_performance_passed": true,
+  "feature_schema_id": "lns2.realized_features.v2",
+  "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+  "main_ranker_equivalence": {
+    "passed": true,
+    "profiles": {
+      "proposal_dynamic": {
+        "maximum_score_delta": 0.0,
+        "pairwise_input_dimension": 55,
+        "passed": true,
+        "selection_mismatch_count": 0,
+        "state_count": 23,
+        "used_feature_count": 55
+      },
+      "realized_dynamic": {
+        "maximum_score_delta": 0.0,
+        "pairwise_input_dimension": 86,
+        "passed": true,
+        "selection_mismatch_count": 0,
+        "state_count": 23,
+        "used_feature_count": 86
+      }
+    }
+  },
+  "performance_benchmark": {
+    "end_to_end_measurement": "estimate_from_recorded_v1_controller_and_repair timings; quick/formal paired wall time remains a promotion gate",
+    "estimated_controller_speedup": 2.733523940929433,
+    "estimated_controller_time_reduction": 0.6341718523013969,
+    "estimated_end_to_end_speedup": 1.4341677216765472,
+    "estimated_end_to_end_time_reduction": 0.3027314832947179,
+    "feature_backend": "native",
+    "file": "performance_benchmark.json",
+    "maximum_feature_delta": 1.1368683772161603e-13,
+    "maze600_feature_time_reduction": 0.932506787603954,
+    "overall_feature_speedup": 10.970872693308165,
+    "overall_feature_time_reduction": 0.9088495484402108,
+    "passed": true,
+    "performance_gate": {
+      "controller_required_reduction": 0.25,
+      "estimated_end_to_end_required_reduction": 0.08,
+      "maze600_required_reduction": 0.5,
+      "overall_required_reduction": 0.35,
+      "passed": true
+    },
+    "sha256": "2c85bfeadd19f2dd00922e3647200838fa495f54aa1e79c09dbfad572a824cce"
+  },
+  "pruner_offline_validation_passed": false,
+  "pruning_promotion_passed": false,
+  "redundancy_audit": {
+    "feature_schema_id": "lns2.realized_features.v2",
+    "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+    "passed": true,
+    "removed_feature_count": 15,
+    "row_count": 8326,
+    "schema": "lns2.feature_redundancy_audit.v2",
+    "violation_count": 0,
+    "violations": [],
+    "violations_truncated": false
+  },
+  "remaining_promotion_gates": [
+    "quick paired controller run",
+    "720 formal episodes without errors",
+    "quality non-inferiority",
+    "controller time reduction >= 25%",
+    "end-to-end wall time reduction >= 8%"
+  ],
+  "schema": "lns2.controller_promotion_report.v2",
+  "selected_pruner_source": null,
+  "selected_threshold": null,
+  "selected_validation": null
+}

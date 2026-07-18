@@ -1,0 +1,2694 @@
+{
+  "controller_manifest": {
+    "default_controller": "v1-full",
+    "fallback_rules": {
+      "invalid_family_cardinality": "full_pool",
+      "maximum_outside_feature_fraction": 0.1,
+      "missing_or_unexpected_family": "full_pool",
+      "non_finite_feature": "full_pool",
+      "schema_mismatch": "reject_bundle",
+      "unsupported_actual_size": "full_pool"
+    },
+    "feature_dimensions": {
+      "proposal_dynamic": 82,
+      "realized_dynamic": 124
+    },
+    "feature_schema_id": "lns2.realized_features.v2",
+    "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+    "main_ranges": {
+      "proposal_dynamic": {
+        "proposal.actual_size": [
+          1.0,
+          16.0
+        ],
+        "proposal.actual_size=12": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=14": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=16": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=4": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=5": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=8": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size_ratio_agents": [
+          0.0125,
+          0.2
+        ],
+        "proposal.family_count=collision:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=collision:4": [
+          0.0,
+          24.0
+        ],
+        "proposal.family_count=random:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=random:4": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=random:8": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=target:16": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_count=target:4": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_count=target:8": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_ratio=collision:4": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_ratio=target:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.seed_component_size_mean": [
+          2.0,
+          82.0
+        ],
+        "proposal.seed_component_size_sum": [
+          2.0,
+          82.0
+        ],
+        "proposal.seed_conflict_degree_max": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_mean": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_min": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_std": [
+          0.0,
+          3.0
+        ],
+        "proposal.seed_conflict_degree_sum": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_delay_max": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_mean": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_min": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_std": [
+          0.0,
+          8.73053390247253
+        ],
+        "proposal.seed_delay_sum": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_path_cost_max": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_mean": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_min": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_std": [
+          0.0,
+          12.5
+        ],
+        "proposal.seed_path_cost_sum": [
+          22.0,
+          139.0
+        ],
+        "proposal.total_count": [
+          1.0,
+          24.0
+        ],
+        "state.agent_count": [
+          80.0,
+          100.0
+        ],
+        "state.colliding_pairs": [
+          1.0,
+          159.0
+        ],
+        "state.component_count": [
+          1.0,
+          8.0
+        ],
+        "state.conflict_edge_density": [
+          0.0125,
+          1.59
+        ],
+        "state.conflict_event_count": [
+          1.0,
+          308.0
+        ],
+        "state.conflict_time_mean": [
+          3.5,
+          62.0
+        ],
+        "state.conflict_time_std": [
+          0.0,
+          24.7931346897681
+        ],
+        "state.conflicting_agent_ratio": [
+          0.025,
+          0.84
+        ],
+        "state.degree_max": [
+          1.0,
+          49.0
+        ],
+        "state.degree_std": [
+          0.15612494995995996,
+          5.61672502442482
+        ],
+        "state.delay_max": [
+          18.0,
+          125.0
+        ],
+        "state.delay_mean": [
+          3.9125,
+          36.83
+        ],
+        "state.delay_std": [
+          4.868264577855234,
+          29.553698584102804
+        ],
+        "state.largest_component_ratio": [
+          0.02,
+          0.82
+        ],
+        "state.low_level_generated_per_agent": [
+          234.7625,
+          936.85
+        ],
+        "state.path_cost_mean": [
+          33.075,
+          72.44
+        ],
+        "state.path_cost_std": [
+          6.794196052514234,
+          30.192820338616926
+        ],
+        "state.path_wait_ratio_mean": [
+          0.034845118233730175,
+          0.28240687526963637
+        ],
+        "state.vertex_event_ratio": [
+          0.6,
+          1.0
+        ]
+      },
+      "realized_dynamic": {
+        "proposal.actual_size=12": [
+          0.0,
+          1.0
+        ],
+        "proposal.actual_size=8": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=collision:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=collision:4": [
+          0.0,
+          24.0
+        ],
+        "proposal.family_count=random:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=random:4": [
+          0.0,
+          1.0
+        ],
+        "proposal.family_count=target:16": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_count=target:4": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_count=target:8": [
+          0.0,
+          8.0
+        ],
+        "proposal.family_ratio=target:16": [
+          0.0,
+          1.0
+        ],
+        "proposal.seed_component_size_mean": [
+          2.0,
+          82.0
+        ],
+        "proposal.seed_component_size_sum": [
+          2.0,
+          82.0
+        ],
+        "proposal.seed_conflict_degree_max": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_mean": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_min": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_conflict_degree_std": [
+          0.0,
+          3.0
+        ],
+        "proposal.seed_conflict_degree_sum": [
+          1.0,
+          49.0
+        ],
+        "proposal.seed_delay_max": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_mean": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_min": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_delay_std": [
+          0.0,
+          8.73053390247253
+        ],
+        "proposal.seed_delay_sum": [
+          0.0,
+          98.0
+        ],
+        "proposal.seed_path_cost_max": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_mean": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_min": [
+          22.0,
+          134.0
+        ],
+        "proposal.seed_path_cost_sum": [
+          22.0,
+          139.0
+        ],
+        "proposal.total_count": [
+          1.0,
+          24.0
+        ],
+        "realized.boundary_conflict_edges": [
+          0.0,
+          83.0
+        ],
+        "realized.component_count": [
+          1.0,
+          6.0
+        ],
+        "realized.component_coverage_max": [
+          0.02564102564102564,
+          1.0
+        ],
+        "realized.conflict_degree_max": [
+          1.0,
+          49.0
+        ],
+        "realized.conflict_degree_mean": [
+          0.0625,
+          14.75
+        ],
+        "realized.conflict_degree_min": [
+          0.0,
+          3.0
+        ],
+        "realized.conflict_degree_std": [
+          0.0,
+          19.929563467371782
+        ],
+        "realized.conflict_degree_sum": [
+          1.0,
+          145.0
+        ],
+        "realized.conflicting_agent_coverage": [
+          0.024390243902439025,
+          1.0
+        ],
+        "realized.conflicting_agent_ratio": [
+          0.0625,
+          1.0
+        ],
+        "realized.delay_max": [
+          1.0,
+          125.0
+        ],
+        "realized.delay_mean": [
+          0.5,
+          62.0
+        ],
+        "realized.delay_min": [
+          0.0,
+          48.0
+        ],
+        "realized.delay_std": [
+          0.0,
+          33.07702894381537
+        ],
+        "realized.delay_sum": [
+          1.0,
+          961.0
+        ],
+        "realized.incident_conflict_coverage": [
+          0.009259259259259259,
+          1.0
+        ],
+        "realized.incident_event_coverage": [
+          0.0049261083743842365,
+          1.0
+        ],
+        "realized.internal_conflict_coverage": [
+          0.0,
+          1.0
+        ],
+        "realized.internal_conflict_edges": [
+          0.0,
+          39.0
+        ],
+        "realized.internal_event_coverage": [
+          0.0,
+          1.0
+        ],
+        "realized.path_articulation_ratio": [
+          0.0,
+          0.18579234972677597
+        ],
+        "realized.path_bbox_area_ratio": [
+          0.21428571428571427,
+          1.0
+        ],
+        "realized.path_cost_max": [
+          30.0,
+          162.0
+        ],
+        "realized.path_cost_mean": [
+          26.25,
+          96.4375
+        ],
+        "realized.path_cost_min": [
+          16.0,
+          91.0
+        ],
+        "realized.path_cost_std": [
+          0.0,
+          30.877783275358354
+        ],
+        "realized.path_cost_sum": [
+          57.0,
+          1543.0
+        ],
+        "realized.path_degree_mean": [
+          2.6819571865443423,
+          3.5326633165829144
+        ],
+        "realized.path_low_degree_ratio": [
+          0.0,
+          0.4525993883792049
+        ],
+        "realized.path_obstacle_rate_r2": [
+          0.23007614213197972,
+          0.5236085626911315
+        ],
+        "realized.path_obstacle_rate_r4": [
+          0.22342595150487343,
+          0.46633591141746084
+        ],
+        "realized.path_overlap_max": [
+          0.0,
+          0.8717948717948718
+        ],
+        "realized.path_overlap_mean": [
+          0.0,
+          0.40975826563064827
+        ],
+        "realized.path_stretch_max": [
+          1.0238095238095237,
+          4.409090909090909
+        ],
+        "realized.path_stretch_mean": [
+          1.0119047619047619,
+          3.372685185185185
+        ],
+        "realized.path_stretch_min": [
+          1.0,
+          2.8055555555555554
+        ],
+        "realized.path_stretch_std": [
+          0.0,
+          1.2360925360998598
+        ],
+        "realized.path_union_cell_ratio": [
+          0.055970149253731345,
+          0.4675141242937853
+        ],
+        "realized.path_visit_heat_mean": [
+          5.698630136986301,
+          55.71913580246913
+        ],
+        "realized.path_wait_ratio_mean": [
+          0.0,
+          0.4804097568779063
+        ],
+        "state.agent_count": [
+          80.0,
+          100.0
+        ],
+        "state.colliding_pairs": [
+          1.0,
+          159.0
+        ],
+        "state.component_count": [
+          1.0,
+          8.0
+        ],
+        "state.conflict_edge_density": [
+          0.0125,
+          1.59
+        ],
+        "state.conflict_time_mean": [
+          3.5,
+          62.0
+        ],
+        "state.conflict_time_std": [
+          0.0,
+          24.7931346897681
+        ],
+        "state.conflicting_agent_ratio": [
+          0.025,
+          0.84
+        ],
+        "state.degree_max": [
+          1.0,
+          49.0
+        ],
+        "state.degree_std": [
+          0.15612494995995996,
+          5.61672502442482
+        ],
+        "state.delay_max": [
+          18.0,
+          125.0
+        ],
+        "state.delay_mean": [
+          3.9125,
+          36.83
+        ],
+        "state.delay_std": [
+          4.868264577855234,
+          29.553698584102804
+        ],
+        "state.largest_component_ratio": [
+          0.02,
+          0.82
+        ],
+        "state.low_level_generated_per_agent": [
+          234.7625,
+          936.85
+        ],
+        "state.path_cost_mean": [
+          33.075,
+          72.44
+        ],
+        "state.path_cost_std": [
+          6.794196052514234,
+          30.192820338616926
+        ],
+        "state.path_stretch_mean": [
+          1.130253849354973,
+          2.034260039314799
+        ],
+        "state.path_wait_ratio_mean": [
+          0.034845118233730175,
+          0.28240687526963637
+        ],
+        "state.vertex_event_ratio": [
+          0.6,
+          1.0
+        ]
+      }
+    },
+    "main_ranker_semantic_fingerprint": "08e929f4c40f1538db12dddac14beaebd91ecda6892d7b953c6d3a524b38afad",
+    "main_rankers": {
+      "proposal_dynamic": {
+        "file": "main__proposal_dynamic.json",
+        "pairwise_input_dimension": 55,
+        "semantic_fingerprint": "daaa8e0afa31b019a713cc626e73f75c0697d32b6f2e15b3f1a0bb59e37bdf8c",
+        "sha256": "c667276baf8e5a3f216e8605db7f295bc6c02805c53c083f54e50044321bfd32",
+        "source_semantic_fingerprint": "d8f7dfde810e6c6ea5e9bca4488aa7dac81298014e20b7689be331781f4b4502",
+        "used_feature_ids": [
+          0,
+          4,
+          6,
+          8,
+          11,
+          12,
+          15,
+          17,
+          18,
+          19,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          28,
+          31,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          74,
+          75,
+          77,
+          78,
+          80,
+          81
+        ],
+        "used_feature_names": [
+          "proposal.actual_size",
+          "proposal.actual_size=12",
+          "proposal.actual_size=14",
+          "proposal.actual_size=16",
+          "proposal.actual_size=4",
+          "proposal.actual_size=5",
+          "proposal.actual_size=8",
+          "proposal.actual_size_ratio_agents",
+          "proposal.family_count=collision:16",
+          "proposal.family_count=collision:4",
+          "proposal.family_count=random:16",
+          "proposal.family_count=random:4",
+          "proposal.family_count=random:8",
+          "proposal.family_count=target:16",
+          "proposal.family_count=target:4",
+          "proposal.family_count=target:8",
+          "proposal.family_ratio=collision:4",
+          "proposal.family_ratio=target:16",
+          "proposal.seed_component_size_mean",
+          "proposal.seed_component_size_sum",
+          "proposal.seed_conflict_degree_max",
+          "proposal.seed_conflict_degree_mean",
+          "proposal.seed_conflict_degree_min",
+          "proposal.seed_conflict_degree_std",
+          "proposal.seed_conflict_degree_sum",
+          "proposal.seed_delay_max",
+          "proposal.seed_delay_mean",
+          "proposal.seed_delay_min",
+          "proposal.seed_delay_std",
+          "proposal.seed_delay_sum",
+          "proposal.seed_path_cost_max",
+          "proposal.seed_path_cost_mean",
+          "proposal.seed_path_cost_min",
+          "proposal.seed_path_cost_std",
+          "proposal.seed_path_cost_sum",
+          "proposal.total_count",
+          "state.agent_count",
+          "state.colliding_pairs",
+          "state.component_count",
+          "state.conflict_edge_density",
+          "state.conflict_event_count",
+          "state.conflict_time_mean",
+          "state.conflict_time_std",
+          "state.conflicting_agent_ratio",
+          "state.degree_max",
+          "state.degree_std",
+          "state.delay_max",
+          "state.delay_mean",
+          "state.delay_std",
+          "state.largest_component_ratio",
+          "state.low_level_generated_per_agent",
+          "state.path_cost_mean",
+          "state.path_cost_std",
+          "state.path_wait_ratio_mean",
+          "state.vertex_event_ratio"
+        ]
+      },
+      "realized_dynamic": {
+        "file": "main__realized_dynamic.json",
+        "pairwise_input_dimension": 86,
+        "semantic_fingerprint": "923ae5249ff0a9c1d565ae9af3b2cfab94f3129fd0b906ac335575a54c43d72b",
+        "sha256": "b6afff3bf436c8a2acb5571094817ce94aef71b5aa0cb1c2369de1c0e1d3abe2",
+        "source_semantic_fingerprint": "08e929f4c40f1538db12dddac14beaebd91ecda6892d7b953c6d3a524b38afad",
+        "used_feature_ids": [
+          4,
+          15,
+          18,
+          19,
+          21,
+          22,
+          24,
+          25,
+          26,
+          31,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          51,
+          58,
+          59,
+          60,
+          61,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          116,
+          117,
+          119,
+          120,
+          121,
+          122,
+          123
+        ],
+        "used_feature_names": [
+          "proposal.actual_size=12",
+          "proposal.actual_size=8",
+          "proposal.family_count=collision:16",
+          "proposal.family_count=collision:4",
+          "proposal.family_count=random:16",
+          "proposal.family_count=random:4",
+          "proposal.family_count=target:16",
+          "proposal.family_count=target:4",
+          "proposal.family_count=target:8",
+          "proposal.family_ratio=target:16",
+          "proposal.seed_component_size_mean",
+          "proposal.seed_component_size_sum",
+          "proposal.seed_conflict_degree_max",
+          "proposal.seed_conflict_degree_mean",
+          "proposal.seed_conflict_degree_min",
+          "proposal.seed_conflict_degree_std",
+          "proposal.seed_conflict_degree_sum",
+          "proposal.seed_delay_max",
+          "proposal.seed_delay_mean",
+          "proposal.seed_delay_min",
+          "proposal.seed_delay_std",
+          "proposal.seed_delay_sum",
+          "proposal.seed_path_cost_max",
+          "proposal.seed_path_cost_mean",
+          "proposal.seed_path_cost_min",
+          "proposal.seed_path_cost_sum",
+          "proposal.total_count",
+          "realized.boundary_conflict_edges",
+          "realized.component_count",
+          "realized.component_coverage_max",
+          "realized.conflict_degree_max",
+          "realized.conflict_degree_mean",
+          "realized.conflict_degree_min",
+          "realized.conflict_degree_std",
+          "realized.conflict_degree_sum",
+          "realized.conflicting_agent_coverage",
+          "realized.conflicting_agent_ratio",
+          "realized.delay_max",
+          "realized.delay_mean",
+          "realized.delay_min",
+          "realized.delay_std",
+          "realized.delay_sum",
+          "realized.incident_conflict_coverage",
+          "realized.incident_event_coverage",
+          "realized.internal_conflict_coverage",
+          "realized.internal_conflict_edges",
+          "realized.internal_event_coverage",
+          "realized.path_articulation_ratio",
+          "realized.path_bbox_area_ratio",
+          "realized.path_cost_max",
+          "realized.path_cost_mean",
+          "realized.path_cost_min",
+          "realized.path_cost_std",
+          "realized.path_cost_sum",
+          "realized.path_degree_mean",
+          "realized.path_low_degree_ratio",
+          "realized.path_obstacle_rate_r2",
+          "realized.path_obstacle_rate_r4",
+          "realized.path_overlap_max",
+          "realized.path_overlap_mean",
+          "realized.path_stretch_max",
+          "realized.path_stretch_mean",
+          "realized.path_stretch_min",
+          "realized.path_stretch_std",
+          "realized.path_union_cell_ratio",
+          "realized.path_visit_heat_mean",
+          "realized.path_wait_ratio_mean",
+          "state.agent_count",
+          "state.colliding_pairs",
+          "state.component_count",
+          "state.conflict_edge_density",
+          "state.conflict_time_mean",
+          "state.conflict_time_std",
+          "state.conflicting_agent_ratio",
+          "state.degree_max",
+          "state.degree_std",
+          "state.delay_max",
+          "state.delay_mean",
+          "state.delay_std",
+          "state.largest_component_ratio",
+          "state.low_level_generated_per_agent",
+          "state.path_cost_mean",
+          "state.path_cost_std",
+          "state.path_stretch_mean",
+          "state.path_wait_ratio_mean",
+          "state.vertex_event_ratio"
+        ]
+      }
+    },
+    "promotion_report": {
+      "file": "promotion_report.json",
+      "sha256": "543489e0cd9aa4ac2e21db44d9bc9bc164bb5d7a16155cc805e57c9ec814137d"
+    },
+    "pruner": null,
+    "schema": "lns2.portable_controller_bundle.v3",
+    "schema_version": 3,
+    "source_bundle": {
+      "confirmation_labels_seen": false,
+      "manifest_sha256": "d87b649459cf0dde44ed1491ae32f8bc2397728230c33c15caeb036005e5970d"
+    },
+    "storage_format_dependency": null
+  },
+  "dedicated_calibration": {
+    "passed": false,
+    "selected": null,
+    "threshold_grid": [
+      {
+        "auc_regret_mean": 0.016077203252381995,
+        "auc_regret_one_sided_95_upper": 0.022217738421857907,
+        "candidate_count_after": 2585,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.4983504754511935,
+        "conflict_regret_mean": 0.059437607291890404,
+        "conflict_regret_one_sided_95_upper": 0.07540576400358202,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.6875,
+        "mean_solved_rate_delta": -0.016493055555555556,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.5
+      },
+      {
+        "auc_regret_mean": 0.0176255840393403,
+        "auc_regret_one_sided_95_upper": 0.024114745222690914,
+        "candidate_count_after": 2855,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.4459538133126334,
+        "conflict_regret_mean": 0.06248839223051174,
+        "conflict_regret_one_sided_95_upper": 0.07864065144051155,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7048611111111112,
+        "mean_solved_rate_delta": -0.019097222222222224,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.51
+      },
+      {
+        "auc_regret_mean": 0.015710877766081398,
+        "auc_regret_one_sided_95_upper": 0.023073796230905556,
+        "candidate_count_after": 2954,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.4267417038618281,
+        "conflict_regret_mean": 0.05694653307391378,
+        "conflict_regret_one_sided_95_upper": 0.07574295831213831,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7152777777777778,
+        "mean_solved_rate_delta": -0.014756944444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.52
+      },
+      {
+        "auc_regret_mean": 0.0121772098542924,
+        "auc_regret_one_sided_95_upper": 0.01981025991000156,
+        "candidate_count_after": 3021,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.41373956918300014,
+        "conflict_regret_mean": 0.04667393174346606,
+        "conflict_regret_one_sided_95_upper": 0.06547322647718903,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7395833333333334,
+        "mean_solved_rate_delta": -0.012152777777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.53
+      },
+      {
+        "auc_regret_mean": 0.012300644211075509,
+        "auc_regret_one_sided_95_upper": 0.019729122188879407,
+        "candidate_count_after": 3094,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.3995730642344265,
+        "conflict_regret_mean": 0.04689729106770258,
+        "conflict_regret_one_sided_95_upper": 0.06576245414036523,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7465277777777778,
+        "mean_solved_rate_delta": -0.012152777777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.54
+      },
+      {
+        "auc_regret_mean": 0.011904433037425312,
+        "auc_regret_one_sided_95_upper": 0.019153710220316863,
+        "candidate_count_after": 3156,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.3875412381137202,
+        "conflict_regret_mean": 0.04668555214327709,
+        "conflict_regret_one_sided_95_upper": 0.0656155037909167,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7638888888888888,
+        "mean_solved_rate_delta": -0.010416666666666666,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.55
+      },
+      {
+        "auc_regret_mean": 0.009419014032858906,
+        "auc_regret_one_sided_95_upper": 0.017710702652806314,
+        "candidate_count_after": 3259,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.36755288181641765,
+        "conflict_regret_mean": 0.04075895341178833,
+        "conflict_regret_one_sided_95_upper": 0.06160891129736695,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.78125,
+        "mean_solved_rate_delta": -0.008680555555555556,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.56
+      },
+      {
+        "auc_regret_mean": 0.010684698671185055,
+        "auc_regret_one_sided_95_upper": 0.018835936036394763,
+        "candidate_count_after": 3347,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.35047545119347956,
+        "conflict_regret_mean": 0.04404939458825892,
+        "conflict_regret_one_sided_95_upper": 0.06399895512987688,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7916666666666666,
+        "mean_solved_rate_delta": -0.006944444444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.57
+      },
+      {
+        "auc_regret_mean": 0.011216320639210532,
+        "auc_regret_one_sided_95_upper": 0.019513052023094158,
+        "candidate_count_after": 3463,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.3279642926450611,
+        "conflict_regret_mean": 0.045505798909246574,
+        "conflict_regret_one_sided_95_upper": 0.06567559613186004,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8055555555555556,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.58
+      },
+      {
+        "auc_regret_mean": 0.01285391129886129,
+        "auc_regret_one_sided_95_upper": 0.020214221861130564,
+        "candidate_count_after": 3545,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.3120512322918688,
+        "conflict_regret_mean": 0.04996816367442976,
+        "conflict_regret_one_sided_95_upper": 0.06749229844178563,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8125,
+        "mean_solved_rate_delta": -0.009548611111111112,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.59
+      },
+      {
+        "auc_regret_mean": 0.012202869632194625,
+        "auc_regret_one_sided_95_upper": 0.02127892372620035,
+        "candidate_count_after": 3626,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2963322336503008,
+        "conflict_regret_mean": 0.04866608034109642,
+        "conflict_regret_one_sided_95_upper": 0.06914355281354838,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8263888888888888,
+        "mean_solved_rate_delta": -0.006944444444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.6
+      },
+      {
+        "auc_regret_mean": 0.014249000584575578,
+        "auc_regret_one_sided_95_upper": 0.022776062113820248,
+        "candidate_count_after": 3704,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.28119542014360566,
+        "conflict_regret_mean": 0.052813456884306303,
+        "conflict_regret_one_sided_95_upper": 0.07244456041294021,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8402777777777778,
+        "mean_solved_rate_delta": -0.009548611111111112,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.61
+      },
+      {
+        "auc_regret_mean": 0.011303393368719765,
+        "auc_regret_one_sided_95_upper": 0.019553695564641774,
+        "candidate_count_after": 3774,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.26761110032990487,
+        "conflict_regret_mean": 0.04525718244092746,
+        "conflict_regret_one_sided_95_upper": 0.0641515627478385,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8611111111111112,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.62
+      },
+      {
+        "auc_regret_mean": 0.010176203987220038,
+        "auc_regret_one_sided_95_upper": 0.018566378551976057,
+        "candidate_count_after": 3856,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2516980399767126,
+        "conflict_regret_mean": 0.0416828360356987,
+        "conflict_regret_one_sided_95_upper": 0.060803474221721526,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8680555555555556,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.63
+      },
+      {
+        "auc_regret_mean": 0.011000182116114103,
+        "auc_regret_one_sided_95_upper": 0.02110423706652337,
+        "candidate_count_after": 3958,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2319037453910343,
+        "conflict_regret_mean": 0.043446754987117656,
+        "conflict_regret_one_sided_95_upper": 0.06927971002230301,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8958333333333334,
+        "mean_solved_rate_delta": -0.0078125,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.64
+      },
+      {
+        "auc_regret_mean": 0.009065783923581703,
+        "auc_regret_one_sided_95_upper": 0.020132147947117342,
+        "candidate_count_after": 4036,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.21676693188433926,
+        "conflict_regret_mean": 0.03970616444428474,
+        "conflict_regret_one_sided_95_upper": 0.06685998064233116,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9166666666666666,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.65
+      },
+      {
+        "auc_regret_mean": 0.009119097379310994,
+        "auc_regret_one_sided_95_upper": 0.020132694311091433,
+        "candidate_count_after": 4116,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.20124199495439554,
+        "conflict_regret_mean": 0.0398084582539612,
+        "conflict_regret_one_sided_95_upper": 0.06704922129612507,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9236111111111112,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.66
+      },
+      {
+        "auc_regret_mean": 0.008361607165519966,
+        "auc_regret_one_sided_95_upper": 0.020921407013502685,
+        "candidate_count_after": 4171,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.19056860081505922,
+        "conflict_regret_mean": 0.03398008523808818,
+        "conflict_regret_one_sided_95_upper": 0.06622659520047625,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9270833333333334,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.67
+      },
+      {
+        "auc_regret_mean": 0.005618533150516127,
+        "auc_regret_one_sided_95_upper": 0.011871057166584348,
+        "candidate_count_after": 4239,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.177372404424607,
+        "conflict_regret_mean": 0.027407664603167545,
+        "conflict_regret_one_sided_95_upper": 0.04524918717991449,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9375,
+        "mean_solved_rate_delta": -0.0008680555555555555,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.68
+      },
+      {
+        "auc_regret_mean": 0.006052560928293905,
+        "auc_regret_one_sided_95_upper": 0.012170372174771715,
+        "candidate_count_after": 4314,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.1628177760527848,
+        "conflict_regret_mean": 0.0282757201587231,
+        "conflict_regret_one_sided_95_upper": 0.04576963105281001,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9409722222222222,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.69
+      },
+      {
+        "auc_regret_mean": 0.00842798197129367,
+        "auc_regret_one_sided_95_upper": 0.014472573300399971,
+        "candidate_count_after": 4408,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.1445759751601009,
+        "conflict_regret_mean": 0.03338102373298198,
+        "conflict_regret_one_sided_95_upper": 0.05157144778231116,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9513888888888888,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.7
+      },
+      {
+        "auc_regret_mean": 0.006102562638348159,
+        "auc_regret_one_sided_95_upper": 0.007525545382775734,
+        "candidate_count_after": 4464,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.1337085193091403,
+        "conflict_regret_mean": 0.026468144945103193,
+        "conflict_regret_one_sided_95_upper": 0.03240944762741716,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9583333333333334,
+        "mean_solved_rate_delta": -0.0008680555555555555,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.71
+      },
+      {
+        "auc_regret_mean": 0.004437770034650008,
+        "auc_regret_one_sided_95_upper": 0.006147242169620745,
+        "candidate_count_after": 4511,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.12458761886279834,
+        "conflict_regret_mean": 0.021587832605113433,
+        "conflict_regret_one_sided_95_upper": 0.02889538293950059,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9722222222222222,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.72
+      },
+      {
+        "auc_regret_mean": 0.0046306712692179095,
+        "auc_regret_one_sided_95_upper": 0.006353027773111998,
+        "candidate_count_after": 4584,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.11042111391422471,
+        "conflict_regret_mean": 0.021973635074249237,
+        "conflict_regret_one_sided_95_upper": 0.0292367922967634,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9756944444444444,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.73
+      },
+      {
+        "auc_regret_mean": 0.0034103826444301334,
+        "auc_regret_one_sided_95_upper": 0.00548981617843532,
+        "candidate_count_after": 4661,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.09547836211915384,
+        "conflict_regret_mean": 0.017980579518693682,
+        "conflict_regret_one_sided_95_upper": 0.02523739371294378,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9756944444444444,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.74
+      },
+      {
+        "auc_regret_mean": 0.002458003871530325,
+        "auc_regret_one_sided_95_upper": 0.004085570397004059,
+        "candidate_count_after": 4745,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.07917717834271298,
+        "conflict_regret_mean": 0.010419297138047137,
+        "conflict_regret_one_sided_95_upper": 0.016256991962637125,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9826388888888888,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.75
+      },
+      {
+        "auc_regret_mean": 0.0017113095238095238,
+        "auc_regret_one_sided_95_upper": 0.003125822978764155,
+        "candidate_count_after": 4782,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.07199689501261397,
+        "conflict_regret_mean": 0.006915509259259259,
+        "conflict_regret_one_sided_95_upper": 0.011533224400871461,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0026041666666666665,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.76
+      },
+      {
+        "auc_regret_mean": 0.0017113095238095238,
+        "auc_regret_one_sided_95_upper": 0.003125822978764155,
+        "candidate_count_after": 4810,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.06656316708713372,
+        "conflict_regret_mean": 0.006915509259259259,
+        "conflict_regret_one_sided_95_upper": 0.011533224400871461,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0026041666666666665,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.77
+      },
+      {
+        "auc_regret_mean": 0.0017113095238095238,
+        "auc_regret_one_sided_95_upper": 0.003125822978764155,
+        "candidate_count_after": 4858,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.05724820492916749,
+        "conflict_regret_mean": 0.006915509259259259,
+        "conflict_regret_one_sided_95_upper": 0.011533224400871461,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0026041666666666665,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.78
+      },
+      {
+        "auc_regret_mean": 0.0017113095238095238,
+        "auc_regret_one_sided_95_upper": 0.003125822978764155,
+        "candidate_count_after": 4896,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.049873859887444194,
+        "conflict_regret_mean": 0.006915509259259259,
+        "conflict_regret_one_sided_95_upper": 0.011533224400871461,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0026041666666666665,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.79
+      },
+      {
+        "auc_regret_mean": 0.0038194444444444448,
+        "auc_regret_one_sided_95_upper": 0.006849094752320559,
+        "candidate_count_after": 4942,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.040947021152726526,
+        "conflict_regret_mean": 0.01154513888888889,
+        "conflict_regret_one_sided_95_upper": 0.01808165677354482,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9930555555555556,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.8
+      },
+      {
+        "auc_regret_mean": 0.0022569444444444447,
+        "auc_regret_one_sided_95_upper": 0.0059375174571253,
+        "candidate_count_after": 4978,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.033960799534251906,
+        "conflict_regret_mean": 0.0076388888888888895,
+        "conflict_regret_one_sided_95_upper": 0.016227794536618066,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9930555555555556,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.81
+      },
+      {
+        "auc_regret_mean": 0.001388888888888889,
+        "auc_regret_one_sided_95_upper": 0.0033042846768336965,
+        "candidate_count_after": 5008,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.028138948185522983,
+        "conflict_regret_mean": 0.005902777777777778,
+        "conflict_regret_one_sided_95_upper": 0.011852335020029518,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9930555555555556,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.82
+      },
+      {
+        "auc_regret_mean": -0.00023148148148148144,
+        "auc_regret_one_sided_95_upper": 0.0011437908496732027,
+        "candidate_count_after": 5039,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.022123035125169777,
+        "conflict_regret_mean": -0.00017361111111111125,
+        "conflict_regret_one_sided_95_upper": 0.003431372549019608,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9965277777777778,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.83
+      },
+      {
+        "auc_regret_mean": -0.00023148148148148144,
+        "auc_regret_one_sided_95_upper": 0.0011437908496732027,
+        "candidate_count_after": 5048,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.02037647972055112,
+        "conflict_regret_mean": -0.00017361111111111125,
+        "conflict_regret_one_sided_95_upper": 0.003431372549019608,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9965277777777778,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.84
+      },
+      {
+        "auc_regret_mean": -0.00023148148148148144,
+        "auc_regret_one_sided_95_upper": 0.0011437908496732027,
+        "candidate_count_after": 5087,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.012808072967203543,
+        "conflict_regret_mean": -0.00017361111111111125,
+        "conflict_regret_one_sided_95_upper": 0.003431372549019608,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9965277777777778,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.85
+      },
+      {
+        "auc_regret_mean": -0.0010416666666666667,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5097,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.010867455850960606,
+        "conflict_regret_mean": -0.0026041666666666665,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9965277777777778,
+        "mean_solved_rate_delta": 0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.86
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5110,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.008344653599844709,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.87
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5121,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.006209974771977489,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.88
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5128,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.004851542790607399,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.89
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5137,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0031049873859887445,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.9
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5141,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.002328740539491503,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.91
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5150,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.000582185134872848,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.92
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5150,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.000582185134872848,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.93
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5152,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.00019406171162428265,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.94
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5152,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.00019406171162428265,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.95
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.96
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.97
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.98
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.99
+      }
+    ]
+  },
+  "dedicated_validation": null,
+  "feature_schema_id": "lns2.realized_features.v2",
+  "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+  "folds": [
+    {
+      "balanced_by": [
+        "layout",
+        "map",
+        "state",
+        "candidate_family"
+      ],
+      "feature_count": 82,
+      "fold": 0,
+      "labeled_family_pair_count": 1593,
+      "layout_count": 3,
+      "map_count": 9,
+      "model_parameters": {
+        "early_stopping": false,
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "random_state": 20260714
+      },
+      "pair_diagnostics": {
+        "family_cardinality=1": 3,
+        "indistinguishable_or_non_dominating": 276,
+        "labeled": 1593
+      },
+      "pairwise_input_dimension": 105,
+      "prediction_count": 720,
+      "state_count": 208,
+      "train_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0002",
+        "policy_train_compartmentalized_double_horizontal_0000",
+        "policy_train_compartmentalized_double_horizontal_0003",
+        "policy_train_dead_end_aisles_0001",
+        "policy_train_dead_end_aisles_0002",
+        "policy_train_dead_end_aisles_0003",
+        "policy_train_regular_beltway_0001",
+        "policy_train_regular_beltway_0002",
+        "policy_train_regular_beltway_0003"
+      ],
+      "training_example_count": 3186,
+      "validation_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0001",
+        "policy_train_dead_end_aisles_0000",
+        "policy_train_regular_beltway_0000"
+      ]
+    },
+    {
+      "balanced_by": [
+        "layout",
+        "map",
+        "state",
+        "candidate_family"
+      ],
+      "feature_count": 82,
+      "fold": 1,
+      "labeled_family_pair_count": 1619,
+      "layout_count": 3,
+      "map_count": 9,
+      "model_parameters": {
+        "early_stopping": false,
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "random_state": 20260714
+      },
+      "pair_diagnostics": {
+        "family_cardinality=1": 3,
+        "indistinguishable_or_non_dominating": 349,
+        "labeled": 1619
+      },
+      "pairwise_input_dimension": 105,
+      "prediction_count": 621,
+      "state_count": 219,
+      "train_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0001",
+        "policy_train_compartmentalized_double_horizontal_0000",
+        "policy_train_compartmentalized_double_horizontal_0003",
+        "policy_train_dead_end_aisles_0000",
+        "policy_train_dead_end_aisles_0002",
+        "policy_train_dead_end_aisles_0003",
+        "policy_train_regular_beltway_0000",
+        "policy_train_regular_beltway_0002",
+        "policy_train_regular_beltway_0003"
+      ],
+      "training_example_count": 3238,
+      "validation_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0002",
+        "policy_train_dead_end_aisles_0001",
+        "policy_train_regular_beltway_0001"
+      ]
+    },
+    {
+      "balanced_by": [
+        "layout",
+        "map",
+        "state",
+        "candidate_family"
+      ],
+      "feature_count": 82,
+      "fold": 2,
+      "labeled_family_pair_count": 1556,
+      "layout_count": 3,
+      "map_count": 9,
+      "model_parameters": {
+        "early_stopping": false,
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "random_state": 20260714
+      },
+      "pair_diagnostics": {
+        "family_cardinality=1": 1,
+        "indistinguishable_or_non_dominating": 315,
+        "labeled": 1556
+      },
+      "pairwise_input_dimension": 105,
+      "prediction_count": 718,
+      "state_count": 208,
+      "train_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0001",
+        "policy_train_compartmentalized_cross_four_gate_0002",
+        "policy_train_compartmentalized_double_horizontal_0003",
+        "policy_train_dead_end_aisles_0000",
+        "policy_train_dead_end_aisles_0001",
+        "policy_train_dead_end_aisles_0003",
+        "policy_train_regular_beltway_0000",
+        "policy_train_regular_beltway_0001",
+        "policy_train_regular_beltway_0003"
+      ],
+      "training_example_count": 3112,
+      "validation_maps": [
+        "policy_train_compartmentalized_double_horizontal_0000",
+        "policy_train_dead_end_aisles_0002",
+        "policy_train_regular_beltway_0002"
+      ]
+    },
+    {
+      "balanced_by": [
+        "layout",
+        "map",
+        "state",
+        "candidate_family"
+      ],
+      "feature_count": 82,
+      "fold": 3,
+      "labeled_family_pair_count": 1724,
+      "layout_count": 3,
+      "map_count": 9,
+      "model_parameters": {
+        "early_stopping": false,
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "random_state": 20260714
+      },
+      "pair_diagnostics": {
+        "family_cardinality=1": 2,
+        "indistinguishable_or_non_dominating": 335,
+        "labeled": 1724
+      },
+      "pairwise_input_dimension": 105,
+      "prediction_count": 530,
+      "state_count": 229,
+      "train_maps": [
+        "policy_train_compartmentalized_cross_four_gate_0001",
+        "policy_train_compartmentalized_cross_four_gate_0002",
+        "policy_train_compartmentalized_double_horizontal_0000",
+        "policy_train_dead_end_aisles_0000",
+        "policy_train_dead_end_aisles_0001",
+        "policy_train_dead_end_aisles_0002",
+        "policy_train_regular_beltway_0000",
+        "policy_train_regular_beltway_0001",
+        "policy_train_regular_beltway_0002"
+      ],
+      "training_example_count": 3448,
+      "validation_maps": [
+        "policy_train_compartmentalized_double_horizontal_0003",
+        "policy_train_dead_end_aisles_0003",
+        "policy_train_regular_beltway_0003"
+      ]
+    }
+  ],
+  "full_training": {
+    "balanced_by": [
+      "layout",
+      "map",
+      "state",
+      "candidate_family"
+    ],
+    "feature_count": 82,
+    "labeled_family_pair_count": 2164,
+    "layout_count": 3,
+    "map_count": 12,
+    "model_parameters": {
+      "early_stopping": false,
+      "l2_regularization": 0.1,
+      "learning_rate": 0.05,
+      "max_iter": 100,
+      "max_leaf_nodes": 15,
+      "min_samples_leaf": 20,
+      "random_state": 20260714
+    },
+    "pair_diagnostics": {
+      "family_cardinality=1": 3,
+      "indistinguishable_or_non_dominating": 425,
+      "labeled": 2164
+    },
+    "pairwise_input_dimension": 105,
+    "state_count": 288,
+    "training_example_count": 4328
+  },
+  "inputs": {
+    "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
+    "source_bundle": "artifacts/initlns-closed-loop-policy-v1",
+    "training_index": "build/initlns-policy-visited-natural-v2-training/policy_visited_index.jsonl",
+    "training_index_sha256": "52f0349daa0b150b3e4dc8130ea790eb20b8e7472141481d8d42891b259cea4e",
+    "validation_index": "build/initlns-policy-visited-natural-v2-training/validation_index.jsonl",
+    "validation_index_sha256": "07f1cbffed1335d24c586320b9f50c316129f601975b28d1a514e7c1e623fffb"
+  },
+  "legacy_calibration": {
+    "passed": false,
+    "selected": null,
+    "threshold_grid": [
+      {
+        "auc_regret_mean": 0.030002675545318158,
+        "auc_regret_one_sided_95_upper": 0.046535615529020795,
+        "candidate_count_after": 2580,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.499320784009315,
+        "conflict_regret_mean": 0.08637184897501499,
+        "conflict_regret_one_sided_95_upper": 0.12106104264500916,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.6875,
+        "mean_solved_rate_delta": -0.041666666666666664,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.5
+      },
+      {
+        "auc_regret_mean": 0.023705240947750457,
+        "auc_regret_one_sided_95_upper": 0.03334729893370248,
+        "candidate_count_after": 3034,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.41121676693188436,
+        "conflict_regret_mean": 0.06570998473356976,
+        "conflict_regret_one_sided_95_upper": 0.08427963135205056,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.7430555555555556,
+        "mean_solved_rate_delta": -0.03732638888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.51
+      },
+      {
+        "auc_regret_mean": 0.019090740864303683,
+        "auc_regret_one_sided_95_upper": 0.02765318562174369,
+        "candidate_count_after": 3259,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.36755288181641765,
+        "conflict_regret_mean": 0.05040013533352287,
+        "conflict_regret_one_sided_95_upper": 0.07044497222518382,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8090277777777778,
+        "mean_solved_rate_delta": -0.030381944444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.52
+      },
+      {
+        "auc_regret_mean": 0.015888580370476524,
+        "auc_regret_one_sided_95_upper": 0.020452596297558426,
+        "candidate_count_after": 3390,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.34213079759363474,
+        "conflict_regret_mean": 0.043676149442870314,
+        "conflict_regret_one_sided_95_upper": 0.05456518255613225,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8263888888888888,
+        "mean_solved_rate_delta": -0.0234375,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.53
+      },
+      {
+        "auc_regret_mean": 0.014478312198235829,
+        "auc_regret_one_sided_95_upper": 0.0188014532853715,
+        "candidate_count_after": 3533,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.3143799728313603,
+        "conflict_regret_mean": 0.04069334521006608,
+        "conflict_regret_one_sided_95_upper": 0.05110616833395207,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8506944444444444,
+        "mean_solved_rate_delta": -0.019965277777777776,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.54
+      },
+      {
+        "auc_regret_mean": 0.010584898107453314,
+        "auc_regret_one_sided_95_upper": 0.013461347214405889,
+        "candidate_count_after": 3688,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2843004075295944,
+        "conflict_regret_mean": 0.034096122987843855,
+        "conflict_regret_one_sided_95_upper": 0.04362501602390304,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.875,
+        "mean_solved_rate_delta": -0.014756944444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.55
+      },
+      {
+        "auc_regret_mean": 0.01034766553326422,
+        "auc_regret_one_sided_95_upper": 0.013522883287147814,
+        "candidate_count_after": 3784,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.26567048321366193,
+        "conflict_regret_mean": 0.032896628038348905,
+        "conflict_regret_one_sided_95_upper": 0.04389234161264291,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8854166666666666,
+        "mean_solved_rate_delta": -0.014756944444444444,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.56
+      },
+      {
+        "auc_regret_mean": 0.007215627244975931,
+        "auc_regret_one_sided_95_upper": 0.01125296169039669,
+        "candidate_count_after": 3825,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2577139530370658,
+        "conflict_regret_mean": 0.026615990783446945,
+        "conflict_regret_one_sided_95_upper": 0.03923724698750131,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8888888888888888,
+        "mean_solved_rate_delta": -0.011284722222222222,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.57
+      },
+      {
+        "auc_regret_mean": 0.005640726451325137,
+        "auc_regret_one_sided_95_upper": 0.009763550719449982,
+        "candidate_count_after": 3893,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.24451775664661357,
+        "conflict_regret_mean": 0.023201638931595093,
+        "conflict_regret_one_sided_95_upper": 0.0357525332826834,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.8958333333333334,
+        "mean_solved_rate_delta": -0.0078125,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.58
+      },
+      {
+        "auc_regret_mean": 0.005823795587232151,
+        "auc_regret_one_sided_95_upper": 0.008835913651411611,
+        "candidate_count_after": 3962,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.23112749854453718,
+        "conflict_regret_mean": 0.02383015149699952,
+        "conflict_regret_one_sided_95_upper": 0.03408912519119766,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9027777777777778,
+        "mean_solved_rate_delta": -0.0078125,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.59
+      },
+      {
+        "auc_regret_mean": 0.0052810622308604995,
+        "auc_regret_one_sided_95_upper": 0.00793354989091011,
+        "candidate_count_after": 4038,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2163788084610906,
+        "conflict_regret_mean": 0.022748065565564364,
+        "conflict_regret_one_sided_95_upper": 0.03234104297645101,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9131944444444444,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.6
+      },
+      {
+        "auc_regret_mean": 0.0050350639720957956,
+        "auc_regret_one_sided_95_upper": 0.007560865524948775,
+        "candidate_count_after": 4113,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.2018241800892684,
+        "conflict_regret_mean": 0.02218491860056549,
+        "conflict_regret_one_sided_95_upper": 0.03146990176037901,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9166666666666666,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.61
+      },
+      {
+        "auc_regret_mean": 0.005460540980578869,
+        "auc_regret_one_sided_95_upper": 0.00795722471481182,
+        "candidate_count_after": 4174,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.18998641568018626,
+        "conflict_regret_mean": 0.023101548486151136,
+        "conflict_regret_one_sided_95_upper": 0.03234572746108839,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9270833333333334,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.62
+      },
+      {
+        "auc_regret_mean": 0.005101345578280018,
+        "auc_regret_one_sided_95_upper": 0.007615117908779689,
+        "candidate_count_after": 4245,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.1762080341548612,
+        "conflict_regret_mean": 0.021944141078743727,
+        "conflict_regret_one_sided_95_upper": 0.03137002707179562,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9270833333333334,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.63
+      },
+      {
+        "auc_regret_mean": 0.005818802801585195,
+        "auc_regret_one_sided_95_upper": 0.010231767901418828,
+        "candidate_count_after": 4338,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.15816029497380169,
+        "conflict_regret_mean": 0.02371970926056191,
+        "conflict_regret_one_sided_95_upper": 0.03824637818747164,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9340277777777778,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.64
+      },
+      {
+        "auc_regret_mean": 0.005818802801585195,
+        "auc_regret_one_sided_95_upper": 0.010231767901418828,
+        "candidate_count_after": 4396,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.14690471569959251,
+        "conflict_regret_mean": 0.02371970926056191,
+        "conflict_regret_one_sided_95_upper": 0.03824637818747164,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9340277777777778,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.65
+      },
+      {
+        "auc_regret_mean": 0.0059474036246304615,
+        "auc_regret_one_sided_95_upper": 0.010295544407863894,
+        "candidate_count_after": 4473,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.13196196390452164,
+        "conflict_regret_mean": 0.023986803277655927,
+        "conflict_regret_one_sided_95_upper": 0.03842444086553432,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9375,
+        "mean_solved_rate_delta": -0.006076388888888889,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.66
+      },
+      {
+        "auc_regret_mean": 0.005807455670140024,
+        "auc_regret_one_sided_95_upper": 0.010230399503599092,
+        "candidate_count_after": 4529,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.12109450805356103,
+        "conflict_regret_mean": 0.02341106728525327,
+        "conflict_regret_one_sided_95_upper": 0.038173956695749904,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9444444444444444,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.67
+      },
+      {
+        "auc_regret_mean": 0.003974305828224938,
+        "auc_regret_one_sided_95_upper": 0.00859238632048861,
+        "candidate_count_after": 4592,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.10886862022123034,
+        "conflict_regret_mean": 0.018359281132728573,
+        "conflict_regret_one_sided_95_upper": 0.032383340672248226,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9583333333333334,
+        "mean_solved_rate_delta": -0.003472222222222222,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.68
+      },
+      {
+        "auc_regret_mean": 0.005767523075250646,
+        "auc_regret_one_sided_95_upper": 0.013045556385860276,
+        "candidate_count_after": 4638,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.09994178148651267,
+        "conflict_regret_mean": 0.022493744482480045,
+        "conflict_regret_one_sided_95_upper": 0.04281480505795574,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.96875,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.69
+      },
+      {
+        "auc_regret_mean": 0.00588725487601693,
+        "auc_regret_one_sided_95_upper": 0.013168191180525146,
+        "candidate_count_after": 4690,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0898505724820493,
+        "conflict_regret_mean": 0.02287954695161585,
+        "conflict_regret_one_sided_95_upper": 0.04326474442698352,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9722222222222222,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.7
+      },
+      {
+        "auc_regret_mean": 0.00588725487601693,
+        "auc_regret_one_sided_95_upper": 0.013168191180525146,
+        "candidate_count_after": 4762,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.07587812924509996,
+        "conflict_regret_mean": 0.02287954695161585,
+        "conflict_regret_one_sided_95_upper": 0.04326474442698352,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9722222222222222,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.71
+      },
+      {
+        "auc_regret_mean": 0.00588725487601693,
+        "auc_regret_one_sided_95_upper": 0.013168191180525146,
+        "candidate_count_after": 4803,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.06792159906850381,
+        "conflict_regret_mean": 0.02287954695161585,
+        "conflict_regret_one_sided_95_upper": 0.04326474442698352,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9722222222222222,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.72
+      },
+      {
+        "auc_regret_mean": 0.00588725487601693,
+        "auc_regret_one_sided_95_upper": 0.013168191180525146,
+        "candidate_count_after": 4830,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.06268193285464774,
+        "conflict_regret_mean": 0.02287954695161585,
+        "conflict_regret_one_sided_95_upper": 0.04326474442698352,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9722222222222222,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.73
+      },
+      {
+        "auc_regret_mean": 0.00426688450564656,
+        "auc_regret_one_sided_95_upper": 0.012024400330851942,
+        "candidate_count_after": 4866,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.05569571123617312,
+        "conflict_regret_mean": 0.01680315806272696,
+        "conflict_regret_one_sided_95_upper": 0.03915566564997305,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9756944444444444,
+        "mean_solved_rate_delta": -0.004340277777777778,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.74
+      },
+      {
+        "auc_regret_mean": 0.0014312363574984109,
+        "auc_regret_one_sided_95_upper": 0.0033071784206214158,
+        "candidate_count_after": 4884,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.05220260042693581,
+        "conflict_regret_mean": 0.008296213618282514,
+        "conflict_regret_one_sided_95_upper": 0.014153892150467494,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9791666666666666,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.75
+      },
+      {
+        "auc_regret_mean": 0.0010436394582736047,
+        "auc_regret_one_sided_95_upper": 0.003093036978756885,
+        "candidate_count_after": 4896,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.049873859887444194,
+        "conflict_regret_mean": 0.00715466110686699,
+        "conflict_regret_one_sided_95_upper": 0.013392857142857144,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9826388888888888,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.76
+      },
+      {
+        "auc_regret_mean": 0.0010436394582736047,
+        "auc_regret_one_sided_95_upper": 0.003093036978756885,
+        "candidate_count_after": 4916,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.04599262565495832,
+        "conflict_regret_mean": 0.00715466110686699,
+        "conflict_regret_one_sided_95_upper": 0.013392857142857144,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9826388888888888,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.77
+      },
+      {
+        "auc_regret_mean": 0.0010436394582736047,
+        "auc_regret_one_sided_95_upper": 0.003093036978756885,
+        "candidate_count_after": 4931,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.04308169998059386,
+        "conflict_regret_mean": 0.00715466110686699,
+        "conflict_regret_one_sided_95_upper": 0.013392857142857144,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9826388888888888,
+        "mean_solved_rate_delta": -0.001736111111111111,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.78
+      },
+      {
+        "auc_regret_mean": 1.9727916069380515e-06,
+        "auc_regret_one_sided_95_upper": 0.0015243902439024393,
+        "candidate_count_after": 4935,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.042305453134096616,
+        "conflict_regret_mean": 0.004550494440200323,
+        "conflict_regret_one_sided_95_upper": 0.011731488783196563,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.79
+      },
+      {
+        "auc_regret_mean": 1.9727916069380515e-06,
+        "auc_regret_one_sided_95_upper": 0.0015243902439024393,
+        "candidate_count_after": 4963,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.03687172520861637,
+        "conflict_regret_mean": 0.004550494440200323,
+        "conflict_regret_one_sided_95_upper": 0.011731488783196563,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9861111111111112,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.8
+      },
+      {
+        "auc_regret_mean": -0.00029564625601210956,
+        "auc_regret_one_sided_95_upper": 0.0015243902439024393,
+        "candidate_count_after": 4992,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.031243935571511727,
+        "conflict_regret_mean": 0.003603524743230626,
+        "conflict_regret_one_sided_95_upper": 0.01099835095328454,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9895833333333334,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.81
+      },
+      {
+        "auc_regret_mean": -0.00029564625601210956,
+        "auc_regret_one_sided_95_upper": 0.0015243902439024393,
+        "candidate_count_after": 5014,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.026974577915777176,
+        "conflict_regret_mean": 0.003603524743230626,
+        "conflict_regret_one_sided_95_upper": 0.01099835095328454,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9895833333333334,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.82
+      },
+      {
+        "auc_regret_mean": 0.0008617611513952977,
+        "auc_regret_one_sided_95_upper": 0.0020686254704744087,
+        "candidate_count_after": 5030,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.02386959052978843,
+        "conflict_regret_mean": 0.006083683473389356,
+        "conflict_regret_one_sided_95_upper": 0.012918473841149363,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 0.9930555555555556,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.83
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5056,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.01882398602755675,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.84
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5065,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.017077430622938095,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.85
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5076,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.014942751795070874,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.86
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5100,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.010285270716087758,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.87
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5114,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0075684067533475785,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.88
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5130,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.004463419367358834,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.89
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5137,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0031049873859887445,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.9
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5142,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.00213467882786722,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.91
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5146,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0013584319813700896,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.92
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5147,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.001164370269745807,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.93
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5147,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.001164370269745807,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.94
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5150,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.000582185134872848,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.95
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.96
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.97
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.98
+      },
+      {
+        "auc_regret_mean": 0.0,
+        "auc_regret_one_sided_95_upper": 0.0,
+        "candidate_count_after": 5153,
+        "candidate_count_before": 5153,
+        "candidate_reduction_fraction": 0.0,
+        "conflict_regret_mean": 0.0,
+        "conflict_regret_one_sided_95_upper": 0.0,
+        "fallback_state_count": 0,
+        "full_ranker_winner_retention": 1.0,
+        "mean_solved_rate_delta": 0.0,
+        "passed": false,
+        "state_count": 288,
+        "threshold": 0.99
+      }
+    ]
+  },
+  "legacy_validation": null,
+  "main_ranker_equivalence": {
+    "passed": true,
+    "profiles": {
+      "proposal_dynamic": {
+        "maximum_score_delta": 0.0,
+        "pairwise_input_dimension": 55,
+        "passed": true,
+        "selection_mismatch_count": 0,
+        "state_count": 23,
+        "used_feature_count": 55
+      },
+      "realized_dynamic": {
+        "maximum_score_delta": 0.0,
+        "pairwise_input_dimension": 86,
+        "passed": true,
+        "selection_mismatch_count": 0,
+        "state_count": 23,
+        "used_feature_count": 86
+      }
+    }
+  },
+  "offline_pruner_passed": false,
+  "redundancy_audit": {
+    "feature_schema_id": "lns2.realized_features.v2",
+    "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+    "passed": true,
+    "removed_feature_count": 15,
+    "row_count": 8326,
+    "schema": "lns2.feature_redundancy_audit.v2",
+    "violation_count": 0,
+    "violations": [],
+    "violations_truncated": false
+  },
+  "schema": "lns2.proposal_pruner_training.v2",
+  "schema_version": 2,
+  "selected_pruner_source": null,
+  "selected_threshold": null,
+  "training_candidate_count": 5153,
+  "training_map_count": 12,
+  "training_state_count": 288,
+  "validation_candidate_count": 2761,
+  "validation_map_count": 6,
+  "validation_state_count": 154
+}

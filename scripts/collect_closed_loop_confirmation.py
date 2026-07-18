@@ -9,9 +9,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from experiments.closed_loop_confirmation import (  # noqa: E402
+    CONTROLLER_MODES,
     CollectionLockError,
     run_closed_loop_collection,
 )
+from experiments.closed_loop_trace_storage import (  # noqa: E402
+    TRACE_FORMAT_DELTA_GZIP_V2,
+    TRACE_FORMATS,
+)
+from experiments.online_feature_engine import FEATURE_BACKENDS  # noqa: E402
 
 
 def main() -> int:
@@ -41,6 +47,22 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--task-id", action="append", dest="task_ids")
+    parser.add_argument(
+        "--trace-format",
+        choices=TRACE_FORMATS,
+        default=TRACE_FORMAT_DELTA_GZIP_V2,
+    )
+    parser.add_argument("--controller", choices=CONTROLLER_MODES)
+    parser.add_argument(
+        "--feature-backend",
+        choices=tuple(value for value in FEATURE_BACKENDS if value != "reference"),
+        default="auto",
+    )
+    parser.add_argument(
+        "--controller-bundle",
+        default="artifacts/initlns-closed-loop-controller-v2",
+    )
+    parser.add_argument("--balanced-config")
     arguments = parser.parse_args()
     try:
         report = run_closed_loop_collection(
@@ -52,6 +74,11 @@ def main() -> int:
             resume=arguments.resume,
             dry_run=arguments.dry_run,
             task_ids=arguments.task_ids,
+            trace_format=arguments.trace_format,
+            controller=arguments.controller,
+            feature_backend=arguments.feature_backend,
+            controller_bundle=arguments.controller_bundle,
+            balanced_config=arguments.balanced_config,
         )
     except CollectionLockError as error:
         print(json.dumps({"status": "locked", "error": str(error)}), file=sys.stderr)

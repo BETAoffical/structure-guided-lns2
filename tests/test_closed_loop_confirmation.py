@@ -35,6 +35,7 @@ from experiments.closed_loop_confirmation_analysis import (
     compare_solver_seeds,
     summarize_policy,
 )
+from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
 from experiments.realized_neighborhood_ranking_audit import _feature_profiles
 from experiments.local_representation_audit import analyze_state
 from experiments.repair_collection import state_fingerprint
@@ -551,6 +552,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["summary"]["success"])
         self.assertEqual(result["summary"]["repair_iterations"], 0)
+        self.assertEqual(result["trace_format"], "delta-gzip-v2")
+        self.assertTrue(str(result["trace_file"]).endswith(".jsonl.gz"))
 
     def test_trace_validation_rejects_wrong_episode_and_resume_reruns_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -574,6 +577,7 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 "metric_iteration_budget": 100,
                 "wall_time_budget_seconds": 300.0,
                 "proposal": {},
+                "trace_format": TRACE_FORMAT_FULL_V1,
             }
             with patch(
                 "experiments.closed_loop_confirmation._make_environment",

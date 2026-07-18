@@ -15,7 +15,14 @@ from experiments.closed_loop_confirmation import (
     POLICIES,
     validate_closed_loop_trace,
 )
-from experiments.repair_collection import SCHEMA_VERSION, _read_json, _read_jsonl, _write_json
+from experiments.closed_loop_trace_storage import trace_file_metadata
+from experiments.repair_collection import (
+    SCHEMA_VERSION,
+    _read_json,
+    _read_jsonl,
+    _utc_now,
+    _write_json,
+)
 
 
 def summarize_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -443,6 +450,23 @@ def run_closed_loop_analysis(
     manifests = {
         policy: _read_jsonl(root / f"{policy}_manifest.jsonl") for policy in policies
     }
+    progress_path = Path(output).resolve() / "analysis_progress.json"
+    expected_valid_traces = sum(
+        str(row.get("status")) in {"ok", "resumed"}
+        for rows in manifests.values()
+        for row in rows
+    )
+    validated_trace_count = 0
+    _write_json(
+        progress_path,
+        {
+            "schema": "lns2.closed_loop_analysis_progress.v1",
+            "status": "running",
+            "total_traces": expected_valid_traces,
+            "validated_traces": 0,
+            "updated_at": _utc_now(),
+        },
+    )
     for rows in manifests.values():
         for row in rows:
             if str(row.get("status")) not in {"ok", "resumed"}:
@@ -457,6 +481,22 @@ def run_closed_loop_analysis(
             )
             if row.get("summary") != validated["summary"]:
                 raise ValueError(f"manifest summary mismatch: {row['episode_id']}")
+            trace_path = root / str(row["trace_file"])
+            metadata = trace_file_metadata(trace_path)
+            if row.get("trace_sha256") is not None and str(
+                row["trace_sha256"]
+            ) != str(metadata["trace_sha256"]):
+                raise ValueError(f"manifest trace SHA256 mismatch: {row['episode_id']}")
+            if row.get("trace_bytes") is not None and int(row["trace_bytes"]) != int(
+                metadata["trace_bytes"]
+            ):
+                raise ValueError(f"manifest trace size mismatch: {row['episode_id']}")
+            if row.get("trace_event_count") is not None and int(
+                row["trace_event_count"]
+            ) != int(validated["event_count"]):
+                raise ValueError(f"manifest event count mismatch: {row['episode_id']}")
+            if row.get("initial_state_ref") != validated.get("initial_state_ref"):
+                raise ValueError(f"manifest state blob mismatch: {row['episode_id']}")
             events = validated["events"]
             transitions = [event for event in events if event.get("event") == "transition"]
             row["trace_timing"] = {
@@ -472,6 +512,19 @@ def run_closed_loop_analysis(
                     for event in transitions
                 ),
             }
+            validated_trace_count += 1
+            _write_json(
+                progress_path,
+                {
+                    "schema": "lns2.closed_loop_analysis_progress.v1",
+                    "status": "running",
+                    "total_traces": expected_valid_traces,
+                    "validated_traces": validated_trace_count,
+                    "current_policy": row.get("policy"),
+                    "current_episode_id": row.get("episode_id"),
+                    "updated_at": _utc_now(),
+                },
+            )
     summaries = {policy: summarize_policy(rows) for policy, rows in manifests.items()}
     expected_episodes = int(config["expected_policy_episodes"])
     for policy, summary in summaries.items():
@@ -544,6 +597,16 @@ def run_closed_loop_analysis(
     markdown_path = output_root / "closed_loop_confirmation.md"
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.write_text(render_markdown(report), encoding="utf-8")
+    _write_json(
+        progress_path,
+        {
+            "schema": "lns2.closed_loop_analysis_progress.v1",
+            "status": "complete",
+            "total_traces": expected_valid_traces,
+            "validated_traces": validated_trace_count,
+            "updated_at": _utc_now(),
+        },
+    )
     return report
 
 
