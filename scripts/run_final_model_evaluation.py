@@ -22,6 +22,7 @@ from experiments.closed_loop_confirmation import (  # noqa: E402
     resolve_controller_mode,
     run_closed_loop_collection,
 )
+from experiments._common import sha256_file  # noqa: E402
 from experiments.closed_loop_trace_storage import (  # noqa: E402
     TRACE_FORMAT_DELTA_GZIP_V2,
     storage_fingerprint,
@@ -37,6 +38,7 @@ from experiments.repair_collection import (  # noqa: E402
     _utc_now,
     _write_json,
 )
+from experiments.run_output_guard import prepare_run_output  # noqa: E402
 from scripts.verify_closed_loop_equivalence import (  # noqa: E402
     equivalence_comparison_fingerprint,
 )
@@ -51,6 +53,10 @@ QUICK_TASKS = (
 )
 REGISTERED_SOLVER_SEEDS = (1, 2, 3)
 FORMAL_TASK_COUNT = 48
+DEFAULT_OUTPUTS = {
+    "quick": "build/initlns-final-model-quick-native-v2",
+    "formal": "build/initlns-final-model-formal-native-v2",
+}
 
 
 def _status(path: Path, started_at: str, **values: Any) -> None:
@@ -361,26 +367,14 @@ def main() -> int:
     )
     parser.add_argument(
         "--quick-audit",
-        default="build/initlns-final-model-quick-v2/status.json",
+        default="build/initlns-final-model-quick-native-v2/status.json",
     )
     arguments = parser.parse_args()
 
-    output = Path(
-        arguments.output
-        or f"build/initlns-final-model-{arguments.mode}-v2"
-    )
+    output = Path(arguments.output or DEFAULT_OUTPUTS[arguments.mode])
     if not output.is_absolute():
         output = PROJECT_ROOT / output
-    output.mkdir(parents=True, exist_ok=True)
-    logger = _logger(output / "run.log")
-    status_path = output / "status.json"
-    started_at = _utc_now()
     task_ids = list(QUICK_TASKS) if arguments.mode == "quick" else None
-    analysis_progress_path = (
-        output / "report" / "registered" / "base" / "analysis_progress.json"
-        if arguments.mode == "formal"
-        else output / "report" / "analysis_progress.json"
-    )
     dataset = (PROJECT_ROOT / arguments.dataset).resolve()
     collection_config = (PROJECT_ROOT / arguments.collection_config).resolve()
     analysis_config = (PROJECT_ROOT / arguments.analysis_config).resolve()
@@ -395,6 +389,77 @@ def main() -> int:
         feature_shadow_validation = (
             arguments.mode == "quick" and controller != "v1-full"
         )
+        controller_audit = _require_controller_audit(controller_bundle, controller)
+        storage_audit = None
+        quick_audit = None
+        if arguments.mode == "formal":
+            storage_audit = _require_storage_audit(
+                (PROJECT_ROOT / arguments.storage_audit).resolve()
+            )
+            quick_audit = _require_quick_audit(
+                (PROJECT_ROOT / arguments.quick_audit).resolve(),
+                controller,
+                arguments.feature_backend,
+            )
+        identity_dry_run = run_closed_loop_collection(
+            dataset,
+            collection_config,
+            PROJECT_ROOT / "build" / ".final-model-identity-unused",
+            workers=arguments.workers,
+            dry_run=True,
+            task_ids=task_ids,
+            trace_format=TRACE_FORMAT_DELTA_GZIP_V2,
+            controller=controller,
+            feature_backend=arguments.feature_backend,
+            controller_bundle=controller_bundle,
+            balanced_config=(
+                balanced_config if controller == "v2-balanced" else None
+            ),
+            feature_shadow_validation=feature_shadow_validation,
+        )
+        prepare_run_output(
+            output,
+            resume=arguments.resume,
+            identity={
+                "runner": "run_final_model_evaluation",
+                "schema_version": 2,
+                "mode": arguments.mode,
+                "dataset": str(dataset),
+                "collection_config": str(collection_config),
+                "analysis_config": str(analysis_config),
+                "analysis_config_sha256": sha256_file(analysis_config),
+                "controller": controller,
+                "controller_bundle": str(controller_bundle),
+                "balanced_config": (
+                    str(balanced_config) if controller == "v2-balanced" else None
+                ),
+                "feature_backend": arguments.feature_backend,
+                "feature_shadow_validation": feature_shadow_validation,
+                "workers": arguments.workers,
+                "task_ids": task_ids,
+                "collection_run_fingerprint": identity_dry_run["run_fingerprint"],
+                "runner_implementation_sha256": {
+                    "runner": sha256_file(Path(__file__).resolve()),
+                    "report": sha256_file(
+                        PROJECT_ROOT / "experiments" / "final_model_evaluation.py"
+                    ),
+                    "output_guard": sha256_file(
+                        PROJECT_ROOT / "experiments" / "run_output_guard.py"
+                    ),
+                },
+            },
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
+        parser.error(str(error))
+    logger = _logger(output / "run.log")
+    status_path = output / "status.json"
+    started_at = _utc_now()
+    analysis_progress_path = (
+        output / "report" / "registered" / "base" / "analysis_progress.json"
+        if arguments.mode == "formal"
+        else output / "report" / "analysis_progress.json"
+    )
+    try:
         _status(
             status_path,
             started_at,
@@ -409,18 +474,13 @@ def main() -> int:
             analysis_progress_file=str(analysis_progress_path),
         )
         if arguments.mode == "formal":
-            audit_path = (PROJECT_ROOT / arguments.storage_audit).resolve()
-            storage_audit = _require_storage_audit(audit_path)
+            assert storage_audit is not None
             logger.info(
                 "Storage audit passed: reduction %.2f%%",
                 100.0 * float(storage_audit["storage"]["reduction_fraction"]),
             )
             quick_audit_path = (PROJECT_ROOT / arguments.quick_audit).resolve()
-            _require_quick_audit(
-                quick_audit_path, controller, arguments.feature_backend
-            )
             logger.info("Quick controller audit passed: %s", quick_audit_path.parent)
-        controller_audit = _require_controller_audit(controller_bundle, controller)
         if controller_audit is not None:
             logger.info("Controller exact-equivalence audit passed: %s", controller)
         if not arguments.skip_preflight:
@@ -454,7 +514,7 @@ def main() -> int:
             progress_file=str(output / "collection_progress.json"),
             analysis_progress_file=str(analysis_progress_path),
         )
-        resume = arguments.resume or (output / "run_config.json").is_file()
+        resume = arguments.resume
         collection_monitor = _start_progress_monitor(
             output / "collection_progress.json", logger, "collection"
         )

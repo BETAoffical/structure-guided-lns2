@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -147,6 +148,39 @@ def _write_v1_trace(path: Path, run_fingerprint: str = "run") -> None:
 
 
 class ClosedLoopTraceStorageTests(unittest.TestCase):
+    def test_tracked_compact_migration_evidence_matches_preserved_reports(self) -> None:
+        project = Path(__file__).resolve().parents[1]
+        artifact = (
+            project
+            / "artifacts"
+            / "initlns-movingai-ood-compact-migration-v2"
+        )
+        evidence = json.loads(
+            (artifact / "migration_evidence.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(evidence["equivalence_passed"])
+        self.assertEqual(evidence["matching_episode_count"], 720)
+        self.assertEqual(evidence["mismatch_count"], 0)
+        self.assertGreater(evidence["storage_reduction_fraction"], 0.99)
+        source = project / "build" / "initlns-movingai-ood-collection-v1"
+        compact = project / "build" / "initlns-movingai-ood-collection-v2-compact"
+        for name, expected in evidence["source_files"].items():
+            path = source / name
+            self.assertEqual(path.stat().st_size, expected["bytes"])
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected["sha256"])
+        for name, expected in evidence["compact_files"].items():
+            path = compact / name
+            self.assertEqual(path.stat().st_size, expected["bytes"])
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected["sha256"])
+        cleanup = json.loads(
+            (artifact / "cleanup_manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertFalse(cleanup["deletion_authorized"])
+        self.assertEqual(
+            cleanup["target"],
+            "build/initlns-movingai-ood-collection-v1/episodes",
+        )
+
     def test_delta_round_trip_preserves_fingerprint_state(self) -> None:
         before = _state(1)
         after = _state(0)

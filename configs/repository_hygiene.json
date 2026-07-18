@@ -15,6 +15,7 @@
     "experiments": "official-kernel experiment implementations",
     "generators": "map and static OD generation",
     "include": "C++ public interfaces",
+    "native_features": "standalone native feature build harness",
     "requirements": "environment specifications",
     "scripts": "stable command-line entry points",
     "src": "C++ implementation and bindings",
@@ -25,6 +26,7 @@
     ".gitattributes",
     ".gitignore",
     "CMakeLists.txt",
+    "pytest.ini",
     "README.md"
   ],
   "forbidden_tracked_parts": [
@@ -53,9 +55,16 @@
       "movingai-ood-dev",
       "gpbs-upstream",
       "initlns-movingai-ood-dataset-v1",
-      "initlns-movingai-ood-collection-v1",
+      "initlns-movingai-ood-collection-v2-compact",
       "initlns-sequential-credit-audit-v1",
       "initlns-policy-visited-natural-v2-collection",
+      "initlns-lns2-speed-quality-calibration",
+      "initlns-lns2-tradeoff-quick",
+      "initlns-lns2-tradeoff-quick-native-v2",
+      "initlns-lns2-tradeoff-formal",
+      "initlns-lns2-tradeoff-formal-native-v2",
+      "initlns-final-model-quick-native-v2",
+      "initlns-final-model-formal-native-v2",
       "repair-experience-calibration-v2"
     ],
     "temporary_name_patterns": [

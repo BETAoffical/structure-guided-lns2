@@ -13,6 +13,7 @@ import numpy as np
 
 from experiments.closed_loop_confirmation import (
     _closed_loop_episode_worker,
+    _with_time_budget_overrides,
     ClosedLoopTraceError,
     closed_loop_dataset_design,
     closed_loop_qualification_report,
@@ -174,6 +175,66 @@ class ZeroConflictEnvironment:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_qualification_accepts_an_explicit_partial_task_seed_cohort(self) -> None:
+        rows = [
+            {
+                "task_id": "task-a",
+                "map_id": "map-a",
+                "agent_count": 100,
+                "layout_mode": "maze",
+                "task_variant": "random_4_agents_100",
+            }
+        ]
+        qualification = [
+            {
+                "task_id": "task-a",
+                "solver_seed": 2,
+                "status": "ok",
+                "initial_conflicts": 4,
+                "state_fingerprint": "state-a-2",
+            }
+        ]
+        config = {
+            "solver_seeds": [1, 2, 3],
+            "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            "qualification": {"minimum_nonzero_states": 1},
+        }
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            config,
+            {"passed": True},
+            {"passed": True},
+            formal=False,
+            expected_job_keys={("task-a", 2)},
+        )
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["expected_reset_count"], 1)
+        self.assertEqual(report["solver_seeds"], [2])
+        self.assertEqual(report["registered_solver_seeds"], [1, 2, 3])
+
+    def test_time_budget_override_updates_all_three_limits_without_changing_source(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "wall_time_budget_seconds": 300.0,
+            "episode_process_timeout_seconds": 360.0,
+        }
+        updated = _with_time_budget_overrides(source, 600.0, 660.0)
+        self.assertEqual(updated["environment"]["time_limit"], 600.0)
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 100)
+        self.assertEqual(updated["wall_time_budget_seconds"], 600.0)
+        self.assertEqual(updated["episode_process_timeout_seconds"], 660.0)
+        self.assertEqual(source["environment"]["time_limit"], 300.0)
+
+    def test_time_budget_override_rejects_an_unsafe_process_timeout(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0},
+            "wall_time_budget_seconds": 300.0,
+            "episode_process_timeout_seconds": 360.0,
+        }
+        with self.assertRaisesRegex(ValueError, "greater than"):
+            _with_time_budget_overrides(source, 600.0, 600.0)
+
     def test_registered_dataset_design_and_qualification_keep_zero_conflicts(self) -> None:
         rows = make_dataset_rows()
         design = closed_loop_dataset_design(rows, "closed_loop")

@@ -212,6 +212,7 @@ class Lns2TradeoffTests(unittest.TestCase):
                     "status": "ok",
                     "trace_file": trace.name,
                     "external_timeout": external_timeout,
+                    "truncated": external_timeout,
                 }
             )
         return _semantic_equivalence_report(
@@ -254,6 +255,93 @@ class Lns2TradeoffTests(unittest.TestCase):
         self.assertEqual(report["unexplained_length_difference_count"], 0)
         self.assertEqual(mismatches, [])
         self.assertEqual(len(boundaries), 1)
+
+    def test_completed_repair_at_loop_budget_boundary_allows_length_difference(
+        self,
+    ) -> None:
+        left = [
+            self._semantic_transition(
+                0,
+                before="initial",
+                after="shared-after",
+                elapsed=299.996,
+            )
+        ]
+        right = [
+            self._semantic_transition(
+                0,
+                before="initial",
+                after="shared-after",
+                elapsed=200.0,
+            ),
+            self._semantic_transition(
+                1,
+                before="shared-after",
+                after="right-after",
+                elapsed=300.2,
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            report, mismatches, boundaries = self._run_semantic_fixture(
+                Path(directory),
+                left,
+                right,
+                left_timeout=True,
+                right_timeout=True,
+            )
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["common_decision_count"], 1)
+        self.assertEqual(report["post_repair_comparison_count"], 1)
+        self.assertEqual(report["budget_boundary_exclusion_count"], 0)
+        self.assertEqual(report["allowed_budget_length_difference_count"], 1)
+        self.assertEqual(
+            report["completed_repair_budget_length_difference_count"], 1
+        )
+        self.assertEqual(
+            report["truncated_repair_budget_length_difference_count"], 0
+        )
+        self.assertEqual(report["unexplained_length_difference_count"], 0)
+        self.assertEqual(mismatches, [])
+        self.assertEqual(boundaries, [])
+
+    def test_completed_repair_well_before_budget_does_not_hide_length_difference(
+        self,
+    ) -> None:
+        left = [
+            self._semantic_transition(
+                0,
+                before="initial",
+                after="shared-after",
+                elapsed=298.0,
+            )
+        ]
+        right = [
+            self._semantic_transition(
+                0,
+                before="initial",
+                after="shared-after",
+                elapsed=200.0,
+            ),
+            self._semantic_transition(
+                1,
+                before="shared-after",
+                after="right-after",
+                elapsed=300.2,
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            report, mismatches, _ = self._run_semantic_fixture(
+                Path(directory),
+                left,
+                right,
+                left_timeout=True,
+                right_timeout=True,
+            )
+        self.assertFalse(report["passed"])
+        self.assertIn(
+            "unexplained_length_difference",
+            {row["mismatch_kind"] for row in mismatches},
+        )
 
     def test_budget_boundary_still_compares_scores_ranking_and_action(self) -> None:
         def fixture() -> tuple[list[dict], list[dict]]:

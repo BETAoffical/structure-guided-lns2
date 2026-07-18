@@ -1,0 +1,24 @@
+{
+  "schema": "lns2.v1_trace_cleanup_manifest.v1",
+  "schema_version": 1,
+  "target": "build/initlns-movingai-ood-collection-v1/episodes",
+  "expected_bytes": 16242547808,
+  "operation": "delete_directory_after_final_approval",
+  "deletion_authorized": false,
+  "requires_explicit_user_approval": true,
+  "must_preserve": [
+    "build/initlns-movingai-ood-collection-v2-compact",
+    "artifacts/initlns-closed-loop-policy-v1",
+    "artifacts/initlns-closed-loop-controller-v2",
+    "build/initlns-movingai-ood-collection-v1/run_config.json",
+    "build/initlns-movingai-ood-collection-v1/*_manifest.jsonl",
+    "archive"
+  ],
+  "preconditions": [
+    "migration_evidence equivalence_passed is true",
+    "all 720 compact episodes remain present and valid",
+    "the fresh 96-episode quick run and timeout sensitivity report pass",
+    "the exact resolved target remains inside the project build directory",
+    "the user explicitly approves the destructive operation"
+  ]
+}

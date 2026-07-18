@@ -42,7 +42,19 @@ LNS2 destroy heuristic. See [`third_party/gpbs/UPSTREAM.md`](third_party/gpbs/UP
 
 Required packages are CMake, a C++14 compiler, Boost program-options/system/filesystem, Eigen3,
 Python development headers, and pybind11 development headers. Inspect installed packages before adding
-anything; the current Ubuntu 22.04 environment already contains every required dependency.
+anything. These are native build/runtime dependencies; optional scikit-learn training packages are
+separate and are not required for frozen-controller inference. Check the two isolated environments with:
+
+```bash
+python3 scripts/check_environment.py --profile runtime-wsl
+```
+
+```powershell
+python scripts/check_environment.py --profile training-windows
+```
+
+The checker is read-only and never installs packages. The registered WSL runtime and Windows training
+environment already contain their required dependencies.
 
 From an Ubuntu shell in this repository:
 

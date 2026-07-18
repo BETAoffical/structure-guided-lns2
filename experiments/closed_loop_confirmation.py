@@ -353,8 +353,20 @@ def closed_loop_qualification_report(
     isolation: dict[str, Any],
     *,
     formal: bool,
+    expected_job_keys: set[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     solver_seeds = configured_solver_seeds(config)
+    available_job_keys = {
+        (str(row["task_id"]), int(seed)) for row in rows for seed in solver_seeds
+    }
+    expected_keys = (
+        {(str(task_id), int(seed)) for task_id, seed in expected_job_keys}
+        if expected_job_keys is not None
+        else available_job_keys
+    )
+    if not expected_keys or not expected_keys <= available_job_keys:
+        raise ValueError("qualification expected-job cohort is empty or invalid")
+    expected_solver_seeds = sorted({seed for _task_id, seed in expected_keys})
     indexed = {
         (str(row["task_id"]), int(row.get("solver_seed", solver_seeds[0]))): row
         for row in qualification
@@ -368,6 +380,8 @@ def closed_loop_qualification_report(
     thresholds = dict(config["severity_thresholds"])
     for source in rows:
         for solver_seed in solver_seeds:
+            if (str(source["task_id"]), solver_seed) not in expected_keys:
+                continue
             result = indexed.get((str(source["task_id"]), solver_seed))
             if result is None or str(result.get("status")) != "ok":
                 continue
@@ -401,11 +415,11 @@ def closed_loop_qualification_report(
                 key=lambda item: str(item["task_id"]),
             )
         )
-        for seed in solver_seeds
+        for seed in expected_solver_seeds
     }
     duplicate_seed_streams = [
         [left, right]
-        for left, right in itertools.combinations(solver_seeds, 2)
+        for left, right in itertools.combinations(expected_solver_seeds, 2)
         if fingerprints_by_seed[left] == fingerprints_by_seed[right]
     ]
     settings = dict(config["qualification"])
@@ -448,7 +462,7 @@ def closed_loop_qualification_report(
     gates = {
         "dataset_design": bool(design["passed"]) if formal else True,
         "seed_isolation": bool(isolation["passed"]),
-        "all_resets_valid": len(cohort) == len(rows) * len(solver_seeds) and not errors,
+        "all_resets_valid": len(cohort) == len(expected_keys) and not errors,
         "distinct_solver_seed_trajectories": not duplicate_seed_streams,
         **sample_gates,
     }
@@ -481,8 +495,9 @@ def closed_loop_qualification_report(
         "decision": "eligible_for_closed_loop" if passed else "inconclusive_do_not_resample",
         "gates": gates,
         "valid_count": len(cohort),
-        "expected_reset_count": len(rows) * len(solver_seeds),
-        "solver_seeds": list(solver_seeds),
+        "expected_reset_count": len(expected_keys),
+        "solver_seeds": expected_solver_seeds,
+        "registered_solver_seeds": list(solver_seeds),
         "initial_feasible_count": len(cohort) - len(nonzero),
         "nonzero_state_count": len(nonzero),
         "nonzero_by_layout": dict(sorted(by_layout.items())),
@@ -2226,6 +2241,36 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _with_time_budget_overrides(
+    config: dict[str, Any],
+    wall_time_budget_seconds: float | None,
+    episode_process_timeout_seconds: float | None,
+) -> dict[str, Any]:
+    result = {**config, "environment": dict(config["environment"])}
+    if wall_time_budget_seconds is None:
+        if episode_process_timeout_seconds is not None:
+            raise ValueError(
+                "episode process timeout override requires a wall-time budget override"
+            )
+        return result
+    wall_budget = float(wall_time_budget_seconds)
+    if not math.isfinite(wall_budget) or wall_budget <= 0.0:
+        raise ValueError("wall-time budget override must be finite and positive")
+    process_timeout = float(
+        episode_process_timeout_seconds
+        if episode_process_timeout_seconds is not None
+        else wall_budget + 60.0
+    )
+    if not math.isfinite(process_timeout) or process_timeout <= wall_budget:
+        raise ValueError(
+            "episode process timeout must be finite and greater than the wall-time budget"
+        )
+    result["wall_time_budget_seconds"] = wall_budget
+    result["episode_process_timeout_seconds"] = process_timeout
+    result["environment"]["time_limit"] = wall_budget
+    return result
+
+
 def run_closed_loop_collection(
     dataset: str | Path,
     config_path: str | Path,
@@ -2243,6 +2288,9 @@ def run_closed_loop_collection(
     feature_shadow_validation: bool = False,
     balanced_config: str | Path | dict[str, Any] | None = None,
     job_keys: set[tuple[str, int]] | None = None,
+    cohort_job_keys: set[tuple[str, int]] | None = None,
+    wall_time_budget_seconds: float | None = None,
+    episode_process_timeout_seconds: float | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -2250,6 +2298,9 @@ def run_closed_loop_collection(
     config = _read_json(Path(config_path).resolve())
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError("unsupported closed-loop config")
+    config = _with_time_budget_overrides(
+        config, wall_time_budget_seconds, episode_process_timeout_seconds
+    )
     if trace_format not in TRACE_FORMATS:
         raise ValueError(f"unsupported trace format: {trace_format}")
     if feature_backend not in FEATURE_BACKENDS:
@@ -2283,9 +2334,26 @@ def run_closed_loop_collection(
         if job_keys is not None
         else None
     )
+    normalized_cohort_job_keys = (
+        {(str(task_id), int(seed)) for task_id, seed in cohort_job_keys}
+        if cohort_job_keys is not None
+        else None
+    )
+    if (
+        normalized_cohort_job_keys is not None
+        and not normalized_cohort_job_keys <= available_job_keys
+    ):
+        unknown = sorted(normalized_cohort_job_keys - available_job_keys)
+        raise ValueError(f"closed-loop cohort contains unknown task/seed pairs: {unknown}")
     if normalized_job_keys is not None and not normalized_job_keys <= available_job_keys:
         unknown = sorted(normalized_job_keys - available_job_keys)
         raise ValueError(f"closed-loop job filter contains unknown task/seed pairs: {unknown}")
+    if (
+        normalized_job_keys is not None
+        and normalized_cohort_job_keys is not None
+        and not normalized_job_keys <= normalized_cohort_job_keys
+    ):
+        raise ValueError("closed-loop execution slice is outside the registered cohort")
     formal = task_ids is None and bool(config.get("formal", True))
     design = closed_loop_dataset_design(
         all_rows, split, dict(config.get("dataset_design", {}))
@@ -2323,6 +2391,11 @@ def run_closed_loop_collection(
     effective = {
         **config,
         "task_ids_override": task_ids,
+        "cohort_job_keys_override": (
+            [list(value) for value in sorted(normalized_cohort_job_keys)]
+            if normalized_cohort_job_keys is not None
+            else None
+        ),
         "controller": controller_mode,
         "feature_backend": feature_backend,
         "controller_bundle": str(controller_root),
@@ -2339,12 +2412,13 @@ def run_closed_loop_collection(
             "controller_implementation": implementation,
         }
     )
+    registered_job_keys = normalized_cohort_job_keys or available_job_keys
     estimate = {
         "task_count": len(rows),
-        "reset_count": len(rows) * len(solver_seeds),
+        "reset_count": len(registered_job_keys),
         "solver_seeds": list(solver_seeds),
         "policies": list(policies),
-        "policy_episode_count": len(rows) * len(solver_seeds) * len(policies),
+        "policy_episode_count": len(registered_job_keys) * len(policies),
         "maximum_decisions_per_episode": int(config["max_decisions"]),
         "maximum_proposals_per_decision": int(config["proposal"]["max_seed_agents"])
         * len(config["proposal"]["heuristics"])
@@ -2356,6 +2430,11 @@ def run_closed_loop_collection(
         "workers": effective_workers,
         "controller": controller_mode,
         "feature_backend": feature_backend,
+        "wall_time_budget_seconds": float(config["wall_time_budget_seconds"]),
+        "episode_process_timeout_seconds": float(
+            config["episode_process_timeout_seconds"]
+        ),
+        "environment_time_limit_seconds": float(config["environment"]["time_limit"]),
     }
     if dry_run:
         return {
@@ -2480,7 +2559,13 @@ def run_closed_loop_collection(
             results = [merged[key] for key in sorted(merged)]
             _write_jsonl(qualification_manifest, results)
             report = closed_loop_qualification_report(
-                rows, results, config, design, isolation, formal=formal
+                rows,
+                results,
+                config,
+                design,
+                isolation,
+                formal=formal,
+                expected_job_keys=normalized_cohort_job_keys,
             )
             _write_json(output_root / "qualification_report.json", report)
             summary["qualification"] = report
@@ -2494,6 +2579,7 @@ def run_closed_loop_collection(
             design,
             isolation,
             formal=formal,
+            expected_job_keys=normalized_cohort_job_keys,
         )
         if not qualification["passed"]:
             raise ValueError("closed-loop qualification failed; policy execution is forbidden")

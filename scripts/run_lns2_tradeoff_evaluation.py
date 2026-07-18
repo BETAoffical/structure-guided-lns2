@@ -18,10 +18,15 @@ if NATIVE_BUILD.is_dir():
     sys.path.insert(0, str(NATIVE_BUILD))
 
 from experiments.balanced_controller import load_balanced_controller  # noqa: E402
+from experiments._common import sha256_file  # noqa: E402
 from experiments.closed_loop_confirmation import run_closed_loop_collection  # noqa: E402
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_DELTA_GZIP_V2  # noqa: E402
 from experiments.compact_controller_model import load_controller_bundle  # noqa: E402
-from experiments.lns2_tradeoff import generate_tradeoff_artifacts  # noqa: E402
+from experiments.lns2_tradeoff import (  # noqa: E402
+    generate_timeout_sensitivity_artifacts,
+    generate_tradeoff_artifacts,
+    timeout_job_keys,
+)
 from experiments.repair_collection import (  # noqa: E402
     _load_dataset_rows,
     _read_json,
@@ -30,6 +35,7 @@ from experiments.repair_collection import (  # noqa: E402
     _write_json,
 )
 from experiments.route_counterfactual import run_route_counterfactuals  # noqa: E402
+from experiments.run_output_guard import prepare_run_output  # noqa: E402
 
 
 QUICK_TASKS = (
@@ -44,6 +50,10 @@ QUICK_TASKS = (
 )
 REGISTERED_SOLVER_SEEDS = (1, 2, 3)
 FORMAL_TASK_COUNT = 48
+DEFAULT_OUTPUTS = {
+    "quick": "build/initlns-lns2-tradeoff-quick-native-v2",
+    "formal": "build/initlns-lns2-tradeoff-formal-native-v2",
+}
 COLLECTIONS = (
     ("official_adaptive", "v1-full", "official_adaptive"),
     ("v1-full", "v1-full", "realized_dynamic"),
@@ -169,8 +179,9 @@ def _preflight(
             "balanced threshold must come from complete-episode calibration, not H4 states"
         )
     estimates = {}
+    run_fingerprints = {}
     for name, controller, _policy in COLLECTIONS:
-        estimates[name] = run_closed_loop_collection(
+        dry_run = run_closed_loop_collection(
             dataset,
             collection_config,
             PROJECT_ROOT / "build" / ".lns2-tradeoff-preflight-unused",
@@ -182,13 +193,22 @@ def _preflight(
             feature_backend=feature_backend,
             controller_bundle=controller_bundle,
             balanced_config=balanced_config if controller == "v2-balanced" else None,
-        )["estimate"]
+        )
+        estimates[name] = dry_run["estimate"]
+        run_fingerprints[name] = dry_run["run_fingerprint"]
     expected_tasks = len(QUICK_TASKS) if task_ids is not None else FORMAL_TASK_COUNT
     for name, estimate in estimates.items():
         if int(estimate["task_count"]) != expected_tasks:
             raise ValueError(f"{name} resolved to an unexpected task count")
         if tuple(map(int, estimate["solver_seeds"])) != REGISTERED_SOLVER_SEEDS:
             raise ValueError(f"{name} does not use the registered solver seeds")
+        if (
+            abs(float(estimate["wall_time_budget_seconds"]) - 300.0) > 1e-12
+            or int(estimate["maximum_decisions_per_episode"]) != 100
+        ):
+            raise ValueError(
+                f"{name} does not use the registered 100-repair / 300-second budget"
+            )
     return {
         "passed": True,
         "expected_task_count": expected_tasks,
@@ -197,6 +217,7 @@ def _preflight(
         "balanced_config": balanced.payload(),
         "controller_bundle": str(controller_bundle),
         "estimates": estimates,
+        "run_fingerprints": run_fingerprints,
     }
 
 
@@ -276,6 +297,9 @@ def _run_interleaved_collections(
     logger: logging.Logger,
     runner_progress: Path,
     schedule_path: Path,
+    job_keys: set[tuple[str, int]] | None = None,
+    wall_time_budget_seconds: float | None = None,
+    episode_process_timeout_seconds: float | None = None,
 ) -> None:
     for name, controller, _policy in COLLECTIONS:
         root = roots[name]
@@ -294,9 +318,18 @@ def _run_interleaved_collections(
             feature_backend=feature_backend,
             controller_bundle=controller_bundle,
             balanced_config=balanced_config if controller == "v2-balanced" else None,
+            job_keys=job_keys,
+            cohort_job_keys=job_keys,
+            wall_time_budget_seconds=wall_time_budget_seconds,
+            episode_process_timeout_seconds=episode_process_timeout_seconds,
         )
 
     keys = _cohort_job_keys(dataset, collection_config, task_ids)
+    if job_keys is not None:
+        normalized = {(str(task_id), int(seed)) for task_id, seed in job_keys}
+        keys = [key for key in keys if key in normalized]
+        if set(keys) != normalized:
+            raise ValueError("paired collection job filter contains unknown task/seed pairs")
     schedule = []
     for task_id, seed in keys:
         digest = hashlib.sha256(f"{task_id}|{seed}".encode("utf-8")).hexdigest()
@@ -352,6 +385,9 @@ def _run_interleaved_collections(
                     balanced_config if controller == "v2-balanced" else None
                 ),
                 job_keys={(task_id, seed)},
+                cohort_job_keys=job_keys,
+                wall_time_budget_seconds=wall_time_budget_seconds,
+                episode_process_timeout_seconds=episode_process_timeout_seconds,
             )
             completed += 1
             _write_json(
@@ -412,7 +448,16 @@ def main() -> int:
     parser.add_argument("--skip-collections", action="store_true")
     parser.add_argument("--skip-counterfactual", action="store_true")
     parser.add_argument(
-        "--quick-audit", default="build/initlns-lns2-tradeoff-quick/status.json"
+        "--timeout-sensitivity-seconds",
+        type=float,
+        help=(
+            "After the 300-second primary run, rerun all four controllers only for "
+            "task-seed pairs where any controller timed out."
+        ),
+    )
+    parser.add_argument(
+        "--quick-audit",
+        default="build/initlns-lns2-tradeoff-quick-native-v2/status.json",
     )
     parser.add_argument(
         "--storage-audit",
@@ -421,14 +466,13 @@ def main() -> int:
     arguments = parser.parse_args()
     if arguments.workers != 1:
         parser.error("primary paired timing requires --workers 1")
+    if (
+        arguments.timeout_sensitivity_seconds is not None
+        and arguments.timeout_sensitivity_seconds <= 300.0
+    ):
+        parser.error("--timeout-sensitivity-seconds must be greater than 300")
 
-    output = _resolve(
-        arguments.output or f"build/initlns-lns2-tradeoff-{arguments.mode}"
-    )
-    output.mkdir(parents=True, exist_ok=True)
-    logger = _logger(output / "run.log")
-    status_path = output / "status.json"
-    started_at = _utc_now()
+    output = _resolve(arguments.output or DEFAULT_OUTPUTS[arguments.mode])
     dataset = _resolve(arguments.dataset)
     collection_config = _resolve(arguments.collection_config)
     controller_bundle = _resolve(arguments.controller_bundle)
@@ -445,6 +489,58 @@ def main() -> int:
         model_semantic_fingerprint = str(
             frozen_bundle.manifest["main_ranker_semantic_fingerprint"]
         )
+        preflight = _preflight(
+            dataset=dataset,
+            collection_config=collection_config,
+            controller_bundle=controller_bundle,
+            balanced_config=balanced_config,
+            task_ids=task_ids,
+            workers=arguments.workers,
+            feature_backend=arguments.feature_backend,
+        )
+        prepare_run_output(
+            output,
+            resume=arguments.resume,
+            identity={
+                "runner": "run_lns2_tradeoff_evaluation",
+                "schema_version": 2,
+                "mode": arguments.mode,
+                "dataset": str(dataset),
+                "collection_config": str(collection_config),
+                "controller_bundle": str(controller_bundle),
+                "balanced_config": str(balanced_config),
+                "feature_backend": arguments.feature_backend,
+                "workers": arguments.workers,
+                "counterfactual_workers": arguments.counterfactual_workers,
+                "counterfactual_routes": arguments.counterfactual_routes,
+                "task_ids": task_ids,
+                "primary_budget_seconds": 300.0,
+                "timeout_sensitivity_seconds": arguments.timeout_sensitivity_seconds,
+                "collection_run_fingerprints": preflight["run_fingerprints"],
+                "model_semantic_fingerprint": model_semantic_fingerprint,
+                "balanced_config_fingerprint": frozen_balanced[
+                    "configuration_fingerprint"
+                ],
+                "runner_implementation_sha256": {
+                    "runner": sha256_file(Path(__file__).resolve()),
+                    "report": sha256_file(
+                        PROJECT_ROOT / "experiments" / "lns2_tradeoff.py"
+                    ),
+                    "counterfactual": sha256_file(
+                        PROJECT_ROOT / "experiments" / "route_counterfactual.py"
+                    ),
+                    "output_guard": sha256_file(
+                        PROJECT_ROOT / "experiments" / "run_output_guard.py"
+                    ),
+                },
+            },
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
+        parser.error(str(error))
+    logger = _logger(output / "run.log")
+    status_path = output / "status.json"
+    started_at = _utc_now()
+    try:
         _status(
             status_path,
             started_at,
@@ -464,15 +560,6 @@ def main() -> int:
                 model_semantic_fingerprint=model_semantic_fingerprint,
             )
         if not arguments.skip_preflight:
-            preflight = _preflight(
-                dataset=dataset,
-                collection_config=collection_config,
-                controller_bundle=controller_bundle,
-                balanced_config=balanced_config,
-                task_ids=task_ids,
-                workers=arguments.workers,
-                feature_backend=arguments.feature_backend,
-            )
             _write_json(output / "preflight_report.json", preflight)
             logger.info("Preflight passed")
         else:
@@ -556,6 +643,58 @@ def main() -> int:
             report_root,
             formal=arguments.mode == "formal",
         )
+        sensitivity_report = None
+        if arguments.timeout_sensitivity_seconds is not None:
+            sensitivity_budget = float(arguments.timeout_sensitivity_seconds)
+            selected_job_keys = timeout_job_keys(roots)
+            sensitivity_label = f"{sensitivity_budget:g}".replace(".", "p")
+            sensitivity_root = output / f"timeout-sensitivity-{sensitivity_label}"
+            sensitivity_roots = {
+                name: sensitivity_root / "collections" / name
+                for name, _controller, _policy in COLLECTIONS
+            }
+            logger.info(
+                "Timeout sensitivity cohort: task-seeds=%s episodes=%s budget=%ss",
+                len(selected_job_keys),
+                len(selected_job_keys) * len(COLLECTIONS),
+                sensitivity_budget,
+            )
+            if selected_job_keys:
+                _status(
+                    status_path,
+                    started_at,
+                    status="running",
+                    phase="timeout-sensitivity",
+                    mode=arguments.mode,
+                    output=str(output),
+                    timeout_sensitivity_seconds=sensitivity_budget,
+                    timeout_sensitivity_task_seed_count=len(selected_job_keys),
+                    progress_file=str(output / "collection_progress.json"),
+                )
+                _run_interleaved_collections(
+                    roots=sensitivity_roots,
+                    dataset=dataset,
+                    collection_config=collection_config,
+                    controller_bundle=controller_bundle,
+                    balanced_config=balanced_config,
+                    task_ids=sorted({task_id for task_id, _seed in selected_job_keys}),
+                    feature_backend=arguments.feature_backend,
+                    resume=arguments.resume,
+                    logger=logger,
+                    runner_progress=output / "collection_progress.json",
+                    schedule_path=sensitivity_root / "execution_schedule.json",
+                    job_keys=selected_job_keys,
+                    wall_time_budget_seconds=sensitivity_budget,
+                    episode_process_timeout_seconds=sensitivity_budget + 60.0,
+                )
+            sensitivity_report = generate_timeout_sensitivity_artifacts(
+                roots,
+                sensitivity_roots if selected_job_keys else None,
+                sensitivity_root / "report",
+                sensitivity_budget_seconds=sensitivity_budget,
+            )
+            if not bool(sensitivity_report.get("passed")):
+                raise RuntimeError("timeout sensitivity validation failed")
         _write_json(
             output / "collection_progress.json",
             {
@@ -596,6 +735,16 @@ def main() -> int:
             model_semantic_fingerprint=model_semantic_fingerprint,
             paired_episode_count=report["paired_episode_count"],
             complete_episode_count=report["complete_episode_count"],
+            timeout_sensitivity=(
+                {
+                    "report": str(
+                        sensitivity_root / "report" / "timeout_sensitivity_report.md"
+                    ),
+                    **sensitivity_report,
+                }
+                if sensitivity_report is not None
+                else None
+            ),
         )
         logger.info("Evaluation complete: %s", report["promotion"]["conclusion"])
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

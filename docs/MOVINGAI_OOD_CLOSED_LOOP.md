@@ -37,6 +37,19 @@ consolidation rather than another model or RL run.
 
 ## Commands
 
+Three independent version labels are used and must not be mixed:
+
+- `delta-gzip-v2` is the trace **storage** format.
+- `feature-v2` is the fixed 124-feature training schema (82 proposal-only features). The deployed
+  frozen ranker evaluates only the 86 canonical inputs referenced by its tree nodes.
+- Controller bundle v3 packages the unchanged frozen v1 ranking semantics with feature-v2 execution,
+  native feature extraction, promotion evidence, and an optional learned pruner.
+
+The learned `proposal_pruner_v2` implementation and locked calibration report are retained, but the
+pruner is not enabled: no threshold simultaneously preserved at least 99% of full-ranker winners and
+reduced candidates by at least 15%. The promoted default is therefore `v2-full`: exact feature/model
+acceleration with the complete candidate pool. This does not create a second scientific model.
+
 ```powershell
 python scripts/fetch_movingai_devset.py --config configs/movingai_ood_devset.json `
   --output build/movingai-ood-dev
@@ -51,23 +64,172 @@ Native collection runs in WSL with `PYTHONPATH=build/linux/project`:
 python3 scripts/collect_closed_loop_confirmation.py \
   --dataset build/initlns-movingai-ood-dataset-v1 \
   --config configs/movingai_ood_collection.json \
-  --output build/initlns-movingai-ood-collection-v1 --phase qualify
+  --output build/initlns-movingai-ood-collection-v2 --phase qualify \
+  --trace-format delta-gzip-v2
 ```
+
+`delta-gzip-v2` is the default. It stores each unique initial deterministic state once under
+`state_blobs/`, records exact per-transition state deltas, and gzip-compresses each episode. The
+validator reconstructs every state and recomputes the registered before/after/final fingerprints.
+Use `--trace-format full-v1` only for storage diagnostics or legacy compatibility.
+
+The existing 15 GiB full-v1 collection can be migrated without rerunning the solver or model. The
+command also runs five-policy scientific equivalence and requires at least 90% storage reduction:
+
+```bash
+python3 scripts/convert_closed_loop_traces.py \
+  --source build/initlns-movingai-ood-collection-v1 \
+  --output build/initlns-movingai-ood-collection-v2-compact
+```
+
+Conversion never deletes the source. Conversion status is written to `conversion_progress.json`; the
+final storage and equivalence records are `storage_conversion_report.json` and
+`equivalence_report.json`. Only the legacy `episodes/` directory becomes eligible for a separate,
+explicitly approved cleanup after the compact evidence and a fresh quick run pass. V1 models, manifests,
+run metadata, and reports remain.
 
 Policy execution is allowed only after qualification passes. Analyze the complete five-policy run with:
 
 ```powershell
 python scripts/analyze_movingai_ood_confirmation.py `
-  --collection build/initlns-movingai-ood-collection-v1 --strict
+  --collection build/initlns-movingai-ood-collection-v2-compact `
+  --output build/initlns-movingai-ood-report-v2-compact
 ```
+
+For a VS Code WSL terminal, the recommended end-to-end smoke command is:
+
+```bash
+cd "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2"
+python3 scripts/run_final_model_evaluation.py --mode quick \
+  --output build/initlns-final-model-quick-native-v2
+```
+
+It builds and tests the native module, verifies the frozen bundle and dataset, runs 75 episodes
+(five registered tasks, three seeds, five policies), validates all compact traces, and emits CSV,
+Markdown, and SVG results under `build/initlns-final-model-quick-native-v2/report`. The report includes
+candidate counts, feature-stage timing, fallback/OOD rates, a paired fixed-suite feature speedup, and
+clearly labelled controller/end-to-end timing projections. It is explicitly marked as non-formal.
+For every learned quick decision, the same candidate state is also evaluated by the v1 reference
+features and ranker; all scores (within `1e-12`), complete rankings, and selected candidates must match.
+This shadow comparison does not run a second solver episode and therefore keeps the quick set at 75.
+
+For diagnostics, force a controller or feature backend with:
+
+```bash
+python3 scripts/run_final_model_evaluation.py --mode quick \
+  --controller v1-full --feature-backend python \
+  --output build/initlns-final-model-quick-v1-diagnostic
+python3 scripts/run_final_model_evaluation.py --mode quick \
+  --controller v2-full --feature-backend native \
+  --output build/initlns-final-model-quick-v2-native-diagnostic
+```
+
+`v2-cascade` is intentionally unavailable until a pruner passes locked validation. After the compact
+equivalence audit and the default quick run both pass, run the registered 720-episode study with:
+
+```bash
+python3 scripts/run_final_model_evaluation.py --mode formal
+```
+
+Both modes update `run.log`, `status.json`, and `collection_progress.json` in the run directory. The
+runner mirrors phase, completed-job, and error counts to the VS Code terminal and `run.log`; the JSON
+files can also be monitored independently of the terminal. A non-empty output is immutable unless
+`--resume` is explicit and both `runner_config.json` and the collection fingerprint match. If a run is
+interrupted, invoke the identical command again with `--resume`; mismatched or legacy output is rejected
+before its log or status is touched.
+
+The registered native benchmark covers all five layout families plus maze400/600, room600, and
+random600. Feature extraction was numerically equivalent within `1.14e-13`, reduced median feature
+time by 90.88% overall (10.97x), and by 93.25% on maze600. Replacing the feature share in the recorded
+v1 timing decomposition projects a 2.73x controller speedup and 1.43x controller-plus-repair speedup;
+those two values are estimates until the quick/formal wall-clock run records observed evidence.
+
+## LNS2 trade-off and balanced routing
+
+The original solver is measured as the `official_adaptive` policy. `v1-full` is the old implementation:
+at every repair it generates candidates, computes the old features, and uses the frozen ranker to select
+the neighborhood. `v2-full` preserves that same every-repair model semantics while changing only the
+feature schema, cache, compact model representation, and feature backend. LNS2/PP remains the low-level
+path repairer in both full-model modes; neither mode hands neighborhood selection back to Adaptive after
+the first repair. `v2-balanced` is a separate hybrid: low-conflict states take Adaptive without model
+features, and the remaining states use the model. Storage, feature, bundle, and routing versions remain
+independent.
+
+Calibrate the routing threshold only from complete `policy_train` episodes, using four
+layout-balanced map-group folds. The six registered conflict thresholds are run as separate collections
+with the same 100-repair/300-second budget. The single selected threshold is then run once on the locked
+`policy_validation` split. Horizon-4 state counterfactuals are not used for selection. The proposal
+pruner remains disabled because its locked validation did not pass.
+
+```bash
+python3 scripts/calibrate_lns2_speed_quality.py
+```
+
+Calibration writes `balanced_controller.json`, `calibration_grid.csv`, and
+`calibration_report.json` under `build/initlns-lns2-speed-quality-calibration`. It never changes the
+bundle default. Because calibration now uses complete episodes, it schedules 1,152 training episodes
+(144 each for LNS2, v2-full, and six thresholds) and 216 locked-validation episodes. It can be resumed
+with `--resume`. Run the paired quick study only after that file exists:
+
+```bash
+python3 scripts/run_lns2_tradeoff_evaluation.py \
+  --mode quick --counterfactual-routes skipped \
+  --timeout-sensitivity-seconds 600 \
+  --output build/initlns-lns2-tradeoff-quick-native-v2
+```
+
+Quick uses five representative layout tasks plus maze600, room600, and random600, with three seeds. The
+four complete collections are isolated under `collections/official_adaptive`, `collections/v1-full`,
+`collections/v2-full`, and `collections/v2-balanced`. This is 96 complete quick episodes. For each
+task/seed, their execution order is hash-rotated and the primary timing uses one worker. Every balanced
+repair records the selected route, route switches, candidate counts, controller time, repair time, and
+total decision time.
+
+The primary comparison is always a complete episode. The report separately compares v2-full with
+v1-full, v2-full with original LNS2, and v2-balanced with both. The v1/v2 traces are checked on their
+entire common repair prefix: candidate pool, scores within `1e-12`, ranking, selected action, and random
+seed must have zero mismatches, including the final budget-truncated decision. After-state fingerprints
+and low-level counters are compared only when both sides completed that repair. An exclusion or length
+difference is legal only when the shorter trace ends with a terminal `truncated=true` event, its episode
+reports `external_timeout=true`, and elapsed wall time reaches the registered 300-second budget.
+
+The 300-second result remains the only primary result. With
+`--timeout-sensitivity-seconds 600`, every task-seed where any primary controller timed out is rerun for
+all four controllers in `timeout-sensitivity-600/`. The repair limit remains 100, the native environment
+and outer wall budget become 600 seconds, and the process guard becomes 660 seconds. This supplemental
+report records new successes and ranking changes but never modifies primary metrics or promotion gates.
+
+The supplemental counterfactual covers only states where v2-balanced actually chose Adaptive. It reuses
+the LNS2 one-repair result already present in the main trajectory, replays the same prefix, and executes
+the model exactly once. It does not continue for three more steps, does not run an extra LNS2 branch, and
+does not cover states where the model was already used. Each state has an atomic resume checkpoint.
+
+The report directory contains `paired_episodes.csv`, `controller_speed_comparison.csv`,
+`v1_v2_semantic_equivalence.json`, `route_usage.csv`, `skipped_model_once.csv`,
+`quality_speed_frontier.csv`, SVG plots, and `hybrid_necessity_report.md`. Quick is non-formal and cannot
+change the default. Once quick, storage equivalence, common-prefix equivalence, and skipped-state replay
+coverage all pass, run:
+
+```bash
+python3 scripts/run_lns2_tradeoff_evaluation.py \
+  --mode formal --counterfactual-routes skipped
+```
+
+Formal covers 48 tasks, three seeds, and four controllers: 576 complete episodes. The default remains
+`v2-full` unless v2 is semantically equivalent to v1 with significantly lower controller time and every
+registered balanced quality, speed, SOC, integrity, and skipped-state coverage gate passes. The final
+decision is one of `hybrid_supported`, `full_model_preferred`, `lns2_preferred`, or
+`inconclusive_keep_v2_full`.
 
 ## Formal Result
 
 The study was preregistered and pushed at commit `606374a` before qualification or policy outcomes were
 read. All 12 archives and extracted maps/scenarios matched their registered SHA256 values. Qualification
 passed with 144/144 valid resets, 74 nonzero-conflict episodes, nine active maps, and at least one active
-map in every registered layout family. All five policies then completed 144 episodes with zero timeout,
-invalid action, initial-fingerprint mismatch, model error, or unexplained failure.
+map in every registered layout family. All five policies then completed 144 episodes with zero process
+timeout, invalid action, initial-fingerprint mismatch, model error, or unexplained failure. Registered
+300-second wall-budget truncations remain represented by capped failure metrics rather than process
+errors.
 
 | Policy | Successes | Mean fixed 100-step AUC |
 | --- | ---: | ---: |
@@ -91,7 +253,12 @@ not a confirmed preregistered cross-layout claim. It does not restore the static
 and does not authorize RL or another tuned model. The confirmed headline remains same-family, multi-seed
 generalization; the MovingAI result is reported as a near-threshold external-layout result.
 
-The generated traces occupy about 15.13 GiB because every transition stores full paths, observations,
-and candidate features. Full trace validation took about 43 minutes in one Python process. Interrupting
-the Codex turn did not stop that child process; it continued normally and wrote the final report. The
-formal JSON SHA256 is `e931721f0cdc08df6eaf9de75843e0a58c86e19f009195e675f3b358c156b46e`.
+The original full-v1 traces occupy about 15.13 GiB because every transition stores all paths and the
+complete observation. They remain the immutable migration reference until compact conversion and
+equivalence pass. The formal JSON SHA256 is
+`e931721f0cdc08df6eaf9de75843e0a58c86e19f009195e675f3b358c156b46e`.
+
+The verified delta-gzip-v2 migration contains all 720 episodes and 144 deduplicated initial-state
+blobs. Traces plus state blobs occupy 50,329,794 bytes, a 99.6901% reduction from 16,242,547,808 bytes.
+All five policy manifests, all 720 episode signatures, and every registered transition field match
+full-v1 exactly. Reanalysis produces the same formal JSON SHA256 shown above.

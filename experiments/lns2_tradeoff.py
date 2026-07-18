@@ -134,6 +134,7 @@ def _episode_row(
         "repairable": bool(summary.get("repairable")),
         "success": bool(summary.get("success")),
         "external_timeout": bool(summary.get("external_timeout")),
+        "truncated": bool(summary.get("truncated")),
         "initial_fingerprint": summary.get("initial_fingerprint"),
         "initial_conflicts": conflicts,
         "initial_conflict_density": density,
@@ -219,6 +220,8 @@ def _load_episodes(
             )
         bundle = dict(run.get("controller_bundle") or {})
         balanced = dict(run.get("balanced_config") or {})
+        configuration = dict(run.get("configuration") or {})
+        environment = dict(configuration.get("environment") or {})
         if controller == "v2-balanced" and str(
             dict(balanced.get("source") or {}).get("selection_unit")
         ) != "complete_episode":
@@ -241,6 +244,19 @@ def _load_episodes(
             ),
             "balanced_config_fingerprint": balanced.get(
                 "configuration_fingerprint"
+            ),
+            "wall_time_budget_seconds": float(
+                configuration.get("wall_time_budget_seconds", 0.0)
+            ),
+            "episode_process_timeout_seconds": float(
+                configuration.get("episode_process_timeout_seconds", 0.0)
+            ),
+            "environment_time_limit_seconds": float(
+                environment.get("time_limit", 0.0)
+            ),
+            "max_decisions": int(configuration.get("max_decisions", 0)),
+            "metric_iteration_budget": int(
+                configuration.get("metric_iteration_budget", 0)
             ),
         }
         manifest_rows = _read_jsonl(_manifest_path(root, controller))
@@ -301,6 +317,270 @@ def _load_episodes(
     if metadata["v2-balanced"]["balanced_config_fingerprint"] is None:
         raise ValueError("balanced collection is missing its frozen route config")
     return episodes, metadata
+
+
+def timeout_job_keys(collections: dict[str, str | Path]) -> set[tuple[str, int]]:
+    roots = {name: Path(collections[name]).resolve() for name in CONTROLLER_ORDER}
+    keys: set[tuple[str, int]] = set()
+    for controller in CONTROLLER_ORDER:
+        for row in _read_jsonl(_manifest_path(roots[controller], controller)):
+            if str(row.get("status")) not in VALID_STATUSES:
+                continue
+            if bool(dict(row.get("summary") or {}).get("external_timeout")):
+                keys.add((str(row["task_id"]), int(row["solver_seed"])))
+    return keys
+
+
+def _sensitivity_ranking(
+    rows: dict[str, dict[str, Any]],
+) -> list[str]:
+    def key(controller: str) -> tuple[Any, ...]:
+        row = rows[controller]
+        normalized_auc = row.get("normalized_fixed_budget_conflict_auc")
+        return (
+            not bool(row["success"]),
+            round(float(normalized_auc), 12)
+            if normalized_auc is not None
+            else math.inf,
+            int(row["final_conflicts"]),
+            CONTROLLER_ORDER.index(controller),
+        )
+
+    return sorted(CONTROLLER_ORDER, key=key)
+
+
+def generate_timeout_sensitivity_artifacts(
+    primary_collections: dict[str, str | Path],
+    sensitivity_collections: dict[str, str | Path] | None,
+    output: str | Path,
+    *,
+    sensitivity_budget_seconds: float,
+    primary_budget_seconds: float = 300.0,
+) -> dict[str, Any]:
+    primary_roots = {
+        name: Path(primary_collections[name]).resolve() for name in CONTROLLER_ORDER
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    official_run = _read_json(primary_roots["official_adaptive"] / "run_config.json")
+    thresholds = dict(official_run["configuration"]["severity_thresholds"])
+    primary_episodes, primary_metadata = _load_episodes(primary_roots, thresholds)
+    selected_keys = timeout_job_keys(primary_roots)
+
+    if any(
+        abs(float(row["wall_time_budget_seconds"]) - primary_budget_seconds) > 1e-12
+        for row in primary_metadata.values()
+    ):
+        raise ValueError("primary collections do not use the registered 300-second budget")
+
+    rows: list[dict[str, Any]] = []
+    ranking_changes: list[dict[str, Any]] = []
+    initial_fingerprint_mismatches = 0
+    lost_success_count = 0
+    if selected_keys:
+        if sensitivity_collections is None:
+            raise ValueError("timeout sensitivity collections are missing")
+        sensitivity_roots = {
+            name: Path(sensitivity_collections[name]).resolve()
+            for name in CONTROLLER_ORDER
+        }
+        sensitivity_episodes, sensitivity_metadata = _load_episodes(
+            sensitivity_roots, thresholds
+        )
+        for metadata in sensitivity_metadata.values():
+            if (
+                abs(
+                    float(metadata["wall_time_budget_seconds"])
+                    - sensitivity_budget_seconds
+                )
+                > 1e-12
+                or abs(
+                    float(metadata["environment_time_limit_seconds"])
+                    - sensitivity_budget_seconds
+                )
+                > 1e-12
+                or abs(
+                    float(metadata["episode_process_timeout_seconds"])
+                    - (sensitivity_budget_seconds + 60.0)
+                )
+                > 1e-12
+                or int(metadata["max_decisions"]) != 100
+                or int(metadata["metric_iteration_budget"]) != 100
+            ):
+                raise ValueError(
+                    "timeout sensitivity collection does not use 100 repairs and "
+                    "the requested wall/process budgets"
+                )
+        primary_index = _paired_index(primary_episodes)
+        sensitivity_index = _paired_index(sensitivity_episodes)
+        for controller in CONTROLLER_ORDER:
+            if set(sensitivity_index[controller]) != selected_keys:
+                raise ValueError(
+                    f"{controller} timeout sensitivity coverage does not match "
+                    "the primary timeout cohort"
+                )
+        for task_id, solver_seed in sorted(selected_keys):
+            primary_group: dict[str, dict[str, Any]] = {}
+            sensitivity_group: dict[str, dict[str, Any]] = {}
+            for controller in CONTROLLER_ORDER:
+                original = primary_index[controller][(task_id, solver_seed)]
+                extended = sensitivity_index[controller][(task_id, solver_seed)]
+                primary_group[controller] = original
+                sensitivity_group[controller] = extended
+                fingerprint_matches = (
+                    str(original["initial_fingerprint"])
+                    == str(extended["initial_fingerprint"])
+                )
+                if not fingerprint_matches:
+                    initial_fingerprint_mismatches += 1
+                lost_success = bool(original["success"]) and not bool(
+                    extended["success"]
+                )
+                lost_success_count += int(lost_success)
+                original_auc = original.get("normalized_fixed_budget_conflict_auc")
+                extended_auc = extended.get("normalized_fixed_budget_conflict_auc")
+                rows.append(
+                    {
+                        "task_id": task_id,
+                        "solver_seed": solver_seed,
+                        "controller": controller,
+                        "primary_budget_seconds": primary_budget_seconds,
+                        "sensitivity_budget_seconds": sensitivity_budget_seconds,
+                        "initial_fingerprint_matches": fingerprint_matches,
+                        "primary_success": bool(original["success"]),
+                        "sensitivity_success": bool(extended["success"]),
+                        "new_success": (
+                            not bool(original["success"])
+                            and bool(extended["success"])
+                        ),
+                        "lost_success": lost_success,
+                        "primary_external_timeout": bool(
+                            original["external_timeout"]
+                        ),
+                        "sensitivity_external_timeout": bool(
+                            extended["external_timeout"]
+                        ),
+                        "primary_repair_iterations": int(
+                            original["repair_iterations"]
+                        ),
+                        "sensitivity_repair_iterations": int(
+                            extended["repair_iterations"]
+                        ),
+                        "sensitivity_reached_100_repairs": int(
+                            extended["repair_iterations"]
+                        )
+                        >= 100,
+                        "primary_final_conflicts": int(original["final_conflicts"]),
+                        "sensitivity_final_conflicts": int(
+                            extended["final_conflicts"]
+                        ),
+                        "final_conflict_delta": int(extended["final_conflicts"])
+                        - int(original["final_conflicts"]),
+                        "primary_normalized_auc": original_auc,
+                        "sensitivity_normalized_auc": extended_auc,
+                        "normalized_auc_delta": (
+                            float(extended_auc) - float(original_auc)
+                            if original_auc is not None and extended_auc is not None
+                            else None
+                        ),
+                        "primary_capped_wall_seconds": original[
+                            "capped_wall_time_seconds"
+                        ],
+                        "sensitivity_capped_wall_seconds": extended[
+                            "capped_wall_time_seconds"
+                        ],
+                        "invalid_action_count": int(
+                            extended["invalid_action_count"]
+                        ),
+                        "fingerprint_mismatch_count": int(
+                            extended["fingerprint_mismatch_count"]
+                        ),
+                    }
+                )
+            primary_ranking = _sensitivity_ranking(primary_group)
+            sensitivity_ranking = _sensitivity_ranking(sensitivity_group)
+            if primary_ranking != sensitivity_ranking:
+                ranking_changes.append(
+                    {
+                        "task_id": task_id,
+                        "solver_seed": solver_seed,
+                        "primary_ranking": primary_ranking,
+                        "sensitivity_ranking": sensitivity_ranking,
+                    }
+                )
+
+    new_success_count = sum(bool(row["new_success"]) for row in rows)
+    invalid_action_count = sum(int(row["invalid_action_count"]) for row in rows)
+    fingerprint_error_count = sum(
+        int(row["fingerprint_mismatch_count"]) for row in rows
+    )
+    if not selected_keys:
+        conclusion = "no_timeout_sensitivity_needed"
+    elif (
+        initial_fingerprint_mismatches
+        or lost_success_count
+        or invalid_action_count
+        or fingerprint_error_count
+    ):
+        conclusion = "invalid_timeout_sensitivity_run"
+    elif new_success_count or ranking_changes:
+        conclusion = "primary_conclusion_is_budget_sensitive"
+    else:
+        conclusion = "300_seconds_adequate_for_primary_conclusion"
+    report = {
+        "schema": "lns2.timeout_sensitivity.v1",
+        "schema_version": 1,
+        "primary_budget_seconds": primary_budget_seconds,
+        "sensitivity_budget_seconds": sensitivity_budget_seconds,
+        "selection_rule": (
+            "all task-seed pairs where any primary controller reported "
+            "external_timeout=true"
+        ),
+        "selected_task_seed_count": len(selected_keys),
+        "expected_episode_count": len(selected_keys) * len(CONTROLLER_ORDER),
+        "completed_episode_count": len(rows),
+        "primary_timeout_episode_count": sum(
+            bool(row["primary_external_timeout"]) for row in rows
+        ),
+        "sensitivity_timeout_episode_count": sum(
+            bool(row["sensitivity_external_timeout"]) for row in rows
+        ),
+        "new_success_count": new_success_count,
+        "lost_success_count": lost_success_count,
+        "ranking_changed_task_seed_count": len(ranking_changes),
+        "initial_fingerprint_mismatch_count": initial_fingerprint_mismatches,
+        "invalid_action_count": invalid_action_count,
+        "fingerprint_error_count": fingerprint_error_count,
+        "main_promotion_metrics_unchanged": True,
+        "conclusion": conclusion,
+        "passed": conclusion != "invalid_timeout_sensitivity_run",
+    }
+    _write_csv(output_root / "timeout_sensitivity_episodes.csv", rows)
+    _write_json(output_root / "timeout_sensitivity_report.json", report)
+    _write_json(
+        output_root / "timeout_sensitivity_ranking_changes.json",
+        {"changes": ranking_changes},
+    )
+    (output_root / "timeout_sensitivity_report.md").write_text(
+        "\n".join(
+            [
+                "# 300/600 秒超时敏感性报告",
+                "",
+                f"- 主实验预算：{primary_budget_seconds:g} 秒 / 100 次 repair。",
+                f"- 补测预算：{sensitivity_budget_seconds:g} 秒 / 100 次 repair。",
+                f"- 被选中的 task-seed：{len(selected_keys)}。",
+                f"- 四路补测 episode：{len(rows)}。",
+                f"- 新增成功：{new_success_count}。",
+                f"- 控制器质量排名变化：{len(ranking_changes)} 个 task-seed。",
+                f"- 结论：`{conclusion}`。",
+                "",
+                "该补测不写入主实验成功数、时间指标或控制器晋级门槛。",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return report
 
 
 def _paired_index(
@@ -664,6 +944,8 @@ def _semantic_equivalence_report(
     maximum_score_delta = 0.0
     differing_length_episodes = 0
     allowed_budget_length_differences = 0
+    completed_repair_budget_length_differences = 0
+    truncated_repair_budget_length_differences = 0
     unexplained_length_differences = 0
     wall_budgets: dict[str, float | None] = {}
     for controller in ("v1-full", "v2-full"):
@@ -707,19 +989,39 @@ def _semantic_equivalence_report(
             elapsed = float(elapsed_value)
         except (TypeError, ValueError):
             elapsed = None
-        if not bool(event.get("truncated")):
-            return False, "repair_completed", elapsed, budget
         if position != len(transitions) - 1:
-            return False, "nonterminal_truncation", elapsed, budget
+            return (
+                False,
+                (
+                    "nonterminal_truncation"
+                    if bool(event.get("truncated"))
+                    else "repair_completed"
+                ),
+                elapsed,
+                budget,
+            )
         if not bool(episode.get("external_timeout")):
             return False, "episode_external_timeout_is_false", elapsed, budget
+        if not bool(episode.get("truncated")):
+            return False, "episode_truncated_is_false", elapsed, budget
         if budget is None:
             return False, "wall_time_budget_is_unregistered", elapsed, budget
         if elapsed is None or not math.isfinite(elapsed):
             return False, "elapsed_wall_time_is_missing_or_non_finite", elapsed, budget
-        if elapsed < budget:
-            return False, "elapsed_wall_time_precedes_budget", elapsed, budget
-        return True, "external_wall_time_budget_boundary", elapsed, budget
+        if bool(event.get("truncated")):
+            if elapsed < budget:
+                return False, "elapsed_wall_time_precedes_budget", elapsed, budget
+            return True, "truncated_repair_wall_time_budget_boundary", elapsed, budget
+
+        # A repair may finish immediately before the loop-level wall-clock check.
+        # In that case the transition is complete (and its after-state remains
+        # comparable), while the episode itself correctly ends as an external
+        # timeout.  Keep the tolerance narrow so an unrelated early stop cannot
+        # be reclassified as a budget boundary.
+        completed_repair_tolerance = min(1.0, max(1e-3, budget * 1e-3))
+        if elapsed < budget - completed_repair_tolerance:
+            return False, "completed_repair_precedes_budget", elapsed, budget
+        return True, "completed_repair_wall_time_budget_boundary", elapsed, budget
 
     for key in sorted(paired_keys):
         left_row = index["v1-full"][key]
@@ -756,6 +1058,10 @@ def _semantic_equivalence_report(
             )
             if valid_length_boundary:
                 allowed_budget_length_differences += 1
+                if reason == "completed_repair_wall_time_budget_boundary":
+                    completed_repair_budget_length_differences += 1
+                else:
+                    truncated_repair_budget_length_differences += 1
             else:
                 unexplained_length_differences += 1
                 mismatch(
@@ -934,6 +1240,12 @@ def _semantic_equivalence_report(
         "budget_boundary_exclusion_count": len(boundary_details),
         "differing_length_episode_count": differing_length_episodes,
         "allowed_budget_length_difference_count": allowed_budget_length_differences,
+        "completed_repair_budget_length_difference_count": (
+            completed_repair_budget_length_differences
+        ),
+        "truncated_repair_budget_length_difference_count": (
+            truncated_repair_budget_length_differences
+        ),
         "unexplained_length_difference_count": unexplained_length_differences,
         "candidate_score_comparison_count": score_comparisons,
         "maximum_score_delta": maximum_score_delta,
@@ -943,9 +1255,10 @@ def _semantic_equivalence_report(
         "common_prefix_exact": total_mismatches == 0,
         "passed": total_mismatches == 0,
         "length_difference_policy": (
-            "allowed only when the shorter trace ends with a terminal truncated repair, "
-            "the episode reports external_timeout, and elapsed wall time reaches the "
-            "registered wall-time budget"
+            "allowed only when the shorter trace ends at the registered wall-time "
+            "budget and the episode reports both external_timeout and truncated; "
+            "the terminal repair may be internally truncated, or may have completed "
+            "within the final one-second/0.1-percent loop-check tolerance"
         ),
         "post_repair_policy": (
             "after fingerprints and low-level counters are compared only when both "
@@ -1788,5 +2101,7 @@ __all__ = [
     "CONTROLLER_ORDER",
     "HISTORICAL_REFERENCE",
     "TRADEOFF_REPORT_SCHEMA",
+    "generate_timeout_sensitivity_artifacts",
     "generate_tradeoff_artifacts",
+    "timeout_job_keys",
 ]
