@@ -178,12 +178,19 @@ def _module_references(root: Path, files: list[str]) -> dict[str, int]:
     references: dict[str, int] = {}
     for relative in files:
         path = Path(relative)
-        if path.parts[:1] != ("experiments",) or path.suffix != ".py":
+        is_active_experiment = path.parts[:1] == ("experiments",)
+        is_research_module = (
+            len(path.parts) >= 3
+            and path.parts[0] == "research"
+            and path.parts[1] in {"studies", "engineering"}
+        )
+        if not (is_active_experiment or is_research_module) or path.suffix != ".py":
             continue
         if path.name in {"__init__.py"}:
             references[relative] = 1
             continue
-        needles = (f"experiments.{path.stem}", path.stem)
+        module_name = ".".join(path.with_suffix("").parts)
+        needles = (module_name, path.stem)
         references[relative] = sum(
             any(needle in contents for needle in needles)
             for other, contents in text.items()

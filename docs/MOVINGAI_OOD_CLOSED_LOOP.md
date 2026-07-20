@@ -53,7 +53,7 @@ acceleration with the complete candidate pool. This does not create a second sci
 ```powershell
 python scripts/fetch_movingai_devset.py --config configs/movingai_ood_devset.json `
   --output build/movingai-ood-dev
-python scripts/prepare_movingai_probe.py --dataset build/movingai-ood-dev `
+python research/scripts/neighborhood/prepare_movingai_probe.py --dataset build/movingai-ood-dev `
   --config configs/movingai_ood_dataset.json `
   --output build/initlns-movingai-ood-dataset-v1
 ```
@@ -100,7 +100,7 @@ For a VS Code WSL terminal, the recommended end-to-end smoke command is:
 
 ```bash
 cd "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2"
-python3 scripts/run_final_model_evaluation.py --mode quick \
+python3 research/scripts/engineering/run_final_model_evaluation.py --mode quick \
   --output build/initlns-final-model-quick-native-v2
 ```
 
@@ -116,10 +116,10 @@ This shadow comparison does not run a second solver episode and therefore keeps 
 For diagnostics, force a controller or feature backend with:
 
 ```bash
-python3 scripts/run_final_model_evaluation.py --mode quick \
+python3 research/scripts/engineering/run_final_model_evaluation.py --mode quick \
   --controller v1-full --feature-backend python \
   --output build/initlns-final-model-quick-v1-diagnostic
-python3 scripts/run_final_model_evaluation.py --mode quick \
+python3 research/scripts/engineering/run_final_model_evaluation.py --mode quick \
   --controller v2-full --feature-backend native \
   --output build/initlns-final-model-quick-v2-native-diagnostic
 ```
@@ -128,7 +128,7 @@ python3 scripts/run_final_model_evaluation.py --mode quick \
 equivalence audit and the default quick run both pass, run the registered 720-episode study with:
 
 ```bash
-python3 scripts/run_final_model_evaluation.py --mode formal
+python3 research/scripts/engineering/run_final_model_evaluation.py --mode formal
 ```
 
 Both modes update `run.log`, `status.json`, and `collection_progress.json` in the run directory. The
@@ -222,7 +222,7 @@ with the same 100-repair/300-second budget. The single selected threshold is the
 pruner remains disabled because its locked validation did not pass.
 
 ```bash
-python3 scripts/calibrate_lns2_speed_quality.py
+python3 research/scripts/engineering/calibrate_lns2_speed_quality.py
 ```
 
 Calibration writes `balanced_controller.json`, `calibration_grid.csv`, and

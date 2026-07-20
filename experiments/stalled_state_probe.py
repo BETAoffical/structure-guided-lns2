@@ -27,7 +27,7 @@ from experiments.repair_collection import (
     _write_json,
     state_fingerprint,
 )
-from experiments.route_counterfactual import _decision_rows, _replay_prefix
+from research.engineering.balanced.route_counterfactual import _decision_rows, _replay_prefix
 from experiments.run_output_guard import prepare_run_output
 from experiments.stall_guard import repair_structure_fingerprint
 

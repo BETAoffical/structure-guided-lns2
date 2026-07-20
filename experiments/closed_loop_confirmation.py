@@ -17,13 +17,13 @@ from experiments._common import (
     select_rows_by_task_id as _selected_rows,
     sha256_file as _sha256,
 )
-from experiments.context_audit import _pair_vector
-from experiments.candidate_pruning import (
+from research.studies.context.context_audit import _pair_vector
+from research.engineering.proposal_pruner.candidate_pruning import (
     CandidatePruner,
     expected_families_from_proposal_config,
     no_pruning_metrics,
 )
-from experiments.balanced_controller import (
+from research.engineering.balanced.balanced_controller import (
     BalancedControllerConfig,
     load_balanced_controller,
 )
@@ -53,25 +53,25 @@ from experiments.compact_controller_model import (
     load_controller_bundle,
 )
 from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
-from experiments.local_representation_audit import (
+from research.studies.representation.local_representation_audit import (
     StaticGridAnalysis,
     analyze_state,
     analyze_static_grid,
 )
-from experiments.natural_distribution_confirmation import conflict_density, conflict_severity
+from research.studies.neighborhood.natural_distribution_confirmation import conflict_density, conflict_severity
 from experiments.online_feature_engine import (
     FEATURE_BACKENDS,
     OnlineFeatureEngine,
     _native_vector_function,
 )
-from experiments.realized_neighborhood_probe import select_representative_neighborhoods
-from experiments.realized_neighborhood_ranking_audit import (
+from research.studies.neighborhood.realized_neighborhood_probe import select_representative_neighborhoods
+from research.studies.neighborhood.realized_neighborhood_ranking_audit import (
     _feature_profiles_from_shared,
     candidate_feature_cache,
     state_dynamic_features,
     static_context_features,
 )
-from experiments.realized_ranking_confirmation import _seed_isolation
+from research.studies.neighborhood.realized_ranking_confirmation import _seed_isolation
 from experiments.repair_collection import (
     SCHEMA_VERSION,
     CollectionLockError,
@@ -121,20 +121,20 @@ DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
-    "experiments/balanced_controller.py",
+    "research/engineering/balanced/balanced_controller.py",
     "experiments/closed_loop_confirmation.py",
-    "experiments/candidate_pruning.py",
+    "research/engineering/proposal_pruner/candidate_pruning.py",
     "experiments/compact_controller_model.py",
-    "experiments/context_audit.py",
+    "research/studies/context/context_audit.py",
     "experiments/feature_schema_v2.py",
-    "experiments/local_representation_audit.py",
-    "experiments/natural_distribution_confirmation.py",
+    "research/studies/representation/local_representation_audit.py",
+    "research/studies/neighborhood/natural_distribution_confirmation.py",
     "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
     "experiments/stall_guard.py",
-    "experiments/realized_neighborhood_ranking_audit.py",
-    "experiments/realized_neighborhood_probe.py",
-    "experiments/realized_ranking_confirmation.py",
+    "research/studies/neighborhood/realized_neighborhood_ranking_audit.py",
+    "research/studies/neighborhood/realized_neighborhood_probe.py",
+    "research/studies/neighborhood/realized_ranking_confirmation.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
     "src/online_features.cpp",

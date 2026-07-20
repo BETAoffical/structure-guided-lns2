@@ -94,23 +94,23 @@ InitLNS 对照为 Adaptive、Target、Collision 和 Random；无冲突后的 any
 
 | 实验 | 状态 | 结论 |
 | --- | --- | --- |
-| [静态上下文首次可学习性审计](CONTEXT_AUDIT.md) | 未通过 | 完整上下文相对动态状态仅增加 4.17 个百分点，AUC regret 反而恶化，未通过门槛。 |
-| [静态上下文二次验证](CONTEXT_SECONDARY_AUDIT.md) | 未通过 | 真实上下文 top-1 与 AUC 指标仅处于置换分布第 6.2% 和 59.2%，并出现 91% size 集中。 |
-| [局部表示恢复审计](LOCAL_REPRESENTATION_AUDIT.md) | 未通过 | local_pre、realized 和静态上下文均未通过预注册恢复门槛；局部表示存在点估计信号但地图间不稳定。 |
-| [MovingAI 初始机制探针](MOVINGAI_MECHANISM_PROBE.md) | 机制证据 | 动作和邻域确有差异，但独立状态和 trial 不足，不能训练迁移模型。 |
-| [MovingAI 首轮标签质量审计](MOVINGAI_PROBE_QUALITY.md) | 未通过 | 结果行数掩盖了有效样本不足，rank、最佳集合和实际邻域稳定性均未通过。 |
-| [MovingAI 八 trial 标签质量审计](MOVINGAI_PROBE_QUALITY.md) | 机制证据 | 排序 Spearman 提高到 0.684，但最佳集合与实际邻域稳定性仍不足，需独立地图。 |
-| [独立布局名义动作确认](INDEPENDENT_LAYOUT_PROBE.md) | 未通过 | 名义动作 eta-squared 和 Pareto-family 稳定性未通过，动作需重定义为实际 agent 集合。 |
-| [首次独立确认 qualification](REALIZED_RANKING_CONFIRMATION.md) | 证据不足 | 48/48 reset 有效，但只有 11/12 地图满足成对覆盖，按规则停止且未重抽 seed。 |
-| [策略访问状态首次 qualification](POLICY_VISITED_AGGREGATION.md) | 证据不足 | 总非零状态足够，但两个 split/layout 单元未达到不合理的 75% 门槛，按规则未重抽。 |
-| [自然分布策略访问状态聚合](POLICY_VISITED_NATURAL_DISTRIBUTION.md) | 未通过 | v2 top-1 与 v1 相同，regret 仅改善 4.9993% 且地图 bootstrap 跨零，未推广模型。 |
-| [排序目标对齐审计](RANKING_OBJECTIVE_AUDIT.md) | 未通过 | 效果差加权 pairwise 与双头 outcome 模型均低于原 v1，目标替换未解决跨地图 top-1。 |
-| [GBDT 容量曲线审计](MODEL_CAPACITY_AUDIT.md) | 未通过 | 更大模型提高训练拟合却显著降低留图表现，诊断为过拟合而非容量不足。 |
-| [冲突图神经表示审计](GRAPH_REPRESENTATION_AUDIT.md) | 未通过 | 冲突边相对 DeepSets 有信息，但 MLP、DeepSets 和 GNN 均未超过原 GBDT。 |
-| [冲突图统计特征 GBDT 审计](GRAPH_FEATURE_GBDT_AUDIT.md) | 未通过 | 新增图特征略提高 pairwise accuracy，但 top-1 与 regret 均未改善，停止监督表示扩展。 |
-| [Policy-visited Horizon-4 长期信用审计](SEQUENTIAL_CREDIT_AUDIT.md) | 未通过 | H4 oracle 机会存在，但长期标签 split-half 稳定性与 H1/H4 差异门槛失败。 |
-| [PP repair order 机制探针](REPAIR_ORDER_PROBE.md) | 机制证据 | repair order 对结果有实质影响且无固定顺序支配，但随机顺序标签仍不稳定。 |
-| [上下文 repair-order selector 审计](CONTEXTUAL_REPAIR_ORDER_AUDIT.md) | 未通过 | selector 仅改善 1.16% AUC、置换百分位 55.2%，并将可行率从 66.7% 降至 59.7%。 |
+| [静态上下文首次可学习性审计](../research/docs/context/CONTEXT_AUDIT.md) | 未通过 | 完整上下文相对动态状态仅增加 4.17 个百分点，AUC regret 反而恶化，未通过门槛。 |
+| [静态上下文二次验证](../research/docs/context/CONTEXT_SECONDARY_AUDIT.md) | 未通过 | 真实上下文 top-1 与 AUC 指标仅处于置换分布第 6.2% 和 59.2%，并出现 91% size 集中。 |
+| [局部表示恢复审计](../research/docs/representation/LOCAL_REPRESENTATION_AUDIT.md) | 未通过 | local_pre、realized 和静态上下文均未通过预注册恢复门槛；局部表示存在点估计信号但地图间不稳定。 |
+| [MovingAI 初始机制探针](../research/docs/neighborhood/MOVINGAI_MECHANISM_PROBE.md) | 机制证据 | 动作和邻域确有差异，但独立状态和 trial 不足，不能训练迁移模型。 |
+| [MovingAI 首轮标签质量审计](../research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md) | 未通过 | 结果行数掩盖了有效样本不足，rank、最佳集合和实际邻域稳定性均未通过。 |
+| [MovingAI 八 trial 标签质量审计](../research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md) | 机制证据 | 排序 Spearman 提高到 0.684，但最佳集合与实际邻域稳定性仍不足，需独立地图。 |
+| [独立布局名义动作确认](../research/docs/neighborhood/INDEPENDENT_LAYOUT_PROBE.md) | 未通过 | 名义动作 eta-squared 和 Pareto-family 稳定性未通过，动作需重定义为实际 agent 集合。 |
+| [首次独立确认 qualification](../research/docs/neighborhood/REALIZED_RANKING_CONFIRMATION.md) | 证据不足 | 48/48 reset 有效，但只有 11/12 地图满足成对覆盖，按规则停止且未重抽 seed。 |
+| [策略访问状态首次 qualification](../research/docs/policy/POLICY_VISITED_AGGREGATION.md) | 证据不足 | 总非零状态足够，但两个 split/layout 单元未达到不合理的 75% 门槛，按规则未重抽。 |
+| [自然分布策略访问状态聚合](../research/docs/policy/POLICY_VISITED_NATURAL_DISTRIBUTION.md) | 未通过 | v2 top-1 与 v1 相同，regret 仅改善 4.9993% 且地图 bootstrap 跨零，未推广模型。 |
+| [排序目标对齐审计](../research/docs/policy/RANKING_OBJECTIVE_AUDIT.md) | 未通过 | 效果差加权 pairwise 与双头 outcome 模型均低于原 v1，目标替换未解决跨地图 top-1。 |
+| [GBDT 容量曲线审计](../research/docs/representation/MODEL_CAPACITY_AUDIT.md) | 未通过 | 更大模型提高训练拟合却显著降低留图表现，诊断为过拟合而非容量不足。 |
+| [冲突图神经表示审计](../research/docs/representation/GRAPH_REPRESENTATION_AUDIT.md) | 未通过 | 冲突边相对 DeepSets 有信息，但 MLP、DeepSets 和 GNN 均未超过原 GBDT。 |
+| [冲突图统计特征 GBDT 审计](../research/docs/representation/GRAPH_FEATURE_GBDT_AUDIT.md) | 未通过 | 新增图特征略提高 pairwise accuracy，但 top-1 与 regret 均未改善，停止监督表示扩展。 |
+| [Policy-visited Horizon-4 长期信用审计](../research/docs/sequential/SEQUENTIAL_CREDIT_AUDIT.md) | 未通过 | H4 oracle 机会存在，但长期标签 split-half 稳定性与 H1/H4 差异门槛失败。 |
+| [PP repair order 机制探针](../research/docs/sequential/REPAIR_ORDER_PROBE.md) | 机制证据 | repair order 对结果有实质影响且无固定顺序支配，但随机顺序标签仍不稳定。 |
+| [上下文 repair-order selector 审计](../research/docs/context/CONTEXTUAL_REPAIR_ORDER_AUDIT.md) | 未通过 | selector 仅改善 1.16% AUC、置换百分位 55.2%，并将可行率从 66.7% 降至 59.7%。 |
 
 H4 审计虽然显示 23.7% oracle AUC 机会，但 split-half Spearman、Pareto Jaccard 和最佳集合重合均低于 0.5，不能形成稳定长期标签。repair order 会实质改变结果，但当前上下文 selector 只改善 1.16% 且降低可行率。增加 GBDT 容量造成跨地图过拟合，MLP、DeepSets、GNN 和图统计 GBDT 也未超过冻结 v1。按照预注册规则，这些结果停止了 RL 与继续调参。
 

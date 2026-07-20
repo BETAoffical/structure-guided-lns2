@@ -21,7 +21,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--frozen-models",
-        default="build/initlns-natural-distribution-confirmation-v1-frozen-models",
+        default="build/initlns-frozen-policy-v1-sklearn",
     )
     parser.add_argument(
         "--config", default="configs/closed_loop_confirmation_collection.json"

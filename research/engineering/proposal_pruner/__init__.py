@@ -1,0 +1,1 @@
+"""Archived proposal-pruner implementation."""

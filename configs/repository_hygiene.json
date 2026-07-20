@@ -5,10 +5,10 @@
   "production_python_roots": [
     "experiments",
     "generators",
+    "research",
     "scripts"
   ],
   "tracked_roles": {
-    "archive": "historical reproducibility",
     "artifacts": "frozen models and compact evidence",
     "configs": "versioned experiment registrations",
     "docs": "research and operational documentation",
@@ -16,6 +16,7 @@
     "generators": "map and static OD generation",
     "include": "C++ public interfaces",
     "native_features": "standalone native feature build harness",
+    "research": "historical studies, negative results, and non-default engineering prototypes",
     "requirements": "environment specifications",
     "scripts": "stable command-line entry points",
     "src": "C++ implementation and bindings",
@@ -44,7 +45,8 @@
   "maximum_tracked_file_bytes": 2097152,
   "absolute_path_scan_roots": [
     "configs",
-    "artifacts"
+    "artifacts",
+    "research"
   ],
   "build": {
     "fixed_protected_roots": [

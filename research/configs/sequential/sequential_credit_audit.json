@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "formal": true,
+  "study_role": "policy_train_sequential_credit",
+  "source": {
+    "collection": "build/initlns-policy-visited-natural-v2-collection",
+    "selected_states": "selected_states.jsonl",
+    "selected_states_sha256": "1d2ccdc1d64c476921c8a39d6e18802ee955c754188d4ad4a442ba831e12695a",
+    "candidates": "candidates.jsonl",
+    "candidates_sha256": "917e3180660bd6e6db04fa34c17aa92fe0738c4d51929723b07e66c0fa637416",
+    "run_config": "run_config.json",
+    "run_config_sha256": "6c15295398174911906a503ab1ee089154513e847e587e523e447189af835f59",
+    "evaluation_trials": "evaluation_trial_manifest.jsonl",
+    "evaluation_trials_sha256": "44a225b885435fe215a2f25ccc3efccfe5a7e9fd72ff79ae1f53b04fdf216b4f",
+    "required_split": "policy_train"
+  },
+  "legacy_diagnosis": {
+    "quality_report": "build/repair-experience-calibration-v2/quality_report.json",
+    "quality_report_sha256": "9081b9a68aa9a3bd75360853cf5b7a9cce715cd836dc135482d002a3b277518d",
+    "run_config": "build/repair-experience-calibration-v2/run_config.json",
+    "run_config_sha256": "af453c26053aaa4c93fe80b9b6f09d398ad0134ec146ebaf9f18ee5b6d799a8a",
+    "expected_states": 200,
+    "expected_outcomes": 7344,
+    "expected_h1_h4_pareto_jaccard": 0.5060849648717296,
+    "absolute_tolerance": 1e-12
+  },
+  "dataset": "build/initlns-policy-visited-v1",
+  "dataset_fingerprint": "5bc4116d449dc47d731d2aec2798e84ba570ff3a091fac3f3c073e342d575365",
+  "selection": {
+    "map_count": 12,
+    "states_per_map": 8,
+    "total_states": 96,
+    "stratification": [
+      "stage",
+      "conflict_severity",
+      "task_variant",
+      "solver_seed"
+    ],
+    "conflict_density_thresholds": [0.001, 0.01]
+  },
+  "environment": {
+    "time_limit": 300.0,
+    "max_repair_iterations": 100,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "proposal": {
+    "max_seed_agents": 4,
+    "heuristics": ["target", "collision", "random"],
+    "neighborhood_sizes": [4, 8, 16],
+    "trials": 8,
+    "candidates_per_family": 2
+  },
+  "evaluation_trials": 4,
+  "horizon": 4,
+  "continuation_policy": "realized_dynamic",
+  "trial_process_timeout_seconds": 180.0,
+  "prepare_process_timeout_seconds": 120.0,
+  "workers": 4,
+  "bootstrap_samples": 5000,
+  "bootstrap_seed": 20270318,
+  "thresholds": {
+    "minimum_split_half_spearman": 0.5,
+    "minimum_split_half_pareto_jaccard": 0.5,
+    "minimum_split_half_best_jaccard": 0.5,
+    "maximum_h1_h4_pareto_jaccard": 0.7,
+    "minimum_changed_best_fraction": 0.5,
+    "minimum_oracle_auc_improvement": 0.05,
+    "minimum_positive_opportunity_fraction": 0.6,
+    "minimum_maps_non_worse": 8,
+    "bootstrap_lower_bound": 0.0
+  },
+  "frozen_models": "build/initlns-frozen-policy-v1-sklearn",
+  "model_registration": {
+    "deployment_bundle": "artifacts/initlns-closed-loop-policy-v1",
+    "deployment_manifest_sha256": "d87b649459cf0dde44ed1491ae32f8bc2397728230c33c15caeb036005e5970d",
+    "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
+    "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
+    "development_candidates": "build/realized-neighborhood-stability-probe-v1/candidates.jsonl",
+    "development_candidates_sha256": "6faef4cd6bcba0e79c30790a287142cee4ce580163d02e40cd740e16ac77ebd2",
+    "portable_models": "artifacts/initlns-closed-loop-policy-v1",
+    "portable_model_sha256": {
+      "proposal_dynamic": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
+      "realized_dynamic": "11d0ad6cbbde0f7f6c598e7ba48026d9e5caabb8046a6c2adf602a99d3b77ee3"
+    },
+    "model_sha256": {
+      "proposal_dynamic": "5e4eaeebf69bf8b660d079d214c50504f9ed5ab4311d9e0c4f58ccc5fee801e4",
+      "realized_dynamic": "f765fe2fef80ee692aefd9c34abe8b984aa6dfd1ea0ad1ed8e31bb67985b3ccb"
+    }
+  }
+}

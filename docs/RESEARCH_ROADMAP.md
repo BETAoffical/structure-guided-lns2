@@ -25,7 +25,7 @@ confirmed. See `docs/INITLNS_RESEARCH_REPORT_ZH.md` for the frozen evidence ledg
 
 Before collecting more data or training RL, the project asks whether static
 context adds measurable predictive value beyond the action, seed, and dynamic
-repair state. `scripts/run_context_audit.py` constructs Horizon-4 Pareto
+repair state. `research/scripts/context/run_context_audit.py` constructs Horizon-4 Pareto
 preferences from the existing counterfactual collection and trains three fixed-
 seed pairwise GBDT ablations:
 
@@ -44,7 +44,7 @@ Consequently, Validation closed-loop evaluation, the planned 31,104/62,208-
 outcome expansions, semantic v3 data, and RL training were paused. This result
 did not prove context useless; it said the Pilot v2 representation, Adaptive-
 state distribution, and first GBDT protocol did not establish the required
-incremental value. See `docs/CONTEXT_AUDIT.md`.
+incremental value. See `research/docs/context/CONTEXT_AUDIT.md`.
 
 A pre-registered secondary diagnostic then merged the old Train/Validation into
 a development set, encoded neighborhood size categorically, added a direct
@@ -60,7 +60,7 @@ The secondary gate is therefore **FAIL**. Under the registered stopping rule, th
 new 12/6-map confirmation data and maximum 23,328 outcomes are not generated.
 The current evidence supports only oracle action heterogeneity, not incremental
 predictive value from the hand-crafted static context. See
-`docs/CONTEXT_SECONDARY_AUDIT.md`.
+`research/docs/context/CONTEXT_SECONDARY_AUDIT.md`.
 
 The subsequent local-representation audit also failed its registered recovery
 gates. Neither pre-generation local features nor realized-neighborhood visibility
@@ -71,7 +71,7 @@ real immediate action and realized-neighborhood diversity, but solver seeds 0 an
 state, action identity explained 39.2% of conflict variation, below the 50% gate;
 map and density permutation percentiles were also below 95%. The registered next
 step is an action-trial stability confirmation on unique states, not contextual
-ranking or RL. See `docs/MOVINGAI_MECHANISM_PROBE.md`.
+ranking or RL. See `research/docs/neighborhood/MOVINGAI_MECHANISM_PROBE.md`.
 
 The subsequent quality audit showed why that confirmation cannot simply duplicate
 the existing collection. The 1,368 rows contain only 12 independent states and four
@@ -80,7 +80,7 @@ have low overlap, and one scenario per map confounds topology with task realizat
 The corrected v2 mechanism probe therefore uses three MovingAI scenarios, one solver
 seed for state acquisition, eight action trials, and bounded initial-conflict sources.
 Independent maps per layout family are still required before any transfer claim.
-See `docs/MOVINGAI_PROBE_QUALITY.md`.
+See `research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md`.
 
 The v2 partial confirmation then recovered 35 independent states and 7,776 outcomes
 with eight trials per candidate. Candidate-rank stability improved to 0.684, but
@@ -92,7 +92,7 @@ collectors. The next useful increase is independent layout-family
 replication and balanced scenario/density coverage, not more trials on these states.
 
 The bounded follow-up was therefore the independent-layout confirmation in
-`docs/INDEPENDENT_LAYOUT_PROBE.md`. It uses two new maps per seen layout family and a
+`research/docs/neighborhood/INDEPENDENT_LAYOUT_PROBE.md`. It uses two new maps per seen layout family and a
 complete balanced/bottleneck by 80/100 static-task design. Qualification, exact
 paired tests, Holm correction, and eight action trials must pass before the paused
 12/6-map confirmation or any learned policy is allowed to resume.
@@ -105,7 +105,7 @@ surface. Because realized neighborhoods had Jaccard 0.428, the next admissible
 mechanism study is candidate-neighborhood generation followed by ranking; the
 12/6-map dataset, supervised policy, and RL remain inactive.
 
-The active mechanism gate is now `docs/REALIZED_NEIGHBORHOOD_PROBE.md`. It selects
+The active mechanism gate is now `research/docs/neighborhood/REALIZED_NEIGHBORHOOD_PROBE.md`. It selects
 representative agent sets without reading repair outcomes, then evaluates each
 fixed set with independent PP-order seeds. Only a stable improvement over the
 nominal action labels permits a realized-neighborhood ranking audit; otherwise the
@@ -132,7 +132,7 @@ added only 4.35 top-1 percentage points, while real-context performance reached 
 decision is to advance dynamic-state plus realized-neighborhood ranking and shrink
 the handcrafted map/OD/density claim. RL remains paused. The next permitted gate is
 an independent-map ranking confirmation plus a proposal-only candidate-generation
-interface; see `docs/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`.
+interface; see `research/docs/neighborhood/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md`.
 
 The natural-distribution confirmation then retained zero-conflict and high-conflict
 tasks without resampling. On 12 fresh maps, the frozen realized-neighborhood ranker

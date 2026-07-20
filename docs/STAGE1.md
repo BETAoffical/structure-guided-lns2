@@ -66,5 +66,5 @@ python scripts/generate_dataset.py `
 
 python scripts/inspect_dataset.py --dataset build/feasibility-dataset
 python scripts/generate_gallery.py
-python -m unittest tests.test_stage1_generators -v
+python -m unittest tests.data.test_stage1_generators -v
 ```

@@ -512,6 +512,13 @@ def _registration_text(registration: dict[str, Any]) -> str:
     return f"登记状态：{status}"
 
 
+def _report_document_link(document: str) -> str:
+    path = Path(document)
+    if path.parts[:1] == ("docs",):
+        return Path(*path.parts[1:]).as_posix()
+    return "../" + path.as_posix()
+
+
 def render_chinese_report(
     config: dict[str, Any], manifest: dict[str, Any]
 ) -> str:
@@ -627,7 +634,7 @@ def render_chinese_report(
     )
     for experiment in negative_rows:
         lines.append(
-            f"| [{experiment['title_zh']}]({Path(experiment['document']).name}) | "
+            f"| [{experiment['title_zh']}]({_report_document_link(experiment['document'])}) | "
             f"{STATUS_LABELS[experiment['status']]} | {experiment['claim']} |"
         )
     lines.extend(

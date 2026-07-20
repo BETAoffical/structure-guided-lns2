@@ -6,13 +6,16 @@ formal evidence chain while removing only demonstrably reproducible clutter.
 
 ## Ownership boundary
 
-- `experiments/`, `configs/`, `scripts/`, `tests/`, and `docs/` retain all 24
-  formal studies recorded in `configs/result_consolidation.json`.
+- `experiments/`, `configs/`, and `scripts/` contain the active controller,
+  data pipeline, and supported evaluation entry points.
+- `research/` retains the implementations, configurations, commands, and
+  documentation for all non-current studies recorded in the evidence ledger.
 - `artifacts/` contains the frozen portable policy and compact evidence ledger.
 - `third_party/` contains pinned, licensed MAPF-LNS2 and GPBS sources and is not
   rewritten by repository cleanup.
-- `archive/legacy_stage5/` retains the pre-official simplified solver and its
-  negative Stage 3-5 source history. It is excluded from active builds and tests.
+- The pre-official simplified solver and Stage 3-5 source history were removed
+  from the working tree and remain recoverable from the
+  `pre-repository-restructure-2026-07-20` Git tag.
 - Formal raw collections, datasets, frozen models, `build/venv-graph`, and the
   Windows/Linux build trees remain local under ignored `build/`.
 
@@ -94,6 +97,24 @@ A cleanup is valid only when:
 - Python tests, Linux CTest, and official parity remain unchanged;
 - no protected root appears in the deletion list;
 - the post-cleanup report records every removed path and final disk usage.
+
+## Transparent build compression
+
+Completed JSON, JSONL, CSV, Markdown, and text collections can use NTFS
+transparent compression without changing their paths or logical bytes. The
+manager never compresses environments, models, maps, source, or binaries, and
+it does not set directory inheritance:
+
+```powershell
+python scripts/manage_build_storage.py plan
+python scripts/manage_build_storage.py compress
+python scripts/manage_build_storage.py verify
+```
+
+The registered plan skips compression below 500 MiB projected savings. A
+successful run records every file SHA256 before and after compression, and the
+verification command rejects any changed or missing file. Decompression is
+available through the explicit `decompress` command.
 
 ## 2026-07-20 space cleanup
 

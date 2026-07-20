@@ -1,0 +1,29 @@
+{
+  "schema": "lns2.build_storage_compaction.v1",
+  "schema_version": 1,
+  "minimum_file_bytes": 65536,
+  "minimum_projected_savings_bytes": 524288000,
+  "extensions": [
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".txt"
+  ],
+  "target_roots": [
+    "build/initlns-sequential-credit-audit-v1",
+    "build/initlns-policy-visited-natural-v2-collection",
+    "build/repair-experience-calibration-v2",
+    "build/initlns-local-representation-audit",
+    "build/movingai-mechanism-probe-v2-collection",
+    "build/initlns-policy-visited-natural-v2-training",
+    "build/initlns-closed-loop-multiseed-v1-collection",
+    "build/initlns-natural-distribution-confirmation-v1-collection",
+    "build/movingai-mechanism-probe-collection"
+  ],
+  "excluded_path_parts": [
+    ".git",
+    "models",
+    "venv-graph"
+  ]
+}

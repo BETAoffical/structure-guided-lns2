@@ -28,13 +28,13 @@
   "wall_time_budget_seconds": 300.0,
   "episode_process_timeout_seconds": 360.0,
   "workers": 1,
-  "frozen_models": "build/initlns-natural-distribution-confirmation-v1-frozen-models",
+  "frozen_models": "build/initlns-frozen-policy-v1-sklearn",
   "model_registration": {
     "development_index": "build/initlns-realized-neighborhood-ranking-audit-v1/ranking_index.jsonl",
     "development_index_sha256": "01daf50f6395f98c8937e899c9fd615fc5abd52da30213f30548216170f0f893",
     "development_candidates": "build/realized-neighborhood-stability-probe-v1/candidates.jsonl",
     "development_candidates_sha256": "6faef4cd6bcba0e79c30790a287142cee4ce580163d02e40cd740e16ac77ebd2",
-    "portable_models": "build/initlns-closed-loop-confirmation-v1-portable-models",
+    "portable_models": "artifacts/initlns-closed-loop-policy-v1",
     "portable_model_sha256": {
       "proposal_dynamic": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
       "realized_dynamic": "11d0ad6cbbde0f7f6c598e7ba48026d9e5caabb8046a6c2adf602a99d3b77ee3"

@@ -17,7 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 if NATIVE_BUILD.is_dir():
     sys.path.insert(0, str(NATIVE_BUILD))
 
-from experiments.balanced_controller import load_balanced_controller  # noqa: E402
+from research.engineering.balanced.balanced_controller import load_balanced_controller  # noqa: E402
 from experiments._common import sha256_file  # noqa: E402
 from experiments.closed_loop_confirmation import (  # noqa: E402
     REPAIR_TIMING_SCHEMA,
@@ -25,7 +25,7 @@ from experiments.closed_loop_confirmation import (  # noqa: E402
 )
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_DELTA_GZIP_V2  # noqa: E402
 from experiments.compact_controller_model import load_controller_bundle  # noqa: E402
-from experiments.lns2_tradeoff import (  # noqa: E402
+from research.engineering.legacy_tradeoff.lns2_tradeoff import (  # noqa: E402
     generate_timeout_sensitivity_artifacts,
     generate_tradeoff_artifacts,
     timeout_job_keys,
@@ -40,7 +40,7 @@ from experiments.repair_collection import (  # noqa: E402
     _utc_now,
     _write_json,
 )
-from experiments.route_counterfactual import run_route_counterfactuals  # noqa: E402
+from research.engineering.balanced.route_counterfactual import run_route_counterfactuals  # noqa: E402
 from experiments.run_output_guard import prepare_run_output  # noqa: E402
 
 
@@ -1037,7 +1037,7 @@ def main() -> int:
     parser.add_argument(
         "--legacy-four-way",
         action="store_true",
-        help="Run the archived LNS2/v1/v2/balanced protocol instead.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--counterfactual-routes",
