@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -205,6 +205,26 @@ class CompactPortablePairwiseModel:
     trees: list[list[dict[str, Any]]]
     semantic_fingerprint: str
     native_predictor: Any | None = None
+    _base_feature_index: dict[str, int] = field(init=False, repr=False)
+    _base_feature_names_tuple: tuple[str, ...] = field(init=False, repr=False)
+    _input_feature_indices: list[tuple[str, int]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if len(self.base_feature_names) != len(set(self.base_feature_names)):
+            raise ValueError("compact model contains duplicate base features")
+        self._base_feature_index = {
+            name: index for index, name in enumerate(self.base_feature_names)
+        }
+        self._base_feature_names_tuple = tuple(self.base_feature_names)
+        try:
+            self._input_feature_indices = [
+                (mode, self._base_feature_index[name])
+                for mode, name in self.input_features
+            ]
+        except KeyError as error:
+            raise ValueError(
+                f"compact model input references an unknown base feature: {error.args[0]}"
+            ) from error
 
     @property
     def feature_names(self) -> list[str]:
@@ -219,14 +239,76 @@ class CompactPortablePairwiseModel:
         )
 
     def pair_vector(self, left: dict[str, Any], right: dict[str, Any]) -> list[float]:
-        left_features = dict(left["features"][self.profile])
-        right_features = dict(right["features"][self.profile])
+        left_values = self._row_values(left)
+        right_values = self._row_values(right)
         result = []
-        for mode, name in self.input_features:
-            first = float(left_features.get(name, 0.0))
-            second = float(right_features.get(name, 0.0))
+        for mode, index in self._input_feature_indices:
+            first = left_values[index]
+            second = right_values[index]
             result.append(first - second if mode == "delta" else (first + second) / 2.0)
         return result
+
+    def _row_values(
+        self, row: dict[str, Any]
+    ) -> list[float] | tuple[float, ...]:
+        if "feature_values" in row:
+            names = row.get("feature_names", ())
+            if str(row.get("feature_profile")) != self.profile or (
+                names
+                if isinstance(names, tuple)
+                else tuple(map(str, names))
+            ) != self._base_feature_names_tuple:
+                raise ValueError("dense feature row does not match the compact model")
+            raw_values = row["feature_values"]
+            dense = (
+                raw_values
+                if isinstance(raw_values, tuple)
+                else tuple(map(float, raw_values))
+            )
+            if len(dense) != len(self.base_feature_names):
+                raise ValueError("dense feature row has the wrong dimension")
+            return dense
+        features = dict(row["features"][self.profile])
+        return [float(features.get(name, 0.0)) for name in self.base_feature_names]
+
+    def pair_vectors(
+        self, rows: list[dict[str, Any]]
+    ) -> tuple[list[list[float]], list[list[float]], list[tuple[int, int]]]:
+        values = [self._row_values(row) for row in rows]
+        forward: list[list[float]] = []
+        reverse: list[list[float]] = []
+        pairs: list[tuple[int, int]] = []
+        for left in range(len(rows)):
+            for right in range(left + 1, len(rows)):
+                left_values = values[left]
+                right_values = values[right]
+                forward.append(
+                    [
+                        left_values[index] - right_values[index]
+                        if mode == "delta"
+                        else (left_values[index] + right_values[index]) / 2.0
+                        for mode, index in self._input_feature_indices
+                    ]
+                )
+                reverse.append(
+                    [
+                        right_values[index] - left_values[index]
+                        if mode == "delta"
+                        else (right_values[index] + left_values[index]) / 2.0
+                        for mode, index in self._input_feature_indices
+                    ]
+                )
+                pairs.append((left, right))
+        return forward, reverse, pairs
+
+    def score_candidates(self, rows: list[dict[str, Any]]) -> list[float] | None:
+        native = getattr(self.native_predictor, "score_pairwise_dense", None)
+        if not callable(native):
+            return None
+        values = [self._row_values(row) for row in rows]
+        modes = [0 if mode == "delta" else 1 for mode, _ in self._input_feature_indices]
+        indices = [index for _, index in self._input_feature_indices]
+        return list(map(float, native(values, modes, indices)))
 
     def predict_positive(self, vectors: list[list[float]]) -> list[float]:
         if self.native_predictor is not None:

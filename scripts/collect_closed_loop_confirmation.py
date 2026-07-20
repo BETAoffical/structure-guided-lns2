@@ -10,6 +10,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from experiments.closed_loop_confirmation import (  # noqa: E402
     CONTROLLER_MODES,
+    CONTROLLER_RUNTIMES,
+    VERIFICATION_PROFILES,
     CollectionLockError,
     run_closed_loop_collection,
 )
@@ -62,7 +64,18 @@ def main() -> int:
         "--controller-bundle",
         default="artifacts/initlns-closed-loop-controller-v2",
     )
+    parser.add_argument(
+        "--controller-runtime",
+        choices=CONTROLLER_RUNTIMES,
+        default="reference",
+    )
+    parser.add_argument(
+        "--verification-profile",
+        choices=VERIFICATION_PROFILES,
+        default="audit",
+    )
     parser.add_argument("--balanced-config")
+    parser.add_argument("--stall-guard-config")
     arguments = parser.parse_args()
     try:
         report = run_closed_loop_collection(
@@ -78,7 +91,10 @@ def main() -> int:
             controller=arguments.controller,
             feature_backend=arguments.feature_backend,
             controller_bundle=arguments.controller_bundle,
+            controller_runtime=arguments.controller_runtime,
+            verification_profile=arguments.verification_profile,
             balanced_config=arguments.balanced_config,
+            stall_guard_config=arguments.stall_guard_config,
         )
     except CollectionLockError as error:
         print(json.dumps({"status": "locked", "error": str(error)}), file=sys.stderr)

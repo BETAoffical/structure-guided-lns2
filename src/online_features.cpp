@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -18,6 +19,13 @@ namespace py = pybind11;
 
 namespace
 {
+using FeatureClock = std::chrono::steady_clock;
+
+double elapsedSeconds(const FeatureClock::time_point& started)
+{
+    return std::chrono::duration<double>(FeatureClock::now() - started).count();
+}
+
 struct AgentData
 {
     int id = 0;
@@ -94,7 +102,50 @@ double integralPopulationStd(const std::vector<double>& values)
     return std::sqrt((double)std::max((long double)0, variance));
 }
 
-void aggregate(py::dict& output, const std::string& prefix,
+class DenseFeatureWriter
+{
+public:
+    DenseFeatureWriter(const std::unordered_map<std::string, size_t>& indices,
+                       std::vector<double>& values) :
+        indices(indices), values(values) {}
+
+    class Slot
+    {
+    public:
+        Slot(DenseFeatureWriter& writer, std::string name) :
+            writer(writer), name(std::move(name)) {}
+
+        Slot& operator=(double value)
+        {
+            writer.set(name, value);
+            return *this;
+        }
+
+    private:
+        DenseFeatureWriter& writer;
+        std::string name;
+    };
+
+    Slot operator[](const char* name) { return Slot(*this, name); }
+    Slot operator[](const std::string& name) { return Slot(*this, name); }
+    Slot operator[](const py::str& name)
+    {
+        return Slot(*this, py::cast<std::string>(name));
+    }
+
+private:
+    void set(const std::string& name, double value)
+    {
+        const auto position = indices.find(name);
+        if (position != indices.end()) values[position->second] = value;
+    }
+
+    const std::unordered_map<std::string, size_t>& indices;
+    std::vector<double>& values;
+};
+
+template<typename Output>
+void aggregate(Output& output, const std::string& prefix,
                const std::vector<double>& values)
 {
     double total = 0;
@@ -142,6 +193,10 @@ struct Analysis
     std::vector<int> component_sizes;
     std::vector<double> event_times;
     int vertex_event_count = 0;
+    double input_seconds = 0;
+    double conflict_scan_seconds = 0;
+    double graph_seconds = 0;
+    double path_aggregate_seconds = 0;
 };
 
 void addEvent(Analysis& analysis, int time, bool vertex, int left, int right)
@@ -160,8 +215,9 @@ void addEvent(Analysis& analysis, int time, bool vertex, int left, int right)
 }
 
 Analysis analyze(const py::dict& state, const py::dict& static_grid,
-                 bool include_realized)
+                 bool include_realized, bool fast_conflict_scan)
 {
+    const auto input_started = FeatureClock::now();
     Analysis analysis;
     analysis.rows = py::cast<int>(state["rows"]);
     analysis.cols = py::cast<int>(state["cols"]);
@@ -215,48 +271,109 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
             analysis.visit_heat[cell]++;
         }
     }
+    analysis.input_seconds = elapsedSeconds(input_started);
 
-    for (size_t time = 0; time < horizon; time++)
+    const auto conflict_scan_started = FeatureClock::now();
+    if (!fast_conflict_scan)
     {
-        std::unordered_map<int, std::vector<int>> occupancy;
-        occupancy.reserve(agent_count * 2);
-        std::unordered_map<uint64_t, std::vector<int>> transitions;
-        if (time) transitions.reserve(agent_count * 2);
-        for (const AgentData& agent : analysis.agents)
+        for (size_t time = 0; time < horizon; time++)
         {
-            const int current = agent.path[std::min(time, agent.path.size() - 1)];
-            occupancy[current].push_back(agent.id);
+            std::unordered_map<int, std::vector<int>> occupancy;
+            occupancy.reserve(agent_count * 2);
+            std::unordered_map<uint64_t, std::vector<int>> transitions;
+            if (time) transitions.reserve(agent_count * 2);
+            for (const AgentData& agent : analysis.agents)
+            {
+                const int current = agent.path[std::min(time, agent.path.size() - 1)];
+                occupancy[current].push_back(agent.id);
+                if (time)
+                {
+                    const int previous = agent.path[std::min(time - 1, agent.path.size() - 1)];
+                    if (previous != current)
+                        transitions[directedKey(previous, current)].push_back(agent.id);
+                }
+            }
+            for (auto& value : occupancy)
+            {
+                std::vector<int>& occupants = value.second;
+                std::sort(occupants.begin(), occupants.end());
+                for (size_t left = 0; left < occupants.size(); left++)
+                    for (size_t right = left + 1; right < occupants.size(); right++)
+                        addEvent(analysis, (int)time, true, occupants[left], occupants[right]);
+            }
             if (time)
             {
-                const int previous = agent.path[std::min(time - 1, agent.path.size() - 1)];
-                if (previous != current)
-                    transitions[directedKey(previous, current)].push_back(agent.id);
-            }
-        }
-        for (auto& value : occupancy)
-        {
-            std::vector<int>& occupants = value.second;
-            std::sort(occupants.begin(), occupants.end());
-            for (size_t left = 0; left < occupants.size(); left++)
-                for (size_t right = left + 1; right < occupants.size(); right++)
-                    addEvent(analysis, (int)time, true, occupants[left], occupants[right]);
-        }
-        if (time)
-        {
-            for (const auto& value : transitions)
-            {
-                const int from = keyLeft(value.first);
-                const int to = keyRight(value.first);
-                if (from >= to) continue;
-                const auto reverse = transitions.find(directedKey(to, from));
-                if (reverse == transitions.end()) continue;
-                for (int left : value.second)
-                    for (int right : reverse->second)
-                        addEvent(analysis, (int)time, false, left, right);
+                for (const auto& value : transitions)
+                {
+                    const int from = keyLeft(value.first);
+                    const int to = keyRight(value.first);
+                    if (from >= to) continue;
+                    const auto reverse = transitions.find(directedKey(to, from));
+                    if (reverse == transitions.end()) continue;
+                    for (int left : value.second)
+                        for (int right : reverse->second)
+                            addEvent(analysis, (int)time, false, left, right);
+                }
             }
         }
     }
+    else
+    {
+        std::vector<int> first_occupant(analysis.cell_count, -1);
+        std::vector<int> touched_cells;
+        touched_cells.reserve(agent_count);
+        std::unordered_map<int, std::vector<int>> colliding_occupants;
+        colliding_occupants.reserve(std::max(1, agent_count / 4));
+        std::unordered_map<uint64_t, std::vector<int>> transitions;
+        transitions.reserve(agent_count * 2);
+        std::vector<uint64_t> touched_transitions;
+        touched_transitions.reserve(agent_count);
+        for (size_t time = 0; time < horizon; time++)
+        {
+            for (int cell : touched_cells) first_occupant[cell] = -1;
+            touched_cells.clear();
+            colliding_occupants.clear();
+            for (const AgentData& agent : analysis.agents)
+            {
+                const int current = agent.path[std::min(time, agent.path.size() - 1)];
+                const int first = first_occupant[current];
+                if (first < 0)
+                {
+                    first_occupant[current] = agent.id;
+                    touched_cells.push_back(current);
+                    continue;
+                }
+                auto inserted = colliding_occupants.emplace(
+                    current, std::vector<int>{first}
+                );
+                std::vector<int>& occupants = inserted.first->second;
+                for (int other : occupants)
+                    addEvent(analysis, (int)time, true, other, agent.id);
+                occupants.push_back(agent.id);
+            }
+            if (!time) continue;
 
+            for (uint64_t key : touched_transitions) transitions[key].clear();
+            touched_transitions.clear();
+            for (const AgentData& agent : analysis.agents)
+            {
+                const int current = agent.path[std::min(time, agent.path.size() - 1)];
+                const int previous = agent.path[std::min(time - 1, agent.path.size() - 1)];
+                if (previous == current) continue;
+                const uint64_t key = directedKey(previous, current);
+                const auto reverse = transitions.find(directedKey(current, previous));
+                if (reverse != transitions.end())
+                    for (int other : reverse->second)
+                        addEvent(analysis, (int)time, false, other, agent.id);
+                std::vector<int>& movers = transitions[key];
+                if (movers.empty()) touched_transitions.push_back(key);
+                movers.push_back(agent.id);
+            }
+        }
+    }
+    analysis.conflict_scan_seconds = elapsedSeconds(conflict_scan_started);
+
+    const auto graph_started = FeatureClock::now();
     analysis.adjacency.assign(agent_count, std::vector<int>());
     for (uint64_t key : analysis.conflict_pairs)
     {
@@ -290,7 +407,9 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
         }
         analysis.component_sizes.push_back(size);
     }
+    analysis.graph_seconds = elapsedSeconds(graph_started);
 
+    const auto path_aggregate_started = FeatureClock::now();
     if (include_realized)
         for (AgentData& agent : analysis.agents)
         {
@@ -304,6 +423,7 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
                 agent.visit_heat_sum += analysis.visit_heat[cell];
             }
         }
+    analysis.path_aggregate_seconds = elapsedSeconds(path_aggregate_started);
     return analysis;
 }
 
@@ -320,9 +440,10 @@ py::dict projectedFeatures(const py::dict& source, const py::dict& required,
     return output;
 }
 
-py::dict dynamicFeatures(const py::dict& state, const Analysis& analysis)
+template<typename Output>
+void fillDynamicFeatures(const py::dict& state, const Analysis& analysis,
+                         Output& output)
 {
-    py::dict output;
     const int count = (int)analysis.agents.size();
     std::vector<double> degrees, delays, costs, shortest, waits;
     degrees.reserve(count); delays.reserve(count); costs.reserve(count);
@@ -370,6 +491,12 @@ py::dict dynamicFeatures(const py::dict& state, const Analysis& analysis)
     output["state.sum_of_costs_per_agent"] = ratio(dictDouble(state, "sum_of_costs"), count);
     output["state.low_level_generated_per_agent"] = ratio(dictDouble(low_level, "generated"), count);
     output["state.low_level_runs_per_agent"] = ratio(dictDouble(low_level, "runs"), count);
+}
+
+py::dict dynamicFeatures(const py::dict& state, const Analysis& analysis)
+{
+    py::dict output;
+    fillDynamicFeatures(state, analysis, output);
     return output;
 }
 
@@ -386,10 +513,10 @@ std::vector<int> candidateAgents(const py::dict& candidate, const Analysis& anal
     return values;
 }
 
-py::dict proposalFeatures(const py::dict& candidate, const Analysis& analysis,
-                          const std::vector<int>& selected)
+template<typename Output>
+void fillProposalFeatures(const py::dict& candidate, const Analysis& analysis,
+                          const std::vector<int>& selected, Output& output)
 {
-    py::dict output;
     std::vector<int> seed_ids;
     if (candidate.contains("seed_agents"))
         seed_ids = py::cast<std::vector<int>>(candidate["seed_agents"]);
@@ -446,6 +573,13 @@ py::dict proposalFeatures(const py::dict& candidate, const Analysis& analysis,
     aggregate(output, "proposal.seed_delay", seed_delays);
     aggregate(output, "proposal.seed_path_cost", seed_costs);
     aggregate(output, "proposal.seed_component_size", seed_components);
+}
+
+py::dict proposalFeatures(const py::dict& candidate, const Analysis& analysis,
+                          const std::vector<int>& selected)
+{
+    py::dict output;
+    fillProposalFeatures(candidate, analysis, selected, output);
     return output;
 }
 
@@ -460,9 +594,10 @@ size_t intersectionSize(const std::unordered_set<int>& left,
     return count;
 }
 
-py::dict realizedFeatures(const Analysis& analysis, const std::vector<int>& selected_ids)
+template<typename Output>
+void fillRealizedFeatures(const Analysis& analysis,
+                          const std::vector<int>& selected_ids, Output& output)
 {
-    py::dict output;
     std::vector<int> selected_indices;
     std::vector<unsigned char> selected(analysis.agents.size(), 0);
     for (int id : selected_ids)
@@ -581,6 +716,13 @@ py::dict realizedFeatures(const Analysis& analysis, const std::vector<int>& sele
     aggregate(output, "realized.conflict_degree", conflicts);
     aggregate(output, "realized.path_cost", costs);
     aggregate(output, "realized.path_stretch", stretches);
+}
+
+py::dict realizedFeatures(const Analysis& analysis,
+                          const std::vector<int>& selected_ids)
+{
+    py::dict output;
+    fillRealizedFeatures(analysis, selected_ids, output);
     return output;
 }
 }
@@ -589,7 +731,12 @@ py::dict batchOnlineFeatures(const py::dict& state, const py::list& candidates,
                              const py::dict& static_grid, bool include_realized,
                              const py::dict& required_features)
 {
-    const Analysis analysis = analyze(state, static_grid, include_realized);
+    const auto analysis_started = FeatureClock::now();
+    const Analysis analysis = analyze(
+        state, static_grid, include_realized, false
+    );
+    const double analysis_seconds = elapsedSeconds(analysis_started);
+    const auto fill_started = FeatureClock::now();
     py::dict result;
     result["dynamic"] = projectedFeatures(
         dynamicFeatures(state, analysis), required_features, "dynamic");
@@ -612,5 +759,77 @@ py::dict batchOnlineFeatures(const py::dict& state, const py::list& candidates,
     result["candidate_count"] = py::len(candidates);
     result["event_count"] = analysis.event_times.size();
     result["conflict_pair_count"] = analysis.conflict_pairs.size();
+    result["state_analysis_seconds"] = analysis_seconds;
+    result["state_input_seconds"] = analysis.input_seconds;
+    result["state_conflict_scan_seconds"] = analysis.conflict_scan_seconds;
+    result["state_graph_seconds"] = analysis.graph_seconds;
+    result["state_path_aggregate_seconds"] = analysis.path_aggregate_seconds;
+    result["feature_fill_seconds"] = elapsedSeconds(fill_started);
+    return result;
+}
+
+py::dict batchOnlineFeatureVectors(const py::dict& state,
+                                   const py::list& candidates,
+                                   const py::dict& static_grid,
+                                   const py::list& feature_names)
+{
+    std::vector<std::string> names;
+    names.reserve(py::len(feature_names));
+    bool include_realized = false;
+    for (const py::handle& value : feature_names)
+    {
+        const std::string name = py::cast<std::string>(value);
+        const bool known = name.rfind("state.", 0) == 0 ||
+            name.rfind("context.", 0) == 0 ||
+            name.rfind("proposal.", 0) == 0 ||
+            name.rfind("realized.", 0) == 0;
+        if (!known)
+            throw py::value_error("native dense feature request contains an unknown prefix");
+        include_realized = include_realized || name.rfind("realized.", 0) == 0;
+        names.push_back(name);
+    }
+    if (names.empty())
+        throw py::value_error("native dense feature request is empty");
+
+    std::unordered_map<std::string, size_t> feature_indices;
+    feature_indices.reserve(names.size());
+    for (size_t index = 0; index < names.size(); index++)
+        if (!feature_indices.emplace(names[index], index).second)
+            throw py::value_error("native dense feature request contains duplicate names");
+
+    const auto analysis_started = FeatureClock::now();
+    const Analysis analysis = analyze(
+        state, static_grid, include_realized, true
+    );
+    const double analysis_seconds = elapsedSeconds(analysis_started);
+    const auto fill_started = FeatureClock::now();
+    std::vector<double> dynamic_values(names.size(), 0.0);
+    DenseFeatureWriter dynamic_writer(feature_indices, dynamic_values);
+    fillDynamicFeatures(state, analysis, dynamic_writer);
+    py::list vectors;
+    for (const py::handle& handle : candidates)
+    {
+        const py::dict candidate = py::cast<py::dict>(handle);
+        const std::vector<int> selected = candidateAgents(candidate, analysis);
+        std::vector<double> values = dynamic_values;
+        DenseFeatureWriter writer(feature_indices, values);
+        fillProposalFeatures(candidate, analysis, selected, writer);
+        if (include_realized)
+            fillRealizedFeatures(analysis, selected, writer);
+        vectors.append(py::cast(std::move(values)));
+    }
+
+    py::dict result;
+    result["feature_names"] = feature_names;
+    result["vectors"] = vectors;
+    result["candidate_count"] = py::len(candidates);
+    result["event_count"] = analysis.event_times.size();
+    result["conflict_pair_count"] = analysis.conflict_pairs.size();
+    result["state_analysis_seconds"] = analysis_seconds;
+    result["state_input_seconds"] = analysis.input_seconds;
+    result["state_conflict_scan_seconds"] = analysis.conflict_scan_seconds;
+    result["state_graph_seconds"] = analysis.graph_seconds;
+    result["state_path_aggregate_seconds"] = analysis.path_aggregate_seconds;
+    result["feature_fill_seconds"] = elapsedSeconds(fill_started);
     return result;
 }

@@ -64,6 +64,22 @@ def _native_batch_function() -> Any | None:
     return None
 
 
+@functools.lru_cache(maxsize=1)
+def _native_vector_function() -> Any | None:
+    # _native_batch_function performs the build-directory discovery and adds
+    # it to sys.path, so call it before probing the companion dense API.
+    _native_batch_function()
+    for module_name in ("lns2_env", "lns2_features_native"):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        function = getattr(module, "batch_online_feature_vectors", None)
+        if callable(function):
+            return function
+    return None
+
+
 @functools.lru_cache(maxsize=16)
 def _cached_static_grid(
     rows: int, cols: int, obstacles: tuple[int, ...]
@@ -496,6 +512,25 @@ def _assert_native_rows(
             )
 
 
+def _dense_rows_as_feature_rows(
+    rows: list[dict[str, Any]], profile: str
+) -> list[dict[str, Any]]:
+    converted = []
+    for row in rows:
+        names = tuple(map(str, row["feature_names"]))
+        values = tuple(map(float, row["feature_values"]))
+        if len(names) != len(values) or len(names) != len(set(names)):
+            raise ValueError("invalid dense feature row")
+        converted.append(
+            {
+                "candidate_id": row["candidate_id"],
+                "candidate_key": row["candidate_key"],
+                "features": {profile: dict(zip(names, values))},
+            }
+        )
+    return converted
+
+
 class OnlineFeatureEngine:
     def __init__(
         self,
@@ -504,6 +539,7 @@ class OnlineFeatureEngine:
         backend: str = "auto",
         shadow_validation: bool = False,
         required_features: dict[str, Iterable[str]] | None = None,
+        dense_output: bool = False,
     ) -> None:
         if backend not in FEATURE_BACKENDS:
             raise ValueError(f"unsupported feature backend: {backend}")
@@ -516,6 +552,14 @@ class OnlineFeatureEngine:
             else "python" if backend == "auto" else backend
         )
         self.native_function = native_function if self.backend == "native" else None
+        self.native_vector_function = (
+            _native_vector_function() if self.backend == "native" else None
+        )
+        self.dense_output = bool(dense_output)
+        if self.dense_output and self.backend != "native":
+            raise ValueError("dense feature output requires the native backend")
+        if self.dense_output and self.native_vector_function is None:
+            raise ValueError("native dense feature output is not available in this build")
         native_doc = str(getattr(self.native_function, "__doc__", ""))
         self.native_accepts_required_features = "required_features" in native_doc
         self.shadow_validation = bool(shadow_validation)
@@ -542,6 +586,7 @@ class OnlineFeatureEngine:
         self.dynamic: dict[str, float] | None = None
         self.last_shadow_rows: dict[str, list[dict[str, Any]]] = {}
         self.last_prepare_metrics: dict[str, Any] = {}
+        self.last_native_metrics: dict[str, float] = {}
         self.prepare(initial_state)
 
     def _native_payload(
@@ -561,7 +606,7 @@ class OnlineFeatureEngine:
             "realized": [name for name in names if name.startswith("realized.")],
         }
         if self.native_accepts_required_features:
-            return dict(
+            payload = dict(
                 self.native_function(
                     self.state,
                     candidates,
@@ -570,11 +615,82 @@ class OnlineFeatureEngine:
                     required,
                 )
             )
-        return dict(
-            self.native_function(
-                self.state, candidates, self.native_static, include_realized
+        else:
+            payload = dict(
+                self.native_function(
+                    self.state, candidates, self.native_static, include_realized
+                )
+            )
+        self.last_native_metrics = {
+            name: float(payload.get(name, 0.0))
+            for name in (
+                "state_analysis_seconds",
+                "state_input_seconds",
+                "state_conflict_scan_seconds",
+                "state_graph_seconds",
+                "state_path_aggregate_seconds",
+                "feature_fill_seconds",
+            )
+        }
+        return payload
+
+    def _native_vector_payload(
+        self, candidates: list[dict[str, Any]], *, profile: str
+    ) -> dict[str, Any]:
+        assert self.native_vector_function is not None and self.state is not None
+        names = self.required_features[profile]
+        payload = dict(
+            self.native_vector_function(
+                self.state, candidates, self.native_static, list(names)
             )
         )
+        returned_names = tuple(map(str, payload.get("feature_names", ())))
+        vectors = list(payload.get("vectors", ()))
+        if returned_names != names:
+            raise ValueError("native dense feature order differs from the controller schema")
+        if len(vectors) != len(candidates):
+            raise ValueError("native dense feature batch has the wrong size")
+        self.last_native_metrics = {
+            name: float(payload.get(name, 0.0))
+            for name in (
+                "state_analysis_seconds",
+                "state_input_seconds",
+                "state_conflict_scan_seconds",
+                "state_graph_seconds",
+                "state_path_aggregate_seconds",
+                "feature_fill_seconds",
+            )
+        }
+        return payload
+
+    def _dense_rows(
+        self,
+        candidates: list[dict[str, Any]],
+        *,
+        profile: str,
+        state_hash: str,
+    ) -> list[dict[str, Any]]:
+        payload = self._native_vector_payload(candidates, profile=profile)
+        names = self.required_features[profile]
+        rows = []
+        for candidate, raw_values in zip(candidates, payload["vectors"]):
+            values = raw_values if isinstance(raw_values, tuple) else tuple(raw_values)
+            if len(values) != len(names) or any(
+                not math.isfinite(value) for value in values
+            ):
+                raise ValueError("native dense feature vector is invalid")
+            candidate_id = str(candidate["candidate_id"])
+            rows.append(
+                {
+                    "state_id": state_hash,
+                    "candidate_id": candidate_id,
+                    "candidate_key": candidate_id,
+                    "feature_profile": profile,
+                    "feature_names": names,
+                    "feature_values": values,
+                }
+            )
+        return rows
 
     def _analysis_from_index(
         self, state: dict[str, Any], index: TemporalConflictIndex
@@ -657,6 +773,7 @@ class OnlineFeatureEngine:
                 "incremental": changed_agents is not None,
                 "incremental_cache_hit": False,
                 "feature_backend": self.backend,
+                "feature_output": "dense" if self.dense_output else "dict",
             }
             return dict(self.last_prepare_metrics)
         conflict_seconds = 0.0
@@ -701,6 +818,7 @@ class OnlineFeatureEngine:
             "incremental": incremental,
             "incremental_cache_hit": cache_hit,
             "feature_backend": self.backend,
+            "feature_output": "dense" if self.dense_output else "dict",
         }
         return dict(self.last_prepare_metrics)
 
@@ -712,6 +830,37 @@ class OnlineFeatureEngine:
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         assert self.state is not None
         started = time.perf_counter()
+        if self.dense_output:
+            rows = self._dense_rows(
+                candidates,
+                profile="proposal_dynamic",
+                state_hash=state_hash,
+            )
+            if self.shadow_validation:
+                reference = online_rows_for_shadow(self.state, candidates)
+                _assert_native_rows(
+                    reference,
+                    _dense_rows_as_feature_rows(rows, "proposal_dynamic"),
+                    "proposal_dynamic",
+                )
+                self.last_shadow_rows["proposal_dynamic"] = reference
+            total_seconds = time.perf_counter() - started
+            native_analysis_seconds = self.last_native_metrics.get(
+                "state_analysis_seconds", 0.0
+            )
+            return rows, {
+                "proposal_feature_seconds": max(
+                    0.0, total_seconds - native_analysis_seconds
+                ),
+                "feature_output": "dense",
+                **self.last_native_metrics,
+                "feature_python_seconds": max(
+                    0.0,
+                    total_seconds
+                    - self.last_native_metrics.get("state_analysis_seconds", 0.0)
+                    - self.last_native_metrics.get("feature_fill_seconds", 0.0),
+                ),
+            }
         if self.backend == "native":
             payload = self._native_payload(
                 candidates,
@@ -743,8 +892,21 @@ class OnlineFeatureEngine:
                 reference = online_rows_for_shadow(self.state, candidates)
                 _assert_native_rows(reference, rows, "proposal_dynamic")
                 self.last_shadow_rows["proposal_dynamic"] = reference
+            total_seconds = time.perf_counter() - started
+            native_analysis_seconds = self.last_native_metrics.get(
+                "state_analysis_seconds", 0.0
+            )
             return rows, {
-                "proposal_feature_seconds": time.perf_counter() - started
+                "proposal_feature_seconds": max(
+                    0.0, total_seconds - native_analysis_seconds
+                ),
+                **self.last_native_metrics,
+                "feature_python_seconds": max(
+                    0.0,
+                    total_seconds
+                    - self.last_native_metrics.get("state_analysis_seconds", 0.0)
+                    - self.last_native_metrics.get("feature_fill_seconds", 0.0),
+                ),
             }
         assert self.analysis is not None and self.cache is not None and self.dynamic is not None
         rows = []
@@ -783,6 +945,37 @@ class OnlineFeatureEngine:
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         assert self.state is not None
         started = time.perf_counter()
+        if self.dense_output:
+            rows = self._dense_rows(
+                candidates,
+                profile="realized_dynamic",
+                state_hash=state_hash,
+            )
+            if self.shadow_validation:
+                reference = online_rows_for_shadow(self.state, candidates)
+                _assert_native_rows(
+                    reference,
+                    _dense_rows_as_feature_rows(rows, "realized_dynamic"),
+                    "realized_dynamic",
+                )
+                self.last_shadow_rows["realized_dynamic"] = reference
+            total_seconds = time.perf_counter() - started
+            native_analysis_seconds = self.last_native_metrics.get(
+                "state_analysis_seconds", 0.0
+            )
+            return rows, {
+                "realized_feature_seconds": max(
+                    0.0, total_seconds - native_analysis_seconds
+                ),
+                "feature_output": "dense",
+                **self.last_native_metrics,
+                "feature_python_seconds": max(
+                    0.0,
+                    total_seconds
+                    - self.last_native_metrics.get("state_analysis_seconds", 0.0)
+                    - self.last_native_metrics.get("feature_fill_seconds", 0.0),
+                ),
+            }
         if self.backend == "native":
             payload = self._native_payload(
                 candidates,
@@ -817,8 +1010,21 @@ class OnlineFeatureEngine:
                 reference = online_rows_for_shadow(self.state, candidates)
                 _assert_native_rows(reference, rows, "realized_dynamic")
                 self.last_shadow_rows["realized_dynamic"] = reference
+            total_seconds = time.perf_counter() - started
+            native_analysis_seconds = self.last_native_metrics.get(
+                "state_analysis_seconds", 0.0
+            )
             return rows, {
-                "realized_feature_seconds": time.perf_counter() - started
+                "realized_feature_seconds": max(
+                    0.0, total_seconds - native_analysis_seconds
+                ),
+                **self.last_native_metrics,
+                "feature_python_seconds": max(
+                    0.0,
+                    total_seconds
+                    - self.last_native_metrics.get("state_analysis_seconds", 0.0)
+                    - self.last_native_metrics.get("feature_fill_seconds", 0.0),
+                ),
             }
         assert self.analysis is not None and self.cache is not None and self.dynamic is not None
         rows = []
@@ -859,6 +1065,7 @@ class OnlineFeatureEngine:
 __all__ = [
     "FEATURE_BACKENDS",
     "OnlineFeatureEngine",
+    "_native_vector_function",
     "TemporalConflictIndex",
     "optimized_explicit_neighborhood_features",
     "static_grid_for_state",

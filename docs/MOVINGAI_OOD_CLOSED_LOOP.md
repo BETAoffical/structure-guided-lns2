@@ -144,7 +144,67 @@ time by 90.88% overall (10.97x), and by 93.25% on maze600. Replacing the feature
 v1 timing decomposition projects a 2.73x controller speedup and 1.43x controller-plus-repair speedup;
 those two values are estimates until the quick/formal wall-clock run records observed evidence.
 
-## LNS2 trade-off and balanced routing
+## Default LNS2/v2 dual-track bottleneck evaluation
+
+The default evaluation now compares only original `official_adaptive` and `v2-full`. The historical
+track preserves the registered 100-repair/300-second protocol. The wall-clock track disables both the
+native and Python repair-count limits and runs each controller until it reaches a globally conflict-free
+state or the 300-second deadline. Any task/seed that either controller does not solve is rerun for both
+controllers from the same seed under an uncapped 600-second diagnostic budget.
+
+```bash
+python3 scripts/run_lns2_tradeoff_evaluation.py \
+  --mode quick \
+  --evaluation-tracks historical,wall-clock \
+  --controllers official_adaptive,v2-full \
+  --wall-clock-seconds 300 \
+  --wall-clock-sensitivity-seconds 600 \
+  --feature-backend native \
+  --controller-runtime optimized \
+  --verification-profile deployment \
+  --output build/initlns-lns2-bottleneck-quick-v2-exact
+```
+
+`audit` runs the compact proposal and dense feature paths with a full reference shadow comparison on
+every repair. `deployment` validates the read-only solver revision on every repair and performs a full
+state check every 20 repairs; final-state fingerprint validation remains mandatory. Both profiles keep
+the same candidate pool, feature order, model scores, ranking, action, and PP implementation.
+
+Before a long quick run, the exact runtime benchmark checks the frozen semantics and speed targets on
+the registered representative tasks:
+
+```bash
+python3 scripts/benchmark_exact_runtime.py
+```
+
+The bottleneck report deliberately keeps two AUC definitions separate. The historical track reports
+both raw fixed-100-repair AUC and initial-conflict-normalized fixed-100-repair AUC; these measure the
+quality of the repair sequence. The wall-clock track reports normalized AUC integrated over real time;
+this includes candidate selection, feature construction, PP, state export, and orchestration, and is the
+metric for practical speed. A policy can improve fixed-step AUC while losing wall-clock AUC if its better
+repair choices cost too much per iteration.
+
+Each repair records candidate generation, feature stages, ranking, native neighborhood generation, PP,
+repair bookkeeping, C++ state snapshots, Python export, orchestration, gzip trace writing, and complete
+loop time. State-fingerprint time is also reported as a child of orchestration (and is not double-counted
+in the additive total). Trace validation, atomic rename, hashing, and other episode-finalization costs are recorded
+separately so they cannot be mistaken for model or PP time. The output report contains
+`iteration_timings.csv`, `episode_timing_breakdown.csv`, `paired_bottleneck_decomposition.csv`,
+`timing_summary.csv`, `neighborhood_pp_summary.csv`, `wall_clock_sensitivity.csv`, four SVG diagnostics, and
+`v2_bottleneck_report.md`. It reports overall, map, layout-family, agent-count, and paired common-success
+groups. Quick runs 8 tasks x 3 seeds x 2 controllers on each primary track. Timing is single-worker and
+controller order is hash-rotated per task/seed.
+
+Run formal only after the dual-track quick status and compact-storage audit pass:
+
+```bash
+python3 scripts/run_lns2_tradeoff_evaluation.py --mode formal
+```
+
+`v1-full` and `v2-balanced` remain available solely through the archived protocol below; they are no
+longer part of routine quick/formal runs or model training.
+
+## Legacy four-way trade-off and balanced routing
 
 The original solver is measured as the `official_adaptive` policy. `v1-full` is the old implementation:
 at every repair it generates candidates, computes the old features, and uses the frozen ranker to select
@@ -173,7 +233,7 @@ with `--resume`. Run the paired quick study only after that file exists:
 
 ```bash
 python3 scripts/run_lns2_tradeoff_evaluation.py \
-  --mode quick --counterfactual-routes skipped \
+  --mode quick --legacy-four-way --counterfactual-routes skipped \
   --timeout-sensitivity-seconds 600 \
   --output build/initlns-lns2-tradeoff-quick-native-v2
 ```
@@ -212,7 +272,7 @@ coverage all pass, run:
 
 ```bash
 python3 scripts/run_lns2_tradeoff_evaluation.py \
-  --mode formal --counterfactual-routes skipped
+  --mode formal --legacy-four-way --counterfactual-routes skipped
 ```
 
 Formal covers 48 tasks, three seeds, and four controllers: 576 complete episodes. The default remains

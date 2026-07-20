@@ -90,7 +90,12 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
         observed=getattr(module, "__file__", None),
         detail=native_error,
     )
-    for attribute in ("LNS2RepairEnv", "PortableTreeEnsemble", "batch_online_features"):
+    for attribute in (
+        "LNS2RepairEnv",
+        "PortableTreeEnsemble",
+        "batch_online_features",
+        "batch_online_feature_vectors",
+    ):
         _check(
             rows,
             f"lns2_env:{attribute}",
@@ -102,25 +107,74 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
                 else None
             ),
         )
+    timing_schema = (
+        str(getattr(module, "repair_timing_schema", "")) if module is not None else None
+    )
+    _check(
+        rows,
+        "lns2_env:repair-timing-schema",
+        timing_schema == "lns2.repair_timing.v1",
+        expected="lns2.repair_timing.v1",
+        observed=timing_schema,
+        detail="Rebuild build/linux/project before running the bottleneck evaluation.",
+    )
+    reset_timing_method = (
+        getattr(getattr(module, "LNS2RepairEnv", object), "get_last_reset_timings", None)
+        if module is not None
+        else None
+    )
+    _check(
+        rows,
+        "lns2_env:get-last-reset-timings",
+        callable(reset_timing_method),
+        expected="callable",
+        observed=(type(reset_timing_method).__name__ if reset_timing_method is not None else None),
+    )
+    compact_proposal_method = (
+        getattr(getattr(module, "LNS2RepairEnv", object), "propose_batch_compact", None)
+        if module is not None
+        else None
+    )
+    _check(
+        rows,
+        "lns2_env:propose-batch-compact",
+        callable(compact_proposal_method),
+        expected="callable",
+        observed=(
+            type(compact_proposal_method).__name__
+            if compact_proposal_method is not None
+            else None
+        ),
+    )
     required_paths = {
-        "controller-v2": PROJECT_ROOT
-        / "artifacts"
-        / "initlns-closed-loop-controller-v2"
-        / "controller_manifest.json",
-        "movingai-dataset": PROJECT_ROOT
-        / "build"
-        / "initlns-movingai-ood-dataset-v1"
-        / "dataset_summary.json",
-        "balanced-controller": PROJECT_ROOT
-        / "build"
-        / "initlns-lns2-speed-quality-calibration"
-        / "balanced_controller.json",
+        "controller-v2": (
+            PROJECT_ROOT
+            / "artifacts"
+            / "initlns-closed-loop-controller-v2"
+            / "controller_manifest.json",
+            True,
+        ),
+        "movingai-dataset": (
+            PROJECT_ROOT
+            / "build"
+            / "initlns-movingai-ood-dataset-v1"
+            / "dataset_summary.json",
+            True,
+        ),
+        "balanced-controller": (
+            PROJECT_ROOT
+            / "build"
+            / "initlns-lns2-speed-quality-calibration"
+            / "balanced_controller.json",
+            False,
+        ),
     }
-    for name, path in required_paths.items():
+    for name, (path, required) in required_paths.items():
         _check(
             rows,
             f"runtime-file:{name}",
             path.is_file(),
+            required=required,
             expected=str(path),
             observed="present" if path.is_file() else "missing",
         )

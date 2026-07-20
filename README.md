@@ -4,6 +4,9 @@ Research infrastructure for context-aware neighborhood control during the collis
 MAPF-LNS2. The active solver is now the complete official MAPF-LNS2 codebase, not the former
 dependency-free approximation.
 
+For a Chinese guide to the current main path, historical experiments, configurations, tests, artifacts,
+and local `build/` outputs, see [`docs/PROJECT_FILE_GUIDE_ZH.md`](docs/PROJECT_FILE_GUIDE_ZH.md).
+
 ## Research target
 
 The frozen claim is deliberately narrow:
@@ -53,8 +56,9 @@ python3 scripts/check_environment.py --profile runtime-wsl
 python scripts/check_environment.py --profile training-windows
 ```
 
-The checker is read-only and never installs packages. The registered WSL runtime and Windows training
-environment already contain their required dependencies.
+The checker is read-only and never installs packages. The WSL profile also rejects a stale native
+module unless it exposes `lns2.repair_timing.v1` and the reset-timing interface; rebuild the native
+module after C++ timing changes. The registered dependency versions otherwise require no new packages.
 
 From an Ubuntu shell in this repository:
 
@@ -63,6 +67,29 @@ cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release
 cmake --build build/linux/project --parallel 4
 ctest --test-dir build/linux/project --output-on-failure
 ```
+
+For the exact v2 deployment path, run `python3 scripts/benchmark_exact_runtime.py` before the dual-track
+quick evaluation. The benchmark requires identical candidates, features, scores, ranking, and selection,
+then checks compact proposal generation, dense native features, and complete selection latency. The
+historical report separates raw and initial-conflict-normalized fixed-100-repair AUC from normalized
+wall-clock AUC so decision quality is not confused with runtime.
+
+The experimental `v2-stall-safe` controller keeps the frozen v2 scores and full candidate ranking, but
+backs off from repeatedly failed neighborhoods when PP rolls back to the same repair state. Before using
+it in a quick comparison, reproduce the target stall and test rank-2, size-capped, and Adaptive repairs
+from the same state:
+
+```bash
+python3 scripts/probe_stalled_state.py \
+  --source build/initlns-lns2-bottleneck-quick-v2-exact/tracks/wall-clock-600/collections/v2-full \
+  --task-id maze-128-128-1__random_04__agents_0600 \
+  --solver-seed 2 --auto-terminal-stall --trials 8 \
+  --output build/initlns-stalled-state-probe-v1
+```
+
+The guarded controller is intentionally separate from `v2-full`; diagnostic subsets are marked
+non-promotable and require an explicit output directory. See
+[`docs/V2_STALL_SAFE_EVALUATION.md`](docs/V2_STALL_SAFE_EVALUATION.md).
 
 Build targets:
 
@@ -376,6 +403,8 @@ The audit never deletes files. See [`docs/REPOSITORY_HYGIENE.md`](docs/REPOSITOR
 - [`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md): frozen-v1 standard-layout OOD
   qualification, five-policy closed-loop comparison, and cross-layout stopping rule.
 - [`docs/ENVIRONMENT_AUDIT.md`](docs/ENVIRONMENT_AUDIT.md): WSL diagnosis and dependency inventory.
+- [`docs/V2_STALL_SAFE_EVALUATION.md`](docs/V2_STALL_SAFE_EVALUATION.md): same-state stall probe,
+  guarded fallback semantics, staged quick gates, and long-horizon stopping rules.
 - [`docs/REPOSITORY_HYGIENE.md`](docs/REPOSITORY_HYGIENE.md): code ownership, evidence protection,
   duplicate-helper consolidation, and the read-only build cleanup policy.
 - [`docs/STAGE1.md`](docs/STAGE1.md): active warehouse dataset.

@@ -99,7 +99,7 @@ add_test(NAME lns2_python_env COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_env.py"
 )
 set_tests_properties(lns2_python_env PROPERTIES ENVIRONMENT
-    "PYTHONPATH=$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
 )
 add_test(NAME lns2_repair_collection_native COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_repair_collection_native.py"

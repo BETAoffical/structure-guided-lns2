@@ -116,7 +116,18 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
            << ",\"sum_of_costs_before\":" << transition.sum_of_costs_before
            << ",\"sum_of_costs_after\":" << transition.sum_of_costs_after
            << ",\"runtime_before\":" << transition.runtime_before
-           << ",\"runtime_after\":" << transition.runtime_after << '}'
+           << ",\"runtime_after\":" << transition.runtime_after
+           << ",\"native_step_seconds\":" << transition.native_step_seconds
+           << ",\"native_neighborhood_generation_seconds\":"
+           << transition.neighborhood_generation_seconds
+           << ",\"native_replan_seconds\":" << transition.replan_seconds
+           << ",\"pp_replan_seconds\":" << transition.pp_replan_seconds
+           << ",\"native_state_snapshot_seconds\":"
+           << transition.state_snapshot_seconds
+           << ",\"native_repair_bookkeeping_seconds\":"
+           << transition.repair_bookkeeping_seconds
+           << ",\"native_residual_seconds\":"
+           << transition.native_residual_seconds << '}'
            << ",\"before\":";
     writeState(before);
     output << ",\"after\":";

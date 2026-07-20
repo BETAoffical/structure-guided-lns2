@@ -200,6 +200,26 @@ class ControllerV2Tests(unittest.TestCase):
             new_index, new_scores, _ = score_online_candidates(rows, compact)
             self.assertEqual(old_index, new_index)
             self.assertEqual(old_scores, new_scores)
+            dense_rows = []
+            for row in rows:
+                features = row["features"][profile]
+                dense_rows.append(
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "candidate_key": row["candidate_key"],
+                        "feature_profile": profile,
+                        "feature_names": tuple(compact.base_feature_names),
+                        "feature_values": tuple(
+                            float(features.get(name, 0.0))
+                            for name in compact.base_feature_names
+                        ),
+                    }
+                )
+            dense_index, dense_scores, _ = score_online_candidates(
+                dense_rows, compact
+            )
+            self.assertEqual(new_index, dense_index)
+            self.assertEqual(new_scores, dense_scores)
 
     def test_python_incremental_engine_matches_reference(self) -> None:
         first = make_state()
@@ -433,6 +453,52 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(metrics["state_check_backend"], "revision")
         self.assertFalse(metrics["full_state_verified"])
 
+    def test_compact_proposal_backend_matches_reference_shadow(self) -> None:
+        state = make_state()
+
+        class Environment:
+            revision = 11
+
+            def get_state_revision(self) -> int:
+                return self.revision
+
+            def propose_batch(self, actions: list[dict]) -> list[dict]:
+                return [
+                    {
+                        "action_valid": True,
+                        "generated": True,
+                        "neighborhood": [0, 1],
+                    }
+                    for _ in actions
+                ]
+
+            def propose_batch_compact(self, actions: list[dict]) -> list[tuple]:
+                return [(True, True, [0, 1]) for _ in actions]
+
+            def get_state(self) -> dict:
+                return state
+
+        candidates, metrics = generate_online_candidates(
+            Environment(),
+            state,
+            task_id="task",
+            solver_seed=1,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target"],
+                "neighborhood_sizes": [4],
+                "trials": 1,
+                "candidates_per_family": 1,
+            },
+            state_hash=state_fingerprint(state),
+            proposal_backend="optimized",
+            shadow_validation=True,
+        )
+        self.assertEqual(metrics["backend"], "compact")
+        self.assertTrue(metrics["shadow_validation_passed"])
+        self.assertEqual(candidates[0]["agents"], [0, 1])
+
     def test_v2_full_worker_executes_one_learned_decision(self) -> None:
         initial = make_state()
         _refresh_conflicts(initial)
@@ -642,6 +708,230 @@ class ControllerV2Tests(unittest.TestCase):
         )
         self.assertEqual(
             summary["controller_totals"].get("candidate_count", 0), 0
+        )
+
+    def test_v2_stall_safe_backs_off_then_uses_official_fallback(self) -> None:
+        initial = make_state()
+        _refresh_conflicts(initial)
+        states = []
+        for iteration in range(8):
+            state = copy.deepcopy(initial)
+            state["iteration"] = iteration
+            state["low_level"] = {
+                "expanded": iteration,
+                "generated": iteration,
+                "reopened": 0,
+                "runs": iteration,
+            }
+            state["num_of_colliding_pairs"] = 5 if iteration < 7 else 0
+            state["feasible"] = iteration == 7
+            state["done"] = iteration == 7
+            if iteration == 7:
+                state["conflict_edges"] = []
+            states.append(state)
+
+        class Environment:
+            def __init__(self) -> None:
+                self.index = 0
+
+            def reset(self, seed: int) -> dict:
+                self.index = 0
+                return states[0]
+
+            def step(self, action: dict) -> dict:
+                expected_sizes = (4, 4, 3, 3, 2, 2)
+                if self.index < 6:
+                    if action.get("mode") != "explicit_neighborhood":
+                        raise AssertionError(f"unexpected model action: {action}")
+                    if len(action["agents"]) != expected_sizes[self.index]:
+                        raise AssertionError(f"unexpected guarded size: {action}")
+                    neighborhood = list(action["agents"])
+                    replan_success = False
+                else:
+                    if action.get("mode") != "official" or "random_seed" not in action:
+                        raise AssertionError(f"unexpected fallback action: {action}")
+                    neighborhood = [0, 1]
+                    replan_success = True
+                before = states[self.index]
+                self.index += 1
+                after = states[self.index]
+                metrics = {
+                    "action_valid": True,
+                    "neighborhood": neighborhood,
+                    "requested_random_seed": int(action["random_seed"]),
+                    "conflicts_before": int(before["num_of_colliding_pairs"]),
+                    "conflicts_after": int(after["num_of_colliding_pairs"]),
+                    "replan_success": replan_success,
+                }
+                return {
+                    "observation": after,
+                    "metrics": metrics,
+                    "terminated": bool(after["feasible"]),
+                    "truncated": False,
+                }
+
+        class FeatureEngine:
+            def __init__(self, state: dict, **_kwargs: object) -> None:
+                self.backend = "fixture"
+                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
+                self.last_shadow_rows: dict[str, list[dict]] = {}
+
+            def prepare(self, state: dict, *, changed_agents: list[int]) -> dict:
+                return {"state_analysis_seconds": 0.0}
+
+            def realized_rows(
+                self, candidates: list[dict], *, state_hash: str
+            ) -> tuple[list[dict], dict]:
+                return (
+                    [
+                        {
+                            "candidate_id": candidate["candidate_id"],
+                            "candidate_key": candidate["candidate_id"],
+                            "features": {"realized_dynamic": {}},
+                        }
+                        for candidate in candidates
+                    ],
+                    {"realized_feature_seconds": 0.0},
+                )
+
+        candidate_rows = [
+            {
+                "candidate_id": "large",
+                "agents": [0, 1, 2, 3],
+                "actual_size": 4,
+                "selection_families": ["target:4"],
+                "proposal_count_by_family": {"target:4": 1},
+                "proposal_seeds": [10],
+                "seed_agents": [0],
+            },
+            {
+                "candidate_id": "medium",
+                "agents": [0, 1, 2],
+                "actual_size": 3,
+                "selection_families": ["target:3"],
+                "proposal_count_by_family": {"target:3": 1},
+                "proposal_seeds": [11],
+                "seed_agents": [0],
+            },
+            {
+                "candidate_id": "small",
+                "agents": [0, 1],
+                "actual_size": 2,
+                "selection_families": ["target:2"],
+                "proposal_count_by_family": {"target:2": 1},
+                "proposal_seeds": [12],
+                "seed_agents": [0],
+            },
+        ]
+
+        def generated(*_args: object, **_kwargs: object) -> tuple[list[dict], dict]:
+            return (
+                copy.deepcopy(candidate_rows),
+                {
+                    "proposal_count": 3,
+                    "candidate_count": 3,
+                    "proposal_seconds": 0.0,
+                    "candidate_generation_seconds": 0.0,
+                    "state_check_seconds": 0.0,
+                    "state_check_fingerprint_seconds": 0.0,
+                    "state_check_backend": "fixture",
+                    "full_state_verified": True,
+                    "state_revision": 1,
+                    "backend": "fixture",
+                },
+            )
+
+        config = json.loads(
+            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 1,
+                "output_root": directory,
+                "run_fingerprint": "stall-safe-run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 7,
+                "metric_iteration_budget": 7,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [2, 3, 4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                "model_registration": config["model_registration"],
+                "controller": "v2-stall-safe",
+                "stall_guard_config": {
+                    "schema": "lns2.stall_guard.v1",
+                    "schema_version": 1,
+                    "unchanged_state_attempts_per_level": 2,
+                    "size_caps": [4, 3, 2],
+                    "terminal_fallback": "official_adaptive",
+                    "reset_on_state_fingerprint_change": True,
+                },
+                "feature_backend": "python",
+                "controller_bundle": str(
+                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
+                ),
+                "feature_shadow_validation": False,
+                "proposal_state_verification": "always",
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=Environment(),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    FeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generated,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.score_online_candidates",
+                    return_value=(0, [3.0, 2.0, 1.0], 1.0),
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            events = read_trace_events(Path(directory) / result["trace_file"])
+
+        self.assertEqual(result["status"], "ok", result.get("error"))
+        summary = result["summary"]
+        self.assertEqual(summary["model_decision_count"], 6)
+        self.assertEqual(summary["official_decision_count"], 1)
+        self.assertEqual(summary["stall_guard"]["size_backoff_count"], 2)
+        self.assertEqual(
+            summary["stall_guard"]["official_fallback_decision_count"], 1
+        )
+        self.assertEqual(summary["stall_guard"]["rescued_state_count"], 1)
+        transitions = [row for row in events if row.get("event") == "transition"]
+        self.assertEqual(
+            [row["controller"]["route"] for row in transitions],
+            ["model"] * 6 + ["official_adaptive"],
+        )
+        fallback = transitions[-1]["controller"]
+        self.assertIsNotNone(fallback["base_selected_candidate_id"])
+        self.assertTrue(fallback["candidate_pool"])
+        self.assertIsNone(fallback["selected_candidate_id"])
+        self.assertEqual(
+            fallback["stall_guard"]["final_neighborhood_size"], 2
         )
 
     def test_v2_balanced_accumulates_changes_across_skipped_model_steps(self) -> None:

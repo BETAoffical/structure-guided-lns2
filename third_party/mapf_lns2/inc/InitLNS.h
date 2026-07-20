@@ -20,6 +20,8 @@ public:
     bool step();
     bool step(const RepairAction& action);
     RepairProposal proposeNeighborhood(const RepairAction& action);
+    vector<RepairProposal> proposeNeighborhoodBatch(
+        const vector<RepairAction>& actions);
     bool run();
     bool isInitialized() const { return initialized; }
     bool isFeasible() const { return initialized && num_of_colliding_pairs == 0; }
@@ -56,6 +58,16 @@ private:
     bool initial_solution_complete = false;
     bool finish_notified = false;
     RepairTransition last_transition;
+
+    struct ProposalTargetData
+    {
+        set<pair<int, int>> start_agents;
+        set<int> target_agents;
+    };
+    bool proposal_batch_cache_active = false;
+    unordered_map<int, unordered_map<int, set<int>>>
+        proposal_collision_component_cache;
+    unordered_map<int, ProposalTargetData> proposal_target_cache;
 
 
     bool runPP(const vector<int>& requested_order, vector<int>& applied_order);

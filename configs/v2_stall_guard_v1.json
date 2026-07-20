@@ -1,0 +1,8 @@
+{
+  "schema": "lns2.stall_guard.v1",
+  "schema_version": 1,
+  "unchanged_state_attempts_per_level": 2,
+  "size_caps": [16, 8, 4],
+  "terminal_fallback": "official_adaptive",
+  "reset_on_state_fingerprint_change": true
+}

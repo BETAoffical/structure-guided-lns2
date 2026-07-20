@@ -88,6 +88,15 @@ struct RepairTransition
     int sum_of_costs_after = 0;
     double runtime_before = 0;
     double runtime_after = 0;
+    // Diagnostic-only wall-clock timings. These fields partition the native
+    // repair step without changing neighborhood generation or replanning.
+    double native_step_seconds = 0;
+    double neighborhood_generation_seconds = 0;
+    double replan_seconds = 0;
+    double pp_replan_seconds = 0;
+    double state_snapshot_seconds = 0;
+    double repair_bookkeeping_seconds = 0;
+    double native_residual_seconds = 0;
 };
 
 class NeighborhoodPolicy

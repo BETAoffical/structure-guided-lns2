@@ -13,6 +13,7 @@ import numpy as np
 
 from experiments.closed_loop_confirmation import (
     _closed_loop_episode_worker,
+    _with_stopping_rule,
     _with_time_budget_overrides,
     ClosedLoopTraceError,
     closed_loop_dataset_design,
@@ -29,6 +30,7 @@ from experiments.closed_loop_confirmation import (
     PortablePairwiseModel,
     score_online_candidates,
     validate_closed_loop_trace,
+    wall_clock_conflict_auc,
 )
 from experiments.closed_loop_confirmation_analysis import (
     closed_loop_acceptance,
@@ -174,6 +176,57 @@ class ZeroConflictEnvironment:
         raise AssertionError("zero-conflict episode must not execute a repair")
 
 
+class UnlimitedRepairEnvironment:
+    def __init__(self, solve_after: int = 101) -> None:
+        self.solve_after = solve_after
+        self.iteration = 0
+        self.state = make_state(1)
+
+    def reset(self, seed: int) -> dict:
+        return self.state
+
+    def step(self, action: dict) -> dict:
+        before_conflicts = int(self.state["num_of_colliding_pairs"])
+        self.iteration += 1
+        solved = self.iteration >= self.solve_after
+        self.state = {
+            **self.state,
+            "iteration": self.iteration,
+            "runtime": self.iteration * 0.001,
+            "feasible": solved,
+            "done": solved,
+            "num_of_colliding_pairs": 0 if solved else 1,
+            "conflict_edges": [] if solved else [[0, 1]],
+            "low_level": {
+                **self.state["low_level"],
+                "expanded": self.state["low_level"]["expanded"] + 1,
+                "generated": self.state["low_level"]["generated"] + 2,
+                "runs": self.state["low_level"]["runs"] + 1,
+            },
+        }
+        return {
+            "observation": self.state,
+            "terminated": solved,
+            "truncated": False,
+            "metrics": {
+                "iteration": self.iteration,
+                "action_valid": True,
+                "generated": True,
+                "replan_success": True,
+                "neighborhood": [0, 1],
+                "conflicts_before": before_conflicts,
+                "conflicts_after": 0 if solved else 1,
+                "requested_random_seed": -1,
+                "native_neighborhood_generation_seconds": 0.0,
+                "pp_replan_seconds": 0.0,
+                "native_repair_bookkeeping_seconds": 0.0,
+                "native_state_snapshot_seconds": 0.0,
+                "binding_state_snapshot_seconds": 0.0,
+                "state_to_python_seconds": 0.0,
+            },
+        }
+
+
 class ClosedLoopConfirmationTests(unittest.TestCase):
     def test_qualification_accepts_an_explicit_partial_task_seed_cohort(self) -> None:
         rows = [
@@ -234,6 +287,28 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "greater than"):
             _with_time_budget_overrides(source, 600.0, 600.0)
+
+    def test_wall_clock_stopping_rule_removes_both_repair_limits(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "max_decisions": 100,
+            "metric_iteration_budget": 100,
+        }
+        updated = _with_stopping_rule(source, "wall-clock")
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 0)
+        self.assertEqual(updated["max_decisions"], 0)
+        self.assertIsNone(updated["metric_iteration_budget"])
+        self.assertEqual(source["environment"]["max_repair_iterations"], 100)
+
+    def test_wall_clock_auc_ignores_an_after_state_beyond_the_deadline(self) -> None:
+        # 10 conflicts for two seconds, 6 conflicts until the five-second
+        # deadline; the after-state at t=7 must not be observed.
+        value = wall_clock_conflict_auc([10, 6, 0], [2.0, 7.0], 5.0)
+        self.assertEqual(value, 10 * 2.0 + 6 * 3.0)
+
+    def test_wall_clock_auc_rejects_unordered_transition_times(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ordered"):
+            wall_clock_conflict_auc([10, 8, 6], [2.0, 1.0], 5.0)
 
     def test_registered_dataset_design_and_qualification_keep_zero_conflicts(self) -> None:
         rows = make_dataset_rows()
@@ -418,6 +493,16 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(metrics["proposal_count"], 6)
         self.assertEqual(metrics["backend"], "batch")
+        self.assertAlmostEqual(
+            metrics["candidate_generation_seconds"],
+            metrics["request_generation_seconds"]
+            + metrics["proposal_seconds"]
+            + metrics["candidate_postprocess_seconds"],
+        )
+        self.assertGreaterEqual(
+            metrics["state_check_seconds"],
+            metrics["state_check_fingerprint_seconds"],
+        )
         self.assertEqual(environment.calls, 12)
         self.assertEqual(state_fingerprint(environment.state), state_fingerprint(state))
 
@@ -615,6 +700,141 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["repair_iterations"], 0)
         self.assertEqual(result["trace_format"], "delta-gzip-v2")
         self.assertTrue(str(result["trace_file"]).endswith(".jsonl.gz"))
+        finalization = result["episode_finalization_timings"]
+        self.assertGreaterEqual(finalization["post_algorithm_finalize_seconds"], 0.0)
+        self.assertGreaterEqual(
+            finalization["episode_process_wall_seconds"],
+            result["summary"]["episode_observed_wall_seconds"],
+        )
+
+    def test_resume_preserves_manifest_only_finalization_timings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=ZeroConflictEnvironment(),
+            ):
+                original = _closed_loop_episode_worker(job)
+            job["resume"] = True
+            job["existing_manifest_row"] = original
+            resumed = _closed_loop_episode_worker(job)
+        self.assertEqual(resumed["status"], "resumed")
+        self.assertEqual(
+            resumed["episode_finalization_timings"],
+            original["episode_finalization_timings"],
+        )
+
+    def test_trace_validation_rejects_nonclosing_timing_partitions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {},
+                "trace_format": TRACE_FORMAT_FULL_V1,
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(solve_after=1),
+            ):
+                result = _closed_loop_episode_worker(job)
+            trace = Path(directory) / result["trace_file"]
+            baseline = [
+                json.loads(line)
+                for line in trace.read_text(encoding="utf-8").splitlines()
+            ]
+
+            selection_events = json.loads(json.dumps(baseline))
+            selection_events[1]["timings"]["neighborhood_selection_seconds"] = 1.0
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in selection_events),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "neighborhood selection timing does not close"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            native_events = json.loads(json.dumps(baseline))
+            native_events[1]["metrics"]["native_step_seconds"] = 1.0
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in native_events),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "native step timing does not close"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+    def test_wall_clock_episode_can_execute_more_than_one_hundred_repairs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 0,
+                "metric_iteration_budget": None,
+                "wall_time_budget_seconds": 10.0,
+                "stopping_rule": "wall-clock",
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(),
+            ):
+                result = _closed_loop_episode_worker(job)
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["summary"]["success"])
+        self.assertEqual(result["summary"]["repair_iterations"], 101)
+        self.assertEqual(result["summary"]["stop_reason"], "success")
+        self.assertIsNone(result["summary"]["fixed_budget_conflict_auc"])
 
     def test_trace_validation_rejects_wrong_episode_and_resume_reruns_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -6,15 +6,27 @@
 
 namespace
 {
-class NeighborSnapshot
+class ProposalNeighborScope
 {
 public:
-    explicit NeighborSnapshot(Neighbor& value) : target(value), saved(value) {}
-    ~NeighborSnapshot() { target = std::move(saved); }
+    explicit ProposalNeighborScope(Neighbor& value) : target(value)
+    {
+        using std::swap;
+        swap(target, scratch);
+    }
+
+    ~ProposalNeighborScope()
+    {
+        using std::swap;
+        swap(target, scratch);
+    }
+
+    ProposalNeighborScope(const ProposalNeighborScope&) = delete;
+    ProposalNeighborScope& operator=(const ProposalNeighborScope&) = delete;
 
 private:
     Neighbor& target;
-    Neighbor saved;
+    Neighbor scratch;
 };
 }
 
@@ -104,7 +116,11 @@ RepairProposal InitLNS::proposeNeighborhood(const RepairAction& action)
         action.seed_agent >= (int)agents.size() || collision_graph[action.seed_agent].empty())
         return proposal;
 
-    NeighborSnapshot restore_neighbor(neighbor);
+    // Proposal generation only writes neighbor.agents. Swap in an empty
+    // scratch Neighbor so hundreds of diagnostic proposals do not deep-copy
+    // old paths and conflict sets. The formal repair Neighbor is restored
+    // even if proposal generation throws.
+    ProposalNeighborScope restore_neighbor(neighbor);
     srand(action.random_seed);
     bool generated = false;
     switch (action.heuristic)
@@ -131,8 +147,35 @@ RepairProposal InitLNS::proposeNeighborhood(const RepairAction& action)
     return proposal;
 }
 
+vector<RepairProposal> InitLNS::proposeNeighborhoodBatch(
+    const vector<RepairAction>& actions)
+{
+    proposal_collision_component_cache.clear();
+    proposal_target_cache.clear();
+    proposal_batch_cache_active = true;
+    vector<RepairProposal> proposals;
+    proposals.reserve(actions.size());
+    try
+    {
+        for (const RepairAction& action : actions)
+            proposals.push_back(proposeNeighborhood(action));
+    }
+    catch (...)
+    {
+        proposal_batch_cache_active = false;
+        proposal_collision_component_cache.clear();
+        proposal_target_cache.clear();
+        throw;
+    }
+    proposal_batch_cache_active = false;
+    proposal_collision_component_cache.clear();
+    proposal_target_cache.clear();
+    return proposals;
+}
+
 bool InitLNS::step(const RepairAction& action)
 {
+    const auto native_step_started = Time::now();
     if (!initialized)
         initialize();
     if (isDone())
@@ -146,7 +189,10 @@ bool InitLNS::step(const RepairAction& action)
         paths[i] = &agents[i].path;
     assert(instance.validateSolution(paths, sum_of_costs, num_of_colliding_pairs));
 
+    auto state_snapshot_started = Time::now();
     RepairState before = getRepairState();
+    double state_snapshot_seconds =
+        ((fsec)(Time::now() - state_snapshot_started)).count();
     RepairTransition transition;
     transition.requested_action = action;
     transition.iteration = repair_iteration + 1;
@@ -159,7 +205,10 @@ bool InitLNS::step(const RepairAction& action)
 
     bool action_valid = true;
     RepairHeuristic applied_heuristic = currentRepairHeuristic();
+    const auto neighborhood_started = Time::now();
     bool succ = generateNeighborhood(action, applied_heuristic, action_valid);
+    transition.neighborhood_generation_seconds =
+        ((fsec)(Time::now() - neighborhood_started)).count();
     repair_iteration++;
     transition.action_valid = action_valid;
     transition.applied_heuristic = applied_heuristic;
@@ -169,21 +218,43 @@ bool InitLNS::step(const RepairAction& action)
     const bool update_alns = ALNS &&
         (action.mode == RepairActionMode::OFFICIAL || !action_valid ||
          (action.mode == RepairActionMode::SEED && action.heuristic == RepairHeuristic::ADAPTIVE));
+
+    auto finishTransition = [&]()
+    {
+        state_snapshot_started = Time::now();
+        RepairState after = getRepairState();
+        state_snapshot_seconds +=
+            ((fsec)(Time::now() - state_snapshot_started)).count();
+        transition.state_snapshot_seconds = state_snapshot_seconds;
+        transition.native_step_seconds =
+            ((fsec)(Time::now() - native_step_started)).count();
+        transition.native_residual_seconds = std::max(
+            0.0,
+            transition.native_step_seconds -
+                transition.neighborhood_generation_seconds -
+                transition.replan_seconds - transition.state_snapshot_seconds);
+        transition.native_residual_seconds = std::max(
+            0.0,
+            transition.native_residual_seconds -
+                transition.repair_bookkeeping_seconds);
+        last_transition = transition;
+        if (observer != nullptr)
+            observer->onTransition(before, transition, after);
+        if (isDone())
+            notifyFinish();
+    };
+
     if (!transition.generated)
     {
         runtime = ((fsec)(Time::now() - start_time)).count();
         transition.conflicts_after = num_of_colliding_pairs;
         transition.sum_of_costs_after = sum_of_costs;
         transition.runtime_after = runtime;
-        last_transition = transition;
-        RepairState after = getRepairState();
-        if (observer != nullptr)
-            observer->onTransition(before, transition, after);
-        if (isDone())
-            notifyFinish();
+        finishTransition();
         return true;
     }
 
+    auto bookkeeping_started = Time::now();
     neighbor.old_colliding_pairs.clear();
     for (int a : neighbor.agents)
     {
@@ -196,16 +267,13 @@ bool InitLNS::step(const RepairAction& action)
     {
         if (update_alns)
             destroy_weights[selected_neighbor] = (1 - decay_factor) * destroy_weights[selected_neighbor];
+        transition.repair_bookkeeping_seconds +=
+            ((fsec)(Time::now() - bookkeeping_started)).count();
         runtime = ((fsec)(Time::now() - start_time)).count();
         transition.conflicts_after = num_of_colliding_pairs;
         transition.sum_of_costs_after = sum_of_costs;
         transition.runtime_after = runtime;
-        last_transition = transition;
-        RepairState after = getRepairState();
-        if (observer != nullptr)
-            observer->onTransition(before, transition, after);
-        if (isDone())
-            notifyFinish();
+        finishTransition();
         return true;
     }
 
@@ -232,7 +300,10 @@ bool InitLNS::step(const RepairAction& action)
         }
         cout << endl;
     }
+    transition.repair_bookkeeping_seconds +=
+        ((fsec)(Time::now() - bookkeeping_started)).count();
 
+    const auto replan_started = Time::now();
     if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
     {
         const vector<int> requested_order = action_valid ? action.repair_order : vector<int>();
@@ -247,8 +318,13 @@ bool InitLNS::step(const RepairAction& action)
         cerr << "Wrong replanning strategy" << endl;
         exit(-1);
     }
+    transition.replan_seconds =
+        ((fsec)(Time::now() - replan_started)).count();
+    if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
+        transition.pp_replan_seconds = transition.replan_seconds;
     transition.replan_success = succ;
 
+    bookkeeping_started = Time::now();
     if (update_alns)
     {
         if (neighbor.colliding_pairs.size() < neighbor.old_colliding_pairs.size())
@@ -293,12 +369,9 @@ bool InitLNS::step(const RepairAction& action)
     transition.conflicts_after = num_of_colliding_pairs;
     transition.sum_of_costs_after = sum_of_costs;
     transition.runtime_after = runtime;
-    last_transition = transition;
-    RepairState after = getRepairState();
-    if (observer != nullptr)
-        observer->onTransition(before, transition, after);
-    if (isDone())
-        notifyFinish();
+    transition.repair_bookkeeping_seconds +=
+        ((fsec)(Time::now() - bookkeeping_started)).count();
+    finishTransition();
     return true;
 }
 bool InitLNS::runGCBS()
@@ -842,17 +915,32 @@ bool InitLNS::generateNeighborByCollisionGraph(int forced_seed, int requested_si
     int target_size = requested_size > 0 ? requested_size : neighbor_size;
     target_size = min((int)agents.size(), max(2, target_size));
     vector<int> all_vertices;
-    all_vertices.reserve(collision_graph.size());
-    for (int i = 0; i < (int)collision_graph.size(); i++)
+    if (forced_seed < 0)
     {
-        if (!collision_graph[i].empty())
-            all_vertices.push_back(i);
+        all_vertices.reserve(collision_graph.size());
+        for (int i = 0; i < (int)collision_graph.size(); i++)
+        {
+            if (!collision_graph[i].empty())
+                all_vertices.push_back(i);
+        }
+        if (all_vertices.empty())
+            return false;
     }
-    unordered_map<int, set<int>> G;
-    if (all_vertices.empty())
-        return false;
     auto v = forced_seed >= 0 ? forced_seed : all_vertices[rand() % all_vertices.size()];
-    findConnectedComponent(collision_graph, v, G);
+    unordered_map<int, set<int>> local_component;
+    unordered_map<int, set<int>>* component = &local_component;
+    if (proposal_batch_cache_active && forced_seed >= 0)
+    {
+        auto inserted = proposal_collision_component_cache.emplace(
+            forced_seed, unordered_map<int, set<int>>()
+        );
+        component = &inserted.first->second;
+        if (inserted.second)
+            findConnectedComponent(collision_graph, v, *component);
+    }
+    else
+        findConnectedComponent(collision_graph, v, *component);
+    auto& G = *component;
     assert(G.size() > 1);
 
     set<int> neighbors_set;
@@ -907,20 +995,31 @@ bool InitLNS::generateNeighborByTarget(int forced_seed, int requested_size)
         }
     }
     assert(a != -1 and !collision_graph[a].empty());
-    set<pair<int,int>> A_start; // an ordered set of (time, id) pair.
-    set<int> A_target;
-
-
-    for(int t = 0 ;t< path_table.table[agents[a].path_planner->start_location].size();t++){
-        for(auto id : path_table.table[agents[a].path_planner->start_location][t]){
-            if (id!=a)
-                A_start.insert(make_pair(t,id));
-        }
+    ProposalTargetData local_target;
+    ProposalTargetData* target_data = &local_target;
+    bool populate_target = true;
+    if (proposal_batch_cache_active && forced_seed >= 0)
+    {
+        auto inserted = proposal_target_cache.emplace(
+            forced_seed, ProposalTargetData()
+        );
+        target_data = &inserted.first->second;
+        populate_target = inserted.second;
     }
-
-
-
-    agents[a].path_planner->findMinimumSetofColldingTargets(goal_table,A_target);// generate non-wait path and collect A_target
+    if (populate_target)
+    {
+        for(int t = 0 ;t< path_table.table[agents[a].path_planner->start_location].size();t++){
+            for(auto id : path_table.table[agents[a].path_planner->start_location][t]){
+                if (id!=a)
+                    target_data->start_agents.insert(make_pair(t,id));
+            }
+        }
+        agents[a].path_planner->findMinimumSetofColldingTargets(
+            goal_table, target_data->target_agents
+        );
+    }
+    const auto& A_start = target_data->start_agents;
+    const auto& A_target = target_data->target_agents;
 
 
     if (screen >= 3){

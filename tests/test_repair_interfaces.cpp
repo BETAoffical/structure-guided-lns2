@@ -1,5 +1,7 @@
 #include "InitLNS.h"
 
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
@@ -9,6 +11,28 @@ void require(bool value, const char* message)
 {
     if (!value)
         throw std::runtime_error(message);
+}
+
+void requireTimings(const RepairTransition& transition)
+{
+    require(std::isfinite(transition.native_step_seconds) &&
+                transition.native_step_seconds >= 0,
+            "native step timing is invalid");
+    require(transition.neighborhood_generation_seconds >= 0 &&
+                transition.replan_seconds >= 0 &&
+                transition.pp_replan_seconds >= 0 &&
+                transition.state_snapshot_seconds >= 0 &&
+                transition.repair_bookkeeping_seconds >= 0 &&
+                transition.native_residual_seconds >= 0,
+            "native timing partition contains a negative value");
+    require(transition.pp_replan_seconds <= transition.replan_seconds + 1e-6,
+            "PP timing exceeds total replanning time");
+    const double partition = transition.neighborhood_generation_seconds +
+        transition.replan_seconds + transition.state_snapshot_seconds +
+        transition.repair_bookkeeping_seconds + transition.native_residual_seconds;
+    const double tolerance = std::max(1e-6, 0.01 * transition.native_step_seconds);
+    require(std::abs(partition - transition.native_step_seconds) <= tolerance,
+            "native timing partition does not close");
 }
 
 struct CountingObserver : public RepairObserver
@@ -262,6 +286,7 @@ int main()
         require(solver.step(invalid), "invalid-action fallback step did not execute");
         require(!solver.getLastTransition().action_valid,
                 "invalid seed action was accepted");
+        requireTimings(solver.getLastTransition());
         require(observer.transitions == 1, "invalid fallback transition was not observed");
     }
 
@@ -279,6 +304,7 @@ int main()
                 "explicit neighborhood was rejected");
         require(solver.getLastTransition().neighborhood.size() == 2,
                 "explicit neighborhood size changed");
+        requireTimings(solver.getLastTransition());
     }
 
     require(solver.getRepairState().iteration <= 2, "repair iteration limit was exceeded");

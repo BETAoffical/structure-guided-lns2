@@ -11,4 +11,7 @@ PYBIND11_MODULE(lns2_features_native, module)
                py::arg("state"), py::arg("candidates"), py::arg("static_grid"),
                py::arg("include_realized") = true,
                py::arg("required_features") = py::dict());
+    module.def("batch_online_feature_vectors", &batchOnlineFeatureVectors,
+               py::arg("state"), py::arg("candidates"), py::arg("static_grid"),
+               py::arg("feature_names"));
 }
