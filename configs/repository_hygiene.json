@@ -126,6 +126,14 @@
       {
         "path": "build/initlns-lns2-bottleneck-quick-v1/tracks",
         "reason": "regenerable raw tracks; reports, configuration, status, and logs remain"
+      },
+      {
+        "path": "build/repository-hygiene-space-cleanup-20260720/fresh-quick",
+        "reason": "interrupted fresh quick attempt superseded by fresh-quick-final"
+      },
+      {
+        "path": "build/repository-hygiene-space-cleanup-20260720/fresh-clock-targeted",
+        "reason": "failed module-discovery reproduction superseded by fresh-clock-targeted-fixed"
       }
     ],
     "conditional_delete_paths": [
@@ -133,19 +141,76 @@
         "path": "build/initlns-movingai-ood-collection-v1/episodes",
         "reason": "legacy full-v1 traces replaced by the verified delta-gzip-v2 collection",
         "expected_bytes": 16242547808,
-        "verification_json": "artifacts/initlns-movingai-ood-compact-migration-v2/migration_evidence.json",
-        "required_values": {
-          "schema": "lns2.compact_migration_evidence.v1",
-          "converted_episode_count": 720,
-          "matching_episode_count": 720,
-          "mismatch_count": 0,
-          "source_trace_bytes": 16242547808,
-          "compact_total_bytes": 50329794,
-          "equivalence_passed": true,
-          "storage_target_passed": true,
-          "deletion_authorized": false,
-          "requires_explicit_user_approval": true
-        }
+        "verification_json_checks": [
+          {
+            "path": "artifacts/initlns-movingai-ood-compact-migration-v2/migration_evidence.json",
+            "required_values": {
+              "schema": "lns2.compact_migration_evidence.v1",
+              "converted_episode_count": 720,
+              "matching_episode_count": 720,
+              "mismatch_count": 0,
+              "source_trace_bytes": 16242547808,
+              "compact_total_bytes": 50329794,
+              "equivalence_passed": true,
+              "storage_target_passed": true,
+              "deletion_authorized": false,
+              "requires_explicit_user_approval": true
+            }
+          },
+          {
+            "path": "build/repository-hygiene-space-cleanup-20260720/fresh_equivalence_report.json",
+            "required_values": {
+              "schema": "lns2.closed_loop_equivalence.v1",
+              "exact": true,
+              "mismatch_count": 0,
+              "passed": true,
+              "storage.reference_trace_bytes": 16242547808,
+              "storage.candidate_total_bytes": 50329794
+            }
+          },
+          {
+            "path": "build/repository-hygiene-space-cleanup-20260720/fresh-quick-final/status.json",
+            "required_values": {
+              "schema": "lns2.lns2_tradeoff_status.v1",
+              "status": "complete",
+              "phase": "complete",
+              "complete_episode_count": 96,
+              "paired_episode_count": 24
+            }
+          },
+          {
+            "path": "build/repository-hygiene-space-cleanup-20260720/fresh-quick-final/report/v1_v2_semantic_equivalence.json",
+            "required_values": {
+              "schema": "lns2.v1_v2_common_prefix_equivalence.v2",
+              "episode_count": 24,
+              "mismatch_count": 0,
+              "passed": true
+            }
+          },
+          {
+            "path": "build/repository-hygiene-space-cleanup-20260720/fresh-quick-final/counterfactual/counterfactual_summary.json",
+            "required_values": {
+              "schema": "lns2.skipped_model_once.v2",
+              "episode_count": 24,
+              "error_count": 0,
+              "coverage_complete": true,
+              "replay_fingerprint_mismatch_count": 0,
+              "passed": true
+            }
+          },
+          {
+            "path": "build/repository-hygiene-space-cleanup-20260720/fresh-quick-final/timeout-sensitivity-600/report/timeout_sensitivity_report.json",
+            "required_values": {
+              "schema": "lns2.timeout_sensitivity.v1",
+              "expected_episode_count": 12,
+              "completed_episode_count": 12,
+              "fingerprint_error_count": 0,
+              "initial_fingerprint_mismatch_count": 0,
+              "invalid_action_count": 0,
+              "passed": true
+            }
+          }
+        ]
       }
     ],
     "temporary_name_patterns": [

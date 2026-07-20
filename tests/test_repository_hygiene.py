@@ -290,6 +290,61 @@ class RepositoryHygieneTests(unittest.TestCase):
             self.assertEqual(len(plan["blocked_paths"]), 1)
             self.assertTrue(target.is_dir())
 
+    def test_conditional_cleanup_accepts_multiple_json_checks_and_nested_fields(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "build" / "legacy" / "episodes"
+            target.mkdir(parents=True)
+            (target / "episode.jsonl").write_bytes(b"legacy")
+            _write_json(root / "artifacts" / "migration.json", {"passed": True})
+            _write_json(
+                root / "build" / "fresh" / "report.json",
+                {"storage": {"reference_bytes": 6}, "mismatch_count": 0},
+            )
+            _write_json(root / "configs" / "result_consolidation.json", {"experiments": []})
+            config = {
+                "result_consolidation_config": "configs/result_consolidation.json",
+                "build": {
+                    "fixed_protected_roots": [],
+                    "conditional_delete_paths": [
+                        {
+                            "path": "build/legacy/episodes",
+                            "expected_bytes": 6,
+                            "verification_json_checks": [
+                                {
+                                    "path": "artifacts/migration.json",
+                                    "required_values": {"passed": True},
+                                },
+                                {
+                                    "path": "build/fresh/report.json",
+                                    "required_values": {
+                                        "storage.reference_bytes": 6,
+                                        "mismatch_count": 0,
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "temporary_name_patterns": [],
+                    "temporary_exact_roots": [],
+                    "cache_directory_names": [],
+                    "incomplete_file_suffixes": [".tmp"],
+                    "dependency_metadata_names": [],
+                    "maximum_dependency_json_bytes": 1024,
+                },
+            }
+            _, plan = build_cleanup_plan(root, config, root / "build" / "hygiene")
+            self.assertEqual(len(plan["conditional_delete_paths"]), 1)
+            conditional = plan["conditional_delete_paths"][0]
+            self.assertTrue(conditional["evidence_preconditions_passed"])
+            self.assertEqual(
+                conditional["verification_json_checks"],
+                ["artifacts/migration.json", "build/fresh/report.json"],
+            )
+            self.assertTrue(all(check["passed"] for check in conditional["checks"]))
+
 
 if __name__ == "__main__":
     unittest.main()

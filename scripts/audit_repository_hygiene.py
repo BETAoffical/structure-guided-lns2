@@ -515,50 +515,66 @@ def _cleanup_path_inventory(
                 "passed": int(row["bytes"]) == int(expected_bytes),
             }
         )
-    verification_relative = str(entry.get("verification_json", ""))
-    verification_path = _repository_path(root, verification_relative)
-    verification: dict[str, Any] = {}
-    if verification_path.is_file():
-        try:
-            verification = json.loads(verification_path.read_text(encoding="utf-8"))
-            checks.append(
-                {
-                    "check": "verification_json",
-                    "path": verification_relative,
-                    "passed": True,
-                }
-            )
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    verification_specs = list(entry.get("verification_json_checks", []))
+    if not verification_specs:
+        verification_specs = [
+            {
+                "path": entry.get("verification_json", ""),
+                "required_values": entry.get("required_values", {}),
+            }
+        ]
+    verification_paths = []
+    for spec in verification_specs:
+        verification_relative = str(spec.get("path", ""))
+        verification_paths.append(verification_relative)
+        verification_path = _repository_path(root, verification_relative)
+        verification: dict[str, Any] = {}
+        if verification_path.is_file():
+            try:
+                verification = json.loads(
+                    verification_path.read_text(encoding="utf-8")
+                )
+                checks.append(
+                    {
+                        "check": "verification_json",
+                        "path": verification_relative,
+                        "passed": True,
+                    }
+                )
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                checks.append(
+                    {
+                        "check": "verification_json",
+                        "path": verification_relative,
+                        "passed": False,
+                        "error": str(error),
+                    }
+                )
+        else:
             checks.append(
                 {
                     "check": "verification_json",
                     "path": verification_relative,
                     "passed": False,
-                    "error": str(error),
+                    "error": "missing",
                 }
             )
-    else:
-        checks.append(
-            {
-                "check": "verification_json",
-                "path": verification_relative,
-                "passed": False,
-                "error": "missing",
-            }
-        )
-    for field, expected in dict(entry.get("required_values", {})).items():
-        actual = verification.get(field)
-        checks.append(
-            {
-                "check": f"required_value:{field}",
-                "expected": expected,
-                "actual": actual,
-                "passed": actual == expected,
-            }
-        )
+        for field, expected in dict(spec.get("required_values", {})).items():
+            actual: Any = verification
+            for part in str(field).split("."):
+                actual = actual.get(part) if isinstance(actual, dict) else None
+            checks.append(
+                {
+                    "check": f"required_value:{field}",
+                    "path": verification_relative,
+                    "expected": expected,
+                    "actual": actual,
+                    "passed": actual == expected,
+                }
+            )
     return {
         **row,
-        "verification_json": verification_relative,
+        "verification_json_checks": verification_paths,
         "checks": checks,
         "blocked": False,
         "evidence_preconditions_passed": bool(checks)
