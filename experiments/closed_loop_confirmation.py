@@ -3158,6 +3158,19 @@ def _with_stopping_rule(
     return result
 
 
+def _collection_policy_summary(results: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "episode_count": len(results),
+        "success_count": sum(
+            bool(dict(row.get("summary") or {}).get("success")) for row in results
+        ),
+        "error_count": sum(
+            str(row.get("status")) not in {"ok", "resumed"} for row in results
+        ),
+        "timeout_count": sum(str(row.get("status")) == "timeout" for row in results),
+    }
+
+
 def run_closed_loop_collection(
     dataset: str | Path,
     config_path: str | Path,
@@ -3596,12 +3609,7 @@ def run_closed_loop_collection(
         )
         results = [merged[key] for key in sorted(merged)]
         _write_jsonl(policy_manifest, results)
-        summary[current] = {
-            "episode_count": len(results),
-            "success_count": sum(bool(row.get("summary", {}).get("success")) for row in results),
-            "error_count": sum(str(row.get("status")) not in {"ok", "resumed"} for row in results),
-            "timeout_count": sum(str(row.get("status")) == "timeout" for row in results),
-        }
+        summary[current] = _collection_policy_summary(results)
         if summary[current]["error_count"] and phase == "all":
             break
     _write_json(output_root / "collection_summary.json", summary)

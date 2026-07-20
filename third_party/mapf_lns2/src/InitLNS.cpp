@@ -6,6 +6,15 @@
 
 namespace
 {
+using RepairTimingClock = std::chrono::steady_clock;
+
+double repairTimingSeconds(const RepairTimingClock::time_point& started)
+{
+    return std::chrono::duration<double>(RepairTimingClock::now() - started).count();
+}
+
+static_assert(RepairTimingClock::is_steady, "repair diagnostics require a steady clock");
+
 class ProposalNeighborScope
 {
 public:
@@ -175,7 +184,7 @@ vector<RepairProposal> InitLNS::proposeNeighborhoodBatch(
 
 bool InitLNS::step(const RepairAction& action)
 {
-    const auto native_step_started = Time::now();
+    const auto native_step_started = RepairTimingClock::now();
     if (!initialized)
         initialize();
     if (isDone())
@@ -189,10 +198,9 @@ bool InitLNS::step(const RepairAction& action)
         paths[i] = &agents[i].path;
     assert(instance.validateSolution(paths, sum_of_costs, num_of_colliding_pairs));
 
-    auto state_snapshot_started = Time::now();
+    auto state_snapshot_started = RepairTimingClock::now();
     RepairState before = getRepairState();
-    double state_snapshot_seconds =
-        ((fsec)(Time::now() - state_snapshot_started)).count();
+    double state_snapshot_seconds = repairTimingSeconds(state_snapshot_started);
     RepairTransition transition;
     transition.requested_action = action;
     transition.iteration = repair_iteration + 1;
@@ -205,10 +213,10 @@ bool InitLNS::step(const RepairAction& action)
 
     bool action_valid = true;
     RepairHeuristic applied_heuristic = currentRepairHeuristic();
-    const auto neighborhood_started = Time::now();
+    const auto neighborhood_started = RepairTimingClock::now();
     bool succ = generateNeighborhood(action, applied_heuristic, action_valid);
-    transition.neighborhood_generation_seconds =
-        ((fsec)(Time::now() - neighborhood_started)).count();
+    transition.neighborhood_generation_seconds = repairTimingSeconds(
+        neighborhood_started);
     repair_iteration++;
     transition.action_valid = action_valid;
     transition.applied_heuristic = applied_heuristic;
@@ -221,13 +229,11 @@ bool InitLNS::step(const RepairAction& action)
 
     auto finishTransition = [&]()
     {
-        state_snapshot_started = Time::now();
+        state_snapshot_started = RepairTimingClock::now();
         RepairState after = getRepairState();
-        state_snapshot_seconds +=
-            ((fsec)(Time::now() - state_snapshot_started)).count();
+        state_snapshot_seconds += repairTimingSeconds(state_snapshot_started);
         transition.state_snapshot_seconds = state_snapshot_seconds;
-        transition.native_step_seconds =
-            ((fsec)(Time::now() - native_step_started)).count();
+        transition.native_step_seconds = repairTimingSeconds(native_step_started);
         transition.native_residual_seconds = std::max(
             0.0,
             transition.native_step_seconds -
@@ -254,7 +260,7 @@ bool InitLNS::step(const RepairAction& action)
         return true;
     }
 
-    auto bookkeeping_started = Time::now();
+    auto bookkeeping_started = RepairTimingClock::now();
     neighbor.old_colliding_pairs.clear();
     for (int a : neighbor.agents)
     {
@@ -267,8 +273,8 @@ bool InitLNS::step(const RepairAction& action)
     {
         if (update_alns)
             destroy_weights[selected_neighbor] = (1 - decay_factor) * destroy_weights[selected_neighbor];
-        transition.repair_bookkeeping_seconds +=
-            ((fsec)(Time::now() - bookkeeping_started)).count();
+        transition.repair_bookkeeping_seconds += repairTimingSeconds(
+            bookkeeping_started);
         runtime = ((fsec)(Time::now() - start_time)).count();
         transition.conflicts_after = num_of_colliding_pairs;
         transition.sum_of_costs_after = sum_of_costs;
@@ -300,10 +306,10 @@ bool InitLNS::step(const RepairAction& action)
         }
         cout << endl;
     }
-    transition.repair_bookkeeping_seconds +=
-        ((fsec)(Time::now() - bookkeeping_started)).count();
+    transition.repair_bookkeeping_seconds += repairTimingSeconds(
+        bookkeeping_started);
 
-    const auto replan_started = Time::now();
+    const auto replan_started = RepairTimingClock::now();
     if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
     {
         const vector<int> requested_order = action_valid ? action.repair_order : vector<int>();
@@ -318,13 +324,12 @@ bool InitLNS::step(const RepairAction& action)
         cerr << "Wrong replanning strategy" << endl;
         exit(-1);
     }
-    transition.replan_seconds =
-        ((fsec)(Time::now() - replan_started)).count();
+    transition.replan_seconds = repairTimingSeconds(replan_started);
     if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
         transition.pp_replan_seconds = transition.replan_seconds;
     transition.replan_success = succ;
 
-    bookkeeping_started = Time::now();
+    bookkeeping_started = RepairTimingClock::now();
     if (update_alns)
     {
         if (neighbor.colliding_pairs.size() < neighbor.old_colliding_pairs.size())
@@ -369,8 +374,8 @@ bool InitLNS::step(const RepairAction& action)
     transition.conflicts_after = num_of_colliding_pairs;
     transition.sum_of_costs_after = sum_of_costs;
     transition.runtime_after = runtime;
-    transition.repair_bookkeeping_seconds +=
-        ((fsec)(Time::now() - bookkeeping_started)).count();
+    transition.repair_bookkeeping_seconds += repairTimingSeconds(
+        bookkeeping_started);
     finishTransition();
     return true;
 }

@@ -12,6 +12,7 @@ from unittest.mock import patch
 import numpy as np
 
 from experiments.closed_loop_confirmation import (
+    _collection_policy_summary,
     _closed_loop_episode_worker,
     _with_stopping_rule,
     _with_time_budget_overrides,
@@ -1014,6 +1015,28 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(
             report["solver_seed_diagnostics"]["improved_solver_seeds"], ["0", "1"]
+        )
+
+    def test_collection_summary_preserves_error_rows_with_null_summary(self) -> None:
+        report = _collection_policy_summary(
+            [
+                {"status": "ok", "summary": {"success": True}},
+                {
+                    "status": "error",
+                    "summary": None,
+                    "error": "ClosedLoopTraceError: invalid timing",
+                },
+                {"status": "timeout", "summary": None},
+            ]
+        )
+        self.assertEqual(
+            report,
+            {
+                "episode_count": 3,
+                "success_count": 1,
+                "error_count": 2,
+                "timeout_count": 1,
+            },
         )
 
 
