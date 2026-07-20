@@ -1022,7 +1022,7 @@ def main() -> int:
         type=float,
         help=(
             "After an >=1800-second wall-clock run, rerun all controllers to this "
-            "budget only for unsolved task/seeds that improved >=1% in the final 600 seconds."
+            "budget only for unsolved task/seeds that improved >=1%% in the final 600 seconds."
         ),
     )
     parser.add_argument(

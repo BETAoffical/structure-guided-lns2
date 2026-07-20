@@ -45,9 +45,26 @@ The second command is also read-only. It emits:
 - `cleanup_plan.json`
 
 The plan recursively discovers formal build dependencies from the evidence
-ledger. Protected paths always win over temporary-name rules. Unknown build
-directories are retained conservatively and reported rather than guessed to be
-disposable. The script deliberately has no delete option.
+ledger. It separates protected roots, directly removable roots, safe nested
+paths, conditional nested paths, blocked paths, and conservatively retained
+roots. Conditional paths record every evidence check and are not listed as
+eligible when a size, schema, count, or migration flag differs. Protected paths
+always win over temporary-name rules. Unknown build directories are retained
+conservatively and reported rather than guessed to be disposable. The script
+deliberately has no delete option.
+
+The current conditional candidate is only the legacy full-trace directory:
+
+```text
+build/initlns-movingai-ood-collection-v1/episodes
+```
+
+Its parent metadata, manifests, reports, compact `delta-gzip-v2` collection,
+downloaded MovingAI inputs, frozen policies, and formal evidence remain
+protected. A passing plan is necessary but not sufficient for removal: the
+720-episode equivalence check, a fresh quick run, timeout sensitivity, exact
+path containment, inactive-process check, and explicit approval are still
+required.
 
 ## Safe local cleanup
 
@@ -64,6 +81,9 @@ Recursive deletion is performed separately from the audit, only after resolving
 every target below the repository's `build/` directory, rejecting reparse
 points, checking for active collectors, and obtaining explicit approval.
 Project-level Python caches may be removed; `build/venv-graph` is left intact.
+Superseded run roots are exact configuration entries rather than inferred from
+similar names. For old bottleneck quick output, only the regenerable `tracks/`
+subdirectory is eligible; reports and run metadata remain.
 
 ## Acceptance
 

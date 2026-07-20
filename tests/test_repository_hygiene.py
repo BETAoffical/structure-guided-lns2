@@ -182,6 +182,114 @@ class RepositoryHygieneTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 build_cleanup_plan(root, config, root / "build" / "hygiene")
 
+    def test_build_plan_classifies_nested_and_conditional_cleanup_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracks = root / "build" / "old-run" / "tracks"
+            legacy = root / "build" / "legacy" / "episodes"
+            tracks.mkdir(parents=True)
+            legacy.mkdir(parents=True)
+            (tracks / "trace.jsonl").write_bytes(b"track")
+            (legacy / "episode.jsonl").write_bytes(b"legacy")
+            evidence_path = root / "artifacts" / "migration.json"
+            _write_json(
+                evidence_path,
+                {
+                    "schema": "migration.v1",
+                    "matching_episode_count": 1,
+                    "equivalence_passed": True,
+                },
+            )
+            _write_json(root / "configs" / "result_consolidation.json", {"experiments": []})
+            config = {
+                "result_consolidation_config": "configs/result_consolidation.json",
+                "build": {
+                    "fixed_protected_roots": [],
+                    "safe_delete_roots": [],
+                    "safe_delete_paths": [
+                        {"path": "build/old-run/tracks", "reason": "regenerable"}
+                    ],
+                    "conditional_delete_paths": [
+                        {
+                            "path": "build/legacy/episodes",
+                            "reason": "migrated",
+                            "expected_bytes": 6,
+                            "verification_json": "artifacts/migration.json",
+                            "required_values": {
+                                "schema": "migration.v1",
+                                "matching_episode_count": 1,
+                                "equivalence_passed": True,
+                            },
+                        }
+                    ],
+                    "temporary_name_patterns": [],
+                    "temporary_exact_roots": [],
+                    "cache_directory_names": [],
+                    "incomplete_file_suffixes": [".tmp"],
+                    "dependency_metadata_names": [],
+                    "maximum_dependency_json_bytes": 1024,
+                },
+            }
+            output = root / "build" / "hygiene"
+            inventory, plan = build_cleanup_plan(root, config, output)
+            self.assertEqual(
+                [row["path"] for row in plan["safe_delete_paths"]],
+                ["build/old-run/tracks"],
+            )
+            self.assertEqual(
+                [row["path"] for row in plan["conditional_delete_paths"]],
+                ["build/legacy/episodes"],
+            )
+            self.assertTrue(
+                plan["conditional_delete_paths"][0]["evidence_preconditions_passed"]
+            )
+            self.assertFalse(plan["deletion_supported"])
+            self.assertTrue(tracks.is_dir())
+            self.assertTrue(legacy.is_dir())
+
+            _write_json(output / "pre_cleanup_inventory.json", inventory)
+            _write_json(output / "cleanup_plan.json", plan)
+            shutil.rmtree(tracks)
+            shutil.rmtree(legacy)
+            _, post = post_cleanup_report(root, config, output)
+            self.assertTrue(post["passed"], post)
+            self.assertEqual(
+                post["removed_paths"],
+                ["build/legacy/episodes", "build/old-run/tracks"],
+            )
+
+    def test_conditional_cleanup_is_blocked_when_evidence_does_not_match(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "build" / "legacy" / "episodes"
+            target.mkdir(parents=True)
+            (target / "episode.jsonl").write_bytes(b"legacy")
+            _write_json(root / "artifacts" / "migration.json", {"passed": False})
+            _write_json(root / "configs" / "result_consolidation.json", {"experiments": []})
+            config = {
+                "result_consolidation_config": "configs/result_consolidation.json",
+                "build": {
+                    "fixed_protected_roots": [],
+                    "conditional_delete_paths": [
+                        {
+                            "path": "build/legacy/episodes",
+                            "verification_json": "artifacts/migration.json",
+                            "required_values": {"passed": True},
+                        }
+                    ],
+                    "temporary_name_patterns": [],
+                    "temporary_exact_roots": [],
+                    "cache_directory_names": [],
+                    "incomplete_file_suffixes": [".tmp"],
+                    "dependency_metadata_names": [],
+                    "maximum_dependency_json_bytes": 1024,
+                },
+            }
+            _, plan = build_cleanup_plan(root, config, root / "build" / "hygiene")
+            self.assertEqual(plan["conditional_delete_paths"], [])
+            self.assertEqual(len(plan["blocked_paths"]), 1)
+            self.assertTrue(target.is_dir())
+
 
 if __name__ == "__main__":
     unittest.main()

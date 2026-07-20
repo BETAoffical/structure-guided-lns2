@@ -464,12 +464,107 @@ def _directory_inventory(root: Path, path: Path) -> dict[str, Any]:
 
 
 def _matches_temporary(name: str, config: dict[str, Any]) -> str | None:
+    for entry in config["build"].get("safe_delete_roots", []):
+        if str(entry.get("name")) == name:
+            return str(entry.get("reason") or "explicit safe-delete root")
     if name in set(map(str, config["build"]["temporary_exact_roots"])):
         return "explicit temporary or superseded root"
     for pattern in map(str, config["build"]["temporary_name_patterns"]):
         if re.search(pattern, name, flags=re.IGNORECASE):
             return f"temporary name pattern: {pattern}"
     return None
+
+
+def _cleanup_path_inventory(
+    root: Path,
+    config: dict[str, Any],
+    entry: dict[str, Any],
+    *,
+    conditional: bool,
+) -> dict[str, Any] | None:
+    relative = str(entry.get("path", ""))
+    path = _repository_path(root, relative)
+    build = (root / "build").resolve()
+    try:
+        path.relative_to(build)
+    except ValueError as error:
+        raise ValueError(f"cleanup path must be below build/: {relative}") from error
+    if path == build:
+        raise ValueError("cleanup path cannot be the build root")
+    if not path.exists():
+        return None
+    if not path.is_dir():
+        raise ValueError(f"cleanup path must be a directory: {relative}")
+    row = {
+        **_directory_inventory(root, path),
+        "reason": str(entry.get("reason") or "explicit cleanup path"),
+    }
+    if row["reparse_point"]:
+        return {**row, "blocked": True, "evidence_preconditions_passed": False}
+    if not conditional:
+        return row
+
+    expected_bytes = entry.get("expected_bytes")
+    checks: list[dict[str, Any]] = []
+    if expected_bytes is not None:
+        checks.append(
+            {
+                "check": "expected_bytes",
+                "expected": int(expected_bytes),
+                "actual": int(row["bytes"]),
+                "passed": int(row["bytes"]) == int(expected_bytes),
+            }
+        )
+    verification_relative = str(entry.get("verification_json", ""))
+    verification_path = _repository_path(root, verification_relative)
+    verification: dict[str, Any] = {}
+    if verification_path.is_file():
+        try:
+            verification = json.loads(verification_path.read_text(encoding="utf-8"))
+            checks.append(
+                {
+                    "check": "verification_json",
+                    "path": verification_relative,
+                    "passed": True,
+                }
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            checks.append(
+                {
+                    "check": "verification_json",
+                    "path": verification_relative,
+                    "passed": False,
+                    "error": str(error),
+                }
+            )
+    else:
+        checks.append(
+            {
+                "check": "verification_json",
+                "path": verification_relative,
+                "passed": False,
+                "error": "missing",
+            }
+        )
+    for field, expected in dict(entry.get("required_values", {})).items():
+        actual = verification.get(field)
+        checks.append(
+            {
+                "check": f"required_value:{field}",
+                "expected": expected,
+                "actual": actual,
+                "passed": actual == expected,
+            }
+        )
+    return {
+        **row,
+        "verification_json": verification_relative,
+        "checks": checks,
+        "blocked": False,
+        "evidence_preconditions_passed": bool(checks)
+        and all(bool(check["passed"]) for check in checks),
+        "requires_explicit_user_approval": True,
+    }
 
 
 def build_cleanup_plan(
@@ -518,6 +613,26 @@ def build_cleanup_plan(
             delete_names.add(name)
             delete_roots.append({**row, "reason": reason})
 
+    safe_delete_paths = []
+    conditional_delete_paths = []
+    blocked_paths = []
+    for entry in config["build"].get("safe_delete_paths", []):
+        row = _cleanup_path_inventory(root, config, dict(entry), conditional=False)
+        if row is None:
+            continue
+        if row.get("blocked"):
+            blocked_paths.append(row)
+        else:
+            safe_delete_paths.append(row)
+    for entry in config["build"].get("conditional_delete_paths", []):
+        row = _cleanup_path_inventory(root, config, dict(entry), conditional=True)
+        if row is None:
+            continue
+        if row.get("blocked") or not row.get("evidence_preconditions_passed"):
+            blocked_paths.append(row)
+        else:
+            conditional_delete_paths.append(row)
+
     cache_names = set(map(str, config["build"]["cache_directory_names"]))
     cache_directories = []
     for path in root.rglob("*"):
@@ -563,6 +678,9 @@ def build_cleanup_plan(
         "delete_roots": delete_roots,
         "blocked_roots": blocked_roots,
         "retained_roots": retained_roots,
+        "safe_delete_paths": safe_delete_paths,
+        "conditional_delete_paths": conditional_delete_paths,
+        "blocked_paths": blocked_paths,
         "cache_directories": sorted(cache_directories),
         "incomplete_files": sorted(incomplete_files),
         "summary": {
@@ -570,6 +688,13 @@ def build_cleanup_plan(
             "delete_root_count": len(delete_roots),
             "delete_root_bytes": sum(row["bytes"] for row in delete_roots),
             "blocked_root_count": len(blocked_roots),
+            "safe_delete_path_count": len(safe_delete_paths),
+            "safe_delete_path_bytes": sum(row["bytes"] for row in safe_delete_paths),
+            "conditional_delete_path_count": len(conditional_delete_paths),
+            "conditional_delete_path_bytes": sum(
+                row["bytes"] for row in conditional_delete_paths
+            ),
+            "blocked_path_count": len(blocked_paths),
             "retained_root_count": len(retained_roots),
             "cache_directory_count": len(cache_directories),
             "incomplete_file_count": len(incomplete_files),
@@ -602,9 +727,19 @@ def post_cleanup_report(
     ]
     current_paths = {row["path"] for row in current}
     expected_deleted = [row["path"] for row in plan["delete_roots"]]
+    expected_deleted_paths = [
+        row["path"]
+        for key in ("safe_delete_paths", "conditional_delete_paths")
+        for row in plan.get(key, [])
+    ]
     expected_protected = [row["path"] for row in plan["protected_roots"]]
     remaining_delete_roots = sorted(set(expected_deleted) & current_paths)
     missing_protected_roots = sorted(set(expected_protected) - current_paths)
+    remaining_delete_paths = sorted(
+        relative
+        for relative in expected_deleted_paths
+        if _repository_path(root, relative).exists()
+    )
 
     cache_names = set(map(str, config["build"]["cache_directory_names"]))
     remaining_caches = []
@@ -622,6 +757,9 @@ def post_cleanup_report(
         "expected_deleted_roots": expected_deleted,
         "removed_roots": sorted(set(expected_deleted) - current_paths),
         "remaining_delete_roots": remaining_delete_roots,
+        "expected_deleted_paths": expected_deleted_paths,
+        "removed_paths": sorted(set(expected_deleted_paths) - set(remaining_delete_paths)),
+        "remaining_delete_paths": remaining_delete_paths,
         "missing_protected_roots": missing_protected_roots,
         "remaining_cache_directories": sorted(remaining_caches),
         "before_bytes": int(before["bytes"]),
@@ -630,6 +768,7 @@ def post_cleanup_report(
         "evidence": evidence,
         "passed": (
             not remaining_delete_roots
+            and not remaining_delete_paths
             and not missing_protected_roots
             and not remaining_caches
             and evidence["missing_count"] == 0

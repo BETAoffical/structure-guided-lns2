@@ -65,7 +65,88 @@
       "initlns-lns2-tradeoff-formal-native-v2",
       "initlns-final-model-quick-native-v2",
       "initlns-final-model-formal-native-v2",
-      "repair-experience-calibration-v2"
+      "repair-experience-calibration-v2",
+      "initlns-exact-runtime-benchmark",
+      "initlns-lns2-bottleneck-quick-v2-exact",
+      "initlns-stalled-state-probe-v1",
+      "initlns-v2-stall-safe-quick-wall-v1",
+      "initlns-v2-stall-safe-targeted-v1",
+      "movingai-ood-downloads",
+      "native-features-windows",
+      "python-deps",
+      "windows-v2"
+    ],
+    "safe_delete_roots": [
+      {
+        "name": "repair-transfer-pilot",
+        "reason": "Pilot v1 has superseded static-OD semantics; Pilot v2 is preserved"
+      },
+      {
+        "name": "initlns-realized-ranking-confirmation-v1",
+        "reason": "superseded pre-confirmation dataset; registered v1b dataset is preserved"
+      },
+      {
+        "name": "repair-experience-qualification",
+        "reason": "superseded qualification output"
+      },
+      {
+        "name": "repair-experience-qualification-v2",
+        "reason": "superseded qualification output"
+      },
+      {
+        "name": "repair-experience-qualification-v2-final",
+        "reason": "superseded qualification output"
+      },
+      {
+        "name": "cross-zone-hotspot-probe",
+        "reason": "unregistered exploratory probe output; generator and tests are preserved"
+      },
+      {
+        "name": "cross-zone-hotspot-qualification",
+        "reason": "unregistered exploratory qualification output"
+      },
+      {
+        "name": "repository-hygiene-20260717",
+        "reason": "superseded repository hygiene record"
+      },
+      {
+        "name": "repository-hygiene-audit-20260718",
+        "reason": "superseded repository hygiene record"
+      },
+      {
+        "name": "repository-hygiene-audit-20260718-final",
+        "reason": "superseded repository hygiene record"
+      },
+      {
+        "name": "repository-hygiene-review-20260720",
+        "reason": "superseded repository hygiene planning record"
+      }
+    ],
+    "safe_delete_paths": [
+      {
+        "path": "build/initlns-lns2-bottleneck-quick-v1/tracks",
+        "reason": "regenerable raw tracks; reports, configuration, status, and logs remain"
+      }
+    ],
+    "conditional_delete_paths": [
+      {
+        "path": "build/initlns-movingai-ood-collection-v1/episodes",
+        "reason": "legacy full-v1 traces replaced by the verified delta-gzip-v2 collection",
+        "expected_bytes": 16242547808,
+        "verification_json": "artifacts/initlns-movingai-ood-compact-migration-v2/migration_evidence.json",
+        "required_values": {
+          "schema": "lns2.compact_migration_evidence.v1",
+          "converted_episode_count": 720,
+          "matching_episode_count": 720,
+          "mismatch_count": 0,
+          "source_trace_bytes": 16242547808,
+          "compact_total_bytes": 50329794,
+          "equivalence_passed": true,
+          "storage_target_passed": true,
+          "deletion_authorized": false,
+          "requires_explicit_user_approval": true
+        }
+      }
     ],
     "temporary_name_patterns": [
       "(^|[-_])(smoke|verify|verification|preregister|dry[-_]?run|repeat|diagnostic|check)([-_]|$)",
