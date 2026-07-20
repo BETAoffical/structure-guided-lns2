@@ -94,3 +94,41 @@ A cleanup is valid only when:
 - Python tests, Linux CTest, and official parity remain unchanged;
 - no protected root appears in the deletion list;
 - the post-cleanup report records every removed path and final disk usage.
+
+## 2026-07-20 space cleanup
+
+The space-first cleanup completed under
+`build/repository-hygiene-space-cleanup-20260720`. Before deletion, the audit
+verified 24/24 formal evidence hashes and 45/45 conditional checks. The latter
+included an exact 720/720 full-v1 versus delta-gzip-v2 trace comparison, a fresh
+quick evaluation, counterfactual coverage, semantic equivalence, and the
+600-second timeout-sensitivity cohort.
+
+The exact-equivalence pass took 3,134.5 seconds and found zero scientific-field
+mismatches. The fresh quick and timeout run took 14,322.3 seconds, completed all
+96 primary episodes and 12/12 timeout-sensitivity episodes, and reported zero
+invalid actions, fingerprint mismatches, or unexplained errors. These checks
+also exposed and fixed a non-monotonic diagnostic clock and inconsistent native
+module discovery; neither change alters official solver behavior or the frozen
+policy.
+
+Cleanup removed 17 exact temporary or superseded roots, three exact nested
+paths, nine cache directories, and the conditional legacy directory
+`build/initlns-movingai-ood-collection-v1/episodes`. The first PowerShell pass
+stopped safely on a long nested path; the remaining exact targets were then
+removed with Windows long-path support after repeating the same containment,
+reparse-point, process, protection, and evidence checks.
+
+The post-cleanup inventory records:
+
+- build size before: 23,328,224,454 bytes;
+- build size after: 7,026,838,533 bytes;
+- released space: 16,301,385,921 bytes (about 15.18 GiB);
+- remaining eligible roots, nested paths, and caches: zero.
+
+The compact MovingAI collection, its 720 episodes, frozen controllers,
+downloads, reports, manifests, environments, formal raw collections, and all 24
+evidence sources remain protected. Strict result consolidation still passes;
+Python reports 307 passed and 17 skipped tests, Linux CTest reports 10/10, and
+official parity remains
+`915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf`.

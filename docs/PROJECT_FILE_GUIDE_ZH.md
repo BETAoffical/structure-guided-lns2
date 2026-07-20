@@ -368,6 +368,7 @@ build/.../episodes + manifest + report
 | `initlns-lns2-bottleneck-quick-v2-exact/report/` | 最新 v2 与 Adaptive 逐阶段耗时。 |
 | `initlns-exact-runtime-benchmark/` | 候选、特征、分数和选择完全一致的微基准。 |
 | `initlns-movingai-ood-report-v1/` | 冻结 v1 的正式 MovingAI OOD 结果。 |
+| `initlns-movingai-ood-collection-v2-compact/` | 720 个正式 episode 的紧凑 `delta-gzip-v2` 轨迹，是当前保留的跨布局原始证据。旧 full-v1 `episodes/` 已在 720/720 等价验证后删除。 |
 | `initlns-closed-loop-multiseed-v1-report/` | 同族新地图多 seed 闭环确认。 |
 | `initlns-stalled-state-probe-v1/` | stall 原因和替代候选探针。 |
 | `initlns-v2-stall-safe-targeted-v1/` | stall-safe 单目标实验。 |
@@ -379,6 +380,10 @@ build/.../episodes + manifest + report
 python scripts/audit_repository_hygiene.py --check
 python scripts/audit_repository_hygiene.py --emit-build-plan build/repository-hygiene-review
 ```
+
+2026-07-20 的空间优先清理记录位于
+`build/repository-hygiene-space-cleanup-20260720/`。该轮释放约 15.18 GiB，
+没有删除 `build/venv-graph`、构建环境、正式紧凑轨迹、冻结模型或 24 项证据来源。
 
 ## tests 目录
 
