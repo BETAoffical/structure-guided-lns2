@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments.closed_loop_trace_storage import read_trace_events
-from research.engineering.legacy_tradeoff.lns2_tradeoff import _manifest_path as _controller_manifest_path
+from experiments.tradeoff_evaluation import _manifest_path as _controller_manifest_path
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 
 

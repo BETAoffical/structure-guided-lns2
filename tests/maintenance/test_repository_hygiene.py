@@ -13,15 +13,6 @@ from experiments._common import (
     trial_job_id,
 )
 from experiments.closed_loop_confirmation import CONTROLLER_IMPLEMENTATION_FILES
-from research.studies.policy.policy_visited_aggregation import (
-    IMPLEMENTATION_FILES as POLICY_IMPLEMENTATION_FILES,
-)
-from research.studies.sequential.repair_order_probe import (
-    IMPLEMENTATION_FILES as REPAIR_ORDER_IMPLEMENTATION_FILES,
-)
-from research.studies.sequential.sequential_credit_audit import (
-    IMPLEMENTATION_FILES as SEQUENTIAL_IMPLEMENTATION_FILES,
-)
 from scripts.audit_repository_hygiene import (
     PROJECT_ROOT,
     _repository_path,
@@ -48,6 +39,15 @@ class RepositoryHygieneTests(unittest.TestCase):
         self.assertTrue(report["passed"], report["errors"])
         self.assertEqual(report["evidence"]["entry_count"], 24)
 
+    def test_minimal_runtime_tree_has_no_historical_imports(self) -> None:
+        for relative in ("research", "tests/research", "native_features", "requirements"):
+            self.assertFalse((PROJECT_ROOT / relative).exists(), relative)
+        for root_name in ("experiments", "generators", "scripts"):
+            for path in (PROJECT_ROOT / root_name).rglob("*.py"):
+                contents = path.read_text(encoding="utf-8")
+                self.assertNotIn("from research", contents, path)
+                self.assertNotIn("import research", contents, path)
+
     def test_common_identifiers_preserve_registered_shapes(self) -> None:
         self.assertEqual(
             episode_id({"task_id": "task"}, 7, "Adaptive"),
@@ -59,14 +59,8 @@ class RepositoryHygieneTests(unittest.TestCase):
             "state-0f4b9f34e988ff56__candidate__trial_0003",
         )
 
-    def test_common_module_is_covered_by_all_relevant_fingerprints(self) -> None:
-        for files in (
-            CONTROLLER_IMPLEMENTATION_FILES,
-            POLICY_IMPLEMENTATION_FILES,
-            REPAIR_ORDER_IMPLEMENTATION_FILES,
-            SEQUENTIAL_IMPLEMENTATION_FILES,
-        ):
-            self.assertIn("experiments/_common.py", files)
+    def test_common_module_is_covered_by_controller_fingerprint(self) -> None:
+        self.assertIn("experiments/_common.py", CONTROLLER_IMPLEMENTATION_FILES)
 
     def test_repository_paths_cannot_escape(self) -> None:
         with self.assertRaises(ValueError):

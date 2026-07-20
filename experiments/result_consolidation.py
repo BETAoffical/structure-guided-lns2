@@ -513,6 +513,8 @@ def _registration_text(registration: dict[str, Any]) -> str:
 
 
 def _report_document_link(document: str) -> str:
+    if document.startswith(("https://", "http://")):
+        return document
     path = Path(document)
     if path.parts[:1] == ("docs",):
         return Path(*path.parts[1:]).as_posix()

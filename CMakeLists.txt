@@ -5,6 +5,22 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(
+    LNS2_FEATURES_ONLY
+    "Build only the standalone Python online-feature extension"
+    OFF
+)
+if(LNS2_FEATURES_ONLY)
+    find_package(pybind11 CONFIG REQUIRED)
+    pybind11_add_module(
+        lns2_features_native
+        src/online_features.cpp
+        src/online_features_module.cpp
+    )
+    target_include_directories(lns2_features_native PRIVATE src)
+    return()
+endif()
+
 find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 

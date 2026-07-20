@@ -17,16 +17,7 @@ from experiments._common import (
     select_rows_by_task_id as _selected_rows,
     sha256_file as _sha256,
 )
-from research.studies.context.context_audit import _pair_vector
-from research.engineering.proposal_pruner.candidate_pruning import (
-    CandidatePruner,
-    expected_families_from_proposal_config,
-    no_pruning_metrics,
-)
-from research.engineering.balanced.balanced_controller import (
-    BalancedControllerConfig,
-    load_balanced_controller,
-)
+from experiments.context_audit import _pair_vector
 from experiments.closed_loop_trace_storage import (
     EPISODE_SCHEMA_V1,
     EPISODE_SCHEMA_V2,
@@ -53,25 +44,29 @@ from experiments.compact_controller_model import (
     load_controller_bundle,
 )
 from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
-from research.studies.representation.local_representation_audit import (
+from experiments.state_analysis import (
     StaticGridAnalysis,
     analyze_state,
     analyze_static_grid,
 )
-from research.studies.neighborhood.natural_distribution_confirmation import conflict_density, conflict_severity
+from experiments.neighborhood_candidates import (
+    _seed_isolation,
+    conflict_density,
+    conflict_severity,
+    no_pruning_metrics,
+    select_representative_neighborhoods,
+)
 from experiments.online_feature_engine import (
     FEATURE_BACKENDS,
     OnlineFeatureEngine,
     _native_vector_function,
 )
-from research.studies.neighborhood.realized_neighborhood_probe import select_representative_neighborhoods
-from research.studies.neighborhood.realized_neighborhood_ranking_audit import (
+from experiments.neighborhood_features import (
     _feature_profiles_from_shared,
     candidate_feature_cache,
     state_dynamic_features,
     static_context_features,
 )
-from research.studies.neighborhood.realized_ranking_confirmation import _seed_isolation
 from experiments.repair_collection import (
     SCHEMA_VERSION,
     CollectionLockError,
@@ -108,8 +103,6 @@ LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_MODES = (
     "v1-full",
     "v2-full",
-    "v2-cascade",
-    "v2-balanced",
     "v2-stall-safe",
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
@@ -121,20 +114,16 @@ DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
-    "research/engineering/balanced/balanced_controller.py",
     "experiments/closed_loop_confirmation.py",
-    "research/engineering/proposal_pruner/candidate_pruning.py",
     "experiments/compact_controller_model.py",
-    "research/studies/context/context_audit.py",
+    "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
-    "research/studies/representation/local_representation_audit.py",
-    "research/studies/neighborhood/natural_distribution_confirmation.py",
+    "experiments/state_analysis.py",
+    "experiments/neighborhood_candidates.py",
+    "experiments/neighborhood_features.py",
     "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
     "experiments/stall_guard.py",
-    "research/studies/neighborhood/realized_neighborhood_ranking_audit.py",
-    "research/studies/neighborhood/realized_neighborhood_probe.py",
-    "research/studies/neighborhood/realized_ranking_confirmation.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
     "src/online_features.cpp",
@@ -200,9 +189,6 @@ def resolve_controller_mode(
         mode = str(controller)
     if mode not in CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {mode}")
-    if mode == "v2-cascade":
-        if loaded is None or loaded.pruner_model is None:
-            raise ValueError("v2-cascade requires a validated controller-v2 bundle")
     return mode, bundle_path, loaded.manifest if loaded is not None else None
 
 
@@ -1866,13 +1852,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     verification_profile = str(job.get("verification_profile", "audit"))
     if verification_profile not in VERIFICATION_PROFILES:
         raise ValueError(f"unsupported verification profile: {verification_profile}")
-    balanced_config: BalancedControllerConfig | None = None
     stall_guard_config: StallGuardConfig | None = None
-    if controller_mode == "v2-balanced":
-        raw_balanced = job.get("balanced_config")
-        if raw_balanced is None:
-            raise ValueError("v2-balanced requires a frozen balanced controller config")
-        balanced_config = load_balanced_controller(raw_balanced)
     if controller_mode == "v2-stall-safe":
         raw_stall_guard = job.get("stall_guard_config")
         if raw_stall_guard is None:
@@ -1881,7 +1861,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     shadow_models: dict[str, Any] = {}
-    candidate_pruner: CandidatePruner | None = None
     if policy in LEARNED_POLICIES:
         bundle = load_frozen_policy_bundle(job["frozen_models"], job["model_registration"])
         if controller_mode == "v1-full":
@@ -1895,33 +1874,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 compact_bundle = load_controller_bundle(controller_path)
                 runtime_models = compact_bundle.main_models
                 runtime_ranges = compact_bundle.main_ranges
-                requested_pruner_threshold = (
-                    balanced_config.pruner_threshold
-                    if balanced_config is not None
-                    else compact_bundle.pruner_threshold
-                )
-                if controller_mode == "v2-cascade" or requested_pruner_threshold is not None:
-                    if (
-                        compact_bundle.pruner_model is None
-                        or requested_pruner_threshold is None
-                    ):
-                        raise ValueError(
-                            f"{controller_mode} requests a pruner but the bundle does not contain one"
-                        )
-                    candidate_pruner = CandidatePruner(
-                        model=compact_bundle.pruner_model,
-                        threshold=requested_pruner_threshold,
-                        ranges=compact_bundle.pruner_ranges,
-                        expected_families=expected_families_from_proposal_config(
-                            job["proposal"]
-                        ),
-                    )
             else:
-                if controller_mode == "v2-cascade" or (
-                    balanced_config is not None
-                    and balanced_config.pruner_threshold is not None
-                ):
-                    raise ValueError("v2-cascade controller bundle is missing")
                 runtime_models = {
                     name: compact_runtime_model(model)
                     for name, model in bundle.models.items()
@@ -2037,11 +1990,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     shadow_validation=bool(job.get("feature_shadow_validation", False)),
                     required_features={
                         policy: runtime_models[policy].base_feature_names,
-                        **(
-                            {"proposal_dynamic": tuple(candidate_pruner.ranges)}
-                            if candidate_pruner is not None
-                            else {}
-                        ),
                     },
                     dense_output=controller_runtime == "optimized",
                 )
@@ -2049,7 +1997,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             feature_engine = (
                 make_feature_engine(state)
                 if policy in LEARNED_POLICIES
-                and controller_mode not in {"v1-full", "v2-balanced"}
+                and controller_mode != "v1-full"
                 else None
             )
             pending_changed_agents: set[int] = set()
@@ -2080,12 +2028,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 )
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
-                route = (
-                    balanced_config.route(int(state["num_of_colliding_pairs"]))
-                    if balanced_config is not None and policy == "realized_dynamic"
-                    else "model" if policy in LEARNED_POLICIES
-                    else "official_adaptive"
-                )
+                route = "model" if policy in LEARNED_POLICIES else "official_adaptive"
                 route_started = time.perf_counter()
                 pre_step_orchestration_seconds = route_started - iteration_started
                 if route == "official_adaptive":
@@ -2099,11 +2042,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "verification_profile": verification_profile,
                             "route": route,
                             "route_conflicts": int(state["num_of_colliding_pairs"]),
-                            "route_conflict_threshold": (
-                                balanced_config.conflict_threshold
-                                if balanced_config is not None
-                                else None
-                            ),
+                            "route_conflict_threshold": None,
                             "controller_seconds_before_repair": controller_seconds_before_repair,
                             "candidate_generation_seconds": 0.0,
                             "state_check_seconds": 0.0,
@@ -2168,22 +2107,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 changed_agents=sorted(pending_changed_agents),
                             )
                         pending_changed_agents.clear()
-                        if policy == "realized_dynamic" and candidate_pruner is None:
+                        if policy == "realized_dynamic":
                             proposal_rows = None
                         else:
                             proposal_rows, proposal_feature_metrics = (
                                 feature_engine.proposal_rows(
                                     candidates, state_hash=before_hash
                                 )
-                            )
-                        if policy == "realized_dynamic" and candidate_pruner is not None:
-                            assert proposal_rows is not None
-                            retained_indices, pruning_metrics = candidate_pruner.prune(
-                                candidates, proposal_rows
-                            )
-                        elif controller_mode == "v2-cascade":
-                            pruning_metrics = no_pruning_metrics(
-                                len(candidates), "policy_not_cascade_eligible"
                             )
                         retained_candidates = [
                             candidates[index] for index in retained_indices
@@ -2416,11 +2346,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "verification_profile": verification_profile,
                             "route": route,
                             "route_conflicts": int(state["num_of_colliding_pairs"]),
-                            "route_conflict_threshold": (
-                                balanced_config.conflict_threshold
-                                if balanced_config is not None
-                                else None
-                            ),
+                            "route_conflict_threshold": None,
                             "feature_backend": (
                                 feature_engine.backend
                                 if feature_engine is not None
@@ -2551,8 +2477,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals["selected_feature_diagnostic_count"] += 1
                     controller_totals["learned_decisions"] += 1
                 if (
-                    (balanced_config is not None or stall_guard is not None)
-                    and policy == "realized_dynamic"
+                    stall_guard is not None and policy == "realized_dynamic"
                 ):
                     route_prefix = "official" if route == "official_adaptive" else "model"
                     controller_totals[f"{route_prefix}_decision_count"] += 1
@@ -2608,8 +2533,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                 pending_changed_agents.update(actual)
                 if (
-                    (balanced_config is not None or stall_guard is not None)
-                    and policy == "realized_dynamic"
+                    stall_guard is not None and policy == "realized_dynamic"
                 ):
                     route_prefix = "official" if route == "official_adaptive" else "model"
                     route_controller_seconds = float(
@@ -2685,7 +2609,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 controller_totals["environment_step_residual_seconds"] += (
                     environment_step_residual_seconds
                 )
-                if route == "official_adaptive" and balanced_config is None:
+                if route == "official_adaptive" and stall_guard is None:
                     controller_totals["controller_seconds_before_repair"] += (
                         controller_before_repair_seconds
                     )
@@ -2879,8 +2803,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             model_decisions = int(controller_totals["model_decision_count"])
             official_decisions = int(controller_totals["official_decision_count"])
             if (
-                (balanced_config is not None or stall_guard is not None)
-                and policy == "realized_dynamic"
+                stall_guard is not None and policy == "realized_dynamic"
                 and model_decisions + official_decisions != len(conflicts) - 1
             ):
                 raise ClosedLoopExecutionError(
@@ -2960,11 +2883,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     else 0.0
                 ),
                 "route_switch_count": int(controller_totals["route_switch_count"]),
-                "balanced_controller": (
-                    balanced_config.payload()
-                    if balanced_config is not None and policy == "realized_dynamic"
-                    else None
-                ),
+                "balanced_controller": None,
                 "stall_guard": (
                     stall_guard.summary()
                     if stall_guard is not None and policy == "realized_dynamic"
@@ -3188,7 +3107,6 @@ def run_closed_loop_collection(
     feature_shadow_validation: bool = False,
     controller_runtime: str = "reference",
     verification_profile: str = "audit",
-    balanced_config: str | Path | dict[str, Any] | None = None,
     stall_guard_config: str | Path | dict[str, Any] | None = None,
     job_keys: set[tuple[str, int]] | None = None,
     cohort_job_keys: set[tuple[str, int]] | None = None,
@@ -3217,14 +3135,7 @@ def run_closed_loop_collection(
     controller_mode, controller_root, controller_manifest = resolve_controller_mode(
         project_root, controller, controller_bundle
     )
-    balanced_payload: dict[str, Any] | None = None
     stall_guard_payload: dict[str, Any] | None = None
-    if controller_mode == "v2-balanced":
-        if balanced_config is None:
-            raise ValueError("v2-balanced requires --balanced-config")
-        balanced_payload = load_balanced_controller(balanced_config).payload()
-    elif balanced_config is not None:
-        raise ValueError("balanced_config is only valid with v2-balanced")
     if controller_mode == "v2-stall-safe":
         if stall_guard_config is None:
             raise ValueError("v2-stall-safe requires --stall-guard-config")
@@ -3326,7 +3237,6 @@ def run_closed_loop_collection(
             or verification_profile == "audit"
             and controller_runtime in {"optimized", "auto"}
         ),
-        "balanced_config": balanced_payload,
         "stall_guard_config": stall_guard_payload,
     }
     config_fp = _fingerprint(effective)
@@ -3396,7 +3306,6 @@ def run_closed_loop_collection(
                 FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
             ),
             "controller_bundle": controller_manifest,
-            "balanced_config": balanced_payload,
             "stall_guard_config": stall_guard_payload,
             "controller_implementation": implementation,
             "estimate": estimate,
@@ -3426,7 +3335,6 @@ def run_closed_loop_collection(
             FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
         ),
         "controller_bundle": controller_manifest,
-        "balanced_config": balanced_payload,
         "stall_guard_config": stall_guard_payload,
         "controller_implementation": implementation,
     }
@@ -3571,7 +3479,6 @@ def run_closed_loop_collection(
                     verification_profile == "audit"
                     and controller_runtime in {"optimized", "auto"}
                 ),
-                "balanced_config": balanced_payload,
                 "stall_guard_config": stall_guard_payload,
                 "proposal_state_verification": (
                     "always" if verification_profile == "audit" else "sampled"

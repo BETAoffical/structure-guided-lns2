@@ -1,427 +1,114 @@
-# 项目文件导航
+# 项目文件指南
 
-这份文档回答三个问题：现在应该看哪些文件、每组文件负责什么、哪些内容只是为了历史复现而保留。
-仓库的大部分文件来自固定的 `third_party/` 与可复现的 `research/`；日常开发只需关注活动入口，不需要逐个阅读历史研究。
+当前分支已经收缩为“可运行求解器 + 冻结控制器 + 当前评测 + 正式证据”。历史模型训练、失败审计和旧 Stage 代码不再混在日常目录中；完整版本可从 Git 标签 `pre-minimal-runtime-2026-07-20` 恢复。
 
-## 先看这 10 个入口
+## 日常只看这些目录
 
-| 目的 | 文件或目录 | 说明 |
-|---|---|---|
-| 了解项目结论 | `docs/INITLNS_RESEARCH_REPORT_ZH.md` | 冻结的中文研究报告、正负结果和证据边界。 |
-| 了解研究演变 | `docs/RESEARCH_ROADMAP.md` | 从静态上下文到显式邻域排序的完整路线。 |
-| 了解当前求解流程 | `README.md` | 构建、CLI、Python 环境和主要运行命令。 |
-| 官方 LNS2 内核 | `third_party/mapf_lns2/` | 固定版本的完整 MAPF-LNS2；核心算法来源。 |
-| 项目 C++ 扩展 | `src/`、`include/` | repair-only CLI、Python binding、trace 和在线特征。 |
-| Python 闭环控制器 | `experiments/closed_loop_confirmation.py` | 候选生成、特征、模型选择、repair 循环和 trace 主实现。 |
-| 当前冻结模型 | `artifacts/initlns-closed-loop-policy-v1/` | 原始 portable pairwise GBDT。 |
-| 当前优化模型 | `artifacts/initlns-closed-loop-controller-v2/` | 与 v1 决策语义相同的紧凑/原生加速版本。 |
-| 最新性能诊断 | `experiments/lns2_bottleneck.py` | 分解候选生成、特征、推理、PP、trace 和墙钟时间。 |
-| 最新 stall-safe 试验 | `docs/V2_STALL_SAFE_EVALUATION.md` | 针对长时间停滞状态的在研保护策略，不属于冻结主结论。 |
+| 目录 | 内容 | 什么时候需要看 |
+| --- | --- | --- |
+| `configs/` | 当前数据、采集、评测和维护配置。 | 修改实验参数时。 |
+| `docs/` | 当前操作说明、研究结论和环境记录。 | 查协议与结论时。 |
+| `experiments/` | 运行时、特征、候选生成、采集和分析实现。 | 修改算法或排查运行时。 |
+| `generators/` | 合成地图与静态 OD 任务生成。 | 修改数据设计时。 |
+| `include/`、`src/` | C++ 接口、官方内核包装、pybind 和原生特征。 | 修改求解器或性能代码时。 |
+| `scripts/` | 稳定 CLI。 | 日常执行实验时。 |
+| `tests/` | runtime、data、evaluation、maintenance 测试。 | 验证修改时。 |
 
-## 当前状态边界
+Explorer 默认隐藏但必须保留：
 
-仓库现在同时保留三条不同性质的内容，阅读时不要混在一起。
+| 目录 | 为什么保留 |
+| --- | --- |
+| `artifacts/` | 冻结 v1/v2 模型、schema 和紧凑证据。 |
+| `third_party/` | 固定版本的官方 MAPF-LNS2 与 GPBS。 |
+| `build/` | 本机数据、trace、虚拟环境和构建结果；不进入 Git。 |
 
-1. **冻结研究主线**：`realized_dynamic v1` 在同族未见地图和多 solver seed 上通过闭环确认；MovingAI 跨布局结果有正信号但未达到 5% 门槛。正式边界见 `docs/INITLNS_RESEARCH_REPORT_ZH.md`。
-2. **v2 工程加速**：不重新训练模型，只压缩特征、树和推理路径，目标是保持候选、分数和选择完全一致并降低控制开销。
-3. **stall-safe 在研试验**：当 frozen v2 连续选择导致 PP 失败且状态不变时，逐级限制邻域大小、黑名单重复失败候选，最后回退 Adaptive。它尚不能改写冻结研究结论。
+## 活动控制器
 
-`v1-full`、`v2-full` 和 `v2-balanced` 容易产生误解：
+- `v1-full`：冻结的 pairwise HistGradientBoosting 模型，输入当前动态冲突状态和实际 agent 邻域的 124 维特征。
+- `v2-full`：与 v1 选择完全一致，使用紧凑树和加速特征实现。
+- `v2-stall-safe`：在 v2 上增加冻结的停滞保护规则。
+- 官方对照：Adaptive、Target、Collision、Random。
 
-- `v1-full`：旧的 Python/字典特征部署路径。
-- `v2-full`：同一冻结 GBDT 的紧凑、稠密、原生加速路径，不是重新训练的新模型。
-- `v2-balanced`：在部分状态跳过模型的混合路由，不是 BALANCE 论文实现，也不是独立模型。
-- `v2-stall-safe`：在 v2 排名之后施加运行期安全保护的实验控制器。
+`v2-balanced`、`v2-cascade` 和 proposal pruner 没有通过推广门槛，已经退出活动代码。旧 bundle 的 pruner 字段仍可只读解析，以免历史 manifest 无法打开，但不会在当前控制器中执行。
 
-## 一次运行经过哪些文件
+## experiments 目录
 
-```text
-MovingAI .map/.scen 或生成数据
-        |
-        v
-generators/ 或 experiments/movingai_devset.py
-        |
-        v
-src/python_bindings.cpp -> lns2_env
-        |
-        v
-experiments/closed_loop_confirmation.py
-        |-- 官方 Adaptive/Target/Collision/Random
-        |-- v1/v2 显式邻域候选
-        |-- online_feature_engine.py / src/online_features.cpp
-        |-- compact_controller_model.py
-        |-- PP + SIPPS repair（third_party/mapf_lns2）
-        v
-build/.../episodes + manifest + report
-```
+| 文件 | 作用 |
+| --- | --- |
+| `closed_loop_confirmation.py` | 闭环候选生成、模型选择、修复执行和 trace。 |
+| `online_feature_engine.py` | Python/native 在线特征统一接口。 |
+| `state_analysis.py` | 状态、路径、冲突图和栅格分析。 |
+| `neighborhood_features.py` | proposal 与 realized neighborhood 特征。 |
+| `neighborhood_candidates.py` | 候选去重、代表邻域和确定性 seed。 |
+| `context_audit.py` | 仅保留旧 sklearn pickle 所需的 `PairwiseModel` 兼容类。 |
+| `compact_controller_model.py` | 紧凑 portable tree bundle 导出和读取。 |
+| `stall_guard.py`、`stalled_state_probe.py` | stall-safe 判定与诊断。 |
+| `closed_loop_trace_storage.py`、`closed_loop_trace_conversion.py` | 紧凑 trace 写入与迁移。 |
+| `closed_loop_confirmation_analysis.py` | 同族闭环分析。 |
+| `movingai_ood_confirmation.py` | 标准 MovingAI OOD 分析。 |
+| `lns2_bottleneck.py`、`tradeoff_evaluation.py` | 当前双轨评测与 manifest 兼容接口。 |
+| `repair_collection.py`、`repair_quality.py` | 基础修复经验采集与质量报告。 |
+| `result_consolidation.py` | 24 项冻结证据的确定性汇总。 |
 
-活动命令位于 `scripts/`，实现位于 `experiments/`，参数位于 `configs/`。历史研究按同样的 `studies/scripts/configs/docs` 结构集中在 `research/`。测试按 `tests/runtime`、`tests/data`、`tests/evaluation`、`tests/research` 和 `tests/maintenance` 分类。
+## scripts 目录
 
-## 顶层目录
+常用入口：
 
-| 路径 | 用途 | 是否日常修改 |
-|---|---|---|
-| `src/` | 项目 C++ 实现和 pybind11 binding。 | 是，修改底层接口或性能时。 |
-| `include/` | 项目 C++ 公共头文件。 | 偶尔。 |
-| `experiments/` | 当前支持的数据采集、闭环控制器、v2、stall-safe 与评测实现。 | 是，活动代码主体。 |
-| `research/` | 未通过或非默认研究的实现、配置、CLI、文档和对应测试。 | 仅在复现历史研究时。 |
-| `scripts/` | 面向用户的 CLI 薄入口和少量编排代码。 | 是，但算法逻辑优先放在 `experiments/`。 |
-| `configs/` | 数据、采集、模型和验收门槛的版本化配置。 | 新实验时。 |
-| `generators/` | 合成仓储地图和静态 OD 任务生成。 | 修改数据语义时。 |
-| `artifacts/` | 提交到 Git 的冻结模型、紧凑证据和图表。 | 只在正式冻结/导出时。 |
-| `docs/` | 每一阶段的设计、协议和结论。 | 实验完成后。 |
-| `tests/` | Python/C++ 测试和小型地图 fixture。 | 随源码同步。 |
-| `third_party/` | 固定提交的官方 MAPF-LNS2 和 GPBS。 | 原则上不改；项目 hook 除外。 |
-| `native_features/` | 独立构建在线特征扩展的 CMake 入口。 | 性能开发时。 |
-| `requirements/` | 可选训练环境的锁定依赖。 | 环境升级时。 |
-| `build/` | 本地二进制、虚拟环境、数据、trace、模型中间件和报告。被 Git 忽略。 | 运行产生，不手工编辑。 |
+- `generate_dataset.py`、`generate_instance.py`、`inspect_dataset.py`
+- `collect_closed_loop_confirmation.py`
+- `analyze_closed_loop_confirmation.py`
+- `analyze_movingai_ood_confirmation.py`
+- `run_lns2_tradeoff_evaluation.py`
+- `probe_stalled_state.py`
+- `consolidate_research_results.py`
+- `audit_repository_hygiene.py`
+- `check_environment.py`
 
-## C++ 与原生接口
+其余脚本用于 trace 转换、等价性验证、性能 benchmark、模型导出或旧采集 manifest 恢复，仍有测试或正式证据依赖。
 
-| 文件 | 职责 |
-|---|---|
-| `CMakeLists.txt` | 构建 `mapf_lns2_core`、`lns_official`、`lns2_repair`、`lns2_env`、GPBS 和 CTest。 |
-| `src/repair_driver.cpp` | repair-only 命令行入口，停在首次无冲突解。 |
-| `src/python_bindings.cpp` | `LNS2RepairEnv.reset/step/propose` 的 pybind11 接口和计时字段。 |
-| `src/online_features.cpp` | 稠密在线状态/候选特征、冲突扫描和路径聚合。 |
-| `src/online_features.h` | 在线特征 C++ 接口。 |
-| `src/online_features_module.cpp` | 独立原生特征模块入口。 |
-| `src/jsonl_observer.cpp` | C++ JSONL trace observer。 |
-| `include/structure_guided/jsonl_observer.hpp` | observer 声明。 |
-| `third_party/mapf_lns2/inc/RepairPolicy.h` | 项目加入官方内核的 repair action/policy 接口。 |
-| `third_party/mapf_lns2/inc/InitLNS.h`、`src/InitLNS.cpp` | 官方 InitLNS 及项目的 step/propose/显式邻域扩展。 |
+## configs 与 artifacts
 
-`third_party/mapf_lns2/inc/CBS/`、`inc/PIBT/` 和对应 `src/` 是官方低层/初始求解器实现，不需要为了理解当前高层策略逐个阅读。
+`configs/` 只保留当前可执行协议：闭环、MovingAI OOD、repair collection、stall guard、数据生成、结果收束和仓库维护。配置中的历史文档链接指向安全标签，不要求当前分支保留历史源码。
 
-## 数据生成
-
-| 文件 | 职责 |
-|---|---|
-| `generators/models.py` | 地图和任务数据类。 |
-| `generators/config.py` | 生成配置读取和校验。 |
-| `generators/warehouse.py` | `regular_beltway`、`compartmentalized`、`dead_end_aisles` 等仓储布局生成。 |
-| `generators/task_flows.py` | balanced、bottleneck、cross-zone、intersection 等静态 OD 任务。 |
-| `generators/dataset.py` | split、seed 和整套数据集生成。 |
-| `generators/io.py` | MovingAI `.map/.scen` 与 JSON sidecar I/O。 |
-| `generators/validation.py` | 连通性、起终点、距离和语义约束。 |
-| `generators/visualization.py` | 地图/任务可视化。 |
-
-常用入口是 `scripts/generate_instance.py`、`scripts/generate_dataset.py`、`scripts/inspect_dataset.py` 和 `scripts/generate_gallery.py`。
-
-## 当前控制器与性能代码
-
-| 模块 | 作用 | 当前地位 |
-|---|---|---|
-| `closed_loop_confirmation.py` | 完整闭环执行器、候选生成、模型选择和 trace。 | 主线核心。 |
-| `online_feature_engine.py` | Python/原生在线特征后端和一致性检查。 | v2 核心。 |
-| `feature_schema_v2.py` | v2 稠密特征顺序、ID 和 schema hash。 | v2 核心。 |
-| `compact_controller_model.py` | 将 portable GBDT 压缩并加载为 Python/C++ 可推理 bundle。 | v2 核心。 |
-| `controller_performance_benchmark.py` | 对比旧/新特征和推理开销。 | 工程验证。 |
-| `candidate_pruning.py`、`proposal_pruner_training.py` | outcome-blind proposal 剪枝训练与执行。 | 已审计，当前 pruner 未获推广。 |
-| `balanced_controller.py` | v2-balanced 混合路由。 | 未获推广，保留复现。 |
-| `lns2_speed_quality_calibration.py` | 速度/质量校准。 | v2 前置工程实验。 |
-| `lns2_tradeoff.py` | v1/v2/balanced/Adaptive 的综合比较和报告。 | 工程评估。 |
-| `lns2_bottleneck.py` | historical、墙钟和 timeout 轨道的精确耗时分解。 | 最新性能诊断。 |
-| `stall_guard.py` | 连续失败时的 cap、blacklist 和 Adaptive fallback 状态机。 | 在研。 |
-| `stalled_state_probe.py` | 重放停滞状态并比较替代邻域/repair order。 | 在研机制探针。 |
-
-对应 CLI：
-
-- `scripts/benchmark_controller_v2.py`
-- `scripts/benchmark_exact_runtime.py`
-- `research/scripts/engineering/train_proposal_pruner_v2.py`
-- `research/scripts/engineering/calibrate_lns2_speed_quality.py`
-- `scripts/run_lns2_tradeoff_evaluation.py`
-- `scripts/probe_stalled_state.py`
-- `scripts/verify_closed_loop_equivalence.py`
-
-最新本地输出主要在：
-
-- `build/initlns-exact-runtime-benchmark/`
-- `build/initlns-lns2-bottleneck-quick-v2-exact/`
-- `build/initlns-stalled-state-probe-v1/`
-- `build/initlns-v2-stall-safe-targeted-v1/`
-- `build/initlns-v2-stall-safe-quick-wall-v1/`
-
-## 历史实验模块
-
-这些文件位于 `research/studies/<group>/`。它们不是废弃垃圾，而是保存预注册假设、负面结果和停止规则，通常不应作为新代码入口。对应 CLI、配置和文档分别位于 `research/scripts/`、`research/configs/` 和 `research/docs/` 的同名分组。
-
-活动代码与历史研究共同复用 `experiments/_common.py` 中无实验语义的 JSON/JSONL、SHA、统计量和稳定 ID 工具；`experiments/__init__.py` 只导出当前包级 repair collection 接口。
-
-### 数据采集和上下文
-
-| 模块 | 对应文档 | 结论/用途 |
-|---|---|---|
-| `repair_collection.py`、`repair_quality.py` | `REPAIR_COLLECTION.md` | qualification、baseline、反事实轨迹和标签质量。 |
-| `context_audit.py` | `CONTEXT_AUDIT.md` | 首轮静态上下文增量审计，未通过。 |
-| `context_confirmation.py` | `CONTEXT_SECONDARY_AUDIT.md` | 二次置换/分组验证，未通过。 |
-| `local_representation_audit.py` | `LOCAL_REPRESENTATION_AUDIT.md` | 局部预生成/实际邻域表示恢复审计，未通过。 |
-
-### 邻域机制和排序
-
-| 模块 | 对应文档 | 结论/用途 |
-|---|---|---|
-| `movingai_mechanism_probe.py`、`movingai_probe_quality.py` | `MOVINGAI_MECHANISM_PROBE.md`、`MOVINGAI_PROBE_QUALITY.md` | 名义动作、trial 稳定性和标签质量。 |
-| `independent_layout_probe.py` | `INDEPENDENT_LAYOUT_PROBE.md` | 独立布局动作机制，名义动作不稳定。 |
-| `realized_neighborhood_probe.py` | `REALIZED_NEIGHBORHOOD_PROBE.md` | 显式 agent 集合比名义动作稳定，通过。 |
-| `realized_neighborhood_ranking_audit.py` | `REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md` | 显式邻域监督排序，通过。 |
-| `realized_ranking_confirmation.py` | `REALIZED_RANKING_CONFIRMATION.md` | 新地图排序确认。 |
-| `natural_distribution_confirmation.py` | `NATURAL_DISTRIBUTION_CONFIRMATION.md` | 不筛选冲突难度的独立确认，通过。 |
-
-`natural_distribution_confirmation_analysis.py` 和 `realized_ranking_confirmation_analysis.py` 是上述 collector 的纯分析层，不负责运行求解器。
-
-### 闭环、聚合和模型诊断
-
-| 模块 | 对应文档 | 结论/用途 |
-|---|---|---|
-| `closed_loop_confirmation_analysis.py` | `CLOSED_LOOP_CONFIRMATION.md` | 首次闭环确认。 |
-| `policy_visited_aggregation.py` | `POLICY_VISITED_AGGREGATION.md`、`POLICY_VISITED_NATURAL_DISTRIBUTION.md` | 策略访问状态聚合 v2，未改善。 |
-| `policy_visited_aggregation_analysis.py` | 同上 | policy-visited 标签、分布偏移和闭环汇总。 |
-| `policy_visited_independent_confirmation.py` | 同上 | 聚合模型通过开发门槛后才允许的独立确认门控。 |
-| `ranking_objective_audit.py` | `RANKING_OBJECTIVE_AUDIT.md` | pairwise/双头目标对齐，未通过。 |
-| `ranking_objective_confirmation.py` | 同上 | 排序目标胜者的独立确认数据接口；门槛失败后未成为主线。 |
-| `model_capacity_audit.py` | `MODEL_CAPACITY_AUDIT.md` | 更大 GBDT 过拟合。 |
-| `graph_representation_audit.py` | `GRAPH_REPRESENTATION_AUDIT.md` | MLP/DeepSets/GNN 未超过 GBDT。 |
-| `graph_feature_gbdt_audit.py` | `GRAPH_FEATURE_GBDT_AUDIT.md` | 图统计特征 GBDT 未通过。 |
-| `sequential_credit_audit.py` | `SEQUENTIAL_CREDIT_AUDIT.md` | Horizon-4 标签不稳定。 |
-| `repair_order_probe.py`、`contextual_repair_order_audit.py` | `REPAIR_ORDER_PROBE.md`、`CONTEXTUAL_REPAIR_ORDER_AUDIT.md` | repair order 重要，但 selector 未通过。 |
-
-### 标准地图、基线和结果收束
-
-| 模块 | 作用 |
-|---|---|
-| `movingai_devset.py` | 下载/验证标准 MovingAI 地图和 scenario。 |
-| `feasibility_benchmark.py` | LNS2 与 GPBS 统一 feasibility runner。 |
-| `movingai_ood_confirmation.py` | MovingAI 跨布局闭环分析。 |
-| `final_model_evaluation.py` | 最终冻结模型评估和门槛。 |
-| `result_consolidation.py` | 读取正式 JSON，生成中文报告、CSV 和图表。 |
-| `closed_loop_trace_storage.py`、`closed_loop_trace_conversion.py` | trace 压缩、迁移和完整性验证。 |
-| `route_counterfactual.py` | 对混合路由跳过的状态执行单步反事实。 |
-| `run_output_guard.py` | 输出目录锁、fingerprint 和 resume 防护。 |
-
-## scripts 目录怎么找入口
-
-脚本名称已经按动作分组：
-
-- `generate_*`：生成地图、任务、数据集、gallery 或确认集。
-- `collect_*`：运行求解器并收集 episode/transition/counterfactual。
-- `analyze_*`：只读取已有结果生成报告。
-- `research/scripts/**/run_*_audit.py`：复现冻结的模型/表示/标签审计，不属于活动入口。
-- `benchmark_*`：计时和等价性能微基准。
-- `verify_*`、`audit_*`、`check_*`：只读验证或一致性检查。
-- `export_closed_loop_models.py`：从 sklearn 模型导出无 sklearn 依赖的 portable bundle。
-- `research/scripts/engineering/run_final_model_evaluation.py`：历史正式模型评估编排。
-- `run_lns2_tradeoff_evaluation.py`：当前最大的一体化工程评估入口；包含 quick/formal、双控制器、墙钟和 stall-safe 路由。
-- `consolidate_research_results.py`：重新生成冻结研究报告，不训练模型。
-
-如果脚本和实现同名，先读脚本的参数，再跳到它 import 的 `experiments` 模块。不要从 6 万行的编排脚本顺序通读整个项目。
-
-### 完整 scripts 索引
-
-| 脚本 | 作用 |
-|---|---|
-| `analyze_closed_loop_confirmation.py` | 分析已完成的闭环 collection。 |
-| `analyze_movingai_ood_confirmation.py` | 汇总 MovingAI OOD 闭环结果。 |
-| `analyze_repair_experience.py` | 生成 calibration 标签质量报告。 |
-| `audit_repository_hygiene.py` | 只读仓库/build 保护和冗余审计。 |
-| `benchmark_controller_v2.py` | v2 feature/controller 性能基准。 |
-| `benchmark_exact_runtime.py` | 候选、特征、分数、排名完全等价的精确计时。 |
-| `benchmark_portable_tree_inference.py` | portable tree Python/C++ 推理微基准。 |
-| `check_environment.py` | 只读检查 WSL runtime 或 Windows training 环境。 |
-| `collect_closed_loop_confirmation.py` | 通用闭环 episode collector。 |
-| `collect_repair_experience.py` | qualification、baseline 和 counterfactual 总入口。 |
-| `consolidate_research_results.py` | 从冻结 JSON 生成证据清单、CSV、图和中文报告。 |
-| `convert_closed_loop_traces.py` | full-v1 trace 转 delta-gzip-v2。 |
-| `export_closed_loop_models.py` | sklearn 模型导出 portable JSON。 |
-| `fetch_movingai_devset.py` | 下载并校验 MovingAI 开发地图。 |
-| `generate_dataset.py` | 从配置生成合成数据集。 |
-| `generate_gallery.py` | 生成地图/任务可视化 gallery。 |
-| `generate_instance.py` | 生成单个地图和任务实例。 |
-| `inspect_dataset.py` | 检查数据集 split、统计和语义。 |
-| `manage_build_storage.py` | 计划、执行和验证 build 文本的 NTFS 透明压缩。 |
-| `manage_repair_collection.py` | collection 状态、resume 和 manifest 管理。 |
-| `probe_stalled_state.py` | 对一个停滞状态运行替代候选/repair-order 探针。 |
-| `recover_counterfactual_manifest.py` | 从已有分支文件恢复中断的反事实 manifest。 |
-| `run_feasibility_benchmark.py` | LNS2/GPBS 统一 feasibility benchmark。 |
-| `run_lns2_tradeoff_evaluation.py` | v1/v2/Adaptive、墙钟、timeout 和 stall-safe 总编排。 |
-| `verify_closed_loop_equivalence.py` | v1/v2 transition、候选、分数和选择等价检查。 |
-
-历史研究脚本不再混列于活动表。它们按 `context`、`neighborhood`、`representation`、`policy`、`sequential` 和 `engineering` 分类放在 `research/scripts/`，具体入口见 `research/README.md` 与各研究文档。
-
-## configs 目录怎么对应
-
-配置文件遵循以下命名：
-
-- `*_dataset.json`：地图、任务、split 和 seed。
-- `*_collection.json`：策略、solver seed、时间/修复预算、workers 和输出。
-- `*_analysis.json`：输入结果、指标、bootstrap 和门槛。
-- `*_pilot.json`：smoke/pilot 小规模配置，不是正式结论。
-- `*_audit.json`：冻结模型参数、特征组和预注册判定。
-
-根 `configs/` 只保留活动数据、闭环、MovingAI OOD、v2/stall-safe 与维护配置。上下文、机制探针、表示、policy、长期信用和未推广工程配置已经移入 `research/configs/<group>/`。
-
-主要配置族：
-
-| 前缀 | 对应阶段 |
-|---|---|
-| `repair_*` | Pilot v1/v2、calibration 和反事实采集。 |
-| `research/configs/context/` | 静态上下文首轮/二次审计。 |
-| `research/configs/neighborhood/` | MovingAI 机制、显式邻域和自然分布研究。 |
-| `closed_loop_*` | 冻结模型闭环和多 seed 确认。 |
-| `research/configs/policy/` | 策略访问状态、聚合和排序目标。 |
-| `research/configs/representation/` | 模型容量和图表示诊断。 |
-| `research/configs/sequential/` | 长期信用和 PP order。 |
-| `movingai_ood_*` | 标准地图跨布局确认。 |
-| `research/configs/engineering/proposal_pruner_v2.json` | v2 proposal pruner；当前未启用。 |
-| `v2_stall_guard_v1.json` | 当前 stall-safe cap/blacklist/fallback 规则。 |
-| `result_consolidation.json` | 24 项冻结正式证据及 SHA。 |
-| `repository_hygiene.json` | build 保护、审计和清理分类。 |
-| `build_storage_compaction.json` | 透明压缩的显式文本目标和 500 MiB 门槛。 |
-
-### 完整 config 索引
-
-下面区分活动配置和 `research/` 历史配置；同一行中的 `dataset/collection/analysis/pilot` 分别负责数据、执行、汇总和小规模验证。
-
-| 阶段 | 配置文件 |
-|---|---|
-| 初始生成 | `stage1_example.json`、`repair_transfer_pilot.json` |
-| 修复经验 | `repair_collection_pilot.json`、`repair_collection_calibration.json`、`repair_collection_hardening_smoke.json` |
-| MovingAI 开发集 | `movingai_devset.json`、`movingai_ood_devset.json` |
-| 闭环确认 | `closed_loop_confirmation_dataset.json`、`closed_loop_confirmation_collection.json`、`closed_loop_confirmation_analysis.json`、`closed_loop_confirmation_pilot.json` |
-| 多 seed 闭环 | `closed_loop_multiseed_dataset.json`、`closed_loop_multiseed_collection.json`、`closed_loop_multiseed_analysis.json` |
-| MovingAI OOD | `movingai_ood_dataset.json`、`movingai_ood_collection.json`、`movingai_ood_analysis.json` |
-| v2/stall-safe | `v2_stall_guard_v1.json` |
-| 结果和仓库 | `result_consolidation.json`、`repository_hygiene.json`、`build_storage_compaction.json` |
-| 历史研究 | `research/configs/` 下按 context、neighborhood、representation、policy、sequential、engineering 分组。 |
-
-## artifacts 目录
-
-| 路径 | 内容 |
-|---|---|
-| `initlns-closed-loop-policy-v1/` | 冻结 v1 的 proposal/realized pairwise GBDT JSON、manifest 和等价报告。 |
-| `initlns-closed-loop-controller-v2/` | 紧凑模型、训练来源报告、性能基准和 promotion report。 |
-| `initlns-research-evidence-v1/` | 24 项实验的 evidence manifest、指标 CSV、验证和 SVG 图。 |
-| `initlns-movingai-ood-compact-migration-v2/` | 720 episode trace 压缩迁移证据；不是删除授权。 |
-
-只有通过冻结门槛的模型和小型证据进入 `artifacts/`。大模型中间文件、原始 trace 和 rollout 留在 `build/`。
+`artifacts/initlns-closed-loop-policy-v1` 是 canonical v1；`artifacts/initlns-closed-loop-controller-v2` 是 canonical v2。不得用确认集结果重新训练或替换它们。
 
 ## build 目录
 
-`build/` 是最大的目录，也是最容易迷路的地方。它不是源码树。
-
-### 环境和二进制
-
-- `build/linux/project/`：WSL CMake 构建、`lns2_env`、`lns2_repair` 和 CTest。
-- `build/windows/`、`build/windows-v2/`：Windows 构建。
-- `build/native-features-windows/`：Windows 原生特征扩展。
-- `build/venv-graph/`：图模型审计的独立 Python 环境。
-- `build/gpbs-upstream/`：GPBS 构建/运行环境。
-
-### 命名规律
-
-- `*-dataset*`：地图、scenario、sidecar 和 manifest。
-- `*-collection*`：episode trace、collection manifest 和 run config。
-- `*-report*`、`*-audit*`：汇总 JSON、Markdown、CSV、图表和模型诊断。
-- `*-frozen-models*`、`*-training*`：训练中间件和冻结模型。
-- 名称含 `smoke`、`verify`、`preregister`、`dry-run`：通常是可再生临时结果，但删除前仍须运行卫生审计。
-
-### 当前最值得看的结果
-
-| 路径 | 内容 |
-|---|---|
-| `initlns-lns2-bottleneck-quick-v2-exact/report/` | 最新 v2 与 Adaptive 逐阶段耗时。 |
-| `initlns-exact-runtime-benchmark/` | 候选、特征、分数和选择完全一致的微基准。 |
-| `initlns-movingai-ood-report-v1/` | 冻结 v1 的正式 MovingAI OOD 结果。 |
-| `initlns-movingai-ood-collection-v2-compact/` | 720 个正式 episode 的紧凑 `delta-gzip-v2` 轨迹，是当前保留的跨布局原始证据。旧 full-v1 `episodes/` 已在 720/720 等价验证后删除。 |
-| `initlns-closed-loop-multiseed-v1-report/` | 同族新地图多 seed 闭环确认。 |
-| `initlns-stalled-state-probe-v1/` | stall 原因和替代候选探针。 |
-| `initlns-v2-stall-safe-targeted-v1/` | stall-safe 单目标实验。 |
-| `initlns-v2-stall-safe-quick-wall-v1/` | stall-safe quick 墙钟队列。 |
-
-不要凭目录名直接删除 `build/` 内容。只读检查命令：
+`build/` 不是源码。它包含约数 GiB 的正式 trace、MovingAI 数据、`venv-graph`、Linux/Windows 构建和验证日志。路径被正式结果 manifest 引用，因此本轮不移动或改名。需要空间清理时先运行：
 
 ```powershell
 python scripts/audit_repository_hygiene.py --check
-python scripts/audit_repository_hygiene.py --emit-build-plan build/repository-hygiene-review
-python scripts/manage_build_storage.py plan
-python scripts/manage_build_storage.py verify
+python scripts/audit_repository_hygiene.py --emit-build-plan build/repository-hygiene
 ```
 
-2026-07-20 的空间优先清理记录位于
-`build/repository-hygiene-space-cleanup-20260720/`。该轮释放约 15.18 GiB，
-没有删除 `build/venv-graph`、构建环境、正式紧凑轨迹、冻结模型或 24 项证据来源。
+审计工具只给清单，不自动删除。
 
-## tests 目录
+## 构建与验证
 
-- 活动测试位于 `tests/runtime`、`tests/data` 和 `tests/evaluation`；历史实验测试位于 `tests/research`。
-- `test_closed_loop_confirmation.py`、`test_controller_v2.py`、`test_lns2_bottleneck.py`、`test_stall_guard.py` 和 `test_stalled_state_probe.py` 是当前控制器/性能主线测试。
-- `test_repair_interfaces.cpp` 验证 C++ repair/propose/随机流和原生接口。
-- `test_python_env.py` 验证 pybind 环境、计时 schema 和在线特征。
-- `check_path_hash.py` 验证官方 LNS2 parity hash。
-- `check_trace.py` 验证 JSONL trace schema。
-- `tests/data/` 是小型确定性地图 fixture，不是实验数据集。
+普通构建使用根 `CMakeLists.txt`。仅构建 native feature 模块时使用：
 
-历史实验测试仍保留，是为了保证旧结论和 schema 可以复现，并不表示这些模型仍在当前运行路径中。
+```bash
+cmake -S . -B build/native-features -DLNS2_FEATURES_ONLY=ON
+cmake --build build/native-features -j4
+```
 
-## docs 目录
+完整验证包括：
 
-文档基本与实验阶段一一对应。除前文已列出的审计文档外，还有几个横向入口：
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+python scripts/consolidate_research_results.py --config configs/result_consolidation.json --verify-build
+python scripts/audit_repository_hygiene.py --check
+```
 
-| 文档 | 用途 |
-|---|---|
-| `CONFIGURATION.md` | 配置 schema、字段和实例。 |
-| `ENVIRONMENT_AUDIT.md` | WSL 可见性、真实 Ubuntu 用户和依赖盘点。 |
-| `TRACE_AND_POLICY_API.md` | observation、action、trace 和 Python policy API。 |
-| `MOVINGAI_BASELINES.md` | 标准 MovingAI runner 和 GPBS/LNS2 基线。 |
-| `CLOSED_LOOP_MULTISEED_CONFIRMATION.md` | 同族新地图多 solver seed 正式闭环结果。 |
-| `STAGE1.md` | 仍保留的仓储数据生成第一阶段说明。 |
-| `REPOSITORY_HYGIENE.md` | 证据保护和安全清理规则。 |
-| `INITLNS_RESEARCH_REPORT_ZH.md` | 最终研究结论；阅读历史实验时以它的 decision 为准。 |
+WSL 中另运行 CTest 10/10 和官方 parity。环境锁文件现在位于根目录 `requirements-policy-training-wsl.lock`。
 
-## 历史恢复与 third_party
+## 已移除内容如何恢复
 
-### 已删除的 Stage 3-5 代码
+历史 `research/`、`tests/research/`、旧随机简化 LNS2、Stage 3-5、失败模型训练器和未推广控制器均不在当前分支。查看或恢复时使用：
 
-接入官方内核前的简化 C++ solver、KNN/检索/监督排序、Stage 5 v1-v4 和 rollout 已从活动仓库删除。需要追溯时使用 Git tag `pre-repository-restructure-2026-07-20` 恢复，不再让这些文件干扰当前项目结构。
+```bash
+git show pre-minimal-runtime-2026-07-20:research/README.md
+git switch --detach pre-minimal-runtime-2026-07-20
+```
 
-### `third_party/mapf_lns2/`
-
-完整官方 MAPF-LNS2 固定提交。重要入口：
-
-- `UPSTREAM.md`：来源和 commit。
-- `license.txt`：许可证。
-- `src/driver.cpp`：官方 CLI。
-- `inc/InitLNS.h`、`src/InitLNS.cpp`：首次可行解修复。
-- `inc/BasicLNS.h`、`src/BasicLNS.cpp`：可行解后的 anytime LNS。
-- `inc/SIPP.h`、`src/SIPP.cpp`：低层安全区间规划。
-
-### `third_party/gpbs/`
-
-独立 GPBS feasibility 基线。它不是 LNS2 destroy heuristic；只在端到端求解器对照中使用。
-
-## 按问题找文件
-
-| 你想做什么 | 从这里开始 |
-|---|---|
-| 运行官方 LNS2 | `README.md` -> `CMakeLists.txt` -> `third_party/mapf_lns2/src/driver.cpp` |
-| 运行 repair-only | `src/repair_driver.cpp` |
-| 理解 Python 环境 | `src/python_bindings.cpp` -> `docs/TRACE_AND_POLICY_API.md` |
-| 理解当前 GBDT | `research/docs/neighborhood/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md` -> `artifacts/initlns-closed-loop-policy-v1/` |
-| 理解 v2 为什么更快 | `experiments/compact_controller_model.py` -> `experiments/online_feature_engine.py` -> 最新 bottleneck report |
-| 比较 v2 和 Adaptive | `scripts/run_lns2_tradeoff_evaluation.py` -> `experiments/lns2_bottleneck.py` |
-| 看 MovingAI 逐地图结果 | `docs/MOVINGAI_OOD_CLOSED_LOOP.md` -> `build/initlns-movingai-ood-report-v1/` |
-| 看当前 stall-safe | `docs/V2_STALL_SAFE_EVALUATION.md` -> `experiments/stall_guard.py` -> `experiments/stalled_state_probe.py` |
-| 重新生成中文总结 | `scripts/consolidate_research_results.py` -> `configs/result_consolidation.json` |
-| 判断文件能否删除 | `docs/REPOSITORY_HYGIENE.md` -> `scripts/audit_repository_hygiene.py` |
-
-## 维护规则
-
-新增实验时保持四件套：
-
-1. `experiments/<name>.py`（活动）或 `research/studies/.../<name>.py`（历史研究）：实现。
-2. `scripts/run_<name>.py` 或 `collect_<name>.py`：CLI。
-3. `configs/<name>.json`：数据、参数和门槛。
-4. `tests/<group>/test_<name>.py` 与 `docs/<NAME>.md` 或 `research/docs/<group>/<NAME>.md`：验证和结论。
-
-不要把新的实验逻辑继续塞入 `run_lns2_tradeoff_evaluation.py`；它已经承担较多编排职责。新的长期研究应建立独立模块，冻结结果后再进入 evidence ledger。
+不要把历史实现重新复制回活动目录来复现结论；优先在标签上建立临时分支。

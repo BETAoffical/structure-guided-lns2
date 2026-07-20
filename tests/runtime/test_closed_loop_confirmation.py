@@ -40,8 +40,8 @@ from experiments.closed_loop_confirmation_analysis import (
     summarize_policy,
 )
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
-from research.studies.neighborhood.realized_neighborhood_ranking_audit import _feature_profiles
-from research.studies.representation.local_representation_audit import analyze_state
+from experiments.neighborhood_features import _feature_profiles
+from experiments.state_analysis import analyze_state
 from experiments.repair_collection import state_fingerprint
 
 
@@ -231,9 +231,8 @@ class UnlimitedRepairEnvironment:
 class ClosedLoopConfirmationTests(unittest.TestCase):
     def test_historical_pairwise_model_symbol_remains_pickle_compatible(self) -> None:
         from experiments.context_audit import PairwiseModel as compatibility_model
-        from research.studies.context.context_audit import PairwiseModel
 
-        self.assertIs(compatibility_model, PairwiseModel)
+        self.assertEqual(compatibility_model.__module__, "experiments.context_audit")
 
     def test_qualification_accepts_an_explicit_partial_task_seed_cohort(self) -> None:
         rows = [

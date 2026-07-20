@@ -183,7 +183,8 @@ Pareto-set overlap was 50.6%. All quality gates passed.
 The subsequent context-learnability gate did not pass. The planned 31,104-outcome
 calibration expansion and 62,208-outcome semantic-v3 collection are therefore
 paused; passing collection-quality checks alone is not evidence that static
-context improves policy learning. See `research/docs/context/CONTEXT_AUDIT.md`.
+context improves policy learning. The frozen audit is available at Git tag
+`pre-minimal-runtime-2026-07-20` under `research/docs/context/CONTEXT_AUDIT.md`.
 
 The original v1 pilot remains under `build/repair-transfer-pilot` for audit only. Its intersection and
 cross-zone names shared nearly identical endpoint logic and must not be used for formal OOD comparison.

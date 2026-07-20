@@ -1,1 +1,1 @@
-"""Project regression tests grouped by runtime, data, evaluation, and research."""
+"""Project regression tests grouped by runtime, data, evaluation, and maintenance."""

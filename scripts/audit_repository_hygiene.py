@@ -66,7 +66,7 @@ def tracked_files(root: Path) -> list[str]:
             "--others",
             "--exclude-standard",
         ).split("\0")
-        if value
+        if value and (root / value).is_file()
     )
 
 

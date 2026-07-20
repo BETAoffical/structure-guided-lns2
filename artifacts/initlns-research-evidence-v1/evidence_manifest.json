@@ -1,13 +1,13 @@
 {
   "active_claim_zh": "基于当前动态冲突状态和实际 agent 邻域的 InitLNS 高层控制，在同族未见地图和多 solver seed 上得到闭环验证；标准 MovingAI 跨布局实验表现出广泛正信号，但未达到预注册的 5% 主门槛；静态地图、OD 和密度上下文的增量价值尚未得到证明。",
-  "config_sha256": "46c21f088a881ab88de9928e4d72e3a26c765ff1a79a3100c34c43bf02125ebf",
+  "config_sha256": "2ded842d5b969c2f29caffc8332ae6e176be14abff41ad3612b9a7cefc809572",
   "experiments": [
     {
       "category": "static_context",
       "claim": "完整上下文相对动态状态仅增加 4.17 个百分点，AUC regret 反而恶化，未通过门槛。",
       "data_boundary": "Pilot v2 Train/Validation；7344 个候选结果；Validation 不参与训练",
       "decision": "fail_context_gate",
-      "document": "research/docs/context/CONTEXT_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/context/CONTEXT_AUDIT.md",
       "id": "context_primary_audit",
       "metrics": [
         {
@@ -62,7 +62,7 @@
       "claim": "真实上下文 top-1 与 AUC 指标仅处于置换分布第 6.2% 和 59.2%，并出现 91% size 集中。",
       "data_boundary": "旧 Train/Validation 合并开发集；按地图三折；500 次任务上下文置换",
       "decision": "stop_before_independent_confirmation",
-      "document": "research/docs/context/CONTEXT_SECONDARY_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/context/CONTEXT_SECONDARY_AUDIT.md",
       "id": "context_secondary_audit",
       "metrics": [
         {
@@ -103,7 +103,7 @@
       "claim": "local_pre、realized 和静态上下文均未通过预注册恢复门槛；局部表示存在点估计信号但地图间不稳定。",
       "data_boundary": "同一 7344 结果；按地图三折；H1/H4 与 compute/runtime 敏感性分离",
       "decision": "run_movingai_mechanism_probe_before_more_collection",
-      "document": "research/docs/representation/LOCAL_REPRESENTATION_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/representation/LOCAL_REPRESENTATION_AUDIT.md",
       "id": "local_representation_audit",
       "metrics": [
         {
@@ -144,7 +144,7 @@
       "claim": "动作和邻域确有差异，但独立状态和 trial 不足，不能训练迁移模型。",
       "data_boundary": "6 张标准地图；12 个去重状态；重复 solver 轨迹合并",
       "decision": "increase_trials_before_modeling",
-      "document": "research/docs/neighborhood/MOVINGAI_MECHANISM_PROBE.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/MOVINGAI_MECHANISM_PROBE.md",
       "id": "movingai_mechanism_probe_v1",
       "metrics": [
         {
@@ -185,7 +185,7 @@
       "claim": "结果行数掩盖了有效样本不足，rank、最佳集合和实际邻域稳定性均未通过。",
       "data_boundary": "12 独立状态；每名义候选四个 pooled trials；一张地图/布局族",
       "decision": "expand_independent_context_coverage_and_action_trials",
-      "document": "research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md",
       "id": "movingai_probe_quality_v1",
       "metrics": [
         {
@@ -240,7 +240,7 @@
       "claim": "排序 Spearman 提高到 0.684，但最佳集合与实际邻域稳定性仍不足，需独立地图。",
       "data_boundary": "35 独立状态；8 trials；一个超时来源未纳入，runtime 失效",
       "decision": "expand_independent_maps_and_scenarios_before_modeling",
-      "document": "research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/MOVINGAI_PROBE_QUALITY.md",
       "id": "movingai_probe_quality_v2",
       "metrics": [
         {
@@ -288,7 +288,7 @@
       "claim": "名义动作 eta-squared 和 Pareto-family 稳定性未通过，动作需重定义为实际 agent 集合。",
       "data_boundary": "6 张新地图；23 状态；6480 outcomes；8 trials",
       "decision": "stop_and_redefine_action_space",
-      "document": "research/docs/neighborhood/INDEPENDENT_LAYOUT_PROBE.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/INDEPENDENT_LAYOUT_PROBE.md",
       "id": "independent_layout_probe",
       "metrics": [
         {
@@ -329,7 +329,7 @@
       "claim": "固定实际 agent 集合后，动作效应和标签稳定性通过全部预注册门槛。",
       "data_boundary": "23 状态；412 个去重实际邻域；每候选 8 个独立 repair-order trials",
       "decision": "proceed_to_realized_neighborhood_ranking_audit",
-      "document": "research/docs/neighborhood/REALIZED_NEIGHBORHOOD_PROBE.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/REALIZED_NEIGHBORHOOD_PROBE.md",
       "id": "realized_neighborhood_stability",
       "metrics": [
         {
@@ -398,7 +398,7 @@
       "claim": "实际集合表示显著超过 proposal；静态上下文的独立增量门槛失败。",
       "data_boundary": "6 折 leave-one-map-out；23 独立状态；8 trials 聚合后标注",
       "decision": "advance_dynamic_realized_ranking_and_shrink_static_transfer_claim",
-      "document": "research/docs/neighborhood/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/REALIZED_NEIGHBORHOOD_RANKING_AUDIT.md",
       "id": "realized_neighborhood_ranking",
       "metrics": [
         {
@@ -453,7 +453,7 @@
       "claim": "48/48 reset 有效，但只有 11/12 地图满足成对覆盖，按规则停止且未重抽 seed。",
       "data_boundary": "12 张固定地图；仅 qualification；未生成候选修复结果",
       "decision": "stop_before_labels",
-      "document": "research/docs/neighborhood/REALIZED_RANKING_CONFIRMATION.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/REALIZED_RANKING_CONFIRMATION.md",
       "id": "ranking_confirmation_qualification",
       "metrics": [
         {
@@ -489,7 +489,7 @@
       "claim": "冻结 realized_dynamic 在未见地图上通过全部离线门槛；静态上下文仍无增量。",
       "data_boundary": "12 张全新同族地图；48 个未筛选任务；41 个非零状态；8 trials",
       "decision": "proceed_to_fresh_closed_loop_confirmation",
-      "document": "research/docs/neighborhood/NATURAL_DISTRIBUTION_CONFIRMATION.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/neighborhood/NATURAL_DISTRIBUTION_CONFIRMATION.md",
       "id": "natural_distribution_confirmation",
       "metrics": [
         {
@@ -734,7 +734,7 @@
       "claim": "总非零状态足够，但两个 split/layout 单元未达到不合理的 75% 门槛，按规则未重抽。",
       "data_boundary": "18 张地图；216 reset；未采集 policy-visited 标签",
       "decision": "inconclusive_sample_do_not_resample",
-      "document": "research/docs/policy/POLICY_VISITED_AGGREGATION.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/policy/POLICY_VISITED_AGGREGATION.md",
       "id": "policy_visited_qualification",
       "metrics": [
         {
@@ -770,7 +770,7 @@
       "claim": "v2 top-1 与 v1 相同，regret 仅改善 4.9993% 且地图 bootstrap 跨零，未推广模型。",
       "data_boundary": "288 Train 状态训练；154 Validation 状态一次冻结评估；每候选 4 trials",
       "decision": "stop_before_independent_confirmation",
-      "document": "research/docs/policy/POLICY_VISITED_NATURAL_DISTRIBUTION.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/policy/POLICY_VISITED_NATURAL_DISTRIBUTION.md",
       "id": "policy_visited_aggregation",
       "metrics": [
         {
@@ -819,7 +819,7 @@
       "claim": "效果差加权 pairwise 与双头 outcome 模型均低于原 v1，目标替换未解决跨地图 top-1。",
       "data_boundary": "12 Train 地图 LOMO；Validation 封存；不采集新数据",
       "decision": "stop_objective_alignment",
-      "document": "research/docs/policy/RANKING_OBJECTIVE_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/policy/RANKING_OBJECTIVE_AUDIT.md",
       "id": "ranking_objective_audit",
       "metrics": [
         {
@@ -860,7 +860,7 @@
       "claim": "更大模型提高训练拟合却显著降低留图表现，诊断为过拟合而非容量不足。",
       "data_boundary": "12 Train 地图 LOMO；4 档冻结容量；Validation 封存",
       "decision": "stop_tabular_capacity_tuning",
-      "document": "research/docs/representation/MODEL_CAPACITY_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/representation/MODEL_CAPACITY_AUDIT.md",
       "id": "model_capacity_audit",
       "metrics": [
         {
@@ -901,7 +901,7 @@
       "claim": "冲突边相对 DeepSets 有信息，但 MLP、DeepSets 和 GNN 均未超过原 GBDT。",
       "data_boundary": "12 Train 地图 LOMO；3 seeds；108 次模型训练；Validation 封存",
       "decision": "stop_supervised_representation_expansion",
-      "document": "research/docs/representation/GRAPH_REPRESENTATION_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/representation/GRAPH_REPRESENTATION_AUDIT.md",
       "id": "graph_representation_audit",
       "metrics": [
         {
@@ -949,7 +949,7 @@
       "claim": "新增图特征略提高 pairwise accuracy，但 top-1 与 regret 均未改善，停止监督表示扩展。",
       "data_boundary": "442 状态；51 个新增图/时间特征；12 Train 地图 LOMO；Validation 封存",
       "decision": "stop_supervised_representation_expansion",
-      "document": "research/docs/representation/GRAPH_FEATURE_GBDT_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/representation/GRAPH_FEATURE_GBDT_AUDIT.md",
       "id": "graph_feature_gbdt_audit",
       "metrics": [
         {
@@ -991,7 +991,7 @@
       "claim": "H4 oracle 机会存在，但长期标签 split-half 稳定性与 H1/H4 差异门槛失败。",
       "data_boundary": "96 Train-only 状态；1718 候选；6872 trials；Validation/OOD 封存",
       "decision": "stop_h4_labels_unstable",
-      "document": "research/docs/sequential/SEQUENTIAL_CREDIT_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/sequential/SEQUENTIAL_CREDIT_AUDIT.md",
       "id": "sequential_credit_audit",
       "metrics": [
         {
@@ -1047,7 +1047,7 @@
       "claim": "repair order 对结果有实质影响且无固定顺序支配，但随机顺序标签仍不稳定。",
       "data_boundary": "24 Train-only 状态；4 个确定性顺序；2304 common-random-number trials",
       "decision": "advance_to_contextual_repair_order",
-      "document": "research/docs/sequential/REPAIR_ORDER_PROBE.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/sequential/REPAIR_ORDER_PROBE.md",
       "id": "repair_order_probe",
       "metrics": [
         {
@@ -1089,7 +1089,7 @@
       "claim": "selector 仅改善 1.16% AUC、置换百分位 55.2%，并将可行率从 66.7% 降至 59.7%。",
       "data_boundary": "144 Train LOMO decisions；12 地图；500 上下文置换；Validation 未生成",
       "decision": "stop_before_independent_confirmation",
-      "document": "research/docs/context/CONTEXTUAL_REPAIR_ORDER_AUDIT.md",
+      "document": "https://github.com/BETAoffical/structure-guided-lns2/blob/pre-minimal-runtime-2026-07-20/research/docs/context/CONTEXTUAL_REPAIR_ORDER_AUDIT.md",
       "id": "contextual_repair_order_audit",
       "metrics": [
         {

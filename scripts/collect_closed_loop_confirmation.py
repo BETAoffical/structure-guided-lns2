@@ -77,7 +77,6 @@ def main() -> int:
         choices=VERIFICATION_PROFILES,
         default="audit",
     )
-    parser.add_argument("--balanced-config")
     parser.add_argument("--stall-guard-config")
     arguments = parser.parse_args()
     try:
@@ -96,7 +95,6 @@ def main() -> int:
             controller_bundle=arguments.controller_bundle,
             controller_runtime=arguments.controller_runtime,
             verification_profile=arguments.verification_profile,
-            balanced_config=arguments.balanced_config,
             stall_guard_config=arguments.stall_guard_config,
         )
     except CollectionLockError as error:

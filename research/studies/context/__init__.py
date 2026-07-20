@@ -1,1 +1,0 @@
-"""Static-context studies."""

@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "**/.vscode": true,
+    "artifacts": true,
+    "build": true,
+    "third_party": true
+  },
+  "files.watcherExclude": {
+    "**/artifacts/**": true,
+    "**/build/**": true,
+    "**/third_party/**": true
+  },
+  "search.exclude": {
+    "artifacts": true,
+    "build": true,
+    "third_party": true
+  }
+}

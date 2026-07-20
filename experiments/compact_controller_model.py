@@ -405,10 +405,6 @@ def export_controller_bundle(
     source_bundle: str | Path,
     output: str | Path,
     *,
-    pruner_payload: dict[str, Any] | None = None,
-    pruner_ranges: dict[str, tuple[float, float]] | None = None,
-    pruner_threshold: float | None = None,
-    pruner_metadata: dict[str, Any] | None = None,
     promotion_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source_root = Path(source_bundle).resolve()
@@ -456,48 +452,10 @@ def export_controller_bundle(
             )
             raise ValueError(f"source bundle lacks ranges for {profile}: {missing}")
 
-    pruner_row = None
-    if pruner_payload is not None:
-        compact_pruner = (
-            pruner_payload
-            if str(pruner_payload.get("schema")) == COMPACT_MODEL_SCHEMA
-            else compact_portable_payload(pruner_payload)
-        )
-        if str(compact_pruner.get("profile")) != "proposal_dynamic":
-            raise ValueError("the candidate pruner must use proposal_dynamic features")
-        if pruner_threshold is None or not 0.5 <= float(pruner_threshold) <= 1.0:
-            raise ValueError("a promoted pruner requires a threshold in [0.5, 1.0]")
-        ranges = dict(pruner_ranges or {})
-        expected = set(PROFILE_FEATURE_NAMES["proposal_dynamic"])
-        if set(ranges) != expected:
-            raise ValueError("pruner ranges must cover the complete feature-v2 proposal schema")
-        destination = output_root / "proposal_pruner_v2.json"
-        _write_json(destination, compact_pruner)
-        pruner_row = {
-            "schema": "lns2.proposal_pruner.v2",
-            "file": destination.relative_to(output_root).as_posix(),
-            "sha256": _file_sha256(destination),
-            "threshold": float(pruner_threshold),
-            "pairwise_input_dimension": int(compact_pruner["input_dimension"]),
-            "used_feature_names": list(compact_pruner["base_feature_names"]),
-            "feature_ranges": {
-                name: [float(ranges[name][0]), float(ranges[name][1])]
-                for name in sorted(ranges)
-            },
-            **dict(pruner_metadata or {}),
-        }
-
     report = dict(promotion_report or {})
     exact_passed = bool(report.get("exact_acceleration_passed", False))
     performance_passed = bool(report.get("feature_performance_passed", False))
-    pruning_passed = bool(report.get("pruning_promotion_passed", False))
-    if pruning_passed and pruner_row is None:
-        raise ValueError("promotion report passes pruning but no pruner was supplied")
-    default_controller = (
-        "v2-cascade"
-        if pruning_passed and pruner_row is not None
-        else "v2-full" if exact_passed and performance_passed else "v1-full"
-    )
+    default_controller = "v2-full" if exact_passed and performance_passed else "v1-full"
     report.update(
         {
             "schema": "lns2.controller_promotion_report.v2",
@@ -521,7 +479,7 @@ def export_controller_bundle(
         "main_ranker_semantic_fingerprint": main_rows["realized_dynamic"][
             "source_semantic_fingerprint"
         ],
-        "pruner": pruner_row,
+        "pruner": None,
         "fallback_rules": {
             "missing_or_unexpected_family": "full_pool",
             "invalid_family_cardinality": "full_pool",
@@ -709,9 +667,7 @@ def update_controller_promotion_evidence(
         and formal_passed
     )
     report["default_controller"] = (
-        "v2-cascade"
-        if report["pruning_promotion_passed"]
-        else "v2-full"
+        "v2-full"
         if report.get("exact_acceleration_passed")
         and report.get("feature_performance_passed")
         else "v1-full"

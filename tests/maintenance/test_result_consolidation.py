@@ -230,7 +230,9 @@ class ResultConsolidationTests(unittest.TestCase):
             self.assertNotIn(str(PROJECT_ROOT), manifest_text)
             report_text = first_report.read_text(encoding="utf-8")
             self.assertIn(
-                "../research/docs/context/CONTEXT_AUDIT.md", report_text
+                "https://github.com/BETAoffical/structure-guided-lns2/blob/"
+                "pre-minimal-runtime-2026-07-20/research/docs/context/CONTEXT_AUDIT.md",
+                report_text,
             )
             for heading in (
                 "## 1. 问题定义",

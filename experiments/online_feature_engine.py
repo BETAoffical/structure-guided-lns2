@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES, canonicalize_features
-from research.studies.representation.local_representation_audit import (
+from experiments.state_analysis import (
     ConflictEvent,
     StateAnalysis,
     StaticGridAnalysis,
@@ -20,7 +20,7 @@ from research.studies.representation.local_representation_audit import (
     analyze_state,
     analyze_static_grid,
 )
-from research.studies.neighborhood.realized_neighborhood_ranking_audit import (
+from experiments.neighborhood_features import (
     CandidateFeatureCache,
     _aggregate,
     _mean,

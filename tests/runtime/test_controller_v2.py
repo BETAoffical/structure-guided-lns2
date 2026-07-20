@@ -9,9 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from research.engineering.balanced.balanced_controller import BalancedControllerConfig
-from research.engineering.proposal_pruner.candidate_pruning import CandidatePruner
 from experiments.closed_loop_confirmation import (
+    CONTROLLER_MODES,
     _closed_loop_episode_worker,
     generate_online_candidates,
     load_frozen_policy_bundle,
@@ -36,7 +35,7 @@ from experiments.feature_schema_v2 import (
     redundancy_violations,
     unsupported_actual_size,
 )
-from research.studies.representation.local_representation_audit import analyze_state, reconstruct_conflicts
+from experiments.state_analysis import analyze_state, reconstruct_conflicts
 from experiments.online_feature_engine import OnlineFeatureEngine, _native_batch_function
 from experiments.repair_collection import state_fingerprint
 from tests.runtime.test_closed_loop_confirmation import make_candidate, make_state
@@ -63,47 +62,6 @@ class _PythonBackedPortableTreeEnsemble:
         return self.reference.predict_positive(vectors)
 
 
-class _SignedModel:
-    profile = "proposal_dynamic"
-    feature_names: list[str] = []
-
-    @staticmethod
-    def pair_vector(left: dict, right: dict) -> list[float]:
-        return [float(left["rank"]) - float(right["rank"])]
-
-    @staticmethod
-    def predict_positive(vectors: list[list[float]]) -> list[float]:
-        return [0.9 if vector[0] > 0 else 0.1 for vector in vectors]
-
-
-def _pruner_pool() -> tuple[list[dict], list[dict]]:
-    candidates = []
-    rows = []
-    for family in PROPOSAL_FAMILIES:
-        for representative, rank in (("a", 2), ("b", 1)):
-            identifier = f"{family}-{representative}"
-            candidates.append(
-                {
-                    "candidate_id": identifier,
-                    "selection_families": [family],
-                    "agents": [0, 1, 2, 3],
-                }
-            )
-            rows.append(
-                {
-                    "candidate_id": identifier,
-                    "candidate_key": identifier,
-                    "rank": rank,
-                    "features": {
-                        "proposal_dynamic": canonicalize_features(
-                            {"proposal.actual_size": 4.0}, "proposal_dynamic"
-                        )
-                    },
-                }
-            )
-    return candidates, rows
-
-
 def _refresh_conflicts(state: dict) -> None:
     events = reconstruct_conflicts(state["agents"])
     pairs = sorted({(event.left, event.right) for event in events})
@@ -122,6 +80,12 @@ def _refresh_conflicts(state: dict) -> None:
 
 
 class ControllerV2Tests(unittest.TestCase):
+    def test_active_controller_modes_are_minimal(self) -> None:
+        self.assertEqual(
+            CONTROLLER_MODES,
+            ("v1-full", "v2-full", "v2-stall-safe"),
+        )
+
     def test_registered_feature_dimensions_and_redundancies(self) -> None:
         self.assertEqual(len(PROFILE_FEATURE_NAMES["proposal_dynamic"]), 82)
         self.assertEqual(len(PROFILE_FEATURE_NAMES["realized_dynamic"]), 124)
@@ -277,19 +241,6 @@ class ControllerV2Tests(unittest.TestCase):
             self.assertEqual(
                 set(rows[0]["features"]["realized_dynamic"]), set(required)
             )
-
-    def test_pruner_reduces_confident_pairs_and_falls_back_on_ood_size(self) -> None:
-        candidates, rows = _pruner_pool()
-        pruner = CandidatePruner(_SignedModel(), 0.8, {})
-        retained, metrics = pruner.prune(candidates, rows)
-        self.assertEqual(len(retained), len(PROPOSAL_FAMILIES))
-        self.assertAlmostEqual(metrics["reduction_fraction"], 0.5)
-        self.assertFalse(metrics["fallback"])
-        rows[0]["features"]["proposal_dynamic"]["proposal.actual_size"] = 20.0
-        retained, metrics = pruner.prune(candidates, rows)
-        self.assertEqual(len(retained), len(candidates))
-        self.assertEqual(metrics["fallback_reason"], "unsupported_actual_size")
-        self.assertTrue(unsupported_actual_size({"proposal.actual_size": 16.5}))
 
     def test_controller_bundle_records_separate_schema_and_defaults(self) -> None:
         source = PROJECT_ROOT / "artifacts" / "initlns-closed-loop-policy-v1"
@@ -611,105 +562,6 @@ class ControllerV2Tests(unittest.TestCase):
             result["summary"]["controller_totals"]["realized_feature_seconds"], 0
         )
 
-    def test_v2_balanced_official_route_skips_features_and_is_accounted(self) -> None:
-        initial = make_state()
-        _refresh_conflicts(initial)
-        final = copy.deepcopy(initial)
-        final["iteration"] = 1
-        final["num_of_colliding_pairs"] = 0
-        final["conflict_edges"] = []
-        final["feasible"] = True
-        final["done"] = True
-
-        class Environment:
-            def reset(self, seed: int) -> dict:
-                return initial
-
-            def step(self, action: dict) -> dict:
-                self.assert_official(action)
-                return {
-                    "observation": final,
-                    "metrics": {
-                        "action_valid": True,
-                        "neighborhood": [0, 1],
-                        "conflicts_before": int(initial["num_of_colliding_pairs"]),
-                        "conflicts_after": 0,
-                    },
-                    "terminated": True,
-                    "truncated": False,
-                }
-
-            @staticmethod
-            def assert_official(action: dict) -> None:
-                if action != {"mode": "official"}:
-                    raise AssertionError(f"unexpected action: {action}")
-
-        config = json.loads(
-            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        balanced = BalancedControllerConfig(
-            conflict_threshold=16,
-            pruner_threshold=None,
-            source={"study_role": "fixture"},
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            job = {
-                "row": {
-                    "split": "closed_loop",
-                    "map_id": "map-a",
-                    "task_id": "task-a",
-                    "layout_mode": "regular_beltway",
-                    "task_variant": "balanced_80",
-                    "agent_count": 4,
-                },
-                "policy": "realized_dynamic",
-                "solver_seed": 1,
-                "output_root": directory,
-                "run_fingerprint": "balanced-run",
-                "resume": False,
-                "dataset_root": directory,
-                "environment": {},
-                "max_decisions": 2,
-                "metric_iteration_budget": 2,
-                "wall_time_budget_seconds": 300.0,
-                "proposal": {
-                    "max_seed_agents": 1,
-                    "heuristics": ["target"],
-                    "neighborhood_sizes": [4],
-                    "trials": 1,
-                    "candidates_per_family": 1,
-                },
-                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
-                "model_registration": config["model_registration"],
-                "controller": "v2-balanced",
-                "balanced_config": balanced.payload(),
-                "feature_backend": "python",
-                "controller_bundle": str(
-                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
-                ),
-                "feature_shadow_validation": False,
-                "proposal_state_verification": "always",
-            }
-            with patch(
-                "experiments.closed_loop_confirmation._make_environment",
-                return_value=Environment(),
-            ):
-                result = _closed_loop_episode_worker(job)
-        self.assertEqual(result["status"], "ok", result.get("error"))
-        summary = result["summary"]
-        self.assertEqual(summary["model_decision_count"], 0)
-        self.assertEqual(summary["official_decision_count"], 1)
-        self.assertEqual(summary["repair_iterations"], 1)
-        self.assertEqual(summary["feature_backend"], "not_used")
-        self.assertEqual(
-            summary["controller_totals"]["official_decision_count"], 1
-        )
-        self.assertEqual(
-            summary["controller_totals"].get("candidate_count", 0), 0
-        )
-
     def test_v2_stall_safe_backs_off_then_uses_official_fallback(self) -> None:
         initial = make_state()
         _refresh_conflicts(initial)
@@ -933,175 +785,6 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(
             fallback["stall_guard"]["final_neighborhood_size"], 2
         )
-
-    def test_v2_balanced_accumulates_changes_across_skipped_model_steps(self) -> None:
-        initial = make_state()
-        _refresh_conflicts(initial)
-        conflict_sequence = (5, 3, 2, 5, 0)
-        states = []
-        for iteration, conflicts in enumerate(conflict_sequence):
-            state = copy.deepcopy(initial)
-            state["iteration"] = iteration
-            state["num_of_colliding_pairs"] = conflicts
-            state["feasible"] = conflicts == 0
-            state["done"] = conflicts == 0
-            if conflicts == 0:
-                state["conflict_edges"] = []
-            states.append(state)
-
-        class Environment:
-            def __init__(self) -> None:
-                self.index = 0
-
-            def reset(self, seed: int) -> dict:
-                self.index = 0
-                return states[0]
-
-            def step(self, action: dict) -> dict:
-                before = states[self.index]
-                expected_model = int(before["num_of_colliding_pairs"]) > 4
-                if expected_model != (action["mode"] == "explicit_neighborhood"):
-                    raise AssertionError(f"unexpected route action: {action}")
-                neighborhood = list(action.get("agents", [self.index - 1]))
-                if not expected_model:
-                    neighborhood = [0] if self.index == 1 else [1]
-                self.index += 1
-                after = states[self.index]
-                metrics = {
-                    "action_valid": True,
-                    "neighborhood": neighborhood,
-                    "conflicts_before": int(before["num_of_colliding_pairs"]),
-                    "conflicts_after": int(after["num_of_colliding_pairs"]),
-                }
-                if expected_model:
-                    metrics["requested_random_seed"] = int(action["random_seed"])
-                return {
-                    "observation": after,
-                    "metrics": metrics,
-                    "terminated": bool(after["feasible"]),
-                    "truncated": False,
-                }
-
-        class FeatureEngine:
-            prepare_calls: list[list[int]] = []
-
-            def __init__(self, state: dict, **_kwargs: object) -> None:
-                self.backend = "fixture"
-                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
-                self.last_shadow_rows: dict[str, list[dict]] = {}
-
-            def prepare(self, state: dict, *, changed_agents: list[int]) -> dict:
-                self.prepare_calls.append(list(changed_agents))
-                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
-                return dict(self.last_prepare_metrics)
-
-            def realized_rows(
-                self, candidates: list[dict], *, state_hash: str
-            ) -> tuple[list[dict], dict]:
-                return (
-                    [
-                        {
-                            "candidate_id": candidate["candidate_id"],
-                            "candidate_key": candidate["candidate_id"],
-                            "features": {"realized_dynamic": {}},
-                        }
-                        for candidate in candidates
-                    ],
-                    {"realized_feature_seconds": 0.0},
-                )
-
-        def candidates(*_args: object, **_kwargs: object) -> tuple[list[dict], dict]:
-            return (
-                [
-                    {
-                        "candidate_id": "candidate-a",
-                        "agents": [2],
-                        "actual_size": 1,
-                        "selection_families": ["target:4"],
-                        "proposal_count_by_family": {"target:4": 1},
-                        "proposal_seeds": [123],
-                        "seed_agents": [2],
-                    }
-                ],
-                {
-                    "proposal_count": 1,
-                    "candidate_count": 1,
-                    "proposal_seconds": 0.0,
-                    "state_check_seconds": 0.0,
-                    "state_check_backend": "fixture",
-                    "full_state_verified": True,
-                    "state_revision": 1,
-                    "backend": "fixture",
-                },
-            )
-
-        config = json.loads(
-            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        balanced = BalancedControllerConfig(
-            conflict_threshold=4,
-            pruner_threshold=None,
-            source={"study_role": "fixture"},
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            job = {
-                "row": {
-                    "split": "closed_loop",
-                    "map_id": "map-a",
-                    "task_id": "task-a",
-                    "layout_mode": "regular_beltway",
-                    "task_variant": "balanced_80",
-                    "agent_count": 4,
-                },
-                "policy": "realized_dynamic",
-                "solver_seed": 1,
-                "output_root": directory,
-                "run_fingerprint": "balanced-accumulation-run",
-                "resume": False,
-                "dataset_root": directory,
-                "environment": {},
-                "max_decisions": 4,
-                "metric_iteration_budget": 4,
-                "wall_time_budget_seconds": 300.0,
-                "proposal": {
-                    "max_seed_agents": 1,
-                    "heuristics": ["target"],
-                    "neighborhood_sizes": [4],
-                    "trials": 1,
-                    "candidates_per_family": 1,
-                },
-                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
-                "model_registration": config["model_registration"],
-                "controller": "v2-balanced",
-                "balanced_config": balanced.payload(),
-                "feature_backend": "python",
-                "controller_bundle": str(
-                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
-                ),
-                "feature_shadow_validation": False,
-                "proposal_state_verification": "always",
-            }
-            with (
-                patch(
-                    "experiments.closed_loop_confirmation._make_environment",
-                    return_value=Environment(),
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
-                    FeatureEngine,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.generate_online_candidates",
-                    side_effect=candidates,
-                ),
-            ):
-                result = _closed_loop_episode_worker(job)
-        self.assertEqual(result["status"], "ok", result.get("error"))
-        self.assertEqual(result["summary"]["model_decision_count"], 2)
-        self.assertEqual(result["summary"]["official_decision_count"], 2)
-        self.assertEqual(FeatureEngine.prepare_calls, [[0, 1, 2]])
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # v2 stall-safe evaluation
 
 `v2-stall-safe` is an experimental runtime guard around the frozen `v2-full` controller. It does not
-change the model bundle, feature values, candidate scores, ranking, proposal pruner, or PP replanner.
+change the model bundle, feature values, candidate scores, ranking, or PP replanner.
 The guard only changes the final admissible neighborhood after repeated PP failures leave paths,
 conflicts, and SOC unchanged.
 

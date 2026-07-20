@@ -1,1 +1,0 @@
-"""Sequential-credit study commands."""

@@ -27,7 +27,7 @@ from experiments.repair_collection import (
     _write_json,
     state_fingerprint,
 )
-from research.engineering.balanced.route_counterfactual import _decision_rows, _replay_prefix
+from experiments.trace_replay import decision_rows, replay_prefix
 from experiments.run_output_guard import prepare_run_output
 from experiments.stall_guard import repair_structure_fingerprint
 
@@ -318,7 +318,7 @@ def _run_trial(
     selection_seconds: float,
     run_fingerprint: str,
 ) -> dict[str, Any]:
-    environment, before = _replay_prefix(job, decision["prefix_actions"])
+    environment, before = replay_prefix(job, decision["prefix_actions"])
     before_fingerprint = state_fingerprint(before)
     if before_fingerprint != str(decision["before_fingerprint"]):
         raise RuntimeError("stalled-state replay fingerprint mismatch")
@@ -460,7 +460,7 @@ def run_stalled_state_probe(
         metric_iteration_budget=configuration.get("metric_iteration_budget"),
         collection_root=collection_root,
     )
-    decisions, _events = _decision_rows(collection_root, manifest)
+    decisions, _events = decision_rows(collection_root, manifest)
     if auto_terminal_stall:
         stall = find_terminal_stall(decisions)
         decision = dict(stall["decision"])
@@ -508,7 +508,7 @@ def run_stalled_state_probe(
     bundle = load_controller_bundle(controller_path)
     model = bundle.main_models["realized_dynamic"]
     model_ranges = bundle.main_ranges["realized_dynamic"]
-    environment, before = _replay_prefix(job, decision["prefix_actions"])
+    environment, before = replay_prefix(job, decision["prefix_actions"])
     before_fingerprint = state_fingerprint(before)
     if before_fingerprint != str(decision["before_fingerprint"]):
         raise RuntimeError("target replay fingerprint does not match the source trace")
@@ -524,7 +524,7 @@ def run_stalled_state_probe(
     )
     branches, alias_to_key = choose_probe_branches(candidates, scores)
 
-    reproduction_environment, reproduction_before = _replay_prefix(
+    reproduction_environment, reproduction_before = replay_prefix(
         job, decision["prefix_actions"]
     )
     if state_fingerprint(reproduction_before) != before_fingerprint:

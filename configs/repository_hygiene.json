@@ -5,19 +5,16 @@
   "production_python_roots": [
     "experiments",
     "generators",
-    "research",
     "scripts"
   ],
   "tracked_roles": {
+    ".vscode": "workspace visibility settings",
     "artifacts": "frozen models and compact evidence",
     "configs": "versioned experiment registrations",
     "docs": "research and operational documentation",
     "experiments": "official-kernel experiment implementations",
     "generators": "map and static OD generation",
     "include": "C++ public interfaces",
-    "native_features": "standalone native feature build harness",
-    "research": "historical studies, negative results, and non-default engineering prototypes",
-    "requirements": "environment specifications",
     "scripts": "stable command-line entry points",
     "src": "C++ implementation and bindings",
     "tests": "active regression coverage",
@@ -26,6 +23,7 @@
   "tracked_root_files": [
     ".gitattributes",
     ".gitignore",
+    "requirements-policy-training-wsl.lock",
     "CMakeLists.txt",
     "pytest.ini",
     "README.md"
@@ -45,8 +43,7 @@
   "maximum_tracked_file_bytes": 2097152,
   "absolute_path_scan_roots": [
     "configs",
-    "artifacts",
-    "research"
+    "artifacts"
   ],
   "build": {
     "fixed_protected_roots": [
