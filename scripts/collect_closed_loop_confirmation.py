@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+NATIVE_BUILD = PROJECT_ROOT / "build" / "linux" / "project"
 sys.path.insert(0, str(PROJECT_ROOT))
+if NATIVE_BUILD.is_dir():
+    sys.path.insert(0, str(NATIVE_BUILD))
 
 from experiments.closed_loop_confirmation import (  # noqa: E402
     CONTROLLER_MODES,

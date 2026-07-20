@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import math
 import os
+import sys
 import unittest
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine
+from scripts import collect_closed_loop_confirmation as collector_cli
 
 try:
     import lns2_env
 except ModuleNotFoundError:
     lns2_env = None
+
+
+class NativeModuleDiscoveryTests(unittest.TestCase):
+    def test_collector_cli_registers_existing_native_build(self) -> None:
+        if collector_cli.NATIVE_BUILD.is_dir():
+            self.assertIn(str(collector_cli.NATIVE_BUILD), sys.path)
 
 
 @unittest.skipUnless(
