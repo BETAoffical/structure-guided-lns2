@@ -183,6 +183,38 @@ design step should audit a state-conditioned repair-success/cost selector across
 both datasets, with any resulting policy requiring another untouched
 confirmation set.
 
+## State-conditioned rescue audit
+
+The next design-only audit reuses the exact branch outcomes from the balanced
+v1 diagnostic and independent locked v2 confirmation. It does not execute the
+solver:
+
+```bash
+python scripts/audit_state_conditioned_rescue.py \
+  --output build/initlns-state-conditioned-rescue-audit-v1
+```
+
+The fixed model is a depth-2 decision tree with at least four states per leaf.
+Inputs are agent count, decision stage, current conflicts/SOC, cached v2 scores,
+candidate overlap, failed-base size, learned recommendation size, and layout
+one-hot values. Dataset and map identity are forbidden inputs. The primary test
+trains on one confirmation set and evaluates the other in both directions;
+four-fold map-group OOF is a secondary check.
+
+The audit result was `state_conditioned_rescue_not_stable`. Cross-confirmation
+transfer passed both aggregate safety folds and reached 1.72x Adaptive
+efficiency, but only 9/12 dataset/cell units were non-inferior and the worst was
+0.519x. Pooled map OOF passed 3/4 aggregate folds, reached 1.15x efficiency,
+and was non-inferior in only 7/12 units. The existing learned reference reached
+1.96x overall but only 8/12 non-inferior units. In contrast, the safe per-state
+oracle upper bound reached 3.34x and 12/12 units, showing useful signal exists
+but the current small confirmation cohort cannot learn it reliably.
+
+No shallow selector is integrated. The evidence supports moving to a separately
+versioned v3 repair-success/real-time-cost design with broader high-load
+training coverage, rather than collecting another confirmation set for a fixed
+4/8 order.
+
 Complete-episode evaluation remains separate:
 
 ```bash

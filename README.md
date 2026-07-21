@@ -188,6 +188,18 @@ efficiency-noninferior and eight alternative fixed orders dominated it on the
 aggregate gate. No rescue controller was promoted and `v2-full` remains the
 default.
 
+Audit a deliberately shallow state-conditioned selector across both completed
+confirmation sets from the Windows training profile (no solver execution):
+
+```bash
+python scripts/audit_state_conditioned_rescue.py \
+  --output build/initlns-state-conditioned-rescue-audit-v1
+```
+
+The audit uses leave-one-confirmation-set-out transfer plus map-group OOF. It is
+design-only and cannot promote a controller; WSL runtime does not need the
+scikit-learn training dependency.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See
