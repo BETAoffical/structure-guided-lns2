@@ -149,6 +149,22 @@ recipe per layout/agent cell. The second command pins that report by SHA256 and
 uses disjoint maps. A source-coverage shortfall stops before candidate replay or
 paired PP trials; quotas must not be relaxed after seeing the locked set.
 
+If a locked set stops for a small coverage shortfall, a balanced same-state
+diagnostic may be run without relaxing the locked confirmation gate:
+
+```bash
+python3 scripts/run_rescue_lite_balanced_diagnostic.py \
+  --source build/initlns-rescue-lite-locked-confirmation-v1 \
+  --output build/initlns-rescue-lite-balanced-diagnostic-v1 \
+  --workers 4
+```
+
+This diagnostic uses four states from each layout/agent cell and four paired PP
+seeds. It is explicitly not promotion eligible, does not run complete episodes,
+and cannot change the default controller. Its repair-only result may decide
+whether rescue research is worth continuing, but cannot substitute for a new
+independent locked confirmation or quick evaluation.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See

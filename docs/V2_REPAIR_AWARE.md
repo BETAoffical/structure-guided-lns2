@@ -106,6 +106,35 @@ replay; fewer than five states in any cell is an inconclusive safe stop, not
 permission to lower the quota or add a post-hoc map. Neither command registers a
 runtime controller or starts quick, formal, or v3 work.
 
+### Balanced diagnostic after a locked coverage shortfall
+
+The locked v1 run prepared 29 of the required 30 states: five cells reached
+five states and `regular_beltway/400` reached four. It therefore stopped before
+branch trials, as required. To avoid discarding the usable evidence while also
+preserving the locked gate, run the explicitly non-promotional diagnostic:
+
+```bash
+python3 scripts/run_rescue_lite_balanced_diagnostic.py \
+  --source build/initlns-rescue-lite-locked-confirmation-v1 \
+  --output build/initlns-rescue-lite-balanced-diagnostic-v1 \
+  --workers 4
+```
+
+It selects exactly four states from each of the six layout/agent cells, caps
+selection at two states per task, and runs four paired PP seeds. The completed
+24-state diagnostic had zero replay errors. Relative to immediate Adaptive,
+the frozen `4>8>Adaptive` rule increased state escape from 68.75% to 97.92%,
+reduced final hard failures from 31.25% to 2.08%, and increased conflict
+reduction per PP second from 53.03 to 95.65. All six cells were non-inferior in
+efficiency; the worst cell ratio was 1.58.
+
+The learned rescue reference reached 94.79% escape and 111.60 conflict
+reduction per PP second overall, but it did not dominate the fixed rule and was
+less stable across cells. These numbers cover only the rescue repair calls.
+They exclude normal v2 candidate/feature overhead and complete-episode effects.
+The emitted decision is therefore `diagnostic_supports_fixed_rescue`, with
+`promotion_eligible=false`; `v2-full` remains the default controller.
+
 Complete-episode evaluation remains separate:
 
 ```bash
