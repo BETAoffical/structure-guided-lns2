@@ -154,6 +154,35 @@ confirmation datasets. The task count is part of the run fingerprint. This v2
 run remains one-shot: a coverage failure cannot be repaired by adding maps after
 results are visible.
 
+The pre-registered v2 run completed all 48 source episodes with no error or
+timeout. It found 335 no-progress states, prepared 120/120 valid replay states,
+and selected five states from each cell across at least three tasks/maps per
+cell. All 568 candidate branches had complete four-seed coverage and exact
+before/after repair fingerprints.
+
+Its locked decision was `inconclusive_collect_more`, not confirmation:
+
+- Adaptive escaped 74.17% of states, hard-failed 25.83%, and reduced 14.78
+  conflicts per PP second.
+- Frozen `4>8>Adaptive` escaped 96.67%, hard-failed 3.33%, and reduced 17.44
+  conflicts per PP second (1.18x Adaptive).
+- The frozen order was efficiency-noninferior in only three of six cells; its
+  worst cell ratio was 0.760, below the 0.90 gate.
+- Eight alternative fixed orders dominated the frozen order on aggregate
+  efficiency while matching or improving escape and hard-failure rates.
+- The learned reference reached 38.77 conflicts per PP second (2.62x Adaptive)
+  but escaped 93.33% and hard-failed 6.67%, so it did not dominate the safer
+  frozen order.
+
+The prior 24-state diagnostic and this independent set disagree on whether size
+4 or size 8 should be attempted first. A post-outcome cross-set check also found
+that `8>4>Adaptive` has a worst cell efficiency ratio of 0.817 on the old set
+and 0.704 on v2. Therefore no single global fixed order is stable enough for
+runtime integration. Do not run quick/formal for rescue-lite yet; the next
+design step should audit a state-conditioned repair-success/cost selector across
+both datasets, with any resulting policy requiring another untouched
+confirmation set.
+
 Complete-episode evaluation remains separate:
 
 ```bash

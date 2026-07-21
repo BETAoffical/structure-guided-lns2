@@ -181,6 +181,13 @@ Its master seed and task capacity are committed before execution. It must stop
 again if any cell cannot provide five valid states; no task may be appended
 after source outcomes are observed.
 
+The completed v2 run passed coverage and fingerprint checks but returned
+`inconclusive_collect_more`. The frozen `4>8>Adaptive` order improved aggregate
+escape and efficiency over Adaptive, yet only three of six cells were
+efficiency-noninferior and eight alternative fixed orders dominated it on the
+aggregate gate. No rescue controller was promoted and `v2-full` remains the
+default.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See
