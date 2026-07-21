@@ -165,6 +165,22 @@ and cannot change the default controller. Its repair-only result may decide
 whether rescue research is worth continuing, but cannot substitute for a new
 independent locked confirmation or quick evaluation.
 
+The pre-registered independent v2 confirmation uses eight new maps/tasks per
+cell while retaining the frozen recipes and five-state gate:
+
+```bash
+python3 scripts/run_locked_rescue_confirmation.py \
+  --output build/initlns-rescue-lite-locked-confirmation-v2 \
+  --dataset-config configs/rescue_lite_locked_confirmation_dataset_v2.json \
+  --expected-tasks-per-cell 8 \
+  --reference-dataset build/initlns-rescue-lite-locked-confirmation-v1/dataset \
+  --workers 4
+```
+
+Its master seed and task capacity are committed before execution. It must stop
+again if any cell cannot provide five valid states; no task may be appended
+after source outcomes are observed.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See

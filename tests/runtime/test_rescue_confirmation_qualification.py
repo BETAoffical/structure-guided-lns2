@@ -163,6 +163,27 @@ class LockedProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "coverage"):
             select_locked_task_ids(rows, recipes)
 
+    def test_preregistered_eight_task_capacity_is_enforced(self) -> None:
+        recipes = self._recipes()
+        rows = []
+        for layout in LAYOUTS:
+            for agents in AGENT_COUNTS:
+                for map_index in range(8):
+                    rows.append(
+                        _task(layout, agents, f"recipe_{agents}", map_index)
+                    )
+        task_ids, counts = select_locked_task_ids(
+            rows, recipes, expected_tasks_per_cell=8
+        )
+        self.assertEqual(len(task_ids), 48)
+        self.assertEqual(set(counts.values()), {8})
+
+        rows.pop()
+        with self.assertRaisesRegex(ValueError, "coverage"):
+            select_locked_task_ids(
+                rows, recipes, expected_tasks_per_cell=8
+            )
+
     def test_source_capacity_applies_two_state_task_cap_before_replay(self) -> None:
         decisions = [
             {

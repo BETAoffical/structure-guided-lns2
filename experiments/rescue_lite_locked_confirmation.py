@@ -140,6 +140,7 @@ def run_locked_rescue_confirmation(
     resume: bool = False,
     quota_per_cell: int = DEFAULT_STATE_QUOTA_PER_CELL,
     trial_count: int = DEFAULT_TRIALS,
+    expected_tasks_per_cell: int = 4,
     max_decisions: int = DEFAULT_MAX_DECISIONS,
     wall_time_seconds: float = DEFAULT_WALL_TIME_SECONDS,
 ) -> dict[str, Any]:
@@ -154,10 +155,13 @@ def run_locked_rescue_confirmation(
         workers <= 0
         or quota_per_cell <= 0
         or trial_count <= 0
+        or expected_tasks_per_cell <= 0
         or max_decisions <= 0
         or wall_time_seconds <= 0
     ):
-        raise ValueError("workers, quotas, trials and source budgets must be positive")
+        raise ValueError(
+            "workers, quotas, trials, task coverage and source budgets must be positive"
+        )
     qualification = _read_json(qualification_path)
     frozen = validate_frozen_qualification(qualification)
     helper_path = root / "experiments" / "rescue_lite_confirmation.py"
@@ -173,6 +177,7 @@ def run_locked_rescue_confirmation(
         ),
         "quota_per_cell": int(quota_per_cell),
         "trial_count": int(trial_count),
+        "expected_tasks_per_cell": int(expected_tasks_per_cell),
         "max_decisions": int(max_decisions),
         "wall_time_seconds": float(wall_time_seconds),
         "sizes": list(SIZES),
@@ -200,7 +205,11 @@ def run_locked_rescue_confirmation(
     isolation = validate_dataset_isolation(dataset, references)
     _write_json(output_root / "dataset_isolation.json", isolation)
     task_rows = _load_dataset_rows(dataset, [CONFIRMATION_SPLIT])
-    task_ids, task_counts = select_locked_task_ids(task_rows, frozen)
+    task_ids, task_counts = select_locked_task_ids(
+        task_rows,
+        frozen,
+        expected_tasks_per_cell=expected_tasks_per_cell,
+    )
     _write_json(
         output_root / "frozen_protocol.json",
         {
@@ -209,6 +218,7 @@ def run_locked_rescue_confirmation(
             "qualification_report": str(qualification_path),
             "qualification_report_sha256": sha256_file(qualification_path),
             "frozen_recipe_by_cell": frozen,
+            "expected_tasks_per_cell": int(expected_tasks_per_cell),
             "selected_task_count_by_cell": task_counts,
             "selected_task_ids": task_ids,
         },
@@ -253,6 +263,8 @@ def run_locked_rescue_confirmation(
             "insufficient_phase": "source-coverage",
             "run_fingerprint": run_fingerprint,
             "required_state_count_per_cell": quota_per_cell,
+            "expected_tasks_per_cell": int(expected_tasks_per_cell),
+            "selected_task_count_by_cell": task_counts,
             "source_state_capacity_by_cell": source_capacity,
             "source_shortfall": source_shortfall,
             "source_no_progress_state_count": len(decisions),
@@ -304,6 +316,8 @@ def run_locked_rescue_confirmation(
             "decision": "locked_confirmation_insufficient_states",
             "run_fingerprint": run_fingerprint,
             "required_state_count_by_cell": required,
+            "expected_tasks_per_cell": int(expected_tasks_per_cell),
+            "selected_task_count_by_cell": task_counts,
             "observed_state_count_by_cell": counts,
             "source_no_progress_state_count": len(decisions),
             "source_state_capacity_by_cell": source_capacity,
@@ -359,6 +373,8 @@ def run_locked_rescue_confirmation(
         "protocol_schema": LOCKED_RESCUE_CONFIRMATION_SCHEMA,
         "run_fingerprint": run_fingerprint,
         "state_count_by_cell": counts,
+        "expected_tasks_per_cell": int(expected_tasks_per_cell),
+        "selected_task_count_by_cell": task_counts,
         "source_no_progress_state_count": len(decisions),
         "source_state_capacity_by_cell": source_capacity,
         "frozen_recipe_by_cell": frozen,

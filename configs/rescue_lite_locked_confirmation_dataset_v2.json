@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "master_seed": 2026072204,
+  "output_dir": "build/initlns-rescue-lite-locked-confirmation-dataset-v2",
+  "tasks_per_map": 3,
+  "task_variants": [
+    {
+      "name": "clustered_400",
+      "task": {
+        "agent_count": 400,
+        "scenario_type": "uniform_random",
+        "hotspot_skew": 0.8,
+        "hotspot_distribution": "zipf",
+        "origin_cluster_count": 6,
+        "goal_cluster_count": 6,
+        "cluster_radius": 5,
+        "minimum_shortest_distance": 15
+      }
+    },
+    {
+      "name": "corridor_600",
+      "task": {
+        "agent_count": 600,
+        "scenario_type": "uniform_random",
+        "required_bottleneck_crossing_ratio": 0.15,
+        "shared_corridor_ratio": 0.15,
+        "target_bottleneck_mode": "highest_prior",
+        "minimum_shortest_distance": 20
+      }
+    },
+    {
+      "name": "clustered_swap_600",
+      "task": {
+        "agent_count": 600,
+        "scenario_type": "uniform_random",
+        "hotspot_skew": 0.6,
+        "hotspot_distribution": "zipf",
+        "origin_cluster_count": 8,
+        "goal_cluster_count": 8,
+        "cluster_radius": 6,
+        "swap_pair_ratio": 0.8,
+        "minimum_shortest_distance": 15
+      }
+    }
+  ],
+  "layout_variants": {
+    "compartmentalized": [
+      {"name": "cross_four_gate", "map": {"divider_template": "cross_four_gate"}},
+      {"name": "double_horizontal", "map": {"divider_template": "double_horizontal"}}
+    ]
+  },
+  "map": {
+    "layout_mode": "regular_beltway",
+    "rows": 49,
+    "cols": 66,
+    "shelf_block_height": 3,
+    "shelf_block_width": [8, 10],
+    "horizontal_aisle_width": 3,
+    "vertical_aisle_width": 3,
+    "outer_beltway_width": 3,
+    "beltway_mode": "full",
+    "wall_clearance": 0,
+    "dead_end_aisle_count": 8,
+    "dead_end_orientation_counts": {"vertical": 4, "horizontal": 4},
+    "dead_end_depth": 6,
+    "gate_count": 2,
+    "gate_width": 1,
+    "divider_template": "single",
+    "divider_orientation": "vertical",
+    "divider_thickness": 1,
+    "combine_layout_features": false,
+    "station_count": 4,
+    "station_sides": ["left", "right", "top", "bottom"],
+    "station_clearance": 4,
+    "station_placement": "opposite_sides",
+    "station_cluster_count": 2,
+    "station_entrance_width": 2,
+    "station_queue_depth": 3,
+    "station_queue_width": 2,
+    "station_demand_distribution": "uniform",
+    "layout_jitter": 0.0,
+    "generation_attempts": 60,
+    "topology_constraints": {"minimum_average_degree": 1.5}
+  },
+  "task": {
+    "agent_count": 600,
+    "scenario_type": "uniform_random",
+    "dominant_flow_ratio": 1.0,
+    "background_flow": "random",
+    "opposing_flow_ratio": 0.5,
+    "origin_cluster_count": 0,
+    "goal_cluster_count": 0,
+    "cluster_radius": 3,
+    "hotspot_skew": 0.0,
+    "hotspot_distribution": "uniform",
+    "required_bottleneck_crossing_ratio": 0.0,
+    "shared_corridor_ratio": 0.0,
+    "required_intersection_crossing_ratio": 0.0,
+    "target_intersection_count": 4,
+    "swap_pair_ratio": 0.0,
+    "minimum_shortest_distance": 8,
+    "maximum_shortest_distance": 160,
+    "max_sampling_attempts": 200000
+  },
+  "splits": {
+    "policy_confirmation": {
+      "layout_counts": {
+        "regular_beltway": 8,
+        "compartmentalized": 8,
+        "dead_end_aisles": 8
+      }
+    }
+  }
+}

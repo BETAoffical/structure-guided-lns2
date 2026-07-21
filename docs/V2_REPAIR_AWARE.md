@@ -135,6 +135,25 @@ They exclude normal v2 candidate/feature overhead and complete-episode effects.
 The emitted decision is therefore `diagnostic_supports_fixed_rescue`, with
 `promotion_eligible=false`; `v2-full` remains the default controller.
 
+The next independent attempt is pre-registered as
+`configs/rescue_lite_locked_confirmation_dataset_v2.json`. It keeps the six
+frozen recipes and the five-state-per-cell gate, changes only to a new master
+seed, and provisions eight disjoint tasks per cell instead of four:
+
+```bash
+python3 scripts/run_locked_rescue_confirmation.py \
+  --output build/initlns-rescue-lite-locked-confirmation-v2 \
+  --dataset-config configs/rescue_lite_locked_confirmation_dataset_v2.json \
+  --expected-tasks-per-cell 8 \
+  --reference-dataset build/initlns-rescue-lite-locked-confirmation-v1/dataset \
+  --workers 4
+```
+
+Map-content isolation covers all previous training, qualification and
+confirmation datasets. The task count is part of the run fingerprint. This v2
+run remains one-shot: a coverage failure cannot be repaired by adding maps after
+results are visible.
+
 Complete-episode evaluation remains separate:
 
 ```bash

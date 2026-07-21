@@ -51,6 +51,7 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--quota-per-cell", type=int, default=5)
     parser.add_argument("--trials", type=int, default=4)
+    parser.add_argument("--expected-tasks-per-cell", type=int, default=4)
     parser.add_argument("--max-decisions", type=int, default=40)
     parser.add_argument("--wall-time-seconds", type=float, default=180.0)
     parser.add_argument(
@@ -85,6 +86,7 @@ def main() -> int:
         resume=arguments.resume,
         quota_per_cell=arguments.quota_per_cell,
         trial_count=arguments.trials,
+        expected_tasks_per_cell=arguments.expected_tasks_per_cell,
         max_decisions=arguments.max_decisions,
         wall_time_seconds=arguments.wall_time_seconds,
     )
