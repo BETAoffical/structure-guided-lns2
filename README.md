@@ -133,6 +133,22 @@ seeds. If the two pre-registered task waves cannot supply every layout/agent
 cell, it reports `insufficient_confirmation_states` and stops before branch
 trials. It does not register a runtime controller or start quick/formal/v3 work.
 
+When ordinary random tasks are too easy to supply those states, qualify stress
+recipes on separate maps before opening a new locked confirmation set:
+
+```bash
+python3 scripts/qualify_rescue_confirmation_data.py \
+  --output build/initlns-rescue-confirmation-qualification-v2 --workers 4
+
+python3 scripts/run_locked_rescue_confirmation.py \
+  --output build/initlns-rescue-lite-locked-confirmation-v1 --workers 4
+```
+
+The first command may inspect only source no-progress yield and freezes one task
+recipe per layout/agent cell. The second command pins that report by SHA256 and
+uses disjoint maps. A source-coverage shortfall stops before candidate replay or
+paired PP trials; quotas must not be relaxed after seeing the locked set.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See

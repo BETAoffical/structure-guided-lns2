@@ -86,6 +86,26 @@ cannot supply a cell quota, it emits `insufficient_confirmation_states` and
 stops before branch trials. The previously exposed pilot validation split is not
 reused. Completion produces evidence only; `v2-full` remains the default.
 
+If this ordinary-task confirmation cannot fill all six layout/agent cells, use a
+separate data-qualification stage rather than repeatedly modifying a viewed
+confirmation set:
+
+```bash
+python3 scripts/qualify_rescue_confirmation_data.py \
+  --output build/initlns-rescue-confirmation-qualification-v2 --workers 4
+
+python3 scripts/run_locked_rescue_confirmation.py \
+  --output build/initlns-rescue-lite-locked-confirmation-v1 --workers 4
+```
+
+Qualification requires a recipe to provide at least five capped no-progress
+states across three distinct tasks and maps in every layout/400-or-600-agent
+cell. The resulting six recipes and report hash are frozen before the locked
+maps are generated. Locked source coverage is checked before expensive candidate
+replay; fewer than five states in any cell is an inconclusive safe stop, not
+permission to lower the quota or add a post-hoc map. Neither command registers a
+runtime controller or starts quick, formal, or v3 work.
+
 Complete-episode evaluation remains separate:
 
 ```bash

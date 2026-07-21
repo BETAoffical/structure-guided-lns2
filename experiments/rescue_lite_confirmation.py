@@ -106,7 +106,7 @@ def _write_status(root: Path, **values: Any) -> None:
     )
 
 
-def _map_hashes(dataset: Path, split: str) -> dict[str, str]:
+def dataset_map_hashes(dataset: Path, split: str) -> dict[str, str]:
     result = {}
     for row in _read_jsonl(dataset / split / "manifest.jsonl"):
         map_id = str(row["map_id"])
@@ -119,7 +119,7 @@ def validate_dataset_isolation(
     references: Iterable[str | Path],
 ) -> dict[str, Any]:
     dataset_root = Path(dataset).resolve()
-    current = _map_hashes(dataset_root, CONFIRMATION_SPLIT)
+    current = dataset_map_hashes(dataset_root, CONFIRMATION_SPLIT)
     overlaps = []
     reference_rows = []
     for value in references:
@@ -129,7 +129,7 @@ def validate_dataset_isolation(
         summary = dict(read_json(root / "dataset_summary.json"))
         hashes = set()
         for split in dict(summary["splits"]):
-            hashes.update(_map_hashes(root, str(split)).values())
+            hashes.update(dataset_map_hashes(root, str(split)).values())
         shared = sorted(set(current.values()) & hashes)
         overlaps.extend(shared)
         reference_rows.append(
@@ -182,25 +182,37 @@ def confirmation_task_waves(rows: list[dict[str, Any]]) -> tuple[list[str], list
 
 
 def build_confirmation_source_config(
-    *, dataset: str | Path, output: str | Path, project_root: str | Path
+    *,
+    dataset: str | Path,
+    output: str | Path,
+    project_root: str | Path,
+    split: str = CONFIRMATION_SPLIT,
+    max_decisions: int = 30,
+    wall_time_seconds: float = 120.0,
 ) -> Path:
     dataset_root = Path(dataset).resolve()
     output_root = Path(output).resolve()
     root = Path(project_root).resolve()
     base = dict(read_json(root / "configs" / "closed_loop_multiseed_collection.json"))
-    rows = _load_dataset_rows(dataset_root, [CONFIRMATION_SPLIT])
+    rows = _load_dataset_rows(dataset_root, [split])
     layouts = collections.Counter(str(row["layout_mode"]) for row in rows)
+    map_ids = {str(row["map_id"]) for row in rows}
+    tasks_per_map = {
+        sum(str(row["map_id"]) == map_id for row in rows) for map_id in map_ids
+    }
+    if len(tasks_per_map) != 1:
+        raise ValueError("confirmation source requires equal tasks per map")
     base.update(
         {
             "formal": False,
-            "split": CONFIRMATION_SPLIT,
+            "split": split,
             "solver_seeds": [0],
             # The closed-loop protocol registers both policies even though this
             # confirmation executes only the realized_dynamic source phase.
             "policies": ["official_adaptive", "realized_dynamic"],
             "dataset_design": {
-                "map_count": 12,
-                "tasks_per_map": 4,
+                "map_count": len(map_ids),
+                "tasks_per_map": next(iter(tasks_per_map)),
                 "task_variants": sorted({str(row["task_variant"]) for row in rows}),
                 "layout_counts": {
                     layout: len(
@@ -210,8 +222,8 @@ def build_confirmation_source_config(
                 },
             },
             "environment": {
-                "time_limit": 120.0,
-                "max_repair_iterations": 30,
+                "time_limit": float(wall_time_seconds),
+                "max_repair_iterations": int(max_decisions),
                 "neighborhood_size": 8,
                 "replan_algorithm": "PP",
                 "use_sipp": True,
@@ -221,17 +233,17 @@ def build_confirmation_source_config(
                 "minimum_nonzero_states_per_layout": 0,
                 "minimum_active_maps": 1,
             },
-            "max_decisions": 30,
-            "metric_iteration_budget": 30,
-            "wall_time_budget_seconds": 120.0,
-            "episode_process_timeout_seconds": 180.0,
+            "max_decisions": int(max_decisions),
+            "metric_iteration_budget": int(max_decisions),
+            "wall_time_budget_seconds": float(wall_time_seconds),
+            "episode_process_timeout_seconds": float(wall_time_seconds) + 60.0,
             "workers": 4,
             "reference_datasets": [],
         }
     )
     if sum(layouts.values()) != len(rows):
         raise ValueError("confirmation source has incomplete layout metadata")
-    path = output_root / "protocol" / "source_policy_confirmation.json"
+    path = output_root / "protocol" / f"source_{split}.json"
     _write_json(path, base)
     return path
 
@@ -327,9 +339,10 @@ def _prepare_state(job: dict[str, Any]) -> dict[str, Any]:
     decision = dict(job["decision"])
     source_run = _read_json(Path(decision["source_root"]) / "run_config.json")
     dataset_root = Path(str(source_run["dataset"])).resolve()
+    split = str(decision.get("split", CONFIRMATION_SPLIT))
     rows = {
         str(row["task_id"]): row
-        for row in _load_dataset_rows(dataset_root, [CONFIRMATION_SPLIT])
+        for row in _load_dataset_rows(dataset_root, [split])
     }
     row = rows[str(decision["task_id"])]
     replay_job = {
@@ -444,7 +457,7 @@ def _prepare_state(job: dict[str, Any]) -> dict[str, Any]:
     state_id = str(decision["before_repair_fingerprint"])
     metadata = {
         "state_id": state_id,
-        "split": CONFIRMATION_SPLIT,
+        "split": split,
         "map_id": str(decision["map_id"]),
         "layout_mode": str(decision["layout_mode"]),
         "task_id": str(decision["task_id"]),
@@ -488,11 +501,13 @@ def _prepare_state(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _candidate_decisions(
-    source_roots: Iterable[Path], dataset: Path
+    source_roots: Iterable[Path],
+    dataset: Path,
+    split: str = CONFIRMATION_SPLIT,
 ) -> list[dict[str, Any]]:
     task_rows = {
         str(row["task_id"]): row
-        for row in _load_dataset_rows(dataset, [CONFIRMATION_SPLIT])
+        for row in _load_dataset_rows(dataset, [split])
     }
     decisions = []
     seen = set()
@@ -612,9 +627,10 @@ def _branch_trial(
     state = dict(preparation["state"])
     source_run = _read_json(Path(state["source_root"]) / "run_config.json")
     dataset_root = Path(str(source_run["dataset"])).resolve()
+    split = str(state.get("split", CONFIRMATION_SPLIT))
     rows = {
         str(row["task_id"]): row
-        for row in _load_dataset_rows(dataset_root, [CONFIRMATION_SPLIT])
+        for row in _load_dataset_rows(dataset_root, [split])
     }
     replay_job = {
         "dataset_root": str(dataset_root),
@@ -660,7 +676,7 @@ def _branch_trial(
     return {
         "schema": RESCUE_LITE_CONFIRMATION_SCHEMA,
         "state_id": str(state["state_id"]),
-        "split": CONFIRMATION_SPLIT,
+        "split": split,
         "map_id": str(state["map_id"]),
         "layout_mode": str(state["layout_mode"]),
         "task_id": str(state["task_id"]),
@@ -885,7 +901,7 @@ def analyze_confirmation(
                 row = _simulate_sequence(
                     metadata={
                         "state_id": state_id,
-                        "split": CONFIRMATION_SPLIT,
+                        "split": str(state.get("split", CONFIRMATION_SPLIT)),
                         "map_id": str(state["map_id"]),
                         "layout_mode": str(state["layout_mode"]),
                         "agent_count": int(state["agent_count"]),
@@ -907,7 +923,7 @@ def analyze_confirmation(
             row = _simulate_sequence(
                 metadata={
                     "state_id": state_id,
-                    "split": CONFIRMATION_SPLIT,
+                    "split": str(state.get("split", CONFIRMATION_SPLIT)),
                     "map_id": str(state["map_id"]),
                     "layout_mode": str(state["layout_mode"]),
                     "agent_count": int(state["agent_count"]),
@@ -1254,6 +1270,7 @@ __all__ = [
     "analyze_confirmation",
     "confirmation_seed",
     "confirmation_task_waves",
+    "dataset_map_hashes",
     "run_rescue_lite_confirmation",
     "select_confirmation_states",
     "validate_dataset_isolation",
