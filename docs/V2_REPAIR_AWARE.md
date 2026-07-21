@@ -43,31 +43,29 @@ python3 scripts/run_high_load_rescue_pipeline.py \
   --mode pilot \
   --output build/initlns-high-load-rescue-pilot-v1
 
-# Continue with size 12 only when its pilot gate passes.
-python3 scripts/run_high_load_rescue_pipeline.py \
-  --mode full \
-  --neighborhood-sizes 4,8,12,16 \
-  --output build/initlns-high-load-rescue-full-v1
-
-# If size 12 fails, train the rescue model without that branch.
-python3 scripts/run_high_load_rescue_pipeline.py \
-  --mode full \
-  --neighborhood-sizes 4,8,16 \
-  --output build/initlns-high-load-rescue-full-no12-v1
+# Audit fixed 4/8/16 rescue orders from the completed pilot without running PP.
+python scripts/audit_rescue_policies.py \
+  --source build/initlns-high-load-rescue-pilot-dense-v2 \
+  --output build/initlns-rescue-policy-audit-v1
 ```
 
 The synthetic protocol uses 48x64 maps, 400/600 agents, disjoint map seeds and
 dense random/paired-swap pressure to obtain genuinely high-load repair states
 without reading MovingAI formal outcomes. The pilot requires 48 training and
 12 locked-validation failure states. Size 12
-continues to full collection only if it is Pareto-optimal in at least one state
-and wins at least three states. Full collection targets 800/200 states, starts
-with two paired trials per arm, and adds trials only for ambiguous top arms.
-Failure of the size-12 gate removes only size 12; it does not block the 4/8/16
-high-load rescue training. Full mode defaults to the larger
-`configs/high_load_rescue_dataset_full.json` design (48 train maps, 16 locked
-validation maps and 20 endpoint variants per map), so the 800/200 state target
-is reachable; pilot mode keeps the smaller 12/6-map design.
+passed its exploratory Pareto/winner gate, but its efficiency was about 52.6%
+below the best 4/8/16 alternative per state and it failed the stronger OOF plus
+validation promotion gate. It remains in the pilot evidence but is excluded
+from runtime generation. The 800/200 collection is paused.
+
+The offline audit compares all 16 fixed non-repeating permutations of 4/8/16
+followed by Adaptive. It uses only the 48 training states for map-group OOF
+selection. The previously exposed 12 validation states are downgraded to a
+diagnostic split. The pilot schema lacks after-state fingerprints, so every
+policy must pass both a `replan-success-stop` and a stricter
+`conflict-reduction-stop` interpretation before it can become a
+`rescue_lite_candidate`. Passing still requires a fresh independent validation
+set before any runtime controller is implemented.
 
 Complete-episode evaluation remains separate:
 

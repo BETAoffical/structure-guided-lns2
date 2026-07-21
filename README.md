@@ -103,14 +103,25 @@ python scripts/run_lns2_tradeoff_evaluation.py \
   --output build/initlns-v2-repair-aware-quick-v1
 ```
 
-The pilot reports the rescue-data decision and the size-12 decision separately.
-If size 12 fails its gate, continue the full 4/8/16 rescue collection with
-`--neighborhood-sizes 4,8,16`; only the size-12 branch is dropped.
+The completed 60-state high-load pilot kept size 12 as exploratory evidence but
+did not promote it for runtime use. Its stronger OOF plus diagnostic result did
+not pass, so the active next step is an offline 4/8/16 rescue-order audit rather
+than the 800/200 full collection:
+
+```bash
+python scripts/audit_rescue_policies.py \
+  --source build/initlns-high-load-rescue-pilot-dense-v2 \
+  --output build/initlns-rescue-policy-audit-v1
+```
+
+This command reuses paired pilot outcomes and never starts the solver. Because
+the v1 trial schema did not store after-state fingerprints, promotion must pass
+under both documented state-change bounds. The exposed 12-state validation
+split is diagnostic only and cannot be reused as a new locked validation set.
 
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
-fitting and four-fold map-group calibration. `policy_validation` is read once
-for locked promotion checks; MovingAI OOD/formal results are never training
-inputs. The frozen v2 main ranker remains unchanged. See
+fitting and four-fold map-group calibration. MovingAI OOD/formal results are
+never training inputs. The frozen v2 main ranker remains unchanged. See
 [`docs/V2_REPAIR_AWARE.md`](docs/V2_REPAIR_AWARE.md).
 
 Verify the frozen evidence chain:
