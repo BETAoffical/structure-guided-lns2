@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import itertools
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 
 from experiments._common import ratio as _ratio
 

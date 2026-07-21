@@ -35,6 +35,10 @@ from Git tag `pre-minimal-runtime-2026-07-20`.
 - `v1-full`: frozen portable pairwise GBDT using `realized_dynamic` features.
 - `v2-full`: exactly equivalent action selection with accelerated feature and tree inference.
 - `v2-stall-safe`: v2 plus the registered stall guard.
+- `v2-repair-aware`: experimental v2 rescue controller. It preserves the first
+  v2 decision on every repair-relevant state, then reuses the unchanged-state
+  candidate pool and consults policy-train-only repairability/cost models after
+  PP makes no structural progress.
 - Official baselines: `Adaptive`, `Target`, `Collision`, and `Random`.
 
 The removed `v2-balanced`, `v2-cascade`, and proposal-pruner variants did not earn
@@ -56,6 +60,7 @@ Build only the online feature module with:
 ```bash
 cmake -S . -B build/native-features -DLNS2_FEATURES_ONLY=ON
 cmake --build build/native-features -j4
+ctest --test-dir build/native-features --output-on-failure
 ```
 
 The WSL policy-training environment is pinned by
@@ -81,6 +86,32 @@ python scripts/collect_closed_loop_confirmation.py --help
 python scripts/analyze_closed_loop_confirmation.py --help
 python scripts/run_lns2_tradeoff_evaluation.py --help
 ```
+
+Train and diagnose the experimental repair-aware controller without replacing
+the frozen v2 ranker:
+
+```bash
+python3 scripts/run_high_load_rescue_pipeline.py \
+  --mode pilot \
+  --output build/initlns-high-load-rescue-pilot-v1
+python scripts/run_lns2_tradeoff_evaluation.py \
+  --mode quick \
+  --evaluation-tracks wall-clock \
+  --controllers official_adaptive,v2-full,v2-stall-safe,v2-repair-aware \
+  --repair-aware-bundle build/initlns-high-load-rescue-full-v1/controller \
+  --skip-wall-clock-sensitivity \
+  --output build/initlns-v2-repair-aware-quick-v1
+```
+
+The pilot reports the rescue-data decision and the size-12 decision separately.
+If size 12 fails its gate, continue the full 4/8/16 rescue collection with
+`--neighborhood-sizes 4,8,16`; only the size-12 branch is dropped.
+
+The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
+fitting and four-fold map-group calibration. `policy_validation` is read once
+for locked promotion checks; MovingAI OOD/formal results are never training
+inputs. The frozen v2 main ranker remains unchanged. See
+[`docs/V2_REPAIR_AWARE.md`](docs/V2_REPAIR_AWARE.md).
 
 Verify the frozen evidence chain:
 

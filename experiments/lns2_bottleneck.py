@@ -20,11 +20,13 @@ LABELS = {
     "official_adaptive": "Original LNS2 Adaptive",
     "v2-full": "Optimized model (v2)",
     "v2-stall-safe": "Optimized model (v2 stall-safe)",
+    "v2-repair-aware": "Optimized model (v2 repair-aware)",
 }
 CONTROLLER_COLORS = {
     "official_adaptive": "#4c78a8",
     "v2-full": "#f58518",
     "v2-stall-safe": "#54a24b",
+    "v2-repair-aware": "#b279a2",
 }
 TIMING_FIELDS = (
     "neighborhood_selection_seconds",
@@ -36,6 +38,7 @@ TIMING_FIELDS = (
     "realized_feature_seconds",
     "ranking_inference_seconds",
     "stall_guard_seconds",
+    "repair_aware_seconds",
     "selection_residual_seconds",
     "pp_replan_seconds",
     "repair_bookkeeping_seconds",
@@ -394,7 +397,9 @@ def _iteration_row(
     timings = dict(event.get("timings") or {})
     low = dict(event.get("low_level_delta") or {})
     controller_data = dict(event.get("controller") or {})
+    proposal = dict(controller_data.get("proposal") or {})
     guard = dict(controller_data.get("stall_guard") or {})
+    repair_aware = dict(controller_data.get("repair_aware") or {})
     neighborhood = list(metrics.get("neighborhood") or [])
     conflicts_before = int(metrics.get("conflicts_before", 0))
     conflicts_after = int(metrics.get("conflicts_after", conflicts_before))
@@ -459,6 +464,42 @@ def _iteration_row(
         "stall_guard_stagnant_attempt": guard.get("stagnant_attempt"),
         "stall_guard_backoff_triggered": guard.get("backoff_triggered"),
         "stall_guard_fallback_reason": guard.get("fallback_reason"),
+        "repair_outcome": repair_aware.get("repair_outcome"),
+        "repair_aware_selection_kind": repair_aware.get("selection_kind"),
+        "repair_aware_state_anchor_fingerprint": repair_aware.get(
+            "state_anchor_fingerprint"
+        ),
+        "repair_aware_base_candidate_id": repair_aware.get(
+            "base_selected_candidate_id"
+        ),
+        "repair_aware_effective_candidate_id": repair_aware.get(
+            "effective_selected_candidate_id"
+        ),
+        "repair_aware_shadow_candidate_id": repair_aware.get(
+            "shadow_selected_candidate_id"
+        ),
+        "repair_aware_base_selection_preserved": repair_aware.get(
+            "base_selection_preserved"
+        ),
+        "repair_aware_cache_hit": bool(
+            controller_data.get("repair_aware_cache_hit", False)
+        ),
+        "repair_aware_no_progress": repair_aware.get("no_progress"),
+        "repair_aware_failed_candidate_count": repair_aware.get(
+            "failed_candidate_count_after"
+        ),
+        "repair_aware_rescue_attempts": repair_aware.get(
+            "rescue_attempts_after"
+        ),
+        "repair_aware_adaptive_fallback_active": repair_aware.get(
+            "adaptive_fallback_active"
+        ),
+        "repair_aware_lazy_candidate_count": int(
+            proposal.get("lazy_candidate_count", 0)
+        ),
+        "repair_aware_lazy_generation_seconds": float(
+            proposal.get("lazy_generation_seconds", 0.0)
+        ),
         "low_level_expanded": int(low.get("expanded", 0)),
         "low_level_generated": int(low.get("generated", 0)),
         "low_level_reopened": int(low.get("reopened", 0)),
@@ -496,6 +537,7 @@ def _episode_row(
     finalization = dict(source.get("episode_finalization_timings") or {})
     budget_low_level = dict(summary.get("budget_final_low_level") or {})
     stall_guard = dict(summary.get("stall_guard") or {})
+    repair_aware = dict(summary.get("repair_aware") or {})
     repairable = bool(summary.get("repairable"))
     initial_conflicts = int(summary.get("initial_conflicts", 0))
     fixed_auc = summary.get("fixed_budget_conflict_auc")
@@ -639,6 +681,39 @@ def _episode_row(
         ),
         "stall_guard_rescued_state_count": int(
             stall_guard.get("rescued_state_count", 0)
+        ),
+        "repair_aware_no_progress_count": int(
+            repair_aware.get("no_progress_count", 0)
+        ),
+        "repair_aware_hard_failure_count": int(
+            repair_aware.get("hard_failure_count", 0)
+        ),
+        "repair_aware_accepted_noop_count": int(
+            repair_aware.get("accepted_noop_count", 0)
+        ),
+        "repair_aware_rescue_selection_count": int(
+            repair_aware.get("rescue_selection_count", 0)
+        ),
+        "repair_aware_fallback_count": int(
+            repair_aware.get("fallback_count", 0)
+        ),
+        "repair_aware_cache_hit_count": int(
+            repair_aware.get("cache_hit_count", 0)
+        ),
+        "repair_aware_cache_refresh_count": int(
+            repair_aware.get("cache_refresh_count", 0)
+        ),
+        "repair_aware_shadow_difference_count": int(
+            repair_aware.get("shadow_difference_count", 0)
+        ),
+        "repair_aware_tiebreak_override_count": int(
+            repair_aware.get("tiebreak_override_count", 0)
+        ),
+        "repair_aware_rescued_state_count": int(
+            repair_aware.get("rescued_state_count", 0)
+        ),
+        "repair_aware_longest_unchanged_streak": int(
+            repair_aware.get("longest_unchanged_streak", 0)
         ),
     }
     for name in TIMING_FIELDS:
@@ -1048,6 +1123,30 @@ def _summary_rows(
                 ),
                 "mean_longest_failed_replan_streak": _mean(
                     row.get("longest_failed_replan_streak") for row in repairable
+                ),
+                "repair_aware_no_progress_count": sum(
+                    int(row.get("repair_aware_no_progress_count", 0))
+                    for row in repairable
+                ),
+                "repair_aware_rescue_selection_count": sum(
+                    int(row.get("repair_aware_rescue_selection_count", 0))
+                    for row in repairable
+                ),
+                "repair_aware_fallback_count": sum(
+                    int(row.get("repair_aware_fallback_count", 0))
+                    for row in repairable
+                ),
+                "repair_aware_cache_hit_count": sum(
+                    int(row.get("repair_aware_cache_hit_count", 0))
+                    for row in repairable
+                ),
+                "repair_aware_rescued_state_count": sum(
+                    int(row.get("repair_aware_rescued_state_count", 0))
+                    for row in repairable
+                ),
+                "mean_repair_aware_longest_unchanged_streak": _mean(
+                    row.get("repair_aware_longest_unchanged_streak")
+                    for row in repairable
                 ),
                 "conflict_reducing_repair_count": sum(int(row.get("conflict_reducing_repair_count", 0)) for row in repairable),
                 "no_improvement_repair_count": sum(int(row.get("no_improvement_repair_count", 0)) for row in repairable),
@@ -1990,6 +2089,121 @@ def _stall_recovery_markdown(
     return "\n".join(lines)
 
 
+def _repair_aware_promotion_gate(
+    summaries: list[dict[str, Any]],
+    *,
+    primary_track: str,
+    validation_passed: bool,
+) -> dict[str, Any]:
+    controllers = {str(row["controller"]) for row in summaries}
+    if "v2-repair-aware" not in controllers:
+        return {
+            "applicable": False,
+            "passed": False,
+            "reason": "repair_aware_absent",
+        }
+    all_rows = {
+        (str(row["track"]), str(row["controller"])): row
+        for row in summaries
+        if row.get("group_type") == "all"
+    }
+    aware = all_rows.get((primary_track, "v2-repair-aware"), {})
+    v2 = all_rows.get((primary_track, "v2-full"), {})
+    lns2 = all_rows.get((primary_track, "official_adaptive"), {})
+    fixed_aware = all_rows.get(("historical", "v2-repair-aware"), {})
+    fixed_v2 = all_rows.get(("historical", "v2-full"), {})
+    fixed_available = bool(fixed_aware and fixed_v2)
+
+    def no_higher(left: Any, right: Any) -> bool:
+        return left is not None and right is not None and float(left) <= float(right)
+
+    aware_loops = max(1, int(aware.get("total_repair_iterations", 0)))
+    v2_loops = max(1, int(v2.get("total_repair_iterations", 0)))
+    aware_no_progress = int(aware.get("no_improvement_repair_count", 0)) / aware_loops
+    v2_no_progress = int(v2.get("no_improvement_repair_count", 0)) / v2_loops
+    selection_aware = aware.get("mean_iteration_selection_seconds")
+    selection_v2 = v2.get("mean_iteration_selection_seconds")
+    gates = {
+        "validation": bool(validation_passed),
+        "success_not_lower_than_v2_and_lns2": int(
+            aware.get("success_count", -1)
+        )
+        >= max(int(v2.get("success_count", 0)), int(lns2.get("success_count", 0))),
+        "wall_auc_not_worse_than_v2": no_higher(
+            aware.get("mean_normalized_wall_clock_conflict_auc"),
+            v2.get("mean_normalized_wall_clock_conflict_auc"),
+        ),
+        "wall_auc_not_worse_than_lns2": no_higher(
+            aware.get("mean_normalized_wall_clock_conflict_auc"),
+            lns2.get("mean_normalized_wall_clock_conflict_auc"),
+        ),
+        "fixed_auc_degradation_at_most_2pct": bool(
+            fixed_available
+            and fixed_aware.get("mean_normalized_fixed_budget_conflict_auc")
+            is not None
+            and fixed_v2.get("mean_normalized_fixed_budget_conflict_auc") is not None
+            and float(fixed_aware["mean_normalized_fixed_budget_conflict_auc"])
+            <= 1.02 * float(fixed_v2["mean_normalized_fixed_budget_conflict_auc"])
+        ),
+        "selection_overhead_at_most_5pct": bool(
+            selection_aware is not None
+            and selection_v2 is not None
+            and float(selection_aware) <= 1.05 * float(selection_v2)
+        ),
+        "no_progress_fraction_reduced": aware_no_progress < v2_no_progress,
+        "unchanged_streak_reduced": bool(
+            aware.get("mean_repair_aware_longest_unchanged_streak") is not None
+            and v2.get("mean_longest_failed_replan_streak") is not None
+            and float(aware["mean_repair_aware_longest_unchanged_streak"])
+            < float(v2["mean_longest_failed_replan_streak"])
+        ),
+    }
+    return {
+        "applicable": True,
+        "passed": fixed_available and all(gates.values()),
+        "fixed_track_available": fixed_available,
+        "gates": gates,
+        "repair_aware_no_progress_fraction": aware_no_progress,
+        "v2_no_improvement_fraction": v2_no_progress,
+        "cache_hit_count": int(aware.get("repair_aware_cache_hit_count", 0)),
+        "rescue_selection_count": int(
+            aware.get("repair_aware_rescue_selection_count", 0)
+        ),
+        "rescued_state_count": int(
+            aware.get("repair_aware_rescued_state_count", 0)
+        ),
+    }
+
+
+def _repair_aware_markdown(
+    promotion: dict[str, Any], pairwise_summary: list[dict[str, Any]]
+) -> str:
+    lines = [
+        "# v2 repair-aware report",
+        "",
+        f"Promotion applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
+        "",
+        f"Cache hits: `{promotion.get('cache_hit_count', 0)}`; rescue selections: `{promotion.get('rescue_selection_count', 0)}`; rescued states: `{promotion.get('rescued_state_count', 0)}`.",
+        "",
+        "## Promotion gates",
+        "",
+    ]
+    for name, passed in dict(promotion.get("gates") or {}).items():
+        lines.append(f"- `{name}`: `{bool(passed)}`")
+    lines.extend(["", "## Paired summaries", ""])
+    for row in pairwise_summary:
+        if "v2-repair-aware" not in str(row.get("pair")):
+            continue
+        lines.append(
+            f"- `{row['track']}` `{row['pair']}`: successes "
+            f"{row['candidate_success_count']} vs {row['reference_success_count']}; "
+            "mean normalized wall-AUC delta "
+            f"{_fmt(row.get('mean_delta_normalized_wall_clock_conflict_auc_candidate_minus_reference'), 6)}."
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def generate_bottleneck_artifacts(
     track_roots: dict[str, dict[str, Path]], output: str | Path
 ) -> dict[str, Any]:
@@ -2026,6 +2240,11 @@ def generate_bottleneck_artifacts(
     pairwise_summary = controller_pairwise_summary(pairwise)
     guard_usage = [
         row for row in episodes if str(row.get("controller")) == "v2-stall-safe"
+    ]
+    repair_aware_usage = [
+        row
+        for row in episodes
+        if str(row.get("controller")) == "v2-repair-aware"
     ]
     long_checkpoints, long_diagnostics, extension_keys = long_horizon_diagnostics(
         episodes, iterations
@@ -2209,6 +2428,11 @@ def generate_bottleneck_artifacts(
         primary_track=primary_track,
         validation_passed=bool(validation["passed"]),
     )
+    repair_aware_promotion = _repair_aware_promotion_gate(
+        summaries,
+        primary_track=primary_track,
+        validation_passed=bool(validation["passed"]),
+    )
 
     _write_csv(output_root / "iteration_timings.csv", iterations)
     _write_csv(output_root / "episode_timing_breakdown.csv", episodes)
@@ -2216,6 +2440,14 @@ def generate_bottleneck_artifacts(
     _write_csv(output_root / "controller_pairwise_episodes.csv", pairwise)
     _write_csv(output_root / "controller_pairwise_summary.csv", pairwise_summary)
     _write_csv(output_root / "stall_guard_usage.csv", guard_usage)
+    _write_csv(output_root / "repair_aware_usage.csv", repair_aware_usage)
+    _write_json(
+        output_root / "repair_aware_promotion.json", repair_aware_promotion
+    )
+    (output_root / "repair_aware_report.md").write_text(
+        _repair_aware_markdown(repair_aware_promotion, pairwise_summary),
+        encoding="utf-8",
+    )
     _write_csv(
         output_root / "stall_prefix_mismatches.csv",
         list(stall_prefix.get("mismatches") or []),
@@ -2249,6 +2481,7 @@ def generate_bottleneck_artifacts(
         "iteration_count": len(iterations),
         "paired_episode_count": len(paired),
         "wall_clock_sensitivity": sensitivity,
+        "repair_aware_promotion": repair_aware_promotion,
         "stall_promotion": stall_promotion,
         "stall_prefix_equivalence": stall_prefix,
         "targeted_stall_recovery": targeted_stall,

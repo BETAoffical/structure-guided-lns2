@@ -37,22 +37,6 @@ def _aggregate(prefix: str, values: Iterable[float | int]) -> dict[str, float]:
     }
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"missing JSON file: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        raise ValueError(f"missing JSONL file: {path}")
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
 def _path_wait_ratio(path: list[int]) -> float:
     return _ratio(
         sum(left == right for left, right in zip(path, path[1:])),

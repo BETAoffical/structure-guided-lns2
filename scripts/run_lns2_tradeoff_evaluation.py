@@ -54,8 +54,14 @@ DUAL_COLLECTIONS = (
     ("v2-full", "v2-full", "realized_dynamic"),
 )
 STALL_SAFE_COLLECTION = ("v2-stall-safe", "v2-stall-safe", "realized_dynamic")
+REPAIR_AWARE_COLLECTION = (
+    "v2-repair-aware",
+    "v2-repair-aware",
+    "realized_dynamic",
+)
 CONTROLLER_COLLECTIONS = {
-    item[0]: item for item in (*DUAL_COLLECTIONS, STALL_SAFE_COLLECTION)
+    item[0]: item
+    for item in (*DUAL_COLLECTIONS, STALL_SAFE_COLLECTION, REPAIR_AWARE_COLLECTION)
 }
 DUAL_DEFAULT_OUTPUTS = {
     "quick": "build/initlns-lns2-bottleneck-quick-v1",
@@ -185,6 +191,8 @@ def _run_interleaved_collections(
     collection_config: Path,
     controller_bundle: Path,
     stall_guard_config: Path | None,
+    repair_aware_config: Path | None,
+    repair_aware_bundle: Path | None,
     task_ids: list[str] | None,
     feature_backend: str,
     resume: bool,
@@ -219,6 +227,12 @@ def _run_interleaved_collections(
             controller_bundle=controller_bundle,
             stall_guard_config=(
                 stall_guard_config if controller == "v2-stall-safe" else None
+            ),
+            repair_aware_config=(
+                repair_aware_config if controller == "v2-repair-aware" else None
+            ),
+            repair_aware_bundle=(
+                repair_aware_bundle if controller == "v2-repair-aware" else None
             ),
             job_keys=job_keys,
             cohort_job_keys=job_keys,
@@ -288,6 +302,16 @@ def _run_interleaved_collections(
                 controller_bundle=controller_bundle,
                 stall_guard_config=(
                     stall_guard_config if controller == "v2-stall-safe" else None
+                ),
+                repair_aware_config=(
+                    repair_aware_config
+                    if controller == "v2-repair-aware"
+                    else None
+                ),
+                repair_aware_bundle=(
+                    repair_aware_bundle
+                    if controller == "v2-repair-aware"
+                    else None
                 ),
                 job_keys={(task_id, seed)},
                 cohort_job_keys=job_keys,
@@ -380,6 +404,8 @@ def _dual_preflight(
     collections: tuple[tuple[str, str, str], ...] = DUAL_COLLECTIONS,
     cohort_job_keys: set[tuple[str, int]] | None = None,
     stall_guard_config: Path | None = None,
+    repair_aware_config: Path | None = None,
+    repair_aware_bundle: Path | None = None,
 ) -> dict[str, Any]:
     if not dataset.is_dir():
         raise FileNotFoundError(f"MovingAI OOD dataset is missing: {dataset}")
@@ -421,6 +447,16 @@ def _dual_preflight(
                 controller_bundle=controller_bundle,
                 stall_guard_config=(
                     stall_guard_config if controller == "v2-stall-safe" else None
+                ),
+                repair_aware_config=(
+                    repair_aware_config
+                    if controller == "v2-repair-aware"
+                    else None
+                ),
+                repair_aware_bundle=(
+                    repair_aware_bundle
+                    if controller == "v2-repair-aware"
+                    else None
                 ),
                 cohort_job_keys=cohort_job_keys,
                 wall_time_budget_seconds=budget,
@@ -543,10 +579,16 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         if arguments.mode == "formal" and arguments.diagnostic_subset:
             raise ValueError("formal evaluation cannot use a diagnostic subset")
         if (
-            ("v2-stall-safe" in controllers or arguments.diagnostic_subset)
+            (
+                "v2-stall-safe" in controllers
+                or "v2-repair-aware" in controllers
+                or arguments.diagnostic_subset
+            )
             and not arguments.output
         ):
-            raise ValueError("stall-safe and diagnostic runs require an explicit --output")
+            raise ValueError(
+                "experimental controllers and diagnostic runs require an explicit --output"
+            )
         if arguments.wall_clock_seconds <= 0.0:
             raise ValueError("--wall-clock-seconds must be positive")
         if (
@@ -590,6 +632,16 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         if "v2-stall-safe" in controllers
         else None
     )
+    repair_aware_config = (
+        _resolve(arguments.repair_aware_config)
+        if "v2-repair-aware" in controllers
+        else None
+    )
+    repair_aware_bundle = (
+        _resolve(arguments.repair_aware_bundle)
+        if "v2-repair-aware" in controllers
+        else None
+    )
     task_ids = (
         requested_task_ids
         if requested_task_ids is not None
@@ -628,6 +680,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             collections=collections,
             cohort_job_keys=cohort_job_keys,
             stall_guard_config=stall_guard_config,
+            repair_aware_config=repair_aware_config,
+            repair_aware_bundle=repair_aware_bundle,
         )
         bundle = load_controller_bundle(controller_bundle)
         model_semantic_fingerprint = str(
@@ -654,6 +708,12 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 "long_horizon_auto_extend_seconds": arguments.long_horizon_auto_extend_seconds,
                 "stall_guard_config": str(stall_guard_config)
                 if stall_guard_config is not None
+                else None,
+                "repair_aware_config": str(repair_aware_config)
+                if repair_aware_config is not None
+                else None,
+                "repair_aware_bundle": str(repair_aware_bundle)
+                if repair_aware_bundle is not None
                 else None,
                 "diagnostic_subset": bool(arguments.diagnostic_subset),
                 "solver_seeds": list(requested_solver_seeds),
@@ -700,6 +760,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    repair_aware_config=repair_aware_config,
+                    repair_aware_bundle=repair_aware_bundle,
                     task_ids=task_ids,
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -735,6 +797,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    repair_aware_config=repair_aware_config,
+                    repair_aware_bundle=repair_aware_bundle,
                     task_ids=sorted({task for task, _seed in selected}),
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -781,6 +845,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    repair_aware_config=repair_aware_config,
+                    repair_aware_bundle=repair_aware_bundle,
                     task_ids=sorted({task for task, _seed in selected}),
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -833,6 +899,11 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 if "v2-stall-safe" in controllers
                 else None
             ),
+            repair_aware_report=(
+                str(output / "report" / "repair_aware_report.md")
+                if "v2-repair-aware" in controllers
+                else None
+            ),
             evaluation_tracks=list(tracks),
             controllers=list(controllers),
             diagnostic_subset=bool(arguments.diagnostic_subset),
@@ -841,6 +912,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             model_semantic_fingerprint=model_semantic_fingerprint,
             bottleneck_validation=report["validation"],
             stall_promotion=report.get("stall_promotion"),
+            repair_aware_promotion=report.get("repair_aware_promotion"),
             targeted_stall_recovery=report.get("targeted_stall_recovery"),
             episode_count=report["episode_count"],
             iteration_count=report["iteration_count"],
@@ -868,7 +940,10 @@ def main() -> int:
     parser.add_argument(
         "--controllers",
         default="official_adaptive,v2-full",
-        help="Active controllers: official_adaptive, v2-full, v2-stall-safe.",
+        help=(
+            "Active controllers: official_adaptive, v2-full, "
+            "v2-stall-safe, v2-repair-aware."
+        ),
     )
     parser.add_argument("--wall-clock-seconds", type=float, default=300.0)
     parser.add_argument(
@@ -891,6 +966,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--stall-guard-config", default="configs/v2_stall_guard_v1.json"
+    )
+    parser.add_argument(
+        "--repair-aware-config", default="configs/v2_repair_aware_v1.json"
+    )
+    parser.add_argument(
+        "--repair-aware-bundle",
+        default="build/initlns-repair-aware-controller-v1",
     )
     parser.add_argument(
         "--feature-backend",

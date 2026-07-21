@@ -12,6 +12,7 @@ from experiments.closed_loop_trace_storage import (
     resolve_state_blob,
 )
 from experiments.repair_collection import _make_environment, _plain, state_fingerprint
+from experiments.stall_guard import repair_structure_fingerprint
 
 
 def _initial_state(
@@ -48,6 +49,7 @@ def decision_rows(
         if route not in {"model", "official_adaptive"}:
             raise ValueError("source transition is missing a valid route")
         before_fingerprint = state_fingerprint(state)
+        before_repair_fingerprint = repair_structure_fingerprint(state)
         if before_fingerprint != str(event.get("before_fingerprint")):
             raise ValueError("source before fingerprint mismatch")
         if str(event.get("schema")) == EPISODE_SCHEMA_V2:
@@ -55,6 +57,7 @@ def decision_rows(
             after.update(apply_extras_delta(state, event["state_extras_delta"]))
         else:
             after = dict(event["after"])
+        after_repair_fingerprint = repair_structure_fingerprint(after)
         actual_metrics = dict(event["metrics"])
         controller_seconds = float(
             controller.get("controller_seconds_before_repair", 0.0)
@@ -66,6 +69,10 @@ def decision_rows(
                 "route": route,
                 "before_fingerprint": before_fingerprint,
                 "after_fingerprint": str(event["after_fingerprint"]),
+                "before_repair_fingerprint": before_repair_fingerprint,
+                "after_repair_fingerprint": after_repair_fingerprint,
+                "repair_state_changed": before_repair_fingerprint
+                != after_repair_fingerprint,
                 "prefix_actions": [dict(action) for action in prefix],
                 "actual_action": dict(event["action"]),
                 "actual_metrics": actual_metrics,

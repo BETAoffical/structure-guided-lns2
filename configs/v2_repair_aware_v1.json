@@ -1,0 +1,10 @@
+{
+  "schema": "lns2.repair_aware_controller.v2",
+  "mode": "rescue-only",
+  "max_model_rescues": null,
+  "same_candidate_attempt_limit": 2,
+  "lazy_neighborhood_sizes": [12],
+  "terminal_fallback": "official_adaptive",
+  "fallback_until_state_change": true,
+  "reset_on_state_fingerprint_change": true
+}

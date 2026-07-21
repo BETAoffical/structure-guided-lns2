@@ -115,6 +115,13 @@ def resolve_within(root: Path, relative: str) -> Path:
     return path
 
 
+def resolve_cli_path(project_root: Path, value: str | Path) -> Path:
+    """Resolve a CLI path without requiring the target to remain inside the repo."""
+
+    path = Path(value)
+    return path.resolve() if path.is_absolute() else (project_root / path).resolve()
+
+
 def add_categorical_feature(
     features: dict[str, float], prefix: str, value: Any
 ) -> None:

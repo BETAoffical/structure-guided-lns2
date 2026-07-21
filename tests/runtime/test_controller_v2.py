@@ -83,7 +83,7 @@ class ControllerV2Tests(unittest.TestCase):
     def test_active_controller_modes_are_minimal(self) -> None:
         self.assertEqual(
             CONTROLLER_MODES,
-            ("v1-full", "v2-full", "v2-stall-safe"),
+            ("v1-full", "v2-full", "v2-stall-safe", "v2-repair-aware"),
         )
 
     def test_registered_feature_dimensions_and_redundancies(self) -> None:
@@ -562,6 +562,281 @@ class ControllerV2Tests(unittest.TestCase):
             result["summary"]["controller_totals"]["realized_feature_seconds"], 0
         )
 
+    def test_v2_repair_aware_reuses_the_unchanged_state_pool(self) -> None:
+        initial = make_state()
+        _refresh_conflicts(initial)
+        solved = copy.deepcopy(initial)
+        solved["conflict_edges"] = []
+        solved["num_of_colliding_pairs"] = 0
+        solved["feasible"] = True
+        solved["done"] = True
+
+        class Environment:
+            def __init__(self) -> None:
+                self.index = 0
+
+            def reset(self, seed: int) -> dict:
+                return copy.deepcopy(initial)
+
+            def step(self, action: dict) -> dict:
+                self.index += 1
+                if self.index == 1:
+                    self.assert_action(action, [0, 1, 2, 3])
+                    after = copy.deepcopy(initial)
+                    after["iteration"] = int(after.get("iteration", 0)) + 1
+                    after["low_level"] = {
+                        **dict(after["low_level"]),
+                        "generated": int(after["low_level"]["generated"]) + 10,
+                        "runs": int(after["low_level"]["runs"]) + 1,
+                    }
+                    success = True
+                else:
+                    self.assert_action(action, [0, 2])
+                    after = copy.deepcopy(solved)
+                    success = True
+                return {
+                    "observation": after,
+                    "metrics": {
+                        "action_valid": True,
+                        "neighborhood": list(action["agents"]),
+                        "requested_random_seed": int(action["random_seed"]),
+                        "conflicts_before": int(initial["num_of_colliding_pairs"]),
+                        "conflicts_after": int(after["num_of_colliding_pairs"]),
+                        "replan_success": success,
+                    },
+                    "terminated": bool(after["feasible"]),
+                    "truncated": False,
+                }
+
+            @staticmethod
+            def assert_action(action: dict, expected: list[int]) -> None:
+                if action.get("mode") != "explicit_neighborhood" or list(
+                    action.get("agents", [])
+                ) != expected:
+                    raise AssertionError(f"unexpected repair-aware action: {action}")
+
+        class FeatureEngine:
+            def __init__(self, state: dict, **_kwargs: object) -> None:
+                self.backend = "fixture"
+                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
+                self.last_shadow_rows: dict[str, list[dict]] = {}
+
+            def prepare(self, state: dict, *, changed_agents: list[int]) -> dict:
+                return {"state_analysis_seconds": 0.0}
+
+            def realized_rows(
+                self, candidates: list[dict], *, state_hash: str
+            ) -> tuple[list[dict], dict]:
+                return (
+                    [
+                        {
+                            "candidate_id": candidate["candidate_id"],
+                            "candidate_key": candidate["candidate_id"],
+                            "features": {"realized_dynamic": {}},
+                        }
+                        for candidate in candidates
+                    ],
+                    {"realized_feature_seconds": 0.0},
+                )
+
+        candidates = [
+            {
+                "candidate_id": "base",
+                "agents": [0, 1, 2, 3],
+                "actual_size": 4,
+                "selection_families": ["target:4"],
+                "proposal_count_by_family": {"target:4": 1},
+                "proposal_seeds": [10],
+                "seed_agents": [0],
+            },
+            {
+                "candidate_id": "rescue",
+                "agents": [0, 1],
+                "actual_size": 2,
+                "selection_families": ["target:2"],
+                "proposal_count_by_family": {"target:2": 1},
+                "proposal_seeds": [11],
+                "seed_agents": [0],
+            },
+        ]
+        lazy_candidate = {
+            "candidate_id": "lazy-12",
+            "agents": [0, 2],
+            "actual_size": 12,
+            "selection_families": ["target:12"],
+            "proposal_count_by_family": {"target:12": 1},
+            "proposal_seeds": [12],
+            "seed_agents": [0],
+        }
+        generation_count = 0
+
+        def generated(*_args: object, **kwargs: object) -> tuple[list[dict], dict]:
+            nonlocal generation_count
+            generation_count += 1
+            proposal_config = dict(kwargs["proposal_config"])
+            selected_candidates = (
+                [lazy_candidate]
+                if proposal_config["neighborhood_sizes"] == [12]
+                else candidates
+            )
+            return (
+                copy.deepcopy(selected_candidates),
+                {
+                    "proposal_count": len(selected_candidates),
+                    "candidate_count": len(selected_candidates),
+                    "proposal_seconds": 0.0,
+                    "candidate_generation_seconds": 0.0,
+                    "state_check_seconds": 0.0,
+                    "state_check_fingerprint_seconds": 0.0,
+                    "state_check_backend": "fixture",
+                    "full_state_verified": True,
+                    "state_revision": 1,
+                    "backend": "fixture",
+                },
+            )
+
+        main_manifest = json.loads(
+            (
+                PROJECT_ROOT
+                / "artifacts"
+                / "initlns-closed-loop-controller-v2"
+                / "controller_manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        class RepairBundle:
+            manifest = {
+                "main_ranker_semantic_fingerprint": main_manifest[
+                    "main_ranker_semantic_fingerprint"
+                ],
+                "size12_promoted_offline": True,
+            }
+            models = {}
+            guarded_tiebreak_eligible = False
+            thresholds = {
+                "minimum_predicted_efficiency": 0.0,
+                "adaptive_efficiency_margin": 0.0,
+            }
+            selected_max_model_rescues = 1
+
+            @staticmethod
+            def predict(rows: list[dict]) -> dict[str, list[float]]:
+                efficiency = [
+                    0.0
+                    if row["candidate_id"] == "official_adaptive"
+                    else 10.0
+                    if row["candidate_id"] == "lazy-12"
+                    else 1.0
+                    for row in rows
+                ]
+                return {
+                    "progress_probability": [0.9] * len(rows),
+                    "conflict_reduction": [2.0] * len(rows),
+                    "repair_seconds": [1.0] * len(rows),
+                    "hard_failure_probability": [0.1] * len(rows),
+                    "efficiency": efficiency,
+                }
+
+        config = json.loads(
+            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 1,
+                "output_root": directory,
+                "run_fingerprint": "repair-aware-run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 3,
+                "metric_iteration_budget": 3,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [2, 4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                "model_registration": config["model_registration"],
+                "controller": "v2-repair-aware",
+                "repair_aware_config": {
+                    "schema": "lns2.repair_aware_controller.v2",
+                    "mode": "rescue-only",
+                    "max_model_rescues": None,
+                    "same_candidate_attempt_limit": 2,
+                    "lazy_neighborhood_sizes": [12],
+                    "terminal_fallback": "official_adaptive",
+                    "fallback_until_state_change": True,
+                    "reset_on_state_fingerprint_change": True,
+                },
+                "repair_aware_bundle": directory,
+                "feature_backend": "python",
+                "controller_bundle": str(
+                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
+                ),
+                "feature_shadow_validation": False,
+                "proposal_state_verification": "always",
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=Environment(),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    FeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generated,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.score_online_candidates",
+                    side_effect=lambda rows, _model: (
+                        0,
+                        [float(len(rows) - index) for index in range(len(rows))],
+                        1.0,
+                    ),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_repair_aware_bundle",
+                    return_value=RepairBundle(),
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            self.assertEqual(result["status"], "ok", result.get("error"))
+            events = read_trace_events(Path(directory) / result["trace_file"])
+
+        transitions = [row for row in events if row.get("event") == "transition"]
+        self.assertEqual(generation_count, 2)
+        self.assertFalse(transitions[0]["controller"]["repair_aware_cache_hit"])
+        self.assertTrue(transitions[1]["controller"]["repair_aware_cache_hit"])
+        self.assertEqual(
+            [row["controller"]["repair_aware"]["selection_kind"] for row in transitions],
+            ["base", "rescue"],
+        )
+        self.assertEqual(
+            [row["controller"]["repair_aware"]["repair_outcome"] for row in transitions],
+            ["accepted_noop", "feasible"],
+        )
+        self.assertEqual(result["summary"]["repair_aware"]["cache_hit_count"], 1)
+        self.assertEqual(
+            transitions[1]["controller"]["proposal"]["lazy_candidate_count"], 1
+        )
+
     def test_v2_stall_safe_backs_off_then_uses_official_fallback(self) -> None:
         initial = make_state()
         _refresh_conflicts(initial)
@@ -762,9 +1037,9 @@ class ControllerV2Tests(unittest.TestCase):
                 ),
             ):
                 result = _closed_loop_episode_worker(job)
+            self.assertEqual(result["status"], "ok", result.get("error"))
             events = read_trace_events(Path(directory) / result["trace_file"])
 
-        self.assertEqual(result["status"], "ok", result.get("error"))
         summary = result["summary"]
         self.assertEqual(summary["model_decision_count"], 6)
         self.assertEqual(summary["official_decision_count"], 1)

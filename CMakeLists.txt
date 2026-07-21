@@ -12,12 +12,22 @@ option(
 )
 if(LNS2_FEATURES_ONLY)
     find_package(pybind11 CONFIG REQUIRED)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     pybind11_add_module(
         lns2_features_native
         src/online_features.cpp
         src/online_features_module.cpp
     )
     target_include_directories(lns2_features_native PRIVATE src)
+    enable_testing()
+    add_test(
+        NAME lns2_features_native_smoke
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_features_native.py"
+    )
+    set_tests_properties(lns2_features_native_smoke PROPERTIES ENVIRONMENT
+        "PYTHONPATH=$<TARGET_FILE_DIR:lns2_features_native>"
+    )
     return()
 endif()
 
