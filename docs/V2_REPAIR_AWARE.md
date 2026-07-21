@@ -67,6 +67,25 @@ policy must pass both a `replan-success-stop` and a stricter
 `rescue_lite_candidate`. Passing still requires a fresh independent validation
 set before any runtime controller is implemented.
 
+## Independent rescue-lite confirmation
+
+The fixed `4>8>Adaptive` order selected by the offline audit is confirmed on a
+new `policy_confirmation` dataset before any runtime integration:
+
+```bash
+python3 scripts/run_rescue_lite_confirmation.py \
+  --output build/initlns-rescue-lite-confirmation-v1 \
+  --workers 4
+```
+
+The command targets 30 states balanced across the three layouts and 400/600
+agents, uses four paired PP seeds, records exact full and repair-structure
+fingerprints, and compares the frozen rule with Adaptive, all other fixed orders,
+and the existing learned rescue selector. If either pre-registered task wave
+cannot supply a cell quota, it emits `insufficient_confirmation_states` and
+stops before branch trials. The previously exposed pilot validation split is not
+reused. Completion produces evidence only; `v2-full` remains the default.
+
 Complete-episode evaluation remains separate:
 
 ```bash

@@ -119,6 +119,20 @@ the v1 trial schema did not store after-state fingerprints, promotion must pass
 under both documented state-change bounds. The exposed 12-state validation
 split is diagnostic only and cannot be reused as a new locked validation set.
 
+Confirm the frozen `4>8>Adaptive` rescue order on fresh synthetic maps with
+exact before/after repair fingerprints:
+
+```bash
+python3 scripts/run_rescue_lite_confirmation.py \
+  --output build/initlns-rescue-lite-confirmation-v1 \
+  --workers 4
+```
+
+The confirmation targets 30 balanced 400/600-agent states and four paired PP
+seeds. If the two pre-registered task waves cannot supply every layout/agent
+cell, it reports `insufficient_confirmation_states` and stops before branch
+trials. It does not register a runtime controller or start quick/formal/v3 work.
+
 The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
 fitting and four-fold map-group calibration. MovingAI OOD/formal results are
 never training inputs. The frozen v2 main ranker remains unchanged. See
