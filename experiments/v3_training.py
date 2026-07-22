@@ -9,10 +9,11 @@ from typing import Any
 
 from experiments._common import sha256_file
 from experiments.compact_controller_model import load_controller_bundle
-from experiments.feature_schema_v2 import (
-    FEATURE_SCHEMA_ID,
-    FEATURE_SCHEMA_SHA256,
-    PROFILE_FEATURE_NAMES,
+from experiments.feature_schema_v3 import (
+    V3_FEATURE_NAMES,
+    V3_FEATURE_SCHEMA_ID,
+    V3_FEATURE_SCHEMA_SHA256,
+    resolve_v3_feature_names,
 )
 from experiments.high_load_rescue_training import (
     _positive_probability,
@@ -517,7 +518,7 @@ def train_v3_controller(
     overhead = float(selection_overhead_seconds)
     if not math.isfinite(overhead) or overhead < 0.0:
         raise ValueError("v3 selection overhead must be finite and nonnegative")
-    feature_names = tuple(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    feature_names = V3_FEATURE_NAMES
     feature_rows = _read_jsonl(feature_path)
     trial_rows = _read_jsonl(trial_path)
     train_rows = _rows(feature_rows, trial_rows, "policy_train", feature_names)
@@ -569,7 +570,7 @@ def train_v3_controller(
             "main_ranker_semantic_fingerprint": main_bundle.manifest[
                 "main_ranker_semantic_fingerprint"
             ],
-            "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
+            "feature_schema_sha256": V3_FEATURE_SCHEMA_SHA256,
             "model_parameters": MODEL_PARAMETERS,
             "threshold_grid": {
                 "effective": EFFECTIVE_TOLERANCE_GRID,
@@ -662,8 +663,8 @@ def train_v3_controller(
         "training_labels_seen": ["policy_train"],
         "formal_or_movingai_labels_seen": False,
         "diagnostic_split_locked_once": True,
-        "feature_schema_id": FEATURE_SCHEMA_ID,
-        "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
+        "feature_schema_id": V3_FEATURE_SCHEMA_ID,
+        "feature_schema_sha256": V3_FEATURE_SCHEMA_SHA256,
         "feature_count": len(feature_names),
         "training_state_count": len(train_states),
         "diagnostic_state_count": len(diagnostic_states),
@@ -691,8 +692,8 @@ def train_v3_controller(
         "schema": V3_BUNDLE_SCHEMA,
         "schema_version": 1,
         "pilot_gate_schema": V3_PILOT_GATE_SCHEMA,
-        "feature_schema_id": FEATURE_SCHEMA_ID,
-        "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
+        "feature_schema_id": V3_FEATURE_SCHEMA_ID,
+        "feature_schema_sha256": V3_FEATURE_SCHEMA_SHA256,
         "profile": "realized_dynamic",
         "feature_names": list(feature_names),
         "models": model_rows,
@@ -738,7 +739,10 @@ def finalize_v3_native_audit(
     manifest_path = output_root / "v3_manifest.json"
     report = dict(_read_json(report_path))
     manifest = dict(_read_json(manifest_path))
-    feature_names = tuple(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    feature_names = resolve_v3_feature_names(
+        str(manifest.get("feature_schema_id")),
+        str(manifest.get("feature_schema_sha256")),
+    )
     diagnostic_rows = _rows(
         _read_jsonl(feature_path),
         _read_jsonl(trial_path),

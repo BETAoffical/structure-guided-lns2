@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import read_json, sha256_file
-from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
+from experiments.feature_schema_v3 import resolve_v3_feature_names
 from experiments.repair_aware import (
     PortableScalarModel,
     classify_repair_outcome,
@@ -97,19 +97,22 @@ def load_v3_controller_bundle(path: str | Path) -> V3ControllerBundle:
     manifest = dict(read_json(root / "v3_manifest.json"))
     if str(manifest.get("schema")) != V3_BUNDLE_SCHEMA:
         raise ValueError("unexpected v3 controller bundle schema")
-    if str(manifest.get("feature_schema_id")) != FEATURE_SCHEMA_ID or str(
-        manifest.get("feature_schema_sha256")
-    ) != FEATURE_SCHEMA_SHA256:
-        raise ValueError("v3 controller feature schema mismatch")
+    expected_feature_names = resolve_v3_feature_names(
+        str(manifest.get("feature_schema_id")),
+        str(manifest.get("feature_schema_sha256")),
+    )
+    if tuple(map(str, manifest.get("feature_names", ()))) != expected_feature_names:
+        raise ValueError("v3 controller feature declaration mismatch")
     models: dict[str, PortableScalarModel] = {}
     for name, raw in dict(manifest.get("models", {})).items():
         row = dict(raw)
         model_path = root / str(row["file"])
         if sha256_file(model_path) != str(row["sha256"]):
             raise ValueError(f"v3 model SHA256 mismatch: {name}")
-        model = load_portable_scalar_model(
-            dict(read_json(model_path)), compact_features=True
-        )
+        payload = dict(read_json(model_path))
+        if tuple(map(str, payload.get("feature_names", ()))) != expected_feature_names:
+            raise ValueError(f"v3 model feature declaration mismatch: {name}")
+        model = load_portable_scalar_model(payload, compact_features=True)
         if model.name != str(name):
             raise ValueError(f"v3 model name mismatch: {name}")
         models[str(name)] = model

@@ -111,6 +111,7 @@ def run_pipeline(
             "experiments/v3_pilot.py",
             "experiments/v3_training.py",
             "experiments/v3_controller.py",
+            "experiments/feature_schema_v3.py",
             "experiments/high_load_rescue.py",
         )
     }
