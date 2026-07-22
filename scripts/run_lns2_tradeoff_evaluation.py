@@ -35,6 +35,7 @@ from experiments.repair_collection import (  # noqa: E402
     _write_json,
 )
 from experiments.run_output_guard import prepare_run_output  # noqa: E402
+from experiments.v3_controller import load_v3_controller_bundle  # noqa: E402
 
 
 QUICK_TASKS = (
@@ -59,9 +60,15 @@ REPAIR_AWARE_COLLECTION = (
     "v2-repair-aware",
     "realized_dynamic",
 )
+V3_COLLECTION = ("v3-full", "v3-full", "realized_dynamic")
 CONTROLLER_COLLECTIONS = {
     item[0]: item
-    for item in (*DUAL_COLLECTIONS, STALL_SAFE_COLLECTION, REPAIR_AWARE_COLLECTION)
+    for item in (
+        *DUAL_COLLECTIONS,
+        STALL_SAFE_COLLECTION,
+        REPAIR_AWARE_COLLECTION,
+        V3_COLLECTION,
+    )
 }
 DUAL_DEFAULT_OUTPUTS = {
     "quick": "build/initlns-lns2-bottleneck-quick-v1",
@@ -193,6 +200,7 @@ def _run_interleaved_collections(
     stall_guard_config: Path | None,
     repair_aware_config: Path | None,
     repair_aware_bundle: Path | None,
+    v3_bundle: Path | None,
     task_ids: list[str] | None,
     feature_backend: str,
     resume: bool,
@@ -234,6 +242,7 @@ def _run_interleaved_collections(
             repair_aware_bundle=(
                 repair_aware_bundle if controller == "v2-repair-aware" else None
             ),
+            v3_bundle=v3_bundle if controller == "v3-full" else None,
             job_keys=job_keys,
             cohort_job_keys=job_keys,
             wall_time_budget_seconds=wall_time_budget_seconds,
@@ -270,6 +279,7 @@ def _run_interleaved_collections(
     )
     collection_by_name = {item[0]: item for item in collections}
     completed = 0
+    error_jobs = 0
     total = len(keys) * len(collections)
     for entry in schedule:
         task_id = str(entry["task_id"])
@@ -313,6 +323,7 @@ def _run_interleaved_collections(
                     if controller == "v2-repair-aware"
                     else None
                 ),
+                v3_bundle=v3_bundle if controller == "v3-full" else None,
                 job_keys={(task_id, seed)},
                 cohort_job_keys=job_keys,
                 wall_time_budget_seconds=wall_time_budget_seconds,
@@ -320,6 +331,25 @@ def _run_interleaved_collections(
                 stopping_rule=stopping_rule,
             )
             completed += 1
+            manifest_rows = _read_jsonl(
+                roots[name] / f"{policy}_manifest.jsonl"
+            )
+            matching_rows = [
+                row
+                for row in manifest_rows
+                if str(row.get("task_id")) == task_id
+                and int(row.get("solver_seed", -1)) == seed
+            ]
+            if len(matching_rows) != 1:
+                raise RuntimeError(
+                    f"{name} did not write exactly one manifest row for "
+                    f"{task_id}/seed={seed}"
+                )
+            episode_error = str(matching_rows[0].get("status")) not in {
+                "ok",
+                "resumed",
+            }
+            error_jobs += int(episode_error)
             _write_json(
                 runner_progress,
                 {
@@ -328,13 +358,18 @@ def _run_interleaved_collections(
                     "status": "running",
                     "completed_jobs": completed,
                     "total_jobs": total,
-                    "error_jobs": 0,
+                    "error_jobs": error_jobs,
                     "active_jobs": [],
                     "task_id": task_id,
                     "solver_seed": seed,
                     "controller": name,
                 },
             )
+            if episode_error:
+                raise RuntimeError(
+                    f"{name} episode failed for {task_id}/seed={seed}: "
+                    f"{matching_rows[0].get('error')}"
+                )
     expected = len(keys)
     for name, _controller, policy in collections:
         manifest = _read_jsonl(roots[name] / f"{policy}_manifest.jsonl")
@@ -406,6 +441,8 @@ def _dual_preflight(
     stall_guard_config: Path | None = None,
     repair_aware_config: Path | None = None,
     repair_aware_bundle: Path | None = None,
+    v3_bundle: Path | None = None,
+    allow_unpromoted_v3_diagnostic: bool = False,
 ) -> dict[str, Any]:
     if not dataset.is_dir():
         raise FileNotFoundError(f"MovingAI OOD dataset is missing: {dataset}")
@@ -422,6 +459,15 @@ def _dual_preflight(
         raise ValueError("v2-full feature performance audit has not passed")
     if bundle.pruner_threshold is not None:
         raise ValueError("the active runtime does not support pruned controller bundles")
+    v3_approval: dict[str, Any] | None = None
+    if any(controller == "v3-full" for _name, controller, _policy in collections):
+        if v3_bundle is None:
+            raise ValueError("v3-full requires --v3-bundle")
+        loaded_v3 = load_v3_controller_bundle(v3_bundle)
+        v3_approval = _v3_evaluation_approval(
+            loaded_v3.report,
+            allow_unpromoted_diagnostic=allow_unpromoted_v3_diagnostic,
+        )
     expected_tasks = len(set(task_ids)) if task_ids is not None else FORMAL_TASK_COUNT
     estimates: dict[str, Any] = {}
     fingerprints: dict[str, Any] = {}
@@ -458,6 +504,7 @@ def _dual_preflight(
                     if controller == "v2-repair-aware"
                     else None
                 ),
+                v3_bundle=v3_bundle if controller == "v3-full" else None,
                 cohort_job_keys=cohort_job_keys,
                 wall_time_budget_seconds=budget,
                 episode_process_timeout_seconds=budget + 60.0,
@@ -494,9 +541,44 @@ def _dual_preflight(
         "controller_runtime": controller_runtime,
         "verification_profile": verification_profile,
         "controllers": [item[0] for item in collections],
+        "v3_evaluation_approval": v3_approval,
         "native_module": native_module,
         "estimates": estimates,
         "run_fingerprints": fingerprints,
+    }
+
+
+def _v3_evaluation_approval(
+    report: dict[str, Any], *, allow_unpromoted_diagnostic: bool
+) -> dict[str, Any]:
+    pilot_passed = bool(report.get("pilot_passed"))
+    if pilot_passed:
+        return {
+            "pilot_passed": True,
+            "unpromoted_diagnostic": False,
+            "decision": str(report.get("decision") or "v3_pilot_passed"),
+        }
+    if not allow_unpromoted_diagnostic:
+        raise ValueError("v3-full requires a v3_pilot_passed bundle")
+    checks = dict(report.get("pilot_checks") or {})
+    required_integrity = {
+        "native_available": bool(report.get("native_available")),
+        "native_audit_completed": bool(report.get("native_audit_completed")),
+        "portable_parity": bool(checks.get("portable_parity")),
+    }
+    if not all(required_integrity.values()):
+        failed = ", ".join(
+            name for name, passed in required_integrity.items() if not passed
+        )
+        raise ValueError(f"unpromoted v3 diagnostic failed integrity checks: {failed}")
+    return {
+        "pilot_passed": False,
+        "unpromoted_diagnostic": True,
+        "decision": str(report.get("decision") or "v3_pilot_failed"),
+        "integrity_checks": required_integrity,
+        "failed_pilot_checks": sorted(
+            name for name, passed in checks.items() if not bool(passed)
+        ),
     }
 
 
@@ -578,10 +660,20 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             raise ValueError("--diagnostic-subset requires a task or seed override")
         if arguments.mode == "formal" and arguments.diagnostic_subset:
             raise ValueError("formal evaluation cannot use a diagnostic subset")
+        if arguments.allow_unpromoted_v3_diagnostic:
+            if not arguments.diagnostic_subset or arguments.mode != "quick":
+                raise ValueError(
+                    "--allow-unpromoted-v3-diagnostic is restricted to a quick diagnostic subset"
+                )
+            if "v3-full" not in controllers:
+                raise ValueError(
+                    "--allow-unpromoted-v3-diagnostic requires v3-full"
+                )
         if (
             (
                 "v2-stall-safe" in controllers
                 or "v2-repair-aware" in controllers
+                or "v3-full" in controllers
                 or arguments.diagnostic_subset
             )
             and not arguments.output
@@ -642,6 +734,9 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         if "v2-repair-aware" in controllers
         else None
     )
+    v3_bundle = (
+        _resolve(arguments.v3_bundle) if "v3-full" in controllers else None
+    )
     task_ids = (
         requested_task_ids
         if requested_task_ids is not None
@@ -682,6 +777,10 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             stall_guard_config=stall_guard_config,
             repair_aware_config=repair_aware_config,
             repair_aware_bundle=repair_aware_bundle,
+            v3_bundle=v3_bundle,
+            allow_unpromoted_v3_diagnostic=bool(
+                arguments.allow_unpromoted_v3_diagnostic
+            ),
         )
         bundle = load_controller_bundle(controller_bundle)
         model_semantic_fingerprint = str(
@@ -692,7 +791,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             resume=arguments.resume,
             identity={
                 "runner": "run_lns2_tradeoff_evaluation.dual_track",
-                "schema_version": 4,
+                "schema_version": 5,
                 "mode": arguments.mode,
                 "dataset": str(dataset),
                 "collection_config": str(collection_config),
@@ -715,6 +814,10 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 "repair_aware_bundle": str(repair_aware_bundle)
                 if repair_aware_bundle is not None
                 else None,
+                "v3_bundle": str(v3_bundle) if v3_bundle is not None else None,
+                "allow_unpromoted_v3_diagnostic": bool(
+                    arguments.allow_unpromoted_v3_diagnostic
+                ),
                 "diagnostic_subset": bool(arguments.diagnostic_subset),
                 "solver_seeds": list(requested_solver_seeds),
                 "task_ids": task_ids,
@@ -724,6 +827,9 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     "runner": sha256_file(Path(__file__).resolve()),
                     "report": sha256_file(PROJECT_ROOT / "experiments" / "lns2_bottleneck.py"),
                     "collection": sha256_file(PROJECT_ROOT / "experiments" / "closed_loop_confirmation.py"),
+                    "v3_controller": sha256_file(
+                        PROJECT_ROOT / "experiments" / "v3_controller.py"
+                    ),
                 },
             },
         )
@@ -762,6 +868,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     stall_guard_config=stall_guard_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
+                    v3_bundle=v3_bundle,
                     task_ids=task_ids,
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -799,6 +906,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     stall_guard_config=stall_guard_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
+                    v3_bundle=v3_bundle,
                     task_ids=sorted({task for task, _seed in selected}),
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -847,6 +955,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     stall_guard_config=stall_guard_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
+                    v3_bundle=v3_bundle,
                     task_ids=sorted({task for task, _seed in selected}),
                     feature_backend=arguments.feature_backend,
                     resume=arguments.resume,
@@ -904,6 +1013,12 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 if "v2-repair-aware" in controllers
                 else None
             ),
+            v3_bundle=str(v3_bundle) if v3_bundle is not None else None,
+            v3_report=(
+                str(output / "report" / "v3_report.md")
+                if "v3-full" in controllers
+                else None
+            ),
             evaluation_tracks=list(tracks),
             controllers=list(controllers),
             diagnostic_subset=bool(arguments.diagnostic_subset),
@@ -913,6 +1028,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             bottleneck_validation=report["validation"],
             stall_promotion=report.get("stall_promotion"),
             repair_aware_promotion=report.get("repair_aware_promotion"),
+            v3_promotion=report.get("v3_promotion"),
             targeted_stall_recovery=report.get("targeted_stall_recovery"),
             episode_count=report["episode_count"],
             iteration_count=report["iteration_count"],
@@ -942,7 +1058,7 @@ def main() -> int:
         default="official_adaptive,v2-full",
         help=(
             "Active controllers: official_adaptive, v2-full, "
-            "v2-stall-safe, v2-repair-aware."
+            "v2-stall-safe, v2-repair-aware, v3-full."
         ),
     )
     parser.add_argument("--wall-clock-seconds", type=float, default=300.0)
@@ -952,6 +1068,14 @@ def main() -> int:
     parser.add_argument("--skip-wall-clock-sensitivity", action="store_true")
     parser.add_argument("--long-horizon-auto-extend-seconds", type=float)
     parser.add_argument("--diagnostic-subset", action="store_true")
+    parser.add_argument(
+        "--allow-unpromoted-v3-diagnostic",
+        action="store_true",
+        help=(
+            "Allow a native-audited but unpromoted v3 bundle only for an explicit "
+            "quick diagnostic subset; this never grants deployment promotion."
+        ),
+    )
     parser.add_argument("--task-ids")
     parser.add_argument("--solver-seeds")
     parser.add_argument(
@@ -973,6 +1097,10 @@ def main() -> int:
     parser.add_argument(
         "--repair-aware-bundle",
         default="build/initlns-repair-aware-controller-v1",
+    )
+    parser.add_argument(
+        "--v3-bundle",
+        default="build/initlns-v3-pilot-v1/controller",
     )
     parser.add_argument(
         "--feature-backend",

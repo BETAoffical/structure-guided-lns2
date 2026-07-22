@@ -101,6 +101,11 @@ from experiments.repair_aware import (
     load_repair_aware_bundle,
     load_repair_aware_config,
 )
+from experiments.v3_controller import (
+    V3ControllerBundle,
+    V3ControllerState,
+    load_v3_controller_bundle,
+)
 
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
@@ -114,6 +119,7 @@ CONTROLLER_MODES = (
     "v2-full",
     "v2-stall-safe",
     "v2-repair-aware",
+    "v3-full",
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
@@ -122,6 +128,7 @@ WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
 REPAIR_TIMING_SCHEMA = "lns2.repair_timing.v1"
 DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_REPAIR_AWARE_BUNDLE = "build/initlns-repair-aware-controller-v1"
+DEFAULT_V3_BUNDLE = "build/initlns-v3-pilot-v1/controller"
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
@@ -136,6 +143,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/repair_collection.py",
     "experiments/stall_guard.py",
     "experiments/repair_aware.py",
+    "experiments/v3_controller.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
     "src/online_features.cpp",
@@ -1035,6 +1043,26 @@ def repair_aware_fallback_seed(
     ) % (2**31)
 
 
+def v3_fallback_seed(
+    task_id: str,
+    solver_seed: int,
+    state_anchor_fingerprint: str,
+    decision_index: int,
+) -> int:
+    return int(
+        _fingerprint(
+            {
+                "namespace": "closed-loop-v3-official-v1",
+                "task_id": task_id,
+                "solver_seed": int(solver_seed),
+                "state_anchor_fingerprint": state_anchor_fingerprint,
+                "decision_index": int(decision_index),
+            }
+        )[:16],
+        16,
+    ) % (2**31)
+
+
 def online_candidate_rows(
     state: dict[str, Any],
     candidates: list[dict[str, Any]],
@@ -1658,6 +1686,22 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError(
                         "repair-aware transition has an invalid outcome"
                     )
+            if str(controller.get("controller_mode")) == "v3-full":
+                v3 = controller.get("v3")
+                if not isinstance(v3, dict):
+                    raise ClosedLoopTraceError(
+                        "v3 transition is missing controller diagnostics"
+                    )
+                if str(v3.get("route")) != route:
+                    raise ClosedLoopTraceError("v3 route mismatch")
+                if str(v3.get("repair_outcome")) not in {
+                    "hard_failure",
+                    "accepted_noop",
+                    "state_changed_no_reduction",
+                    "conflict_reduced",
+                    "feasible",
+                }:
+                    raise ClosedLoopTraceError("v3 transition has an invalid outcome")
             if previous_route is not None and previous_route != route:
                 route_switch_count += 1
             previous_route = route
@@ -1715,6 +1759,7 @@ def validate_closed_loop_trace(
         summary.get("balanced_controller") is not None
         or summary.get("stall_guard") is not None
         or summary.get("repair_aware") is not None
+        or summary.get("v3") is not None
     ):
         expected_routes = {
             "model_decision_count": int(route_counts["model"]),
@@ -1906,6 +1951,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     stall_guard_config: StallGuardConfig | None = None
     repair_aware_config: RepairAwareConfig | None = None
     repair_aware_bundle: RepairAwareBundle | None = None
+    v3_bundle: V3ControllerBundle | None = None
     if controller_mode == "v2-stall-safe":
         raw_stall_guard = job.get("stall_guard_config")
         if raw_stall_guard is None:
@@ -1920,6 +1966,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
         repair_aware_config = load_repair_aware_config(raw_repair_aware)
         repair_aware_bundle = load_repair_aware_bundle(raw_repair_bundle)
+    if controller_mode == "v3-full":
+        raw_v3_bundle = job.get("v3_bundle")
+        if raw_v3_bundle is None:
+            raise ValueError("v3-full requires a frozen v3 bundle")
+        v3_bundle = load_v3_controller_bundle(raw_v3_bundle)
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     shadow_models: dict[str, Any] = {}
@@ -1948,6 +1999,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError(
                         "repair-aware bundle was trained for a different v2 ranker"
                     )
+                if v3_bundle is not None and str(
+                    v3_bundle.manifest.get("main_ranker_semantic_fingerprint", "")
+                ) != str(
+                    compact_bundle.manifest.get(
+                        "main_ranker_semantic_fingerprint", ""
+                    )
+                ):
+                    raise ValueError("v3 bundle was trained for a different v2 ranker")
             else:
                 runtime_models = {
                     name: compact_runtime_model(model)
@@ -2067,6 +2126,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     repair_aware_bundle, "models", {}
                 ).values():
                     required_model_features.update(auxiliary_model.feature_names)
+            if v3_bundle is not None and policy == "realized_dynamic":
+                required_model_features.update(v3_bundle.required_feature_names)
             def make_feature_engine(current_state: dict[str, Any]) -> OnlineFeatureEngine:
                 return OnlineFeatureEngine(
                     current_state,
@@ -2099,7 +2160,19 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 and policy == "realized_dynamic"
                 else None
             )
-            repair_aware_cache: dict[str, Any] | None = None
+            v3_state = (
+                V3ControllerState(
+                    v3_bundle,
+                    maximum_distinct_failures=int(
+                        v3_bundle.manifest.get("maximum_distinct_failures", 3)
+                    ),
+                )
+                if v3_bundle is not None
+                and controller_mode == "v3-full"
+                and policy == "realized_dynamic"
+                else None
+            )
+            stateful_cache: dict[str, Any] | None = None
             while not bool(state["done"]) and (
                 max_decisions <= 0 or len(conflicts) - 1 < max_decisions
             ):
@@ -2117,7 +2190,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before_hash = state_fingerprint(before)
                 before_repair_hash = (
                     repair_structure_fingerprint(before)
-                    if repair_aware is not None
+                    if repair_aware is not None or v3_state is not None
                     else before_hash
                 )
                 before_fingerprint_seconds = (
@@ -2159,15 +2232,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         _fingerprint(job["proposal"]),
                         int(solver_seed),
                     )
+                    stateful_controller = v3_state or repair_aware
                     refresh_cache = (
                         repair_aware.consume_refresh()
                         if repair_aware is not None
                         else False
                     )
                     cache_hit = bool(
-                        repair_aware is not None
-                        and repair_aware_cache is not None
-                        and repair_aware_cache.get("key") == cache_key
+                        stateful_controller is not None
+                        and stateful_cache is not None
+                        and stateful_cache.get("key") == cache_key
                         and not refresh_cache
                     )
                     state_feature_metrics: dict[str, Any] = {}
@@ -2176,19 +2250,20 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     proposal_rows: list[dict[str, Any]] | None = None
                     state_analysis_seconds = 0.0
                     repair_aware_seconds = 0.0
-                    repair_predictions: dict[str, list[float]] | None = None
+                    v3_seconds = 0.0
+                    stateful_predictions: dict[str, list[float]] | None = None
                     if cache_hit:
-                        assert repair_aware_cache is not None
-                        candidates = repair_aware_cache["candidates"]
-                        candidate_rows = repair_aware_cache["candidate_rows"]
-                        scores = repair_aware_cache["scores"]
-                        margin = float(repair_aware_cache["margin"])
+                        assert stateful_cache is not None
+                        candidates = stateful_cache["candidates"]
+                        candidate_rows = stateful_cache["candidate_rows"]
+                        scores = stateful_cache["scores"]
+                        margin = float(stateful_cache["margin"])
                         selected_local_index = int(
-                            repair_aware_cache["base_selected_local_index"]
+                            stateful_cache["base_selected_local_index"]
                         )
-                        repair_predictions = repair_aware_cache["repair_predictions"]
+                        stateful_predictions = stateful_cache["stateful_predictions"]
                         proposal_metrics = {
-                            **dict(repair_aware_cache["proposal_metrics"]),
+                            **dict(stateful_cache["proposal_metrics"]),
                             "proposal_seconds": 0.0,
                             "candidate_generation_seconds": 0.0,
                             "state_check_seconds": 0.0,
@@ -2197,10 +2272,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "state_check_backend": "cached-state-fingerprint",
                             "full_state_verified": False,
                             "repair_aware_cache_hit": True,
+                            "v3_cache_hit": v3_state is not None,
                         }
                         feature_seconds = 0.0
                         inference_seconds = 0.0
-                        repair_aware.note_cache_hit()
+                        assert stateful_controller is not None
+                        stateful_controller.note_cache_hit()
                     else:
                         verification_mode = str(
                             job.get("proposal_state_verification", "always")
@@ -2225,6 +2302,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             ),
                         )
                         proposal_metrics["repair_aware_cache_hit"] = False
+                        proposal_metrics["v3_cache_hit"] = False
                         if controller_mode == "v1-full":
                             feature_started = time.perf_counter()
                             candidate_rows = online_candidate_rows(
@@ -2298,15 +2376,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             candidate_rows, runtime_models[policy]
                         )
                         inference_seconds = time.perf_counter() - inference_started
-                        if repair_aware is not None:
-                            repair_aware_cache = {
+                        if stateful_controller is not None:
+                            stateful_cache = {
                                 "key": cache_key,
                                 "candidates": candidates,
                                 "candidate_rows": candidate_rows,
                                 "scores": scores,
                                 "margin": margin,
                                 "base_selected_local_index": selected_local_index,
-                                "repair_predictions": repair_predictions,
+                                "stateful_predictions": stateful_predictions,
                                 "proposal_metrics": dict(proposal_metrics),
                                 "generation_decision_index": decision_index,
                                 "lazy_augmented": False,
@@ -2321,12 +2399,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             )
                         )
                     ):
-                        if repair_aware_cache is None:
+                        if stateful_cache is None:
                             raise ClosedLoopExecutionError(
                                 "repair_aware_cache_missing",
                                 "lazy rescue generation has no state cache",
                             )
-                        if not bool(repair_aware_cache.get("lazy_augmented")):
+                        if not bool(stateful_cache.get("lazy_augmented")):
                             lazy_started = time.perf_counter()
                             lazy_config = dict(job["proposal"])
                             lazy_config["neighborhood_sizes"] = list(
@@ -2338,7 +2416,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 task_id=str(row["task_id"]),
                                 solver_seed=solver_seed,
                                 decision_index=int(
-                                    repair_aware_cache["generation_decision_index"]
+                                    stateful_cache["generation_decision_index"]
                                 ),
                                 proposal_config=lazy_config,
                                 state_hash=before_hash,
@@ -2371,15 +2449,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         candidate_rows, runtime_models[policy]
                                     )
                                 )
-                                repair_aware_cache.update(
+                                stateful_cache.update(
                                     {
                                         "candidates": candidates,
                                         "candidate_rows": candidate_rows,
                                         "scores": scores,
-                                        "repair_predictions": None,
+                                        "stateful_predictions": None,
                                     }
                                 )
-                                repair_predictions = None
+                                stateful_predictions = None
                                 realized_feature_metrics["realized_feature_seconds"] = float(
                                     realized_feature_metrics.get(
                                         "realized_feature_seconds", 0.0
@@ -2389,11 +2467,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         "realized_feature_seconds", 0.0
                                     )
                                 )
-                            repair_aware_cache["lazy_augmented"] = True
-                            repair_aware_cache["lazy_candidate_count"] = len(
+                            stateful_cache["lazy_augmented"] = True
+                            stateful_cache["lazy_candidate_count"] = len(
                                 extra_candidates
                             )
-                            repair_aware_cache["lazy_generation_seconds"] = (
+                            stateful_cache["lazy_generation_seconds"] = (
                                 time.perf_counter() - lazy_started
                             )
                             proposal_metrics = {
@@ -2406,7 +2484,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ),
                                 "lazy_candidate_count": len(extra_candidates),
                                 "lazy_generation_seconds": float(
-                                    repair_aware_cache["lazy_generation_seconds"]
+                                    stateful_cache["lazy_generation_seconds"]
                                 ),
                             }
                     controller["proposal"] = proposal_metrics
@@ -2488,22 +2566,22 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals["stall_guard_seconds"] += guard_seconds
                     if repair_aware is not None:
                         if repair_aware.predictions_required(before_repair_hash):
-                            if repair_predictions is None:
+                            if stateful_predictions is None:
                                 repair_prediction_started = time.perf_counter()
                                 assert repair_aware_bundle is not None
-                                repair_predictions = repair_aware_bundle.predict(
+                                stateful_predictions = repair_aware_bundle.predict(
                                     candidate_rows
                                 )
                                 repair_aware_seconds += (
                                     time.perf_counter() - repair_prediction_started
                                 )
-                                if repair_aware_cache is None:
+                                if stateful_cache is None:
                                     raise ClosedLoopExecutionError(
                                         "repair_aware_cache_missing",
                                         "repair-aware prediction has no state cache",
                                     )
-                                repair_aware_cache["repair_predictions"] = (
-                                    repair_predictions
+                                stateful_cache["stateful_predictions"] = (
+                                    stateful_predictions
                                 )
                             adaptive_prediction_started = time.perf_counter()
                             assert repair_aware_bundle is not None
@@ -2523,7 +2601,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             candidates,
                             scores,
                             base_selected_local_index,
-                            repair_predictions,
+                            stateful_predictions,
                             before_fingerprint=before_repair_hash,
                             adaptive_prediction=adaptive_prediction,
                         )
@@ -2535,13 +2613,43 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals["repair_aware_seconds"] += (
                             repair_aware_seconds
                         )
+                    if v3_state is not None:
+                        if v3_state.predictions_required(before_repair_hash):
+                            if stateful_predictions is None:
+                                v3_prediction_started = time.perf_counter()
+                                assert v3_bundle is not None
+                                stateful_predictions = v3_bundle.predict(candidate_rows)
+                                v3_seconds += time.perf_counter() - v3_prediction_started
+                                if stateful_cache is None:
+                                    raise ClosedLoopExecutionError(
+                                        "v3_cache_missing",
+                                        "v3 prediction has no state cache",
+                                    )
+                                stateful_cache["stateful_predictions"] = (
+                                    stateful_predictions
+                                )
+                        v3_select_started = time.perf_counter()
+                        v3_selected_index, v3_diagnostic = v3_state.select(
+                            candidates,
+                            scores,
+                            stateful_predictions,
+                            before_fingerprint=before_repair_hash,
+                        )
+                        v3_seconds += time.perf_counter() - v3_select_started
+                        selected_local_index = v3_selected_index
+                        controller["v3"] = v3_diagnostic
+                        controller_totals["v3_seconds"] += v3_seconds
                     base_diagnostic = feature_range_diagnostic(
                         candidate_rows[base_selected_local_index],
                         policy,
                         runtime_ranges[policy],
                     )
                     if selected_local_index is None:
-                        if stall_guard is None and repair_aware is None:
+                        if (
+                            stall_guard is None
+                            and repair_aware is None
+                            and v3_state is None
+                        ):
                             raise ClosedLoopExecutionError(
                                 "controller_no_candidate",
                                 "controller did not select a candidate",
@@ -2553,7 +2661,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         fallback_anchor = (
                             str(guard_diagnostic["state_anchor_fingerprint"])
                             if stall_guard is not None
-                            else str(repair_diagnostic["state_anchor_fingerprint"])
+                            else str(
+                                repair_diagnostic["state_anchor_fingerprint"]
+                                if repair_aware is not None
+                                else v3_diagnostic["state_anchor_fingerprint"]
+                            )
                         )
                         action = {
                             "mode": "official",
@@ -2565,11 +2677,20 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     decision_index,
                                 )
                                 if stall_guard is not None
-                                else repair_aware_fallback_seed(
-                                    str(row["task_id"]),
-                                    solver_seed,
-                                    fallback_anchor,
-                                    decision_index,
+                                else (
+                                    repair_aware_fallback_seed(
+                                        str(row["task_id"]),
+                                        solver_seed,
+                                        fallback_anchor,
+                                        decision_index,
+                                    )
+                                    if repair_aware is not None
+                                    else v3_fallback_seed(
+                                        str(row["task_id"]),
+                                        solver_seed,
+                                        fallback_anchor,
+                                        decision_index,
+                                    )
                                 )
                             ),
                         }
@@ -2644,7 +2765,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
                         + guard_seconds
-                        + repair_aware_seconds,
+                        + repair_aware_seconds
+                        + v3_seconds,
                     )
                     measured_selection_stages = (
                         candidate_generation_seconds
@@ -2654,6 +2776,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + inference_seconds
                         + guard_seconds
                         + repair_aware_seconds
+                        + v3_seconds
                     )
                     controller.update(
                         {
@@ -2681,6 +2804,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     is not None
                                     else "python-portable-tree"
                                 ),
+                            ),
+                            "v3_inference_backends": (
+                                list(v3_bundle.inference_backends)
+                                if v3_bundle is not None
+                                else None
                             ),
                             "candidate_pool": candidate_pool,
                             "pruning": pruning_metrics,
@@ -2725,7 +2853,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "ranking_inference_seconds": inference_seconds,
                             "stall_guard_seconds": guard_seconds,
                             "repair_aware_seconds": repair_aware_seconds,
+                            "v3_seconds": v3_seconds,
                             "repair_aware_cache_hit": cache_hit,
+                            "v3_cache_hit": cache_hit and v3_state is not None,
                             "selection_residual_seconds": max(
                                 0.0,
                                 controller_seconds_before_repair
@@ -2795,7 +2925,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals["selected_feature_diagnostic_count"] += 1
                     controller_totals["learned_decisions"] += 1
                 if (
-                    (stall_guard is not None or repair_aware is not None)
+                    (
+                        stall_guard is not None
+                        or repair_aware is not None
+                        or v3_state is not None
+                    )
                     and policy == "realized_dynamic"
                 ):
                     route_prefix = "official" if route == "official_adaptive" else "model"
@@ -2849,7 +2983,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                 pending_changed_agents.update(actual)
                 if (
-                    (stall_guard is not None or repair_aware is not None)
+                    (
+                        stall_guard is not None
+                        or repair_aware is not None
+                        or v3_state is not None
+                    )
                     and policy == "realized_dynamic"
                 ):
                     route_prefix = "official" if route == "official_adaptive" else "model"
@@ -2939,7 +3077,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 after_hash = state_fingerprint(state)
                 after_repair_hash = (
                     repair_structure_fingerprint(state)
-                    if repair_aware is not None
+                    if repair_aware is not None or v3_state is not None
                     else after_hash
                 )
                 state_fingerprint_seconds = before_fingerprint_seconds + (
@@ -3002,6 +3140,25 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller.get("repair_aware_seconds", 0.0)
                     ) + observe_seconds
                     controller_totals["repair_aware_seconds"] += observe_seconds
+                if v3_state is not None:
+                    v3_observe_started = time.perf_counter()
+                    observed = v3_state.observe(
+                        before_fingerprint=before_repair_hash,
+                        after_fingerprint=after_repair_hash,
+                        replan_success=bool(metrics.get("replan_success")),
+                        conflicts_before=int(before["num_of_colliding_pairs"]),
+                        conflicts_after=int(state["num_of_colliding_pairs"]),
+                        feasible=bool(state.get("feasible")),
+                    )
+                    observe_seconds = time.perf_counter() - v3_observe_started
+                    controller["v3"] = {
+                        **dict(controller.get("v3") or {}),
+                        **observed,
+                    }
+                    controller["v3_seconds"] = float(
+                        controller.get("v3_seconds", 0.0)
+                    ) + observe_seconds
+                    controller_totals["v3_seconds"] += observe_seconds
                 transition_timings = {
                     "pre_step_orchestration_seconds": pre_step_orchestration_seconds,
                     "controller_before_repair_seconds": controller_before_repair_seconds,
@@ -3032,6 +3189,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     "repair_aware_seconds": float(
                         controller.get("repair_aware_seconds", 0.0)
                     ),
+                    "v3_seconds": float(controller.get("v3_seconds", 0.0)),
                     "selection_residual_seconds": float(
                         controller.get("selection_residual_seconds", 0.0)
                     ),
@@ -3151,7 +3309,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             model_decisions = int(controller_totals["model_decision_count"])
             official_decisions = int(controller_totals["official_decision_count"])
             if (
-                (stall_guard is not None or repair_aware is not None)
+                (
+                    stall_guard is not None
+                    or repair_aware is not None
+                    or v3_state is not None
+                )
                 and policy == "realized_dynamic"
                 and model_decisions + official_decisions != len(conflicts) - 1
             ):
@@ -3241,6 +3403,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "repair_aware": (
                     repair_aware.summary()
                     if repair_aware is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "v3": (
+                    {
+                        **v3_state.summary(),
+                        "runtime_projection": v3_bundle.runtime_projection,
+                        "combined_runtime_feature_count": len(
+                            required_model_features
+                        ),
+                    }
+                    if v3_state is not None and policy == "realized_dynamic"
                     else None
                 ),
                 "candidate_reduction_fraction": (
@@ -3464,6 +3637,7 @@ def run_closed_loop_collection(
     stall_guard_config: str | Path | dict[str, Any] | None = None,
     repair_aware_config: str | Path | dict[str, Any] | None = None,
     repair_aware_bundle: str | Path | None = None,
+    v3_bundle: str | Path | None = None,
     job_keys: set[tuple[str, int]] | None = None,
     cohort_job_keys: set[tuple[str, int]] | None = None,
     wall_time_budget_seconds: float | None = None,
@@ -3495,6 +3669,8 @@ def run_closed_loop_collection(
     repair_aware_payload: dict[str, Any] | None = None
     repair_aware_root: Path | None = None
     repair_aware_manifest: dict[str, Any] | None = None
+    v3_root: Path | None = None
+    v3_manifest: dict[str, Any] | None = None
     if controller_mode == "v2-stall-safe":
         if stall_guard_config is None:
             raise ValueError("v2-stall-safe requires --stall-guard-config")
@@ -3532,6 +3708,21 @@ def run_closed_loop_collection(
         raise ValueError(
             "repair-aware config/bundle are only valid with v2-repair-aware"
         )
+    if controller_mode == "v3-full":
+        v3_root = Path(str(v3_bundle or DEFAULT_V3_BUNDLE))
+        if not v3_root.is_absolute():
+            v3_root = project_root / v3_root
+        v3_root = v3_root.resolve()
+        v3_manifest = load_v3_controller_bundle(v3_root).manifest
+        if controller_manifest is None or str(
+            v3_manifest.get("main_ranker_semantic_fingerprint", "")
+        ) != str(controller_manifest.get("main_ranker_semantic_fingerprint", "")):
+            raise ValueError("v3 bundle does not match the selected v2 tie-break ranker")
+        proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
+        if proposal_sizes != {4, 8, 16}:
+            raise ValueError("v3-full requires the frozen 4/8/16 candidate space")
+    elif v3_bundle is not None:
+        raise ValueError("v3_bundle is only valid with v3-full")
     storage_fp = storage_fingerprint(trace_format)
     split = str(config["split"])
     solver_seeds = configured_solver_seeds(config)
@@ -3628,6 +3819,7 @@ def run_closed_loop_collection(
         "repair_aware_bundle": (
             str(repair_aware_root) if repair_aware_root is not None else None
         ),
+        "v3_bundle": str(v3_root) if v3_root is not None else None,
     }
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
@@ -3637,6 +3829,7 @@ def run_closed_loop_collection(
             "freeze_manifest": bundle.manifest,
             "controller_bundle_manifest": controller_manifest,
             "repair_aware_bundle_manifest": repair_aware_manifest,
+            "v3_bundle_manifest": v3_manifest,
             "controller_implementation": implementation,
         }
     )
@@ -3698,6 +3891,7 @@ def run_closed_loop_collection(
             ),
             "controller_bundle": controller_manifest,
             "stall_guard_config": stall_guard_payload,
+            "v3_bundle": v3_manifest,
             "controller_implementation": implementation,
             "estimate": estimate,
         }
@@ -3727,6 +3921,7 @@ def run_closed_loop_collection(
         ),
         "controller_bundle": controller_manifest,
         "stall_guard_config": stall_guard_payload,
+        "v3_bundle": v3_manifest,
         "controller_implementation": implementation,
     }
     run_path = output_root / "run_config.json"
@@ -3875,6 +4070,7 @@ def run_closed_loop_collection(
                 "repair_aware_bundle": (
                     str(repair_aware_root) if repair_aware_root is not None else None
                 ),
+                "v3_bundle": str(v3_root) if v3_root is not None else None,
                 "proposal_state_verification": (
                     "always" if verification_profile == "audit" else "sampled"
                 ),

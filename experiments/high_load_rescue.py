@@ -15,7 +15,7 @@ from experiments.closed_loop_confirmation import (
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine
-from experiments.repair_aware import adaptive_feature_row
+from experiments.repair_aware import adaptive_feature_row, classify_repair_outcome
 from experiments.repair_collection import (
     _fingerprint,
     _load_dataset_rows,
@@ -28,6 +28,7 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.trace_replay import decision_rows, replay_prefix
+from experiments.stall_guard import repair_structure_fingerprint
 
 
 HIGH_LOAD_RESCUE_SCHEMA = "lns2.high_load_rescue_collection.v1"
@@ -147,6 +148,16 @@ def _trial(
     before_conflicts = int(before["num_of_colliding_pairs"])
     after_conflicts = int(after["num_of_colliding_pairs"])
     low_level = _low_level_delta(before, after)
+    before_repair_fingerprint = repair_structure_fingerprint(before)
+    after_repair_fingerprint = repair_structure_fingerprint(after)
+    repair_outcome = classify_repair_outcome(
+        before_fingerprint=before_repair_fingerprint,
+        after_fingerprint=after_repair_fingerprint,
+        replan_success=bool(metrics.get("replan_success")),
+        conflicts_before=before_conflicts,
+        conflicts_after=after_conflicts,
+        feasible=bool(after.get("feasible")),
+    )
     return {
         "schema": HIGH_LOAD_RESCUE_SCHEMA,
         "split": str(decision["split"]),
@@ -162,6 +173,12 @@ def _trial(
             "conflict_reduction": max(0, before_conflicts - after_conflicts),
             "replan_success": bool(metrics.get("replan_success")),
             "hard_failure": not bool(metrics.get("replan_success")),
+            "repair_outcome": repair_outcome,
+            "before_repair_fingerprint": before_repair_fingerprint,
+            "after_repair_fingerprint": after_repair_fingerprint,
+            "repair_state_changed": (
+                before_repair_fingerprint != after_repair_fingerprint
+            ),
             "feasible": bool(after.get("feasible")),
             "repair_seconds": repair_wall_seconds,
             "pp_replan_seconds": float(metrics.get("pp_replan_seconds", 0.0)),
@@ -250,6 +267,7 @@ def _state_job(job: dict[str, Any]) -> dict[str, Any]:
                 "task_id": str(decision["task_id"]),
                 "agent_count": len(state["agents"]),
                 "actual_size": int(candidate["actual_size"]),
+                "selection_families": list(candidate.get("selection_families", ())),
                 "route": "model",
                 "base_selected": tuple(sorted(map(int, candidate["agents"])))
                 == source_agents,

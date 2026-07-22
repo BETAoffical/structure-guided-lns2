@@ -166,6 +166,11 @@ class PortableScalarModel:
     transform: str
     semantic_fingerprint: str
     native_predictor: Any | None = None
+    declared_feature_count: int | None = None
+
+    @property
+    def source_feature_count(self) -> int:
+        return int(self.declared_feature_count or len(self.feature_names))
 
     @property
     def inference_backend(self) -> str:
@@ -244,7 +249,56 @@ def _connect_native(model: PortableScalarModel) -> PortableScalarModel:
     return model
 
 
-def load_portable_scalar_model(payload: dict[str, Any]) -> PortableScalarModel:
+def compact_portable_scalar_model(
+    model: PortableScalarModel,
+) -> PortableScalarModel:
+    """Project a fitted scalar ensemble onto features used by its split nodes."""
+
+    used_indices = sorted(
+        {
+            int(node["feature_idx"])
+            for tree in model.trees
+            for node in tree
+            if not bool(node["is_leaf"])
+        }
+    )
+    if any(index < 0 or index >= len(model.feature_names) for index in used_indices):
+        raise ValueError("portable scalar model references an invalid feature index")
+    if used_indices == list(range(len(model.feature_names))):
+        return _connect_native(model)
+    compact_index = {
+        source_index: target_index
+        for target_index, source_index in enumerate(used_indices)
+    }
+    compact_trees = []
+    for source_tree in model.trees:
+        output_tree = []
+        for source_node in source_tree:
+            node = dict(source_node)
+            node["feature_idx"] = (
+                0
+                if bool(node["is_leaf"])
+                else compact_index[int(node["feature_idx"])]
+            )
+            output_tree.append(node)
+        compact_trees.append(output_tree)
+    return _connect_native(
+        PortableScalarModel(
+            name=model.name,
+            profile=model.profile,
+            feature_names=[model.feature_names[index] for index in used_indices],
+            baseline=model.baseline,
+            trees=compact_trees,
+            transform=model.transform,
+            semantic_fingerprint=model.semantic_fingerprint,
+            declared_feature_count=model.source_feature_count,
+        )
+    )
+
+
+def load_portable_scalar_model(
+    payload: dict[str, Any], *, compact_features: bool = False
+) -> PortableScalarModel:
     if str(payload.get("schema")) != PORTABLE_SCALAR_MODEL_SCHEMA:
         raise ValueError("unexpected portable scalar model schema")
     transform = str(payload.get("transform"))
@@ -265,16 +319,20 @@ def load_portable_scalar_model(payload: dict[str, Any]) -> PortableScalarModel:
     )
     if str(payload.get("semantic_fingerprint")) != expected:
         raise ValueError("portable scalar model semantic fingerprint mismatch")
-    return _connect_native(
-        PortableScalarModel(
-            name=str(payload["name"]),
-            profile=str(payload["profile"]),
-            feature_names=names,
-            baseline=float(payload["baseline"]),
-            trees=list(payload["trees"]),
-            transform=transform,
-            semantic_fingerprint=expected,
-        )
+    model = PortableScalarModel(
+        name=str(payload["name"]),
+        profile=str(payload["profile"]),
+        feature_names=names,
+        baseline=float(payload["baseline"]),
+        trees=list(payload["trees"]),
+        transform=transform,
+        semantic_fingerprint=expected,
+        declared_feature_count=len(names),
+    )
+    return (
+        compact_portable_scalar_model(model)
+        if compact_features
+        else _connect_native(model)
     )
 
 
@@ -785,6 +843,7 @@ __all__ = [
     "RepairAwareState",
     "adaptive_feature_row",
     "classify_repair_outcome",
+    "compact_portable_scalar_model",
     "guarded_tiebreak_candidate",
     "load_portable_scalar_model",
     "load_repair_aware_bundle",

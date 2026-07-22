@@ -4,6 +4,7 @@ import csv
 import html
 import itertools
 import math
+import random
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -21,12 +22,14 @@ LABELS = {
     "v2-full": "Optimized model (v2)",
     "v2-stall-safe": "Optimized model (v2 stall-safe)",
     "v2-repair-aware": "Optimized model (v2 repair-aware)",
+    "v3-full": "Cost-aware model (v3)",
 }
 CONTROLLER_COLORS = {
     "official_adaptive": "#4c78a8",
     "v2-full": "#f58518",
     "v2-stall-safe": "#54a24b",
     "v2-repair-aware": "#b279a2",
+    "v3-full": "#e45756",
 }
 TIMING_FIELDS = (
     "neighborhood_selection_seconds",
@@ -39,6 +42,7 @@ TIMING_FIELDS = (
     "ranking_inference_seconds",
     "stall_guard_seconds",
     "repair_aware_seconds",
+    "v3_seconds",
     "selection_residual_seconds",
     "pp_replan_seconds",
     "repair_bookkeeping_seconds",
@@ -400,6 +404,7 @@ def _iteration_row(
     proposal = dict(controller_data.get("proposal") or {})
     guard = dict(controller_data.get("stall_guard") or {})
     repair_aware = dict(controller_data.get("repair_aware") or {})
+    v3 = dict(controller_data.get("v3") or {})
     neighborhood = list(metrics.get("neighborhood") or [])
     conflicts_before = int(metrics.get("conflicts_before", 0))
     conflicts_after = int(metrics.get("conflicts_after", conflicts_before))
@@ -464,7 +469,9 @@ def _iteration_row(
         "stall_guard_stagnant_attempt": guard.get("stagnant_attempt"),
         "stall_guard_backoff_triggered": guard.get("backoff_triggered"),
         "stall_guard_fallback_reason": guard.get("fallback_reason"),
-        "repair_outcome": repair_aware.get("repair_outcome"),
+        "repair_outcome": repair_aware.get(
+            "repair_outcome", v3.get("repair_outcome")
+        ),
         "repair_aware_selection_kind": repair_aware.get("selection_kind"),
         "repair_aware_state_anchor_fingerprint": repair_aware.get(
             "state_anchor_fingerprint"
@@ -500,6 +507,16 @@ def _iteration_row(
         "repair_aware_lazy_generation_seconds": float(
             proposal.get("lazy_generation_seconds", 0.0)
         ),
+        "v3_selection_kind": v3.get("selection_kind"),
+        "v3_state_anchor_fingerprint": v3.get("state_anchor_fingerprint"),
+        "v3_effective_candidate_id": v3.get("effective_selected_candidate_id"),
+        "v3_cache_hit": bool(controller_data.get("v3_cache_hit", False)),
+        "v3_no_progress": v3.get("no_progress"),
+        "v3_failed_candidate_count": v3.get("failed_candidate_count_after"),
+        "v3_blacklisted_neighborhood_count": v3.get(
+            "blacklisted_neighborhood_count_after"
+        ),
+        "v3_adaptive_fallback_active": v3.get("adaptive_fallback_active"),
         "low_level_expanded": int(low.get("expanded", 0)),
         "low_level_generated": int(low.get("generated", 0)),
         "low_level_reopened": int(low.get("reopened", 0)),
@@ -538,6 +555,7 @@ def _episode_row(
     budget_low_level = dict(summary.get("budget_final_low_level") or {})
     stall_guard = dict(summary.get("stall_guard") or {})
     repair_aware = dict(summary.get("repair_aware") or {})
+    v3 = dict(summary.get("v3") or {})
     repairable = bool(summary.get("repairable"))
     initial_conflicts = int(summary.get("initial_conflicts", 0))
     fixed_auc = summary.get("fixed_budget_conflict_auc")
@@ -714,6 +732,23 @@ def _episode_row(
         ),
         "repair_aware_longest_unchanged_streak": int(
             repair_aware.get("longest_unchanged_streak", 0)
+        ),
+        "v3_no_progress_count": int(v3.get("no_progress_count", 0)),
+        "v3_hard_failure_count": int(v3.get("hard_failure_count", 0)),
+        "v3_accepted_noop_count": int(v3.get("accepted_noop_count", 0)),
+        "v3_adaptive_fallback_decision_count": int(
+            v3.get("adaptive_fallback_decision_count", 0)
+        ),
+        "v3_adaptive_fallback_fraction": _number(
+            v3.get("adaptive_fallback_fraction")
+        ),
+        "v3_blacklist_addition_count": int(
+            v3.get("blacklist_addition_count", 0)
+        ),
+        "v3_cache_hit_count": int(v3.get("cache_hit_count", 0)),
+        "v3_rescued_state_count": int(v3.get("rescued_state_count", 0)),
+        "v3_longest_unchanged_streak": int(
+            v3.get("longest_unchanged_streak", 0)
         ),
     }
     for name in TIMING_FIELDS:
@@ -1147,6 +1182,25 @@ def _summary_rows(
                 "mean_repair_aware_longest_unchanged_streak": _mean(
                     row.get("repair_aware_longest_unchanged_streak")
                     for row in repairable
+                ),
+                "v3_no_progress_count": sum(
+                    int(row.get("v3_no_progress_count", 0)) for row in repairable
+                ),
+                "v3_adaptive_fallback_decision_count": sum(
+                    int(row.get("v3_adaptive_fallback_decision_count", 0))
+                    for row in repairable
+                ),
+                "v3_cache_hit_count": sum(
+                    int(row.get("v3_cache_hit_count", 0)) for row in repairable
+                ),
+                "v3_rescued_state_count": sum(
+                    int(row.get("v3_rescued_state_count", 0)) for row in repairable
+                ),
+                "mean_v3_adaptive_fallback_fraction": _mean(
+                    row.get("v3_adaptive_fallback_fraction") for row in repairable
+                ),
+                "mean_v3_longest_unchanged_streak": _mean(
+                    row.get("v3_longest_unchanged_streak") for row in repairable
                 ),
                 "conflict_reducing_repair_count": sum(int(row.get("conflict_reducing_repair_count", 0)) for row in repairable),
                 "no_improvement_repair_count": sum(int(row.get("no_improvement_repair_count", 0)) for row in repairable),
@@ -2204,6 +2258,232 @@ def _repair_aware_markdown(
     return "\n".join(lines)
 
 
+def _paired_metric_values(
+    rows: list[dict[str, Any]],
+    *,
+    candidate: str,
+    reference: str,
+    metric: str,
+    common_success_only: bool = False,
+) -> list[tuple[str, float, float]]:
+    result: list[tuple[str, float, float]] = []
+    for row in rows:
+        if common_success_only and not bool(row.get("common_success")):
+            continue
+        if row.get("candidate") == candidate and row.get("reference") == reference:
+            reference_value = row.get(f"reference_{metric}")
+            candidate_value = row.get(f"candidate_{metric}")
+        elif row.get("candidate") == reference and row.get("reference") == candidate:
+            reference_value = row.get(f"candidate_{metric}")
+            candidate_value = row.get(f"reference_{metric}")
+        else:
+            continue
+        if reference_value is None or candidate_value is None:
+            continue
+        result.append(
+            (str(row.get("map_id")), float(reference_value), float(candidate_value))
+        )
+    return result
+
+
+def _map_bootstrap_relative_degradation(
+    values: list[tuple[str, float, float]],
+    *,
+    samples: int = 5000,
+    seed: int = 20260722,
+) -> dict[str, Any]:
+    grouped: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for map_id, reference, candidate in values:
+        grouped[map_id].append((reference, candidate))
+    map_ids = sorted(grouped)
+    if not map_ids:
+        return {
+            "map_count": 0,
+            "pair_count": 0,
+            "observed_relative_degradation": None,
+            "one_sided_95_upper": None,
+        }
+
+    def degradation(selected_maps: list[str]) -> float:
+        selected = [value for map_id in selected_maps for value in grouped[map_id]]
+        reference_mean = statistics.fmean(value[0] for value in selected)
+        candidate_mean = statistics.fmean(value[1] for value in selected)
+        return (candidate_mean - reference_mean) / max(1e-12, reference_mean)
+
+    rng = random.Random(seed)
+    bootstrap = sorted(
+        degradation([rng.choice(map_ids) for _map_id in map_ids])
+        for _ in range(samples)
+    )
+    upper_index = min(len(bootstrap) - 1, math.ceil(0.95 * len(bootstrap)) - 1)
+    return {
+        "map_count": len(map_ids),
+        "pair_count": len(values),
+        "samples": samples,
+        "observed_relative_degradation": degradation(map_ids),
+        "one_sided_95_upper": bootstrap[upper_index],
+    }
+
+
+def _v3_promotion_gate(
+    summaries: list[dict[str, Any]],
+    pairwise: list[dict[str, Any]],
+    *,
+    primary_track: str,
+    validation_passed: bool,
+) -> dict[str, Any]:
+    controllers = {str(row["controller"]) for row in summaries}
+    if "v3-full" not in controllers:
+        return {"applicable": False, "passed": False, "reason": "v3_absent"}
+    all_rows = {
+        (str(row["track"]), str(row["controller"])): row
+        for row in summaries
+        if row.get("group_type") == "all"
+    }
+    v3 = all_rows.get((primary_track, "v3-full"), {})
+    v2 = all_rows.get((primary_track, "v2-full"), {})
+    lns2 = all_rows.get((primary_track, "official_adaptive"), {})
+    fixed_v3 = all_rows.get(("historical", "v3-full"), {})
+    fixed_v2 = all_rows.get(("historical", "v2-full"), {})
+    fixed_available = bool(fixed_v3 and fixed_v2)
+
+    primary_pairs = [row for row in pairwise if row.get("track") == primary_track]
+    auc_bootstrap = {
+        baseline: _map_bootstrap_relative_degradation(
+            _paired_metric_values(
+                primary_pairs,
+                candidate="v3-full",
+                reference=baseline,
+                metric="normalized_wall_clock_conflict_auc",
+            ),
+            seed=20260722 + offset,
+        )
+        for offset, baseline in enumerate(("v2-full", "official_adaptive"))
+    }
+    ttf = {}
+    for baseline in ("v2-full", "official_adaptive"):
+        values = _paired_metric_values(
+            primary_pairs,
+            candidate="v3-full",
+            reference=baseline,
+            metric="restricted_time_to_feasible",
+            common_success_only=True,
+        )
+        ttf[baseline] = {
+            "pair_count": len(values),
+            "reference_mean": _mean(value[1] for value in values),
+            "v3_mean": _mean(value[2] for value in values),
+        }
+
+    def no_higher(left: Any, right: Any, factor: float = 1.0) -> bool:
+        return (
+            left is not None
+            and right is not None
+            and float(left) <= factor * float(right) + 1e-12
+        )
+
+    v3_loops = max(1, int(v3.get("total_repair_iterations", 0)))
+    v2_loops = max(1, int(v2.get("total_repair_iterations", 0)))
+    v3_no_progress = int(v3.get("v3_no_progress_count", 0)) / v3_loops
+    v2_no_improvement = int(v2.get("no_improvement_repair_count", 0)) / v2_loops
+    fallback_fraction = int(
+        v3.get("v3_adaptive_fallback_decision_count", 0)
+    ) / v3_loops
+    v2_ttf = ttf["v2-full"]
+    lns2_ttf = ttf["official_adaptive"]
+    checks = {
+        "validation": bool(validation_passed),
+        "success_not_lower_than_v2_and_lns2": int(v3.get("success_count", -1))
+        >= max(int(v2.get("success_count", 0)), int(lns2.get("success_count", 0))),
+        "mean_wall_auc_not_worse_than_v2": no_higher(
+            v3.get("mean_normalized_wall_clock_conflict_auc"),
+            v2.get("mean_normalized_wall_clock_conflict_auc"),
+        ),
+        "mean_wall_auc_not_worse_than_lns2": no_higher(
+            v3.get("mean_normalized_wall_clock_conflict_auc"),
+            lns2.get("mean_normalized_wall_clock_conflict_auc"),
+        ),
+        "paired_auc_upper_degradation_vs_v2_at_most_2pct": bool(
+            auc_bootstrap["v2-full"]["one_sided_95_upper"] is not None
+            and float(auc_bootstrap["v2-full"]["one_sided_95_upper"]) <= 0.02
+        ),
+        "paired_auc_upper_degradation_vs_lns2_at_most_2pct": bool(
+            auc_bootstrap["official_adaptive"]["one_sided_95_upper"] is not None
+            and float(
+                auc_bootstrap["official_adaptive"]["one_sided_95_upper"]
+            )
+            <= 0.02
+        ),
+        "common_success_ttf_not_slower_than_v2": no_higher(
+            v2_ttf["v3_mean"], v2_ttf["reference_mean"]
+        ),
+        "common_success_ttf_not_over_5pct_slower_than_lns2": no_higher(
+            lns2_ttf["v3_mean"], lns2_ttf["reference_mean"], 1.05
+        ),
+        "fixed_auc_degradation_at_most_2pct": bool(
+            fixed_available
+            and no_higher(
+                fixed_v3.get("mean_normalized_fixed_budget_conflict_auc"),
+                fixed_v2.get("mean_normalized_fixed_budget_conflict_auc"),
+                1.02,
+            )
+        ),
+        "pp_no_progress_rate_reduced": v3_no_progress < v2_no_improvement,
+        "longest_repeated_failure_reduced": bool(
+            v3.get("mean_v3_longest_unchanged_streak") is not None
+            and v2.get("mean_longest_failed_replan_streak") is not None
+            and float(v3["mean_v3_longest_unchanged_streak"])
+            < float(v2["mean_longest_failed_replan_streak"])
+        ),
+        "controller_time_increase_at_most_5pct": no_higher(
+            v3.get("mean_iteration_selection_seconds"),
+            v2.get("mean_iteration_selection_seconds"),
+            1.05,
+        ),
+        "adaptive_fallback_fraction_at_most_5pct": fallback_fraction <= 0.05,
+    }
+    return {
+        "applicable": True,
+        "passed": fixed_available and all(checks.values()),
+        "fixed_track_available": fixed_available,
+        "gates": checks,
+        "auc_map_bootstrap": auc_bootstrap,
+        "common_success_time_to_feasible": ttf,
+        "v3_no_progress_fraction": v3_no_progress,
+        "v2_no_improvement_fraction": v2_no_improvement,
+        "adaptive_fallback_fraction": fallback_fraction,
+        "cache_hit_count": int(v3.get("v3_cache_hit_count", 0)),
+        "rescued_state_count": int(v3.get("v3_rescued_state_count", 0)),
+    }
+
+
+def _v3_markdown(
+    promotion: dict[str, Any], pairwise_summary: list[dict[str, Any]]
+) -> str:
+    lines = [
+        "# v3 cost-aware controller report",
+        "",
+        f"Promotion applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
+        "",
+        "## Promotion gates",
+        "",
+    ]
+    for name, passed in dict(promotion.get("gates") or {}).items():
+        lines.append(f"- `{name}`: `{bool(passed)}`")
+    lines.extend(["", "## Paired summaries", ""])
+    for row in pairwise_summary:
+        if "v3-full" not in str(row.get("pair")):
+            continue
+        lines.append(
+            f"- `{row['track']}` `{row['pair']}`: successes "
+            f"{row['candidate_success_count']} vs {row['reference_success_count']}; "
+            "mean normalized wall-AUC delta "
+            f"{_fmt(row.get('mean_delta_normalized_wall_clock_conflict_auc_candidate_minus_reference'), 6)}."
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def generate_bottleneck_artifacts(
     track_roots: dict[str, dict[str, Path]], output: str | Path
 ) -> dict[str, Any]:
@@ -2245,6 +2525,9 @@ def generate_bottleneck_artifacts(
         row
         for row in episodes
         if str(row.get("controller")) == "v2-repair-aware"
+    ]
+    v3_usage = [
+        row for row in episodes if str(row.get("controller")) == "v3-full"
     ]
     long_checkpoints, long_diagnostics, extension_keys = long_horizon_diagnostics(
         episodes, iterations
@@ -2433,6 +2716,12 @@ def generate_bottleneck_artifacts(
         primary_track=primary_track,
         validation_passed=bool(validation["passed"]),
     )
+    v3_promotion = _v3_promotion_gate(
+        summaries,
+        pairwise,
+        primary_track=primary_track,
+        validation_passed=bool(validation["passed"]),
+    )
 
     _write_csv(output_root / "iteration_timings.csv", iterations)
     _write_csv(output_root / "episode_timing_breakdown.csv", episodes)
@@ -2441,12 +2730,17 @@ def generate_bottleneck_artifacts(
     _write_csv(output_root / "controller_pairwise_summary.csv", pairwise_summary)
     _write_csv(output_root / "stall_guard_usage.csv", guard_usage)
     _write_csv(output_root / "repair_aware_usage.csv", repair_aware_usage)
+    _write_csv(output_root / "v3_usage.csv", v3_usage)
     _write_json(
         output_root / "repair_aware_promotion.json", repair_aware_promotion
     )
     (output_root / "repair_aware_report.md").write_text(
         _repair_aware_markdown(repair_aware_promotion, pairwise_summary),
         encoding="utf-8",
+    )
+    _write_json(output_root / "v3_promotion.json", v3_promotion)
+    (output_root / "v3_report.md").write_text(
+        _v3_markdown(v3_promotion, pairwise_summary), encoding="utf-8"
     )
     _write_csv(
         output_root / "stall_prefix_mismatches.csv",
@@ -2482,6 +2776,7 @@ def generate_bottleneck_artifacts(
         "paired_episode_count": len(paired),
         "wall_clock_sensitivity": sensitivity,
         "repair_aware_promotion": repair_aware_promotion,
+        "v3_promotion": v3_promotion,
         "stall_promotion": stall_promotion,
         "stall_prefix_equivalence": stall_prefix,
         "targeted_stall_recovery": targeted_stall,

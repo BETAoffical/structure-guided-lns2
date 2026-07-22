@@ -208,6 +208,9 @@ class CompactPortablePairwiseModel:
     _base_feature_index: dict[str, int] = field(init=False, repr=False)
     _base_feature_names_tuple: tuple[str, ...] = field(init=False, repr=False)
     _input_feature_indices: list[tuple[str, int]] = field(init=False, repr=False)
+    _dense_projection_cache: dict[tuple[str, ...], tuple[int, ...]] = field(
+        init=False, repr=False, default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         if len(self.base_feature_names) != len(set(self.base_feature_names)):
@@ -253,11 +256,10 @@ class CompactPortablePairwiseModel:
     ) -> list[float] | tuple[float, ...]:
         if "feature_values" in row:
             names = row.get("feature_names", ())
-            if str(row.get("feature_profile")) != self.profile or (
-                names
-                if isinstance(names, tuple)
-                else tuple(map(str, names))
-            ) != self._base_feature_names_tuple:
+            names_tuple = (
+                names if isinstance(names, tuple) else tuple(map(str, names))
+            )
+            if str(row.get("feature_profile")) != self.profile:
                 raise ValueError("dense feature row does not match the compact model")
             raw_values = row["feature_values"]
             dense = (
@@ -265,9 +267,32 @@ class CompactPortablePairwiseModel:
                 if isinstance(raw_values, tuple)
                 else tuple(map(float, raw_values))
             )
-            if len(dense) != len(self.base_feature_names):
+            if len(dense) != len(names_tuple) or len(names_tuple) != len(
+                set(names_tuple)
+            ):
                 raise ValueError("dense feature row has the wrong dimension")
-            return dense
+            if names_tuple == self._base_feature_names_tuple:
+                return dense
+            projection = self._dense_projection_cache.get(names_tuple)
+            if projection is None:
+                source_indices = {
+                    name: index for index, name in enumerate(names_tuple)
+                }
+                missing = [
+                    name
+                    for name in self._base_feature_names_tuple
+                    if name not in source_indices
+                ]
+                if missing:
+                    raise ValueError(
+                        "dense feature row is missing compact model features: "
+                        f"{missing}"
+                    )
+                projection = tuple(
+                    source_indices[name] for name in self._base_feature_names_tuple
+                )
+                self._dense_projection_cache[names_tuple] = projection
+            return tuple(float(dense[index]) for index in projection)
         features = dict(row["features"][self.profile])
         return [float(features.get(name, 0.0)) for name in self.base_feature_names]
 

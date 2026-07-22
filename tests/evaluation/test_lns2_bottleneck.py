@@ -16,6 +16,7 @@ from experiments.lns2_bottleneck import (
     _iteration_row,
     _sensitivity_rows,
     _stall_promotion_gate,
+    _v3_promotion_gate,
     generate_bottleneck_artifacts,
     long_horizon_diagnostics,
     paired_decomposition,
@@ -26,6 +27,7 @@ from experiments.lns2_bottleneck import (
 from scripts.run_lns2_tradeoff_evaluation import (
     _require_native_timing_interface,
     _unsolved_job_keys,
+    _v3_evaluation_approval,
 )
 
 
@@ -235,6 +237,90 @@ def _write_manifest(
 
 
 class Lns2BottleneckTests(unittest.TestCase):
+    def test_v3_promotion_enforces_quality_speed_and_fallback_gates(self) -> None:
+        wall = {
+            "official_adaptive": {
+                "success_count": 6,
+                "mean_normalized_wall_clock_conflict_auc": 0.50,
+                "mean_iteration_selection_seconds": 0.01,
+                "total_repair_iterations": 60,
+                "no_improvement_repair_count": 20,
+                "mean_longest_failed_replan_streak": 4.0,
+            },
+            "v2-full": {
+                "success_count": 6,
+                "mean_normalized_wall_clock_conflict_auc": 0.45,
+                "mean_iteration_selection_seconds": 0.10,
+                "total_repair_iterations": 60,
+                "no_improvement_repair_count": 18,
+                "mean_longest_failed_replan_streak": 3.0,
+            },
+            "v3-full": {
+                "success_count": 6,
+                "mean_normalized_wall_clock_conflict_auc": 0.44,
+                "mean_iteration_selection_seconds": 0.104,
+                "total_repair_iterations": 60,
+                "v3_no_progress_count": 10,
+                "v3_adaptive_fallback_decision_count": 2,
+                "v3_cache_hit_count": 10,
+                "v3_rescued_state_count": 3,
+                "mean_v3_longest_unchanged_streak": 2.0,
+            },
+        }
+        summaries = [
+            {
+                "track": "wall-clock-300",
+                "controller": controller,
+                "group_type": "all",
+                **values,
+            }
+            for controller, values in wall.items()
+        ] + [
+            {
+                "track": "historical",
+                "controller": "v2-full",
+                "group_type": "all",
+                "mean_normalized_fixed_budget_conflict_auc": 0.40,
+            },
+            {
+                "track": "historical",
+                "controller": "v3-full",
+                "group_type": "all",
+                "mean_normalized_fixed_budget_conflict_auc": 0.405,
+            },
+        ]
+        pairwise = []
+        for map_index in range(6):
+            for reference, reference_auc, reference_ttf in (
+                ("v2-full", 0.45, 10.5),
+                ("official_adaptive", 0.50, 10.0),
+            ):
+                pairwise.append(
+                    {
+                        "track": "wall-clock-300",
+                        "candidate": "v3-full",
+                        "reference": reference,
+                        "map_id": f"map-{map_index}",
+                        "common_success": True,
+                        "reference_normalized_wall_clock_conflict_auc": reference_auc,
+                        "candidate_normalized_wall_clock_conflict_auc": 0.44,
+                        "reference_restricted_time_to_feasible": reference_ttf,
+                        "candidate_restricted_time_to_feasible": 10.4,
+                    }
+                )
+        gate = _v3_promotion_gate(
+            summaries,
+            pairwise,
+            primary_track="wall-clock-300",
+            validation_passed=True,
+        )
+        self.assertTrue(gate["passed"], gate)
+        self.assertLessEqual(
+            gate["auc_map_bootstrap"]["v2-full"]["one_sided_95_upper"],
+            0.02,
+        )
+        self.assertLessEqual(gate["adaptive_fallback_fraction"], 0.05)
+
     def test_stall_guard_attempt_limit_and_target_recovery(self) -> None:
         guarded = [
             {
@@ -503,6 +589,27 @@ class Lns2BottleneckTests(unittest.TestCase):
                 _require_native_timing_interface(require_optimized=True),
                 "/tmp/lns2_env.so",
             )
+
+    def test_unpromoted_v3_requires_explicit_diagnostic_and_native_integrity(self) -> None:
+        report = {
+            "decision": "v3_pilot_failed",
+            "pilot_passed": False,
+            "native_available": True,
+            "native_audit_completed": True,
+            "pilot_checks": {
+                "portable_parity": True,
+                "worst_cell": False,
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "v3_pilot_passed"):
+            _v3_evaluation_approval(
+                report, allow_unpromoted_diagnostic=False
+            )
+        approval = _v3_evaluation_approval(
+            report, allow_unpromoted_diagnostic=True
+        )
+        self.assertTrue(approval["unpromoted_diagnostic"])
+        self.assertEqual(approval["failed_pilot_checks"], ["worst_cell"])
 
     def test_sensitivity_selects_a_pair_when_either_controller_is_unsolved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

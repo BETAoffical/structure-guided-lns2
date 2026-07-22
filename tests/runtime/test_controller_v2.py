@@ -38,6 +38,7 @@ from experiments.feature_schema_v2 import (
 from experiments.state_analysis import analyze_state, reconstruct_conflicts
 from experiments.online_feature_engine import OnlineFeatureEngine, _native_batch_function
 from experiments.repair_collection import state_fingerprint
+from experiments.v3_controller import V3ControllerBundle
 from tests.runtime.test_closed_loop_confirmation import make_candidate, make_state
 
 
@@ -83,7 +84,13 @@ class ControllerV2Tests(unittest.TestCase):
     def test_active_controller_modes_are_minimal(self) -> None:
         self.assertEqual(
             CONTROLLER_MODES,
-            ("v1-full", "v2-full", "v2-stall-safe", "v2-repair-aware"),
+            (
+                "v1-full",
+                "v2-full",
+                "v2-stall-safe",
+                "v2-repair-aware",
+                "v3-full",
+            ),
         )
 
     def test_registered_feature_dimensions_and_redundancies(self) -> None:
@@ -184,6 +191,28 @@ class ControllerV2Tests(unittest.TestCase):
             )
             self.assertEqual(new_index, dense_index)
             self.assertEqual(new_scores, dense_scores)
+            superset_names = tuple(PROFILE_FEATURE_NAMES[profile])
+            self.assertTrue(set(compact.base_feature_names) <= set(superset_names))
+            superset_rows = []
+            for row in rows:
+                features = row["features"][profile]
+                superset_rows.append(
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "candidate_key": row["candidate_key"],
+                        "feature_profile": profile,
+                        "feature_names": superset_names,
+                        "feature_values": tuple(
+                            float(features.get(name, 0.0))
+                            for name in superset_names
+                        ),
+                    }
+                )
+            superset_index, superset_scores, _ = score_online_candidates(
+                superset_rows, compact
+            )
+            self.assertEqual(new_index, superset_index)
+            self.assertEqual(new_scores, superset_scores)
 
     def test_python_incremental_engine_matches_reference(self) -> None:
         first = make_state()
@@ -836,6 +865,240 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(
             transitions[1]["controller"]["proposal"]["lazy_candidate_count"], 1
         )
+
+    def test_v3_reuses_state_cache_blacklists_three_neighborhoods_then_falls_back(
+        self,
+    ) -> None:
+        initial = make_state()
+        _refresh_conflicts(initial)
+        solved = copy.deepcopy(initial)
+        solved["conflict_edges"] = []
+        solved["num_of_colliding_pairs"] = 0
+        solved["feasible"] = True
+        solved["done"] = True
+
+        candidate_rows = [
+            {
+                "candidate_id": f"c{index}",
+                "agents": [index],
+                "actual_size": size,
+                "selection_families": [f"target:{size}"],
+                "proposal_count_by_family": {f"target:{size}": 1},
+                "proposal_seeds": [10 + index],
+                "seed_agents": [index],
+            }
+            for index, size in enumerate((4, 8, 16, 8))
+        ]
+        generation_count = 0
+
+        class Environment:
+            def __init__(self) -> None:
+                self.index = 0
+
+            def reset(self, seed: int) -> dict:
+                return copy.deepcopy(initial)
+
+            def step(self, action: dict) -> dict:
+                if self.index < 3:
+                    if action.get("mode") != "explicit_neighborhood" or list(
+                        action.get("agents", [])
+                    ) != [self.index]:
+                        raise AssertionError(f"unexpected v3 model action: {action}")
+                    after = copy.deepcopy(initial)
+                    after["iteration"] = self.index + 1
+                    after["low_level"] = {
+                        **dict(after["low_level"]),
+                        "generated": int(after["low_level"]["generated"])
+                        + self.index
+                        + 1,
+                        "runs": int(after["low_level"]["runs"]) + 1,
+                    }
+                    neighborhood = list(action["agents"])
+                else:
+                    if action.get("mode") != "official":
+                        raise AssertionError(f"unexpected v3 fallback action: {action}")
+                    after = copy.deepcopy(solved)
+                    neighborhood = [0, 1]
+                self.index += 1
+                return {
+                    "observation": after,
+                    "metrics": {
+                        "action_valid": True,
+                        "neighborhood": neighborhood,
+                        "requested_random_seed": int(action.get("random_seed", 0)),
+                        "conflicts_before": int(initial["num_of_colliding_pairs"]),
+                        "conflicts_after": int(after["num_of_colliding_pairs"]),
+                        "replan_success": True,
+                    },
+                    "terminated": bool(after["feasible"]),
+                    "truncated": False,
+                }
+
+        class FeatureEngine:
+            def __init__(self, state: dict, **_kwargs: object) -> None:
+                self.backend = "fixture"
+                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
+                self.last_shadow_rows: dict[str, list[dict]] = {}
+
+            def prepare(self, state: dict, *, changed_agents: list[int]) -> dict:
+                return {"state_analysis_seconds": 0.0}
+
+            def realized_rows(
+                self, candidates: list[dict], *, state_hash: str
+            ) -> tuple[list[dict], dict]:
+                return (
+                    [
+                        {
+                            "candidate_id": candidate["candidate_id"],
+                            "candidate_key": candidate["candidate_id"],
+                            "features": {"realized_dynamic": {}},
+                        }
+                        for candidate in candidates
+                    ],
+                    {"realized_feature_seconds": 0.0},
+                )
+
+        def generated(*_args: object, **_kwargs: object) -> tuple[list[dict], dict]:
+            nonlocal generation_count
+            generation_count += 1
+            return (
+                copy.deepcopy(candidate_rows),
+                {
+                    "proposal_count": len(candidate_rows),
+                    "candidate_count": len(candidate_rows),
+                    "proposal_seconds": 0.0,
+                    "candidate_generation_seconds": 0.0,
+                    "state_check_seconds": 0.0,
+                    "state_check_fingerprint_seconds": 0.0,
+                    "state_check_backend": "fixture",
+                    "full_state_verified": True,
+                    "state_revision": 1,
+                    "backend": "fixture",
+                },
+            )
+
+        main_manifest = json.loads(
+            (
+                PROJECT_ROOT
+                / "artifacts"
+                / "initlns-closed-loop-controller-v2"
+                / "controller_manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        class V3Bundle(V3ControllerBundle):
+            def predict(self, rows: list[dict]) -> dict[str, list[float]]:
+                count = len(rows)
+                return {
+                    "effective_progress_probability": [0.9] * count,
+                    "no_progress_probability": [0.1] * count,
+                    "conflict_reduction": [3.0] * count,
+                    "repair_seconds": [1.0] * count,
+                    "utility": [float(count - index) for index in range(count)],
+                }
+
+        v3_bundle = V3Bundle(
+            models={},
+            thresholds={
+                "effective_probability_tolerance": 0.1,
+                "no_progress_probability_tolerance": 0.1,
+                "conflict_reduction_retention": 0.9,
+            },
+            selection_overhead_seconds=0.1,
+            manifest={
+                "main_ranker_semantic_fingerprint": main_manifest[
+                    "main_ranker_semantic_fingerprint"
+                ],
+                "maximum_distinct_failures": 3,
+            },
+            report={"pilot_passed": True},
+        )
+        config = json.loads(
+            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 1,
+                "output_root": directory,
+                "run_fingerprint": "v3-run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 5,
+                "metric_iteration_budget": 5,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [4, 8, 16],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                "model_registration": config["model_registration"],
+                "controller": "v3-full",
+                "v3_bundle": directory,
+                "feature_backend": "python",
+                "controller_bundle": str(
+                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
+                ),
+                "feature_shadow_validation": False,
+                "proposal_state_verification": "always",
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=Environment(),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    FeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generated,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.score_online_candidates",
+                    side_effect=lambda rows, _model: (
+                        0,
+                        [float(len(rows) - index) for index in range(len(rows))],
+                        1.0,
+                    ),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_v3_controller_bundle",
+                    return_value=v3_bundle,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            self.assertEqual(result["status"], "ok", result.get("error"))
+            events = read_trace_events(Path(directory) / result["trace_file"])
+
+        transitions = [row for row in events if row.get("event") == "transition"]
+        self.assertEqual(generation_count, 1)
+        self.assertEqual(
+            [row["controller"]["route"] for row in transitions],
+            ["model", "model", "model", "official_adaptive"],
+        )
+        self.assertEqual(
+            [row["controller"]["v3"]["repair_outcome"] for row in transitions],
+            ["accepted_noop", "accepted_noop", "accepted_noop", "feasible"],
+        )
+        self.assertEqual(result["summary"]["v3"]["cache_hit_count"], 3)
+        self.assertEqual(result["summary"]["model_decision_count"], 3)
+        self.assertEqual(result["summary"]["official_decision_count"], 1)
 
     def test_v2_stall_safe_backs_off_then_uses_official_fallback(self) -> None:
         initial = make_state()

@@ -7,6 +7,7 @@ from experiments.repair_aware import (
     RepairAwareBundle,
     RepairAwareState,
     classify_repair_outcome,
+    compact_portable_scalar_model,
     guarded_tiebreak_candidate,
     load_repair_aware_config,
 )
@@ -266,6 +267,62 @@ class PortableScalarModelTests(unittest.TestCase):
         self.assertEqual(raw.predict(rows), [-1.0, 1.0])
         self.assertLess(probability.predict(rows)[0], 0.5)
         self.assertGreater(probability.predict(rows)[1], 0.5)
+
+    def test_compact_scalar_model_projects_only_split_features_exactly(self) -> None:
+        tree = [
+            [
+                {
+                    "value": 0.0,
+                    "feature_idx": 2,
+                    "num_threshold": 0.5,
+                    "missing_go_to_left": False,
+                    "left": 1,
+                    "right": 2,
+                    "is_leaf": False,
+                },
+                {
+                    "value": -2.0,
+                    "feature_idx": 0,
+                    "num_threshold": 0.0,
+                    "missing_go_to_left": False,
+                    "left": 0,
+                    "right": 0,
+                    "is_leaf": True,
+                },
+                {
+                    "value": 3.0,
+                    "feature_idx": 0,
+                    "num_threshold": 0.0,
+                    "missing_go_to_left": False,
+                    "left": 0,
+                    "right": 0,
+                    "is_leaf": True,
+                },
+            ]
+        ]
+        rows = [
+            {
+                "feature_profile": "realized_dynamic",
+                "feature_names": ("unused-a", "unused-b", "used"),
+                "feature_values": (100.0, -100.0, value),
+            }
+            for value in (0.0, 1.0)
+        ]
+        source = PortableScalarModel(
+            "raw",
+            "realized_dynamic",
+            ["unused-a", "unused-b", "used"],
+            1.0,
+            tree,
+            "identity",
+            "source-semantic-fingerprint",
+            declared_feature_count=3,
+        )
+        compact = compact_portable_scalar_model(source)
+        self.assertEqual(compact.feature_names, ["used"])
+        self.assertEqual(compact.source_feature_count, 3)
+        self.assertEqual(compact.semantic_fingerprint, source.semantic_fingerprint)
+        self.assertEqual(compact.predict(rows), source.predict(rows))
 
 
 if __name__ == "__main__":
