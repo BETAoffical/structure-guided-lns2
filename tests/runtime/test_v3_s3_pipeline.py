@@ -49,6 +49,7 @@ from experiments.v3_s3_training import (
     HGB_PARAMETERS,
     _baseline_metrics,
     _fit_target_model,
+    _normalize_prediction_values,
     _portable_payload,
     _runtime_prefix_targets,
     _runtime_reachable_steps,
@@ -91,6 +92,22 @@ class _PythonPortableTreeEnsemble:
 
 
 class V3S3PipelineTest(unittest.TestCase):
+    def test_probability_export_parity_uses_runtime_clamping(self) -> None:
+        self.assertEqual(
+            _normalize_prediction_values(
+                "step1_no_progress_probability",
+                (-0.2, 0.4, 1.3),
+            ),
+            [0.0, 0.4, 1.0],
+        )
+        self.assertEqual(
+            _normalize_prediction_values(
+                "sequence_net_conflict_reduction",
+                (-2.0, 3.0),
+            ),
+            [-2.0, 3.0],
+        )
+
     @staticmethod
     def _write_complete_collection(root: Path) -> None:
         collection = root / "collection"

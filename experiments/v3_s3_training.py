@@ -329,6 +329,19 @@ def _is_probability_target(name: str) -> bool:
     return str(name).endswith("_probability")
 
 
+def _normalize_prediction_values(
+    name: str, values: Any
+) -> list[float]:
+    normalized = list(map(float, values))
+    if _is_probability_target(name):
+        return [min(1.0, max(0.0, value)) for value in normalized]
+    if str(name).startswith("step") and str(name).endswith(
+        "conflict_reduction"
+    ):
+        return [max(0.0, value) for value in normalized]
+    return normalized
+
+
 def _fit_target_model(
     name: str,
     values: Any,
@@ -415,11 +428,9 @@ def _predict_models(
     )
     result = {}
     for name, estimator in models.items():
-        predicted = list(map(float, estimator.predict(values)))
-        if _is_probability_target(name):
-            predicted = [min(1.0, max(0.0, value)) for value in predicted]
-        if name.startswith("step") and name.endswith("conflict_reduction"):
-            predicted = [max(0.0, float(value)) for value in predicted]
+        predicted = _normalize_prediction_values(
+            name, estimator.predict(values)
+        )
         result[name] = list(map(float, predicted))
         if name.endswith("log_total_seconds"):
             step = name.split("_", 1)[0]
@@ -1039,7 +1050,9 @@ def _export_family(
         _write_json(path, payload)
         portable = load_portable_scalar_model(payload)
         python_portable: PortableScalarModel = replace(portable, native_predictor=None)
-        values = list(map(float, python_portable.predict(dense)))
+        values = _normalize_prediction_values(
+            name, python_portable.predict(dense)
+        )
         expected = reference[name]
         delta = max(
             (abs(float(left) - float(right)) for left, right in zip(values, expected)),
@@ -1801,7 +1814,9 @@ def finalize_v3_s3_native_audit(
         for _repeat in range(3):
             started = time.perf_counter()
             predicted = {
-                name: list(map(float, model.predict(runtime_rows)))
+                name: _normalize_prediction_values(
+                    name, model.predict(runtime_rows)
+                )
                 for name, model in models.items()
             }
             for step in range(1, S3_HORIZON + 1):
