@@ -915,16 +915,21 @@ def main() -> int:
             if isinstance(report, dict)
             else {}
         )
+        completed_states = collection.get(
+            "completed_state_count",
+            dict(report).get("completed_state_count"),
+        )
+        if completed_states is None and training:
+            completed_states = int(
+                dict(training).get("training_state_count", 0)
+            ) + int(dict(training).get("diagnostic_state_count", 0))
         console_report = {
             "schema": "lns2.v3_s3_cli_summary.v1",
             "mode": "sequence-pilot",
             "stage": arguments.stage,
             "output": str(output),
             "complete": bool(dict(report).get("complete", True)),
-            "completed_states": collection.get(
-                "completed_state_count",
-                dict(report).get("completed_state_count"),
-            ),
+            "completed_states": completed_states,
             "error_states": collection.get(
                 "error_state_count",
                 dict(report).get("error_state_count", 0),
