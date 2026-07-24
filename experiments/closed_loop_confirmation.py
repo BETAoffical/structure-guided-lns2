@@ -43,7 +43,11 @@ from experiments.compact_controller_model import (
     compact_runtime_model,
     load_controller_bundle,
 )
-from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
+from experiments.feature_schema_v2 import (
+    FEATURE_SCHEMA_ID,
+    FEATURE_SCHEMA_SHA256,
+    PROFILE_FEATURE_NAMES,
+)
 from experiments.state_analysis import (
     StaticGridAnalysis,
     analyze_state,
@@ -98,6 +102,7 @@ from experiments.repair_aware import (
     RepairAwareConfig,
     RepairAwareState,
     adaptive_feature_row,
+    classify_repair_outcome,
     load_repair_aware_bundle,
     load_repair_aware_config,
 )
@@ -106,6 +111,15 @@ from experiments.v3_controller import (
     V3ControllerBundle,
     V3ControllerState,
     load_v3_controller_bundle,
+)
+from experiments.v3_s3 import (
+    V3_S3_BUNDLE_SCHEMA,
+    V3_S3_FEATURE_SCHEMA_ID,
+    V3_S3_FEATURE_SCHEMA_SHA256,
+    V3S3Bundle,
+    V3S3ControllerState,
+    load_v3_s3_bundle,
+    s3_temporal_context,
 )
 
 
@@ -122,6 +136,7 @@ CONTROLLER_MODES = (
     "v2-repair-aware",
     "v3-full",
     "v3-h3",
+    "v3-s3",
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
@@ -131,6 +146,9 @@ REPAIR_TIMING_SCHEMA = "lns2.repair_timing.v1"
 DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_REPAIR_AWARE_BUNDLE = "build/initlns-repair-aware-controller-v1"
 DEFAULT_V3_BUNDLE = "build/initlns-v3-pilot-v1/controller"
+DEFAULT_V3_S3_BUNDLE = (
+    "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller"
+)
 CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
@@ -146,6 +164,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/stall_guard.py",
     "experiments/repair_aware.py",
     "experiments/v3_controller.py",
+    "experiments/v3_s3.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
     "src/online_features.cpp",
@@ -1756,6 +1775,24 @@ def validate_closed_loop_trace(
                     "feasible",
                 }:
                     raise ClosedLoopTraceError("v3 transition has an invalid outcome")
+            if str(controller.get("controller_mode")) == "v3-s3":
+                v3_s3 = controller.get("v3_s3")
+                if not isinstance(v3_s3, dict):
+                    raise ClosedLoopTraceError(
+                        "v3-S3 transition is missing controller diagnostics"
+                    )
+                if str(v3_s3.get("route")) != "v3-s3" or route != "model":
+                    raise ClosedLoopTraceError("v3-S3 route mismatch")
+                if str(v3_s3.get("repair_outcome")) not in {
+                    "hard_failure",
+                    "accepted_noop",
+                    "state_changed_no_reduction",
+                    "conflict_reduced",
+                    "feasible",
+                }:
+                    raise ClosedLoopTraceError(
+                        "v3-S3 transition has an invalid outcome"
+                    )
             if previous_route is not None and previous_route != route:
                 route_switch_count += 1
             previous_route = route
@@ -2006,6 +2043,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     repair_aware_config: RepairAwareConfig | None = None
     repair_aware_bundle: RepairAwareBundle | None = None
     v3_bundle: V3ControllerBundle | None = None
+    v3_s3_bundle: V3S3Bundle | None = None
     if controller_mode == "v2-stall-safe":
         raw_stall_guard = job.get("stall_guard_config")
         if raw_stall_guard is None:
@@ -2029,6 +2067,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("v3-h3 requires a Horizon-3 controller bundle")
         if controller_mode == "v3-full" and v3_bundle.schema == V3_H3_BUNDLE_SCHEMA:
             raise ValueError("v3-full cannot load a Horizon-3 controller bundle")
+    if controller_mode == "v3-s3":
+        raw_v3_s3_bundle = job.get("v3_s3_bundle")
+        if raw_v3_s3_bundle is None:
+            raise ValueError("v3-s3 requires a frozen v3-S3 bundle")
+        v3_s3_bundle = load_v3_s3_bundle(raw_v3_s3_bundle)
+        if str(v3_s3_bundle.manifest.get("schema")) != V3_S3_BUNDLE_SCHEMA:
+            raise ValueError("v3-s3 requires a sequence-aware controller bundle")
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     shadow_models: dict[str, Any] = {}
@@ -2176,7 +2221,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             required_model_features = (
                 set(runtime_models[policy].base_feature_names)
-                if policy in LEARNED_POLICIES
+                if policy in LEARNED_POLICIES and v3_s3_bundle is None
                 else set()
             )
             if repair_aware_bundle is not None and policy == "realized_dynamic":
@@ -2186,6 +2231,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     required_model_features.update(auxiliary_model.feature_names)
             if v3_bundle is not None and policy == "realized_dynamic":
                 required_model_features.update(v3_bundle.required_feature_names)
+            if v3_s3_bundle is not None and policy == "realized_dynamic":
+                required_model_features.update(
+                    set(v3_s3_bundle.required_feature_names)
+                    & set(PROFILE_FEATURE_NAMES["realized_dynamic"])
+                )
             def make_feature_engine(current_state: dict[str, Any]) -> OnlineFeatureEngine:
                 return OnlineFeatureEngine(
                     current_state,
@@ -2230,7 +2280,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 and policy == "realized_dynamic"
                 else None
             )
+            v3_s3_state = (
+                V3S3ControllerState(v3_s3_bundle)
+                if v3_s3_bundle is not None
+                and controller_mode == "v3-s3"
+                and policy == "realized_dynamic"
+                else None
+            )
+            v3_s3_history: list[dict[str, Any]] = []
             stateful_cache: dict[str, Any] | None = None
+            controller_stalled = False
             while not bool(state["done"]) and (
                 max_decisions <= 0 or len(conflicts) - 1 < max_decisions
             ):
@@ -2248,7 +2307,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before_hash = state_fingerprint(before)
                 before_repair_hash = (
                     repair_structure_fingerprint(before)
-                    if repair_aware is not None or v3_state is not None
+                    if (
+                        repair_aware is not None
+                        or v3_state is not None
+                        or v3_s3_state is not None
+                    )
                     else before_hash
                 )
                 before_fingerprint_seconds = (
@@ -2285,12 +2348,33 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                 else:
                     proposal_started = time.perf_counter()
+                    effective_proposal = dict(job["proposal"])
+                    if v3_s3_state is not None:
+                        generation_request = (
+                            v3_s3_state.candidate_generation_request()
+                        )
+                        if generation_request["mode"] == "restricted":
+                            effective_proposal.update(
+                                {
+                                    "heuristics": list(
+                                        generation_request["heuristics"]
+                                    ),
+                                    "neighborhood_sizes": list(
+                                        generation_request["neighborhood_sizes"]
+                                    ),
+                                    "candidates_per_family": int(
+                                        generation_request[
+                                            "candidates_per_family"
+                                        ]
+                                    ),
+                                }
+                            )
                     cache_key = (
                         before_repair_hash,
-                        _fingerprint(job["proposal"]),
+                        _fingerprint(effective_proposal),
                         int(solver_seed),
                     )
-                    stateful_controller = v3_state or repair_aware
+                    stateful_controller = v3_s3_state or v3_state or repair_aware
                     refresh_cache = (
                         repair_aware.consume_refresh()
                         if repair_aware is not None
@@ -2326,7 +2410,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "candidate_generation_seconds": 0.0,
                             "state_check_seconds": 0.0,
                             "state_check_fingerprint_seconds": 0.0,
-                            "backend": "repair-aware-cache",
+                            "backend": (
+                                "v3-s3-cache"
+                                if v3_s3_state is not None
+                                else "v3-cache"
+                                if v3_state is not None
+                                else "repair-aware-cache"
+                            ),
                             "state_check_backend": "cached-state-fingerprint",
                             "full_state_verified": False,
                             "repair_aware_cache_hit": True,
@@ -2350,7 +2440,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             task_id=str(row["task_id"]),
                             solver_seed=solver_seed,
                             decision_index=decision_index,
-                            proposal_config=job["proposal"],
+                            proposal_config=effective_proposal,
                             state_hash=before_hash,
                             verify_full_state=verify_full_state,
                             proposal_backend=controller_runtime,
@@ -2429,11 +2519,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     )
                                 )
                             )
-                        inference_started = time.perf_counter()
-                        selected_local_index, scores, margin = score_online_candidates(
-                            candidate_rows, runtime_models[policy]
-                        )
-                        inference_seconds = time.perf_counter() - inference_started
+                        if v3_s3_state is not None:
+                            selected_local_index = 0
+                            scores = [0.0] * len(candidate_rows)
+                            margin = 0.0
+                            inference_seconds = 0.0
+                        else:
+                            inference_started = time.perf_counter()
+                            selected_local_index, scores, margin = (
+                                score_online_candidates(
+                                    candidate_rows, runtime_models[policy]
+                                )
+                            )
+                            inference_seconds = (
+                                time.perf_counter() - inference_started
+                            )
                         if stateful_controller is not None:
                             stateful_cache = {
                                 "key": cache_key,
@@ -2697,12 +2797,39 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         selected_local_index = v3_selected_index
                         controller["v3"] = v3_diagnostic
                         controller_totals["v3_seconds"] += v3_seconds
-                    base_diagnostic = feature_range_diagnostic(
-                        candidate_rows[base_selected_local_index],
-                        policy,
-                        runtime_ranges[policy],
+                    v3_s3_seconds = 0.0
+                    if v3_s3_state is not None:
+                        v3_s3_select_started = time.perf_counter()
+                        v3_s3_selected_index, v3_s3_diagnostic = (
+                            v3_s3_state.select(
+                                candidates,
+                                candidate_rows,
+                                temporal_context=s3_temporal_context(
+                                    v3_s3_history, int(row["agent_count"])
+                                ),
+                                before_fingerprint=before_repair_hash,
+                                agent_count=int(row["agent_count"]),
+                            )
+                        )
+                        v3_s3_seconds = (
+                            time.perf_counter() - v3_s3_select_started
+                        )
+                        selected_local_index = v3_s3_selected_index
+                        controller["v3_s3"] = v3_s3_diagnostic
+                        controller_totals["v3_s3_seconds"] += v3_s3_seconds
+                    base_diagnostic = (
+                        None
+                        if v3_s3_bundle is not None
+                        else feature_range_diagnostic(
+                            candidate_rows[base_selected_local_index],
+                            policy,
+                            runtime_ranges[policy],
+                        )
                     )
                     if selected_local_index is None:
+                        if v3_s3_state is not None:
+                            controller_stalled = True
+                            break
                         if (
                             stall_guard is None
                             and repair_aware is None
@@ -2785,7 +2912,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "retained": local_index is not None,
                                 "score": (
                                     scores[local_index]
-                                    if local_index is not None
+                                    if (
+                                        local_index is not None
+                                        and v3_s3_bundle is None
+                                    )
                                     else None
                                 ),
                                 "feature_out_of_range_fraction": (
@@ -2824,7 +2954,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + inference_seconds
                         + guard_seconds
                         + repair_aware_seconds
-                        + v3_seconds,
+                        + v3_seconds
+                        + v3_s3_seconds,
                     )
                     measured_selection_stages = (
                         candidate_generation_seconds
@@ -2835,6 +2966,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + guard_seconds
                         + repair_aware_seconds
                         + v3_seconds
+                        + v3_s3_seconds
                     )
                     controller.update(
                         {
@@ -2849,23 +2981,32 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 if feature_engine is not None
                                 else "reference-v1"
                             ),
-                            "inference_backend": getattr(
-                                runtime_models[policy],
-                                "inference_backend",
-                                (
-                                    "native-portable-tree"
-                                    if getattr(
-                                        runtime_models[policy],
-                                        "native_predictor",
-                                        None,
-                                    )
-                                    is not None
-                                    else "python-portable-tree"
-                                ),
+                            "inference_backend": (
+                                ",".join(v3_s3_bundle.inference_backends)
+                                if v3_s3_bundle is not None
+                                else getattr(
+                                    runtime_models[policy],
+                                    "inference_backend",
+                                    (
+                                        "native-portable-tree"
+                                        if getattr(
+                                            runtime_models[policy],
+                                            "native_predictor",
+                                            None,
+                                        )
+                                        is not None
+                                        else "python-portable-tree"
+                                    ),
+                                )
                             ),
                             "v3_inference_backends": (
                                 list(v3_bundle.inference_backends)
                                 if v3_bundle is not None
+                                else None
+                            ),
+                            "v3_s3_inference_backends": (
+                                list(v3_s3_bundle.inference_backends)
+                                if v3_s3_bundle is not None
                                 else None
                             ),
                             "candidate_pool": candidate_pool,
@@ -2880,15 +3021,30 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             ),
                             "selected_score": (
                                 scores[selected_local_index]
-                                if selected_local_index is not None
+                                if (
+                                    selected_local_index is not None
+                                    and v3_s3_bundle is None
+                                )
                                 else None
                             ),
-                            "base_selected_candidate_id": candidates[
-                                retained_indices[base_selected_local_index]
-                            ]["candidate_id"],
-                            "base_selected_score": scores[base_selected_local_index],
+                            "base_selected_candidate_id": (
+                                candidates[
+                                    retained_indices[
+                                        base_selected_local_index
+                                    ]
+                                ]["candidate_id"]
+                                if v3_s3_bundle is None
+                                else None
+                            ),
+                            "base_selected_score": (
+                                scores[base_selected_local_index]
+                                if v3_s3_bundle is None
+                                else None
+                            ),
                             "base_selected_feature_range": base_diagnostic,
-                            "score_margin": margin,
+                            "score_margin": (
+                                margin if v3_s3_bundle is None else None
+                            ),
                             "selected_feature_range": diagnostic,
                             "feature_seconds": feature_seconds,
                             "inference_seconds": inference_seconds,
@@ -2912,8 +3068,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "stall_guard_seconds": guard_seconds,
                             "repair_aware_seconds": repair_aware_seconds,
                             "v3_seconds": v3_seconds,
+                            "v3_s3_seconds": v3_s3_seconds,
                             "repair_aware_cache_hit": cache_hit,
                             "v3_cache_hit": cache_hit and v3_state is not None,
+                            "v3_s3_cache_hit": (
+                                cache_hit and v3_s3_state is not None
+                            ),
                             "selection_residual_seconds": max(
                                 0.0,
                                 controller_seconds_before_repair
@@ -2987,6 +3147,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         stall_guard is not None
                         or repair_aware is not None
                         or v3_state is not None
+                        or v3_s3_state is not None
                     )
                     and policy == "realized_dynamic"
                 ):
@@ -3167,7 +3328,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 after_hash = state_fingerprint(state)
                 after_repair_hash = (
                     repair_structure_fingerprint(state)
-                    if repair_aware is not None or v3_state is not None
+                    if (
+                        repair_aware is not None
+                        or v3_state is not None
+                        or v3_s3_state is not None
+                    )
                     else after_hash
                 )
                 state_fingerprint_seconds = before_fingerprint_seconds + (
@@ -3249,6 +3414,61 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller.get("v3_seconds", 0.0)
                     ) + observe_seconds
                     controller_totals["v3_seconds"] += observe_seconds
+                if v3_s3_state is not None:
+                    v3_s3_observe_started = time.perf_counter()
+                    repair_outcome = classify_repair_outcome(
+                        before_fingerprint=before_repair_hash,
+                        after_fingerprint=after_repair_hash,
+                        replan_success=bool(metrics.get("replan_success")),
+                        conflicts_before=int(before["num_of_colliding_pairs"]),
+                        conflicts_after=int(state["num_of_colliding_pairs"]),
+                        feasible=bool(state.get("feasible")),
+                    )
+                    conflict_reduction = max(
+                        0,
+                        int(before["num_of_colliding_pairs"])
+                        - int(state["num_of_colliding_pairs"]),
+                    )
+                    continuation_expected = v3_s3_state.observe(
+                        before_fingerprint=before_repair_hash,
+                        after_fingerprint=after_repair_hash,
+                        repair_outcome=repair_outcome,
+                        conflict_reduction=float(conflict_reduction),
+                        total_seconds=float(
+                            controller_before_repair_seconds
+                            + repair_wall_seconds
+                        ),
+                        feasible=bool(state.get("feasible")),
+                    )
+                    v3_s3_history.append(
+                        {
+                            "conflict_reduction": float(conflict_reduction),
+                            "repair_seconds": float(repair_wall_seconds),
+                            "state_changed": (
+                                before_repair_hash != after_repair_hash
+                            ),
+                            "no_progress": repair_outcome
+                            in {"hard_failure", "accepted_noop"},
+                            "neighborhood_size": len(actual),
+                        }
+                    )
+                    observe_seconds = (
+                        time.perf_counter() - v3_s3_observe_started
+                    )
+                    controller["v3_s3"] = {
+                        **dict(controller.get("v3_s3") or {}),
+                        "repair_outcome": repair_outcome,
+                        "continuation_expected": bool(
+                            continuation_expected
+                        ),
+                        "state_unchanged": (
+                            before_repair_hash == after_repair_hash
+                        ),
+                    }
+                    controller["v3_s3_seconds"] = float(
+                        controller.get("v3_s3_seconds", 0.0)
+                    ) + observe_seconds
+                    controller_totals["v3_s3_seconds"] += observe_seconds
                 transition_timings = {
                     "pre_step_orchestration_seconds": pre_step_orchestration_seconds,
                     "controller_before_repair_seconds": controller_before_repair_seconds,
@@ -3280,6 +3500,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller.get("repair_aware_seconds", 0.0)
                     ),
                     "v3_seconds": float(controller.get("v3_seconds", 0.0)),
+                    "v3_s3_seconds": float(
+                        controller.get("v3_s3_seconds", 0.0)
+                    ),
                     "selection_residual_seconds": float(
                         controller.get("selection_residual_seconds", 0.0)
                     ),
@@ -3389,6 +3612,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             if success:
                 stop_reason = "success"
+            elif controller_stalled:
+                stop_reason = "controller_stalled"
             elif repair_limit_reached:
                 stop_reason = "repair_limit"
             elif external_timeout or bool(state["done"]):
@@ -3403,6 +3628,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     stall_guard is not None
                     or repair_aware is not None
                     or v3_state is not None
+                    or v3_s3_state is not None
                 )
                 and policy == "realized_dynamic"
                 and model_decisions + official_decisions != len(conflicts) - 1
@@ -3504,6 +3730,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         ),
                     }
                     if v3_state is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "v3_s3": (
+                    {
+                        **v3_s3_state.summary(),
+                        "combined_runtime_feature_count": len(
+                            required_model_features
+                        ),
+                        "history_length": len(v3_s3_history),
+                    }
+                    if v3_s3_state is not None
+                    and policy == "realized_dynamic"
                     else None
                 ),
                 "candidate_reduction_fraction": (
@@ -3728,6 +3966,7 @@ def run_closed_loop_collection(
     repair_aware_config: str | Path | dict[str, Any] | None = None,
     repair_aware_bundle: str | Path | None = None,
     v3_bundle: str | Path | None = None,
+    v3_s3_bundle: str | Path | None = None,
     job_keys: set[tuple[str, int]] | None = None,
     cohort_job_keys: set[tuple[str, int]] | None = None,
     wall_time_budget_seconds: float | None = None,
@@ -3765,6 +4004,8 @@ def run_closed_loop_collection(
     repair_aware_manifest: dict[str, Any] | None = None
     v3_root: Path | None = None
     v3_manifest: dict[str, Any] | None = None
+    v3_s3_root: Path | None = None
+    v3_s3_manifest: dict[str, Any] | None = None
     if controller_mode == "v2-stall-safe":
         if stall_guard_config is None:
             raise ValueError("v2-stall-safe requires --stall-guard-config")
@@ -3822,6 +4063,24 @@ def run_closed_loop_collection(
             raise ValueError(f"{controller_mode} requires the frozen 4/8/16 candidate space")
     elif v3_bundle is not None:
         raise ValueError("v3_bundle is only valid with v3-full or v3-h3")
+    if controller_mode == "v3-s3":
+        v3_s3_root = Path(
+            str(v3_s3_bundle or DEFAULT_V3_S3_BUNDLE)
+        )
+        if not v3_s3_root.is_absolute():
+            v3_s3_root = project_root / v3_s3_root
+        v3_s3_root = v3_s3_root.resolve()
+        loaded_v3_s3 = load_v3_s3_bundle(v3_s3_root)
+        v3_s3_manifest = loaded_v3_s3.manifest
+        if not bool(v3_s3_manifest.get("native_audit_completed")):
+            raise ValueError("v3-s3 requires a completed native audit")
+        proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
+        if proposal_sizes != {4, 8, 16}:
+            raise ValueError(
+                "v3-s3 requires the frozen 4/8/16 candidate space"
+            )
+    elif v3_s3_bundle is not None:
+        raise ValueError("v3_s3_bundle is only valid with v3-s3")
     storage_fp = storage_fingerprint(trace_format)
     split = str(config["split"])
     solver_seeds = configured_solver_seeds(config)
@@ -3922,6 +4181,9 @@ def run_closed_loop_collection(
             str(repair_aware_root) if repair_aware_root is not None else None
         ),
         "v3_bundle": str(v3_root) if v3_root is not None else None,
+        "v3_s3_bundle": (
+            str(v3_s3_root) if v3_s3_root is not None else None
+        ),
     }
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
@@ -3932,6 +4194,7 @@ def run_closed_loop_collection(
             "controller_bundle_manifest": controller_manifest,
             "repair_aware_bundle_manifest": repair_aware_manifest,
             "v3_bundle_manifest": v3_manifest,
+            "v3_s3_bundle_manifest": v3_s3_manifest,
             "controller_implementation": implementation,
         }
     )
@@ -3986,14 +4249,23 @@ def run_closed_loop_collection(
             "controller_runtime": controller_runtime,
             "verification_profile": verification_profile,
             "feature_schema_id": (
-                FEATURE_SCHEMA_ID if controller_mode != "v1-full" else None
+                V3_S3_FEATURE_SCHEMA_ID
+                if controller_mode == "v3-s3"
+                else FEATURE_SCHEMA_ID
+                if controller_mode != "v1-full"
+                else None
             ),
             "feature_schema_sha256": (
-                FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
+                V3_S3_FEATURE_SCHEMA_SHA256
+                if controller_mode == "v3-s3"
+                else FEATURE_SCHEMA_SHA256
+                if controller_mode != "v1-full"
+                else None
             ),
             "controller_bundle": controller_manifest,
             "stall_guard_config": stall_guard_payload,
             "v3_bundle": v3_manifest,
+            "v3_s3_bundle": v3_s3_manifest,
             "controller_implementation": implementation,
             "estimate": estimate,
         }
@@ -4016,14 +4288,23 @@ def run_closed_loop_collection(
         "controller_runtime": controller_runtime,
         "verification_profile": verification_profile,
         "feature_schema_id": (
-            FEATURE_SCHEMA_ID if controller_mode != "v1-full" else None
+            V3_S3_FEATURE_SCHEMA_ID
+            if controller_mode == "v3-s3"
+            else FEATURE_SCHEMA_ID
+            if controller_mode != "v1-full"
+            else None
         ),
         "feature_schema_sha256": (
-            FEATURE_SCHEMA_SHA256 if controller_mode != "v1-full" else None
+            V3_S3_FEATURE_SCHEMA_SHA256
+            if controller_mode == "v3-s3"
+            else FEATURE_SCHEMA_SHA256
+            if controller_mode != "v1-full"
+            else None
         ),
         "controller_bundle": controller_manifest,
         "stall_guard_config": stall_guard_payload,
         "v3_bundle": v3_manifest,
+        "v3_s3_bundle": v3_s3_manifest,
         "controller_implementation": implementation,
     }
     run_path = output_root / "run_config.json"
@@ -4208,6 +4489,9 @@ def run_closed_loop_collection(
                     str(repair_aware_root) if repair_aware_root is not None else None
                 ),
                 "v3_bundle": str(v3_root) if v3_root is not None else None,
+                "v3_s3_bundle": (
+                    str(v3_s3_root) if v3_s3_root is not None else None
+                ),
                 "proposal_state_verification": (
                     "always" if verification_profile == "audit" else "sampled"
                 ),

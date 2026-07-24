@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -84,6 +85,42 @@ S3_TEMPORAL_FEATURE_NAMES = (
     "history.state_change_rate3",
     "history.previous_size_ratio_agents",
 )
+
+
+def s3_temporal_context(
+    history: list[dict[str, Any]], agent_count: int
+) -> dict[str, float]:
+    """Summarize only information available before the next repair decision."""
+
+    recent = history[-3:]
+    reductions = [float(row["conflict_reduction"]) for row in recent]
+    seconds = [float(row["repair_seconds"]) for row in recent]
+    no_progress_length = 0
+    for row in reversed(history):
+        if not bool(row["no_progress"]):
+            break
+        no_progress_length += 1
+    previous_size = int(history[-1]["neighborhood_size"]) if history else 0
+    return {
+        "history.available_steps": float(len(recent)),
+        "history.recent_no_progress_length": float(no_progress_length),
+        "history.last_conflict_reduction": reductions[-1] if reductions else 0.0,
+        "history.mean3_conflict_reduction": (
+            statistics.fmean(reductions) if reductions else 0.0
+        ),
+        "history.last_repair_seconds": seconds[-1] if seconds else 0.0,
+        "history.mean3_repair_seconds": (
+            statistics.fmean(seconds) if seconds else 0.0
+        ),
+        "history.state_change_rate3": (
+            statistics.fmean(float(row["state_changed"]) for row in recent)
+            if recent
+            else 0.0
+        ),
+        "history.previous_size_ratio_agents": (
+            float(previous_size) / max(1, int(agent_count))
+        ),
+    }
 
 
 def _template_feature_names(step: int) -> tuple[str, ...]:
@@ -591,6 +628,7 @@ class V3S3ControllerState:
         self.deviation_replan_count = 0
         self.stalled_no_candidate_count = 0
         self.risk_relaxed_count = 0
+        self.cache_hit_count = 0
 
     @property
     def continuation_template(self) -> S3ActionTemplate | None:
@@ -622,6 +660,9 @@ class V3S3ControllerState:
             "candidates_per_family": 2,
             "template": template.payload(),
         }
+
+    def note_cache_hit(self) -> None:
+        self.cache_hit_count += 1
 
     def _continuation_cell(self) -> dict[str, float]:
         if self.pending_step is None or self.pending_agent_count is None:
@@ -720,7 +761,11 @@ class V3S3ControllerState:
                     temporal_context,
                     templates,
                     agent_count=int(resolved_agent_count),
-                    feature_names=self.bundle.feature_names,
+                    feature_names=getattr(
+                        self.bundle,
+                        "required_feature_names",
+                        self.bundle.feature_names,
+                    ),
                 )
             )
             active_sequences.append(templates)
@@ -886,6 +931,7 @@ class V3S3ControllerState:
             "deviation_replan_count": self.deviation_replan_count,
             "stalled_no_candidate_count": self.stalled_no_candidate_count,
             "risk_relaxed_count": self.risk_relaxed_count,
+            "cache_hit_count": self.cache_hit_count,
             "v2_call_count": 0,
             "adaptive_call_count": 0,
             "blacklisted_neighborhood_count": len(self.blacklisted_neighborhoods),
@@ -910,6 +956,7 @@ __all__ = [
     "load_v3_s3_bundle",
     "rank_s3_sequences",
     "registered_runtime_sequences",
+    "s3_temporal_context",
     "sequence_feature_row",
     "sequence_id",
     "v3_s3_feature_schema_manifest",

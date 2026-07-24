@@ -91,6 +91,7 @@ class ControllerV2Tests(unittest.TestCase):
                 "v2-repair-aware",
                 "v3-full",
                 "v3-h3",
+                "v3-s3",
             ),
         )
 

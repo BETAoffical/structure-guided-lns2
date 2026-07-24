@@ -260,6 +260,11 @@ class S3SelectionTests(unittest.TestCase):
         self.assertEqual(diagnostic["v2_call_count"], 0)
         self.assertEqual(diagnostic["adaptive_call_count"], 0)
 
+    def test_cache_hits_are_counted_by_the_shared_runtime_interface(self) -> None:
+        state = V3S3ControllerState(_Bundle())
+        state.note_cache_hit()
+        self.assertEqual(state.summary()["cache_hit_count"], 1)
+
     def test_unexpected_result_discards_remaining_plan_and_replans(self) -> None:
         bundle = _Bundle()
         state = V3S3ControllerState(bundle)
