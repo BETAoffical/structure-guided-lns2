@@ -1,0 +1,143 @@
+{
+  "coverage": {
+    "diagnostic_state_count": 75,
+    "risk_relaxed_state_count": 0,
+    "runtime_paired_episode_count": 8,
+    "runtime_report_count": 2,
+    "state_count": 201,
+    "training_state_count": 126
+  },
+  "decision": "proceed_to_long_horizon_value_pilot",
+  "decision_checks": {
+    "closed_loop_repeats_consistently_worse": true,
+    "model_local_efficiency_beats_v2": true,
+    "oracle_has_at_least_10pct_local_headroom": true,
+    "true_remaining_time_to_feasible_labels_available": false
+  },
+  "diagnostic": {
+    "mean_model_utility_regret": 6.459652754811617,
+    "model_efficiency_change_vs_v2": 0.09137642137982172,
+    "model_headroom_capture_fraction": 0.18137206156703423,
+    "model_oracle_exact_match_rate": 0.16,
+    "model_oracle_first_template_match_rate": 0.21333333333333335,
+    "model_s3": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 5.01,
+      "mean_feasible_rate": 0.39,
+      "mean_no_progress_rate": 0.07,
+      "mean_total_seconds": 0.3989924558704209,
+      "pooled_conflict_reduction_per_second": 12.556628393061839,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "model_s3"
+    },
+    "oracle_efficiency_headroom_vs_v2": 0.5038064881125556,
+    "oracle_h1_efficiency": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 3.691666666666667,
+      "mean_feasible_rate": 0.24,
+      "mean_no_progress_rate": 0.0,
+      "mean_total_seconds": 0.16558696500490744,
+      "pooled_conflict_reduction_per_second": 22.29442798566456,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "oracle_h1_efficiency"
+    },
+    "oracle_s3_efficiency": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 6.37,
+      "mean_feasible_rate": 0.45666666666666667,
+      "mean_no_progress_rate": 0.006666666666666667,
+      "mean_total_seconds": 0.3681705134783321,
+      "pooled_conflict_reduction_per_second": 17.30176580361831,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "oracle_s3_efficiency"
+    },
+    "oracle_s3_quality_time": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 7.193333333333333,
+      "mean_feasible_rate": 0.5,
+      "mean_no_progress_rate": 0.0,
+      "mean_total_seconds": 0.5242642082660132,
+      "pooled_conflict_reduction_per_second": 13.720817137460232,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "oracle_s3_quality_time"
+    },
+    "oracle_s3_reduction": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 7.196666666666666,
+      "mean_feasible_rate": 0.5,
+      "mean_no_progress_rate": 0.0,
+      "mean_total_seconds": 0.5255993332192944,
+      "pooled_conflict_reduction_per_second": 13.692305548766782,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "oracle_s3_reduction"
+    },
+    "quality_oracle_reduction_retention_vs_v2": 1.1021450459652706,
+    "v2_full": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 6.526666666666666,
+      "mean_feasible_rate": 0.35333333333333333,
+      "mean_no_progress_rate": 0.09333333333333334,
+      "mean_total_seconds": 0.5672741031455129,
+      "pooled_conflict_reduction_per_second": 11.505313975160428,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "v2_full"
+    },
+    "v2_h1": {
+      "agent_count": "all",
+      "mean_conflict_reduction": 2.933333333333333,
+      "mean_feasible_rate": 0.15333333333333332,
+      "mean_no_progress_rate": 0.19333333333333333,
+      "mean_total_seconds": 0.2225062832996385,
+      "pooled_conflict_reduction_per_second": 13.183148313089005,
+      "split": "policy_validation",
+      "state_count": 75,
+      "strategy": "v2_h1"
+    }
+  },
+  "diagnostic_only": true,
+  "limitations": [
+    "Oracle selection observes paired outcomes and is optimistic.",
+    "Policy-validation maps are diagnostic, not untouched promotion data.",
+    "Registered S3 sequences do not enumerate every possible 18^3 sequence.",
+    "The collection ends after the registered three-step prefix and has no true remaining time-to-feasible target.",
+    "Closed-loop evidence is a four-task, one-seed repeated diagnostic subset."
+  ],
+  "recommended_next_step": "Collect a small map-isolated variable-horizon pilot and train an independent actual-candidate cost-to-go controller; keep v2-full as the default and archive v3-S3.",
+  "runtime_evidence": [
+    {
+      "common_success_count": 4,
+      "mean_iteration_change_fraction": 0.3055555555555556,
+      "normalized_wall_auc_change_fraction": 0.10637264860991234,
+      "paired_episode_count": 4,
+      "pooled_time_change_fraction": 0.11579484975494207,
+      "report": "initlns-v3-s3-stable-runtime-v1/runtime_comparison_report.json",
+      "sha256": "881f4e4f0aa11273cf5667229be9163f9b13df35ff74f180760f6e974b60cb5a",
+      "v3_faster_pair_count": 1
+    },
+    {
+      "common_success_count": 4,
+      "mean_iteration_change_fraction": 0.3055555555555556,
+      "normalized_wall_auc_change_fraction": 0.045812472747427065,
+      "paired_episode_count": 4,
+      "pooled_time_change_fraction": 0.017353469834472043,
+      "report": "initlns-v3-s3-stable-runtime-v2-repeat/runtime_comparison_report.json",
+      "sha256": "37e8d6398b63c8a26c5533a56522968a9d1d2cebe1f7d22756b6fa0ccee3393a",
+      "v3_faster_pair_count": 2
+    }
+  ],
+  "schema": "lns2.v3_s3_oracle_audit.v1",
+  "source": {
+    "bundle_source_fingerprint": "65e0c575e2c95e3690c9a627045b2701409479632b1ba0e2b682a44034af71e2",
+    "collection_schema": "lns2.v3_s3_collection.v1",
+    "external_baselines_sha256": "b321ecbc3456f70b95cbef83f7fb48d478f7c226ecd7a6c34f62c8237f260075",
+    "model_planner_overhead_seconds_per_state": 0.011749491000006884,
+    "sequence_features_sha256": "bb72ef0e59dec41f1e7e5a244754bb1bebec588cce7b6eac2f336a78aa541cea",
+    "sequence_trials_sha256": "712d109cb56ec69a7723aa7fbb9fa43697188f113a16bbec16de0ab49a93414b"
+  }
+}
