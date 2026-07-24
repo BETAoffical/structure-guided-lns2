@@ -700,7 +700,12 @@ def _collection_root(
     if not reference_path.is_file():
         return local.resolve()
     reference = _read_json(reference_path)
-    root = Path(str(reference["collection_root"])).resolve()
+    relative = reference.get("collection_root_relative")
+    root = (
+        Path(__file__).resolve().parents[1] / str(relative)
+        if relative
+        else Path(str(reference["collection_root"]))
+    ).resolve()
     report_path = root / "collection_report.json"
     if sha256_file(report_path) != str(
         reference["collection_report_sha256"]
@@ -837,11 +842,19 @@ def run_v3_s3_training_stage(
     )
     if collection_source is not None:
         collection_report = dict(inputs["collection_report"])
+        resolved_collection = Path(collection_source).resolve()
+        try:
+            collection_relative = resolved_collection.relative_to(
+                project_root.resolve()
+            ).as_posix()
+        except ValueError:
+            collection_relative = None
         _write_json(
             output / "collection_reference.json",
             {
                 "schema": "lns2.v3_s3_collection_reference.v1",
-                "collection_root": str(Path(collection_source).resolve()),
+                "collection_root": str(resolved_collection),
+                "collection_root_relative": collection_relative,
                 "collection_report_sha256": str(
                     collection_report["sha256"]
                 ),

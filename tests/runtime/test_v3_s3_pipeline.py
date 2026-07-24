@@ -231,6 +231,7 @@ class V3S3PipelineTest(unittest.TestCase):
                 Path(reference["collection_root"]),
                 (source / "collection").resolve(),
             )
+            self.assertIsNone(reference["collection_root_relative"])
 
     def test_runtime_labels_stop_after_unchanged_state(self) -> None:
         steps = [
