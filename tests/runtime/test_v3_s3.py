@@ -6,11 +6,14 @@ import unittest
 
 from experiments.v3_s3 import (
     S3_ACTION_TEMPLATES,
+    S3_TEMPORAL_FEATURE_NAMES,
+    S3_WALL_TIME_FEATURE_NAMES,
     V3S3ControllerState,
     balanced_sequence_templates,
     candidate_template_indices,
     rank_s3_sequences,
     registered_runtime_sequences,
+    s3_temporal_context,
     sequence_feature_row,
 )
 
@@ -48,7 +51,7 @@ class _Bundle:
         "total_seconds": 0.1,
     }
     continuation_calibration = {
-        "schema": "lns2.v3_s3_continuation.v1",
+        "schema": "lns2.v3_s3_continuation.v2",
         "coverage": 0.90,
         "minimum_cell_observations": 1,
         "cells": {},
@@ -58,7 +61,6 @@ class _Bundle:
                 "no_progress_threshold": 0.5,
                 "no_progress_accuracy": 1.0,
                 "reduction_relative_error": 0.1,
-                "log_total_seconds_error": 0.1,
             }
             for step in range(1, 4)
         },
@@ -85,6 +87,24 @@ class _Bundle:
 
 
 class S3TemplateTests(unittest.TestCase):
+    def test_current_temporal_schema_excludes_measured_wall_time(self) -> None:
+        self.assertTrue(
+            set(S3_WALL_TIME_FEATURE_NAMES).isdisjoint(S3_TEMPORAL_FEATURE_NAMES)
+        )
+        context = s3_temporal_context(
+            [
+                {
+                    "conflict_reduction": 1.0,
+                    "repair_seconds": 999.0,
+                    "state_changed": True,
+                    "no_progress": False,
+                    "neighborhood_size": 8,
+                }
+            ],
+            100,
+        )
+        self.assertTrue(set(S3_WALL_TIME_FEATURE_NAMES).isdisjoint(context))
+
     def test_registered_schedule_covers_every_first_action_twice(self) -> None:
         sequences = balanced_sequence_templates("state")
         self.assertEqual(len(sequences), 36)
@@ -233,7 +253,9 @@ class S3SelectionTests(unittest.TestCase):
             after_fingerprint="after",
             repair_outcome="conflict_reduced",
             conflict_reduction=1.0,
-            total_seconds=1.0,
+            # Measured wall time is deliberately irrelevant to a v2
+            # continuation decision.
+            total_seconds=1_000_000.0,
             feasible=False,
         )
         self.assertTrue(expected)

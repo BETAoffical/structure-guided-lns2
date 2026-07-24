@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -165,6 +166,7 @@ class PortableScalarModel:
     trees: list[list[dict[str, Any]]]
     transform: str
     semantic_fingerprint: str
+    input_precision: str = "float64"
     native_predictor: Any | None = None
     declared_feature_count: int | None = None
 
@@ -190,6 +192,11 @@ class PortableScalarModel:
                     f"repair-aware row is missing model features: {sorted(missing)}"
                 )
             vector = [float(features[name]) for name in self.feature_names]
+            if self.input_precision == "float32":
+                vector = [
+                    struct.unpack("!f", struct.pack("!f", value))[0]
+                    for value in vector
+                ]
             if any(not math.isfinite(value) for value in vector):
                 raise ValueError("repair-aware model received non-finite features")
             vectors.append(vector)
@@ -291,6 +298,7 @@ def compact_portable_scalar_model(
             trees=compact_trees,
             transform=model.transform,
             semantic_fingerprint=model.semantic_fingerprint,
+            input_precision=model.input_precision,
             declared_feature_count=model.source_feature_count,
         )
     )
@@ -304,19 +312,23 @@ def load_portable_scalar_model(
     transform = str(payload.get("transform"))
     if transform not in {"identity", "sigmoid"}:
         raise ValueError("portable scalar model has an invalid transform")
+    input_precision = str(payload.get("input_precision", "float64"))
+    if input_precision not in {"float32", "float64"}:
+        raise ValueError("portable scalar model has invalid input precision")
     names = list(map(str, payload.get("feature_names", ())))
     if not names or len(names) != len(set(names)):
         raise ValueError("portable scalar model has invalid feature names")
-    expected = _fingerprint(
-        {
-            "name": payload.get("name"),
-            "profile": payload.get("profile"),
-            "feature_names": names,
-            "baseline": payload.get("baseline"),
-            "trees": payload.get("trees"),
-            "transform": transform,
-        }
-    )
+    fingerprint_payload = {
+        "name": payload.get("name"),
+        "profile": payload.get("profile"),
+        "feature_names": names,
+        "baseline": payload.get("baseline"),
+        "trees": payload.get("trees"),
+        "transform": transform,
+    }
+    if "input_precision" in payload:
+        fingerprint_payload["input_precision"] = input_precision
+    expected = _fingerprint(fingerprint_payload)
     if str(payload.get("semantic_fingerprint")) != expected:
         raise ValueError("portable scalar model semantic fingerprint mismatch")
     model = PortableScalarModel(
@@ -327,6 +339,7 @@ def load_portable_scalar_model(
         trees=list(payload["trees"]),
         transform=transform,
         semantic_fingerprint=expected,
+        input_precision=input_precision,
         declared_feature_count=len(names),
     )
     return (

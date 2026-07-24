@@ -34,6 +34,7 @@ from experiments.v3_s3 import (
     V3_S3_FEATURE_SCHEMA_ID,
     V3_S3_FEATURE_SCHEMA_SHA256,
     V3_S3_FULL_FEATURE_NAMES,
+    V3_S3_LEGACY_FULL_FEATURE_NAMES,
     V3_S3_OBJECTIVE_ID,
     V3_S3_PROFILE,
     balanced_sequence_templates,
@@ -53,7 +54,7 @@ os.environ.setdefault(
 )
 
 
-V3_S3_TRAINING_SCHEMA = "lns2.v3_s3_training.v2"
+V3_S3_TRAINING_SCHEMA = "lns2.v3_s3_training.v3"
 MODEL_FAMILIES = ("hist_gradient_boosting", "extra_trees")
 HGB_PARAMETERS = {
     "max_iter": 100,
@@ -154,6 +155,24 @@ def _runtime_prefix_targets(trial: dict[str, Any]) -> dict[str, float]:
     }
 
 
+def _project_training_features(
+    names: tuple[str, ...], values: tuple[float, ...]
+) -> tuple[float, ...]:
+    if len(names) != len(values) or len(names) != len(set(names)):
+        raise ValueError("v3-S3 training feature schema is malformed")
+    supported = set(V3_S3_LEGACY_FULL_FEATURE_NAMES)
+    if not set(names) <= supported:
+        raise ValueError("v3-S3 training feature schema contains unknown features")
+    by_name = dict(zip(names, values))
+    missing = set(V3_S3_FULL_FEATURE_NAMES) - set(by_name)
+    if missing:
+        raise ValueError(
+            "v3-S3 training feature schema is incomplete: "
+            f"{sorted(missing)}"
+        )
+    return tuple(float(by_name[name]) for name in V3_S3_FULL_FEATURE_NAMES)
+
+
 def _sequence_rows(
     feature_path: Path, trial_path: Path
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -184,8 +203,7 @@ def _sequence_rows(
         }
         names = tuple(map(str, feature["feature_names"]))
         values = tuple(map(float, feature["feature_values"]))
-        if names != V3_S3_FULL_FEATURE_NAMES or len(values) != len(names):
-            raise ValueError("v3-S3 training feature schema is incomplete")
+        values = _project_training_features(names, values)
         targets: dict[str, float | None] = {}
         for step in range(1, S3_HORIZON + 1):
             observed = []
@@ -998,6 +1016,12 @@ def _portable_payload(
     baseline, trees, transform = _tree_payload(
         estimator, probability=_is_probability_target(name)
     )
+    input_precision = (
+        "float64"
+        if isinstance(estimator, _ConstantEstimator)
+        or hasattr(estimator, "_predictors")
+        else "float32"
+    )
     payload = {
         "schema": PORTABLE_SCALAR_MODEL_SCHEMA,
         "schema_version": 1,
@@ -1007,6 +1031,7 @@ def _portable_payload(
         "baseline": baseline,
         "trees": trees,
         "transform": transform,
+        "input_precision": input_precision,
         "source_fingerprint": source_fingerprint,
     }
     payload["semantic_fingerprint"] = _fingerprint(
@@ -1017,6 +1042,7 @@ def _portable_payload(
             "baseline": baseline,
             "trees": trees,
             "transform": transform,
+            "input_precision": input_precision,
         }
     )
     return payload
@@ -1128,8 +1154,6 @@ def _continuation_calibration(
                 f"step{step}_conflict_reduction"
             )
             is not None
-            and rows[index]["targets"].get(f"step{step}_log_total_seconds")
-            is not None
             and rows[index]["targets"].get(
                 f"step{step}_no_progress_probability"
             )
@@ -1166,7 +1190,6 @@ def _continuation_calibration(
             thresholds, key=lambda value: (accuracy(value), -abs(value - 0.5))
         )
         reduction_errors = []
-        time_errors = []
         for index in usable:
             predicted_reduction = float(
                 predictions[f"step{step}_conflict_reduction"][index]
@@ -1178,24 +1201,11 @@ def _continuation_calibration(
                 abs(actual_reduction - predicted_reduction)
                 / max(1.0, abs(predicted_reduction))
             )
-            time_errors.append(
-                abs(
-                    float(
-                        rows[index]["targets"][
-                            f"step{step}_log_total_seconds"
-                        ]
-                    )
-                    - float(
-                        predictions[f"step{step}_log_total_seconds"][index]
-                    )
-                )
-            )
         return {
             "observation_count": len(usable),
             "no_progress_threshold": float(no_progress_threshold),
             "no_progress_accuracy": accuracy(no_progress_threshold),
             "reduction_relative_error": quantile(reduction_errors),
-            "log_total_seconds_error": quantile(time_errors),
         }
 
     fallback = {}
@@ -1216,7 +1226,7 @@ def _continuation_calibration(
             if int(candidate["observation_count"]) >= 32:
                 cells[f"step{step}:agents{agents}"] = candidate
     return {
-        "schema": "lns2.v3_s3_continuation.v1",
+        "schema": "lns2.v3_s3_continuation.v2",
         "coverage": coverage,
         "minimum_cell_observations": 32,
         "fallback": fallback,
@@ -1500,21 +1510,11 @@ def _continuation_diagnostic(
                 reduction_error = abs(
                     float(step["conflict_reduction"]) - predicted_reduction
                 ) / max(1.0, abs(predicted_reduction))
-                log_time_error = abs(
-                    math.log1p(max(0.0, float(step["total_seconds"])))
-                    - float(
-                        local[f"step{offset + 1}_log_total_seconds"][
-                            order[0]
-                        ]
-                    )
-                )
                 if (
                     not no_progress
                     and predicted_no_progress == no_progress
                     and reduction_error
                     <= float(cell["reduction_relative_error"]) + 1e-12
-                    and log_time_error
-                    <= float(cell["log_total_seconds_error"]) + 1e-12
                 ):
                     reused += 1
     return {

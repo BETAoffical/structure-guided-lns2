@@ -2805,7 +2805,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 candidates,
                                 candidate_rows,
                                 temporal_context=s3_temporal_context(
-                                    v3_s3_history, int(row["agent_count"])
+                                    v3_s3_history,
+                                    int(row["agent_count"]),
+                                    include_wall_time=bool(
+                                        v3_s3_bundle.wall_time_history_required
+                                    ),
                                 ),
                                 before_fingerprint=before_repair_hash,
                                 agent_count=int(row["agent_count"]),

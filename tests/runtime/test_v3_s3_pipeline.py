@@ -17,6 +17,7 @@ from experiments.repair_collection import _read_json, _write_json, _write_jsonl
 from experiments.v3_s3 import (
     S3_ACTION_TEMPLATES,
     V3_S3_FULL_FEATURE_NAMES,
+    V3_S3_LEGACY_FULL_FEATURE_NAMES,
     balanced_sequence_templates,
     load_v3_s3_bundle,
     sequence_id,
@@ -51,6 +52,7 @@ from experiments.v3_s3_training import (
     _fit_target_model,
     _normalize_prediction_values,
     _portable_payload,
+    _project_training_features,
     _runtime_prefix_targets,
     _runtime_reachable_steps,
     _sequence_rows,
@@ -845,6 +847,26 @@ class V3S3PipelineTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate sequences"):
                 _sequence_rows(features, trials)
 
+    def test_training_projects_legacy_wall_time_features_by_name(self) -> None:
+        legacy_values = tuple(
+            999.0
+            if name.startswith("history.") and name.endswith("repair_seconds")
+            else float(index)
+            for index, name in enumerate(V3_S3_LEGACY_FULL_FEATURE_NAMES)
+        )
+        projected = _project_training_features(
+            V3_S3_LEGACY_FULL_FEATURE_NAMES,
+            legacy_values,
+        )
+        self.assertEqual(len(projected), len(V3_S3_FULL_FEATURE_NAMES))
+        self.assertEqual(
+            projected,
+            tuple(
+                legacy_values[V3_S3_LEGACY_FULL_FEATURE_NAMES.index(name)]
+                for name in V3_S3_FULL_FEATURE_NAMES
+            ),
+        )
+
     def test_baseline_metrics_require_exact_state_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "baselines.jsonl"
@@ -968,6 +990,54 @@ class V3S3PipelineTest(unittest.TestCase):
         self.assertLessEqual(
             max(abs(float(left) - float(right)) for left, right in zip(expected, observed)),
             1e-12,
+        )
+
+    def test_extra_trees_portable_matches_float32_split_boundary(self) -> None:
+        try:
+            import numpy as np
+            from sklearn.ensemble import ExtraTreesRegressor
+        except ImportError:
+            self.skipTest("scikit-learn is only required in the Windows training profile")
+
+        values = np.asarray([[0.0], [1.0]], dtype=float)
+        estimator = ExtraTreesRegressor(
+            n_estimators=1,
+            min_samples_leaf=1,
+            max_features=1,
+            random_state=17,
+            n_jobs=1,
+        ).fit(values, np.asarray([0.0, 1.0], dtype=float))
+        threshold = float(estimator.estimators_[0].tree_.threshold[0])
+        lower = np.float32(threshold)
+        if float(lower) > threshold:
+            lower = np.nextafter(lower, np.float32("-inf"))
+        upper = np.nextafter(lower, np.float32("inf"))
+        rounding_boundary = (float(lower) + float(upper)) / 2.0
+        probe = (threshold + rounding_boundary) / 2.0
+        self.assertNotEqual(
+            float(probe <= threshold),
+            float(np.float32(probe) <= threshold),
+        )
+        payload = _portable_payload(
+            "step1_conflict_reduction",
+            estimator,
+            ["x"],
+            "float32-boundary",
+        )
+        self.assertEqual(payload["input_precision"], "float32")
+        portable = replace(
+            load_portable_scalar_model(payload),
+            native_predictor=None,
+        )
+        row = {
+            "feature_profile": "v3_s3",
+            "feature_names": ("x",),
+            "feature_values": (probe,),
+        }
+        self.assertAlmostEqual(
+            float(estimator.predict(np.asarray([[probe]], dtype=float))[0]),
+            float(portable.predict([row])[0]),
+            places=12,
         )
 
     def test_training_smoke_exports_an_independent_bundle(self) -> None:

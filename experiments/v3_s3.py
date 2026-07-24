@@ -15,8 +15,10 @@ from experiments.repair_collection import _fingerprint
 
 
 V3_S3_BUNDLE_SCHEMA = "lns2.v3_s3_controller_bundle.v2"
-V3_S3_FEATURE_SCHEMA_ID = "lns2.v3_s3_features.v1"
-V3_S3_OBJECTIVE_ID = "v3-s3-runtime-reachable-sequence-v2"
+V3_S3_LEGACY_FEATURE_SCHEMA_ID = "lns2.v3_s3_features.v1"
+V3_S3_FEATURE_SCHEMA_ID = "lns2.v3_s3_features.v2"
+V3_S3_LEGACY_OBJECTIVE_ID = "v3-s3-runtime-reachable-sequence-v2"
+V3_S3_OBJECTIVE_ID = "v3-s3-runtime-reachable-sequence-v3"
 V3_S3_PROFILE = "v3_s3"
 S3_FAMILIES = ("collision", "target", "random")
 S3_SIZES = (4, 8, 16)
@@ -75,7 +77,7 @@ S3_ACTION_TEMPLATES = tuple(
     for representative in S3_REPRESENTATIVES
 )
 
-S3_TEMPORAL_FEATURE_NAMES = (
+S3_LEGACY_TEMPORAL_FEATURE_NAMES = (
     "history.available_steps",
     "history.recent_no_progress_length",
     "history.last_conflict_reduction",
@@ -85,32 +87,43 @@ S3_TEMPORAL_FEATURE_NAMES = (
     "history.state_change_rate3",
     "history.previous_size_ratio_agents",
 )
+S3_WALL_TIME_FEATURE_NAMES = (
+    "history.last_repair_seconds",
+    "history.mean3_repair_seconds",
+)
+S3_TEMPORAL_FEATURE_NAMES = tuple(
+    name
+    for name in S3_LEGACY_TEMPORAL_FEATURE_NAMES
+    if name not in S3_WALL_TIME_FEATURE_NAMES
+)
 
 
 def s3_temporal_context(
-    history: list[dict[str, Any]], agent_count: int
+    history: list[dict[str, Any]],
+    agent_count: int,
+    *,
+    include_wall_time: bool = False,
 ) -> dict[str, float]:
-    """Summarize only information available before the next repair decision."""
+    """Summarize deterministic information available before the next decision.
+
+    ``include_wall_time`` exists only to keep historical v1 bundles replayable.
+    New v2 feature bundles never include measured wall-clock time as an input.
+    """
 
     recent = history[-3:]
     reductions = [float(row["conflict_reduction"]) for row in recent]
-    seconds = [float(row["repair_seconds"]) for row in recent]
     no_progress_length = 0
     for row in reversed(history):
         if not bool(row["no_progress"]):
             break
         no_progress_length += 1
     previous_size = int(history[-1]["neighborhood_size"]) if history else 0
-    return {
+    result = {
         "history.available_steps": float(len(recent)),
         "history.recent_no_progress_length": float(no_progress_length),
         "history.last_conflict_reduction": reductions[-1] if reductions else 0.0,
         "history.mean3_conflict_reduction": (
             statistics.fmean(reductions) if reductions else 0.0
-        ),
-        "history.last_repair_seconds": seconds[-1] if seconds else 0.0,
-        "history.mean3_repair_seconds": (
-            statistics.fmean(seconds) if seconds else 0.0
         ),
         "history.state_change_rate3": (
             statistics.fmean(float(row["state_changed"]) for row in recent)
@@ -121,6 +134,17 @@ def s3_temporal_context(
             float(previous_size) / max(1, int(agent_count))
         ),
     }
+    if include_wall_time:
+        seconds = [float(row["repair_seconds"]) for row in recent]
+        result.update(
+            {
+                "history.last_repair_seconds": seconds[-1] if seconds else 0.0,
+                "history.mean3_repair_seconds": (
+                    statistics.fmean(seconds) if seconds else 0.0
+                ),
+            }
+        )
+    return result
 
 
 def _template_feature_names(step: int) -> tuple[str, ...]:
@@ -146,12 +170,19 @@ V3_S3_FULL_FEATURE_NAMES = tuple(
         *S3_TEMPLATE_FEATURE_NAMES,
     )
 )
+V3_S3_LEGACY_FULL_FEATURE_NAMES = tuple(
+    (
+        *PROFILE_FEATURE_NAMES["realized_dynamic"],
+        *S3_LEGACY_TEMPORAL_FEATURE_NAMES,
+        *S3_TEMPLATE_FEATURE_NAMES,
+    )
+)
 
 
 def _schema_payload() -> dict[str, Any]:
     return {
         "schema": V3_S3_FEATURE_SCHEMA_ID,
-        "schema_version": 1,
+        "schema_version": 2,
         "profile": V3_S3_PROFILE,
         "base_profile": "realized_dynamic",
         "base_feature_names": list(PROFILE_FEATURE_NAMES["realized_dynamic"]),
@@ -160,12 +191,35 @@ def _schema_payload() -> dict[str, Any]:
         "feature_names": list(V3_S3_FULL_FEATURE_NAMES),
         "horizon": S3_HORIZON,
         "action_template_count": len(S3_ACTION_TEMPLATES),
+        "wall_clock_features": [],
     }
 
 
 V3_S3_FEATURE_SCHEMA_SHA256 = hashlib.sha256(
     json.dumps(
         _schema_payload(), sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+).hexdigest()
+
+
+def _legacy_schema_payload() -> dict[str, Any]:
+    return {
+        "schema": V3_S3_LEGACY_FEATURE_SCHEMA_ID,
+        "schema_version": 1,
+        "profile": V3_S3_PROFILE,
+        "base_profile": "realized_dynamic",
+        "base_feature_names": list(PROFILE_FEATURE_NAMES["realized_dynamic"]),
+        "temporal_feature_names": list(S3_LEGACY_TEMPORAL_FEATURE_NAMES),
+        "template_feature_names": list(S3_TEMPLATE_FEATURE_NAMES),
+        "feature_names": list(V3_S3_LEGACY_FULL_FEATURE_NAMES),
+        "horizon": S3_HORIZON,
+        "action_template_count": len(S3_ACTION_TEMPLATES),
+    }
+
+
+V3_S3_LEGACY_FEATURE_SCHEMA_SHA256 = hashlib.sha256(
+    json.dumps(
+        _legacy_schema_payload(), sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
 ).hexdigest()
 
@@ -323,18 +377,24 @@ def sequence_feature_row(
         raise ValueError(
             f"S3 source row is missing required base features: {sorted(missing_base)}"
         )
-    required_temporal = set(selected_names) & set(S3_TEMPORAL_FEATURE_NAMES)
+    supported_names = set(V3_S3_LEGACY_FULL_FEATURE_NAMES)
+    unknown_names = set(selected_names) - supported_names
+    if unknown_names:
+        raise ValueError(f"unknown S3 feature projection: {sorted(unknown_names)}")
+    required_temporal = set(selected_names) & set(
+        S3_LEGACY_TEMPORAL_FEATURE_NAMES
+    )
     missing_temporal = required_temporal - set(temporal_context)
     if missing_temporal:
         raise ValueError(
             "S3 temporal context is missing required features: "
             f"{sorted(missing_temporal)}"
         )
-    values = {name: 0.0 for name in V3_S3_FULL_FEATURE_NAMES}
+    values = {name: 0.0 for name in V3_S3_LEGACY_FULL_FEATURE_NAMES}
     for name, value in source_values.items():
         if name in values:
             values[name] = float(value)
-    for name in S3_TEMPORAL_FEATURE_NAMES:
+    for name in S3_LEGACY_TEMPORAL_FEATURE_NAMES:
         values[name] = float(temporal_context.get(name, 0.0))
     for step, template in enumerate(templates, 1):
         prefix = f"sequence.step{step}"
@@ -345,9 +405,6 @@ def sequence_feature_row(
         values[f"{prefix}.requested_size_ratio_agents"] = (
             float(template.requested_size) / agents
         )
-    missing = set(selected_names) - set(values)
-    if missing:
-        raise ValueError(f"unknown S3 feature projection: {sorted(missing)}")
     return {
         "candidate_id": sequence_id(templates),
         "candidate_key": sequence_id(templates),
@@ -397,6 +454,10 @@ class V3S3Bundle:
         }
         return tuple(name for name in self.feature_names if name in required)
 
+    @property
+    def wall_time_history_required(self) -> bool:
+        return bool(set(self.feature_names) & set(S3_WALL_TIME_FEATURE_NAMES))
+
     def predict(self, rows: list[dict[str, Any]]) -> dict[str, list[float]]:
         result: dict[str, list[float]] = {}
         for name, model in self.models.items():
@@ -434,14 +495,32 @@ def load_v3_s3_bundle(path: str | Path) -> V3S3Bundle:
     }
     if forbidden & set(manifest):
         raise ValueError("v3-S3 bundle contains a forbidden v2/Adaptive dependency")
-    if str(manifest.get("feature_schema_id")) != V3_S3_FEATURE_SCHEMA_ID:
+    feature_schema_id = str(manifest.get("feature_schema_id"))
+    schema_contracts = {
+        V3_S3_FEATURE_SCHEMA_ID: (
+            V3_S3_FEATURE_SCHEMA_SHA256,
+            V3_S3_OBJECTIVE_ID,
+            set(V3_S3_FULL_FEATURE_NAMES),
+        ),
+        V3_S3_LEGACY_FEATURE_SCHEMA_ID: (
+            V3_S3_LEGACY_FEATURE_SCHEMA_SHA256,
+            V3_S3_LEGACY_OBJECTIVE_ID,
+            set(V3_S3_LEGACY_FULL_FEATURE_NAMES),
+        ),
+    }
+    if feature_schema_id not in schema_contracts:
         raise ValueError("v3-S3 feature schema id mismatch")
-    if str(manifest.get("training_objective_id")) != V3_S3_OBJECTIVE_ID:
+    expected_schema_sha256, expected_objective_id, allowed_names = (
+        schema_contracts[feature_schema_id]
+    )
+    if str(manifest.get("feature_schema_sha256")) != expected_schema_sha256:
+        raise ValueError("v3-S3 feature schema SHA256 mismatch")
+    if str(manifest.get("training_objective_id")) != expected_objective_id:
         raise ValueError("v3-S3 training objective mismatch")
     declared_names = tuple(map(str, manifest.get("feature_names", ())))
     if not declared_names or len(declared_names) != len(set(declared_names)):
         raise ValueError("v3-S3 feature declaration is invalid")
-    if not set(declared_names) <= set(V3_S3_FULL_FEATURE_NAMES):
+    if not set(declared_names) <= allowed_names:
         raise ValueError("v3-S3 bundle declares unknown features")
     models = {}
     for name, raw in dict(manifest.get("models", {})).items():
@@ -481,7 +560,10 @@ def load_v3_s3_bundle(path: str | Path) -> V3S3Bundle:
     if intervals["coverage"] > 1.0:
         raise ValueError("v3-S3 prediction interval coverage is invalid")
     continuation = dict(manifest.get("continuation_calibration", {}))
-    if str(continuation.get("schema")) != "lns2.v3_s3_continuation.v1":
+    if str(continuation.get("schema")) not in {
+        "lns2.v3_s3_continuation.v1",
+        "lns2.v3_s3_continuation.v2",
+    }:
         raise ValueError("v3-S3 continuation calibration is missing")
     if not 0.0 < float(continuation.get("coverage", 0.0)) <= 1.0:
         raise ValueError("v3-S3 continuation coverage is invalid")
@@ -878,13 +960,6 @@ class V3S3ControllerState:
             abs(float(conflict_reduction) - predicted_reduction)
             / reduction_scale
         )
-        predicted_log_seconds = float(
-            self.pending_prediction["log_total_seconds"]
-        )
-        time_error = abs(
-            math.log1p(max(0.0, float(total_seconds)))
-            - predicted_log_seconds
-        )
         predicted_lower_reduction = predicted_reduction - float(
             calibration["reduction_relative_error"]
         ) * reduction_scale
@@ -893,13 +968,27 @@ class V3S3ControllerState:
             and predicted_no_progress == no_progress
             and reduction_error
             <= float(calibration["reduction_relative_error"]) + 1e-12
-            and time_error
-            <= float(calibration["log_total_seconds_error"]) + 1e-12
             and not (
                 float(conflict_reduction) <= 0.0
                 and predicted_lower_reduction > 0.0
             )
         )
+        if (
+            expected
+            and str(self.bundle.continuation_calibration.get("schema"))
+            == "lns2.v3_s3_continuation.v1"
+        ):
+            predicted_log_seconds = float(
+                self.pending_prediction["log_total_seconds"]
+            )
+            time_error = abs(
+                math.log1p(max(0.0, float(total_seconds)))
+                - predicted_log_seconds
+            )
+            expected = (
+                time_error
+                <= float(calibration["log_total_seconds_error"]) + 1e-12
+            )
         state_changed = str(before_fingerprint) != str(after_fingerprint)
         if state_changed:
             self.blacklisted_neighborhoods.clear()
@@ -941,12 +1030,15 @@ class V3S3ControllerState:
 __all__ = [
     "S3_ACTION_TEMPLATES",
     "S3_HORIZON",
+    "S3_LEGACY_TEMPORAL_FEATURE_NAMES",
     "S3_TEMPORAL_FEATURE_NAMES",
+    "S3_WALL_TIME_FEATURE_NAMES",
     "S3ActionTemplate",
     "V3_S3_BUNDLE_SCHEMA",
     "V3_S3_FEATURE_SCHEMA_ID",
     "V3_S3_FEATURE_SCHEMA_SHA256",
     "V3_S3_FULL_FEATURE_NAMES",
+    "V3_S3_LEGACY_FULL_FEATURE_NAMES",
     "V3_S3_OBJECTIVE_ID",
     "V3S3Bundle",
     "V3S3ControllerState",

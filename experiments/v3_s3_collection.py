@@ -50,6 +50,7 @@ from experiments.v3_s3 import (
     all_runtime_sequences,
     balanced_sequence_templates,
     candidate_template_indices,
+    s3_temporal_context,
     sequence_feature_row,
     sequence_id,
 )
@@ -159,35 +160,7 @@ def _outcome_row(decision: dict[str, Any]) -> dict[str, Any]:
 
 
 def temporal_context(history: list[dict[str, Any]], agent_count: int) -> dict[str, float]:
-    recent = history[-3:]
-    reductions = [float(row["conflict_reduction"]) for row in recent]
-    seconds = [float(row["repair_seconds"]) for row in recent]
-    no_progress_length = 0
-    for row in reversed(history):
-        if not bool(row["no_progress"]):
-            break
-        no_progress_length += 1
-    previous_size = int(history[-1]["neighborhood_size"]) if history else 0
-    return {
-        "history.available_steps": float(len(recent)),
-        "history.recent_no_progress_length": float(no_progress_length),
-        "history.last_conflict_reduction": reductions[-1] if reductions else 0.0,
-        "history.mean3_conflict_reduction": (
-            statistics.fmean(reductions) if reductions else 0.0
-        ),
-        "history.last_repair_seconds": seconds[-1] if seconds else 0.0,
-        "history.mean3_repair_seconds": (
-            statistics.fmean(seconds) if seconds else 0.0
-        ),
-        "history.state_change_rate3": (
-            statistics.fmean(float(row["state_changed"]) for row in recent)
-            if recent
-            else 0.0
-        ),
-        "history.previous_size_ratio_agents": (
-            float(previous_size) / max(1, int(agent_count))
-        ),
-    }
+    return s3_temporal_context(history, agent_count)
 
 
 def source_decisions(

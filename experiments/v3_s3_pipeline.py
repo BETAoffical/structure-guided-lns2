@@ -739,6 +739,7 @@ def _training_identity(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     inputs = _verified_training_inputs(output)
     implementation_files = (
+        "experiments/repair_aware.py",
         "experiments/v3_s3.py",
         "experiments/v3_s3_training.py",
     )
