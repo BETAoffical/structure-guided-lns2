@@ -1,0 +1,53 @@
+{
+  "action_sensitive_state_fraction": 1.0,
+  "checks": {
+    "action_sensitive_state_fraction_at_least_50pct": true,
+    "at_least_two_actions_per_state": true,
+    "coverage_complete": true,
+    "uncensored_branch_fraction_at_least_50pct": true,
+    "winner_seed_agreement_at_least_50pct": true
+  },
+  "decision": "cost_to_go_labels_promising",
+  "limitations": [
+    "The continuation teacher is official Adaptive, so labels estimate Q under that teacher rather than an optimal or on-policy v3 continuation.",
+    "Candidate arms were selected from existing v2, model-S3, and retrospective Oracle diagnostics; this pilot tests label signal and is not promotion evidence.",
+    "Replay and prefix reconstruction time is excluded from cost-to-go labels.",
+    "Censored branches require survival-aware handling before model training."
+  ],
+  "plan_coverage": {
+    "selected_by_agent_count": {
+      "100": 2,
+      "200": 3,
+      "400": 4,
+      "600": 3
+    },
+    "selected_by_layout": {
+      "compartmentalized": 7,
+      "dead_end_aisles": 2,
+      "regular_beltway": 3
+    },
+    "unique_map_count": 4
+  },
+  "rollout_count": 70,
+  "run_config": {
+    "implementation_sha256": "326ad824e3016029efacc768baae414b9c466686e89f883f0a09864c99d492e0",
+    "max_repairs": 30,
+    "plan_fingerprint": "1e024ecabea2a1f067fcdc9ce7a69f0055bd202e8ff5f51a9c131cebde6ab3d5",
+    "schema": "lns2.v3_value_label_pilot.v1",
+    "smoke_only": false,
+    "split": "policy_train",
+    "state_count": 12,
+    "trials": 2,
+    "wall_clock_seconds": 60.0
+  },
+  "schema": "lns2.v3_value_label_pilot.v1",
+  "smoke_only": false,
+  "state_count": 12,
+  "uncensored_branch_fraction": 0.8142857142857143,
+  "winner_seed_agreement_by_overhead": {
+    "0.0": 0.5,
+    "0.05": 0.5,
+    "0.1": 0.5,
+    "0.15": 0.5
+  }
+}
