@@ -190,6 +190,7 @@ class V3S3PipelineTest(unittest.TestCase):
             self.assertEqual(report["provisional_model_family"], "test")
             self.assertTrue((root / "controller" / "artifact").is_file())
             self.assertFalse((root / "controller.partial").exists())
+            self.assertEqual(_read_json(root / "status.json")["status"], "waiting")
             loader.assert_called_once()
 
     def test_runtime_labels_stop_after_unchanged_state(self) -> None:

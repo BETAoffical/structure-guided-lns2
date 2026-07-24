@@ -904,7 +904,58 @@ def main() -> int:
             )
     except (FileNotFoundError, RuntimeError, ValueError) as error:
         parser.error(str(error))
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    if arguments.mode == "sequence-pilot":
+        training = (
+            report
+            if arguments.stage == "train"
+            else dict(report).get("training", {})
+        )
+        collection = (
+            dict(report).get("collection", {})
+            if isinstance(report, dict)
+            else {}
+        )
+        console_report = {
+            "schema": "lns2.v3_s3_cli_summary.v1",
+            "mode": "sequence-pilot",
+            "stage": arguments.stage,
+            "output": str(output),
+            "complete": bool(dict(report).get("complete", True)),
+            "completed_states": collection.get(
+                "completed_state_count",
+                dict(report).get("completed_state_count"),
+            ),
+            "error_states": collection.get(
+                "error_state_count",
+                dict(report).get("error_state_count", 0),
+            ),
+            "decision": dict(training).get(
+                "decision", dict(report).get("decision")
+            ),
+            "provisional_model_family": dict(training).get(
+                "provisional_model_family"
+            ),
+            "declared_feature_count": dict(training).get(
+                "declared_feature_count"
+            ),
+            "next_stage": dict(report).get("next_stage")
+            or (
+                "native-audit"
+                if arguments.stage == "train"
+                else None
+            ),
+            "automatic_followup": False,
+        }
+        print(
+            json.dumps(
+                console_report,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
 

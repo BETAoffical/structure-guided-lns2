@@ -558,7 +558,7 @@ def run_v3_s3_collection_stage(
         _write_status(
             output,
             started_at=started_at,
-            status="running",
+            status="waiting",
             phase="awaiting-sequence-collection",
             completed_sources=6,
             total_sources=6,
@@ -667,7 +667,7 @@ def run_v3_s3_collection_stage(
     _write_status(
         output,
         started_at=started_at,
-        status="running",
+        status="waiting",
         phase="awaiting-windows-training",
         completed_states=int(collection["completed_state_count"]),
         total_states=int(collection["requested_state_count"]),
@@ -741,8 +741,6 @@ def _training_identity(
     implementation_files = (
         "experiments/v3_s3.py",
         "experiments/v3_s3_training.py",
-        "experiments/v3_s3_pipeline.py",
-        "scripts/run_v3_training_pipeline.py",
     )
     identity = {
         "runner": "run_v3_training_pipeline.sequence-pilot.train",
@@ -811,6 +809,8 @@ def run_v3_s3_training_stage(
     collection_state_count = int(inputs["collection_state_count"])
     controller = output / "controller"
     partial_controller = output / "controller.partial"
+    status = _read_json(output / "status.json")
+    started_at = str(status.get("started_at") or _utc_now())
     if controller.exists():
         if not resume:
             raise ValueError(
@@ -823,14 +823,26 @@ def run_v3_s3_training_stage(
             raise ValueError(
                 "v3-S3 controller exists without training_stage_report.json"
             )
-        return _read_json(report_path)
+        training = _read_json(report_path)
+        _write_status(
+            output,
+            started_at=started_at,
+            status="waiting",
+            phase="awaiting-native-audit",
+            completed_states=collection_state_count,
+            total_states=collection_state_count,
+            error_states=0,
+            training_jobs=jobs,
+            provisional_model_family=training[
+                "provisional_model_family"
+            ],
+        )
+        return training
     if partial_controller.exists():
         suffix = _utc_now().replace(":", "").replace("+", "_")
         partial_controller.replace(
             output / f"controller.interrupted-{suffix}"
         )
-    status = _read_json(output / "status.json")
-    started_at = str(status.get("started_at") or _utc_now())
     _write_status(
         output,
         started_at=started_at,
@@ -866,7 +878,7 @@ def run_v3_s3_training_stage(
     _write_status(
         output,
         started_at=started_at,
-        status="running",
+        status="waiting",
         phase="awaiting-native-audit",
         completed_states=collection_state_count,
         total_states=collection_state_count,
