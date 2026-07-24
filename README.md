@@ -52,7 +52,7 @@ environment, and native feature extension:
 ```bash
 cmake -S . -B build/linux
 cmake --build build/linux -j4
-ctest --test-dir build/linux --output-on-failure
+ctest --test-dir build/linux/project --output-on-failure
 ```
 
 Build only the online feature module with:
@@ -101,6 +101,68 @@ python scripts/run_lns2_tradeoff_evaluation.py \
   --repair-aware-bundle build/initlns-high-load-rescue-full-v1/controller \
   --skip-wall-clock-sensitivity \
   --output build/initlns-v2-repair-aware-quick-v1
+```
+
+Train the isolated Horizon-3 cost-aware pilot from the registered 180-state
+high-load source without starting quick or formal evaluation:
+
+```bash
+python3 scripts/run_v3_training_pipeline.py \
+  --mode horizon-pilot \
+  --source build/initlns-v3-pilot-v1 \
+  --output build/initlns-v3-horizon-pilot-v1 \
+  --horizon 3 \
+  --workers 4
+```
+
+The independent mixed-load successor is `v3-S3`. It trains from fresh
+80/100/200/400/600-agent synthetic maps, plans three v3 actions jointly, and
+has no runtime call to v2 or Adaptive. Run it in three resumable stages because
+collection/native validation require WSL while tree training uses the Windows
+training environment:
+
+```bash
+# WSL: fresh sources, lane audit, 375-state paired S3 collection
+python3 scripts/run_v3_training_pipeline.py \
+  --mode sequence-pilot \
+  --stage collect \
+  --workers auto \
+  --parallelism-audit \
+  --output build/initlns-v3-s3-mixed-load-pilot-v1
+
+# Windows: nested map-group OOF, feature selection, HGB/ExtraTrees training
+python scripts/run_v3_training_pipeline.py `
+  --mode sequence-pilot `
+  --stage train `
+  --training-jobs auto `
+  --output build/initlns-v3-s3-mixed-load-pilot-v1
+
+# WSL: native/Python parity, native latency, and final pilot gate
+python3 scripts/run_v3_training_pipeline.py \
+  --mode sequence-pilot \
+  --stage native-audit \
+  --output build/initlns-v3-s3-mixed-load-pilot-v1
+```
+
+This pilot always stops after its final report. It never starts full data
+collection, quick, formal, or changes the default `v2-full` controller.
+
+If that pilot passes, a timing-qualified parallel quick can run different
+task/seed cohorts on isolated physical cores while keeping LNS2, v2, and v3-H3
+serial within each cohort. The audit automatically reduces 4 lanes to 3, 2, or
+strict single-worker execution when timing isolation is not adequate:
+
+```bash
+python3 scripts/run_lns2_tradeoff_evaluation.py \
+  --mode quick \
+  --evaluation-tracks wall-clock \
+  --controllers official_adaptive,v2-full,v3-h3 \
+  --v3-bundle build/initlns-v3-horizon-pilot-v1/controller \
+  --paired-execution isolated-parallel \
+  --parallel-lanes auto \
+  --parallelism-audit \
+  --skip-wall-clock-sensitivity \
+  --output build/initlns-v3-h3-tradeoff-quick-v1
 ```
 
 The completed 60-state high-load pilot kept size 12 as exploratory evidence but

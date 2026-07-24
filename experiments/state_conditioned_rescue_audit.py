@@ -338,32 +338,6 @@ def _tree_predictions(model: Any, states: list[AuditState]) -> dict[str, str]:
     return predictions
 
 
-def _lookup_action(states: list[AuditState], *, cell: str | None) -> str:
-    eligible = [state for state in states if cell is None or state.cell == cell]
-    if not eligible:
-        return "adaptive"
-    metrics = {
-        action: _aggregate(
-            [row for state in eligible for row in state.rows_by_action[action]]
-        )
-        for action in ACTIONS
-    }
-    return select_safe_oracle_action(metrics)
-
-
-def _lookup_predictions(
-    train: list[AuditState], test: list[AuditState], *, by_cell: bool
-) -> dict[str, str]:
-    cache = {
-        cell: _lookup_action(train, cell=cell if by_cell else None)
-        for cell in ({state.cell for state in test} if by_cell else {None})
-    }
-    return {
-        state.state_id: cache[state.cell if by_cell else None]
-        for state in test
-    }
-
-
 def _evaluate(
     states: list[AuditState], predictions: dict[str, str]
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:

@@ -165,11 +165,14 @@ Snapshot stepWithExplicitOrder(int solver_seed, int action_seed)
     action.repair_order = proposal.neighborhood;
     std::reverse(action.repair_order.begin(), action.repair_order.end());
     action.random_seed = action_seed + 1;
+    action.pp_random_seed = 45678;
     require(solver.step(action), "explicit-order step did not execute");
     const RepairTransition& transition = solver.getLastTransition();
     require(transition.action_valid, "valid explicit repair order was rejected");
     require(transition.repair_order == action.repair_order,
             "actual PP repair order differs from the request");
+    require(transition.applied_pp_random_seed == action.pp_random_seed,
+            "PP did not retain the independently requested seed");
 
     Snapshot snapshot;
     state = solver.getRepairState();
@@ -201,6 +204,42 @@ void requireInvalidOrderFallback(int solver_seed, int action_seed)
     action.random_seed = action_seed;
     require(solver.step(action), "invalid explicit-order fallback did not execute");
     require(!solver.getLastTransition().action_valid, "incomplete repair order was accepted");
+}
+
+void requireReplayNeighborhoodAllowsRecordedNoop(int solver_seed)
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(solver_seed);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    require(solver.initialize(), "failed to initialize replay-neighborhood source");
+    const RepairState before = solver.getRepairState();
+    if (before.done)
+        return;
+
+    RepairAction replay;
+    replay.mode = RepairActionMode::REPLAY_NEIGHBORHOOD;
+    for (const auto& agent : before.agents)
+    {
+        if (agent.conflict_degree == 0)
+            replay.agents.push_back(agent.id);
+        if (replay.agents.size() == 2)
+            break;
+    }
+    require(!replay.agents.empty(), "replay source has no non-conflicting agent");
+    require(solver.step(replay), "recorded no-op replay did not execute");
+    const RepairTransition& transition = solver.getLastTransition();
+    require(transition.action_valid, "recorded no-op replay was rejected");
+    vector<int> expected = replay.agents;
+    std::sort(expected.begin(), expected.end());
+    require(transition.neighborhood == expected,
+            "recorded no-op replay changed the neighborhood");
+    require(!transition.replan_success,
+            "recorded no-op replay unexpectedly invoked PP");
 }
 
 bool sameState(const RepairState& left, const RepairState& right)
@@ -258,6 +297,7 @@ int main()
     require(ordered_first.paths == ordered_second.paths,
             "explicit repair order paths are not deterministic");
     requireInvalidOrderFallback(0, 34567);
+    requireReplayNeighborhoodAllowsRecordedNoop(0);
 
     Instance instance(TEST_MAP, TEST_SCEN, 80);
     vector<Agent> agents;

@@ -23,6 +23,7 @@ LABELS = {
     "v2-stall-safe": "Optimized model (v2 stall-safe)",
     "v2-repair-aware": "Optimized model (v2 repair-aware)",
     "v3-full": "Cost-aware model (v3)",
+    "v3-h3": "Horizon-3 cost-aware model (v3-H3)",
 }
 CONTROLLER_COLORS = {
     "official_adaptive": "#4c78a8",
@@ -30,6 +31,7 @@ CONTROLLER_COLORS = {
     "v2-stall-safe": "#54a24b",
     "v2-repair-aware": "#b279a2",
     "v3-full": "#e45756",
+    "v3-h3": "#e45756",
 }
 TIMING_FIELDS = (
     "neighborhood_selection_seconds",
@@ -2331,19 +2333,23 @@ def _v3_promotion_gate(
     *,
     primary_track: str,
     validation_passed: bool,
+    candidate_controller: str | None = None,
 ) -> dict[str, Any]:
     controllers = {str(row["controller"]) for row in summaries}
-    if "v3-full" not in controllers:
+    candidate = candidate_controller or (
+        "v3-h3" if "v3-h3" in controllers else "v3-full"
+    )
+    if candidate not in controllers:
         return {"applicable": False, "passed": False, "reason": "v3_absent"}
     all_rows = {
         (str(row["track"]), str(row["controller"])): row
         for row in summaries
         if row.get("group_type") == "all"
     }
-    v3 = all_rows.get((primary_track, "v3-full"), {})
+    v3 = all_rows.get((primary_track, candidate), {})
     v2 = all_rows.get((primary_track, "v2-full"), {})
     lns2 = all_rows.get((primary_track, "official_adaptive"), {})
-    fixed_v3 = all_rows.get(("historical", "v3-full"), {})
+    fixed_v3 = all_rows.get(("historical", candidate), {})
     fixed_v2 = all_rows.get(("historical", "v2-full"), {})
     fixed_available = bool(fixed_v3 and fixed_v2)
 
@@ -2352,7 +2358,7 @@ def _v3_promotion_gate(
         baseline: _map_bootstrap_relative_degradation(
             _paired_metric_values(
                 primary_pairs,
-                candidate="v3-full",
+                candidate=candidate,
                 reference=baseline,
                 metric="normalized_wall_clock_conflict_auc",
             ),
@@ -2364,7 +2370,7 @@ def _v3_promotion_gate(
     for baseline in ("v2-full", "official_adaptive"):
         values = _paired_metric_values(
             primary_pairs,
-            candidate="v3-full",
+            candidate=candidate,
             reference=baseline,
             metric="restricted_time_to_feasible",
             common_success_only=True,
@@ -2444,6 +2450,7 @@ def _v3_promotion_gate(
     }
     return {
         "applicable": True,
+        "candidate_controller": candidate,
         "passed": fixed_available and all(checks.values()),
         "fixed_track_available": fixed_available,
         "gates": checks,
@@ -2460,8 +2467,9 @@ def _v3_promotion_gate(
 def _v3_markdown(
     promotion: dict[str, Any], pairwise_summary: list[dict[str, Any]]
 ) -> str:
+    candidate = str(promotion.get("candidate_controller") or "v3-full")
     lines = [
-        "# v3 cost-aware controller report",
+        f"# {candidate} cost-aware controller report",
         "",
         f"Promotion applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
         "",
@@ -2472,7 +2480,7 @@ def _v3_markdown(
         lines.append(f"- `{name}`: `{bool(passed)}`")
     lines.extend(["", "## Paired summaries", ""])
     for row in pairwise_summary:
-        if "v3-full" not in str(row.get("pair")):
+        if candidate not in str(row.get("pair")):
             continue
         lines.append(
             f"- `{row['track']}` `{row['pair']}`: successes "
@@ -2526,8 +2534,13 @@ def generate_bottleneck_artifacts(
         for row in episodes
         if str(row.get("controller")) == "v2-repair-aware"
     ]
+    v3_candidates = tuple(
+        controller
+        for controller in report_controllers
+        if controller in {"v3-full", "v3-h3"}
+    )
     v3_usage = [
-        row for row in episodes if str(row.get("controller")) == "v3-full"
+        row for row in episodes if str(row.get("controller")) in v3_candidates
     ]
     long_checkpoints, long_diagnostics, extension_keys = long_horizon_diagnostics(
         episodes, iterations
@@ -2721,6 +2734,9 @@ def generate_bottleneck_artifacts(
         pairwise,
         primary_track=primary_track,
         validation_passed=bool(validation["passed"]),
+        candidate_controller=(
+            "v3-h3" if "v3-h3" in report_controllers else "v3-full"
+        ),
     )
 
     _write_csv(output_root / "iteration_timings.csv", iterations)

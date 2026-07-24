@@ -7,6 +7,7 @@ import unittest
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine
+from experiments.repair_collection import state_fingerprint
 from scripts import collect_closed_loop_confirmation as collector_cli
 
 try:
@@ -504,6 +505,100 @@ class RepairEnvironmentTests(unittest.TestCase):
                 }
             )
             self.assertFalse(invalid["metrics"]["action_valid"])
+
+    def test_replay_neighborhood_accepts_recorded_no_conflict_noop(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"]:
+            self.skipTest("initial soft PP was already feasible")
+        agents = [
+            int(agent["id"])
+            for agent in state["agents"]
+            if int(agent["conflict_degree"]) == 0
+        ][:2]
+        if not agents:
+            self.skipTest("test state has no non-conflicting replay agent")
+        result = env.step(
+            {
+                "mode": "replay_neighborhood",
+                "agents": agents,
+            }
+        )
+        self.assertEqual(result["metrics"]["requested_mode"], "replay_neighborhood")
+        self.assertTrue(result["metrics"]["action_valid"])
+        self.assertEqual(result["metrics"]["neighborhood"], sorted(agents))
+        self.assertFalse(result["metrics"]["replan_success"])
+
+    def test_replay_neighborhood_rejects_empty_action(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"]:
+            self.skipTest("initial soft PP was already feasible")
+        result = env.step({"mode": "replay_neighborhood", "agents": []})
+        self.assertFalse(result["metrics"]["action_valid"])
+
+    def test_pp_random_seed_is_independent_of_action_rng_history(self) -> None:
+        def run(action_seed: int) -> tuple[list[list[int]], dict[str, object]]:
+            env = self.make_env()
+            state = env.reset(seed=29)
+            if state["done"] or not state["conflict_edges"]:
+                self.skipTest("initial soft PP was already feasible")
+            agents = list(state["conflict_edges"][0])
+            result = env.step(
+                {
+                    "mode": "explicit_neighborhood",
+                    "agents": agents,
+                    "repair_order": list(reversed(agents)),
+                    "random_seed": action_seed,
+                    "pp_random_seed": 44001,
+                }
+            )
+            return (
+                [list(agent["path"]) for agent in result["observation"]["agents"]],
+                result["metrics"],
+            )
+
+        first_paths, first_metrics = run(12001)
+        second_paths, second_metrics = run(12002)
+        self.assertEqual(first_paths, second_paths)
+        self.assertEqual(first_metrics["requested_pp_random_seed"], 44001)
+        self.assertEqual(first_metrics["applied_pp_random_seed"], 44001)
+        self.assertEqual(second_metrics["applied_pp_random_seed"], 44001)
+
+    def test_seeded_official_prefix_replays_exactly(self) -> None:
+        source = self.make_env()
+        state = source.reset(seed=29)
+        recorded: list[tuple[dict[str, object], str]] = []
+        pp_steps = 0
+        for decision_index in range(2):
+            if state["done"]:
+                break
+            result = source.step(
+                {
+                    "mode": "official",
+                    "pp_random_seed": 45000 + decision_index,
+                }
+            )
+            state = result["observation"]
+            metrics = result["metrics"]
+            action: dict[str, object] = {
+                "mode": "replay_neighborhood",
+                "agents": list(metrics["neighborhood"]),
+                "repair_order": list(metrics["repair_order"]),
+            }
+            applied_seed = int(metrics["applied_pp_random_seed"])
+            if applied_seed >= 0:
+                action["pp_random_seed"] = applied_seed
+                pp_steps += 1
+            recorded.append((action, state_fingerprint(state)))
+
+        if not pp_steps:
+            self.skipTest("the short source prefix did not invoke PP")
+        replay = self.make_env()
+        replay_state = replay.reset(seed=29)
+        for action, expected_fingerprint in recorded:
+            replay_state = replay.step(action)["observation"]
+            self.assertEqual(state_fingerprint(replay_state), expected_fingerprint)
 
     def test_partial_proposal_batch_still_protects_global_rng(self) -> None:
         env = self.make_env()

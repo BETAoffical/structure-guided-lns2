@@ -271,6 +271,8 @@ RepairAction parseAction(const py::dict& value)
         action.mode = RepairActionMode::SEED;
     else if (mode == "explicit_neighborhood")
         action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    else if (mode == "replay_neighborhood")
+        action.mode = RepairActionMode::REPLAY_NEIGHBORHOOD;
     else
         throw py::value_error("unknown repair action mode: " + mode);
 
@@ -286,6 +288,12 @@ RepairAction parseAction(const py::dict& value)
         if (action.random_seed < 0)
             throw py::value_error("random_seed must be non-negative");
     }
+    if (value.contains("pp_random_seed"))
+    {
+        action.pp_random_seed = py::cast<int>(value["pp_random_seed"]);
+        if (action.pp_random_seed < 0)
+            throw py::value_error("pp_random_seed must be non-negative");
+    }
     if (value.contains("agents"))
         action.agents = py::cast<vector<int>>(value["agents"]);
     if (value.contains("repair_order"))
@@ -300,6 +308,8 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["requested_mode"] = repairActionModeName(transition.requested_action.mode);
     result["requested_heuristic"] = repairHeuristicName(transition.requested_action.heuristic);
     result["requested_random_seed"] = transition.requested_action.random_seed;
+    result["requested_pp_random_seed"] = transition.requested_action.pp_random_seed;
+    result["applied_pp_random_seed"] = transition.applied_pp_random_seed;
     result["requested_repair_order"] = transition.requested_action.repair_order;
     result["applied_heuristic"] = repairHeuristicName(transition.applied_heuristic);
     result["action_valid"] = transition.action_valid;
@@ -333,6 +343,7 @@ py::dict proposalToPython(const RepairProposal& proposal)
     result["requested_mode"] = repairActionModeName(proposal.requested_action.mode);
     result["requested_heuristic"] = repairHeuristicName(proposal.requested_action.heuristic);
     result["requested_random_seed"] = proposal.requested_action.random_seed;
+    result["requested_pp_random_seed"] = proposal.requested_action.pp_random_seed;
     result["requested_repair_order"] = proposal.requested_action.repair_order;
     result["applied_heuristic"] = repairHeuristicName(proposal.applied_heuristic);
     result["action_valid"] = proposal.action_valid;

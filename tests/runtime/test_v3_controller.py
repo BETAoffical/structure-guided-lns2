@@ -4,9 +4,11 @@ import unittest
 
 from experiments.repair_aware import PortableScalarModel
 from experiments.v3_controller import (
+    V3_H3_BUNDLE_SCHEMA,
     V3ControllerBundle,
     V3ControllerState,
     v3_candidate_order,
+    v3_h3_candidate_order,
 )
 
 
@@ -60,6 +62,115 @@ class V3CandidateOrderingTests(unittest.TestCase):
         )
         self.assertNotIn(0, order)
 
+    def test_horizon_utility_prefers_two_fast_size8_repairs(self) -> None:
+        values = [
+            {"candidate_id": "size8", "actual_size": 8},
+            {"candidate_id": "size16", "actual_size": 16},
+        ]
+        predictions = {
+            "effective_progress_probability": [0.9, 0.9],
+            "no_progress_probability": [0.1, 0.1],
+            "h3_no_progress_probability": [0.1, 0.1],
+            "utility": [10.0, 5.0],
+        }
+        order = v3_h3_candidate_order(
+            values,
+            predictions,
+            [1.0, 2.0],
+            {
+                "h1_effective_probability_tolerance": 0.1,
+                "h1_no_progress_probability_tolerance": 0.1,
+                "minimum_h3_utility_improvement": 0.0,
+            },
+        )
+        self.assertEqual(order[0], 0)
+
+    def test_horizon_utility_prefers_one_size16_when_repeated_size8_is_slower(self) -> None:
+        values = [
+            {"candidate_id": "size8", "actual_size": 8},
+            {"candidate_id": "size16", "actual_size": 16},
+        ]
+        predictions = {
+            "effective_progress_probability": [0.9, 0.9],
+            "no_progress_probability": [0.1, 0.1],
+            "h3_no_progress_probability": [0.1, 0.1],
+            "utility": [4.0, 6.0],
+        }
+        order = v3_h3_candidate_order(
+            values,
+            predictions,
+            [2.0, 1.0],
+            {
+                "h1_effective_probability_tolerance": 0.1,
+                "h1_no_progress_probability_tolerance": 0.1,
+                "minimum_h3_utility_improvement": 0.0,
+            },
+        )
+        self.assertEqual(order[0], 1)
+
+    def test_horizon_margin_keeps_v2_winner_for_small_predicted_gain(self) -> None:
+        values = [{"candidate_id": "new"}, {"candidate_id": "v2"}]
+        predictions = {
+            "effective_progress_probability": [0.9, 0.9],
+            "no_progress_probability": [0.1, 0.1],
+            "h3_no_progress_probability": [0.1, 0.1],
+            "utility": [10.0, 9.5],
+        }
+        order = v3_h3_candidate_order(
+            values,
+            predictions,
+            [1.0, 2.0],
+            {
+                "h1_effective_probability_tolerance": 0.1,
+                "h1_no_progress_probability_tolerance": 0.1,
+                "minimum_h3_utility_improvement": 0.10,
+            },
+        )
+        self.assertEqual(order[0], 1)
+
+    def test_horizon_equal_utility_keeps_v2_winner(self) -> None:
+        values = [{"candidate_id": "h3"}, {"candidate_id": "v2"}]
+        predictions = {
+            "effective_progress_probability": [0.9, 0.9],
+            "no_progress_probability": [0.1, 0.1],
+            "h3_no_progress_probability": [0.1, 0.1],
+            "utility": [5.0, 5.0],
+        }
+        order = v3_h3_candidate_order(
+            values,
+            predictions,
+            [1.0, 2.0],
+            {
+                "h1_effective_probability_tolerance": 0.1,
+                "h1_no_progress_probability_tolerance": 0.1,
+                "minimum_h3_utility_improvement": 0.0,
+            },
+        )
+        self.assertEqual(order[0], 1)
+
+    def test_horizon_v2_score_tie_uses_formal_lexicographic_rule(self) -> None:
+        values = [
+            {"candidate_id": "z", "candidate_key": "z"},
+            {"candidate_id": "a", "candidate_key": "a"},
+        ]
+        predictions = {
+            "effective_progress_probability": [0.9, 0.9],
+            "no_progress_probability": [0.1, 0.1],
+            "h3_no_progress_probability": [0.1, 0.1],
+            "utility": [5.0, 5.0],
+        }
+        order = v3_h3_candidate_order(
+            values,
+            predictions,
+            [2.0, 2.0],
+            {
+                "h1_effective_probability_tolerance": 0.1,
+                "h1_no_progress_probability_tolerance": 0.1,
+                "minimum_h3_utility_improvement": 0.0,
+            },
+        )
+        self.assertEqual(order[0], 1)
+
 
 class V3RuntimeProjectionTests(unittest.TestCase):
     def test_bundle_reports_union_of_runtime_model_features(self) -> None:
@@ -102,6 +213,16 @@ class V3RuntimeProjectionTests(unittest.TestCase):
                 "model_runtime_feature_counts": {"a": 2, "b": 2},
             },
         )
+
+    def test_horizon_bundle_schema_is_independent_from_v3(self) -> None:
+        runtime_bundle = V3ControllerBundle(
+            models={},
+            thresholds={},
+            selection_overhead_seconds=0.0,
+            manifest={"schema": V3_H3_BUNDLE_SCHEMA},
+            report={},
+        )
+        self.assertTrue(runtime_bundle.is_horizon)
 
 
 class V3ControllerStateTests(unittest.TestCase):

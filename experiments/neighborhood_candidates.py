@@ -47,6 +47,7 @@ def select_representative_neighborhoods(
                 "proposal_seeds": set(),
                 "seed_agents": set(),
                 "selection_families": set(),
+                "selection_rank_by_family": {},
             },
         )
         record["proposal_count_by_family"][family] += 1
@@ -71,9 +72,11 @@ def select_representative_neighborhoods(
                         _candidate_id(agents),
                     ),
                 )
+            rank = len(chosen)
             chosen.append(selected)
             remaining.remove(selected)
             by_agents[selected]["selection_families"].add(family)
+            by_agents[selected]["selection_rank_by_family"][family] = rank
 
     selected_rows = []
     for agents, record in by_agents.items():
@@ -85,6 +88,9 @@ def select_representative_neighborhoods(
                 "agents": list(agents),
                 "actual_size": len(agents),
                 "selection_families": sorted(record["selection_families"]),
+                "selection_rank_by_family": dict(
+                    sorted(record["selection_rank_by_family"].items())
+                ),
                 "proposal_count_by_family": dict(
                     sorted(record["proposal_count_by_family"].items())
                 ),

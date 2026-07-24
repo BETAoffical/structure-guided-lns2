@@ -302,9 +302,16 @@ def generate_dataset(
                 current_task_config = merge_dicts(
                     task_config, task_variant["task"]
                 )
-                task_data = generate_tasks(
-                    map_data, current_task_config, task_seed, task_id
-                )
+                try:
+                    task_data = generate_tasks(
+                        map_data, current_task_config, task_seed, task_id
+                    )
+                except ValueError as error:
+                    raise ValueError(
+                        "task generation failed for "
+                        f"split={split_name}, map={map_id}, "
+                        f"variant={task_variant['name']}, seed={task_seed}: {error}"
+                    ) from error
                 validate_task(map_data, task_data)
                 write_instance_bundle(
                     split_root / "instances", map_data, task_data

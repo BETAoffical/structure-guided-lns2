@@ -102,6 +102,7 @@ from experiments.repair_aware import (
     load_repair_aware_config,
 )
 from experiments.v3_controller import (
+    V3_H3_BUNDLE_SCHEMA,
     V3ControllerBundle,
     V3ControllerState,
     load_v3_controller_bundle,
@@ -120,6 +121,7 @@ CONTROLLER_MODES = (
     "v2-stall-safe",
     "v2-repair-aware",
     "v3-full",
+    "v3-h3",
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
@@ -263,7 +265,7 @@ def closed_loop_dataset_design(
             errors.append(f"{map_id}: incomplete registered task pairing")
         if len({int(row["map_seed"]) for row in tasks}) != 1:
             errors.append(f"{map_id}: inconsistent map seed")
-        if len({int(row["task_seed"]) for row in tasks}) != 4:
+        if len({int(row["task_seed"]) for row in tasks}) != tasks_per_map:
             errors.append(f"{map_id}: repeated task seed")
     expected_layouts = dict(
         settings.get(
@@ -359,6 +361,24 @@ def configured_solver_seeds(config: dict[str, Any]) -> tuple[int, ...]:
     if not seeds or len(seeds) != len(set(seeds)) or any(seed < 0 for seed in seeds):
         raise ValueError("solver seeds must be unique non-negative integers")
     return seeds
+
+
+def _qualification_reuse_fingerprint(run_config: dict[str, Any]) -> str:
+    """Fingerprint the state-reset inputs that qualification depends on."""
+
+    configuration = dict(run_config.get("configuration") or {})
+    return _fingerprint(
+        {
+            "dataset_fingerprint": str(run_config.get("dataset_fingerprint", "")),
+            "split": str(configuration.get("split", "")),
+            "solver_seeds": list(configured_solver_seeds(configuration)),
+            "environment": dict(configuration.get("environment") or {}),
+            "seed_isolation": dict(run_config.get("seed_isolation") or {}),
+            "controller_implementation": dict(
+                run_config.get("controller_implementation") or {}
+            ),
+        }
+    )
 
 
 def configured_policies(config: dict[str, Any]) -> tuple[str, ...]:
@@ -1003,6 +1023,30 @@ def repair_random_seed(
     return value
 
 
+def pp_replay_random_seed(
+    task_id: str,
+    solver_seed: int,
+    state_hash: str,
+    decision_index: int,
+    route: str,
+) -> int:
+    """Return a PP-only seed for deterministic cross-process trace replay."""
+
+    return int(
+        _fingerprint(
+            {
+                "namespace": "closed-loop-pp-replay-v1",
+                "task_id": str(task_id),
+                "solver_seed": int(solver_seed),
+                "state_fingerprint": str(state_hash),
+                "decision_index": int(decision_index),
+                "route": str(route),
+            }
+        )[:16],
+        16,
+    ) % (2**31)
+
+
 def stall_guard_fallback_seed(
     task_id: str,
     solver_seed: int,
@@ -1565,6 +1609,16 @@ def validate_closed_loop_trace(
         action = event.get("action")
         if not isinstance(metrics, dict) or not isinstance(action, dict):
             raise ClosedLoopTraceError("transition is missing action or metrics")
+        action_pp_seed = int(action.get("pp_random_seed", -1))
+        requested_pp_seed = int(metrics.get("requested_pp_random_seed", -1))
+        applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
+        if action_pp_seed != requested_pp_seed:
+            raise ClosedLoopTraceError("transition requested PP seed mismatch")
+        if metrics.get("repair_order") and action_pp_seed >= 0:
+            if applied_pp_seed != action_pp_seed:
+                raise ClosedLoopTraceError("transition applied PP seed mismatch")
+        elif applied_pp_seed >= 0:
+            raise ClosedLoopTraceError("transition applied an unexpected PP seed")
         if int(metrics.get("conflicts_before", -1)) != conflicts[-1]:
             raise ClosedLoopTraceError("transition conflicts_before mismatch")
         after_conflicts = int(after.get("num_of_colliding_pairs", -1))
@@ -1686,7 +1740,7 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError(
                         "repair-aware transition has an invalid outcome"
                     )
-            if str(controller.get("controller_mode")) == "v3-full":
+            if str(controller.get("controller_mode")) in {"v3-full", "v3-h3"}:
                 v3 = controller.get("v3")
                 if not isinstance(v3, dict):
                     raise ClosedLoopTraceError(
@@ -1966,11 +2020,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
         repair_aware_config = load_repair_aware_config(raw_repair_aware)
         repair_aware_bundle = load_repair_aware_bundle(raw_repair_bundle)
-    if controller_mode == "v3-full":
+    if controller_mode in {"v3-full", "v3-h3"}:
         raw_v3_bundle = job.get("v3_bundle")
         if raw_v3_bundle is None:
-            raise ValueError("v3-full requires a frozen v3 bundle")
+            raise ValueError(f"{controller_mode} requires a frozen v3 bundle")
         v3_bundle = load_v3_controller_bundle(raw_v3_bundle)
+        if controller_mode == "v3-h3" and v3_bundle.schema != V3_H3_BUNDLE_SCHEMA:
+            raise ValueError("v3-h3 requires a Horizon-3 controller bundle")
+        if controller_mode == "v3-full" and v3_bundle.schema == V3_H3_BUNDLE_SCHEMA:
+            raise ValueError("v3-full cannot load a Horizon-3 controller bundle")
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     shadow_models: dict[str, Any] = {}
@@ -2168,7 +2226,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     ),
                 )
                 if v3_bundle is not None
-                and controller_mode == "v3-full"
+                and controller_mode in {"v3-full", "v3-h3"}
                 and policy == "realized_dynamic"
                 else None
             )
@@ -2944,6 +3002,24 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     if previous_route is not None and previous_route != route:
                         controller_totals["route_switch_count"] += 1
                     previous_route = route
+                if bool(job.get("deterministic_pp_replay", False)):
+                    # Explicit learned actions already seed immediately before
+                    # PP because they do not run native neighborhood
+                    # generation.  Preserve that behavior.  Official actions
+                    # need an independent seed because their neighborhood
+                    # generator consumes the process-global RNG first.
+                    action["pp_random_seed"] = (
+                        int(action["random_seed"])
+                        if action.get("mode") == "explicit_neighborhood"
+                        and int(action.get("random_seed", -1)) >= 0
+                        else pp_replay_random_seed(
+                            str(row["task_id"]),
+                            solver_seed,
+                            before_hash,
+                            decision_index,
+                            route,
+                        )
+                    )
                 repair_started = time.perf_counter()
                 result = _plain(environment.step(action))
                 repair_wall_seconds = time.perf_counter() - repair_started
@@ -2951,6 +3027,20 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 total_repair_wall_seconds += repair_wall_seconds
                 state = result["observation"]
                 metrics = result["metrics"]
+                if "pp_random_seed" in action:
+                    requested_pp_seed = int(action["pp_random_seed"])
+                    if int(metrics.get("requested_pp_random_seed", -1)) != requested_pp_seed:
+                        raise ClosedLoopExecutionError(
+                            "pp_seed_mismatch",
+                            "native transition did not retain the requested PP seed",
+                        )
+                    if metrics.get("repair_order") and int(
+                        metrics.get("applied_pp_random_seed", -1)
+                    ) != requested_pp_seed:
+                        raise ClosedLoopExecutionError(
+                            "pp_seed_not_applied",
+                            "native PP did not apply the deterministic replay seed",
+                        )
                 required_native_timing_keys = {
                     "native_step_seconds",
                     "native_neighborhood_generation_seconds",
@@ -3643,6 +3733,8 @@ def run_closed_loop_collection(
     wall_time_budget_seconds: float | None = None,
     episode_process_timeout_seconds: float | None = None,
     stopping_rule: str = "historical",
+    qualification_source: str | Path | None = None,
+    use_global_collection_lock: bool = True,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -3650,6 +3742,8 @@ def run_closed_loop_collection(
     config = _read_json(Path(config_path).resolve())
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError("unsupported closed-loop config")
+    if not isinstance(config.get("deterministic_pp_replay", False), bool):
+        raise ValueError("deterministic_pp_replay must be boolean")
     config = _with_time_budget_overrides(
         config, wall_time_budget_seconds, episode_process_timeout_seconds
     )
@@ -3708,21 +3802,26 @@ def run_closed_loop_collection(
         raise ValueError(
             "repair-aware config/bundle are only valid with v2-repair-aware"
         )
-    if controller_mode == "v3-full":
+    if controller_mode in {"v3-full", "v3-h3"}:
         v3_root = Path(str(v3_bundle or DEFAULT_V3_BUNDLE))
         if not v3_root.is_absolute():
             v3_root = project_root / v3_root
         v3_root = v3_root.resolve()
         v3_manifest = load_v3_controller_bundle(v3_root).manifest
+        loaded_v3_schema = str(v3_manifest.get("schema"))
+        if controller_mode == "v3-h3" and loaded_v3_schema != V3_H3_BUNDLE_SCHEMA:
+            raise ValueError("v3-h3 requires a Horizon-3 controller bundle")
+        if controller_mode == "v3-full" and loaded_v3_schema == V3_H3_BUNDLE_SCHEMA:
+            raise ValueError("v3-full cannot load a Horizon-3 controller bundle")
         if controller_manifest is None or str(
             v3_manifest.get("main_ranker_semantic_fingerprint", "")
         ) != str(controller_manifest.get("main_ranker_semantic_fingerprint", "")):
             raise ValueError("v3 bundle does not match the selected v2 tie-break ranker")
         proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
         if proposal_sizes != {4, 8, 16}:
-            raise ValueError("v3-full requires the frozen 4/8/16 candidate space")
+            raise ValueError(f"{controller_mode} requires the frozen 4/8/16 candidate space")
     elif v3_bundle is not None:
-        raise ValueError("v3_bundle is only valid with v3-full")
+        raise ValueError("v3_bundle is only valid with v3-full or v3-h3")
     storage_fp = storage_fingerprint(trace_format)
     split = str(config["split"])
     solver_seeds = configured_solver_seeds(config)
@@ -3808,6 +3907,9 @@ def run_closed_loop_collection(
         "feature_backend": feature_backend,
         "controller_runtime": controller_runtime,
         "verification_profile": verification_profile,
+        "deterministic_pp_replay": bool(
+            config.get("deterministic_pp_replay", False)
+        ),
         "controller_bundle": str(controller_root),
         "feature_shadow_validation": bool(
             feature_shadow_validation
@@ -3955,28 +4057,63 @@ def run_closed_loop_collection(
     }
     for current in sequence:
         if current == "qualify":
-            jobs = [
-                {
-                    "row": row,
-                    "solver_seed": solver_seed,
-                    "dataset_root": str(dataset_root),
-                    "environment": config["environment"],
-                }
-                for row in rows
-                for solver_seed in solver_seeds
-                if normalized_job_keys is None
-                or (str(row["task_id"]), int(solver_seed)) in normalized_job_keys
-            ]
-            with _CollectionRunLock(output_root, run_fp, "closed-loop-qualification"):
-                results = _run_jobs(
-                    _qualification_worker,
-                    jobs,
-                    effective_workers,
-                    phase="closed-loop-qualification",
-                    output_root=output_root,
-                    run_fingerprint=run_fp,
-                    timeout_seconds=float(config["episode_process_timeout_seconds"]),
+            if qualification_source is not None:
+                qualification_root = Path(qualification_source).resolve()
+                source_run_path = qualification_root / "run_config.json"
+                if not source_run_path.is_file():
+                    raise ValueError("qualification source is missing run_config.json")
+                source_run = _read_json(source_run_path)
+                if _qualification_reuse_fingerprint(
+                    source_run
+                ) != _qualification_reuse_fingerprint(run_config):
+                    raise ValueError(
+                        "qualification source is incompatible with the current reset protocol"
+                    )
+                reused_results = _read_jsonl(
+                    qualification_root / "qualification_manifest.jsonl"
                 )
+                expected_qualification_keys = (
+                    normalized_job_keys
+                    if normalized_job_keys is not None
+                    else available_job_keys
+                )
+                results = [
+                    value
+                    for value in reused_results
+                    if (
+                        str(value["task_id"]),
+                        int(value.get("solver_seed", solver_seeds[0])),
+                    )
+                    in expected_qualification_keys
+                ]
+            else:
+                jobs = [
+                    {
+                        "row": row,
+                        "solver_seed": solver_seed,
+                        "dataset_root": str(dataset_root),
+                        "environment": config["environment"],
+                    }
+                    for row in rows
+                    for solver_seed in solver_seeds
+                    if normalized_job_keys is None
+                    or (str(row["task_id"]), int(solver_seed)) in normalized_job_keys
+                ]
+                with _CollectionRunLock(
+                    output_root,
+                    run_fp,
+                    "closed-loop-qualification",
+                    use_global_lock=use_global_collection_lock,
+                ):
+                    results = _run_jobs(
+                        _qualification_worker,
+                        jobs,
+                        effective_workers,
+                        phase="closed-loop-qualification",
+                        output_root=output_root,
+                        run_fingerprint=run_fp,
+                        timeout_seconds=float(config["episode_process_timeout_seconds"]),
+                    )
             qualification_manifest = output_root / "qualification_manifest.jsonl"
             existing_results = (
                 _read_jsonl(qualification_manifest)
@@ -4076,6 +4213,9 @@ def run_closed_loop_collection(
                 ),
                 "resume": resume,
                 "require_finalization_timings": True,
+                "deterministic_pp_replay": bool(
+                    config.get("deterministic_pp_replay", False)
+                ),
                 "existing_manifest_row": existing_by_key.get(
                     (str(row["task_id"]), int(solver_seed))
                 ),
@@ -4085,7 +4225,12 @@ def run_closed_loop_collection(
             if normalized_job_keys is None
             or (str(row["task_id"]), int(solver_seed)) in normalized_job_keys
         ]
-        with _CollectionRunLock(output_root, run_fp, f"closed-loop-{current}"):
+        with _CollectionRunLock(
+            output_root,
+            run_fp,
+            f"closed-loop-{current}",
+            use_global_lock=use_global_collection_lock,
+        ):
             results = _run_jobs(
                 _closed_loop_episode_worker,
                 jobs,

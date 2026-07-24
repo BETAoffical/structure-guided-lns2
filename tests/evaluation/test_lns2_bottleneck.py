@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import inspect
 import json
 import sys
 import tempfile
@@ -25,7 +26,13 @@ from experiments.lns2_bottleneck import (
     targeted_stall_recovery_diagnostic,
 )
 from scripts.run_lns2_tradeoff_evaluation import (
+    _merge_lane_collection,
+    _rank_correlation,
     _require_native_timing_interface,
+    _resolve_parallel_lanes,
+    _run_dual_track,
+    _run_dual_track_after_validation,
+    _run_isolated_parallel_collections,
     _unsolved_job_keys,
     _v3_evaluation_approval,
 )
@@ -237,6 +244,63 @@ def _write_manifest(
 
 
 class Lns2BottleneckTests(unittest.TestCase):
+    def test_parallel_helpers_do_not_split_dual_track_entrypoint(self) -> None:
+        entrypoint = inspect.getsource(_run_dual_track)
+        continuation = inspect.getsource(_run_dual_track_after_validation)
+        parallel = inspect.getsource(_run_isolated_parallel_collections)
+        self.assertIn("return _run_dual_track_after_validation", entrypoint)
+        self.assertIn("repair_aware_config", continuation)
+        self.assertNotIn("repair_aware_config =", parallel)
+
+    def test_parallel_lane_resolution_keeps_strict_single_worker(self) -> None:
+        self.assertEqual(_resolve_parallel_lanes("strict", "auto"), 1)
+        with patch(
+            "experiments.parallel_runtime.physical_cpu_sets", return_value=[(0,)]
+        ):
+            self.assertEqual(
+                _resolve_parallel_lanes("isolated-parallel", "auto"), 1
+            )
+
+    def test_parallel_rank_correlation_detects_reversal(self) -> None:
+        self.assertAlmostEqual(_rank_correlation([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]), 1.0)
+        self.assertAlmostEqual(_rank_correlation([1.0, 2.0, 3.0], [3.0, 2.0, 1.0]), -1.0)
+
+    def test_parallel_lane_merge_preserves_unique_episode_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane0 = root / "lane0"
+            lane1 = root / "lane1"
+            for lane, seed in ((lane0, 1), (lane1, 2)):
+                (lane / "episodes").mkdir(parents=True)
+                (lane / "episodes" / f"episode-{seed}.json").write_text(
+                    str(seed), encoding="utf-8"
+                )
+                (lane / "realized_dynamic_manifest.jsonl").write_text(
+                    json.dumps(
+                        {
+                            "task_id": "task",
+                            "solver_seed": seed,
+                            "trace_sha256": f"sha-{seed}",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            canonical.mkdir()
+            _merge_lane_collection(
+                canonical, [lane0, lane1], "realized_dynamic"
+            )
+            rows = [
+                json.loads(value)
+                for value in (canonical / "realized_dynamic_manifest.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            self.assertEqual([row["solver_seed"] for row in rows], [1, 2])
+            self.assertTrue((canonical / "episodes" / "episode-1.json").is_file())
+            self.assertTrue((canonical / "episodes" / "episode-2.json").is_file())
+
     def test_v3_promotion_enforces_quality_speed_and_fallback_gates(self) -> None:
         wall = {
             "official_adaptive": {
@@ -320,6 +384,34 @@ class Lns2BottleneckTests(unittest.TestCase):
             0.02,
         )
         self.assertLessEqual(gate["adaptive_fallback_fraction"], 0.05)
+
+        h3_summaries = [
+            {
+                **row,
+                "controller": (
+                    "v3-h3" if row["controller"] == "v3-full" else row["controller"]
+                ),
+            }
+            for row in summaries
+        ]
+        h3_pairwise = [
+            {
+                **row,
+                "candidate": (
+                    "v3-h3" if row["candidate"] == "v3-full" else row["candidate"]
+                ),
+            }
+            for row in pairwise
+        ]
+        h3_gate = _v3_promotion_gate(
+            h3_summaries,
+            h3_pairwise,
+            primary_track="wall-clock-300",
+            validation_passed=True,
+            candidate_controller="v3-h3",
+        )
+        self.assertTrue(h3_gate["passed"], h3_gate)
+        self.assertEqual(h3_gate["candidate_controller"], "v3-h3")
 
     def test_stall_guard_attempt_limit_and_target_recovery(self) -> None:
         guarded = [

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import collections as collections_module
+import concurrent.futures
 import hashlib
 import json
 import logging
+import math
+import shutil
+import statistics
 import sys
-import threading
 import traceback
 from pathlib import Path
 from typing import Any
@@ -23,9 +27,15 @@ from experiments.closed_loop_confirmation import (  # noqa: E402
     run_closed_loop_collection,
 )
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_DELTA_GZIP_V2  # noqa: E402
+from experiments.closed_loop_trace_storage import read_trace_events  # noqa: E402
 from experiments.compact_controller_model import load_controller_bundle  # noqa: E402
 from experiments.lns2_bottleneck import (  # noqa: E402
     generate_bottleneck_artifacts,
+)
+from experiments.parallel_runtime import (  # noqa: E402
+    initialize_isolated_worker,
+    isolated_lane_cpu_sets,
+    parallel_runtime_metadata,
 )
 from experiments.repair_collection import (  # noqa: E402
     _load_dataset_rows,
@@ -33,6 +43,7 @@ from experiments.repair_collection import (  # noqa: E402
     _read_jsonl,
     _utc_now,
     _write_json,
+    _write_jsonl,
 )
 from experiments.run_output_guard import prepare_run_output  # noqa: E402
 from experiments.v3_controller import load_v3_controller_bundle  # noqa: E402
@@ -61,6 +72,7 @@ REPAIR_AWARE_COLLECTION = (
     "realized_dynamic",
 )
 V3_COLLECTION = ("v3-full", "v3-full", "realized_dynamic")
+V3_H3_COLLECTION = ("v3-h3", "v3-h3", "realized_dynamic")
 CONTROLLER_COLLECTIONS = {
     item[0]: item
     for item in (
@@ -68,6 +80,7 @@ CONTROLLER_COLLECTIONS = {
         STALL_SAFE_COLLECTION,
         REPAIR_AWARE_COLLECTION,
         V3_COLLECTION,
+        V3_H3_COLLECTION,
     )
 }
 DUAL_DEFAULT_OUTPUTS = {
@@ -105,62 +118,6 @@ def _status(path: Path, started_at: str, **values: Any) -> None:
             **values,
         },
     )
-
-
-def _monitor_progress(
-    path: Path,
-    logger: logging.Logger,
-    label: str,
-    mirror_path: Path | None = None,
-) -> tuple[threading.Event, threading.Thread]:
-    stop = threading.Event()
-
-    def monitor() -> None:
-        previous: tuple[Any, ...] | None = None
-        while not stop.wait(10.0):
-            if not path.is_file():
-                continue
-            try:
-                row = _read_json(path)
-            except (OSError, ValueError, json.JSONDecodeError):
-                continue
-            if mirror_path is not None:
-                _write_json(
-                    mirror_path,
-                    {
-                        **row,
-                        "runner_label": label,
-                        "source_progress_file": str(path),
-                    },
-                )
-            current = (
-                row.get("phase"),
-                row.get("status"),
-                row.get("completed_jobs"),
-                row.get("total_jobs"),
-                row.get("error_jobs"),
-            )
-            if current != previous:
-                logger.info(
-                    "%s progress: phase=%s status=%s completed=%s/%s errors=%s active=%s",
-                    label,
-                    row.get("phase"),
-                    row.get("status"),
-                    row.get("completed_jobs"),
-                    row.get("total_jobs"),
-                    row.get("error_jobs"),
-                    ", ".join(map(str, row.get("active_jobs", []))) or "none",
-                )
-                previous = current
-
-    thread = threading.Thread(target=monitor, name=f"{label}-progress", daemon=True)
-    thread.start()
-    return stop, thread
-
-
-def _stop_monitor(monitor: tuple[threading.Event, threading.Thread]) -> None:
-    monitor[0].set()
-    monitor[1].join(timeout=2.0)
 
 
 def _cohort_job_keys(
@@ -214,7 +171,10 @@ def _run_interleaved_collections(
     collections: tuple[tuple[str, str, str], ...] = DUAL_COLLECTIONS,
     controller_runtime: str = "reference",
     verification_profile: str = "audit",
+    paired_execution: str = "strict",
+    parallel_lanes: int = 1,
 ) -> None:
+    qualification_root: Path | None = None
     for name, controller, _policy in collections:
         root = roots[name]
         root.mkdir(parents=True, exist_ok=True)
@@ -242,13 +202,16 @@ def _run_interleaved_collections(
             repair_aware_bundle=(
                 repair_aware_bundle if controller == "v2-repair-aware" else None
             ),
-            v3_bundle=v3_bundle if controller == "v3-full" else None,
+            v3_bundle=v3_bundle if controller in {"v3-full", "v3-h3"} else None,
             job_keys=job_keys,
             cohort_job_keys=job_keys,
             wall_time_budget_seconds=wall_time_budget_seconds,
             episode_process_timeout_seconds=episode_process_timeout_seconds,
             stopping_rule=stopping_rule,
+            qualification_source=qualification_root,
         )
+        if qualification_root is None:
+            qualification_root = root
 
     keys = _cohort_job_keys(dataset, collection_config, task_ids)
     if job_keys is not None:
@@ -273,10 +236,38 @@ def _run_interleaved_collections(
         {
             "schema": "lns2.controller_execution_schedule.v1",
             "method": "sha256-rotated-per-task-seed",
-            "workers": 1,
+            "workers": (
+                parallel_lanes if paired_execution == "isolated-parallel" else 1
+            ),
+            "paired_execution": paired_execution,
             "entries": schedule,
         },
     )
+    if paired_execution == "isolated-parallel" and parallel_lanes > 1:
+        _run_isolated_parallel_collections(
+            roots=roots,
+            dataset=dataset,
+            collection_config=collection_config,
+            controller_bundle=controller_bundle,
+            stall_guard_config=stall_guard_config,
+            repair_aware_config=repair_aware_config,
+            repair_aware_bundle=repair_aware_bundle,
+            v3_bundle=v3_bundle,
+            task_ids=task_ids,
+            feature_backend=feature_backend,
+            runner_progress=runner_progress,
+            schedule_path=schedule_path,
+            schedule=schedule,
+            job_keys=job_keys,
+            wall_time_budget_seconds=wall_time_budget_seconds,
+            episode_process_timeout_seconds=episode_process_timeout_seconds,
+            stopping_rule=stopping_rule,
+            collections=collections,
+            controller_runtime=controller_runtime,
+            verification_profile=verification_profile,
+            parallel_lanes=parallel_lanes,
+        )
+        return
     collection_by_name = {item[0]: item for item in collections}
     completed = 0
     error_jobs = 0
@@ -323,7 +314,7 @@ def _run_interleaved_collections(
                     if controller == "v2-repair-aware"
                     else None
                 ),
-                v3_bundle=v3_bundle if controller == "v3-full" else None,
+                v3_bundle=v3_bundle if controller in {"v3-full", "v3-h3"} else None,
                 job_keys={(task_id, seed)},
                 cohort_job_keys=job_keys,
                 wall_time_budget_seconds=wall_time_budget_seconds,
@@ -386,6 +377,25 @@ def _csv_options(value: str, allowed: set[str], label: str) -> tuple[str, ...]:
     if not values or len(values) != len(set(values)) or any(item not in allowed for item in values):
         raise ValueError(f"invalid {label}: {value}")
     return values
+
+
+def _resolve_parallel_lanes(paired_execution: str, value: str) -> int:
+    if paired_execution == "strict":
+        return 1
+    if paired_execution != "isolated-parallel":
+        raise ValueError(f"unsupported paired execution mode: {paired_execution}")
+    if value == "auto":
+        from experiments.parallel_runtime import physical_cpu_sets
+
+        physical = len(physical_cpu_sets())
+        if physical < 2:
+            return 1
+        return min(4, max(2, physical - 2))
+    lanes = int(value)
+    if lanes not in {2, 3, 4}:
+        raise ValueError("--parallel-lanes must be auto, 2, 3, or 4")
+    isolated_lane_cpu_sets(lanes)
+    return lanes
 
 
 def _require_native_timing_interface(*, require_optimized: bool = False) -> str:
@@ -460,9 +470,12 @@ def _dual_preflight(
     if bundle.pruner_threshold is not None:
         raise ValueError("the active runtime does not support pruned controller bundles")
     v3_approval: dict[str, Any] | None = None
-    if any(controller == "v3-full" for _name, controller, _policy in collections):
+    if any(
+        controller in {"v3-full", "v3-h3"}
+        for _name, controller, _policy in collections
+    ):
         if v3_bundle is None:
-            raise ValueError("v3-full requires --v3-bundle")
+            raise ValueError("v3 evaluation requires --v3-bundle")
         loaded_v3 = load_v3_controller_bundle(v3_bundle)
         v3_approval = _v3_evaluation_approval(
             loaded_v3.report,
@@ -504,7 +517,9 @@ def _dual_preflight(
                     if controller == "v2-repair-aware"
                     else None
                 ),
-                v3_bundle=v3_bundle if controller == "v3-full" else None,
+                v3_bundle=(
+                    v3_bundle if controller in {"v3-full", "v3-h3"} else None
+                ),
                 cohort_job_keys=cohort_job_keys,
                 wall_time_budget_seconds=budget,
                 episode_process_timeout_seconds=budget + 60.0,
@@ -559,7 +574,7 @@ def _v3_evaluation_approval(
             "decision": str(report.get("decision") or "v3_pilot_passed"),
         }
     if not allow_unpromoted_diagnostic:
-        raise ValueError("v3-full requires a v3_pilot_passed bundle")
+        raise ValueError("v3 evaluation requires a v3_pilot_passed bundle")
     checks = dict(report.get("pilot_checks") or {})
     required_integrity = {
         "native_available": bool(report.get("native_available")),
@@ -613,6 +628,15 @@ def _require_dual_formal_audits(quick_status: Path, storage_audit: Path) -> None
 
 def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     try:
+        parallel_lanes = _resolve_parallel_lanes(
+            arguments.paired_execution, arguments.parallel_lanes
+        )
+        if arguments.parallelism_audit and arguments.paired_execution != "isolated-parallel":
+            raise ValueError(
+                "--parallelism-audit requires --paired-execution isolated-parallel"
+            )
+        if arguments.parallelism_audit_seconds <= 0.0:
+            raise ValueError("--parallelism-audit-seconds must be positive")
         tracks = _csv_options(
             arguments.evaluation_tracks,
             {"historical", "wall-clock"},
@@ -665,15 +689,16 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 raise ValueError(
                     "--allow-unpromoted-v3-diagnostic is restricted to a quick diagnostic subset"
                 )
-            if "v3-full" not in controllers:
+            if not {"v3-full", "v3-h3"} & set(controllers):
                 raise ValueError(
-                    "--allow-unpromoted-v3-diagnostic requires v3-full"
+                    "--allow-unpromoted-v3-diagnostic requires a v3 controller"
                 )
         if (
             (
                 "v2-stall-safe" in controllers
                 or "v2-repair-aware" in controllers
                 or "v3-full" in controllers
+                or "v3-h3" in controllers
                 or arguments.diagnostic_subset
             )
             and not arguments.output
@@ -724,6 +749,570 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         if "v2-stall-safe" in controllers
         else None
     )
+    return _run_dual_track_after_validation(
+        arguments,
+        parser,
+        parallel_lanes=parallel_lanes,
+        tracks=tracks,
+        controllers=controllers,
+        collections=collections,
+        requested_task_ids=requested_task_ids,
+        requested_solver_seeds=requested_solver_seeds,
+        output=output,
+        dataset=dataset,
+        collection_config=collection_config,
+        controller_bundle=controller_bundle,
+        stall_guard_config=stall_guard_config,
+    )
+
+
+def _paired_lane_worker(job: dict[str, Any]) -> dict[str, Any]:
+    collections = {
+        str(item[0]): tuple(item) for item in job["collections"]
+    }
+    completed = 0
+    errors = 0
+    for entry in job["entries"]:
+        task_id = str(entry["task_id"])
+        seed = int(entry["solver_seed"])
+        for collection_name in entry["controller_order"]:
+            name, controller, policy = collections[str(collection_name)]
+            root = Path(job["lane_roots"][name])
+            run_closed_loop_collection(
+                job["dataset"],
+                job["collection_config"],
+                root,
+                phase=policy,
+                workers=1,
+                resume=True,
+                task_ids=job["task_ids"],
+                trace_format=TRACE_FORMAT_DELTA_GZIP_V2,
+                controller=controller,
+                feature_backend=job["feature_backend"],
+                controller_runtime=job["controller_runtime"],
+                verification_profile=job["verification_profile"],
+                controller_bundle=job["controller_bundle"],
+                stall_guard_config=(
+                    job["stall_guard_config"]
+                    if controller == "v2-stall-safe"
+                    else None
+                ),
+                repair_aware_config=(
+                    job["repair_aware_config"]
+                    if controller == "v2-repair-aware"
+                    else None
+                ),
+                repair_aware_bundle=(
+                    job["repair_aware_bundle"]
+                    if controller == "v2-repair-aware"
+                    else None
+                ),
+                v3_bundle=(
+                    job["v3_bundle"]
+                    if controller in {"v3-full", "v3-h3"}
+                    else None
+                ),
+                job_keys={(task_id, seed)},
+                cohort_job_keys={tuple(value) for value in job["job_keys"]},
+                wall_time_budget_seconds=job["wall_time_budget_seconds"],
+                episode_process_timeout_seconds=job[
+                    "episode_process_timeout_seconds"
+                ],
+                stopping_rule=job["stopping_rule"],
+                use_global_collection_lock=False,
+            )
+            rows = _read_jsonl(root / f"{policy}_manifest.jsonl")
+            matching = [
+                row
+                for row in rows
+                if str(row.get("task_id")) == task_id
+                and int(row.get("solver_seed", -1)) == seed
+            ]
+            if len(matching) != 1:
+                raise RuntimeError(
+                    f"lane {job['lane_id']} did not write one result for "
+                    f"{task_id}/seed={seed}/{name}"
+                )
+            completed += 1
+            errors += int(str(matching[0].get("status")) not in {"ok", "resumed"})
+    return {
+        "lane_id": int(job["lane_id"]),
+        "completed_jobs": completed,
+        "error_jobs": errors,
+        "lane_roots": dict(job["lane_roots"]),
+    }
+
+
+def _prepare_lane_root(canonical: Path, lane: Path) -> None:
+    lane.mkdir(parents=True, exist_ok=True)
+    canonical_config = _read_json(canonical / "run_config.json")
+    lane_config_path = lane / "run_config.json"
+    if lane_config_path.is_file():
+        lane_config = _read_json(lane_config_path)
+        if str(lane_config.get("run_fingerprint")) != str(
+            canonical_config.get("run_fingerprint")
+        ):
+            raise ValueError(f"parallel lane contains a different run: {lane}")
+    else:
+        shutil.copy2(canonical / "run_config.json", lane_config_path)
+    for name in ("qualification_manifest.jsonl", "qualification_report.json"):
+        shutil.copy2(canonical / name, lane / name)
+
+
+def _merge_lane_collection(
+    canonical: Path,
+    lane_roots: list[Path],
+    policy: str,
+) -> None:
+    for lane in lane_roots:
+        for directory in ("episodes", "state_blobs"):
+            source = lane / directory
+            if source.is_dir():
+                shutil.copytree(source, canonical / directory, dirs_exist_ok=True)
+    manifest_path = canonical / f"{policy}_manifest.jsonl"
+    rows = _read_jsonl(manifest_path) if manifest_path.is_file() else []
+    merged = {
+        (str(row["task_id"]), int(row["solver_seed"])): row for row in rows
+    }
+    for lane in lane_roots:
+        path = lane / f"{policy}_manifest.jsonl"
+        if not path.is_file():
+            continue
+        for row in _read_jsonl(path):
+            key = (str(row["task_id"]), int(row["solver_seed"]))
+            previous = merged.get(key)
+            if (
+                previous is not None
+                and str(previous.get("trace_sha256"))
+                != str(row.get("trace_sha256"))
+            ):
+                raise RuntimeError(f"parallel lane result mismatch for {key}")
+            merged[key] = row
+    _write_jsonl(manifest_path, [merged[key] for key in sorted(merged)])
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    lower = int(position)
+    upper = min(len(ordered) - 1, lower + 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _rank_correlation(left: list[float], right: list[float]) -> float:
+    if len(left) != len(right) or len(left) < 2:
+        return 1.0
+
+    def ranks(values: list[float]) -> list[float]:
+        order = sorted(range(len(values)), key=lambda index: (values[index], index))
+        result = [0.0] * len(values)
+        for rank, index in enumerate(order):
+            result[index] = float(rank)
+        return result
+
+    left_rank = ranks(left)
+    right_rank = ranks(right)
+    left_mean = statistics.fmean(left_rank)
+    right_mean = statistics.fmean(right_rank)
+    numerator = math.fsum(
+        (a - left_mean) * (b - right_mean)
+        for a, b in zip(left_rank, right_rank)
+    )
+    denominator = math.sqrt(
+        math.fsum((value - left_mean) ** 2 for value in left_rank)
+        * math.fsum((value - right_mean) ** 2 for value in right_rank)
+    )
+    return numerator / denominator if denominator > 0.0 else 1.0
+
+
+def _parallel_audit_rows(
+    roots: dict[str, Path], collections: tuple[tuple[str, str, str], ...]
+) -> dict[tuple[str, int, str], list[dict[str, Any]]]:
+    result = {}
+    for name, _controller, policy in collections:
+        for manifest in _read_jsonl(roots[name] / f"{policy}_manifest.jsonl"):
+            trace = read_trace_events(roots[name] / str(manifest["trace_file"]))
+            transitions = []
+            for event in trace:
+                if str(event.get("event")) != "transition":
+                    continue
+                controller = dict(event.get("controller") or {})
+                timings = dict(event.get("timings") or {})
+                transitions.append(
+                    {
+                        "before_fingerprint": str(event.get("before_fingerprint")),
+                        "action": dict(event.get("action") or {}),
+                        "selected_candidate_id": controller.get(
+                            "selected_candidate_id"
+                        ),
+                        "pp_seconds": float(timings.get("pp_replan_seconds", 0.0)),
+                        "iteration_seconds": float(
+                            timings.get("iteration_wall_seconds", 0.0)
+                        ),
+                    }
+                )
+            result[
+                (str(manifest["task_id"]), int(manifest["solver_seed"]), name)
+            ] = transitions
+    return result
+
+
+def _compare_parallel_audit(
+    strict_roots: dict[str, Path],
+    parallel_roots: dict[str, Path],
+    collections: tuple[tuple[str, str, str], ...],
+    lanes: int,
+) -> dict[str, Any]:
+    strict = _parallel_audit_rows(strict_roots, collections)
+    parallel = _parallel_audit_rows(parallel_roots, collections)
+    if set(strict) != set(parallel):
+        raise RuntimeError("parallelism audit has incomplete paired coverage")
+    strict_pp: list[float] = []
+    parallel_pp: list[float] = []
+    strict_iteration: dict[str, list[float]] = collections_module.defaultdict(list)
+    parallel_iteration: dict[str, list[float]] = collections_module.defaultdict(list)
+    semantic_mismatches = 0
+    paired_pp_left: list[float] = []
+    paired_pp_right: list[float] = []
+    for key in sorted(strict):
+        strict_rows = strict[key]
+        parallel_rows = parallel[key]
+        common = min(len(strict_rows), len(parallel_rows))
+        for left, right in zip(strict_rows[:common], parallel_rows[:common]):
+            if (
+                left["before_fingerprint"] != right["before_fingerprint"]
+                or left["action"] != right["action"]
+                or left["selected_candidate_id"] != right["selected_candidate_id"]
+            ):
+                semantic_mismatches += 1
+            if left["pp_seconds"] > 0.0 and right["pp_seconds"] > 0.0:
+                strict_pp.append(left["pp_seconds"])
+                parallel_pp.append(right["pp_seconds"])
+                paired_pp_left.append(left["pp_seconds"])
+                paired_pp_right.append(right["pp_seconds"])
+            strict_iteration[key[2]].append(left["iteration_seconds"])
+            parallel_iteration[key[2]].append(right["iteration_seconds"])
+    median_inflation = statistics.median(parallel_pp) / max(
+        1e-9, statistics.median(strict_pp)
+    )
+    p95_inflation = _percentile(parallel_pp, 0.95) / max(
+        1e-9, _percentile(strict_pp, 0.95)
+    )
+    correlation = _rank_correlation(paired_pp_left, paired_pp_right)
+    reference = collections[0][0]
+    pairwise_ratio_delta = 0.0
+    strict_reference = statistics.median(strict_iteration[reference])
+    parallel_reference = statistics.median(parallel_iteration[reference])
+    for name, _controller, _policy in collections[1:]:
+        strict_ratio = statistics.median(strict_iteration[name]) / max(
+            1e-9, strict_reference
+        )
+        parallel_ratio = statistics.median(parallel_iteration[name]) / max(
+            1e-9, parallel_reference
+        )
+        pairwise_ratio_delta = max(
+            pairwise_ratio_delta,
+            abs(parallel_ratio / max(1e-9, strict_ratio) - 1.0),
+        )
+    checks = {
+        "semantic_mismatches_zero": semantic_mismatches == 0,
+        "pp_median_inflation_at_most_3pct": median_inflation <= 1.03,
+        "pp_p95_inflation_at_most_5pct": p95_inflation <= 1.05,
+        "pp_rank_correlation_at_least_098": correlation >= 0.98,
+        "controller_ratio_delta_at_most_5pct": pairwise_ratio_delta <= 0.05,
+    }
+    return {
+        "schema": "lns2.paired_parallelism_audit.v1",
+        "lanes": lanes,
+        "paired_episode_count": len(strict),
+        "paired_pp_count": len(paired_pp_left),
+        "semantic_mismatch_count": semantic_mismatches,
+        "pp_median_inflation": median_inflation,
+        "pp_p95_inflation": p95_inflation,
+        "pp_rank_correlation": correlation,
+        "controller_pairwise_ratio_maximum_delta": pairwise_ratio_delta,
+        "checks": checks,
+        "passed": all(checks.values()),
+    }
+
+
+def _run_parallelism_audit(
+    *,
+    output: Path,
+    dataset: Path,
+    collection_config: Path,
+    controller_bundle: Path,
+    stall_guard_config: Path | None,
+    repair_aware_config: Path | None,
+    repair_aware_bundle: Path | None,
+    v3_bundle: Path | None,
+    task_ids: list[str] | None,
+    cohort_job_keys: set[tuple[str, int]],
+    feature_backend: str,
+    controller_runtime: str,
+    verification_profile: str,
+    collections: tuple[tuple[str, str, str], ...],
+    requested_lanes: int,
+    audit_seconds: float,
+    resume: bool,
+    logger: logging.Logger,
+) -> dict[str, Any]:
+    if audit_seconds <= 0.0:
+        raise ValueError("parallelism audit seconds must be positive")
+    preferred = [QUICK_TASKS[index] for index in (0, 2, 5, 6)]
+    available_tasks = {task_id for task_id, _seed in cohort_job_keys}
+    selected_tasks = [task for task in preferred if task in available_tasks]
+    selected_tasks.extend(
+        task
+        for task in sorted(available_tasks)
+        if task not in selected_tasks
+    )
+    selected_tasks = selected_tasks[:4]
+    audit_keys = {
+        min(
+            (key for key in cohort_job_keys if key[0] == task),
+            key=lambda value: value[1],
+        )
+        for task in selected_tasks
+    }
+    if len(audit_keys) < 2:
+        raise ValueError("parallelism audit requires at least two task/seed cohorts")
+    audit_task_ids = sorted({task for task, _seed in audit_keys})
+    root = output / "parallelism-audit"
+    strict_roots = {
+        name: root / "strict" / "collections" / name
+        for name, _controller, _policy in collections
+    }
+    logger.info(
+        "Parallelism audit strict reference: cohorts=%s budget=%ss",
+        len(audit_keys),
+        audit_seconds,
+    )
+    _run_interleaved_collections(
+        roots=strict_roots,
+        dataset=dataset,
+        collection_config=collection_config,
+        controller_bundle=controller_bundle,
+        stall_guard_config=stall_guard_config,
+        repair_aware_config=repair_aware_config,
+        repair_aware_bundle=repair_aware_bundle,
+        v3_bundle=v3_bundle,
+        task_ids=audit_task_ids,
+        feature_backend=feature_backend,
+        resume=resume or (root / "strict").is_dir(),
+        logger=logger,
+        runner_progress=root / "strict" / "progress.json",
+        schedule_path=root / "strict" / "execution_schedule.json",
+        job_keys=audit_keys,
+        wall_time_budget_seconds=audit_seconds,
+        episode_process_timeout_seconds=audit_seconds + 60.0,
+        stopping_rule="wall-clock",
+        collections=collections,
+        controller_runtime=controller_runtime,
+        verification_profile=verification_profile,
+        paired_execution="strict",
+        parallel_lanes=1,
+    )
+    attempts = []
+    selected_lanes = 1
+    for lanes in range(requested_lanes, 1, -1):
+        parallel_roots = {
+            name: root / f"lanes-{lanes}" / "collections" / name
+            for name, _controller, _policy in collections
+        }
+        logger.info("Parallelism audit candidate: lanes=%s", lanes)
+        _run_interleaved_collections(
+            roots=parallel_roots,
+            dataset=dataset,
+            collection_config=collection_config,
+            controller_bundle=controller_bundle,
+            stall_guard_config=stall_guard_config,
+            repair_aware_config=repair_aware_config,
+            repair_aware_bundle=repair_aware_bundle,
+            v3_bundle=v3_bundle,
+            task_ids=audit_task_ids,
+            feature_backend=feature_backend,
+            resume=resume or (root / f"lanes-{lanes}").is_dir(),
+            logger=logger,
+            runner_progress=root / f"lanes-{lanes}" / "progress.json",
+            schedule_path=root / f"lanes-{lanes}" / "execution_schedule.json",
+            job_keys=audit_keys,
+            wall_time_budget_seconds=audit_seconds,
+            episode_process_timeout_seconds=audit_seconds + 60.0,
+            stopping_rule="wall-clock",
+            collections=collections,
+            controller_runtime=controller_runtime,
+            verification_profile=verification_profile,
+            paired_execution="isolated-parallel",
+            parallel_lanes=lanes,
+        )
+        comparison = _compare_parallel_audit(
+            strict_roots, parallel_roots, collections, lanes
+        )
+        attempts.append(comparison)
+        if bool(comparison["passed"]):
+            selected_lanes = lanes
+            break
+    report = {
+        "schema": "lns2.paired_parallelism_audit_selection.v1",
+        "audit_seconds": audit_seconds,
+        "audit_job_keys": [list(value) for value in sorted(audit_keys)],
+        "requested_lanes": requested_lanes,
+        "selected_lanes": selected_lanes,
+        "attempts": attempts,
+        "parallel_candidate_passed": selected_lanes > 1,
+        "fallback_to_strict": selected_lanes == 1,
+        "passed": True,
+    }
+    _write_json(root / "parallelism_audit_report.json", report)
+    return report
+
+
+def _run_isolated_parallel_collections(
+    *,
+    roots: dict[str, Path],
+    dataset: Path,
+    collection_config: Path,
+    controller_bundle: Path,
+    stall_guard_config: Path | None,
+    repair_aware_config: Path | None,
+    repair_aware_bundle: Path | None,
+    v3_bundle: Path | None,
+    task_ids: list[str] | None,
+    feature_backend: str,
+    runner_progress: Path,
+    schedule_path: Path,
+    schedule: list[dict[str, Any]],
+    job_keys: set[tuple[str, int]] | None,
+    wall_time_budget_seconds: float | None,
+    episode_process_timeout_seconds: float | None,
+    stopping_rule: str,
+    collections: tuple[tuple[str, str, str], ...],
+    controller_runtime: str,
+    verification_profile: str,
+    parallel_lanes: int,
+) -> None:
+    if parallel_lanes not in {2, 3, 4}:
+        raise ValueError("isolated parallel timing requires 2, 3, or 4 lanes")
+    runtime = parallel_runtime_metadata(parallel_lanes)
+    effective_job_keys = job_keys or {
+        (str(entry["task_id"]), int(entry["solver_seed"])) for entry in schedule
+    }
+    # Keep assignments for different audited lane counts isolated.  Otherwise
+    # a resumed run that falls back from four lanes to two can accidentally
+    # merge stale episodes from the old lane partition.
+    lane_work = schedule_path.parent / "lane-work" / f"lanes-{parallel_lanes}"
+    lane_entries = [[] for _ in range(parallel_lanes)]
+    for index, entry in enumerate(schedule):
+        lane_entries[index % parallel_lanes].append(entry)
+    jobs = []
+    for lane_id, entries in enumerate(lane_entries):
+        if not entries:
+            continue
+        lane_roots = {
+            name: lane_work / f"lane-{lane_id}" / name
+            for name, _controller, _policy in collections
+        }
+        for name, lane_root in lane_roots.items():
+            _prepare_lane_root(roots[name], lane_root)
+        jobs.append(
+            {
+                "lane_id": lane_id,
+                "entries": entries,
+                "lane_roots": {name: str(path) for name, path in lane_roots.items()},
+                "collections": [list(value) for value in collections],
+                "dataset": str(dataset),
+                "collection_config": str(collection_config),
+                "controller_bundle": str(controller_bundle),
+                "stall_guard_config": (
+                    str(stall_guard_config) if stall_guard_config is not None else None
+                ),
+                "repair_aware_config": (
+                    str(repair_aware_config) if repair_aware_config is not None else None
+                ),
+                "repair_aware_bundle": (
+                    str(repair_aware_bundle) if repair_aware_bundle is not None else None
+                ),
+                "v3_bundle": str(v3_bundle) if v3_bundle is not None else None,
+                "task_ids": task_ids,
+                "feature_backend": feature_backend,
+                "controller_runtime": controller_runtime,
+                "verification_profile": verification_profile,
+                "job_keys": [list(value) for value in sorted(effective_job_keys)],
+                "wall_time_budget_seconds": wall_time_budget_seconds,
+                "episode_process_timeout_seconds": episode_process_timeout_seconds,
+                "stopping_rule": stopping_rule,
+            }
+        )
+    total = len(schedule) * len(collections)
+    completed = 0
+    errors = 0
+    cpu_sets = tuple(isolated_lane_cpu_sets(parallel_lanes))
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=parallel_lanes,
+        initializer=initialize_isolated_worker,
+        initargs=(cpu_sets,),
+    ) as pool:
+        futures = [pool.submit(_paired_lane_worker, job) for job in jobs]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            completed += int(result["completed_jobs"])
+            errors += int(result["error_jobs"])
+            _write_json(
+                runner_progress,
+                {
+                    "schema": "lns2.lns2_tradeoff_progress.v2",
+                    "phase": "paired-isolated-parallel",
+                    "status": "running",
+                    "completed_jobs": completed,
+                    "total_jobs": total,
+                    "error_jobs": errors,
+                    "parallel_runtime": runtime,
+                },
+            )
+    for name, _controller, policy in collections:
+        _merge_lane_collection(
+            roots[name],
+            [lane_work / f"lane-{lane_id}" / name for lane_id in range(parallel_lanes)],
+            policy,
+        )
+    _write_json(
+        runner_progress,
+        {
+            "schema": "lns2.lns2_tradeoff_progress.v2",
+            "phase": "paired-isolated-parallel",
+            "status": "complete" if errors == 0 else "error",
+            "completed_jobs": completed,
+            "total_jobs": total,
+            "error_jobs": errors,
+            "parallel_runtime": runtime,
+        },
+    )
+    if completed != total or errors:
+        raise RuntimeError(
+            f"isolated parallel paired collection incomplete: {completed}/{total}, errors={errors}"
+        )
+
+
+def _run_dual_track_after_validation(
+    arguments: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    *,
+    parallel_lanes: int,
+    tracks: tuple[str, ...],
+    controllers: tuple[str, ...],
+    collections: tuple[tuple[str, str, str], ...],
+    requested_task_ids: list[str] | None,
+    requested_solver_seeds: tuple[int, ...],
+    output: Path,
+    dataset: Path,
+    collection_config: Path,
+    controller_bundle: Path,
+    stall_guard_config: Path | None,
+) -> int:
     repair_aware_config = (
         _resolve(arguments.repair_aware_config)
         if "v2-repair-aware" in controllers
@@ -735,7 +1324,9 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         else None
     )
     v3_bundle = (
-        _resolve(arguments.v3_bundle) if "v3-full" in controllers else None
+        _resolve(arguments.v3_bundle)
+        if {"v3-full", "v3-h3"} & set(controllers)
+        else None
     )
     task_ids = (
         requested_task_ids
@@ -791,7 +1382,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             resume=arguments.resume,
             identity={
                 "runner": "run_lns2_tradeoff_evaluation.dual_track",
-                "schema_version": 5,
+                "schema_version": 6,
                 "mode": arguments.mode,
                 "dataset": str(dataset),
                 "collection_config": str(collection_config),
@@ -800,6 +1391,12 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 "controller_runtime": arguments.controller_runtime,
                 "verification_profile": arguments.verification_profile,
                 "workers": 1,
+                "paired_execution": arguments.paired_execution,
+                "parallel_lanes": parallel_lanes,
+                "parallelism_audit": bool(arguments.parallelism_audit),
+                "parallelism_audit_seconds": float(
+                    arguments.parallelism_audit_seconds
+                ),
                 "tracks": list(tracks),
                 "controllers": list(controllers),
                 "wall_clock_seconds": float(arguments.wall_clock_seconds),
@@ -843,6 +1440,49 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
     try:
         _status(status_path, started_at, status="running", phase="preflight", mode=arguments.mode, output=str(output))
         _write_json(output / "preflight_report.json", preflight)
+        if (
+            arguments.paired_execution == "isolated-parallel"
+            and arguments.parallelism_audit
+            and not arguments.skip_collections
+        ):
+            _status(
+                status_path,
+                started_at,
+                status="running",
+                phase="parallelism-audit",
+                mode=arguments.mode,
+                output=str(output),
+            )
+            audit_cohort = set(
+                cohort_job_keys
+                or _cohort_job_keys(
+                    dataset,
+                    collection_config,
+                    task_ids,
+                    requested_solver_seeds,
+                )
+            )
+            parallelism_audit = _run_parallelism_audit(
+                output=output,
+                dataset=dataset,
+                collection_config=collection_config,
+                controller_bundle=controller_bundle,
+                stall_guard_config=stall_guard_config,
+                repair_aware_config=repair_aware_config,
+                repair_aware_bundle=repair_aware_bundle,
+                v3_bundle=v3_bundle,
+                task_ids=task_ids,
+                cohort_job_keys=audit_cohort,
+                feature_backend=arguments.feature_backend,
+                controller_runtime=arguments.controller_runtime,
+                verification_profile=arguments.verification_profile,
+                collections=collections,
+                requested_lanes=parallel_lanes,
+                audit_seconds=float(arguments.parallelism_audit_seconds),
+                resume=arguments.resume,
+                logger=logger,
+            )
+            parallel_lanes = int(parallelism_audit["selected_lanes"])
         if arguments.mode == "formal":
             quick_path = _resolve(arguments.quick_audit)
             if str(arguments.quick_audit) == "build/initlns-lns2-tradeoff-quick-native-v2/status.json":
@@ -882,6 +1522,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collections=collections,
                     controller_runtime=arguments.controller_runtime,
                     verification_profile=arguments.verification_profile,
+                    paired_execution=arguments.paired_execution,
+                    parallel_lanes=parallel_lanes,
                 )
             else:
                 logger.warning("%s collections explicitly skipped; existing files will be used", label)
@@ -920,6 +1562,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collections=collections,
                     controller_runtime=arguments.controller_runtime,
                     verification_profile=arguments.verification_profile,
+                    paired_execution=arguments.paired_execution,
+                    parallel_lanes=parallel_lanes,
                 )
             elif not selected:
                 track_roots.pop(sensitivity_label)
@@ -972,6 +1616,8 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                     collections=collections,
                     controller_runtime=arguments.controller_runtime,
                     verification_profile=arguments.verification_profile,
+                    paired_execution=arguments.paired_execution,
+                    parallel_lanes=parallel_lanes,
                 )
                 track_roots[extension_label] = extension_roots
             else:
@@ -1016,7 +1662,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             v3_bundle=str(v3_bundle) if v3_bundle is not None else None,
             v3_report=(
                 str(output / "report" / "v3_report.md")
-                if "v3-full" in controllers
+                if {"v3-full", "v3-h3"} & set(controllers)
                 else None
             ),
             evaluation_tracks=list(tracks),
@@ -1058,7 +1704,7 @@ def main() -> int:
         default="official_adaptive,v2-full",
         help=(
             "Active controllers: official_adaptive, v2-full, "
-            "v2-stall-safe, v2-repair-aware, v3-full."
+            "v2-stall-safe, v2-repair-aware, v3-full, v3-h3."
         ),
     )
     parser.add_argument("--wall-clock-seconds", type=float, default=300.0)
@@ -1117,6 +1763,31 @@ def main() -> int:
         choices=("audit", "deployment"),
         default="audit",
     )
+    parser.add_argument(
+        "--paired-execution",
+        choices=("strict", "isolated-parallel"),
+        default="strict",
+        help=(
+            "Run each task/seed cohort serially, or run different cohorts on "
+            "isolated physical cores while keeping controllers within a cohort serial."
+        ),
+    )
+    parser.add_argument(
+        "--parallel-lanes",
+        default="auto",
+        help="Isolated lane count: auto, 2, 3, or 4.",
+    )
+    parser.add_argument(
+        "--parallelism-audit",
+        action="store_true",
+        help="Require the isolated timing audit before accepting parallel quick results.",
+    )
+    parser.add_argument(
+        "--parallelism-audit-seconds",
+        type=float,
+        default=60.0,
+        help="Wall-clock budget for each audit episode.",
+    )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--output")
     parser.add_argument("--resume", action="store_true")
@@ -1134,7 +1805,10 @@ def main() -> int:
     )
     arguments = parser.parse_args()
     if arguments.workers != 1:
-        parser.error("primary paired timing requires --workers 1")
+        parser.error(
+            "--workers remains 1 for each episode; use --paired-execution "
+            "isolated-parallel and --parallel-lanes to parallelize cohorts"
+        )
     return _run_dual_track(arguments, parser)
 
 

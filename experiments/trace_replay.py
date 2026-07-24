@@ -15,6 +15,53 @@ from experiments.repair_collection import _make_environment, _plain, state_finge
 from experiments.stall_guard import repair_structure_fingerprint
 
 
+TRACE_REPLAY_CONTRACT = "lns2.trace_replay.pp-seeded-neighborhood.v2"
+
+
+def recorded_replay_action(event: dict[str, Any]) -> dict[str, Any]:
+    """Return an action that reproduces the recorded transition, not its policy.
+
+    Source ``official`` actions are relative to the environment's configured
+    destroy strategy.  Replaying them in another environment changes their
+    meaning.  The trace already contains the neighborhood and PP order that
+    were actually used, so offline replay uses the dedicated native replay
+    mode.  That mode also permits a legitimate recorded random no-op whose
+    neighborhood did not touch a conflict.
+    """
+
+    metrics = event.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("source transition is missing replay metrics")
+    neighborhood = metrics.get("neighborhood")
+    repair_order = metrics.get("repair_order")
+    if not isinstance(neighborhood, list) or not isinstance(repair_order, list):
+        raise ValueError("source transition lacks a recorded neighborhood or PP order")
+    if not neighborhood:
+        raise ValueError("source transition has an empty recorded neighborhood")
+    source_action = event.get("action")
+    if not isinstance(source_action, dict):
+        raise ValueError("source transition is missing its recorded action")
+    requested_pp_seed = int(metrics.get("requested_pp_random_seed", -1))
+    action_pp_seed = int(source_action.get("pp_random_seed", -1))
+    applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
+    if requested_pp_seed != action_pp_seed:
+        raise ValueError("source transition requested PP seed does not match its action")
+    if repair_order and applied_pp_seed < 0:
+        raise ValueError(
+            "source transition ran PP without a deterministic pp_random_seed"
+        )
+    if repair_order and applied_pp_seed != requested_pp_seed:
+        raise ValueError("source transition applied a different PP seed")
+    action: dict[str, Any] = {
+        "mode": "replay_neighborhood",
+        "agents": list(map(int, neighborhood)),
+        "repair_order": list(map(int, repair_order)),
+    }
+    if applied_pp_seed >= 0:
+        action["pp_random_seed"] = applied_pp_seed
+    return action
+
+
 def _initial_state(
     collection_root: Path, trace_path: Path, event: dict[str, Any]
 ) -> dict[str, Any]:
@@ -59,6 +106,7 @@ def decision_rows(
             after = dict(event["after"])
         after_repair_fingerprint = repair_structure_fingerprint(after)
         actual_metrics = dict(event["metrics"])
+        replay_action = recorded_replay_action(event)
         controller_seconds = float(
             controller.get("controller_seconds_before_repair", 0.0)
         )
@@ -74,6 +122,7 @@ def decision_rows(
                 "repair_state_changed": before_repair_fingerprint
                 != after_repair_fingerprint,
                 "prefix_actions": [dict(action) for action in prefix],
+                "replay_action": replay_action,
                 "actual_action": dict(event["action"]),
                 "actual_metrics": actual_metrics,
                 "before_conflicts": int(state["num_of_colliding_pairs"]),
@@ -103,7 +152,7 @@ def decision_rows(
                 },
             }
         )
-        prefix.append(dict(event["action"]))
+        prefix.append(replay_action)
         state = after
     return rows, events
 
@@ -111,8 +160,9 @@ def decision_rows(
 def replay_prefix(
     job: dict[str, Any], actions: Iterable[dict[str, Any]]
 ) -> tuple[Any, dict[str, Any]]:
+    destroy_strategy = str(job.get("replay_destroy_strategy", "Adaptive"))
     environment = _make_environment(
-        job["dataset_root"], job["row"], job["environment"], "Adaptive"
+        job["dataset_root"], job["row"], job["environment"], destroy_strategy
     )
     state = _plain(environment.reset(seed=int(job["solver_seed"])))
     for action in actions:

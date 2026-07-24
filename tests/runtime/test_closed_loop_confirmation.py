@@ -14,6 +14,7 @@ import numpy as np
 from experiments.closed_loop_confirmation import (
     _collection_policy_summary,
     _closed_loop_episode_worker,
+    _qualification_reuse_fingerprint,
     _with_stopping_rule,
     _with_time_budget_overrides,
     ClosedLoopTraceError,
@@ -229,6 +230,30 @@ class UnlimitedRepairEnvironment:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_qualification_reuse_ignores_controller_but_not_reset_inputs(self) -> None:
+        base = {
+            "dataset_fingerprint": "dataset",
+            "configuration": {
+                "split": "policy_train",
+                "solver_seeds": [0],
+                "environment": {"replan_algorithm": "PP", "time_limit": 45.0},
+            },
+            "seed_isolation": {"passed": True},
+            "controller_implementation": {"native": "sha"},
+            "controller": "v2-full",
+        }
+        another_controller = {**base, "controller": "v3-full"}
+        self.assertEqual(
+            _qualification_reuse_fingerprint(base),
+            _qualification_reuse_fingerprint(another_controller),
+        )
+        changed = json.loads(json.dumps(base))
+        changed["configuration"]["environment"]["time_limit"] = 46.0
+        self.assertNotEqual(
+            _qualification_reuse_fingerprint(base),
+            _qualification_reuse_fingerprint(changed),
+        )
+
     def test_historical_pairwise_model_symbol_remains_pickle_compatible(self) -> None:
         from experiments.context_audit import PairwiseModel as compatibility_model
 
@@ -350,6 +375,41 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["initial_feasible_count"], 3)
         self.assertEqual(report["nonzero_state_count"], 21)
+
+    def test_dataset_design_accepts_configured_task_count_above_four(self) -> None:
+        variants = tuple(f"variant_{index}" for index in range(5))
+        rows = []
+        for layout_index, layout in enumerate(
+            ("regular_beltway", "compartmentalized", "dead_end_aisles")
+        ):
+            map_id = f"custom_{layout}"
+            for variant_index, variant in enumerate(variants):
+                rows.append(
+                    {
+                        "split": "custom",
+                        "map_id": map_id,
+                        "task_id": f"{map_id}__{variant}",
+                        "layout_mode": layout,
+                        "task_variant": variant,
+                        "map_seed": 100 + layout_index,
+                        "task_seed": 1000 + 10 * layout_index + variant_index,
+                    }
+                )
+        design = closed_loop_dataset_design(
+            rows,
+            "custom",
+            {
+                "map_count": 3,
+                "tasks_per_map": 5,
+                "task_variants": list(variants),
+                "layout_counts": {
+                    "regular_beltway": 1,
+                    "compartmentalized": 1,
+                    "dead_end_aisles": 1,
+                },
+            },
+        )
+        self.assertTrue(design["passed"], design["errors"])
 
     def test_multiseed_design_and_qualification_keep_repeated_measurements_grouped(self) -> None:
         rows = make_dataset_rows(replicates=4, split="closed_loop_multiseed")
@@ -804,6 +864,65 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(
                 ClosedLoopTraceError, "native step timing does not close"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+    def test_trace_validation_rejects_inconsistent_pp_seed_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {},
+                "trace_format": TRACE_FORMAT_FULL_V1,
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(solve_after=1),
+            ):
+                result = _closed_loop_episode_worker(job)
+            trace = Path(directory) / result["trace_file"]
+            events = [
+                json.loads(line)
+                for line in trace.read_text(encoding="utf-8").splitlines()
+            ]
+            transition = events[1]
+            transition["action"]["pp_random_seed"] = 101
+            transition["metrics"]["requested_pp_random_seed"] = 102
+            transition["metrics"]["applied_pp_random_seed"] = 101
+            transition["metrics"]["repair_order"] = [0, 1]
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "requested PP seed mismatch"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            transition["metrics"]["requested_pp_random_seed"] = 101
+            transition["metrics"]["applied_pp_random_seed"] = 103
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "applied PP seed mismatch"
             ):
                 validate_closed_loop_trace(trace, "run")
 

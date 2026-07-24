@@ -288,15 +288,6 @@ def _run_source_wave(
     )
 
 
-def _dense_features(row: dict[str, Any]) -> dict[str, float]:
-    if "feature_values" in row:
-        return dict(zip(map(str, row["feature_names"]), map(float, row["feature_values"])))
-    return {
-        str(key): float(value)
-        for key, value in dict(row["features"]["realized_dynamic"]).items()
-    }
-
-
 def _learned_choice(
     candidates: list[dict[str, Any]],
     feature_rows: list[dict[str, Any]],

@@ -15,6 +15,7 @@ from experiments.repair_aware import (
 
 
 V3_BUNDLE_SCHEMA = "lns2.v3_controller_bundle.v1"
+V3_H3_BUNDLE_SCHEMA = "lns2.v3_horizon_controller_bundle.v1"
 V3_MODEL_NAMES = {
     "effective_progress_probability",
     "no_progress_probability",
@@ -26,6 +27,20 @@ V3_THRESHOLD_NAMES = {
     "no_progress_probability_tolerance",
     "conflict_reduction_retention",
 }
+V3_H3_MODEL_NAMES = {
+    "h1_effective_progress_probability",
+    "h1_no_progress_probability",
+    "h1_conflict_reduction",
+    "h1_log_pp_seconds",
+    "h3_conflict_reduction",
+    "h3_log_total_seconds",
+    "h3_no_progress_probability",
+}
+V3_H3_THRESHOLD_NAMES = {
+    "h1_effective_probability_tolerance",
+    "h1_no_progress_probability_tolerance",
+    "minimum_h3_utility_improvement",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +50,14 @@ class V3ControllerBundle:
     selection_overhead_seconds: float
     manifest: dict[str, Any]
     report: dict[str, Any]
+
+    @property
+    def schema(self) -> str:
+        return str(self.manifest.get("schema", V3_BUNDLE_SCHEMA))
+
+    @property
+    def is_horizon(self) -> bool:
+        return self.schema == V3_H3_BUNDLE_SCHEMA
 
     @property
     def inference_backends(self) -> tuple[str, ...]:
@@ -67,6 +90,47 @@ class V3ControllerBundle:
         }
 
     def predict(self, rows: list[dict[str, Any]]) -> dict[str, list[float]]:
+        if self.is_horizon:
+            h1_effective = self.models["h1_effective_progress_probability"].predict(rows)
+            h1_no_progress = self.models["h1_no_progress_probability"].predict(rows)
+            h1_reduction = self.models["h1_conflict_reduction"].predict(rows)
+            h1_log_pp = self.models["h1_log_pp_seconds"].predict(rows)
+            h3_reduction = self.models["h3_conflict_reduction"].predict(rows)
+            h3_log_total = self.models["h3_log_total_seconds"].predict(rows)
+            h3_no_progress = self.models["h3_no_progress_probability"].predict(rows)
+            h1_pp_seconds = [
+                max(1e-9, math.expm1(min(50.0, float(value))))
+                for value in h1_log_pp
+            ]
+            h3_total_seconds = [
+                max(1e-9, math.expm1(min(50.0, float(value))))
+                for value in h3_log_total
+            ]
+            h3_reductions = [max(0.0, float(value)) for value in h3_reduction]
+            return {
+                "effective_progress_probability": [
+                    min(1.0, max(0.0, float(value))) for value in h1_effective
+                ],
+                "no_progress_probability": [
+                    min(1.0, max(0.0, float(value))) for value in h1_no_progress
+                ],
+                "h1_conflict_reduction": [
+                    max(0.0, float(value)) for value in h1_reduction
+                ],
+                "h1_pp_seconds": h1_pp_seconds,
+                "h3_conflict_reduction": h3_reductions,
+                "h3_total_seconds": h3_total_seconds,
+                "h3_no_progress_probability": [
+                    min(1.0, max(0.0, float(value)))
+                    for value in h3_no_progress
+                ],
+                "utility": [
+                    reduction / max(1e-9, duration)
+                    for reduction, duration in zip(
+                        h3_reductions, h3_total_seconds
+                    )
+                ],
+            }
         effective = self.models["effective_progress_probability"].predict(rows)
         no_progress = self.models["no_progress_probability"].predict(rows)
         reduction = self.models["conflict_reduction"].predict(rows)
@@ -95,7 +159,8 @@ class V3ControllerBundle:
 def load_v3_controller_bundle(path: str | Path) -> V3ControllerBundle:
     root = Path(path).resolve()
     manifest = dict(read_json(root / "v3_manifest.json"))
-    if str(manifest.get("schema")) != V3_BUNDLE_SCHEMA:
+    schema = str(manifest.get("schema"))
+    if schema not in {V3_BUNDLE_SCHEMA, V3_H3_BUNDLE_SCHEMA}:
         raise ValueError("unexpected v3 controller bundle schema")
     expected_feature_names = resolve_v3_feature_names(
         str(manifest.get("feature_schema_id")),
@@ -116,20 +181,32 @@ def load_v3_controller_bundle(path: str | Path) -> V3ControllerBundle:
         if model.name != str(name):
             raise ValueError(f"v3 model name mismatch: {name}")
         models[str(name)] = model
-    if set(models) != V3_MODEL_NAMES:
+    expected_models = V3_H3_MODEL_NAMES if schema == V3_H3_BUNDLE_SCHEMA else V3_MODEL_NAMES
+    if set(models) != expected_models:
         raise ValueError("v3 controller bundle has an incomplete model set")
     thresholds = {
         str(name): float(value)
         for name, value in dict(manifest.get("thresholds", {})).items()
     }
-    if set(thresholds) != V3_THRESHOLD_NAMES:
+    expected_thresholds = (
+        V3_H3_THRESHOLD_NAMES if schema == V3_H3_BUNDLE_SCHEMA else V3_THRESHOLD_NAMES
+    )
+    if set(thresholds) != expected_thresholds:
         raise ValueError("v3 controller bundle has incomplete thresholds")
-    if not 0.0 <= thresholds["effective_probability_tolerance"] <= 1.0:
-        raise ValueError("v3 effective probability tolerance is invalid")
-    if not 0.0 <= thresholds["no_progress_probability_tolerance"] <= 1.0:
-        raise ValueError("v3 no-progress probability tolerance is invalid")
-    if not 0.0 < thresholds["conflict_reduction_retention"] <= 1.0:
-        raise ValueError("v3 conflict-reduction retention is invalid")
+    if schema == V3_H3_BUNDLE_SCHEMA:
+        if not 0.0 <= thresholds["h1_effective_probability_tolerance"] <= 1.0:
+            raise ValueError("v3-h3 effective probability tolerance is invalid")
+        if not 0.0 <= thresholds["h1_no_progress_probability_tolerance"] <= 1.0:
+            raise ValueError("v3-h3 no-progress probability tolerance is invalid")
+        if not 0.0 <= thresholds["minimum_h3_utility_improvement"] <= 1.0:
+            raise ValueError("v3-h3 utility improvement threshold is invalid")
+    else:
+        if not 0.0 <= thresholds["effective_probability_tolerance"] <= 1.0:
+            raise ValueError("v3 effective probability tolerance is invalid")
+        if not 0.0 <= thresholds["no_progress_probability_tolerance"] <= 1.0:
+            raise ValueError("v3 no-progress probability tolerance is invalid")
+        if not 0.0 < thresholds["conflict_reduction_retention"] <= 1.0:
+            raise ValueError("v3 conflict-reduction retention is invalid")
     selection_overhead = float(manifest.get("selection_overhead_seconds", -1.0))
     if not math.isfinite(selection_overhead) or selection_overhead < 0.0:
         raise ValueError("v3 selection overhead is invalid")
@@ -194,6 +271,87 @@ def v3_candidate_order(
             str(candidates[index]["candidate_id"]),
         ),
     )
+
+
+def v3_h3_candidate_order(
+    candidates: list[dict[str, Any]],
+    predictions: dict[str, list[float]],
+    v2_scores: list[float],
+    thresholds: dict[str, float],
+    *,
+    eligible: Iterable[int] | None = None,
+) -> list[int]:
+    """Rank candidates by conservative three-repair utility.
+
+    The frozen v2 winner remains the action unless the best safe H3 candidate
+    clears the calibrated relative-utility margin.  This prevents the horizon
+    model from changing an established decision for a negligible predicted win.
+    """
+
+    allowed = list(range(len(candidates))) if eligible is None else list(eligible)
+    if not allowed:
+        return []
+    if len(v2_scores) != len(candidates) or any(
+        len(values) != len(candidates) for values in predictions.values()
+    ):
+        raise ValueError("v3-h3 predictions do not match the candidate pool")
+    effective = predictions["effective_progress_probability"]
+    no_progress = predictions["no_progress_probability"]
+    h3_no_progress = predictions["h3_no_progress_probability"]
+    utility = predictions["utility"]
+    maximum_effective = max(effective[index] for index in allowed)
+    effective_shortlist = [
+        index
+        for index in allowed
+        if effective[index]
+        >= maximum_effective
+        - thresholds["h1_effective_probability_tolerance"]
+    ]
+    minimum_no_progress = min(no_progress[index] for index in effective_shortlist)
+    safe = [
+        index
+        for index in effective_shortlist
+        if no_progress[index]
+        <= minimum_no_progress
+        + thresholds["h1_no_progress_probability_tolerance"]
+    ]
+    ranked = sorted(
+        safe,
+        key=lambda index: (
+            -round(float(utility[index]), 12),
+            round(float(h3_no_progress[index]), 12),
+            -round(float(effective[index]), 12),
+            -round(float(v2_scores[index]), 12),
+            str(candidates[index]["candidate_id"]),
+        ),
+    )
+    # Match score_online_candidates exactly: scores are rounded to 1e-12 and
+    # the lexicographically smallest candidate key wins a numerical tie.
+    # Using max(score, candidate_id) here used to reverse that final rule.
+    v2_winner = min(
+        allowed,
+        key=lambda index: (
+            -round(float(v2_scores[index]), 12),
+            str(
+                candidates[index].get(
+                    "candidate_key", candidates[index]["candidate_id"]
+                )
+            ),
+        ),
+    )
+    best = ranked[0]
+    if best != v2_winner:
+        best_utility = float(utility[best])
+        v2_utility = float(utility[v2_winner])
+        required = (1.0 + thresholds["minimum_h3_utility_improvement"]) * max(
+            0.0, v2_utility
+        )
+        if (
+            best_utility <= v2_utility + 1e-12
+            or best_utility + 1e-12 < required
+        ):
+            return [v2_winner] + [index for index in ranked if index != v2_winner]
+    return ranked
 
 
 @dataclass
@@ -273,12 +431,22 @@ class V3ControllerState:
             ):
                 self.adaptive_fallback_active = True
             else:
-                order = v3_candidate_order(
-                    candidates,
-                    predictions,
-                    v2_scores,
-                    self.bundle.thresholds,
-                    eligible=eligible,
+                order = (
+                    v3_h3_candidate_order(
+                        candidates,
+                        predictions,
+                        v2_scores,
+                        self.bundle.thresholds,
+                        eligible=eligible,
+                    )
+                    if self.bundle.is_horizon
+                    else v3_candidate_order(
+                        candidates,
+                        predictions,
+                        v2_scores,
+                        self.bundle.thresholds,
+                        eligible=eligible,
+                    )
                 )
                 if order:
                     selected = order[0]
@@ -300,7 +468,7 @@ class V3ControllerState:
             self.model_decision_count += 1
             selection_kind = "v3"
         return selected, {
-            "schema": V3_BUNDLE_SCHEMA,
+            "schema": self.bundle.schema,
             "state_anchor_fingerprint": self.state_anchor_fingerprint,
             "selection_kind": selection_kind,
             "effective_selected_candidate_id": self.pending_candidate_id,
@@ -390,7 +558,7 @@ class V3ControllerState:
     def summary(self) -> dict[str, Any]:
         total = self.model_decision_count + self.adaptive_fallback_decision_count
         return {
-            "schema": V3_BUNDLE_SCHEMA,
+            "schema": self.bundle.schema,
             "inference_backends": list(self.bundle.inference_backends),
             "model_decision_count": self.model_decision_count,
             "adaptive_fallback_decision_count": self.adaptive_fallback_decision_count,
@@ -413,8 +581,10 @@ class V3ControllerState:
 
 __all__ = [
     "V3_BUNDLE_SCHEMA",
+    "V3_H3_BUNDLE_SCHEMA",
     "V3ControllerBundle",
     "V3ControllerState",
     "load_v3_controller_bundle",
     "v3_candidate_order",
+    "v3_h3_candidate_order",
 ]

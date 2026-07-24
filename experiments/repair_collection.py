@@ -153,7 +153,14 @@ class _AtomicProcessLock:
 
 
 class _CollectionRunLock:
-    def __init__(self, output_root: Path, run_fingerprint: str, phase: str) -> None:
+    def __init__(
+        self,
+        output_root: Path,
+        run_fingerprint: str,
+        phase: str,
+        *,
+        use_global_lock: bool = True,
+    ) -> None:
         pid = os.getpid()
         self.owner = {
             "schema_version": SCHEMA_VERSION,
@@ -166,21 +173,28 @@ class _CollectionRunLock:
             "started_at": _utc_now(),
             "output_root": str(output_root),
         }
-        self.global_lock = _AtomicProcessLock(CONTROL_ROOT / "active.lock", self.owner)
+        self.global_lock = (
+            _AtomicProcessLock(CONTROL_ROOT / "active.lock", self.owner)
+            if use_global_lock
+            else None
+        )
         self.output_lock = _AtomicProcessLock(output_root / ".collection.lock", self.owner)
 
     def __enter__(self) -> dict[str, Any]:
-        self.global_lock.acquire()
+        if self.global_lock is not None:
+            self.global_lock.acquire()
         try:
             self.output_lock.acquire()
         except BaseException:
-            self.global_lock.release()
+            if self.global_lock is not None:
+                self.global_lock.release()
             raise
         return self.owner
 
     def __exit__(self, *_: Any) -> None:
         self.output_lock.release()
-        self.global_lock.release()
+        if self.global_lock is not None:
+            self.global_lock.release()
 
 
 def collection_status(output: str | Path) -> dict[str, Any]:
@@ -1461,14 +1475,6 @@ def _load_dataset_rows(dataset_root: Path, splits: list[str]) -> list[dict[str, 
                 raise ValueError(f"manifest row crosses split boundary: {manifest_path}")
             rows.append(row)
     return rows
-
-
-def _policy_train_dataset_lookup(dataset_root: Path) -> dict[str, dict[str, Any]]:
-    rows = _load_dataset_rows(dataset_root, ["policy_train"])
-    lookup = {str(row["task_id"]): row for row in rows}
-    if len(lookup) != len(rows):
-        raise ValueError("policy_train dataset contains duplicate task IDs")
-    return lookup
 
 
 def _effective_config(

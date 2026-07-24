@@ -70,7 +70,8 @@ private:
     unordered_map<int, ProposalTargetData> proposal_target_cache;
 
 
-    bool runPP(const vector<int>& requested_order, vector<int>& applied_order);
+    bool runPP(const vector<int>& requested_order, vector<int>& applied_order,
+               int pp_random_seed = -1);
     bool runGCBS();
     bool runPBS();
 
@@ -82,6 +83,7 @@ private:
                               bool& action_valid);
     bool generateOfficialNeighborhood(RepairHeuristic& applied_heuristic);
     bool validateExplicitNeighborhood(const vector<int>& values) const;
+    bool validateReplayNeighborhood(const vector<int>& values) const;
     bool validateRepairOrder(const vector<int>& order, const vector<int>& neighborhood) const;
     bool generateNeighborByCollisionGraph(int forced_seed = -1, int requested_size = 0);
     bool generateNeighborByTarget(int forced_seed = -1, int requested_size = 0);

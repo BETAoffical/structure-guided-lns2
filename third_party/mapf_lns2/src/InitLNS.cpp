@@ -313,7 +313,10 @@ bool InitLNS::step(const RepairAction& action)
     if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
     {
         const vector<int> requested_order = action_valid ? action.repair_order : vector<int>();
-        succ = runPP(requested_order, transition.repair_order);
+        const int pp_random_seed = action_valid ? action.pp_random_seed : -1;
+        succ = runPP(requested_order, transition.repair_order, pp_random_seed);
+        if (pp_random_seed >= 0)
+            transition.applied_pp_random_seed = pp_random_seed;
     }
     else if (replan_algo_name == "GCBS")
         succ = runGCBS();
@@ -486,7 +489,8 @@ bool InitLNS::runPBS()
         return false;
     }
 }
-bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_order)
+bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_order,
+                    int pp_random_seed)
 {
     vector<int> shuffled_agents;
     if (requested_order.empty())
@@ -497,6 +501,12 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     else
         shuffled_agents = requested_order;
     applied_order = shuffled_agents;
+    // Seed only after the source-side random shuffle.  Replay supplies the
+    // recorded order and therefore skips that shuffle; seeding earlier would
+    // leave source and replay at different RNG positions for low-level tie
+    // breaking even though their applied orders are identical.
+    if (pp_random_seed >= 0)
+        srand(pp_random_seed);
     if (screen >= 2) {
         cout<<"Neighbors_set: ";
         for (auto id : shuffled_agents)
@@ -757,17 +767,25 @@ void InitLNS::notifyFinish()
 
 bool InitLNS::validateExplicitNeighborhood(const vector<int>& values) const
 {
+    if (!validateReplayNeighborhood(values))
+        return false;
+    bool touches_conflict = false;
+    for (int agent : values)
+        touches_conflict = touches_conflict || !collision_graph[agent].empty();
+    return touches_conflict;
+}
+
+bool InitLNS::validateReplayNeighborhood(const vector<int>& values) const
+{
     if (values.empty() || values.size() > agents.size())
         return false;
     set<int> unique;
-    bool touches_conflict = false;
     for (int agent : values)
     {
         if (agent < 0 || agent >= (int)agents.size() || !unique.insert(agent).second)
             return false;
-        touches_conflict = touches_conflict || !collision_graph[agent].empty();
     }
-    return touches_conflict;
+    return true;
 }
 
 bool InitLNS::validateRepairOrder(const vector<int>& order,
@@ -802,8 +820,10 @@ bool InitLNS::generateNeighborhood(const RepairAction& action, RepairHeuristic& 
                                    bool& action_valid)
 {
     action_valid = true;
+    const bool explicit_action = action.mode == RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    const bool replay_action = action.mode == RepairActionMode::REPLAY_NEIGHBORHOOD;
     if (!action.repair_order.empty() &&
-        (action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD || replan_algo_name != "PP"))
+        ((!explicit_action && !replay_action) || replan_algo_name != "PP"))
     {
         action_valid = false;
         return generateOfficialNeighborhood(applied_heuristic);
@@ -811,9 +831,12 @@ bool InitLNS::generateNeighborhood(const RepairAction& action, RepairHeuristic& 
     if (action.mode == RepairActionMode::OFFICIAL)
         return generateOfficialNeighborhood(applied_heuristic);
 
-    if (action.mode == RepairActionMode::EXPLICIT_NEIGHBORHOOD)
+    if (explicit_action || replay_action)
     {
-        if (!validateExplicitNeighborhood(action.agents) ||
+        const bool neighborhood_valid = replay_action
+            ? validateReplayNeighborhood(action.agents)
+            : validateExplicitNeighborhood(action.agents);
+        if (!neighborhood_valid ||
             !validateRepairOrder(action.repair_order, action.agents))
         {
             action_valid = false;

@@ -178,12 +178,6 @@ def _episode_evidence(
     return signature, timing
 
 
-def _episode_signature(root: Path, manifest: dict[str, Any]) -> dict[str, Any]:
-    run_path = root / "run_config.json"
-    run_config = _read_json(run_path) if run_path.is_file() else None
-    return _episode_evidence(root, manifest, run_config)[0]
-
-
 def _timing_summary(values: list[dict[str, float]]) -> dict[str, float]:
     return {
         "episode_count": float(len(values)),

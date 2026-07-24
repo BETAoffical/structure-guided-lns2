@@ -8,7 +8,11 @@ enum class RepairActionMode
 {
     OFFICIAL,
     SEED,
-    EXPLICIT_NEIGHBORHOOD
+    EXPLICIT_NEIGHBORHOOD,
+    // Reserved for deterministic offline trace replay. Unlike the normal
+    // explicit controller action, this mode may reproduce a recorded random
+    // neighborhood that did not happen to touch a conflict.
+    REPLAY_NEIGHBORHOOD
 };
 
 enum class RepairHeuristic
@@ -26,6 +30,12 @@ struct RepairAction
     int seed_agent = -1;
     int neighborhood_size = 0;
     int random_seed = -1;
+    // Optional seed applied immediately before PP.  This is deliberately
+    // separate from random_seed because official neighborhood generation and
+    // PP both consume the process-global C RNG.  Trace replay can reproduce
+    // the recorded neighborhood without repeating the former, so it needs an
+    // independent PP seed to reproduce low-level tie breaking exactly.
+    int pp_random_seed = -1;
     vector<int> agents;
     vector<int> repair_order;
 };
@@ -81,6 +91,7 @@ struct RepairTransition
     bool action_valid = true;
     bool generated = false;
     bool replan_success = false;
+    int applied_pp_random_seed = -1;
     int iteration = 0;
     int conflicts_before = 0;
     int conflicts_after = 0;
@@ -122,6 +133,7 @@ inline const char* repairActionModeName(RepairActionMode mode)
         case RepairActionMode::OFFICIAL: return "official";
         case RepairActionMode::SEED: return "seed";
         case RepairActionMode::EXPLICIT_NEIGHBORHOOD: return "explicit_neighborhood";
+        case RepairActionMode::REPLAY_NEIGHBORHOOD: return "replay_neighborhood";
     }
     return "unknown";
 }
