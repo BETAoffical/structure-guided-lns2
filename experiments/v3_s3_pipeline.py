@@ -28,6 +28,7 @@ from experiments.v3_s3_training import (
 from experiments.v3_s3 import (
     V3_S3_FEATURE_SCHEMA_SHA256,
     V3_S3_OBJECTIVE_ID,
+    V3_S3_SELECTION_OBJECTIVE_ID,
     load_v3_s3_bundle,
 )
 from generators.config import load_json
@@ -687,8 +688,31 @@ def _training_jobs(value: str | int) -> int:
     return jobs
 
 
-def _verified_training_inputs(output: Path) -> dict[str, Any]:
-    collection_root = output / "collection"
+def _collection_root(
+    output: Path, collection_source: Path | None = None
+) -> Path:
+    if collection_source is not None:
+        return Path(collection_source).resolve()
+    local = output / "collection"
+    if local.is_dir():
+        return local.resolve()
+    reference_path = output / "collection_reference.json"
+    if not reference_path.is_file():
+        return local.resolve()
+    reference = _read_json(reference_path)
+    root = Path(str(reference["collection_root"])).resolve()
+    report_path = root / "collection_report.json"
+    if sha256_file(report_path) != str(
+        reference["collection_report_sha256"]
+    ):
+        raise ValueError("v3-S3 referenced collection SHA256 mismatch")
+    return root
+
+
+def _verified_training_inputs(
+    output: Path, collection_source: Path | None = None
+) -> dict[str, Any]:
+    collection_root = _collection_root(output, collection_source)
     report_path = collection_root / "collection_report.json"
     report = _read_json(report_path)
     completed = _completed_collection_state_count(report)
@@ -736,8 +760,9 @@ def _training_identity(
     project_root: Path,
     output: Path,
     jobs: int,
+    collection_source: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    inputs = _verified_training_inputs(output)
+    inputs = _verified_training_inputs(output, collection_source)
     implementation_files = (
         "experiments/repair_aware.py",
         "experiments/v3_s3.py",
@@ -748,6 +773,7 @@ def _training_identity(
         "schema_version": 1,
         "feature_schema_sha256": V3_S3_FEATURE_SCHEMA_SHA256,
         "training_objective_id": V3_S3_OBJECTIVE_ID,
+        "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
         "training_jobs": int(jobs),
         "model_parameters": {
             "hist_gradient_boosting": HGB_PARAMETERS,
@@ -795,22 +821,40 @@ def run_v3_s3_training_stage(
     output: Path,
     training_jobs: str | int,
     resume: bool,
+    collection_source: Path | None = None,
 ) -> dict[str, Any]:
     jobs = _training_jobs(training_jobs)
     identity, inputs = _training_identity(
         project_root=project_root,
         output=output,
         jobs=jobs,
+        collection_source=collection_source,
     )
     prepare_run_output(
         output / "training-control",
         resume=resume,
         identity=identity,
     )
+    if collection_source is not None:
+        collection_report = dict(inputs["collection_report"])
+        _write_json(
+            output / "collection_reference.json",
+            {
+                "schema": "lns2.v3_s3_collection_reference.v1",
+                "collection_root": str(Path(collection_source).resolve()),
+                "collection_report_sha256": str(
+                    collection_report["sha256"]
+                ),
+            },
+        )
     collection_state_count = int(inputs["collection_state_count"])
     controller = output / "controller"
     partial_controller = output / "controller.partial"
-    status = _read_json(output / "status.json")
+    status = (
+        _read_json(output / "status.json")
+        if (output / "status.json").is_file()
+        else {}
+    )
     started_at = str(status.get("started_at") or _utc_now())
     if controller.exists():
         if not resume:
@@ -856,9 +900,15 @@ def run_v3_s3_training_stage(
     )
     try:
         training = train_v3_s3_controller(
-            sequence_features=output / "collection" / "sequence_features.jsonl",
-            sequence_trials=output / "collection" / "sequence_trials.jsonl",
-            external_baselines=output / "collection" / "external_baselines.jsonl",
+            sequence_features=Path(
+                inputs["artifacts"]["sequence_features"]["file"]
+            ),
+            sequence_trials=Path(
+                inputs["artifacts"]["sequence_trials"]["file"]
+            ),
+            external_baselines=Path(
+                inputs["artifacts"]["external_baselines"]["file"]
+            ),
             output=partial_controller,
             training_jobs=jobs,
         )
@@ -927,7 +977,9 @@ def _markdown(report: dict[str, Any]) -> str:
 
 
 def run_v3_s3_native_audit_stage(*, output: Path) -> dict[str, Any]:
-    collection = _read_json(output / "collection" / "collection_report.json")
+    collection = _read_json(
+        _collection_root(output) / "collection_report.json"
+    )
     collection_state_count = _completed_collection_state_count(collection)
     # Validate the complete Windows artifact before mutating the shared status.
     load_v3_s3_bundle(output / "controller")

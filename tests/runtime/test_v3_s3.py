@@ -207,6 +207,72 @@ class S3SelectionTests(unittest.TestCase):
         )
         self.assertEqual(order[0], 0)
 
+    def test_quality_floor_rejects_fast_but_low_reduction_sequence(
+        self,
+    ) -> None:
+        sequences = [
+            tuple(S3_ACTION_TEMPLATES[:3]),
+            tuple(S3_ACTION_TEMPLATES[3:6]),
+        ]
+        predictions = {
+            "sequence_net_conflict_reduction": [6.0, 10.0],
+            "sequence_total_seconds": [1.0, 2.0],
+            "sequence_no_progress_probability": [0.0, 0.0],
+        }
+        for step in range(1, 4):
+            predictions[f"step{step}_conflict_reduction"] = [2.0, 3.0]
+            predictions[f"step{step}_total_seconds"] = [1.0, 1.0]
+            predictions[f"step{step}_no_progress_probability"] = [
+                0.0,
+                0.0,
+            ]
+            predictions[f"step{step}_template_valid_probability"] = [
+                1.0,
+                1.0,
+            ]
+        thresholds = {
+            "minimum_template_valid_probability": 0.5,
+            "maximum_no_progress_probability": 0.5,
+            "maximum_sequence_no_progress_probability": 0.5,
+            "minimum_sequence_reduction_retention": 0.95,
+        }
+        self.assertEqual(
+            rank_s3_sequences(sequences, predictions, thresholds)[0],
+            1,
+        )
+
+    def test_quality_floor_minimizes_time_inside_quality_band(self) -> None:
+        sequences = [
+            tuple(S3_ACTION_TEMPLATES[:3]),
+            tuple(S3_ACTION_TEMPLATES[3:6]),
+        ]
+        predictions = {
+            "sequence_net_conflict_reduction": [9.8, 10.0],
+            "sequence_total_seconds": [2.0, 3.0],
+            "sequence_no_progress_probability": [0.0, 0.0],
+        }
+        for step in range(1, 4):
+            predictions[f"step{step}_conflict_reduction"] = [3.0, 3.0]
+            predictions[f"step{step}_total_seconds"] = [1.0, 1.0]
+            predictions[f"step{step}_no_progress_probability"] = [
+                0.0,
+                0.0,
+            ]
+            predictions[f"step{step}_template_valid_probability"] = [
+                1.0,
+                1.0,
+            ]
+        thresholds = {
+            "minimum_template_valid_probability": 0.5,
+            "maximum_no_progress_probability": 0.5,
+            "maximum_sequence_no_progress_probability": 0.5,
+            "minimum_sequence_reduction_retention": 0.95,
+        }
+        self.assertEqual(
+            rank_s3_sequences(sequences, predictions, thresholds)[0],
+            0,
+        )
+
     def test_risk_relaxation_is_explicit(self) -> None:
         sequences = [tuple(S3_ACTION_TEMPLATES[:3])]
         predictions = {

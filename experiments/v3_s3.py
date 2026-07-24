@@ -19,6 +19,12 @@ V3_S3_LEGACY_FEATURE_SCHEMA_ID = "lns2.v3_s3_features.v1"
 V3_S3_FEATURE_SCHEMA_ID = "lns2.v3_s3_features.v2"
 V3_S3_LEGACY_OBJECTIVE_ID = "v3-s3-runtime-reachable-sequence-v2"
 V3_S3_OBJECTIVE_ID = "v3-s3-runtime-reachable-sequence-v3"
+V3_S3_EFFICIENCY_SELECTION_OBJECTIVE_ID = (
+    "v3-s3-predicted-reduction-per-second-v1"
+)
+V3_S3_SELECTION_OBJECTIVE_ID = (
+    "v3-s3-quality-constrained-repair-time-v1"
+)
 V3_S3_PROFILE = "v3_s3"
 S3_FAMILIES = ("collision", "target", "random")
 S3_SIZES = (4, 8, 16)
@@ -517,6 +523,15 @@ def load_v3_s3_bundle(path: str | Path) -> V3S3Bundle:
         raise ValueError("v3-S3 feature schema SHA256 mismatch")
     if str(manifest.get("training_objective_id")) != expected_objective_id:
         raise ValueError("v3-S3 training objective mismatch")
+    selection_objective_id = str(
+        manifest.get("selection_objective_id")
+        or V3_S3_EFFICIENCY_SELECTION_OBJECTIVE_ID
+    )
+    if selection_objective_id not in {
+        V3_S3_EFFICIENCY_SELECTION_OBJECTIVE_ID,
+        V3_S3_SELECTION_OBJECTIVE_ID,
+    }:
+        raise ValueError("v3-S3 selection objective mismatch")
     declared_names = tuple(map(str, manifest.get("feature_names", ())))
     if not declared_names or len(declared_names) != len(set(declared_names)):
         raise ValueError("v3-S3 feature declaration is invalid")
@@ -541,11 +556,14 @@ def load_v3_s3_bundle(path: str | Path) -> V3S3Bundle:
         str(name): float(value)
         for name, value in dict(manifest.get("thresholds", {})).items()
     }
-    if set(thresholds) != {
+    expected_thresholds = {
         "minimum_template_valid_probability",
         "maximum_no_progress_probability",
         "maximum_sequence_no_progress_probability",
-    }:
+    }
+    if selection_objective_id == V3_S3_SELECTION_OBJECTIVE_ID:
+        expected_thresholds.add("minimum_sequence_reduction_retention")
+    if set(thresholds) != expected_thresholds:
         raise ValueError("v3-S3 thresholds are incomplete")
     if any(not 0.0 <= value <= 1.0 for value in thresholds.values()):
         raise ValueError("v3-S3 probability threshold is invalid")
@@ -606,6 +624,13 @@ def rank_s3_sequences(
     sequence_no_progress_maximum = float(
         thresholds["maximum_sequence_no_progress_probability"]
     )
+    reduction_retention = thresholds.get(
+        "minimum_sequence_reduction_retention"
+    )
+    if reduction_retention is not None and not (
+        0.0 <= float(reduction_retention) <= 1.0
+    ):
+        raise ValueError("v3-S3 reduction retention is invalid")
     scored = []
     for index, templates in enumerate(sequences):
         maximum_risk = 0.0
@@ -673,9 +698,33 @@ def rank_s3_sequences(
             )
         )
     else:
+        if reduction_retention is not None:
+            maximum_reduction = max(
+                float(row["reduction"]) for row in eligible
+            )
+            if maximum_reduction > 0.0:
+                quality_floor = (
+                    float(reduction_retention) * maximum_reduction
+                )
+                eligible = [
+                    row
+                    for row in eligible
+                    if float(row["reduction"]) + 1e-12 >= quality_floor
+                ]
+            else:
+                eligible = [
+                    row
+                    for row in eligible
+                    if float(row["reduction"]) + 1e-12
+                    >= maximum_reduction
+                ]
         eligible.sort(
             key=lambda row: (
-                -round(float(row["utility"]), 12),
+                (
+                    round(float(row["seconds"]), 12)
+                    if reduction_retention is not None
+                    else -round(float(row["utility"]), 12)
+                ),
                 -round(float(row["reduction"]), 12),
                 round(float(row["sequence_risk"]), 12),
                 round(float(row["risk"]), 12),
@@ -1038,8 +1087,10 @@ __all__ = [
     "V3_S3_FEATURE_SCHEMA_ID",
     "V3_S3_FEATURE_SCHEMA_SHA256",
     "V3_S3_FULL_FEATURE_NAMES",
+    "V3_S3_EFFICIENCY_SELECTION_OBJECTIVE_ID",
     "V3_S3_LEGACY_FULL_FEATURE_NAMES",
     "V3_S3_OBJECTIVE_ID",
+    "V3_S3_SELECTION_OBJECTIVE_ID",
     "V3S3Bundle",
     "V3S3ControllerState",
     "all_runtime_sequences",

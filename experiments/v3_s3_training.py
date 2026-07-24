@@ -37,6 +37,7 @@ from experiments.v3_s3 import (
     V3_S3_LEGACY_FULL_FEATURE_NAMES,
     V3_S3_OBJECTIVE_ID,
     V3_S3_PROFILE,
+    V3_S3_SELECTION_OBJECTIVE_ID,
     balanced_sequence_templates,
     load_v3_s3_bundle,
     rank_s3_sequences,
@@ -73,6 +74,7 @@ EXTRA_TREES_PARAMETERS = {
 }
 VALID_THRESHOLD_GRID = (0.40, 0.50, 0.60)
 NO_PROGRESS_THRESHOLD_GRID = (0.40, 0.50, 0.60)
+REDUCTION_RETENTION_GRID = (0.90, 0.95, 0.98, 1.00)
 
 
 class _ConstantEstimator:
@@ -728,32 +730,108 @@ def _selection_metrics(
 
 
 def _calibrate_thresholds(
-    rows: list[dict[str, Any]], predictions: dict[str, list[float]]
+    rows: list[dict[str, Any]],
+    predictions: dict[str, list[float]],
+    reference_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    reference = dict(reference_metrics or {})
+    minimum_reduction = 0.98 * float(
+        reference.get("mean_conflict_reduction", 0.0)
+    )
+    maximum_no_progress = float(
+        reference.get("no_progress_rate", 1.0)
+    ) + 0.01
     grid = []
     for valid in VALID_THRESHOLD_GRID:
         for no_progress in NO_PROGRESS_THRESHOLD_GRID:
             for sequence_no_progress in NO_PROGRESS_THRESHOLD_GRID:
-                thresholds = {
-                    "minimum_template_valid_probability": valid,
-                    "maximum_no_progress_probability": no_progress,
-                    "maximum_sequence_no_progress_probability": (
-                        sequence_no_progress
-                    ),
-                }
-                metrics = _selection_metrics(rows, predictions, thresholds)
-                grid.append({"thresholds": thresholds, "metrics": metrics})
-    selected = max(
-        grid,
-        key=lambda row: (
-            float(row["metrics"]["conflict_reduction_per_total_second"]),
-            float(row["metrics"]["mean_conflict_reduction"]),
-            -float(row["metrics"]["no_progress_rate"]),
-            -float(row["metrics"]["risk_relaxed_fraction"]),
-            float(row["metrics"]["selection_coverage"]),
-        ),
-    )
-    return {"grid": grid, "selected": selected}
+                for retention in REDUCTION_RETENTION_GRID:
+                    thresholds = {
+                        "minimum_template_valid_probability": valid,
+                        "maximum_no_progress_probability": no_progress,
+                        "maximum_sequence_no_progress_probability": (
+                            sequence_no_progress
+                        ),
+                        "minimum_sequence_reduction_retention": retention,
+                    }
+                    metrics = _selection_metrics(
+                        rows, predictions, thresholds
+                    )
+                    checks = {
+                        "selection_coverage_complete": float(
+                            metrics["selection_coverage"]
+                        )
+                        + 1e-12
+                        >= 1.0,
+                        "reference_reduction_retention_98pct": float(
+                            metrics["mean_conflict_reduction"]
+                        )
+                        + 1e-12
+                        >= minimum_reduction,
+                        "reference_no_progress_delta_1pct": float(
+                            metrics["no_progress_rate"]
+                        )
+                        <= maximum_no_progress + 1e-12,
+                    }
+                    grid.append(
+                        {
+                            "thresholds": thresholds,
+                            "metrics": metrics,
+                            "checks": checks,
+                        }
+                    )
+    eligible = [
+        row for row in grid if all(dict(row["checks"]).values())
+    ]
+    if eligible:
+        selected = min(
+            eligible,
+            key=lambda row: (
+                float(row["metrics"]["mean_total_seconds"]),
+                -float(row["metrics"]["mean_conflict_reduction"]),
+                -float(
+                    row["metrics"][
+                        "conflict_reduction_per_total_second"
+                    ]
+                ),
+                float(row["metrics"]["no_progress_rate"]),
+                float(
+                    row["thresholds"][
+                        "minimum_sequence_reduction_retention"
+                    ]
+                ),
+            ),
+        )
+    else:
+        selected = max(
+            grid,
+            key=lambda row: (
+                float(row["metrics"]["mean_conflict_reduction"]),
+                float(
+                    row["metrics"][
+                        "conflict_reduction_per_total_second"
+                    ]
+                ),
+                -float(row["metrics"]["no_progress_rate"]),
+                -float(row["metrics"]["mean_total_seconds"]),
+            ),
+        )
+    return {
+        "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
+        "reference": {
+            "mean_conflict_reduction": float(
+                reference.get("mean_conflict_reduction", 0.0)
+            ),
+            "no_progress_rate": float(
+                reference.get("no_progress_rate", 1.0)
+            ),
+            "minimum_mean_conflict_reduction": minimum_reduction,
+            "maximum_no_progress_rate": maximum_no_progress,
+        },
+        "eligible_count": len(eligible),
+        "grid": grid,
+        "selected": selected,
+    }
 
 
 def _cached_oof_predictions(
@@ -831,6 +909,7 @@ def _schema_candidates(
 def _choose_feature_schema(
     train: list[dict[str, Any]],
     *,
+    reference_metrics: dict[str, Any],
     jobs: int = 1,
     oof_cache: dict[
         tuple[str, tuple[int, ...]],
@@ -853,7 +932,9 @@ def _choose_feature_schema(
             "hist_gradient_boosting",
             jobs=jobs,
         )
-        calibration = _calibrate_thresholds(train, predictions)
+        calibration = _calibrate_thresholds(
+            train, predictions, reference_metrics
+        )
         metrics = dict(calibration["selected"]["metrics"])
         reports.append(
             {
@@ -919,6 +1000,7 @@ def _family_report(
     feature_indices: tuple[int, ...],
     family: str,
     *,
+    reference_metrics: dict[str, Any],
     jobs: int = 1,
     oof_cache: dict[
         tuple[str, tuple[int, ...]],
@@ -937,7 +1019,9 @@ def _family_report(
         family,
         jobs=jobs,
     )
-    calibration = _calibrate_thresholds(train, predictions)
+    calibration = _calibrate_thresholds(
+        train, predictions, reference_metrics
+    )
     return (
         {
             "family": family,
@@ -945,6 +1029,13 @@ def _family_report(
             "oof_cache_hit": cache_hit,
             "folds": folds,
             "runtime_used_feature_count": len(used),
+            "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
+            "calibration_eligible_count": int(
+                calibration["eligible_count"]
+            ),
+            "calibration_checks": dict(
+                calibration["selected"]["checks"]
+            ),
             "thresholds": dict(calibration["selected"]["thresholds"]),
             "metrics": dict(calibration["selected"]["metrics"]),
         },
@@ -1539,12 +1630,20 @@ def train_v3_s3_controller(
     baseline_path = Path(external_baselines).resolve()
     output_root = Path(output).resolve()
     train, diagnostic = _sequence_rows(feature_path, trial_path)
+    training_state_ids = {str(row["state_id"]) for row in train}
+    training_v2 = _baseline_metrics(
+        baseline_path,
+        "policy_train",
+        "v2-full",
+        expected_state_ids=training_state_ids,
+    )
     oof_cache: dict[
         tuple[str, tuple[int, ...]],
         tuple[dict[str, list[float]], list[dict[str, Any]], set[int]],
     ] = {}
     feature_selection = _choose_feature_schema(
         train,
+        reference_metrics=training_v2,
         jobs=int(training_jobs),
         oof_cache=oof_cache,
     )
@@ -1557,6 +1656,7 @@ def train_v3_s3_controller(
             train,
             feature_indices,
             family,
+            reference_metrics=training_v2,
             jobs=int(training_jobs),
             oof_cache=oof_cache,
         )
@@ -1583,6 +1683,7 @@ def train_v3_s3_controller(
                 "extra_trees": EXTRA_TREES_PARAMETERS,
             },
             "training_objective_id": V3_S3_OBJECTIVE_ID,
+            "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
         }
     )
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1668,6 +1769,7 @@ def train_v3_s3_controller(
         "training_agent_counts": sorted({int(row["agent_count"]) for row in train}),
         "training_jobs": int(training_jobs),
         "training_objective_id": V3_S3_OBJECTIVE_ID,
+        "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
         "formal_or_movingai_labels_seen": False,
         "feature_selection": feature_selection,
         "declared_feature_count": len(feature_names),
@@ -1685,6 +1787,9 @@ def train_v3_s3_controller(
             "continuation_possible_count": continuation_possible,
             "continuation_reused_count": continuation_reused,
             "continuation_reuse_fraction": continuation_fraction,
+        },
+        "training_reference": {
+            "v2_full": training_v2,
         },
         "pilot_checks": checks,
         "pilot_passed_before_native_audit": all(checks.values()),
@@ -1705,6 +1810,7 @@ def train_v3_s3_controller(
         "feature_schema_id": V3_S3_FEATURE_SCHEMA_ID,
         "feature_schema_sha256": V3_S3_FEATURE_SCHEMA_SHA256,
         "training_objective_id": V3_S3_OBJECTIVE_ID,
+        "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
         "profile": V3_S3_PROFILE,
         "feature_names": feature_names,
         "models": manifest_models,

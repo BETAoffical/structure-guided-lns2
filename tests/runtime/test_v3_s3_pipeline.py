@@ -195,6 +195,43 @@ class V3S3PipelineTest(unittest.TestCase):
             self.assertEqual(_read_json(root / "status.json")["status"], "waiting")
             loader.assert_called_once()
 
+    def test_training_can_reference_completed_collection_without_copying(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            output = root / "output"
+            self._write_complete_collection(source)
+
+            def fake_train(*, output, **_kwargs):
+                Path(output).mkdir(parents=True)
+                (Path(output) / "artifact").write_text(
+                    "ok\n", encoding="utf-8"
+                )
+                return {"provisional_model_family": "test"}
+
+            with mock.patch(
+                "experiments.v3_s3_pipeline.train_v3_s3_controller",
+                side_effect=fake_train,
+            ), mock.patch(
+                "experiments.v3_s3_pipeline.load_v3_s3_bundle"
+            ):
+                report = run_v3_s3_training_stage(
+                    project_root=Path(__file__).resolve().parents[2],
+                    output=output,
+                    training_jobs=1,
+                    resume=False,
+                    collection_source=source / "collection",
+                )
+            self.assertEqual(report["provisional_model_family"], "test")
+            self.assertFalse((output / "collection").exists())
+            reference = _read_json(output / "collection_reference.json")
+            self.assertEqual(
+                Path(reference["collection_root"]),
+                (source / "collection").resolve(),
+            )
+
     def test_runtime_labels_stop_after_unchanged_state(self) -> None:
         steps = [
             {
@@ -1123,7 +1160,7 @@ class V3S3PipelineTest(unittest.TestCase):
                                         "feasible": False,
                                     }
                                 )
-                        if split == "policy_validation":
+                        if split in {"policy_train", "policy_validation"}:
                             for controller in ("v2-full", "official_adaptive"):
                                 for trial_index in (0, 1):
                                     reduction = 5.0 if controller == "v2-full" else 4.0

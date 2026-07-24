@@ -789,6 +789,13 @@ def main() -> int:
             "directory; the source report SHA256 is included in the run identity."
         ),
     )
+    parser.add_argument(
+        "--reuse-sequence-collection",
+        help=(
+            "Reuse a completed sequence-pilot collection for a new training-only "
+            "output without copying its state and trial artifacts."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     arguments = parser.parse_args()
     try:
@@ -813,6 +820,21 @@ def main() -> int:
                 if arguments.reuse_sequence_sources
                 else None
             )
+            reuse_sequence_collection = (
+                resolve_cli_path(
+                    PROJECT_ROOT, arguments.reuse_sequence_collection
+                )
+                if arguments.reuse_sequence_collection
+                else None
+            )
+            if (
+                reuse_sequence_collection is not None
+                and arguments.stage != "train"
+            ):
+                raise ValueError(
+                    "--reuse-sequence-collection requires "
+                    "--mode sequence-pilot --stage train"
+                )
             if arguments.stage in {"source", "collect", "all"}:
                 report = run_v3_s3_collection_stage(
                     project_root=PROJECT_ROOT,
@@ -831,6 +853,7 @@ def main() -> int:
                     output=output,
                     training_jobs=arguments.training_jobs,
                     resume=arguments.resume,
+                    collection_source=reuse_sequence_collection,
                 )
             if arguments.stage in {"native-audit", "all"}:
                 report = run_v3_s3_native_audit_stage(output=output)
@@ -884,6 +907,10 @@ def main() -> int:
                 )
         elif arguments.reuse_sequence_sources:
             raise ValueError("--reuse-sequence-sources requires --mode sequence-pilot")
+        elif arguments.reuse_sequence_collection:
+            raise ValueError(
+                "--reuse-sequence-collection requires --mode sequence-pilot"
+            )
         elif arguments.dry_run:
             raise ValueError("--dry-run is currently supported by horizon-pilot")
         elif arguments.stage == "train":
