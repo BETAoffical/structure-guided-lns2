@@ -1,0 +1,5 @@
+common_feasible_count,common_feasible_mean_time_delta_seconds,feasible_count_delta,losses,map_id,net_wins,paired_count,state_count,ties,wins
+4,-0.4497844285000028,2,0,policy_train_compartmentalized_double_horizontal_0001,8,8,2,0,8
+6,-0.1760843661666532,-1,4,policy_train_compartmentalized_double_horizontal_0002,-1,8,2,1,3
+8,0.013340577625005068,0,4,policy_train_dead_end_aisles_0002,-2,8,2,2,2
+8,0.034692262250004546,0,3,policy_train_regular_beltway_0002,-3,8,2,5,0

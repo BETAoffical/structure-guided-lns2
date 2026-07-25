@@ -1,0 +1,4 @@
+agent_count,common_feasible_count,common_feasible_mean_time_delta_seconds,feasible_count_delta,losses,net_wins,paired_count,state_count,ties,wins
+200,8,-0.2248922142500014,0,0,4,8,2,4,4
+400,10,-0.10585692529999165,-1,6,-1,12,3,1,5
+600,8,0.04829072187500927,2,5,-1,12,3,3,4
