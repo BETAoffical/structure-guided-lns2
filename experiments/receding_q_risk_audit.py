@@ -450,6 +450,31 @@ def audit_receding_q_risk(
         [{**row, "policy_id": "map_group_oof"} for row in oof_rows]
     )
     agent_rows = _summaries_by_agent(oof_rows, policy_id="map_group_oof")
+    fixed_policy_agent_rows = []
+    for policy in policies:
+        policy_rows = [
+            row
+            for row in loo_rows
+            if str(row["policy_id"]) == str(policy["policy_id"])
+        ]
+        fixed_policy_agent_rows.extend(
+            _summaries_by_agent(
+                policy_rows, policy_id=str(policy["policy_id"])
+            )
+        )
+    six_hundred_policy_rows = [
+        row
+        for row in fixed_policy_agent_rows
+        if int(row["agent_count"]) == 600
+    ]
+    passing_six_hundred_policies = [
+        row
+        for row in six_hundred_policy_rows
+        if float(row["feasible_rate_delta"]) >= 0.0
+        and float(row["mean_normalized_step_auc_delta"]) <= 0.0
+        and float(row["mean_total_seconds_delta"]) <= 0.0
+        and int(row["net_wins"]) >= 0
+    ]
     agent_lookup = {
         int(row["agent_count"]): row for row in agent_rows
     }
@@ -498,6 +523,9 @@ def audit_receding_q_risk(
         "six_hundred_agent_wins_not_below_losses": (
             high_load is not None and int(high_load["net_wins"]) >= 0
         ),
+        "some_fixed_policy_passes_all_six_hundred_agent_gates": bool(
+            passing_six_hundred_policies
+        ),
         "lower_load_auc_retains_mean_policy_within_2pct": float(
             lower_load_summary["mean_normalized_step_auc_delta"]
         )
@@ -527,6 +555,10 @@ def audit_receding_q_risk(
         "map_group_oof": oof_summary,
         "map_group_selections": map_selections,
         "agent_summaries": agent_rows,
+        "six_hundred_fixed_policy_summaries": six_hundred_policy_rows,
+        "passing_six_hundred_fixed_policy_count": len(
+            passing_six_hundred_policies
+        ),
         "lower_load_oof_summary": lower_load_summary,
         "lower_load_mean_policy_summary": mean_lower_summary,
         "checks": checks,
@@ -545,6 +577,10 @@ def audit_receding_q_risk(
         output_root / "map_group_selection.csv", map_selections
     )
     _atomic_write_csv(output_root / "agent_summary.csv", agent_rows)
+    _atomic_write_csv(
+        output_root / "fixed_policy_agent_summary.csv",
+        fixed_policy_agent_rows,
+    )
     _write_json(output_root / "receding_q_risk_audit_report.json", report)
     (output_root / "receding_q_risk_audit_report.md").write_text(
         _markdown(report), encoding="utf-8"
