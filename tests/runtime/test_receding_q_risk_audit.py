@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from experiments import receding_q_risk_audit as module
 
 
@@ -117,3 +119,15 @@ def test_map_group_selection_never_uses_heldout_map_for_policy_choice() -> None:
     assert by_map["map-a"] == "risk"
     assert by_map["map-b"] == "mean"
     assert len(selected) == 4
+
+
+def test_persisted_wsl_source_falls_back_to_sibling(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source-pilot"
+    source.mkdir()
+    resolved = module.resolve_persisted_source_path(
+        "/mnt/c/old/location/source-pilot",
+        sibling_root=tmp_path,
+    )
+    assert resolved == source

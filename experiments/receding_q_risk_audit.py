@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import math
+import os
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
@@ -20,6 +21,30 @@ from experiments.repair_collection import _write_json
 RECEDING_Q_RISK_AUDIT_SCHEMA = "lns2.receding_q_risk_audit.v1"
 RISK_LAMBDAS = (0.25, 0.50, 1.00, 2.00)
 RISK_MODES = ("auc", "quality", "quality_time")
+
+
+def resolve_persisted_source_path(
+    value: str | Path, *, sibling_root: str | Path
+) -> Path:
+    """Resolve a source path persisted by either WSL or Windows."""
+
+    path = Path(value)
+    if path.is_dir():
+        return path.resolve()
+    text = str(value).replace("\\", "/")
+    if os.name == "nt" and text.startswith("/mnt/") and len(text) >= 7:
+        drive = text[5]
+        converted = Path(f"{drive.upper()}:/{text[7:]}")
+        if converted.is_dir():
+            return converted.resolve()
+    if os.name != "nt" and len(text) >= 3 and text[1:3] == ":/":
+        converted = Path(f"/mnt/{text[0].lower()}/{text[3:]}")
+        if converted.is_dir():
+            return converted.resolve()
+    sibling = Path(sibling_root).resolve() / Path(text).name
+    if sibling.is_dir():
+        return sibling
+    raise ValueError(f"cannot resolve persisted source path: {value}")
 
 
 def risk_policy_grid() -> list[dict[str, Any]]:
@@ -398,9 +423,10 @@ def audit_receding_q_risk(
     stability_report = dict(
         read_json(stability_root / "receding_q_stability_report.json")
     )
-    source_root = Path(
-        str(dict(stability_report["run_config"])["source"])
-    ).resolve()
+    source_root = resolve_persisted_source_path(
+        str(dict(stability_report["run_config"])["source"]),
+        sibling_root=stability_root.parent,
+    )
     source_rows = load_receding_q_rollouts(source_root)
     followup_rows = load_receding_q_rollouts(stability_root)
     merged = merge_followup_rollouts(source_rows, followup_rows)
@@ -581,6 +607,7 @@ __all__ = [
     "audit_receding_q_risk",
     "build_risk_loo_rows",
     "map_group_policy_selection",
+    "resolve_persisted_source_path",
     "risk_candidate_summary",
     "risk_policy_grid",
     "select_risk_candidate",
