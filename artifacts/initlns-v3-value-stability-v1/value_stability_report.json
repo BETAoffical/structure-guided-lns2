@@ -1,0 +1,174 @@
+{
+  "analysis_implementation_sha256": "6e7bdb5581d652c6e679997d7323c59d4bc5d00489a0a22d6b1e2211f403b80c",
+  "checks": {
+    "all_censored_rollouts_extended": true,
+    "followup_coverage_complete": true,
+    "merged_uncensored_fraction_at_least_90pct": true,
+    "target_pairwise_winner_agreement_at_least_60pct": false,
+    "target_winner_purity_at_least_50pct": true
+  },
+  "decision": "label_stability_insufficient_for_value_model_pilot",
+  "extended_censored_rollout_count": 13,
+  "followup_rollout_count": 63,
+  "limitations": [
+    "Only previously unstable or censored states receive two additional PP seeds; stable states retain two seeds.",
+    "Previously censored branches are extended to the new cap while completed branches reuse their original measurements.",
+    "Continuation actions still use official Adaptive, so the labels estimate a teacher-conditioned Q rather than an on-policy v3 value.",
+    "Strict all-seed agreement is diagnostic only because its probability decreases mechanically as the seed count grows; the promotion gate uses pairwise agreement.",
+    "This is a label-stability gate and does not compare complete v2 or v3 episodes."
+  ],
+  "median_target_winner_purity": 0.5,
+  "merged_rollout_count": 120,
+  "merged_uncensored_fraction": 0.9,
+  "minimum_target_winner_purity": 0.5,
+  "original_uncensored_fraction": 0.8142857142857143,
+  "pairwise_winner_agreement_by_overhead": {
+    "0.0": 0.5416666666666666,
+    "0.05": 0.5277777777777778,
+    "0.1": 0.5277777777777778,
+    "0.15": 0.5277777777777778
+  },
+  "remaining_extended_censored_rollout_count": 5,
+  "resolved_censored_rollout_count": 8,
+  "run_config": {
+    "implementation_sha256": "34c8299d2bf35b146ac43ac1baf814235d3653bc1402b1796d2e59c2bc6e605c",
+    "max_repairs": 60,
+    "schema": "lns2.v3_value_label_stability.v1",
+    "source_pilot": "initlns-v3-value-label-pilot-v1",
+    "source_plan_fingerprint": "1e024ecabea2a1f067fcdc9ce7a69f0055bd202e8ff5f51a9c131cebde6ab3d5",
+    "source_rollout_fingerprint": "26841c5e5dafa830dedac7bfe5b85967335dd4df06b9667ac91f2071a75fa853",
+    "target_fingerprint": "975fa0475265b0b1acbbb67d2642aeb6dabdd66fc326969c4471e3941a2fd2cf",
+    "total_trials": 4,
+    "wall_clock_seconds": 120.0
+  },
+  "schema": "lns2.v3_value_label_stability.v1",
+  "source_rollout_count": 70,
+  "strict_winner_agreement_by_overhead": {
+    "0.0": 0.3333333333333333,
+    "0.05": 0.3333333333333333,
+    "0.1": 0.3333333333333333,
+    "0.15": 0.3333333333333333
+  },
+  "target_pairwise_winner_agreement": 0.3125,
+  "target_state_count": 8,
+  "targets": {
+    "censored_rollout_keys": [
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "oracle_h1_efficiency",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "oracle_h1_efficiency",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "oracle_s3_quality_time",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "oracle_s3_quality_time",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "v2_full",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+        "v2_full",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0004__0026",
+        "oracle_s3_quality_time",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0004__0026",
+        "oracle_s3_quality_time",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0004__0026",
+        "v2_full",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022",
+        "oracle_h1_efficiency",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022",
+        "oracle_s3_efficiency",
+        0
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022",
+        "oracle_s3_efficiency",
+        1
+      ],
+      [
+        "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022",
+        "v2_full",
+        1
+      ]
+    ],
+    "censored_state_ids": [
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0004__0026",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022"
+    ],
+    "target_state_ids": [
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0011__seed_0000__fixed_random__decision_0000__0013",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0004__0026",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0006__0022",
+      "s3__policy_train__policy_train_dead_end_aisles_0002__task_0012__seed_0000__realized_dynamic__decision_0000__0090",
+      "s3__policy_train__policy_train_dead_end_aisles_0002__task_0016__seed_0000__fixed_random__decision_0000__0103",
+      "s3__policy_train__policy_train_regular_beltway_0002__task_0011__seed_0000__official_adaptive__decision_0000__0109",
+      "s3__policy_train__policy_train_regular_beltway_0002__task_0019__seed_0000__fixed_random__decision_0000__0116"
+    ],
+    "unstable_state_ids": [
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0011__seed_0000__fixed_random__decision_0000__0013",
+      "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+      "s3__policy_train__policy_train_dead_end_aisles_0002__task_0012__seed_0000__realized_dynamic__decision_0000__0090",
+      "s3__policy_train__policy_train_dead_end_aisles_0002__task_0016__seed_0000__fixed_random__decision_0000__0103",
+      "s3__policy_train__policy_train_regular_beltway_0002__task_0011__seed_0000__official_adaptive__decision_0000__0109",
+      "s3__policy_train__policy_train_regular_beltway_0002__task_0019__seed_0000__fixed_random__decision_0000__0116"
+    ]
+  },
+  "upstream_value_report": {
+    "action_sensitive_state_fraction": 1.0,
+    "checks": {
+      "action_sensitive_state_fraction_at_least_50pct": true,
+      "at_least_two_actions_per_state": true,
+      "coverage_complete": true,
+      "uncensored_branch_fraction_at_least_50pct": true,
+      "winner_seed_agreement_at_least_50pct": false
+    },
+    "decision": "cost_to_go_labels_insufficient",
+    "limitations": [
+      "The continuation teacher is official Adaptive, so labels estimate Q under that teacher rather than an optimal or on-policy v3 continuation.",
+      "Candidate arms were selected from existing v2, model-S3, and retrospective Oracle diagnostics; this pilot tests label signal and is not promotion evidence.",
+      "Replay and prefix reconstruction time is excluded from cost-to-go labels.",
+      "Censored branches require survival-aware handling before model training."
+    ],
+    "rollout_count": 120,
+    "schema": "lns2.v3_value_label_pilot.v1",
+    "smoke_only": false,
+    "state_count": 12,
+    "uncensored_branch_fraction": 0.9,
+    "winner_seed_agreement_by_overhead": {
+      "0.0": 0.3333333333333333,
+      "0.05": 0.3333333333333333,
+      "0.1": 0.3333333333333333,
+      "0.15": 0.3333333333333333
+    }
+  }
+}
