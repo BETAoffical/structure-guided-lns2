@@ -99,6 +99,9 @@ def _row(
                 "conflict_reduction": 10 - final_conflicts,
                 "after_done": True,
                 "after_feasible": False,
+                "step_applied": True,
+                "terminated": False,
+                "truncated": True,
                 "replan_success": True,
                 "repair_outcome": "conflict_reduced",
                 "low_level": {

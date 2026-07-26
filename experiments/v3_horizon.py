@@ -40,7 +40,23 @@ from experiments.trace_replay import TRACE_REPLAY_CONTRACT, replay_prefix
 from experiments.v3_controller import load_v3_controller_bundle, v3_candidate_order
 
 
-V3_HORIZON_COLLECTION_SCHEMA = "lns2.v3_horizon_collection.v1"
+V3_HORIZON_COLLECTION_SCHEMA = "lns2.v3_horizon_collection.v2"
+
+
+def _terminal_flags(
+    result: dict[str, Any], state: dict[str, Any]
+) -> tuple[bool, bool, bool]:
+    if "terminated" not in result or "truncated" not in result:
+        raise RuntimeError("v3-h3 native step omitted terminal flags")
+    terminated = bool(result["terminated"])
+    truncated = bool(result["truncated"])
+    done = bool(state.get("done"))
+    feasible = bool(state.get("feasible"))
+    if terminated != feasible or truncated != (done and not feasible):
+        raise RuntimeError("v3-h3 native terminal flags disagree with observation")
+    if done != (terminated or truncated):
+        raise RuntimeError("v3-h3 native done flag is inconsistent")
+    return terminated, truncated, done
 
 
 def _horizon_environment_configuration(
@@ -187,6 +203,9 @@ def _horizon_trial(
     expected = str(decision["before_fingerprint"])
     if state_fingerprint(state) != expected:
         raise RuntimeError("v3-h3 replay fingerprint mismatch")
+    if bool(state.get("done")):
+        raise RuntimeError("v3-h3 replay starts from a terminal state")
+    initial_fingerprint = state_fingerprint(state)
     initial_conflicts = int(state["num_of_colliding_pairs"])
     initial_repair_fingerprint = repair_structure_fingerprint(state)
     trajectory = [initial_conflicts]
@@ -196,8 +215,11 @@ def _horizon_trial(
     total_controller_seconds = max(0.0, float(first_selection_seconds))
     low_level_total = collections.Counter()
     first_outcome: dict[str, Any] | None = None
+    stop_reason = "horizon_complete"
+    truncated = False
     for offset in range(horizon):
         before = state
+        before_fingerprint = state_fingerprint(before)
         before_conflicts = int(before["num_of_colliding_pairs"])
         before_repair = repair_structure_fingerprint(before)
         if offset == 0:
@@ -238,10 +260,14 @@ def _horizon_trial(
         repair_seconds = time.perf_counter() - repair_started
         state = dict(result["observation"])
         metrics = dict(result["metrics"])
+        if metrics.get("step_applied") is not True:
+            raise RuntimeError("v3-h3 native step ended before applying a repair")
+        terminated, step_truncated, done = _terminal_flags(result, state)
         after_conflicts = int(state["num_of_colliding_pairs"])
+        after_fingerprint = state_fingerprint(state)
         after_repair = repair_structure_fingerprint(state)
         low_level = _low_level_delta(before, state)
-        for name in ("generated", "expanded", "reopened"):
+        for name in ("generated", "expanded", "reopened", "runs"):
             low_level_total[name] += int(low_level.get(name, 0))
         pp_seconds = max(0.0, float(metrics.get("pp_replan_seconds", 0.0)))
         total_pp_seconds += pp_seconds
@@ -265,14 +291,26 @@ def _horizon_trial(
             "conflicts_before": before_conflicts,
             "conflicts_after": after_conflicts,
             "repair_outcome": outcome_name,
+            "replan_success": bool(metrics.get("replan_success")),
+            "before_fingerprint": before_fingerprint,
+            "after_fingerprint": after_fingerprint,
             "before_repair_fingerprint": before_repair,
             "after_repair_fingerprint": after_repair,
+            "low_level_delta": {
+                name: int(low_level.get(name, 0))
+                for name in ("generated", "expanded", "reopened", "runs")
+            },
+            "terminated": terminated,
+            "truncated": step_truncated,
+            "done": done,
         }
         steps.append(step)
         trajectory.append(after_conflicts)
         if first_outcome is None:
             first_outcome = dict(step)
-        if bool(state.get("feasible")):
+        if done:
+            stop_reason = "feasible" if terminated else "environment_terminal"
+            truncated = step_truncated
             break
     assert first_outcome is not None
     minimum_conflicts = min(trajectory)
@@ -289,9 +327,13 @@ def _horizon_trial(
         "complete": True,
         "horizon": int(horizon),
         "executed_steps": len(steps),
+        "initial_fingerprint": initial_fingerprint,
         "initial_repair_fingerprint": initial_repair_fingerprint,
+        "final_fingerprint": state_fingerprint(state),
         "final_repair_fingerprint": repair_structure_fingerprint(state),
         "conflict_trajectory": trajectory,
+        "stop_reason": stop_reason,
+        "truncated": truncated,
         "steps": steps,
         "h1": {
             "effective_progress": first_outcome["repair_outcome"]
@@ -317,6 +359,7 @@ def _horizon_trial(
             "generated": int(low_level_total["generated"]),
             "expanded": int(low_level_total["expanded"]),
             "reopened": int(low_level_total["reopened"]),
+            "runs": int(low_level_total["runs"]),
         },
     }
 

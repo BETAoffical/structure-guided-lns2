@@ -299,6 +299,24 @@ def _validate_pp_seed(metrics: dict[str, Any], expected_seed: int) -> None:
         )
 
 
+def _terminal_flags(
+    transition: dict[str, Any], state: dict[str, Any]
+) -> tuple[bool, bool, bool]:
+    if "terminated" not in transition or "truncated" not in transition:
+        raise RuntimeError("receding-Q native step omitted terminal flags")
+    terminated = bool(transition["terminated"])
+    truncated = bool(transition["truncated"])
+    done = bool(state.get("done"))
+    feasible = bool(state.get("feasible"))
+    if terminated != feasible or truncated != (done and not feasible):
+        raise RuntimeError(
+            "receding-Q native terminal flags disagree with observation"
+        )
+    if done != (terminated or truncated):
+        raise RuntimeError("receding-Q native done flag is inconsistent")
+    return terminated, truncated, done
+
+
 def _fixed_horizon_labels(
     *,
     initial_conflicts: int,
@@ -389,9 +407,11 @@ def _stored_agent_ids(
     *,
     field: str,
     agent_count: int,
+    allow_empty: bool = False,
 ) -> list[int]:
-    if not isinstance(value, list) or not value:
-        raise ValueError(f"receding-Q rollout {field} must be a non-empty list")
+    if not isinstance(value, list) or (not value and not bool(allow_empty)):
+        qualifier = "a list" if allow_empty else "a non-empty list"
+        raise ValueError(f"receding-Q rollout {field} must be {qualifier}")
     if any(isinstance(agent, bool) or not isinstance(agent, int) for agent in value):
         raise ValueError(f"receding-Q rollout {field} must contain integers")
     agents = list(value)
@@ -562,6 +582,20 @@ def validate_receding_q_rollout(
             raise ValueError("receding-Q step lacks terminal-state evidence")
         after_done = bool(step["after_done"])
         after_feasible = bool(step["after_feasible"])
+        if step.get("step_applied") is not True:
+            raise ValueError("receding-Q rollout contains a non-applied repair")
+        if not isinstance(step.get("terminated"), bool) or not isinstance(
+            step.get("truncated"), bool
+        ):
+            raise ValueError("receding-Q step lacks native terminal flags")
+        terminated = bool(step["terminated"])
+        truncated = bool(step["truncated"])
+        if terminated != after_feasible or truncated != (
+            after_done and not after_feasible
+        ):
+            raise ValueError("receding-Q native terminal evidence mismatch")
+        if after_done != (terminated or truncated):
+            raise ValueError("receding-Q done/terminal evidence mismatch")
         if after_feasible != (conflicts_after == 0):
             raise ValueError("receding-Q step feasibility evidence mismatch")
         if after_feasible and not after_done:
@@ -578,11 +612,8 @@ def validate_receding_q_rollout(
             step.get("repair_order"),
             field=f"steps[{step_index}].repair_order",
             agent_count=int(state_plan["agent_count"]),
+            allow_empty=True,
         )
-        if set(repair_order) != set(step_agents):
-            raise ValueError(
-                "receding-Q repair order does not cover the executed neighborhood"
-            )
 
         replan_success = step.get("replan_success")
         if not isinstance(replan_success, bool):
@@ -603,6 +634,15 @@ def validate_receding_q_rollout(
         )
         if outcome != expected_outcome:
             raise ValueError("receding-Q repair outcome mismatch")
+        if repair_order:
+            if set(repair_order) != set(step_agents):
+                raise ValueError(
+                    "receding-Q repair order does not cover the executed neighborhood"
+                )
+        elif replan_success or outcome != "hard_failure":
+            raise ValueError(
+                "receding-Q empty repair order is only valid for a hard failure"
+            )
 
         low_level = step.get("low_level")
         if not isinstance(low_level, dict):
@@ -621,7 +661,8 @@ def validate_receding_q_rollout(
         if int(step.get("requested_pp_seed", -1)) != expected_seed:
             raise ValueError("receding-Q paired PP seed mismatch")
         applied_seed = int(step.get("applied_pp_seed", -2))
-        if applied_seed not in {-1, expected_seed}:
+        expected_applied_seed = expected_seed if repair_order else -1
+        if applied_seed != expected_applied_seed:
             raise ValueError("receding-Q applied PP seed mismatch")
         action = step.get("action")
         if not isinstance(action, dict):
@@ -902,6 +943,11 @@ def run_receding_q_rollout(job: dict[str, Any]) -> dict[str, Any]:
         solver_step_wall = time.perf_counter() - started
         state = dict(transition["observation"])
         metrics = dict(transition["metrics"])
+        if metrics.get("step_applied") is not True:
+            raise RuntimeError(
+                "receding-Q native step ended before applying a repair"
+            )
+        terminated, truncated, done = _terminal_flags(transition, state)
         _validate_pp_seed(metrics, seed)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_full = state_fingerprint(state)
@@ -954,6 +1000,9 @@ def run_receding_q_rollout(job: dict[str, Any]) -> dict[str, Any]:
                 "conflict_reduction": conflicts_before - conflicts_after,
                 "after_done": bool(state.get("done")),
                 "after_feasible": bool(state.get("feasible")),
+                "step_applied": True,
+                "terminated": terminated,
+                "truncated": truncated,
                 "replan_success": bool(metrics.get("replan_success")),
                 "repair_outcome": outcome,
                 "low_level": {
@@ -966,10 +1015,10 @@ def run_receding_q_rollout(job: dict[str, Any]) -> dict[str, Any]:
                 "after_repair_fingerprint": after_repair,
             }
         )
-        if bool(state.get("feasible")):
+        if terminated:
             stop_reason = "feasible"
             break
-        if bool(state.get("done")):
+        if done:
             stop_reason = "environment_terminal"
             break
 
@@ -1021,16 +1070,26 @@ def run_receding_q_rollout(job: dict[str, Any]) -> dict[str, Any]:
         },
         **labels,
     }
-    validate_receding_q_rollout(
-        result,
-        state_plan=state_row,
-        arm_plan=arm,
-        feature_names=RECEDING_Q_FEATURE_NAMES,
-        horizon=horizon,
-        continuation_teacher=teacher,
-        expected_trial_index=trial_index,
-        expected_producer_fingerprint=producer_fingerprint,
-    )
+    try:
+        validate_receding_q_rollout(
+            result,
+            state_plan=state_row,
+            arm_plan=arm,
+            feature_names=RECEDING_Q_FEATURE_NAMES,
+            horizon=horizon,
+            continuation_teacher=teacher,
+            expected_trial_index=trial_index,
+            expected_producer_fingerprint=producer_fingerprint,
+        )
+    except ValueError as error:
+        repair_order_counts = [
+            len(step.get("repair_order", ())) for step in steps
+        ]
+        raise ValueError(
+            f"{error}; state={state_row['state_id']}; "
+            f"candidate={arm['candidate_id']}; trial={trial_index}; "
+            f"repair_order_counts={repair_order_counts}"
+        ) from error
     return result
 
 

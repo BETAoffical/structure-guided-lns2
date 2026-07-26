@@ -19,6 +19,7 @@ from experiments.closed_loop_confirmation import (
     _valid_episode_trace,
     _with_stopping_rule,
     _with_time_budget_overrides,
+    ClosedLoopExecutionError,
     ClosedLoopTraceError,
     closed_loop_dataset_design,
     closed_loop_qualification_report,
@@ -735,6 +736,59 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         )
         self.assertEqual(environment.calls, 12)
         self.assertEqual(state_fingerprint(environment.state), state_fingerprint(state))
+
+    def test_proposal_full_check_allows_live_runtime_to_advance(self) -> None:
+        state = make_state()
+
+        class Environment(FakeProposalEnvironment):
+            def get_state(self) -> dict:
+                result = dict(self.state)
+                result["runtime"] = float(result["runtime"]) + 0.25
+                return result
+
+        candidates, metrics = generate_online_candidates(
+            Environment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target"],
+                "neighborhood_sizes": [4],
+                "trials": 1,
+                "candidates_per_family": 1,
+            },
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertTrue(metrics["full_state_verified"])
+
+    def test_proposal_full_check_rejects_deterministic_state_change(self) -> None:
+        state = make_state()
+
+        class Environment(FakeProposalEnvironment):
+            def get_state(self) -> dict:
+                result = dict(self.state)
+                result["iteration"] = int(result["iteration"]) + 1
+                return result
+
+        with self.assertRaisesRegex(
+            ClosedLoopExecutionError, "proposal changed the closed-loop repair state"
+        ):
+            generate_online_candidates(
+                Environment(state),
+                state,
+                task_id="task-a",
+                solver_seed=0,
+                decision_index=0,
+                proposal_config={
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+            )
 
     def test_proposal_and_repair_seeds_are_deterministic_and_disjoint(self) -> None:
         proposal = proposal_random_seed("task", 0, "state", 1, 2, "target", 8, 3)

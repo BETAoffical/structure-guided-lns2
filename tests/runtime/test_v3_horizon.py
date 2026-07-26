@@ -171,7 +171,13 @@ class HorizonCandidateSamplingTests(unittest.TestCase):
                     "feasible": False,
                     "done": False,
                 },
-                "metrics": {"replan_success": True, "pp_replan_seconds": 0.3},
+                "metrics": {
+                    "replan_success": True,
+                    "pp_replan_seconds": 0.3,
+                    "step_applied": True,
+                },
+                "terminated": False,
+                "truncated": False,
             },
             {
                 "observation": {
@@ -179,7 +185,13 @@ class HorizonCandidateSamplingTests(unittest.TestCase):
                     "feasible": True,
                     "done": True,
                 },
-                "metrics": {"replan_success": True, "pp_replan_seconds": 0.4},
+                "metrics": {
+                    "replan_success": True,
+                    "pp_replan_seconds": 0.4,
+                    "step_applied": True,
+                },
+                "terminated": True,
+                "truncated": False,
             },
         ]
 
@@ -251,9 +263,164 @@ class HorizonCandidateSamplingTests(unittest.TestCase):
         self.assertAlmostEqual(row["h3"]["pp_replan_seconds"], 0.7)
         self.assertAlmostEqual(row["h3"]["controller_seconds"], 0.3)
         self.assertTrue(row["h3"]["feasible"])
+        self.assertEqual(row["stop_reason"], "feasible")
+        self.assertFalse(row["truncated"])
         self.assertEqual(row["route"], "model")
         self.assertEqual(row["actual_size"], 4)
         self.assertEqual(row["steps"][0]["action"]["pp_random_seed"], row["steps"][0]["action"]["random_seed"])
+
+    def test_horizon_trial_stops_on_nonfeasible_terminal_state(self) -> None:
+        initial = {
+            "num_of_colliding_pairs": 10,
+            "feasible": False,
+            "done": False,
+        }
+        transition = {
+            "observation": {
+                "num_of_colliding_pairs": 10,
+                "feasible": False,
+                "done": True,
+            },
+            "metrics": {
+                "replan_success": False,
+                "pp_replan_seconds": 0.0,
+                "step_applied": True,
+            },
+            "terminated": False,
+            "truncated": True,
+        }
+
+        class Environment:
+            call_count = 0
+
+            def step(self, _action):
+                self.call_count += 1
+                return transition
+
+        environment = Environment()
+        decision = {
+            "split": "policy_train",
+            "state_id": "state",
+            "prefix_actions": [],
+            "before_fingerprint": "full-10",
+            "before_repair_fingerprint": "repair-10",
+            "task_id": "task",
+            "solver_seed": 1,
+            "decision_index": 2,
+        }
+        candidate = {
+            "candidate_id": "candidate",
+            "route": "model",
+            "agents": [1, 2, 3, 4],
+            "actual_size": 4,
+        }
+
+        with (
+            patch(
+                "experiments.v3_horizon.replay_prefix",
+                return_value=(environment, initial),
+            ),
+            patch(
+                "experiments.v3_horizon.state_fingerprint",
+                return_value="full-10",
+            ),
+            patch(
+                "experiments.v3_horizon.repair_structure_fingerprint",
+                return_value="repair-10",
+            ),
+            patch(
+                "experiments.v3_horizon._low_level_delta", return_value={}
+            ),
+            patch("experiments.v3_horizon._v2_action") as continuation,
+        ):
+            row = _horizon_trial(
+                {},
+                decision,
+                candidate,
+                trial_index=0,
+                horizon=3,
+                first_selection_seconds=0.1,
+                proposal={},
+                main_model=object(),
+            )
+
+        self.assertEqual(environment.call_count, 1)
+        continuation.assert_not_called()
+        self.assertEqual(row["executed_steps"], 1)
+        self.assertEqual(row["conflict_trajectory"], [10, 10])
+        self.assertEqual(row["stop_reason"], "environment_terminal")
+        self.assertTrue(row["truncated"])
+        self.assertFalse(row["h3"]["feasible"])
+        self.assertTrue(row["steps"][0]["done"])
+        self.assertTrue(row["steps"][0]["truncated"])
+
+    def test_horizon_trial_rejects_terminal_noop_step(self) -> None:
+        initial = {
+            "num_of_colliding_pairs": 10,
+            "feasible": False,
+            "done": False,
+        }
+        transition = {
+            "observation": {
+                "num_of_colliding_pairs": 10,
+                "feasible": False,
+                "done": True,
+            },
+            "metrics": {
+                "replan_success": False,
+                "pp_replan_seconds": 0.0,
+                "step_applied": False,
+            },
+            "terminated": False,
+            "truncated": True,
+        }
+
+        class Environment:
+            def step(self, _action):
+                return transition
+
+        decision = {
+            "split": "policy_train",
+            "state_id": "state",
+            "prefix_actions": [],
+            "before_fingerprint": "full-10",
+            "before_repair_fingerprint": "repair-10",
+            "task_id": "task",
+            "solver_seed": 1,
+            "decision_index": 2,
+        }
+        candidate = {
+            "candidate_id": "candidate",
+            "route": "model",
+            "agents": [1, 2, 3, 4],
+            "actual_size": 4,
+        }
+
+        with (
+            patch(
+                "experiments.v3_horizon.replay_prefix",
+                return_value=(Environment(), initial),
+            ),
+            patch(
+                "experiments.v3_horizon.state_fingerprint",
+                return_value="full-10",
+            ),
+            patch(
+                "experiments.v3_horizon.repair_structure_fingerprint",
+                return_value="repair-10",
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "before applying a repair"):
+                _horizon_trial(
+                    {},
+                    decision,
+                    candidate,
+                    trial_index=0,
+                    horizon=3,
+                    first_selection_seconds=0.1,
+                    proposal={},
+                    main_model=object(),
+                )
 
     def test_adaptive_reference_does_not_require_candidate_features(self) -> None:
         feature = {

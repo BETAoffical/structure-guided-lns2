@@ -139,6 +139,7 @@ class _FakeEnvironment:
         return {
             "observation": observation,
             "metrics": {
+                "step_applied": True,
                 "replan_success": True,
                 "requested_pp_random_seed": action["pp_random_seed"],
                 "applied_pp_random_seed": action["pp_random_seed"],
@@ -149,6 +150,8 @@ class _FakeEnvironment:
                 "conflicts_before": before,
                 "conflicts_after": after,
             },
+            "terminated": False,
+            "truncated": False,
         }
 
 
@@ -375,6 +378,9 @@ def _analysis_row(candidate: str, trial: int, auc: float) -> dict:
                 "conflict_reduction": 10 - final_conflicts,
                 "after_done": True,
                 "after_feasible": False,
+                "step_applied": True,
+                "terminated": False,
+                "truncated": True,
                 "replan_success": True,
                 "requested_pp_seed": seed,
                 "applied_pp_seed": seed,
@@ -438,6 +444,44 @@ def test_analysis_requires_complete_candidate_trial_matrix() -> None:
             trials=2,
             horizon=3,
             smoke_only=True,
+        )
+
+
+def test_empty_repair_order_is_valid_only_for_a_hard_failure() -> None:
+    plan = _analysis_plan()
+    state = dict(plan["states"][0])
+    arm = dict(state["arms"][0])
+    row = _analysis_row("a", 0, 1.0)
+    step = row["steps"][0]
+    step["repair_order"] = []
+    step["replan_success"] = False
+    step["repair_outcome"] = "hard_failure"
+    step["applied_pp_seed"] = -1
+    step["after_repair_fingerprint"] = row["initial_repair_fingerprint"]
+    row["final_repair_fingerprint"] = row["initial_repair_fingerprint"]
+    module.validate_receding_q_rollout(
+        row,
+        state_plan=state,
+        arm_plan=arm,
+        feature_names=["x"],
+        horizon=3,
+        continuation_teacher="official_adaptive",
+        expected_trial_index=0,
+        expected_producer_fingerprint="producer",
+    )
+
+    step["replan_success"] = True
+    step["repair_outcome"] = "accepted_noop"
+    with pytest.raises(ValueError, match="only valid for a hard failure"):
+        module.validate_receding_q_rollout(
+            row,
+            state_plan=state,
+            arm_plan=arm,
+            feature_names=["x"],
+            horizon=3,
+            continuation_teacher="official_adaptive",
+            expected_trial_index=0,
+            expected_producer_fingerprint="producer",
         )
 
 
@@ -512,7 +556,7 @@ def test_resume_loader_binds_producer_and_preserves_invalid_complete(
         ),
         (
             lambda row: row["steps"][0].__setitem__("after_done", False),
-            "early stop lacks terminal-state evidence",
+            "native terminal evidence mismatch",
         ),
         (
             lambda row: (

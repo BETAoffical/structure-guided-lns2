@@ -1486,7 +1486,13 @@ def generate_online_candidates(
         state_check_fingerprint_seconds = (
             time.perf_counter() - state_check_fingerprint_started
         )
-        if after != state or after_fingerprint != state_hash:
+        # ``runtime`` is a live wall-clock field and legitimately advances
+        # while a read-only proposal batch is being generated.  The
+        # deterministic fingerprint deliberately excludes wall-clock/context
+        # fields, while the native revision above protects structural state.
+        # Comparing the complete dictionaries therefore creates false
+        # positives without adding a repair-state invariant.
+        if after_fingerprint != state_hash:
             raise ClosedLoopExecutionError(
                 "fingerprint_mismatch", "proposal changed the closed-loop repair state"
             )
