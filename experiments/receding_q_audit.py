@@ -10,14 +10,18 @@ receding-Q label collection.
 from __future__ import annotations
 
 import collections
-import csv
 import math
 import statistics
-import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_jsonl, sha256_file, write_json
+from experiments._common import (
+    atomic_write_csv as _atomic_write_csv,
+    read_jsonl,
+    sha256_file,
+    state_groups as _state_groups,
+    write_json,
+)
 from experiments.feature_schema_v3 import V3_FEATURE_NAMES
 from experiments.v3_s3 import S3_TEMPORAL_FEATURE_NAMES
 
@@ -35,28 +39,6 @@ ACTUAL_CANDIDATE_FEATURE_NAMES = (
     *V3_FEATURE_NAMES,
     *S3_TEMPORAL_FEATURE_NAMES,
 )
-
-
-def _atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    materialized = list(rows)
-    if not materialized:
-        raise ValueError(f"cannot write an empty CSV: {path.name}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = sorted({name for row in materialized for name in row})
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(materialized)
-    temporary.replace(path)
 
 
 def _mean(values: Iterable[float]) -> float:
@@ -365,13 +347,6 @@ def _correlation(left: list[float], right: list[float]) -> float:
     if left_scale <= 0.0 or right_scale <= 0.0:
         return 0.0
     return numerator / (left_scale * right_scale)
-
-
-def _state_groups(rows: list[dict[str, Any]]) -> list[list[int]]:
-    grouped: dict[str, list[int]] = collections.defaultdict(list)
-    for index, row in enumerate(rows):
-        grouped[str(row["state_id"])].append(index)
-    return [grouped[key] for key in sorted(grouped)]
 
 
 def _fit_models(

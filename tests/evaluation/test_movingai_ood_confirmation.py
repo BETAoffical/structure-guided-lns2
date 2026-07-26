@@ -111,11 +111,16 @@ class MovingAIOODConfirmationTests(unittest.TestCase):
         results = []
         for row in rows:
             for seed in (1, 2, 3):
+                initial_conflicts = (
+                    0 if row["task_id"].endswith("-100") else 3
+                )
                 results.append(
                     {
                         **row,
                         "solver_seed": seed,
-                        "initial_conflicts": 0 if row["task_id"].endswith("-100") else 3,
+                        "initial_conflicts": initial_conflicts,
+                        "initial_complete": True,
+                        "initial_feasible": initial_conflicts == 0,
                         "state_fingerprint": f"{row['task_id']}-{seed}",
                         "status": "ok",
                     }

@@ -20,7 +20,9 @@ def main() -> int:
     transitions = [row for row in rows if row["event"] == "transition"]
     assert transitions
     for row in transitions:
+        assert row["native_timing_schema"] == "lns2.repair_timing.v2"
         assert row["action"]["mode"] == "official"
+        assert "pp_random_seed" in row["action"]
         assert row["action_valid"] is True
         assert row["metrics"]["conflicts_before"] >= 0
         assert row["metrics"]["conflicts_after"] >= 0
@@ -36,6 +38,18 @@ def main() -> int:
         assert all(
             math.isfinite(float(metrics[name])) and float(metrics[name]) >= 0.0
             for name in timing_names
+        )
+        assert float(metrics["native_state_snapshot_seconds"]) > 0.0
+        assert int(metrics["applied_pp_random_seed"]) >= -1
+        assert math.isclose(
+            float(metrics["step_runtime"]),
+            float(metrics["native_step_seconds"]),
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
+        assert (
+            math.isfinite(float(metrics["episode_runtime_delta_seconds"]))
+            and float(metrics["episode_runtime_delta_seconds"]) >= 0.0
         )
         partition = sum(float(metrics[name]) for name in timing_names[1:])
         assert math.isclose(

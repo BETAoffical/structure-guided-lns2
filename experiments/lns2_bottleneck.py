@@ -3,16 +3,34 @@ from __future__ import annotations
 import csv
 import html
 import itertools
+import json
 import math
 import random
 import statistics
+import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments.closed_loop_trace_storage import read_trace_events
+from experiments._common import contained_file, sha256_file
+from experiments.closed_loop_confirmation import (
+    ClosedLoopTraceError,
+    validate_closed_loop_trace,
+)
+from experiments.closed_loop_trace_storage import (
+    TRACE_FORMAT_DELTA_GZIP_V2,
+    TRACE_FORMAT_FULL_V1,
+    open_trace_text,
+    read_trace_events,
+    storage_fingerprint,
+)
 from experiments.tradeoff_evaluation import _manifest_path as _controller_manifest_path
-from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
+from experiments.repair_collection import (
+    _fingerprint,
+    _read_json,
+    _read_jsonl,
+    _write_json,
+)
 
 
 REPORT_SCHEMA = "lns2.v2_bottleneck_diagnostic.v2"
@@ -34,6 +52,8 @@ CONTROLLER_COLORS = {
     "v3-h3": "#e45756",
 }
 TIMING_FIELDS = (
+    "native_step_seconds",
+    "episode_runtime_delta_seconds",
     "neighborhood_selection_seconds",
     "candidate_generation_seconds",
     "state_check_seconds",
@@ -57,6 +77,10 @@ TIMING_FIELDS = (
     "iteration_wall_seconds",
     "trace_write_seconds",
 )
+SUPPORTED_NATIVE_TIMING_SCHEMAS = {
+    "lns2.repair_timing.v1",
+    "lns2.repair_timing.v2",
+}
 DECOMPOSITION_FIELDS = (
     "environment_construct_seconds",
     "reset_wall_seconds",
@@ -525,7 +549,7 @@ def _iteration_row(
         "low_level_runs": int(low.get("runs", 0)),
         "trace_write_seconds": trace_write_seconds,
         "timing_instrumented": bool(event.get("timings"))
-        and event.get("native_timing_schema") == "lns2.repair_timing.v1"
+        and event.get("native_timing_schema") in SUPPORTED_NATIVE_TIMING_SCHEMAS
         and "pp_replan_seconds" in timings
         and "neighborhood_selection_seconds" in timings,
     }
@@ -804,6 +828,234 @@ def _episode_row(
     return row
 
 
+def validate_manifest_trace(
+    root: Path,
+    source: dict[str, Any],
+    *,
+    run_fingerprint: str,
+    expected_policy: str,
+) -> tuple[Path, list[dict[str, Any]], Path | None]:
+    """Validate the immutable trace metadata and episode identity in a manifest row."""
+
+    if not run_fingerprint:
+        raise ValueError("collection run fingerprint is missing")
+    trace_path = contained_file(
+        root, source.get("trace_file"), field="trace_file"
+    )
+    expected_sha256 = str(source.get("trace_sha256") or "")
+    if not expected_sha256:
+        raise ValueError(f"trace SHA256 is missing: {source.get('episode_id')}")
+    actual_sha256 = sha256_file(trace_path)
+    if actual_sha256 != expected_sha256:
+        raise ValueError(f"trace SHA256 mismatch: {source.get('episode_id')}")
+    try:
+        expected_bytes = int(source["trace_bytes"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(
+            f"trace byte count is missing or invalid: {source.get('episode_id')}"
+        ) from error
+    if trace_path.stat().st_size != expected_bytes:
+        raise ValueError(f"trace byte count mismatch: {source.get('episode_id')}")
+
+    episode_id = str(source.get("episode_id") or "")
+    policy = str(source.get("policy") or "")
+    if not episode_id:
+        raise ValueError("manifest episode id is missing")
+    if policy != expected_policy:
+        raise ValueError(f"manifest policy mismatch: {episode_id}")
+    try:
+        solver_seed = int(source["solver_seed"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"manifest solver seed is invalid: {episode_id}") from error
+
+    preflight_events = read_trace_events(trace_path)
+    if len(preflight_events) < 2:
+        raise ValueError(f"trace must contain initial and finish events: {episode_id}")
+    preflight_initial = preflight_events[0]
+    manifest_state_ref = source.get("initial_state_ref")
+    event_state_ref = preflight_initial.get("state_blob")
+    blob_path: Path | None = None
+    if manifest_state_ref is not None or event_state_ref is not None:
+        manifest_reference = (
+            manifest_state_ref if isinstance(manifest_state_ref, str) else ""
+        )
+        event_reference = event_state_ref if isinstance(event_state_ref, str) else ""
+        if (
+            not manifest_reference
+            or not event_reference
+            or manifest_reference != event_reference
+        ):
+            raise ValueError(
+                f"manifest and trace state blob references differ: {episode_id}"
+            )
+        blob_path = contained_file(
+            root, event_reference, field="initial_state_ref"
+        )
+    manifest_summary = source.get("summary")
+    metric_iteration_budget = (
+        manifest_summary.get("metric_iteration_budget")
+        if isinstance(manifest_summary, dict)
+        else None
+    )
+    validation_events: list[dict[str, Any]] = []
+    legacy_timing_view = False
+    for event in preflight_events:
+        validation_event = dict(event)
+        if (
+            event.get("event") == "transition"
+            and event.get("native_timing_schema") == "lns2.repair_timing.v1"
+            and isinstance(event.get("timings"), dict)
+            and isinstance(event.get("metrics"), dict)
+        ):
+            timings = dict(event["timings"])
+            metrics = event["metrics"]
+            derived = {
+                "native_step_seconds": metrics.get("native_step_seconds"),
+                "episode_runtime_delta_seconds": metrics.get(
+                    "episode_runtime_delta_seconds", metrics.get("step_runtime")
+                ),
+            }
+            for name, value in derived.items():
+                if name not in timings and value is not None:
+                    timings[name] = value
+                    legacy_timing_view = True
+            validation_event["timings"] = timings
+        validation_events.append(validation_event)
+
+    def validate_trace(validation_path: Path) -> dict[str, Any]:
+        return validate_closed_loop_trace(
+            validation_path,
+            run_fingerprint,
+            expected_episode_id=episode_id,
+            expected_policy=expected_policy,
+            expected_solver_seed=solver_seed,
+            metric_iteration_budget=(
+                int(metric_iteration_budget)
+                if metric_iteration_budget is not None
+                else None
+            ),
+            collection_root=root,
+        )
+
+    try:
+        if legacy_timing_view:
+            with tempfile.TemporaryDirectory(
+                prefix="lns2-trace-validation-"
+            ) as directory:
+                # The authenticated source may be gzip-compressed, but this
+                # derived validation view need not be; schema markers determine
+                # full-v1 versus compact semantics.
+                validation_path = Path(directory) / "trace.jsonl"
+                with open_trace_text(validation_path, "w") as stream:
+                    for event in validation_events:
+                        stream.write(
+                            json.dumps(
+                                event,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            )
+                            + "\n"
+                        )
+                validated = validate_trace(validation_path)
+        else:
+            validated = validate_trace(trace_path)
+    except ClosedLoopTraceError as error:
+        raise ValueError(f"trace validation failed: {episode_id}: {error}") from error
+    events = preflight_events
+    initial = events[0]
+    finish = events[-1]
+    validated_trace_format = str(validated["trace_format"])
+    expected_storage_fingerprint = storage_fingerprint(validated_trace_format)
+    manifest_trace_format = source.get("trace_format")
+    manifest_storage_fingerprint = source.get("storage_fingerprint")
+    if validated_trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
+        if str(manifest_trace_format or "") != TRACE_FORMAT_DELTA_GZIP_V2:
+            raise ValueError(f"compact trace format mismatch: {episode_id}")
+        if str(manifest_storage_fingerprint or "") != expected_storage_fingerprint:
+            raise ValueError(f"compact trace storage fingerprint mismatch: {episode_id}")
+        if blob_path is None or str(validated.get("initial_state_ref") or "") != str(
+            manifest_state_ref or ""
+        ):
+            raise ValueError(
+                f"manifest and trace state blob references differ: {episode_id}"
+            )
+    elif validated_trace_format == TRACE_FORMAT_FULL_V1:
+        if manifest_trace_format not in {None, "", TRACE_FORMAT_FULL_V1}:
+            raise ValueError(f"full trace format mismatch: {episode_id}")
+        if manifest_storage_fingerprint not in {
+            None,
+            "",
+            expected_storage_fingerprint,
+        }:
+            raise ValueError(f"full trace storage fingerprint mismatch: {episode_id}")
+        if any(
+            "trace_format" in event
+            and str(event.get("trace_format") or "") != TRACE_FORMAT_FULL_V1
+            for event in events
+        ):
+            raise ValueError(f"full trace event format mismatch: {episode_id}")
+        if any(
+            "storage_fingerprint" in event
+            and str(event.get("storage_fingerprint") or "")
+            != expected_storage_fingerprint
+            for event in events
+        ):
+            raise ValueError(
+                f"full trace event storage fingerprint mismatch: {episode_id}"
+            )
+    else:
+        raise ValueError(f"unsupported validated trace format: {validated_trace_format}")
+    if any(str(event.get("run_fingerprint") or "") != run_fingerprint for event in events):
+        raise ValueError(f"trace run fingerprint mismatch: {episode_id}")
+    if any(str(event.get("episode_id") or "") != episode_id for event in events):
+        raise ValueError(f"trace episode id mismatch: {episode_id}")
+    if any(
+        "policy" in event and str(event.get("policy") or "") != expected_policy
+        for event in events
+    ):
+        raise ValueError(f"trace policy mismatch: {episode_id}")
+    if str(initial.get("policy") or "") != expected_policy or str(
+        finish.get("policy") or ""
+    ) != expected_policy:
+        raise ValueError(f"trace policy mismatch: {episode_id}")
+    try:
+        trace_seed = int(initial.get("solver_seed"))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"trace solver seed is invalid: {episode_id}") from error
+    if trace_seed != solver_seed:
+        raise ValueError(f"trace solver seed mismatch: {episode_id}")
+    for event in events:
+        if "solver_seed" not in event:
+            continue
+        try:
+            event_seed = int(event["solver_seed"])
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"trace solver seed is invalid: {episode_id}") from error
+        if event_seed != solver_seed:
+            raise ValueError(f"trace solver seed mismatch: {episode_id}")
+    task_id = str(source.get("task_id") or "")
+    if not task_id:
+        raise ValueError(f"manifest task id is missing: {episode_id}")
+    if any(
+        "task_id" in event and str(event.get("task_id") or "") != task_id
+        for event in events
+    ):
+        raise ValueError(f"trace task id mismatch: {episode_id}")
+    try:
+        expected_event_count = int(source["trace_event_count"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"trace event count is missing or invalid: {episode_id}") from error
+    if expected_event_count != len(events):
+        raise ValueError(f"trace event count mismatch: {episode_id}")
+    finish_summary = finish.get("summary")
+    if not isinstance(manifest_summary, dict) or not isinstance(finish_summary, dict):
+        raise ValueError(f"trace summary is missing or invalid: {episode_id}")
+    if manifest_summary != finish_summary:
+        raise ValueError(f"trace summary mismatch: {episode_id}")
+    return trace_path, events, blob_path
+
+
 def load_track(
     track: str, roots: dict[str, Path]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
@@ -817,9 +1069,12 @@ def load_track(
         environment = dict(configuration.get("environment") or {})
         implementation = dict(run.get("controller_implementation") or {})
         native_module = dict(implementation.get("native_module") or {})
+        run_fingerprint = str(run.get("run_fingerprint") or "")
+        if not run_fingerprint:
+            raise ValueError(f"collection run fingerprint is missing: {root}")
         metadata[controller] = {
             "root": str(root),
-            "run_fingerprint": run.get("run_fingerprint"),
+            "run_fingerprint": run_fingerprint,
             "dataset_fingerprint": run.get("dataset_fingerprint"),
             "stopping_rule": configuration.get("stopping_rule"),
             "replan_algorithm": environment.get("replan_algorithm"),
@@ -839,8 +1094,17 @@ def load_track(
                     }
                 )
                 continue
-            trace_path = root / str(source["trace_file"])
-            events = read_trace_events(trace_path)
+            expected_policy = (
+                "official_adaptive"
+                if controller == "official_adaptive"
+                else "realized_dynamic"
+            )
+            _trace_path, events, _blob_path = validate_manifest_trace(
+                root,
+                source,
+                run_fingerprint=run_fingerprint,
+                expected_policy=expected_policy,
+            )
             transitions = [event for event in events if event.get("event") == "transition"]
             summary = dict(source.get("summary") or {})
             trace_times = list(summary.get("transition_trace_write_seconds") or [])
@@ -2829,6 +3093,7 @@ __all__ = [
     "CONTROLLERS",
     "DECOMPOSITION_FIELDS",
     "REPORT_SCHEMA",
+    "SUPPORTED_NATIVE_TIMING_SCHEMAS",
     "TIMING_FIELDS",
     "generate_bottleneck_artifacts",
     "controller_pairwise_rows",
@@ -2837,6 +3102,7 @@ __all__ = [
     "stall_guard_attempt_limit_violations",
     "stall_prefix_equivalence",
     "targeted_stall_recovery_diagnostic",
+    "validate_manifest_trace",
     "load_track",
     "paired_decomposition",
 ]

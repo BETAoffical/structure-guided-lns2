@@ -58,13 +58,16 @@ def _git(root: Path, *arguments: str) -> str:
 def tracked_files(root: Path) -> list[str]:
     return sorted(
         value
+        for value in _git(root, "ls-files", "-z", "--cached").split("\0")
+        if value and (root / value).is_file()
+    )
+
+
+def untracked_files(root: Path) -> list[str]:
+    return sorted(
+        value
         for value in _git(
-            root,
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
+            root, "ls-files", "-z", "--others", "--exclude-standard"
         ).split("\0")
         if value and (root / value).is_file()
     )
@@ -243,6 +246,7 @@ def evidence_status(root: Path, config: dict[str, Any]) -> dict[str, Any]:
 def run_check(root: Path, config: dict[str, Any]) -> dict[str, Any]:
     root = root.resolve()
     files = tracked_files(root)
+    untracked = untracked_files(root)
     roles = dict(config["tracked_roles"])
     root_files = set(map(str, config["tracked_root_files"]))
     production_roots = set(map(str, config["production_python_roots"]))
@@ -309,12 +313,17 @@ def run_check(root: Path, config: dict[str, Any]) -> dict[str, Any]:
             for row in evidence["entries"]
             if row["exists"] and not row["matches"]
         ],
+        "missing_evidence_files": [
+            row["path"] for row in evidence["entries"] if not row["exists"]
+        ],
     }
     error_count = sum(len(values) for values in errors.values())
     return {
         "schema": SCHEMA,
         "repository": ".",
         "tracked_file_count": len(files),
+        "untracked_file_count": len(untracked),
+        "diagnostics": {"untracked_files": untracked},
         "tracked_role_counts": {
             role: sum(
                 Path(relative).parts
@@ -884,6 +893,7 @@ def main() -> int:
                 {
                     "passed": check["passed"],
                     "tracked_file_count": check["tracked_file_count"],
+                    "untracked_file_count": check["untracked_file_count"],
                     "evidence_verified": check["evidence"]["verified_count"],
                     "evidence_entries": check["evidence"]["entry_count"],
                     "error_count": check["error_count"],

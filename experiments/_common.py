@@ -7,12 +7,21 @@ in their owning experiment modules so historical results stay reproducible.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import importlib
+import importlib.metadata
 import json
+import math
 import os
+import platform
 import statistics
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
+
+
+PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v1"
 
 
 def mean(values: Iterable[float | int | bool]) -> float:
@@ -46,12 +55,237 @@ def relative_improvement(baseline: float, challenger: float) -> float:
     return (baseline - challenger) / baseline
 
 
+def standard_error(values: Iterable[float | int]) -> float:
+    numbers = [float(value) for value in values]
+    if len(numbers) < 2:
+        return 0.0
+    return statistics.stdev(numbers) / math.sqrt(len(numbers))
+
+
+def state_groups(rows: list[dict[str, Any]]) -> list[list[int]]:
+    grouped: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        grouped.setdefault(str(row["state_id"]), []).append(index)
+    return [grouped[key] for key in sorted(grouped)]
+
+
+def contained_file(root: Path, value: Any, *, field: str) -> Path:
+    """Resolve a required relative file without following child symlinks."""
+
+    root = root.resolve()
+    text = str(value or "")
+    relative = Path(text)
+    if not text or relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"{field} must be a contained relative path")
+    path = root
+    for part in relative.parts:
+        path /= part
+        if path.is_symlink():
+            raise ValueError(f"{field} must not traverse a symbolic link")
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ValueError(f"{field} escapes its collection root: {value}") from error
+    if not resolved.is_file():
+        raise FileNotFoundError(f"{field} does not exist: {value}")
+    return resolved
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def producer_identity(
+    *,
+    project_root: Path,
+    source_files: Iterable[str | Path],
+    native_required: bool,
+    package_names: Iterable[str] = (),
+    optional_package_names: Iterable[str] = (),
+) -> dict[str, Any]:
+    """Describe every executable dependency that can change an artifact.
+
+    Source keys are project-relative so identities remain readable and stable.
+    When native execution is required, an unavailable or unversioned extension
+    is a hard error rather than an identity with missing evidence.
+    """
+
+    root = Path(project_root).resolve()
+    source_sha256: dict[str, str] = {}
+    for value in source_files:
+        candidate = Path(value)
+        path = candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
+        try:
+            relative = path.relative_to(root).as_posix()
+        except ValueError as error:
+            raise ValueError(f"producer source escapes project root: {value}") from error
+        if relative in source_sha256:
+            raise ValueError(f"duplicate producer source: {relative}")
+        if not path.is_file():
+            raise FileNotFoundError(f"producer source is missing: {relative}")
+        source_sha256[relative] = sha256_file(path)
+    if not source_sha256:
+        raise ValueError("producer identity requires at least one source file")
+
+    required_packages = tuple(sorted(set(map(str, package_names))))
+    optional_packages = tuple(sorted(set(map(str, optional_package_names))))
+    overlap = set(required_packages) & set(optional_packages)
+    if overlap:
+        raise ValueError(
+            "producer packages cannot be both required and optional: "
+            + ", ".join(sorted(overlap))
+        )
+    requested_packages = tuple(sorted((*required_packages, *optional_packages)))
+    packages: dict[str, str | None] = {}
+    for name in requested_packages:
+        if not name:
+            raise ValueError("producer package name must not be empty")
+        try:
+            packages[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            import_name = {
+                "scikit-learn": "sklearn",
+            }.get(name, name.replace("-", "_"))
+            try:
+                package = importlib.import_module(import_name)
+            except ImportError:
+                packages[name] = None
+            else:
+                raw_version = getattr(package, "__version__", None)
+                packages[name] = (
+                    str(raw_version) if raw_version is not None else None
+                )
+
+    native: dict[str, str] | None = None
+    try:
+        module = importlib.import_module("lns2_env")
+    except ImportError as error:
+        if native_required:
+            raise RuntimeError("required native module lns2_env is unavailable") from error
+    else:
+        raw_path = getattr(module, "__file__", None)
+        if not raw_path:
+            raise RuntimeError("loaded lns2_env has no binary path")
+        native_path = Path(str(raw_path)).resolve()
+        if not native_path.is_file():
+            raise RuntimeError(f"loaded lns2_env binary is missing: {native_path}")
+        timing_schema = str(getattr(module, "repair_timing_schema", ""))
+        if not timing_schema:
+            raise RuntimeError("loaded lns2_env has no repair_timing_schema")
+        native = {
+            "path": str(native_path),
+            "sha256": sha256_file(native_path),
+            "repair_timing_schema": timing_schema,
+        }
+
+    result = {
+        "schema": PRODUCER_IDENTITY_SCHEMA,
+        "source_sha256": dict(sorted(source_sha256.items())),
+        "python": {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+        },
+        "packages": packages,
+        "native_required": bool(native_required),
+        "native": native,
+    }
+    validate_producer_identity(
+        result,
+        native_required=bool(native_required),
+        package_names=required_packages,
+        optional_package_names=optional_packages,
+    )
+    return result
+
+
+def validate_producer_identity(
+    value: Any,
+    *,
+    native_required: bool,
+    package_names: Iterable[str] = (),
+    optional_package_names: Iterable[str] = (),
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("producer identity is not an object")
+    identity = dict(value)
+    if str(identity.get("schema")) != PRODUCER_IDENTITY_SCHEMA:
+        raise ValueError("producer identity schema mismatch")
+    sources = identity.get("source_sha256")
+    if not isinstance(sources, dict) or not sources:
+        raise ValueError("producer identity has no source hashes")
+    hexadecimal = set("0123456789abcdef")
+    for name, digest in sources.items():
+        if not str(name) or len(str(digest)) != 64 or not set(str(digest)) <= hexadecimal:
+            raise ValueError("producer identity contains an invalid source hash")
+    python = identity.get("python")
+    if not isinstance(python, dict) or not str(
+        python.get("implementation", "")
+    ) or not str(python.get("version", "")):
+        raise ValueError("producer identity has invalid Python runtime evidence")
+    packages = identity.get("packages")
+    if not isinstance(packages, dict):
+        raise ValueError("producer identity package versions are missing")
+    required_packages = set(map(str, package_names))
+    optional_packages = set(map(str, optional_package_names))
+    if required_packages & optional_packages:
+        raise ValueError("producer package requirement sets overlap")
+    for name in required_packages:
+        if name not in packages or not str(packages[name] or ""):
+            raise ValueError(f"producer identity lacks package version: {name}")
+    for name in optional_packages:
+        if name not in packages or (
+            packages[name] is not None and not str(packages[name])
+        ):
+            raise ValueError(f"producer identity lacks optional package state: {name}")
+    if identity.get("native_required") is not bool(native_required):
+        raise ValueError("producer identity native-required marker mismatch")
+    native = identity.get("native")
+    if native_required and not isinstance(native, dict):
+        raise ValueError("producer identity lacks required native evidence")
+    if native is not None:
+        if not isinstance(native, dict):
+            raise ValueError("producer identity native evidence is not an object")
+        if not str(native.get("path", "")):
+            raise ValueError("producer identity native path is missing")
+        digest = str(native.get("sha256", ""))
+        if len(digest) != 64 or not set(digest) <= hexadecimal:
+            raise ValueError("producer identity native hash is invalid")
+        if not str(native.get("repair_timing_schema", "")):
+            raise ValueError("producer identity native timing schema is missing")
+    return identity
+
+
+def config_producer_fingerprint(
+    config: dict[str, Any],
+    *,
+    label: str,
+    native_required: bool = True,
+    package_names: Iterable[str] = (),
+    optional_package_names: Iterable[str] = ("numpy", "scikit-learn"),
+) -> str:
+    identity = validate_producer_identity(
+        config.get("producer_identity"),
+        native_required=native_required,
+        package_names=package_names,
+        optional_package_names=optional_package_names,
+    )
+    expected = hashlib.sha256(
+        json.dumps(
+            identity,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    fingerprint = str(config.get("producer_identity_fingerprint", ""))
+    if not fingerprint or fingerprint != expected:
+        raise ValueError(f"{label} producer identity fingerprint mismatch")
+    return fingerprint
 
 
 def read_json(path: Path) -> Any:
@@ -96,6 +330,33 @@ def write_jsonl(path: Path, values: Iterable[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as stream:
         for value in values:
             stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
+    materialized = list(rows)
+    if not materialized:
+        raise ValueError(f"cannot write an empty CSV: {path.name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = sorted({name for row in materialized for name in row})
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".partial",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            writer = csv.DictWriter(stream, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(materialized)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def append_jsonl_fsync(path: Path, value: dict[str, Any]) -> None:
@@ -178,13 +439,18 @@ def select_rows_by_task_id(
 
 
 __all__ = [
+    "PRODUCER_IDENTITY_SCHEMA",
     "action_family",
     "add_categorical_feature",
     "append_jsonl_fsync",
+    "atomic_write_csv",
+    "contained_file",
+    "config_producer_fingerprint",
     "episode_id",
     "feature_names",
     "mean",
     "population_std",
+    "producer_identity",
     "quantile",
     "ratio",
     "read_collection_jsonl",
@@ -196,7 +462,10 @@ __all__ = [
     "sha256_file",
     "select_rows_by_task_id",
     "state_storage_id",
+    "state_groups",
+    "standard_error",
     "trial_job_id",
+    "validate_producer_identity",
     "write_json",
     "write_jsonl",
 ]

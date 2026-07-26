@@ -39,7 +39,7 @@ using std::ofstream;
 using std::cerr;
 using std::string;
 using namespace std::chrono;
-typedef std::chrono::high_resolution_clock Time;
+typedef std::chrono::steady_clock Time;
 typedef std::chrono::duration<float> fsec;
 
 #define MAX_TIMESTEP INT_MAX / 2

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import collections
-import math
 import statistics
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
+from experiments._common import read_json, sha256_file, standard_error as _standard_error
 from experiments.receding_q_pilot import _atomic_write_csv, _winner_key
 from experiments.receding_q_risk_audit import (
     map_group_policy_selection,
@@ -16,15 +15,14 @@ from experiments.receding_q_risk_audit import (
 )
 from experiments.receding_q_stability import (
     _outcome_score,
-    load_receding_q_rollouts,
-    merge_followup_rollouts,
+    load_validated_four_seed_stability,
 )
 from experiments.receding_q_variance_audit import validate_four_seed_rows
 from experiments.repair_collection import _write_json
 
 
 RECEDING_Q_PAIRED_LABEL_AUDIT_SCHEMA = (
-    "lns2.receding_q_paired_label_audit.v1"
+    "lns2.receding_q_paired_label_audit.v2"
 )
 PAIRED_RISK_LAMBDAS = (0.25, 0.50, 1.00, 2.00)
 
@@ -55,13 +53,6 @@ def paired_label_policy_grid() -> list[dict[str, Any]]:
             }
         )
     return result
-
-
-def _standard_error(values: Iterable[float]) -> float:
-    materialized = list(map(float, values))
-    if len(materialized) < 2:
-        return 0.0
-    return statistics.stdev(materialized) / math.sqrt(len(materialized))
 
 
 def _aggregate_candidate(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -104,10 +95,23 @@ def _group_candidates(
     rows: Iterable[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    seen: set[tuple[str, int]] = set()
     for row in rows:
-        grouped[str(row["candidate_id"])].append(dict(row))
+        candidate = str(row["candidate_id"])
+        trial = int(row["trial_index"])
+        key = (candidate, trial)
+        if key in seen:
+            raise ValueError("paired label selection contains a duplicate trial")
+        seen.add(key)
+        grouped[candidate].append(dict(row))
     if len(grouped) < 2:
         raise ValueError("paired label selection needs at least two candidates")
+    trial_sets = {
+        frozenset(int(row["trial_index"]) for row in candidate_rows)
+        for candidate_rows in grouped.values()
+    }
+    if len(trial_sets) != 1:
+        raise ValueError("paired label selection has unbalanced candidate trials")
     return grouped
 
 
@@ -124,14 +128,25 @@ def _mean_winner(rows: Iterable[dict[str, Any]]) -> str:
 def _average_rank_winner(rows: Iterable[dict[str, Any]]) -> str:
     values = [dict(row) for row in rows]
     grouped = _group_candidates(values)
-    ranks: dict[str, list[int]] = collections.defaultdict(list)
+    ranks: dict[str, list[float]] = collections.defaultdict(list)
     for trial in sorted({int(row["trial_index"]) for row in values}):
         ordered = sorted(
             (row for row in values if int(row["trial_index"]) == trial),
             key=_winner_key,
         )
-        for rank, row in enumerate(ordered):
-            ranks[str(row["candidate_id"])].append(rank)
+        start = 0
+        while start < len(ordered):
+            outcome_key = _winner_key(ordered[start])[:-1]
+            end = start + 1
+            while (
+                end < len(ordered)
+                and _winner_key(ordered[end])[:-1] == outcome_key
+            ):
+                end += 1
+            average_rank = (start + end - 1) / 2.0
+            for row in ordered[start:end]:
+                ranks[str(row["candidate_id"])].append(average_rank)
+            start = end
     aggregates = {
         candidate: _aggregate_candidate(candidate_rows)
         for candidate, candidate_rows in grouped.items()
@@ -368,6 +383,60 @@ def _summaries_by_agent(
     return result
 
 
+def _paired_label_checks(
+    *,
+    loo_rows: list[dict[str, Any]],
+    target_state_ids: list[str],
+    policies: list[dict[str, Any]],
+    oof_summary: dict[str, Any],
+    high_load: dict[str, Any] | None,
+) -> dict[str, bool]:
+    return {
+        "coverage_complete": len(loo_rows)
+        == len(target_state_ids) * 4 * len(policies),
+        "at_least_four_map_groups": len(
+            {str(row["map_id"]) for row in loo_rows}
+        )
+        >= 4,
+        "oof_feasible_rate_not_below_v2": float(
+            oof_summary["feasible_rate_delta"]
+        )
+        >= 0.0,
+        "oof_auc_not_below_v2": float(
+            oof_summary["mean_normalized_step_auc_delta"]
+        )
+        <= 0.0,
+        "oof_time_not_below_v2": float(
+            oof_summary["mean_total_seconds_delta"]
+        )
+        <= 0.0,
+        "oof_wins_not_below_losses": int(oof_summary["net_wins"]) >= 0,
+        "six_hundred_oof_auc_not_below_v2": (
+            high_load is not None
+            and float(high_load["mean_normalized_step_auc_delta"]) <= 0.0
+        ),
+        "six_hundred_oof_feasible_rate_not_below_v2": (
+            high_load is not None
+            and float(high_load["feasible_rate_delta"]) >= 0.0
+        ),
+        "six_hundred_oof_time_not_below_v2": (
+            high_load is not None
+            and float(high_load["mean_total_seconds_delta"]) <= 0.0
+        ),
+        "six_hundred_oof_wins_not_below_losses": (
+            high_load is not None and int(high_load["net_wins"]) >= 0
+        ),
+    }
+
+
+def paired_label_audit_decision(checks: dict[str, bool]) -> str:
+    return (
+        "paired_h3_label_transform_promising"
+        if checks and all(map(bool, checks.values()))
+        else "paired_h3_label_transform_not_supported_by_current_audit"
+    )
+
+
 def audit_receding_q_paired_labels(
     *, stability: str | Path, output: str | Path
 ) -> dict[str, Any]:
@@ -377,21 +446,17 @@ def audit_receding_q_paired_labels(
         raise FileExistsError("paired label audit output is non-empty")
     output_root.mkdir(parents=True, exist_ok=True)
 
-    status = dict(read_json(stability_root / "status.json"))
-    if str(status.get("status")) != "complete" or int(
-        status.get("error_count", -1)
-    ) != 0:
-        raise ValueError("paired label source is not complete and clean")
     config = dict(read_json(stability_root / "run_config.json"))
     source_root = resolve_persisted_source_path(
         config["source"], sibling_root=stability_root.parent
     )
-    targets = dict(read_json(stability_root / "targets.json"))
-    target_state_ids = list(map(str, targets["target_state_ids"]))
-    merged = merge_followup_rollouts(
-        load_receding_q_rollouts(source_root),
-        load_receding_q_rollouts(stability_root),
+    validated = load_validated_four_seed_stability(
+        stability_root,
+        source_root,
     )
+    targets = dict(validated["targets"])
+    target_state_ids = list(map(str, targets["target_state_ids"]))
+    merged = list(validated["merged_rows"])
     policies = paired_label_policy_grid()
     loo_rows = build_paired_label_loo_rows(
         merged, target_state_ids=target_state_ids, policies=policies
@@ -423,55 +488,14 @@ def audit_receding_q_paired_labels(
     high_load = next(
         (row for row in agent_rows if int(row["agent_count"]) == 600), None
     )
-    passing_fixed_high_load = [
-        row
-        for row in fixed_agent_rows
-        if int(row["agent_count"]) == 600
-        and float(row["feasible_rate_delta"]) >= 0.0
-        and float(row["mean_normalized_step_auc_delta"]) <= 0.0
-        and float(row["mean_total_seconds_delta"]) <= 0.0
-        and int(row["net_wins"]) >= 0
-    ]
-    checks = {
-        "coverage_complete": len(loo_rows)
-        == len(target_state_ids) * 4 * len(policies),
-        "at_least_four_map_groups": len(
-            {str(row["map_id"]) for row in loo_rows}
-        )
-        >= 4,
-        "oof_feasible_rate_not_below_v2": float(
-            oof_summary["feasible_rate_delta"]
-        )
-        >= 0.0,
-        "oof_auc_not_below_v2": float(
-            oof_summary["mean_normalized_step_auc_delta"]
-        )
-        <= 0.0,
-        "oof_time_not_below_v2": float(
-            oof_summary["mean_total_seconds_delta"]
-        )
-        <= 0.0,
-        "oof_wins_not_below_losses": int(oof_summary["net_wins"]) >= 0,
-        "six_hundred_oof_auc_not_below_v2": (
-            high_load is not None
-            and float(high_load["mean_normalized_step_auc_delta"]) <= 0.0
-        ),
-        "six_hundred_oof_time_not_below_v2": (
-            high_load is not None
-            and float(high_load["mean_total_seconds_delta"]) <= 0.0
-        ),
-        "six_hundred_oof_wins_not_below_losses": (
-            high_load is not None and int(high_load["net_wins"]) >= 0
-        ),
-        "some_fixed_method_passes_all_six_hundred_gates": bool(
-            passing_fixed_high_load
-        ),
-    }
-    decision = (
-        "paired_h3_label_transform_promising"
-        if all(checks.values())
-        else "recollect_h3_with_consistent_continuation"
+    checks = _paired_label_checks(
+        loo_rows=loo_rows,
+        target_state_ids=target_state_ids,
+        policies=policies,
+        oof_summary=oof_summary,
+        high_load=high_load,
     )
+    decision = paired_label_audit_decision(checks)
     report = {
         "schema": RECEDING_Q_PAIRED_LABEL_AUDIT_SCHEMA,
         "decision": decision,
@@ -483,19 +507,18 @@ def audit_receding_q_paired_labels(
         "map_count": len({str(row["map_id"]) for row in loo_rows}),
         "policy_count": len(policies),
         "fold_count_per_policy": len(target_state_ids) * 4,
-        "globally_selected_policy": selected_global,
+        "exploratory_globally_selected_policy": selected_global,
+        "gate_policy_selection": "leave_one_map_out",
         "map_group_oof": oof_summary,
         "map_group_selections": map_selections,
         "agent_summaries": agent_rows,
         "fixed_policy_agent_summaries": fixed_agent_rows,
-        "passing_six_hundred_fixed_method_count": len(
-            passing_fixed_high_load
-        ),
         "checks": checks,
         "limitations": [
             "This audit reuses seven unstable policy_train states and does not train a feature-based model.",
             "Seed-centering and rank aggregation use paired outcomes only; they do not change the Adaptive continuation teacher.",
             "Map-group selection is diagnostic because only five maps and seven states are available.",
+            "Only leave-one-map-out selections contribute to the gate; global and fixed-policy summaries are exploratory.",
             "A passing transform would justify a fresh independent pilot, not controller promotion.",
         ],
     }
@@ -572,6 +595,7 @@ __all__ = [
     "RECEDING_Q_PAIRED_LABEL_AUDIT_SCHEMA",
     "audit_receding_q_paired_labels",
     "build_paired_label_loo_rows",
+    "paired_label_audit_decision",
     "paired_label_policy_grid",
     "select_paired_label_candidate",
 ]

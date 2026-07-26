@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import collections
-import csv
 import itertools
 import math
 import statistics
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import atomic_write_csv as _atomic_write_csv
 from experiments._common import read_json, sha256_file
 from experiments.repair_aware import load_repair_aware_bundle, repair_aware_order
 from experiments.repair_collection import _fingerprint, _read_jsonl, _write_json
@@ -43,27 +42,6 @@ def enumerate_rescue_policies() -> list[RescuePolicy]:
     if len(policies) != 16:
         raise AssertionError("the fixed 4/8/16 policy grid must contain 16 rules")
     return policies
-
-
-def _atomic_write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fields = sorted({key for row in rows for key in row})
-    if not fields:
-        raise ValueError(f"cannot write an empty CSV: {path.name}")
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
-    temporary.replace(path)
 
 
 def _validate_state_fingerprints(

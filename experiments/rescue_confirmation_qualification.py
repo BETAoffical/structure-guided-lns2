@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import collections
-import csv
-import os
-import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import atomic_write_csv as _write_csv
 from experiments._common import read_json, sha256_file
 from experiments.high_load_rescue import select_failure_decisions
 from experiments.repair_collection import (
@@ -44,27 +42,6 @@ def _cell(layout: str, agent_count: int) -> str:
     if layout not in LAYOUTS or int(agent_count) not in AGENT_COUNTS:
         raise ValueError(f"unexpected qualification cell: {layout}/{agent_count}")
     return f"{layout}__agents_{int(agent_count)}"
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        raise ValueError("qualification CSV cannot be empty")
-    fields = sorted({key for row in rows for key in row})
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
-    os.replace(temporary, path)
 
 
 def _write_status(root: Path, *, phase: str, status: str, **values: Any) -> None:

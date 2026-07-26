@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import math
+import copy
 import sys
 import types
 import unittest
@@ -13,7 +14,12 @@ from unittest import mock
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import configured_policies
 from experiments.repair_aware import load_portable_scalar_model
-from experiments.repair_collection import _read_json, _write_json, _write_jsonl
+from experiments.repair_collection import (
+    _read_json,
+    _write_json,
+    _write_jsonl,
+    state_fingerprint,
+)
 from experiments.v3_s3 import (
     S3_ACTION_TEMPLATES,
     V3_S3_FULL_FEATURE_NAMES,
@@ -22,19 +28,32 @@ from experiments.v3_s3 import (
     load_v3_s3_bundle,
     sequence_id,
 )
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.trace_replay import recorded_replay_action
 from experiments.v3_s3_collection import (
+    V3_S3_COLLECTION_SCHEMA,
+    V3_S3_COLLECTION_VERSION,
     _ambiguous_additional_sequences,
     _audit_state_sample,
     _coverage,
     _job_progress,
     _outcome_row,
     _paired_repair_action,
+    _paired_seed,
+    _qualification_artifact_errors,
     _rank_correlation,
+    _resume_completed_artifact,
     _select_qualified_states,
+    _sequence_feature,
+    _sequence_trial,
+    _baseline_trial,
+    _state_artifact_errors,
+    _strict_retest,
     _stream_manifests,
     qualification_pool,
+    temporal_context,
 )
+from tests.data.test_repair_collection import sample_state
 from experiments.v3_s3_pipeline import (
     S3_SOURCE_POLICIES,
     _pipeline_identity,
@@ -43,6 +62,7 @@ from experiments.v3_s3_pipeline import (
     _verified_training_inputs,
     collect_v3_s3_sources,
     run_v3_s3_collection_stage,
+    run_v3_s3_native_audit_stage,
     run_v3_s3_training_stage,
 )
 from experiments.v3_s3_training import (
@@ -93,7 +113,280 @@ class _PythonPortableTreeEnsemble:
         ]
 
 
+def _semantic_qualification(root: Path, *, ambiguous: bool = True):
+    run_fingerprint = "run-v2"
+    state_id = "state"
+    decision = {
+        "split": "policy_train",
+        "state_id": state_id,
+        "map_id": "map",
+        "layout_mode": "regular_beltway",
+        "agent_count": 100,
+        "source_stratum": "ordinary_progress",
+        "before_fingerprint": "full-0",
+        "before_repair_fingerprint": "repair-0",
+        "temporal_context": temporal_context([], 100),
+    }
+    candidates = []
+    candidate_rows = []
+    template_indices = {}
+    for index, template in enumerate(S3_ACTION_TEMPLATES):
+        candidate_id = f"candidate-{index}"
+        candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "agents": [index],
+                "selection_families": [template.family_key],
+                "selection_rank_by_family": {
+                    template.family_key: template.representative
+                },
+            }
+        )
+        candidate_rows.append(
+            {
+                "state_id": decision["before_fingerprint"],
+                "candidate_id": candidate_id,
+                "candidate_key": candidate_id,
+                "features": {
+                    "realized_dynamic": {
+                        name: 0.0
+                        for name in PROFILE_FEATURE_NAMES["realized_dynamic"]
+                    }
+                },
+            }
+        )
+        template_indices[template.key] = index
+    qualified = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "run_fingerprint": run_fingerprint,
+        "complete": True,
+        "decision": decision,
+        "candidates": candidates,
+        "candidate_rows": candidate_rows,
+        "template_indices": template_indices,
+        "timing": {"full_pool_seconds": 0.0},
+    }
+    qualification_path = root / "qualification.json"
+    _write_json(qualification_path, qualified)
+    selected = {**decision, "qualification_file": str(qualification_path)}
+    sequences = list(balanced_sequence_templates(state_id))
+    if ambiguous:
+        sequences.extend(_ambiguous_additional_sequences(qualified, state_id))
+    return run_fingerprint, qualified, selected, sequences
+
+
+def _semantic_sequence_trial(decision, templates, trial_index):
+    conflicts = [3, 2, 1, 0]
+    steps = []
+    for index, template in enumerate(templates, 1):
+        terminated = index == len(templates)
+        candidate_index = S3_ACTION_TEMPLATES.index(template)
+        agents = [candidate_index]
+        steps.append(
+            {
+                "step": index,
+                "template": template.payload(),
+                "template_valid": True,
+                "executed": True,
+                "candidate_id": f"candidate-{candidate_index}",
+                "agents": agents,
+                "action": {
+                    "mode": "explicit_neighborhood",
+                    "agents": agents,
+                    "random_seed": _paired_seed(
+                        "repair-0", trial_index, index
+                    ),
+                    "pp_random_seed": _paired_seed(
+                        "repair-0", trial_index, index
+                    ),
+                },
+                "selection_seconds": 0.0,
+                "repair_seconds": 0.0,
+                "pp_replan_seconds": 0.0,
+                "total_seconds": 0.0,
+                "conflicts_before": conflicts[index - 1],
+                "conflicts_after": conflicts[index],
+                "conflict_reduction": 1,
+                "repair_outcome": "feasible" if terminated else "conflict_reduced",
+                "replan_success": True,
+                "before_fingerprint": f"full-{index - 1}",
+                "after_fingerprint": f"full-{index}",
+                "before_repair_fingerprint": f"repair-{index - 1}",
+                "after_repair_fingerprint": f"repair-{index}",
+                "low_level_delta": {
+                    "generated": 0,
+                    "expanded": 0,
+                    "reopened": 0,
+                    "runs": 0,
+                },
+                "terminated": terminated,
+                "truncated": False,
+                "done": terminated,
+            }
+        )
+    return {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "split": decision["split"],
+        "state_id": decision["state_id"],
+        "map_id": decision["map_id"],
+        "layout_mode": decision["layout_mode"],
+        "agent_count": decision["agent_count"],
+        "source_stratum": decision["source_stratum"],
+        "sequence_id": sequence_id(templates),
+        "templates": [template.payload() for template in templates],
+        "trial_index": trial_index,
+        "initial_fingerprint": "full-0",
+        "initial_repair_fingerprint": "repair-0",
+        "final_fingerprint": "full-3",
+        "final_repair_fingerprint": "repair-3",
+        "steps": steps,
+        "executed_steps": 3,
+        "conflict_trajectory": conflicts,
+        "conflict_reduction": 3,
+        "best_conflict_reduction": 3,
+        "no_progress": False,
+        "feasible": True,
+        "stop_reason": "feasible",
+        "truncated": False,
+        "total_seconds": 0.0,
+        "pp_replan_seconds": 0.0,
+        "generated": 0,
+        "expanded": 0,
+        "reopened": 0,
+        "runs": 0,
+        "complete": True,
+    }
+
+
+def _semantic_baseline(decision, controller, trial_index):
+    row = _semantic_sequence_trial(
+        decision, balanced_sequence_templates(decision["state_id"])[0], trial_index
+    )
+    row.pop("source_stratum")
+    row.pop("sequence_id")
+    row.pop("templates")
+    row["controller"] = controller
+    for step in row["steps"]:
+        step.pop("template")
+        step.pop("template_valid")
+        step.pop("executed")
+        if controller == "official_adaptive":
+            step["candidate_id"] = "official_adaptive"
+            step["action"] = {
+                "mode": "official",
+                "random_seed": _paired_seed(
+                    row["initial_repair_fingerprint"],
+                    trial_index,
+                    step["step"],
+                ),
+                "pp_random_seed": _paired_seed(
+                    row["initial_repair_fingerprint"],
+                    trial_index,
+                    step["step"],
+                ),
+            }
+    return row
+
+
+def _semantic_state_artifact(root: Path, *, ambiguous: bool = True):
+    run_fingerprint, qualified, selected, sequences = _semantic_qualification(
+        root, ambiguous=ambiguous
+    )
+    decision = qualified["decision"]
+    features = [_sequence_feature(qualified, templates) for templates in sequences]
+    trials = [
+        _semantic_sequence_trial(decision, templates, trial_index)
+        for templates in sequences
+        for trial_index in (0, 1)
+    ]
+    if ambiguous:
+        top = sorted(sequence_id(templates) for templates in sequences)[:6]
+        lookup = {sequence_id(templates): templates for templates in sequences}
+        trials.extend(
+            _semantic_sequence_trial(decision, lookup[key], trial_index)
+            for key in top
+            for trial_index in (2, 3)
+        )
+    payload = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "run_fingerprint": run_fingerprint,
+        "complete": True,
+        "state_id": decision["state_id"],
+        "ambiguous": ambiguous,
+        "features": features,
+        "trials": trials,
+        "external_baselines": [
+            _semantic_baseline(decision, controller, trial_index)
+            for controller in ("v2-full", "official_adaptive")
+            for trial_index in (0, 1)
+        ],
+    }
+    state_path = root / "state.json"
+    _write_json(state_path, payload)
+    return run_fingerprint, qualified, selected, state_path, payload
+
+
 class V3S3PipelineTest(unittest.TestCase):
+    def test_native_audit_stage_forwards_resume_to_identity_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            controller = root / "controller"
+            controller.mkdir(parents=True)
+            final_report = {
+                "native_audit_completed": True,
+                "decision": "v3_s3_mixed_load_pilot_failed",
+            }
+            final_manifest: dict[str, object] = {}
+            _write_json(controller / "training_report.json", final_report)
+            _write_json(
+                root / "training_stage_report.json",
+                {**final_report, "manifest": final_manifest},
+            )
+            _write_json(root / "status.json", {"started_at": "start"})
+            collection = root / "collection"
+            collection.mkdir()
+            _write_json(collection / "collection_report.json", {"complete": True})
+            bundle = types.SimpleNamespace(
+                report=final_report,
+                manifest=final_manifest,
+            )
+            audit_identity = {"schema": "native-audit-test"}
+            with mock.patch(
+                "experiments.v3_s3_pipeline._completed_collection_state_count",
+                return_value=130,
+            ), mock.patch(
+                "experiments.v3_s3_pipeline.load_v3_s3_bundle",
+                return_value=bundle,
+            ), mock.patch(
+                "experiments.v3_s3_pipeline.v3_s3_native_audit_identity",
+                return_value=audit_identity,
+            ), mock.patch(
+                "experiments.v3_s3_pipeline.prepare_run_output"
+            ) as prepare, mock.patch(
+                "experiments.v3_s3_pipeline.finalize_v3_s3_native_audit",
+                return_value={**final_report, "manifest": final_manifest},
+            ) as finalize, mock.patch(
+                "experiments.v3_s3_pipeline._completed_native_stage_is_valid",
+                return_value=True,
+            ):
+                result = run_v3_s3_native_audit_stage(
+                    output=root,
+                    resume=True,
+                    benchmark_rows=12,
+                )
+            self.assertEqual(result["decision"], final_report["decision"])
+            self.assertTrue(prepare.call_args.kwargs["resume"])
+            self.assertEqual(
+                prepare.call_args.kwargs["identity"]["native_audit_identity"],
+                audit_identity,
+            )
+            self.assertEqual(
+                finalize.call_args.kwargs["audit_identity"], audit_identity
+            )
+
     def test_probability_export_parity_uses_runtime_clamping(self) -> None:
         self.assertEqual(
             _normalize_prediction_values(
@@ -182,7 +475,10 @@ class V3S3PipelineTest(unittest.TestCase):
                 side_effect=fake_train,
             ), mock.patch(
                 "experiments.v3_s3_pipeline.load_v3_s3_bundle"
-            ) as loader:
+            ) as loader, mock.patch(
+                "experiments.v3_s3_pipeline.v3_s3_training_producer_identity",
+                return_value={"schema": "test-training-producer"},
+            ):
                 report = run_v3_s3_training_stage(
                     project_root=Path(__file__).resolve().parents[2],
                     output=root,
@@ -216,6 +512,9 @@ class V3S3PipelineTest(unittest.TestCase):
                 side_effect=fake_train,
             ), mock.patch(
                 "experiments.v3_s3_pipeline.load_v3_s3_bundle"
+            ), mock.patch(
+                "experiments.v3_s3_pipeline.v3_s3_training_producer_identity",
+                return_value={"schema": "test-training-producer"},
             ):
                 report = run_v3_s3_training_stage(
                     project_root=Path(__file__).resolve().parents[2],
@@ -440,21 +739,32 @@ class V3S3PipelineTest(unittest.TestCase):
                 '{"passed": true}\n', encoding="utf-8"
             )
 
-            identity = _pipeline_identity(
-                project_root=Path(__file__).resolve().parents[2],
-                dataset_config=config,
-                controller_bundle=controller,
-                workers="auto",
-                parallelism_audit=True,
-                reuse_source_output=source,
-            )
+            with mock.patch(
+                "experiments.v3_s3_pipeline.producer_identity",
+                return_value={"schema": "test-producer"},
+            ) as producer:
+                identity = _pipeline_identity(
+                    project_root=Path(__file__).resolve().parents[2],
+                    dataset_config=config,
+                    controller_bundle=controller,
+                    workers="auto",
+                    parallelism_audit=True,
+                    reuse_source_output=source,
+                )
 
             self.assertEqual(identity["reuse_source_output"], str(source.resolve()))
             self.assertIn("reuse_source_report_sha256", identity)
             self.assertIn("reuse_source_replay_audit_sha256", identity)
+            self.assertEqual(
+                identity["producer_identity"], {"schema": "test-producer"}
+            )
+            self.assertNotIn("implementation", identity)
+            producer.assert_called_once()
+            producer_arguments = producer.call_args.kwargs
+            self.assertTrue(producer_arguments["native_required"])
             self.assertNotIn(
                 "experiments/v3_s3_training.py",
-                identity["implementation"],
+                producer_arguments["source_files"],
             )
 
     def test_collection_stage_records_incomplete_source_report(self) -> None:
@@ -775,83 +1085,283 @@ class V3S3PipelineTest(unittest.TestCase):
     def test_coverage_allows_extra_paired_trials_for_ambiguous_sequences(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            state_id = "state"
-            qualified = {
-                "template_indices": {
-                    template.key: index
-                    for index, template in enumerate(S3_ACTION_TEMPLATES)
-                }
-            }
-            qualification_path = root / "qualification.json"
-            _write_json(qualification_path, qualified)
-            sequences = [
-                *balanced_sequence_templates(state_id),
-                *_ambiguous_additional_sequences(qualified, state_id),
-            ]
-            registered_ids = [sequence_id(sequence) for sequence in sequences]
-            features = [
-                {"state_id": state_id, "sequence_id": value}
-                for value in registered_ids
-            ]
-            trials = [
-                {
-                    "state_id": state_id,
-                    "sequence_id": value,
-                    "trial_index": trial,
-                    "initial_fingerprint": "fingerprint",
-                    "conflict_reduction": 1,
-                    "total_seconds": 1.0,
-                }
-                for value in registered_ids
-                for trial in (0, 1)
-            ]
-            trials.extend(
-                {
-                    "state_id": state_id,
-                    "sequence_id": value,
-                    "trial_index": trial,
-                    "initial_fingerprint": "fingerprint",
-                    "conflict_reduction": 1,
-                    "total_seconds": 1.0,
-                }
-                for value in sorted(registered_ids)[:6]
-                for trial in (2, 3)
-            )
-            path = root / "state.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "state_id": state_id,
-                        "ambiguous": True,
-                        "features": features,
-                        "trials": trials,
-                        "external_baselines": [
-                            {
-                                "state_id": state_id,
-                                "controller": controller,
-                                "trial_index": trial,
-                            }
-                            for controller in ("v2-full", "official_adaptive")
-                            for trial in (0, 1)
-                        ],
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
+            run_fingerprint, _qualified, selected, path, _payload = (
+                _semantic_state_artifact(root)
             )
             report = _coverage(
-                [
-                    {
-                        "state_id": state_id,
-                        "before_fingerprint": "fingerprint",
-                        "qualification_file": str(qualification_path),
-                    }
-                ],
+                [selected],
                 [path],
+                run_fingerprint=run_fingerprint,
             )
         self.assertEqual(report["feature_count"], 48)
         self.assertEqual(report["trial_count"], 108)
         self.assertTrue(report["passed"], report["errors"])
+
+    def test_completed_artifact_validators_reject_semantic_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, qualified, selected, _path, payload = _semantic_state_artifact(
+                root, ambiguous=False
+            )
+            self.assertEqual(
+                _qualification_artifact_errors(
+                    qualified,
+                    run_fingerprint=run,
+                    expected_decision=qualified["decision"],
+                ),
+                [],
+            )
+            self.assertEqual(
+                _state_artifact_errors(
+                    payload,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                ),
+                [],
+            )
+
+            template_tamper = copy.deepcopy(qualified)
+            first_key = next(iter(template_tamper["template_indices"]))
+            template_tamper["template_indices"][first_key] = 17
+            self.assertTrue(
+                _qualification_artifact_errors(
+                    template_tamper, run_fingerprint=run
+                )
+            )
+            self.assertTrue(
+                _qualification_artifact_errors([], run_fingerprint=run)
+            )
+
+            feature_tamper = copy.deepcopy(payload)
+            feature_tamper["features"][0]["feature_names"].reverse()
+            self.assertTrue(
+                _state_artifact_errors(
+                    feature_tamper,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+            terminal_tamper = copy.deepcopy(payload)
+            terminal_tamper["trials"][0]["stop_reason"] = "horizon_complete"
+            self.assertTrue(
+                _state_artifact_errors(
+                    terminal_tamper,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+            sequence_seed_tamper = copy.deepcopy(payload)
+            sequence_action = sequence_seed_tamper["trials"][0]["steps"][0][
+                "action"
+            ]
+            sequence_action["random_seed"] += 1
+            sequence_action["pp_random_seed"] += 1
+            self.assertTrue(
+                _state_artifact_errors(
+                    sequence_seed_tamper,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+            baseline_seed_tamper = copy.deepcopy(payload)
+            baseline_action = baseline_seed_tamper["external_baselines"][0][
+                "steps"
+            ][0]["action"]
+            baseline_action["random_seed"] += 1
+            baseline_action["pp_random_seed"] += 1
+            self.assertTrue(
+                _state_artifact_errors(
+                    baseline_seed_tamper,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+            nonfinite_tamper = copy.deepcopy(payload)
+            nonfinite_tamper["features"][0]["feature_values"][0] = float("nan")
+            self.assertTrue(
+                _state_artifact_errors(
+                    nonfinite_tamper,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+
+    def test_invalid_completed_resume_fails_closed_and_preserves_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, qualified, _selected, _sequences = _semantic_qualification(root)
+            path = root / "qualification.json"
+            qualified["candidate_rows"][0]["state_id"] = "tampered"
+            _write_json(path, qualified)
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "invalid and was preserved"):
+                _resume_completed_artifact(
+                    path,
+                    run_fingerprint=run,
+                    validator=_qualification_artifact_errors,
+                    label="test qualification",
+                    expected_decision=qualified["decision"],
+                )
+            self.assertEqual(path.read_bytes(), before)
+
+            qualified["complete"] = False
+            qualified["candidate_rows"][0]["state_id"] = qualified["decision"][
+                "before_fingerprint"
+            ]
+            _write_json(path, qualified)
+            self.assertIsNone(
+                _resume_completed_artifact(
+                    path,
+                    run_fingerprint=run,
+                    validator=_qualification_artifact_errors,
+                    label="test qualification",
+                    expected_decision=qualified["decision"],
+                )
+            )
+
+            run, qualified, selected, state_path, payload = (
+                _semantic_state_artifact(root, ambiguous=False)
+            )
+            payload["external_baselines"][0]["state_id"] = "other-state"
+            _write_json(state_path, payload)
+            before = state_path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "invalid and was preserved"):
+                _resume_completed_artifact(
+                    state_path,
+                    run_fingerprint=run,
+                    validator=_state_artifact_errors,
+                    label="test state",
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            self.assertEqual(state_path.read_bytes(), before)
+
+    def test_terminal_nonfeasible_done_stops_sequence_and_baseline(self) -> None:
+        before = sample_state()
+        before["iteration"] = 0
+        after = copy.deepcopy(before)
+        after["done"] = True
+        after["feasible"] = False
+        after["iteration"] = 1
+        decision = {
+            "split": "policy_train",
+            "state_id": "terminal-state",
+            "map_id": "map",
+            "layout_mode": "regular_beltway",
+            "agent_count": 4,
+            "source_stratum": "ordinary_progress",
+            "task_id": "task",
+            "solver_seed": 7,
+            "decision_index": 0,
+            "prefix_actions": [],
+            "before_fingerprint": state_fingerprint(before),
+        }
+        templates = balanced_sequence_templates(decision["state_id"])[0]
+        qualified = {
+            "decision": decision,
+            "candidates": [{"candidate_id": "first", "agents": [0]}],
+            "template_indices": {templates[0].key: 0},
+            "timing": {"full_pool_seconds": 0.0},
+        }
+
+        class TerminalEnvironment:
+            def __init__(self):
+                self.calls = 0
+
+            def step(self, _action):
+                self.calls += 1
+                return {
+                    "observation": copy.deepcopy(after),
+                    "metrics": {
+                        "replan_success": False,
+                        "pp_replan_seconds": 0.0,
+                    },
+                    "terminated": False,
+                    "truncated": True,
+                }
+
+        with mock.patch(
+            "experiments.v3_s3_collection._source_replay_job",
+            return_value=({}, {"proposal": {}}),
+        ):
+            sequence_environment = TerminalEnvironment()
+            with mock.patch(
+                "experiments.v3_s3_collection.replay_prefix",
+                return_value=(sequence_environment, copy.deepcopy(before)),
+            ):
+                sequence = _sequence_trial(qualified, templates, 0)
+            baseline_environment = TerminalEnvironment()
+            with mock.patch(
+                "experiments.v3_s3_collection.replay_prefix",
+                return_value=(baseline_environment, copy.deepcopy(before)),
+            ):
+                baseline = _baseline_trial(qualified, "official_adaptive", 0)
+
+        self.assertEqual(sequence_environment.calls, 1)
+        self.assertEqual(baseline_environment.calls, 1)
+        for row in (sequence, baseline):
+            self.assertEqual(
+                row["stop_reason"], "deadline_or_iteration_truncation"
+            )
+            self.assertTrue(row["truncated"])
+            self.assertEqual(row["executed_steps"], 1)
+
+    def test_strict_retest_cache_binds_state_and_qualification_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, _qualified, selected, state_path, payload = (
+                _semantic_state_artifact(root, ambiguous=False)
+            )
+            controller = root / "controller"
+            controller.mkdir()
+            (controller / "bundle.json").write_text("{}\n", encoding="utf-8")
+            completed = [
+                {
+                    "state_id": selected["state_id"],
+                    "sequence_id": payload["trials"][0]["sequence_id"],
+                    "trial_index": 0,
+                    "passed": True,
+                }
+            ]
+            with mock.patch(
+                "experiments.v3_s3_collection._run_jobs",
+                return_value=(completed, []),
+            ) as run_jobs:
+                first = _strict_retest(
+                    selected=[selected],
+                    state_files=[state_path],
+                    output_root=root,
+                    controller_bundle=controller,
+                    run_fingerprint=run,
+                    fraction=1.0,
+                )
+                second = _strict_retest(
+                    selected=[selected],
+                    state_files=[state_path],
+                    output_root=root,
+                    controller_bundle=controller,
+                    run_fingerprint=run,
+                    fraction=1.0,
+                )
+                payload["cache_nonce"] = 1
+                _write_json(state_path, payload)
+                third = _strict_retest(
+                    selected=[selected],
+                    state_files=[state_path],
+                    output_root=root,
+                    controller_bundle=controller,
+                    run_fingerprint=run,
+                    fraction=1.0,
+                )
+            self.assertEqual(first["input_sha256"], second["input_sha256"])
+            self.assertNotEqual(second["input_sha256"], third["input_sha256"])
+            self.assertEqual(run_jobs.call_count, 2)
 
     def test_resume_progress_excludes_reused_states_from_throughput(self) -> None:
         completed = [{"status": "resumed"} for _ in range(47)]
@@ -1232,6 +1742,10 @@ class V3S3PipelineTest(unittest.TestCase):
             self.assertEqual(report["manifest"]["adaptive_runtime_call_count"], 0)
             native_module = types.ModuleType("lns2_env")
             native_module.PortableTreeEnsemble = _PythonPortableTreeEnsemble
+            native_module.repair_timing_schema = "lns2.repair_timing.v2"
+            native_binary = root / "lns2_env.pyd"
+            native_binary.write_bytes(b"native-audit-one")
+            native_module.__file__ = str(native_binary)
             with mock.patch.dict(sys.modules, {"lns2_env": native_module}):
                 finalized = finalize_v3_s3_native_audit(
                     controller_output=root / "controller", benchmark_rows=32
@@ -1241,6 +1755,38 @@ class V3S3PipelineTest(unittest.TestCase):
             self.assertEqual(finalized["native_benchmark_sequence_count"], 32)
             self.assertEqual(finalized["native_parity_probe_count"], 32)
             report_path = root / "controller" / "training_report.json"
+            manifest_path = root / "controller" / "v3_s3_manifest.json"
+            finalized_bytes = (report_path.read_bytes(), manifest_path.read_bytes())
+            with mock.patch.dict(
+                sys.modules, {"lns2_env": native_module}
+            ), mock.patch(
+                "experiments.v3_s3_training.time.perf_counter",
+                side_effect=AssertionError("completed audit was remeasured"),
+            ):
+                repeated = finalize_v3_s3_native_audit(
+                    controller_output=root / "controller", benchmark_rows=32
+                )
+            self.assertEqual(
+                repeated["native_audit_identity_fingerprint"],
+                finalized["native_audit_identity_fingerprint"],
+            )
+            self.assertEqual(
+                finalized_bytes,
+                (report_path.read_bytes(), manifest_path.read_bytes()),
+            )
+            native_binary.write_bytes(b"native-audit-two")
+            with mock.patch.dict(sys.modules, {"lns2_env": native_module}):
+                with self.assertRaisesRegex(
+                    ValueError, "identity differs"
+                ):
+                    finalize_v3_s3_native_audit(
+                        controller_output=root / "controller",
+                        benchmark_rows=32,
+                    )
+            self.assertEqual(
+                finalized_bytes,
+                (report_path.read_bytes(), manifest_path.read_bytes()),
+            )
             tampered = json.loads(report_path.read_text(encoding="utf-8"))
             tampered["decision"] = "tampered"
             report_path.write_text(

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import producer_identity, sha256_file
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.parallel_runtime import candidate_lane_counts
 from experiments.repair_collection import _read_json, _read_jsonl, _utc_now, _write_json
@@ -22,8 +23,11 @@ from experiments.v3_s3_collection import (
 from experiments.v3_s3_training import (
     EXTRA_TREES_PARAMETERS,
     HGB_PARAMETERS,
+    V3_S3_TRAINING_SCHEMA,
     finalize_v3_s3_native_audit,
     train_v3_s3_controller,
+    v3_s3_native_audit_identity,
+    v3_s3_training_producer_identity,
 )
 from experiments.v3_s3 import (
     V3_S3_FEATURE_SCHEMA_SHA256,
@@ -35,8 +39,45 @@ from generators.config import load_json
 from generators.dataset import generate_dataset
 
 
-V3_S3_PIPELINE_SCHEMA = "lns2.v3_s3_pipeline.v1"
+V3_S3_PIPELINE_SCHEMA = "lns2.v3_s3_pipeline.v2"
 S3_SOURCE_POLICIES = ("fixed_random", "official_adaptive", "realized_dynamic")
+V3_S3_PIPELINE_PRODUCER_FILES = (
+    "experiments/_common.py",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_trace_storage.py",
+    "experiments/compact_controller_model.py",
+    "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
+    "experiments/feature_schema_v3.py",
+    "experiments/online_feature_engine.py",
+    "experiments/parallel_runtime.py",
+    "experiments/repair_aware.py",
+    "experiments/repair_aware_training.py",
+    "experiments/repair_collection.py",
+    "experiments/run_output_guard.py",
+    "experiments/stall_guard.py",
+    "experiments/trace_replay.py",
+    "experiments/v3_s3.py",
+    "experiments/v3_s3_collection.py",
+    "experiments/v3_s3_pipeline.py",
+    "generators/config.py",
+    "generators/dataset.py",
+    "generators/io.py",
+    "generators/models.py",
+    "generators/task_flows.py",
+    "generators/validation.py",
+    "generators/visualization.py",
+    "generators/warehouse.py",
+    "scripts/run_v3_training_pipeline.py",
+    "src/jsonl_observer.cpp",
+    "src/python_bindings.cpp",
+    "src/repair_driver.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/inc/SIPP.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 
 
 def _write_status(root: Path, *, started_at: str, **values: Any) -> None:
@@ -354,24 +395,9 @@ def _pipeline_identity(
     parallelism_audit: bool,
     reuse_source_output: Path | None = None,
 ) -> dict[str, Any]:
-    implementation_files = (
-        "experiments/trace_replay.py",
-        "experiments/v3_s3.py",
-        "experiments/v3_s3_collection.py",
-        "experiments/v3_s3_pipeline.py",
-        "experiments/parallel_runtime.py",
-        "experiments/closed_loop_confirmation.py",
-        "experiments/online_feature_engine.py",
-        "generators/dataset.py",
-        "generators/task_flows.py",
-        "scripts/run_v3_training_pipeline.py",
-        "src/python_bindings.cpp",
-        "third_party/mapf_lns2/inc/RepairPolicy.h",
-        "third_party/mapf_lns2/src/InitLNS.cpp",
-    )
     identity = {
         "runner": "run_v3_training_pipeline.sequence-pilot",
-        "schema_version": 1,
+        "schema_version": 2,
         "mode": "sequence-pilot",
         "dataset_config": str(dataset_config),
         "dataset_config_sha256": sha256_file(dataset_config),
@@ -381,9 +407,12 @@ def _pipeline_identity(
         ),
         "workers": str(workers),
         "parallelism_audit": bool(parallelism_audit),
-        "implementation": {
-            name: sha256_file(project_root / name) for name in implementation_files
-        },
+        "producer_identity": producer_identity(
+            project_root=project_root,
+            source_files=V3_S3_PIPELINE_PRODUCER_FILES,
+            native_required=True,
+            optional_package_names=("joblib", "numpy", "scikit-learn"),
+        ),
         "automatic_full": False,
         "automatic_quick": False,
         "automatic_formal": False,
@@ -768,14 +797,10 @@ def _training_identity(
     collection_source: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     inputs = _verified_training_inputs(output, collection_source)
-    implementation_files = (
-        "experiments/repair_aware.py",
-        "experiments/v3_s3.py",
-        "experiments/v3_s3_training.py",
-    )
+    training_producer_identity = v3_s3_training_producer_identity(project_root)
     identity = {
         "runner": "run_v3_training_pipeline.sequence-pilot.train",
-        "schema_version": 1,
+        "schema_version": 2,
         "feature_schema_sha256": V3_S3_FEATURE_SCHEMA_SHA256,
         "training_objective_id": V3_S3_OBJECTIVE_ID,
         "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
@@ -785,10 +810,7 @@ def _training_identity(
             "extra_trees": EXTRA_TREES_PARAMETERS,
         },
         "inputs": inputs,
-        "implementation": {
-            name: sha256_file(project_root / name)
-            for name in implementation_files
-        },
+        "producer_identity": training_producer_identity,
         "automatic_native_audit": False,
         "automatic_full": False,
         "automatic_quick": False,
@@ -818,6 +840,92 @@ def _completed_collection_state_count(collection: dict[str, Any]) -> int:
             f"v3-S3 adaptive collection is below split minimums: {shortages}"
         )
     return completed
+
+
+def _json_sha256(value: Any) -> str:
+    payload = (
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _pre_native_training_stage_report(
+    *, report: dict[str, Any], manifest: dict[str, Any]
+) -> dict[str, Any]:
+    if not bool(report.get("native_audit_completed")):
+        return {**report, "manifest": manifest}
+    provisional = str(report["provisional_model_family"])
+    diagnostic = dict(dict(report["model_family_diagnostics"])[provisional])
+    pre_report = json.loads(json.dumps(report))
+    for key in (
+        "selected_model_family",
+        "native_latency_seconds_per_sequence",
+        "native_benchmark_sequence_count",
+        "native_parity_probe_count",
+        "sequence_row_construction_seconds",
+        "planner_seconds_per_new_state",
+        "native_parity",
+        "native_audit_identity",
+        "native_audit_identity_fingerprint",
+        "pilot_passed",
+    ):
+        pre_report.pop(key, None)
+    pre_report.update(
+        {
+            "thresholds": dict(diagnostic["thresholds"]),
+            "prediction_intervals": dict(diagnostic["prediction_intervals"]),
+            "continuation_calibration": dict(
+                diagnostic["continuation_calibration"]
+            ),
+            "diagnostic": {
+                "v3_s3": dict(diagnostic["v3_s3"]),
+                "v2_full": dict(report["diagnostic"])["v2_full"],
+                "official_adaptive": dict(report["diagnostic"])[
+                    "official_adaptive"
+                ],
+                "continuation_possible_count": int(
+                    diagnostic["continuation_possible_count"]
+                ),
+                "continuation_reused_count": int(
+                    diagnostic["continuation_reused_count"]
+                ),
+                "continuation_reuse_fraction": float(
+                    diagnostic["continuation_reuse_fraction"]
+                ),
+            },
+            "pilot_checks": dict(diagnostic["pilot_checks"]),
+            "native_audit_completed": False,
+            "decision": "awaiting_v3_s3_native_audit",
+        }
+    )
+    pre_manifest = json.loads(json.dumps(manifest))
+    for key in (
+        "native_audit_identity",
+        "native_audit_identity_fingerprint",
+    ):
+        pre_manifest.pop(key, None)
+    pre_manifest.update(
+        {
+            "models": {
+                name: dict(raw)
+                for name, raw in dict(
+                    dict(report["model_exports"])[provisional]["models"]
+                ).items()
+            },
+            "model_family": provisional,
+            "thresholds": dict(diagnostic["thresholds"]),
+            "prediction_intervals": dict(diagnostic["prediction_intervals"]),
+            "continuation_calibration": dict(
+                diagnostic["continuation_calibration"]
+            ),
+            "native_audit_completed": False,
+        }
+    )
+    pre_manifest["training_report"] = {
+        "file": str(dict(manifest["training_report"])["file"]),
+        "sha256": _json_sha256(pre_report),
+    }
+    return {**pre_report, "manifest": pre_manifest}
 
 
 def run_v3_s3_training_stage(
@@ -875,26 +983,50 @@ def run_v3_s3_training_stage(
                 "v3-S3 controller output already exists; pass --resume only "
                 "when its training identity is unchanged"
             )
-        load_v3_s3_bundle(controller)
+        bundle = load_v3_s3_bundle(controller)
         report_path = output / "training_stage_report.json"
         if not report_path.is_file():
             raise ValueError(
                 "v3-S3 controller exists without training_stage_report.json"
             )
         training = _read_json(report_path)
-        _write_status(
-            output,
-            started_at=started_at,
-            status="waiting",
-            phase="awaiting-native-audit",
-            completed_states=collection_state_count,
-            total_states=collection_state_count,
-            error_states=0,
-            training_jobs=jobs,
-            provisional_model_family=training[
-                "provisional_model_family"
-            ],
-        )
+        expected_training = {**bundle.report, "manifest": bundle.manifest}
+        if training != expected_training:
+            recoverable_pre_native = _pre_native_training_stage_report(
+                report=bundle.report,
+                manifest=bundle.manifest,
+            )
+            if training != recoverable_pre_native:
+                raise ValueError(
+                    "completed v3-S3 training_stage_report.json failed "
+                    "semantic validation"
+                )
+            _write_json(report_path, expected_training)
+            training = expected_training
+        if (
+            str(training.get("schema"))
+            != V3_S3_TRAINING_SCHEMA
+            or training.get("producer_identity")
+            != identity["producer_identity"]
+        ):
+            raise ValueError(
+                "completed v3-S3 training artifact belongs to a legacy or "
+                "different producer"
+            )
+        if not bool(training.get("native_audit_completed")):
+            _write_status(
+                output,
+                started_at=started_at,
+                status="waiting",
+                phase="awaiting-native-audit",
+                completed_states=collection_state_count,
+                total_states=collection_state_count,
+                error_states=0,
+                training_jobs=jobs,
+                provisional_model_family=training[
+                    "provisional_model_family"
+                ],
+            )
         return training
     if partial_controller.exists():
         suffix = _utc_now().replace(":", "").replace("+", "_")
@@ -924,6 +1056,7 @@ def run_v3_s3_training_stage(
             ),
             output=partial_controller,
             training_jobs=jobs,
+            producer_identity_payload=identity["producer_identity"],
         )
         load_v3_s3_bundle(partial_controller)
         partial_controller.replace(controller)
@@ -989,42 +1122,118 @@ def _markdown(report: dict[str, Any]) -> str:
     )
 
 
-def run_v3_s3_native_audit_stage(*, output: Path) -> dict[str, Any]:
+def _completed_native_stage_is_valid(
+    *, output: Path, expected: dict[str, Any]
+) -> bool:
+    report_path = output / "v3_s3_pilot_report.json"
+    if not report_path.is_file():
+        return False
+    existing = _read_json(report_path)
+    if not bool(existing.get("complete")):
+        return False
+    if existing != expected:
+        raise ValueError(
+            "completed v3-S3 native-audit report failed semantic validation"
+        )
+    markdown_path = output / "v3_s3_pilot_report.md"
+    if not markdown_path.is_file():
+        return False
+    if markdown_path.read_text(encoding="utf-8") != _markdown(expected):
+        raise ValueError(
+            "completed v3-S3 native-audit Markdown failed validation"
+        )
+    status_path = output / "status.json"
+    if not status_path.is_file():
+        return False
+    status = _read_json(status_path)
+    if (
+        str(status.get("schema")) != V3_S3_PIPELINE_SCHEMA
+        or str(status.get("status")) != "complete"
+        or str(status.get("phase")) != "complete"
+        or str(status.get("decision")) != str(expected["decision"])
+    ):
+        raise ValueError(
+            "completed v3-S3 native-audit status failed validation"
+        )
+    return True
+
+
+def run_v3_s3_native_audit_stage(
+    *,
+    output: Path,
+    resume: bool = False,
+    benchmark_rows: int = 36,
+) -> dict[str, Any]:
     collection = _read_json(
         _collection_root(output) / "collection_report.json"
     )
     collection_state_count = _completed_collection_state_count(collection)
     # Validate the complete Windows artifact before mutating the shared status.
-    load_v3_s3_bundle(output / "controller")
-    if not (output / "training_stage_report.json").is_file():
+    bundle = load_v3_s3_bundle(output / "controller")
+    training_stage_path = output / "training_stage_report.json"
+    if not training_stage_path.is_file():
         raise FileNotFoundError(
             "v3-S3 native audit requires training_stage_report.json"
         )
+    stage_training = _read_json(training_stage_path)
+    expected_stage_training = {**bundle.report, "manifest": bundle.manifest}
+    if stage_training != expected_stage_training and stage_training != (
+        _pre_native_training_stage_report(
+            report=bundle.report,
+            manifest=bundle.manifest,
+        )
+    ):
+        raise ValueError(
+            "v3-S3 native audit found an invalid training_stage_report.json"
+        )
+    audit_identity = v3_s3_native_audit_identity(
+        controller_output=output / "controller",
+        benchmark_rows=benchmark_rows,
+    )
+    prepare_run_output(
+        output / "native-audit-control",
+        resume=resume,
+        identity={
+            "runner": "run_v3_training_pipeline.sequence-pilot.native-audit",
+            "schema_version": 1,
+            "native_audit_identity": audit_identity,
+        },
+    )
+    controller_report = _read_json(output / "controller" / "training_report.json")
+    native_audit_already_completed = bool(
+        controller_report.get("native_audit_completed")
+    )
     status = _read_json(output / "status.json")
     started_at = str(status.get("started_at") or _utc_now())
-    _write_status(
-        output,
-        started_at=started_at,
-        status="running",
-        phase="native-audit",
-        completed_states=collection_state_count,
-        total_states=collection_state_count,
-        error_states=0,
-    )
-    try:
-        training = finalize_v3_s3_native_audit(
-            controller_output=output / "controller"
-        )
-    except BaseException as error:
-        _write_stage_error(
+    if not native_audit_already_completed:
+        _write_status(
             output,
             started_at=started_at,
+            status="running",
             phase="native-audit",
-            error=error,
             completed_states=collection_state_count,
             total_states=collection_state_count,
+            error_states=0,
         )
+    try:
+        training = finalize_v3_s3_native_audit(
+            controller_output=output / "controller",
+            benchmark_rows=benchmark_rows,
+            audit_identity=audit_identity,
+        )
+    except BaseException as error:
+        if not native_audit_already_completed:
+            _write_stage_error(
+                output,
+                started_at=started_at,
+                phase="native-audit",
+                error=error,
+                completed_states=collection_state_count,
+                total_states=collection_state_count,
+            )
         raise
+    if _read_json(training_stage_path) != training:
+        _write_json(training_stage_path, training)
     report = {
         "schema": V3_S3_PIPELINE_SCHEMA,
         "complete": True,
@@ -1037,6 +1246,10 @@ def run_v3_s3_native_audit_stage(*, output: Path) -> dict[str, Any]:
         "quick_started": False,
         "formal_started": False,
     }
+    if native_audit_already_completed and _completed_native_stage_is_valid(
+        output=output, expected=report
+    ):
+        return report
     _write_json(output / "v3_s3_pilot_report.json", report)
     (output / "v3_s3_pilot_report.md").write_text(
         _markdown(report), encoding="utf-8", newline="\n"

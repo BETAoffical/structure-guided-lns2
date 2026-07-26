@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import collections
 import concurrent.futures
-import csv
 import os
 import statistics
-import tempfile
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import atomic_write_csv as _write_csv
 from experiments._common import read_json, sha256_file
 from experiments.closed_loop_confirmation import (
     generate_online_candidates,
@@ -76,27 +75,6 @@ def _cell(layout: str, agent_count: int) -> str:
     if layout not in LAYOUTS or int(agent_count) not in AGENT_COUNTS:
         raise ValueError(f"unexpected confirmation cell: {layout}/{agent_count}")
     return f"{layout}__agents_{int(agent_count)}"
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        raise ValueError(f"cannot write empty confirmation CSV: {path.name}")
-    fields = sorted({key for row in rows for key in row})
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
-    temporary.replace(path)
 
 
 def _write_status(root: Path, **values: Any) -> None:

@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 project(structure_guided_lns2 LANGUAGES CXX)
 
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(
+        CMAKE_BUILD_TYPE Release
+        CACHE STRING "Build type (default: Release, for representative solver timing)"
+        FORCE
+    )
+    message(STATUS "CMAKE_BUILD_TYPE was not set; defaulting to Release")
+endif()
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -57,6 +66,20 @@ target_link_libraries(mapf_lns2_core PUBLIC
     Eigen3::Eigen
 )
 
+add_library(
+    structure_guided_instance_validation
+    STATIC
+    src/instance_validation.cpp
+)
+set_target_properties(
+    structure_guided_instance_validation
+    PROPERTIES POSITION_INDEPENDENT_CODE ON
+)
+target_include_directories(
+    structure_guided_instance_validation
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 add_executable(lns_official "${MAPF_LNS2_ROOT}/src/driver.cpp")
 target_link_libraries(lns_official PRIVATE mapf_lns2_core)
 
@@ -64,7 +87,10 @@ add_executable(lns2_repair
     src/repair_driver.cpp
     src/jsonl_observer.cpp
 )
-target_link_libraries(lns2_repair PRIVATE mapf_lns2_core)
+target_link_libraries(
+    lns2_repair
+    PRIVATE mapf_lns2_core structure_guided_instance_validation
+)
 
 set(GPBS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gpbs")
 file(GLOB GPBS_SOURCES CONFIGURE_DEPENDS "${GPBS_ROOT}/src/*.cpp")
@@ -80,9 +106,18 @@ target_link_libraries(gpbs_official PRIVATE
 find_package(pybind11 CONFIG REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 pybind11_add_module(lns2_env src/python_bindings.cpp src/online_features.cpp)
-target_link_libraries(lns2_env PRIVATE mapf_lns2_core)
+target_link_libraries(
+    lns2_env
+    PRIVATE mapf_lns2_core structure_guided_instance_validation
+)
 
 enable_testing()
+set(LNS2_TEST_PYTHONPATH_SEPARATOR ":")
+if(WIN32)
+    # ENVIRONMENT is itself a CMake list, so keep the Windows path-list
+    # separator escaped until CTest sets the variable.
+    set(LNS2_TEST_PYTHONPATH_SEPARATOR "\\;")
+endif()
 add_executable(lns2_interface_tests tests/test_repair_interfaces.cpp)
 target_link_libraries(lns2_interface_tests PRIVATE mapf_lns2_core)
 target_compile_definitions(lns2_interface_tests PRIVATE
@@ -98,6 +133,15 @@ add_test(NAME lns2_repair_smoke COMMAND lns2_repair
     --agentNum 24
     --cutoffTime 10
     --seed 0
+)
+add_test(
+    NAME lns2_failed_trace_state
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_failed_repair_trace.py"
+            "$<TARGET_FILE:lns2_repair>"
+            "${MAPF_LNS2_ROOT}/random-32-32-20.map"
+            "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+            "${CMAKE_CURRENT_BINARY_DIR}/failed-repair-trace.jsonl"
 )
 set(GPBS_TEST_STATS "${CMAKE_CURRENT_BINARY_DIR}/gpbs-smoke.csv")
 add_test(NAME gpbs_official_smoke COMMAND gpbs_official
@@ -125,13 +169,13 @@ add_test(NAME lns2_python_env COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime/test_python_env.py"
 )
 set_tests_properties(lns2_python_env PROPERTIES ENVIRONMENT
-    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    "PYTHONPATH=$<TARGET_FILE_DIR:lns2_env>${LNS2_TEST_PYTHONPATH_SEPARATOR}${CMAKE_CURRENT_SOURCE_DIR};LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
 )
 add_test(NAME lns2_repair_collection_native COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_repair_collection_native.py"
 )
 set_tests_properties(lns2_repair_collection_native PROPERTIES ENVIRONMENT
-    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:$<TARGET_FILE_DIR:lns2_env>;LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    "PYTHONPATH=$<TARGET_FILE_DIR:lns2_env>${LNS2_TEST_PYTHONPATH_SEPARATOR}${CMAKE_CURRENT_SOURCE_DIR};LNS2_TEST_MAP=${MAPF_LNS2_ROOT}/random-32-32-20.map;LNS2_TEST_SCEN=${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
 )
 
 set(TRACE_TEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/repair-trace-test.jsonl")

@@ -7,21 +7,34 @@ import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
+from experiments._common import (
+    config_producer_fingerprint as _config_producer_fingerprint,
+    producer_identity,
+    read_json,
+    sha256_file,
+)
 from experiments.repair_collection import _fingerprint, _write_json
 from experiments.v3_value_pilot import (
     DEFAULT_OVERHEAD_GRID,
+    PROJECT_ROOT,
     V3_VALUE_PILOT_SCHEMA,
+    V3_VALUE_PILOT_PRODUCER_FILES,
     _atomic_write_csv,
     _rollout_file_name,
     _rollout_flat,
     _winner_key,
     analyze_value_rollouts,
+    load_resumable_value_rollout,
     run_value_rollout,
+    validate_value_rollout,
 )
 
 
-V3_VALUE_STABILITY_SCHEMA = "lns2.v3_value_label_stability.v1"
+V3_VALUE_STABILITY_SCHEMA = "lns2.v3_value_label_stability.v2"
+V3_VALUE_STABILITY_PRODUCER_FILES = (
+    *V3_VALUE_PILOT_PRODUCER_FILES,
+    "experiments/v3_value_stability.py",
+)
 
 
 def _portable_report_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -39,10 +52,12 @@ def _rollout_key(row: dict[str, Any]) -> tuple[str, str, int]:
 
 
 def _load_rollouts(root: Path) -> list[dict[str, Any]]:
-    rows = [
-        dict(read_json(path))
-        for path in sorted((root / "rollouts").glob("*.json"))
-    ]
+    rows = []
+    for path in sorted((root / "rollouts").glob("*.json")):
+        value = read_json(path)
+        if not isinstance(value, dict):
+            raise ValueError(f"value rollout is not an object: {path.name}")
+        rows.append(dict(value))
     if not rows:
         raise ValueError("source value pilot has no rollout files")
     keys = [_rollout_key(row) for row in rows]
@@ -51,6 +66,102 @@ def _load_rollouts(root: Path) -> list[dict[str, Any]]:
     if not all(bool(row.get("complete")) for row in rows):
         raise ValueError("source value pilot contains incomplete rollouts")
     return rows
+
+
+def _validate_value_matrix(
+    rows: Iterable[dict[str, Any]],
+    *,
+    plan: dict[str, Any],
+    expected_keys: set[tuple[str, str, int]],
+    max_repairs: int,
+    wall_clock_seconds: float,
+    producer_fingerprint: str,
+    followup_reasons: dict[tuple[str, str, int], str] | None = None,
+) -> list[dict[str, Any]]:
+    materialized = [dict(row) for row in rows]
+    observed = {_rollout_key(row) for row in materialized}
+    if len(observed) != len(materialized) or observed != expected_keys:
+        raise ValueError("value rollout matrix coverage mismatch")
+    states = {str(state["state_id"]): dict(state) for state in plan["states"]}
+    arms = {
+        (state_id, str(arm["arm_id"])): dict(arm)
+        for state_id, state in states.items()
+        for arm in state["arms"]
+    }
+    for row in materialized:
+        key = _rollout_key(row)
+        state_id, arm_id, trial_index = key
+        if state_id not in states or (state_id, arm_id) not in arms:
+            raise ValueError("value rollout is outside its plan")
+        validate_value_rollout(
+            row,
+            state_plan=states[state_id],
+            arm_plan=arms[(state_id, arm_id)],
+            max_repairs=int(max_repairs),
+            wall_clock_seconds=float(wall_clock_seconds),
+            expected_trial_index=trial_index,
+            expected_producer_fingerprint=producer_fingerprint,
+        )
+        if followup_reasons is not None and str(row.get("followup_reason")) != str(
+            followup_reasons[key]
+        ):
+            raise ValueError("value rollout follow-up reason mismatch")
+    return materialized
+
+
+def _load_validated_source_pilot(
+    root: Path,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    status_value = read_json(root / "status.json")
+    config_value = read_json(root / "run_config.json")
+    plan_value = read_json(root / "plan.json")
+    if not all(
+        isinstance(value, dict)
+        for value in (status_value, config_value, plan_value)
+    ):
+        raise ValueError("source value pilot metadata is not an object")
+    status = dict(status_value)
+    config = dict(config_value)
+    plan = dict(plan_value)
+    if str(status.get("schema")) != V3_VALUE_PILOT_SCHEMA:
+        raise ValueError("source value pilot status schema mismatch")
+    if (
+        str(status.get("status")) != "complete"
+        or int(status.get("error_count", -1)) != 0
+    ):
+        raise ValueError("source value pilot is not complete and clean")
+    if str(config.get("schema")) != V3_VALUE_PILOT_SCHEMA:
+        raise ValueError("source value pilot configuration schema mismatch")
+    if str(plan.get("schema")) != V3_VALUE_PILOT_SCHEMA:
+        raise ValueError("source value pilot plan schema mismatch")
+    if str(config.get("plan_fingerprint")) != _fingerprint(plan):
+        raise ValueError("source value pilot plan fingerprint mismatch")
+    producer_fingerprint = _config_producer_fingerprint(
+        config, label="source value pilot"
+    )
+    trials = int(config.get("trials", -1))
+    if trials <= 0:
+        raise ValueError("source value pilot trial count is invalid")
+    expected_keys = {
+        (str(state["state_id"]), str(arm["arm_id"]), trial)
+        for state in plan["states"]
+        for arm in state["arms"]
+        for trial in range(trials)
+    }
+    rows = _validate_value_matrix(
+        _load_rollouts(root),
+        plan=plan,
+        expected_keys=expected_keys,
+        max_repairs=int(config["max_repairs"]),
+        wall_clock_seconds=float(config["wall_clock_seconds"]),
+        producer_fingerprint=producer_fingerprint,
+    )
+    if (
+        int(status.get("completed_rollout_count", -1)) != len(rows)
+        or int(status.get("total_rollout_count", -1)) != len(rows)
+    ):
+        raise ValueError("source value pilot status count mismatch")
+    return plan, config, rows
 
 
 def trial_winners(
@@ -434,18 +545,19 @@ def run_stability_followup(
     wall_clock_seconds: float = 120.0,
     resume: bool = False,
 ) -> dict[str, Any]:
+    if int(total_trials) <= 0 or int(max_repairs) <= 0:
+        raise ValueError("total_trials and max_repairs must be positive")
+    if not math.isfinite(float(wall_clock_seconds)) or float(
+        wall_clock_seconds
+    ) <= 0.0:
+        raise ValueError("wall_clock_seconds must be finite and positive")
     pilot_root = Path(pilot).resolve()
     output_root = Path(output).resolve()
     if not (pilot_root / "status.json").is_file():
         raise FileNotFoundError("source pilot status.json is missing")
-    status = dict(read_json(pilot_root / "status.json"))
-    if status.get("status") != "complete":
-        raise ValueError("source value pilot is not complete")
-    source_config = dict(read_json(pilot_root / "run_config.json"))
-    if source_config.get("schema") != V3_VALUE_PILOT_SCHEMA:
-        raise ValueError("source value pilot schema mismatch")
-    source_plan = dict(read_json(pilot_root / "plan.json"))
-    source_rows = _load_rollouts(pilot_root)
+    source_plan, source_config, source_rows = _load_validated_source_pilot(
+        pilot_root
+    )
     targets, jobs = build_stability_jobs(
         plan=source_plan,
         source_rows=source_rows,
@@ -453,10 +565,23 @@ def run_stability_followup(
         max_repairs=int(max_repairs),
         wall_clock_seconds=float(wall_clock_seconds),
     )
+    identity = producer_identity(
+        project_root=PROJECT_ROOT,
+        source_files=V3_VALUE_STABILITY_PRODUCER_FILES,
+        native_required=True,
+        optional_package_names=("numpy", "scikit-learn"),
+    )
+    identity_fingerprint = _fingerprint(identity)
+    for job in jobs:
+        job["producer_identity_fingerprint"] = identity_fingerprint
     config = {
         "schema": V3_VALUE_STABILITY_SCHEMA,
-        "implementation_sha256": sha256_file(Path(__file__).resolve()),
+        "producer_identity": identity,
+        "producer_identity_fingerprint": identity_fingerprint,
         "source_pilot": str(pilot_root),
+        "source_producer_identity_fingerprint": str(
+            source_config["producer_identity_fingerprint"]
+        ),
         "source_plan_fingerprint": _fingerprint(source_plan),
         "source_rollout_fingerprint": _fingerprint(
             sorted((_rollout_key(row), row) for row in source_rows)
@@ -466,16 +591,24 @@ def run_stability_followup(
         "wall_clock_seconds": float(wall_clock_seconds),
         "target_fingerprint": _fingerprint(targets),
     }
-    if output_root.exists() and any(output_root.iterdir()) and not bool(resume):
+    output_has_files = output_root.exists() and any(output_root.iterdir())
+    if output_has_files and not bool(resume):
         raise FileExistsError("stability output is non-empty; pass resume")
-    output_root.mkdir(parents=True, exist_ok=True)
     config_path = output_root / "run_config.json"
-    if config_path.is_file():
+    target_path = output_root / "followup_plan.json"
+    if output_has_files and not (config_path.is_file() and target_path.is_file()):
+        raise ValueError(
+            "stability output lacks resumable config/targets; use a new output"
+        )
+    if output_has_files:
         if dict(read_json(config_path)) != config:
             raise ValueError("stability resume configuration mismatch")
+        if dict(read_json(target_path)) != targets:
+            raise ValueError("stability resume targets mismatch")
     else:
+        output_root.mkdir(parents=True, exist_ok=True)
         _write_json(config_path, config)
-        _write_json(output_root / "followup_plan.json", targets)
+        _write_json(target_path, targets)
 
     rollout_root = output_root / "rollouts"
     rollout_root.mkdir(parents=True, exist_ok=True)
@@ -490,12 +623,20 @@ def run_stability_followup(
         )
         try:
             if bool(resume) and path.is_file():
-                row = dict(read_json(path))
-                if (
-                    _rollout_key(row) == (state_id, arm_id, trial_index)
-                    and bool(row.get("complete"))
-                    and str(row.get("followup_reason")) == str(job["reason"])
-                ):
+                row = load_resumable_value_rollout(
+                    path,
+                    state_plan=dict(job["state"]),
+                    arm_plan=dict(job["arm"]),
+                    max_repairs=int(max_repairs),
+                    wall_clock_seconds=float(wall_clock_seconds),
+                    expected_trial_index=trial_index,
+                    expected_producer_fingerprint=identity_fingerprint,
+                )
+                if row is not None:
+                    if str(row.get("followup_reason")) != str(job["reason"]):
+                        raise ValueError(
+                            "stability rollout follow-up reason mismatch"
+                        )
                     completed.append(row)
                     continue
             row = run_value_rollout(job)
@@ -531,6 +672,23 @@ def run_stability_followup(
         _write_json(output_root / "errors.json", {"errors": errors})
         raise RuntimeError(errors[0]["error"])
     (output_root / "errors.json").unlink(missing_ok=True)
+    expected_followups = {
+        (
+            str(job["state"]["state_id"]),
+            str(job["arm"]["arm_id"]),
+            int(job["trial_index"]),
+        ): str(job["reason"])
+        for job in jobs
+    }
+    completed = _validate_value_matrix(
+        completed,
+        plan=source_plan,
+        expected_keys=set(expected_followups),
+        max_repairs=int(max_repairs),
+        wall_clock_seconds=float(wall_clock_seconds),
+        producer_fingerprint=identity_fingerprint,
+        followup_reasons=expected_followups,
+    )
     report, state_rows, arm_rows = analyze_stability_followup(
         source_rows=source_rows,
         followup_rows=completed,
@@ -568,15 +726,102 @@ def run_stability_followup(
     return report
 
 
-def reanalyze_stability_followup(
+def load_validated_value_stability(
     *, pilot: str | Path, output: str | Path
 ) -> dict[str, Any]:
     pilot_root = Path(pilot).resolve()
     output_root = Path(output).resolve()
-    source_rows = _load_rollouts(pilot_root)
-    followup_rows = _load_rollouts(output_root)
-    config = dict(read_json(output_root / "run_config.json"))
-    targets = dict(read_json(output_root / "followup_plan.json"))
+    source_plan, source_config, source_rows = _load_validated_source_pilot(
+        pilot_root
+    )
+    config_value = read_json(output_root / "run_config.json")
+    targets_value = read_json(output_root / "followup_plan.json")
+    status_value = read_json(output_root / "status.json")
+    if not all(
+        isinstance(value, dict)
+        for value in (config_value, targets_value, status_value)
+    ):
+        raise ValueError("value stability metadata is not an object")
+    config = dict(config_value)
+    targets = dict(targets_value)
+    status = dict(status_value)
+    if str(config.get("schema")) != V3_VALUE_STABILITY_SCHEMA:
+        raise ValueError("value stability configuration schema mismatch")
+    if str(status.get("schema")) != V3_VALUE_STABILITY_SCHEMA:
+        raise ValueError("value stability status schema mismatch")
+    if (
+        str(status.get("status")) != "complete"
+        or int(status.get("error_count", -1)) != 0
+    ):
+        raise ValueError("value stability is not complete and clean")
+    if Path(str(config.get("source_pilot", ""))).resolve() != pilot_root:
+        raise ValueError("value stability source path mismatch")
+    if str(config.get("source_plan_fingerprint")) != _fingerprint(source_plan):
+        raise ValueError("value stability source plan fingerprint mismatch")
+    if str(config.get("source_producer_identity_fingerprint")) != str(
+        source_config["producer_identity_fingerprint"]
+    ):
+        raise ValueError("value stability source producer mismatch")
+    if str(config.get("source_rollout_fingerprint")) != _fingerprint(
+        sorted((_rollout_key(row), row) for row in source_rows)
+    ):
+        raise ValueError("value stability source rollout fingerprint mismatch")
+    producer_fingerprint = _config_producer_fingerprint(
+        config, label="value stability"
+    )
+    recomputed_targets, jobs = build_stability_jobs(
+        plan=source_plan,
+        source_rows=source_rows,
+        total_trials=int(config["total_trials"]),
+        max_repairs=int(config["max_repairs"]),
+        wall_clock_seconds=float(config["wall_clock_seconds"]),
+    )
+    if (
+        _fingerprint(targets) != _fingerprint(recomputed_targets)
+        or str(config.get("target_fingerprint")) != _fingerprint(targets)
+    ):
+        raise ValueError("value stability targets mismatch")
+    expected_reasons = {
+        (
+            str(job["state"]["state_id"]),
+            str(job["arm"]["arm_id"]),
+            int(job["trial_index"]),
+        ): str(job["reason"])
+        for job in jobs
+    }
+    followup_rows = _validate_value_matrix(
+        _load_rollouts(output_root),
+        plan=source_plan,
+        expected_keys=set(expected_reasons),
+        max_repairs=int(config["max_repairs"]),
+        wall_clock_seconds=float(config["wall_clock_seconds"]),
+        producer_fingerprint=producer_fingerprint,
+        followup_reasons=expected_reasons,
+    )
+    if (
+        int(status.get("completed_rollout_count", -1)) != len(followup_rows)
+        or int(status.get("total_rollout_count", -1)) != len(followup_rows)
+    ):
+        raise ValueError("value stability status count mismatch")
+    return {
+        "source_plan": source_plan,
+        "source_config": source_config,
+        "source_rows": source_rows,
+        "config": config,
+        "targets": targets,
+        "followup_rows": followup_rows,
+    }
+
+
+def reanalyze_stability_followup(
+    *, pilot: str | Path, output: str | Path
+) -> dict[str, Any]:
+    output_root = Path(output).resolve()
+    validated = load_validated_value_stability(pilot=pilot, output=output)
+    source_rows = list(validated["source_rows"])
+    followup_rows = list(validated["followup_rows"])
+    config = dict(validated["config"])
+    targets = dict(validated["targets"])
     report, state_rows, arm_rows = analyze_stability_followup(
         source_rows=source_rows,
         followup_rows=followup_rows,

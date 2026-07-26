@@ -5,13 +5,20 @@ import hashlib
 import json
 import math
 import os
+import platform
 import statistics
 import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    contained_file,
+    producer_identity,
+    sha256_file,
+    validate_producer_identity,
+)
+from experiments._common import state_groups as _state_groups
 from experiments.repair_aware import (
     PORTABLE_SCALAR_MODEL_SCHEMA,
     PortableScalarModel,
@@ -55,7 +62,33 @@ os.environ.setdefault(
 )
 
 
-V3_S3_TRAINING_SCHEMA = "lns2.v3_s3_training.v3"
+V3_S3_TRAINING_SCHEMA = "lns2.v3_s3_training.v4"
+V3_S3_NATIVE_AUDIT_IDENTITY_SCHEMA = "lns2.v3_s3_native_audit_identity.v1"
+V3_S3_TRAINING_PRODUCER_FILES = (
+    "experiments/_common.py",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_trace_storage.py",
+    "experiments/compact_controller_model.py",
+    "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
+    "experiments/repair_aware.py",
+    "experiments/repair_aware_training.py",
+    "experiments/repair_collection.py",
+    "experiments/v3_s3.py",
+    "experiments/v3_s3_training.py",
+)
+V3_S3_NATIVE_AUDIT_PRODUCER_FILES = (
+    *V3_S3_TRAINING_PRODUCER_FILES,
+    "experiments/v3_s3_pipeline.py",
+    "scripts/run_v3_training_pipeline.py",
+    "src/python_bindings.cpp",
+    "src/repair_driver.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/inc/SIPP.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 MODEL_FAMILIES = ("hist_gradient_boosting", "extra_trees")
 HGB_PARAMETERS = {
     "max_iter": 100,
@@ -75,6 +108,142 @@ EXTRA_TREES_PARAMETERS = {
 VALID_THRESHOLD_GRID = (0.40, 0.50, 0.60)
 NO_PROGRESS_THRESHOLD_GRID = (0.40, 0.50, 0.60)
 REDUCTION_RETENTION_GRID = (0.90, 0.95, 0.98, 1.00)
+
+
+def v3_s3_training_producer_identity(
+    project_root: str | Path | None = None,
+) -> dict[str, Any]:
+    root = (
+        Path(project_root).resolve()
+        if project_root is not None
+        else Path(__file__).resolve().parents[1]
+    )
+    return producer_identity(
+        project_root=root,
+        source_files=V3_S3_TRAINING_PRODUCER_FILES,
+        native_required=False,
+        package_names=("joblib", "numpy", "scikit-learn"),
+    )
+
+
+def _runtime_platform_identity() -> dict[str, Any]:
+    affinity: list[int] | None = None
+    if hasattr(os, "sched_getaffinity"):
+        try:
+            affinity = sorted(map(int, os.sched_getaffinity(0)))
+        except OSError:
+            affinity = None
+    return {
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "logical_cpu_count": os.cpu_count(),
+        "cpu_affinity": affinity,
+    }
+
+
+def _native_audit_controller_inputs(
+    root: Path,
+    report: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    exports = dict(report.get("model_exports", {}))
+    if set(exports) != set(MODEL_FAMILIES):
+        raise ValueError("v3-S3 native audit model-family exports are incomplete")
+    model_files: dict[str, dict[str, dict[str, str]]] = {}
+    for family in MODEL_FAMILIES:
+        models = dict(dict(exports[family]).get("models", {}))
+        if set(models) != set(S3_MODEL_NAMES):
+            raise ValueError(
+                f"v3-S3 native audit model export is incomplete: {family}"
+            )
+        family_files: dict[str, dict[str, str]] = {}
+        for name in sorted(models):
+            raw = dict(models[name])
+            path = contained_file(
+                root,
+                raw.get("file"),
+                field=f"model_exports.{family}.{name}.file",
+            )
+            actual_sha256 = sha256_file(path)
+            if actual_sha256 != str(raw.get("sha256", "")):
+                raise ValueError(
+                    f"v3-S3 native audit model SHA256 mismatch: {family}/{name}"
+                )
+            family_files[name] = {
+                "file": path.relative_to(root).as_posix(),
+                "sha256": actual_sha256,
+            }
+        model_files[family] = family_files
+    inputs = {
+        "training_schema": str(report.get("schema", "")),
+        "bundle_schema": str(manifest.get("schema", "")),
+        "source_fingerprint": str(manifest.get("source_fingerprint", "")),
+        "feature_schema_id": str(manifest.get("feature_schema_id", "")),
+        "feature_schema_sha256": str(
+            manifest.get("feature_schema_sha256", "")
+        ),
+        "feature_names": list(map(str, manifest.get("feature_names", ()))),
+        "provisional_model_family": str(
+            report.get("provisional_model_family", "")
+        ),
+        "model_family_diagnostics_fingerprint": _fingerprint(
+            report.get("model_family_diagnostics", {})
+        ),
+        "model_exports_fingerprint": _fingerprint(exports),
+        "model_files": model_files,
+    }
+    if not inputs["source_fingerprint"] or not inputs["provisional_model_family"]:
+        raise ValueError("v3-S3 native audit controller identity is incomplete")
+    return inputs
+
+
+def v3_s3_native_audit_identity(
+    *,
+    controller_output: str | Path,
+    benchmark_rows: int = 36,
+    project_root: str | Path | None = None,
+) -> dict[str, Any]:
+    requested_benchmark_rows = int(benchmark_rows)
+    if requested_benchmark_rows <= 0 or requested_benchmark_rows > 36:
+        raise ValueError("v3-S3 native benchmark_rows must be in [1, 36]")
+    root = Path(controller_output).resolve()
+    report = dict(_read_json(root / "training_report.json"))
+    manifest = dict(_read_json(root / "v3_s3_manifest.json"))
+    if str(report.get("schema")) != V3_S3_TRAINING_SCHEMA:
+        raise ValueError(
+            "v3-S3 native audit cannot continue a legacy training schema; "
+            "train into a new output directory"
+        )
+    if report.get("producer_identity") != manifest.get("producer_identity"):
+        raise ValueError("v3-S3 training producer identity mismatch")
+    validate_producer_identity(
+        report.get("producer_identity"),
+        native_required=False,
+        package_names=("joblib", "numpy", "scikit-learn"),
+    )
+    resolved_project_root = (
+        Path(project_root).resolve()
+        if project_root is not None
+        else Path(__file__).resolve().parents[1]
+    )
+    inputs = _native_audit_controller_inputs(root, report, manifest)
+    return {
+        "schema": V3_S3_NATIVE_AUDIT_IDENTITY_SCHEMA,
+        "schema_version": 1,
+        "benchmark_rows": requested_benchmark_rows,
+        "controller_input_sha256": _fingerprint(inputs),
+        "controller_inputs": inputs,
+        "producer_identity": producer_identity(
+            project_root=resolved_project_root,
+            source_files=V3_S3_NATIVE_AUDIT_PRODUCER_FILES,
+            native_required=True,
+            optional_package_names=("joblib", "numpy", "scikit-learn"),
+        ),
+        "runtime_platform": _runtime_platform_identity(),
+    }
 
 
 class _ConstantEstimator:
@@ -562,13 +731,6 @@ def _oof_predictions(
     if any(any(not math.isfinite(value) for value in values) for values in result.values()):
         raise ValueError("v3-S3 OOF predictions are incomplete")
     return result, fold_reports, used
-
-
-def _state_groups(rows: list[dict[str, Any]]) -> list[list[int]]:
-    grouped: dict[str, list[int]] = collections.defaultdict(list)
-    for index, row in enumerate(rows):
-        grouped[str(row["state_id"])].append(index)
-    return [grouped[key] for key in sorted(grouped)]
 
 
 def _selection_metrics(
@@ -1622,6 +1784,7 @@ def train_v3_s3_controller(
     external_baselines: str | Path,
     output: str | Path,
     training_jobs: int = 1,
+    producer_identity_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if int(training_jobs) <= 0:
         raise ValueError("v3-S3 training_jobs must be positive")
@@ -1629,6 +1792,16 @@ def train_v3_s3_controller(
     trial_path = Path(sequence_trials).resolve()
     baseline_path = Path(external_baselines).resolve()
     output_root = Path(output).resolve()
+    resolved_producer_identity = (
+        dict(producer_identity_payload)
+        if producer_identity_payload is not None
+        else v3_s3_training_producer_identity()
+    )
+    validate_producer_identity(
+        resolved_producer_identity,
+        native_required=False,
+        package_names=("joblib", "numpy", "scikit-learn"),
+    )
     train, diagnostic = _sequence_rows(feature_path, trial_path)
     training_state_ids = {str(row["state_id"]) for row in train}
     training_v2 = _baseline_metrics(
@@ -1684,6 +1857,7 @@ def train_v3_s3_controller(
             },
             "training_objective_id": V3_S3_OBJECTIVE_ID,
             "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
+            "producer_identity": resolved_producer_identity,
         }
     )
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1770,6 +1944,7 @@ def train_v3_s3_controller(
         "training_jobs": int(training_jobs),
         "training_objective_id": V3_S3_OBJECTIVE_ID,
         "selection_objective_id": V3_S3_SELECTION_OBJECTIVE_ID,
+        "producer_identity": resolved_producer_identity,
         "formal_or_movingai_labels_seen": False,
         "feature_selection": feature_selection,
         "declared_feature_count": len(feature_names),
@@ -1820,6 +1995,7 @@ def train_v3_s3_controller(
         "prediction_intervals": intervals,
         "continuation_calibration": continuation_calibration,
         "source_fingerprint": source_fingerprint,
+        "producer_identity": resolved_producer_identity,
         "training_report": {
             "file": report_path.relative_to(output_root).as_posix(),
             "sha256": sha256_file(report_path),
@@ -1836,14 +2012,17 @@ def train_v3_s3_controller(
 
 
 def finalize_v3_s3_native_audit(
-    *, controller_output: str | Path, benchmark_rows: int = 36
+    *,
+    controller_output: str | Path,
+    benchmark_rows: int = 36,
+    audit_identity: dict[str, Any] | None = None,
+    project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     root = Path(controller_output).resolve()
     report_path = root / "training_report.json"
     manifest_path = root / "v3_s3_manifest.json"
     report = dict(_read_json(report_path))
     manifest = dict(_read_json(manifest_path))
-    feature_names = list(map(str, manifest["feature_names"]))
     requested_benchmark_rows = int(benchmark_rows)
     if requested_benchmark_rows <= 0:
         raise ValueError("v3-S3 native benchmark_rows must be positive")
@@ -1852,6 +2031,52 @@ def finalize_v3_s3_native_audit(
             "v3-S3 native benchmark_rows cannot exceed the registered "
             "36-sequence deployment schedule"
         )
+    if str(report.get("schema")) != V3_S3_TRAINING_SCHEMA:
+        raise ValueError(
+            "v3-S3 native audit cannot continue a legacy training schema; "
+            "train into a new output directory"
+        )
+    if report.get("producer_identity") != manifest.get("producer_identity"):
+        raise ValueError("v3-S3 training producer identity mismatch")
+    current_identity = v3_s3_native_audit_identity(
+        controller_output=root,
+        benchmark_rows=requested_benchmark_rows,
+        project_root=project_root,
+    )
+    if audit_identity is not None and dict(audit_identity) != current_identity:
+        raise ValueError("v3-S3 native audit identity changed before execution")
+    audit_fingerprint = _fingerprint(current_identity)
+    report_completed = bool(report.get("native_audit_completed"))
+    manifest_completed = bool(manifest.get("native_audit_completed"))
+    if report_completed != manifest_completed:
+        raise ValueError("v3-S3 native audit artifacts are partially committed")
+    if report_completed:
+        if (
+            report.get("native_audit_identity") != current_identity
+            or manifest.get("native_audit_identity") != current_identity
+            or str(report.get("native_audit_identity_fingerprint", ""))
+            != audit_fingerprint
+            or str(manifest.get("native_audit_identity_fingerprint", ""))
+            != audit_fingerprint
+        ):
+            raise ValueError(
+                "v3-S3 native audit identity differs from the completed result"
+            )
+        if sha256_file(report_path) != str(
+            dict(manifest.get("training_report", {})).get("sha256", "")
+        ):
+            raise ValueError("v3-S3 completed native audit report SHA256 mismatch")
+        load_v3_s3_bundle(root)
+        return {**report, "manifest": manifest}
+    if any(
+        key in report or key in manifest
+        for key in (
+            "native_audit_identity",
+            "native_audit_identity_fingerprint",
+        )
+    ):
+        raise ValueError("v3-S3 native audit identity is partially committed")
+    feature_names = list(map(str, manifest["feature_names"]))
     parity_probe_count = min(64, requested_benchmark_rows)
     parity_rows = [
         {
@@ -2022,11 +2247,15 @@ def finalize_v3_s3_native_audit(
             "planner_seconds_per_new_state": planner_seconds,
             "native_parity": parity,
             "native_audit_completed": True,
+            "native_audit_identity": current_identity,
+            "native_audit_identity_fingerprint": audit_fingerprint,
             "pilot_checks": checks,
             "pilot_passed": all(checks.values()),
             "decision": decision,
         }
     )
+    manifest["native_audit_identity"] = current_identity
+    manifest["native_audit_identity_fingerprint"] = audit_fingerprint
     _write_json(report_path, report)
     manifest["training_report"]["sha256"] = sha256_file(report_path)
     _write_json(manifest_path, manifest)
@@ -2038,7 +2267,10 @@ __all__ = [
     "EXTRA_TREES_PARAMETERS",
     "HGB_PARAMETERS",
     "MODEL_FAMILIES",
+    "V3_S3_NATIVE_AUDIT_IDENTITY_SCHEMA",
     "V3_S3_TRAINING_SCHEMA",
     "finalize_v3_s3_native_audit",
     "train_v3_s3_controller",
+    "v3_s3_native_audit_identity",
+    "v3_s3_training_producer_identity",
 ]

@@ -95,12 +95,12 @@ cmake --build build/native-features -j4
 完整验证包括：
 
 ```powershell
-python -m unittest discover -s tests -p "test_*.py"
+python -m pytest -q
 python scripts/consolidate_research_results.py --config configs/result_consolidation.json --verify-build
 python scripts/audit_repository_hygiene.py --check
 ```
 
-WSL 中另运行 CTest 10/10 和官方 parity。环境锁文件现在位于根目录 `requirements-policy-training-wsl.lock`。
+WSL 中另运行 CTest 11/11 和官方 parity。环境锁文件现在位于根目录 `requirements-policy-training-wsl.lock`。
 
 ## 已移除内容如何恢复
 

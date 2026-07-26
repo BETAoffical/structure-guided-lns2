@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from experiments.v3_value_stability import (
+    V3_VALUE_STABILITY_SCHEMA,
+    _load_rollouts,
     analyze_stability_followup,
     build_stability_jobs,
     identify_stability_targets,
@@ -49,6 +53,19 @@ def _state(state_id: str) -> dict:
 
 
 class V3ValueStabilityTargetTests(unittest.TestCase):
+    def test_schema_is_v2_and_non_object_rollout_is_rejected(self) -> None:
+        self.assertEqual(
+            V3_VALUE_STABILITY_SCHEMA,
+            "lns2.v3_value_label_stability.v2",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "rollouts").mkdir()
+            (root / "rollouts" / "bad.json").write_text(
+                "[]", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "not an object"):
+                _load_rollouts(root)
     def test_targets_are_union_of_unstable_and_censored_states(self) -> None:
         rows = [
             _row("unstable", "a", 0, feasible=True, seconds=1.0),

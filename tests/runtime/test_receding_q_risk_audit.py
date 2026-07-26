@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from experiments import receding_q_risk_audit as module
+from experiments import receding_q_pilot as pilot
+from experiments import receding_q_stability as stability_module
 
 
 def _row(
@@ -131,3 +135,40 @@ def test_persisted_wsl_source_falls_back_to_sibling(
         sibling_root=tmp_path,
     )
     assert resolved == source
+
+
+def test_risk_audit_rejects_corrupt_stability_configuration(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source-pilot"
+    stability = tmp_path / "stability"
+    source.mkdir()
+    stability.mkdir()
+    module._write_json(
+        source / "status.json",
+        {
+            "schema": pilot.RECEDING_Q_PILOT_SCHEMA,
+            "status": "complete",
+            "error_count": 0,
+        },
+    )
+    module._write_json(
+        stability / "status.json",
+        {
+            "schema": stability_module.RECEDING_Q_STABILITY_SCHEMA,
+            "status": "complete",
+            "error_count": 0,
+        },
+    )
+    module._write_json(
+        stability / "run_config.json",
+        {
+            "schema": "corrupt",
+            "source": str(source),
+        },
+    )
+    with pytest.raises(ValueError, match="configuration schema mismatch"):
+        module.audit_receding_q_risk(
+            stability=stability,
+            output=tmp_path / "output",
+        )

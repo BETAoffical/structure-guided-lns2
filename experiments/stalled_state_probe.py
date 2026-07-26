@@ -55,6 +55,20 @@ def _median(values: Iterable[float]) -> float | None:
     return statistics.median(numbers) if numbers else None
 
 
+def _repair_state_unchanged(row: dict[str, Any]) -> bool:
+    reported = row.get("repair_state_changed")
+    before = row.get("before_repair_fingerprint")
+    after = row.get("after_repair_fingerprint")
+    if before is not None and after is not None:
+        changed = str(before) != str(after)
+        if reported is not None and bool(reported) != changed:
+            raise ValueError("repair state-change flag disagrees with fingerprints")
+        return not changed
+    if reported is None:
+        raise ValueError("decision lacks repair-structure state-change evidence")
+    return not bool(reported)
+
+
 def find_terminal_stall(decisions: list[dict[str, Any]], minimum: int = 3) -> dict[str, Any]:
     """Return the first decision in the terminal unchanged-state failed-replan run."""
 
@@ -65,10 +79,9 @@ def find_terminal_stall(decisions: list[dict[str, Any]], minimum: int = 3) -> di
         row = decisions[start - 1]
         metrics = dict(row.get("actual_metrics") or {})
         failed = not bool(metrics.get("replan_success"))
-        unchanged = int(row.get("before_conflicts", -1)) == int(
-            metrics.get("conflicts_after", -2)
-        )
-        if not unchanged or not failed:
+        if not failed:
+            break
+        if not _repair_state_unchanged(row):
             break
         start -= 1
     length = len(decisions) - start

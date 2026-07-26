@@ -47,6 +47,9 @@ InitLNS::InitLNS(const Instance& instance, vector<Agent>& agents, double time_li
          policy(policy), observer(observer), max_repair_iterations(max_repair_iterations)
  {
      replan_time_limit = time_limit;
+     obstacle_snapshot.reserve(instance.map_size);
+     for (int location = 0; location < instance.map_size; location++)
+         obstacle_snapshot.push_back(instance.isObstacle(location) ? 1 : 0);
      if (init_destory_name == "Adaptive")
      {
          ALNS = true;
@@ -198,9 +201,9 @@ bool InitLNS::step(const RepairAction& action)
         paths[i] = &agents[i].path;
     assert(instance.validateSolution(paths, sum_of_costs, num_of_colliding_pairs));
 
-    auto state_snapshot_started = RepairTimingClock::now();
+    const auto before_snapshot_started = RepairTimingClock::now();
     RepairState before = getRepairState();
-    double state_snapshot_seconds = repairTimingSeconds(state_snapshot_started);
+    double state_snapshot_seconds = repairTimingSeconds(before_snapshot_started);
     RepairTransition transition;
     transition.requested_action = action;
     transition.iteration = repair_iteration + 1;
@@ -229,9 +232,9 @@ bool InitLNS::step(const RepairAction& action)
 
     auto finishTransition = [&]()
     {
-        state_snapshot_started = RepairTimingClock::now();
+        const auto after_snapshot_started = RepairTimingClock::now();
         RepairState after = getRepairState();
-        state_snapshot_seconds += repairTimingSeconds(state_snapshot_started);
+        state_snapshot_seconds += repairTimingSeconds(after_snapshot_started);
         transition.state_snapshot_seconds = state_snapshot_seconds;
         transition.native_step_seconds = repairTimingSeconds(native_step_started);
         transition.native_residual_seconds = std::max(
@@ -692,9 +695,26 @@ bool InitLNS::isDone() const
 {
     if (!initialized)
         return false;
-    if (!initial_solution_complete || num_of_colliding_pairs == 0 || runtime >= time_limit)
+    if (!initial_solution_complete || num_of_colliding_pairs == 0 ||
+        currentRuntime() >= time_limit)
         return true;
     return max_repair_iterations > 0 && repair_iteration >= max_repair_iterations;
+}
+
+double InitLNS::currentRuntime() const
+{
+    if (!initialized)
+        return runtime;
+    if (!initial_solution_complete || num_of_colliding_pairs == 0 ||
+        (max_repair_iterations > 0 && repair_iteration >= max_repair_iterations))
+        return runtime;
+    // Preserve a real native-step overshoot.  Only time accumulated while the
+    // active solver is idle between calls is capped at the configured cutoff.
+    if (runtime >= time_limit)
+        return runtime;
+    const double live_runtime =
+        std::chrono::duration<double>(Time::now() - start_time).count();
+    return std::min(std::max(runtime, live_runtime), time_limit);
 }
 
 RepairState InitLNS::getRepairState() const
@@ -702,17 +722,18 @@ RepairState InitLNS::getRepairState() const
     RepairState state;
     state.initialized = initialized;
     state.initial_solution_complete = initial_solution_complete;
-    state.feasible = initialized && num_of_colliding_pairs == 0;
-    state.done = isDone();
+    state.feasible = isFeasible();
+    state.runtime = currentRuntime();
+    state.done = initialized &&
+        (!initial_solution_complete || num_of_colliding_pairs == 0 ||
+         state.runtime >= time_limit ||
+         (max_repair_iterations > 0 && repair_iteration >= max_repair_iterations));
     state.iteration = repair_iteration;
     state.rows = instance.num_of_rows;
     state.cols = instance.num_of_cols;
     state.sum_of_costs = sum_of_costs;
     state.num_of_colliding_pairs = num_of_colliding_pairs;
-    state.runtime = runtime;
-    state.obstacles.reserve(instance.map_size);
-    for (int location = 0; location < instance.map_size; location++)
-        state.obstacles.push_back(instance.isObstacle(location) ? 1 : 0);
+    state.obstacles = obstacle_snapshot;
 
     state.agents.reserve(agents.size());
     for (const auto& agent : agents)
@@ -1218,6 +1239,11 @@ void InitLNS::writeIterStatsToFile(const string & file_name) const
 
 void InitLNS::writeResultToFile(const string & file_name, int sum_of_distances, double preprocessing_time) const
 {
+    if (iteration_stats.empty())
+    {
+        cerr << "Cannot write InitLNS results before initialization" << endl;
+        return;
+    }
     std::ifstream infile(file_name);
     bool exist = infile.good();
     infile.close();
@@ -1241,19 +1267,17 @@ void InitLNS::writeResultToFile(const string & file_name, int sum_of_distances, 
         num_LL_runs += agent.path_planner->num_runs;
     }
     double auc = 0;
-    if (!iteration_stats.empty())
+    auto prev = iteration_stats.begin();
+    auto curr = prev;
+    ++curr;
+    while (curr != iteration_stats.end() && curr->runtime < time_limit)
     {
-        auto prev = iteration_stats.begin();
-        auto curr = prev;
+        auc += prev->num_of_colliding_pairs * (curr->runtime - prev->runtime);
+        prev = curr;
         ++curr;
-        while (curr != iteration_stats.end() && curr->runtime < time_limit)
-        {
-            auc += prev->num_of_colliding_pairs * (curr->runtime - prev->runtime);
-            prev = curr;
-            ++curr;
-        }
-        auc += prev->num_of_colliding_pairs * (time_limit - prev->runtime);
     }
+    auc += prev->num_of_colliding_pairs *
+        std::max(0.0, time_limit - prev->runtime);
 
     ofstream stats(file_name, std::ios::app);
     stats << runtime << "," << iteration_stats.back().num_of_colliding_pairs << "," <<
@@ -1312,12 +1336,16 @@ void InitLNS::printPath() const
 
 void InitLNS::printResult()
 {
+    if (iteration_stats.empty())
+    {
+        cout << "\t" << getSolverName() << ": no iterations" << endl;
+        return;
+    }
     average_group_size = - iteration_stats.front().num_of_agents;
     for (const auto& data : iteration_stats)
         average_group_size += data.num_of_agents;
     if (average_group_size > 0)
         average_group_size /= (double)(iteration_stats.size() - 1);
-    assert(!iteration_stats.empty());
     cout << "\t" << getSolverName() << ": "
          << "runtime = " << runtime << ", "
          << "iterations = " << iteration_stats.size() << ", "

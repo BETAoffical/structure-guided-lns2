@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import sha256_file
+from experiments._common import producer_identity, sha256_file
 from experiments.closed_loop_confirmation import (
     generate_online_candidates,
     score_online_candidates,
@@ -47,6 +47,8 @@ from experiments.v3_s3 import (
     S3_ACTION_TEMPLATES,
     S3_HORIZON,
     S3ActionTemplate,
+    V3_S3_FULL_FEATURE_NAMES,
+    V3_S3_PROFILE,
     all_runtime_sequences,
     balanced_sequence_templates,
     candidate_template_indices,
@@ -56,7 +58,41 @@ from experiments.v3_s3 import (
 )
 
 
-V3_S3_COLLECTION_SCHEMA = "lns2.v3_s3_collection.v1"
+V3_S3_COLLECTION_SCHEMA = "lns2.v3_s3_collection.v2"
+V3_S3_COLLECTION_VERSION = 2
+V3_S3_STOP_REASONS = frozenset(
+    {
+        "feasible",
+        "deadline_or_iteration_truncation",
+        "template_unavailable",
+        "horizon_complete",
+    }
+)
+V3_S3_COLLECTION_PRODUCER_FILES = (
+    "CMakeLists.txt",
+    "experiments/_common.py",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_trace_storage.py",
+    "experiments/compact_controller_model.py",
+    "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
+    "experiments/feature_schema_v3.py",
+    "experiments/online_feature_engine.py",
+    "experiments/parallel_runtime.py",
+    "experiments/repair_aware.py",
+    "experiments/repair_aware_training.py",
+    "experiments/repair_collection.py",
+    "experiments/stall_guard.py",
+    "experiments/trace_replay.py",
+    "experiments/v3_s3.py",
+    "experiments/v3_s3_collection.py",
+    "src/python_bindings.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/inc/SIPP.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 S3_AGENT_COUNTS = (80, 100, 200, 400, 600)
 S3_LAYOUTS = ("regular_beltway", "compartmentalized", "dead_end_aisles")
 S3_SOURCE_POLICIES = ("fixed_random", "official_adaptive", "realized_dynamic")
@@ -103,22 +139,6 @@ def _directory_content_fingerprint(root: Path) -> str:
     return _fingerprint(
         [(path.relative_to(root).as_posix(), sha256_file(path)) for path in files]
     )
-
-
-def _collection_implementation_fingerprint() -> dict[str, str]:
-    project = Path(__file__).resolve().parents[1]
-    names = (
-        "experiments/trace_replay.py",
-        "experiments/v3_s3.py",
-        "experiments/v3_s3_collection.py",
-        "experiments/parallel_runtime.py",
-        "experiments/closed_loop_confirmation.py",
-        "experiments/online_feature_engine.py",
-        "src/python_bindings.cpp",
-        "third_party/mapf_lns2/inc/RepairPolicy.h",
-        "third_party/mapf_lns2/src/InitLNS.cpp",
-    )
-    return {name: sha256_file(project / name) for name in names}
 
 
 def _decision_stage(index: int) -> str:
@@ -467,6 +487,7 @@ def _adaptive_selection_plan(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
     return {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "policy": "adaptive-global-backfill-v1",
         "target_state_cap": S3_TARGET_STATE_CAP,
         "target_state_count": sum(
@@ -518,6 +539,7 @@ def qualification_pool(
         )
     return selected, {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "source_decision_count": len(rows),
         "qualification_pool_count": len(selected),
         "reserve_multiplier": int(reserve_multiplier),
@@ -610,15 +632,202 @@ def _full_candidate_rows(
     }
 
 
+def _finite_number(value: Any) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(float(value))
+    )
+
+
+def _finite_nonnegative(value: Any) -> bool:
+    return _finite_number(value) and float(value) >= 0.0
+
+
+def _artifact_header_errors(
+    payload: Any,
+    *,
+    run_fingerprint: str | None,
+    require_complete: bool = True,
+) -> list[str]:
+    if not isinstance(payload, dict):
+        return ["artifact payload is not a JSON object"]
+    errors = []
+    if str(payload.get("schema")) != V3_S3_COLLECTION_SCHEMA:
+        errors.append("artifact schema is not v3-S3 collection v2")
+    try:
+        schema_version = int(payload.get("schema_version", -1))
+    except (TypeError, ValueError):
+        schema_version = -1
+    if schema_version != V3_S3_COLLECTION_VERSION:
+        errors.append("artifact schema_version is not 2")
+    if run_fingerprint is not None and str(payload.get("run_fingerprint")) != str(
+        run_fingerprint
+    ):
+        errors.append("artifact run_fingerprint differs")
+    if require_complete and payload.get("complete") is not True:
+        errors.append("artifact is not marked complete")
+    return errors
+
+
+def _qualification_artifact_errors(
+    payload: Any,
+    *,
+    run_fingerprint: str | None = None,
+    expected_decision: dict[str, Any] | None = None,
+) -> list[str]:
+    errors = _artifact_header_errors(
+        payload, run_fingerprint=run_fingerprint, require_complete=True
+    )
+    if not isinstance(payload, dict):
+        return errors
+    decision = payload.get("decision")
+    if not isinstance(decision, dict):
+        return [*errors, "qualification decision is not an object"]
+    state_id = str(decision.get("state_id", ""))
+    before_fingerprint = str(decision.get("before_fingerprint", ""))
+    if not state_id:
+        errors.append("qualification decision has no state_id")
+    if not before_fingerprint:
+        errors.append("qualification decision has no before_fingerprint")
+    if not str(decision.get("before_repair_fingerprint", "")):
+        errors.append("qualification decision has no before_repair_fingerprint")
+    if expected_decision is not None and _fingerprint(decision) != _fingerprint(
+        expected_decision
+    ):
+        errors.append("qualification decision differs from the scheduled decision")
+
+    candidates = payload.get("candidates")
+    rows = payload.get("candidate_rows")
+    raw_indices = payload.get("template_indices")
+    timing = payload.get("timing")
+    if not isinstance(candidates, list) or not candidates:
+        errors.append("qualification candidates are missing")
+        candidates = []
+    if not isinstance(rows, list) or len(rows) != len(candidates):
+        errors.append("qualification candidate row coverage differs")
+        rows = []
+    if not isinstance(raw_indices, dict):
+        errors.append("qualification template_indices is not an object")
+        raw_indices = {}
+    try:
+        if any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in raw_indices.values()
+        ):
+            raise ValueError("template index is not an integer")
+        indices = {str(key): int(value) for key, value in raw_indices.items()}
+    except (TypeError, ValueError):
+        errors.append("qualification template_indices contains a non-integer index")
+        indices = {}
+    try:
+        computed_indices = candidate_template_indices(candidates)
+    except (KeyError, TypeError, ValueError) as error:
+        errors.append(f"qualification candidate/template mapping is invalid: {error}")
+        computed_indices = {}
+    expected_template_keys = {template.key for template in S3_ACTION_TEMPLATES}
+    if set(indices) != expected_template_keys:
+        errors.append("qualification does not cover every registered action template")
+    if indices != computed_indices:
+        errors.append("qualification template_indices differs from candidate mapping")
+
+    required_features = set(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    for index, (candidate, row) in enumerate(zip(candidates, rows)):
+        if not isinstance(candidate, dict) or not isinstance(row, dict):
+            errors.append(f"qualification candidate {index} is not an object pair")
+            continue
+        candidate_id = str(candidate.get("candidate_id", ""))
+        if not candidate_id or str(row.get("candidate_id", "")) != candidate_id:
+            errors.append(f"qualification candidate {index} identity differs")
+        agents = candidate.get("agents")
+        if (
+            not isinstance(agents, list)
+            or not agents
+            or any(isinstance(agent, bool) or not isinstance(agent, int) for agent in agents)
+            or len(agents) != len(set(agents))
+        ):
+            errors.append(f"qualification candidate {index} agents are invalid")
+        if str(row.get("candidate_key", "")) != candidate_id:
+            errors.append(f"qualification candidate {index} key differs")
+        if str(row.get("state_id", "")) != before_fingerprint:
+            errors.append(f"qualification candidate {index} state fingerprint differs")
+        features = row.get("features")
+        profile = (
+            features.get("realized_dynamic")
+            if isinstance(features, dict)
+            else None
+        )
+        if not isinstance(profile, dict) or set(map(str, profile)) != required_features:
+            errors.append(f"qualification candidate {index} feature coverage differs")
+        elif any(not _finite_number(value) for value in profile.values()):
+            errors.append(f"qualification candidate {index} has a non-finite feature")
+    if not isinstance(timing, dict) or not _finite_nonnegative(
+        timing.get("full_pool_seconds") if isinstance(timing, dict) else None
+    ):
+        errors.append("qualification full-pool timing is invalid")
+    return errors
+
+
+def _resume_completed_artifact(
+    path: Path,
+    *,
+    run_fingerprint: str,
+    validator: Any,
+    label: str,
+    **validator_kwargs: Any,
+) -> dict[str, Any] | None:
+    """Return a verified completed artifact, or allow a v2 incomplete rewrite.
+
+    Existing malformed, legacy, foreign-run, or semantically invalid artifacts
+    are deliberately left untouched and fail closed.  Only a current-run v2
+    object explicitly marked incomplete may be atomically replaced.
+    """
+
+    if not path.is_file():
+        return None
+    try:
+        existing = _read_json(path)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"{label} artifact is unreadable and was preserved: {error}"
+        ) from error
+    header_errors = _artifact_header_errors(
+        existing,
+        run_fingerprint=run_fingerprint,
+        require_complete=False,
+    )
+    if header_errors:
+        raise ValueError(
+            f"{label} artifact is incompatible and was preserved: "
+            + "; ".join(header_errors)
+        )
+    if existing.get("complete") is not True:
+        return None
+    errors = validator(
+        existing,
+        run_fingerprint=run_fingerprint,
+        **validator_kwargs,
+    )
+    if errors:
+        raise ValueError(
+            f"{label} completed artifact is invalid and was preserved: "
+            + "; ".join(errors[:5])
+        )
+    return existing
+
+
 def _qualification_job(job: dict[str, Any]) -> dict[str, Any]:
     decision = dict(job["decision"])
     output = Path(job["state_file"])
     if bool(job["resume"]) and output.is_file():
-        existing = _read_json(output)
-        if (
-            str(existing.get("run_fingerprint")) == str(job["run_fingerprint"])
-            and bool(existing.get("complete"))
-        ):
+        existing = _resume_completed_artifact(
+            output,
+            run_fingerprint=str(job["run_fingerprint"]),
+            validator=_qualification_artifact_errors,
+            label="v3-S3 qualification",
+            expected_decision=decision,
+        )
+        if existing is not None:
             return {
                 "state_id": str(decision["state_id"]),
                 "state_file": str(output),
@@ -656,6 +865,7 @@ def _qualification_job(job: dict[str, Any]) -> dict[str, Any]:
         }
     payload = {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "run_fingerprint": str(job["run_fingerprint"]),
         "complete": True,
         "decision": decision,
@@ -883,8 +1093,15 @@ def audit_v3_s3_parallelism(
     assign_source_strata(rows)
     controller = Path(controller_bundle).resolve()
     lane_values = candidate_lane_counts(maximum_lanes)
+    audit_producer_identity = producer_identity(
+        project_root=Path(__file__).resolve().parents[1],
+        source_files=V3_S3_COLLECTION_PRODUCER_FILES,
+        native_required=True,
+        optional_package_names=("joblib", "numpy", "scikit-learn"),
+    )
     audit_identity = {
-        "schema": "lns2.v3_s3_parallelism_audit_run.v1",
+        "schema": "lns2.v3_s3_parallelism_audit_run.v2",
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "trace_replay_contract": TRACE_REPLAY_CONTRACT,
         "source_run_fingerprints": sorted(
             {str(row["source_run_fingerprint"]) for row in rows}
@@ -902,7 +1119,10 @@ def audit_v3_s3_parallelism(
         ),
         "controller_bundle": str(controller),
         "controller_bundle_fingerprint": _directory_content_fingerprint(controller),
-        "implementation": _collection_implementation_fingerprint(),
+        "producer_identity": audit_producer_identity,
+        "producer_identity_fingerprint": _fingerprint(
+            audit_producer_identity
+        ),
         "lane_values": list(lane_values),
     }
     audit_run_fingerprint = _fingerprint(audit_identity)
@@ -1127,6 +1347,30 @@ def _restricted_candidate(
     return (candidates[index] if index is not None else None), elapsed
 
 
+def _terminal_flags(
+    result: dict[str, Any], state: dict[str, Any]
+) -> tuple[bool, bool, bool]:
+    if "terminated" not in result or "truncated" not in result:
+        raise RuntimeError("v3-S3 native step omitted terminal flags")
+    terminated = bool(result["terminated"])
+    truncated = bool(result["truncated"])
+    done = bool(state.get("done"))
+    feasible = bool(state.get("feasible"))
+    if terminated != feasible or truncated != (done and not feasible):
+        raise RuntimeError("v3-S3 native terminal flags disagree with observation")
+    if done != (terminated or truncated):
+        raise RuntimeError("v3-S3 native done flag is inconsistent")
+    return terminated, truncated, done
+
+
+def _state_stop_reason(state: dict[str, Any]) -> tuple[str, bool] | None:
+    if not bool(state.get("done")):
+        return None
+    if bool(state.get("feasible")):
+        return "feasible", False
+    return "deadline_or_iteration_truncation", True
+
+
 def _sequence_trial(
     qualified: dict[str, Any],
     templates: tuple[S3ActionTemplate, ...],
@@ -1150,7 +1394,10 @@ def _sequence_trial(
         str(name): int(value)
         for name, value in dict(qualified["template_indices"]).items()
     }
-    for offset, template in enumerate(templates):
+    terminal = _state_stop_reason(state)
+    stop_reason = terminal[0] if terminal is not None else "horizon_complete"
+    truncated = terminal[1] if terminal is not None else False
+    for offset, template in (() if terminal is not None else enumerate(templates)):
         before = state
         before_full = state_fingerprint(before)
         before_repair = repair_structure_fingerprint(before)
@@ -1178,6 +1425,8 @@ def _sequence_trial(
                 }
             )
             total_seconds += selection_seconds
+            stop_reason = "template_unavailable"
+            truncated = False
             break
         action = _paired_repair_action(
             "explicit_neighborhood",
@@ -1189,6 +1438,7 @@ def _sequence_trial(
         repair_seconds = time.perf_counter() - repair_started
         state = dict(result["observation"])
         metrics = dict(result["metrics"])
+        terminated, step_truncated, done = _terminal_flags(result, state)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_repair = repair_structure_fingerprint(state)
         outcome = classify_repair_outcome(
@@ -1200,7 +1450,7 @@ def _sequence_trial(
             feasible=bool(state.get("feasible")),
         )
         low_level = _low_level_delta(before, state)
-        for name in ("generated", "expanded", "reopened"):
+        for name in ("generated", "expanded", "reopened", "runs"):
             low_level_total[name] += int(low_level.get(name, 0))
         pp_seconds = max(0.0, float(metrics.get("pp_replan_seconds", 0.0)))
         step_total = selection_seconds + repair_seconds
@@ -1224,19 +1474,28 @@ def _sequence_trial(
                 "conflicts_after": conflicts_after,
                 "conflict_reduction": max(0, conflicts_before - conflicts_after),
                 "repair_outcome": outcome,
+                "replan_success": bool(metrics.get("replan_success")),
                 "before_fingerprint": before_full,
                 "after_fingerprint": state_fingerprint(state),
                 "before_repair_fingerprint": before_repair,
                 "after_repair_fingerprint": after_repair,
+                "low_level_delta": low_level,
+                "terminated": terminated,
+                "truncated": step_truncated,
+                "done": done,
             }
         )
-        # The pilot labels the complete registered three-action plan. Runtime
-        # may replan after a deviation, but stopping the label here would make
-        # S3 cheaper than the three-step v2/Adaptive baselines by construction.
-        if bool(state.get("feasible")):
+        if done:
+            stop_reason = (
+                "feasible"
+                if terminated
+                else "deadline_or_iteration_truncation"
+            )
+            truncated = step_truncated
             break
     return {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "split": str(decision["split"]),
         "state_id": str(decision["state_id"]),
         "map_id": str(decision["map_id"]),
@@ -1257,11 +1516,14 @@ def _sequence_trial(
         "best_conflict_reduction": max(0, initial_conflicts - min(trajectory)),
         "no_progress": min(trajectory) >= initial_conflicts,
         "feasible": bool(state.get("feasible")),
+        "stop_reason": stop_reason,
+        "truncated": truncated,
         "total_seconds": total_seconds,
         "pp_replan_seconds": total_pp_seconds,
         "generated": int(low_level_total["generated"]),
         "expanded": int(low_level_total["expanded"]),
         "reopened": int(low_level_total["reopened"]),
+        "runs": int(low_level_total["runs"]),
         "complete": True,
     }
 
@@ -1309,13 +1571,20 @@ def _baseline_trial(
     environment, state = replay_prefix(replay, decision["prefix_actions"])
     if state_fingerprint(state) != str(decision["before_fingerprint"]):
         raise RuntimeError("v3-S3 baseline replay fingerprint mismatch")
+    initial_full = state_fingerprint(state)
     initial_repair = repair_structure_fingerprint(state)
     initial_conflicts = int(state["num_of_colliding_pairs"])
     trajectory = [initial_conflicts]
     steps = []
     total_seconds = 0.0
-    for offset in range(S3_HORIZON):
+    total_pp_seconds = 0.0
+    low_level_total = collections.Counter()
+    terminal = _state_stop_reason(state)
+    stop_reason = terminal[0] if terminal is not None else "horizon_complete"
+    truncated = terminal[1] if terminal is not None else False
+    for offset in (() if terminal is not None else range(S3_HORIZON)):
         before = state
+        before_full = state_fingerprint(before)
         before_repair = repair_structure_fingerprint(before)
         conflicts_before = int(before["num_of_colliding_pairs"])
         seed = _paired_seed(initial_repair, trial_index, offset + 1)
@@ -1337,6 +1606,7 @@ def _baseline_trial(
         repair_seconds = time.perf_counter() - started
         state = dict(result["observation"])
         metrics = dict(result["metrics"])
+        terminated, step_truncated, done = _terminal_flags(result, state)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_repair = repair_structure_fingerprint(state)
         outcome = classify_repair_outcome(
@@ -1349,6 +1619,11 @@ def _baseline_trial(
         )
         step_total = selection_seconds + repair_seconds
         total_seconds += step_total
+        pp_seconds = max(0.0, float(metrics.get("pp_replan_seconds", 0.0)))
+        total_pp_seconds += pp_seconds
+        low_level = _low_level_delta(before, state)
+        for name in ("generated", "expanded", "reopened", "runs"):
+            low_level_total[name] += int(low_level.get(name, 0))
         trajectory.append(conflicts_after)
         steps.append(
             {
@@ -1357,19 +1632,34 @@ def _baseline_trial(
                 "action": action,
                 "selection_seconds": selection_seconds,
                 "repair_seconds": repair_seconds,
-                "pp_replan_seconds": max(
-                    0.0, float(metrics.get("pp_replan_seconds", 0.0))
-                ),
+                "pp_replan_seconds": pp_seconds,
                 "total_seconds": step_total,
                 "conflicts_before": conflicts_before,
                 "conflicts_after": conflicts_after,
+                "conflict_reduction": max(0, conflicts_before - conflicts_after),
                 "repair_outcome": outcome,
+                "replan_success": bool(metrics.get("replan_success")),
+                "before_fingerprint": before_full,
+                "after_fingerprint": state_fingerprint(state),
+                "before_repair_fingerprint": before_repair,
+                "after_repair_fingerprint": after_repair,
+                "low_level_delta": low_level,
+                "terminated": terminated,
+                "truncated": step_truncated,
+                "done": done,
             }
         )
-        if bool(state.get("feasible")):
+        if done:
+            stop_reason = (
+                "feasible"
+                if terminated
+                else "deadline_or_iteration_truncation"
+            )
+            truncated = step_truncated
             break
     return {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "split": str(decision["split"]),
         "state_id": str(decision["state_id"]),
         "map_id": str(decision["map_id"]),
@@ -1377,13 +1667,25 @@ def _baseline_trial(
         "agent_count": int(decision["agent_count"]),
         "controller": controller,
         "trial_index": int(trial_index),
+        "initial_fingerprint": initial_full,
+        "initial_repair_fingerprint": initial_repair,
+        "final_fingerprint": state_fingerprint(state),
+        "final_repair_fingerprint": repair_structure_fingerprint(state),
         "steps": steps,
         "executed_steps": len(steps),
         "conflict_trajectory": trajectory,
         "conflict_reduction": max(0, initial_conflicts - int(trajectory[-1])),
+        "best_conflict_reduction": max(0, initial_conflicts - min(trajectory)),
         "no_progress": min(trajectory) >= initial_conflicts,
         "feasible": bool(state.get("feasible")),
+        "stop_reason": stop_reason,
+        "truncated": truncated,
         "total_seconds": total_seconds,
+        "pp_replan_seconds": total_pp_seconds,
+        "generated": int(low_level_total["generated"]),
+        "expanded": int(low_level_total["expanded"]),
+        "reopened": int(low_level_total["reopened"]),
+        "runs": int(low_level_total["runs"]),
         "complete": True,
     }
 
@@ -1460,6 +1762,7 @@ def _sequence_feature(
     )
     return {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "split": str(decision["split"]),
         "state_id": str(decision["state_id"]),
         "map_id": str(decision["map_id"]),
@@ -1474,16 +1777,676 @@ def _sequence_feature(
     }
 
 
+def _float_matches(value: Any, expected: float) -> bool:
+    return _finite_nonnegative(value) and math.isclose(
+        float(value), float(expected), rel_tol=1e-9, abs_tol=1e-9
+    )
+
+
+def _row_identity_errors(
+    row: dict[str, Any], decision: dict[str, Any], *, label: str
+) -> list[str]:
+    errors = []
+    expected = {
+        "split": str(decision["split"]),
+        "state_id": str(decision["state_id"]),
+        "map_id": str(decision["map_id"]),
+        "layout_mode": str(decision["layout_mode"]),
+        "agent_count": int(decision["agent_count"]),
+    }
+    for name, value in expected.items():
+        if row.get(name) != value:
+            errors.append(f"{label} {name} differs")
+    return errors
+
+
+def _sequence_trial_errors(
+    row: Any,
+    *,
+    decision: dict[str, Any],
+    expected_templates: tuple[S3ActionTemplate, ...],
+) -> list[str]:
+    errors = _artifact_header_errors(
+        row, run_fingerprint=None, require_complete=True
+    )
+    if not isinstance(row, dict):
+        return errors
+    errors.extend(_row_identity_errors(row, decision, label="sequence trial"))
+    try:
+        templates = tuple(
+            S3ActionTemplate.from_payload(dict(value)) for value in row["templates"]
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        return [*errors, f"sequence trial templates are invalid: {error}"]
+    if templates != expected_templates:
+        errors.append("sequence trial templates differ from feature registration")
+    expected_sequence_id = sequence_id(expected_templates)
+    if str(row.get("sequence_id")) != expected_sequence_id:
+        errors.append("sequence trial sequence_id differs")
+    try:
+        trial_index = int(row["trial_index"])
+    except (KeyError, TypeError, ValueError):
+        trial_index = -1
+        errors.append("sequence trial index is invalid")
+    if trial_index < 0:
+        errors.append("sequence trial index is negative")
+    if str(row.get("initial_fingerprint")) != str(decision["before_fingerprint"]):
+        errors.append("sequence trial initial fingerprint differs")
+    if str(row.get("initial_repair_fingerprint")) != str(
+        decision["before_repair_fingerprint"]
+    ):
+        errors.append("sequence trial initial repair fingerprint differs")
+
+    steps = row.get("steps")
+    trajectory = row.get("conflict_trajectory")
+    if not isinstance(steps, list) or len(steps) > S3_HORIZON:
+        return [*errors, "sequence trial step coverage is invalid"]
+    if not isinstance(trajectory, list) or not trajectory:
+        return [*errors, "sequence trial conflict trajectory is invalid"]
+    try:
+        conflicts = list(map(int, trajectory))
+    except (TypeError, ValueError):
+        return [*errors, "sequence trial conflict trajectory is non-integral"]
+    if conflicts[0] < 0:
+        errors.append("sequence trial initial conflicts is negative")
+    executed = 0
+    selection_total = 0.0
+    repair_total = 0.0
+    pp_total = 0.0
+    low_level_total = collections.Counter()
+    previous_full = str(row.get("initial_fingerprint"))
+    previous_repair = str(row.get("initial_repair_fingerprint"))
+    terminal_seen = False
+    unavailable_seen = False
+    for position, step in enumerate(steps, 1):
+        if not isinstance(step, dict):
+            errors.append(f"sequence trial step {position} is not an object")
+            continue
+        if int(step.get("step", -1)) != position:
+            errors.append(f"sequence trial step {position} index differs")
+        expected_template = expected_templates[position - 1]
+        if step.get("template") != expected_template.payload():
+            errors.append(f"sequence trial step {position} template differs")
+        selection = step.get("selection_seconds")
+        if not _finite_nonnegative(selection):
+            errors.append(f"sequence trial step {position} selection time is invalid")
+            selection = 0.0
+        selection_total += float(selection)
+        is_executed = step.get("executed") is True
+        if not is_executed:
+            unavailable_seen = True
+            if step.get("template_valid") is not False or position != len(steps):
+                errors.append(
+                    f"sequence trial step {position} invalid-template boundary differs"
+                )
+            continue
+        executed += 1
+        if unavailable_seen or terminal_seen or step.get("template_valid") is not True:
+            errors.append(f"sequence trial step {position} executes after a stop")
+        for name in ("repair_seconds", "pp_replan_seconds", "total_seconds"):
+            if not _finite_nonnegative(step.get(name)):
+                errors.append(f"sequence trial step {position} {name} is invalid")
+        repair_seconds = (
+            float(step.get("repair_seconds", 0.0))
+            if _finite_nonnegative(step.get("repair_seconds"))
+            else 0.0
+        )
+        pp_seconds = (
+            float(step.get("pp_replan_seconds", 0.0))
+            if _finite_nonnegative(step.get("pp_replan_seconds"))
+            else 0.0
+        )
+        repair_total += repair_seconds
+        pp_total += pp_seconds
+        if not _float_matches(
+            step.get("total_seconds"), float(selection) + repair_seconds
+        ):
+            errors.append(f"sequence trial step {position} total time differs")
+        try:
+            before_conflicts = int(step["conflicts_before"])
+            after_conflicts = int(step["conflicts_after"])
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"sequence trial step {position} conflicts are invalid")
+            continue
+        if before_conflicts != conflicts[executed - 1]:
+            errors.append(f"sequence trial step {position} before conflicts differs")
+        if len(conflicts) <= executed or after_conflicts != conflicts[executed]:
+            errors.append(f"sequence trial step {position} after conflicts differs")
+        if int(step.get("conflict_reduction", -1)) != max(
+            0, before_conflicts - after_conflicts
+        ):
+            errors.append(f"sequence trial step {position} reduction differs")
+        if str(step.get("before_fingerprint")) != previous_full:
+            errors.append(f"sequence trial step {position} fingerprint chain differs")
+        if str(step.get("before_repair_fingerprint")) != previous_repair:
+            errors.append(
+                f"sequence trial step {position} repair fingerprint chain differs"
+            )
+        previous_full = str(step.get("after_fingerprint"))
+        previous_repair = str(step.get("after_repair_fingerprint"))
+        if not previous_full or not previous_repair:
+            errors.append(f"sequence trial step {position} final fingerprint is empty")
+        action = step.get("action")
+        agents = step.get("agents")
+        if (
+            not isinstance(action, dict)
+            or str(action.get("mode")) != "explicit_neighborhood"
+            or not isinstance(agents, list)
+            or list(action.get("agents") or ()) != agents
+        ):
+            errors.append(f"sequence trial step {position} action differs")
+        elif (
+            isinstance(action.get("random_seed"), bool)
+            or not isinstance(action.get("random_seed"), int)
+            or int(action["random_seed"]) < 0
+            or action.get("pp_random_seed") != action.get("random_seed")
+            or int(action["random_seed"])
+            != _paired_seed(
+                str(row.get("initial_repair_fingerprint")),
+                trial_index,
+                position,
+            )
+        ):
+            errors.append(f"sequence trial step {position} paired seed differs")
+        low_level = step.get("low_level_delta")
+        if not isinstance(low_level, dict):
+            errors.append(f"sequence trial step {position} low-level delta is invalid")
+        else:
+            for name in ("generated", "expanded", "reopened", "runs"):
+                try:
+                    value = int(low_level[name])
+                except (KeyError, TypeError, ValueError):
+                    errors.append(
+                        f"sequence trial step {position} low-level {name} is invalid"
+                    )
+                    continue
+                if value < 0:
+                    errors.append(
+                        f"sequence trial step {position} low-level {name} is negative"
+                    )
+                low_level_total[name] += value
+        terminated = step.get("terminated") is True
+        truncated = step.get("truncated") is True
+        done = step.get("done") is True
+        if done != (terminated or truncated) or terminated and truncated:
+            errors.append(f"sequence trial step {position} terminal flags differ")
+        try:
+            expected_outcome = classify_repair_outcome(
+                before_fingerprint=str(step["before_repair_fingerprint"]),
+                after_fingerprint=str(step["after_repair_fingerprint"]),
+                replan_success=step.get("replan_success") is True,
+                conflicts_before=before_conflicts,
+                conflicts_after=after_conflicts,
+                feasible=terminated,
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(
+                f"sequence trial step {position} outcome is invalid: {error}"
+            )
+        else:
+            if str(step.get("repair_outcome")) != expected_outcome:
+                errors.append(
+                    f"sequence trial step {position} repair outcome differs"
+                )
+        terminal_seen = terminal_seen or done
+
+    if len(conflicts) != executed + 1:
+        errors.append("sequence trial trajectory length differs from executed steps")
+    if int(row.get("executed_steps", -1)) != executed:
+        errors.append("sequence trial executed_steps differs")
+    if unavailable_seen:
+        expected_stop = "template_unavailable"
+        expected_truncated = False
+    elif steps and isinstance(steps[-1], dict) and steps[-1].get("done") is True:
+        expected_stop = (
+            "feasible"
+            if steps[-1].get("terminated") is True
+            else "deadline_or_iteration_truncation"
+        )
+        expected_truncated = steps[-1].get("truncated") is True
+    elif executed == S3_HORIZON:
+        expected_stop = "horizon_complete"
+        expected_truncated = False
+    else:
+        expected_stop = ""
+        expected_truncated = False
+        errors.append("sequence trial stopped before a registered boundary")
+    if str(row.get("stop_reason")) != expected_stop:
+        errors.append("sequence trial stop_reason differs")
+    if row.get("truncated") is not expected_truncated:
+        errors.append("sequence trial truncated flag differs")
+    if str(row.get("stop_reason")) not in V3_S3_STOP_REASONS:
+        errors.append("sequence trial stop_reason is unsupported")
+    if str(row.get("final_fingerprint")) != previous_full:
+        errors.append("sequence trial final fingerprint differs")
+    if str(row.get("final_repair_fingerprint")) != previous_repair:
+        errors.append("sequence trial final repair fingerprint differs")
+    if not _float_matches(row.get("total_seconds"), selection_total + repair_total):
+        errors.append("sequence trial total_seconds differs")
+    if not _float_matches(row.get("pp_replan_seconds"), pp_total):
+        errors.append("sequence trial pp_replan_seconds differs")
+    for name in ("generated", "expanded", "reopened", "runs"):
+        if int(row.get(name, -1)) != int(low_level_total[name]):
+            errors.append(f"sequence trial {name} total differs")
+    if conflicts:
+        expected_reduction = max(0, conflicts[0] - conflicts[-1])
+        expected_best = max(0, conflicts[0] - min(conflicts))
+        if int(row.get("conflict_reduction", -1)) != expected_reduction:
+            errors.append("sequence trial conflict_reduction differs")
+        if int(row.get("best_conflict_reduction", -1)) != expected_best:
+            errors.append("sequence trial best_conflict_reduction differs")
+        if row.get("no_progress") is not (min(conflicts) >= conflicts[0]):
+            errors.append("sequence trial no_progress differs")
+    if row.get("feasible") is not (expected_stop == "feasible"):
+        errors.append("sequence trial feasible flag differs")
+    return errors
+
+
+def _baseline_trial_errors(
+    row: Any,
+    *,
+    decision: dict[str, Any],
+    controller: str,
+) -> list[str]:
+    errors = _artifact_header_errors(
+        row, run_fingerprint=None, require_complete=True
+    )
+    if not isinstance(row, dict):
+        return errors
+    errors.extend(_row_identity_errors(row, decision, label="baseline trial"))
+    if str(row.get("controller")) != controller:
+        errors.append("baseline controller differs")
+    if str(row.get("initial_fingerprint")) != str(decision["before_fingerprint"]):
+        errors.append("baseline initial fingerprint differs")
+    if str(row.get("initial_repair_fingerprint")) != str(
+        decision["before_repair_fingerprint"]
+    ):
+        errors.append("baseline initial repair fingerprint differs")
+    try:
+        trial_index = int(row["trial_index"])
+    except (KeyError, TypeError, ValueError):
+        trial_index = -1
+        errors.append("baseline trial index is invalid")
+    if trial_index < 0:
+        errors.append("baseline trial index is negative")
+    steps = row.get("steps")
+    trajectory = row.get("conflict_trajectory")
+    if not isinstance(steps, list) or not 0 <= len(steps) <= S3_HORIZON:
+        return [*errors, "baseline step coverage is invalid"]
+    if not isinstance(trajectory, list):
+        return [*errors, "baseline conflict trajectory is invalid"]
+    try:
+        conflicts = list(map(int, trajectory))
+    except (TypeError, ValueError):
+        return [*errors, "baseline conflict trajectory is non-integral"]
+    if len(conflicts) != len(steps) + 1 or not conflicts:
+        errors.append("baseline trajectory length differs")
+    total_seconds = 0.0
+    pp_total = 0.0
+    low_level_total = collections.Counter()
+    previous_full = str(row.get("initial_fingerprint"))
+    previous_repair = str(row.get("initial_repair_fingerprint"))
+    terminal_seen = False
+    for position, step in enumerate(steps, 1):
+        if not isinstance(step, dict):
+            errors.append(f"baseline step {position} is not an object")
+            continue
+        if int(step.get("step", -1)) != position or terminal_seen:
+            errors.append(f"baseline step {position} order differs")
+        for name in ("selection_seconds", "repair_seconds", "pp_replan_seconds"):
+            if not _finite_nonnegative(step.get(name)):
+                errors.append(f"baseline step {position} {name} is invalid")
+        selection = float(step.get("selection_seconds", 0.0)) if _finite_nonnegative(step.get("selection_seconds")) else 0.0
+        repair = float(step.get("repair_seconds", 0.0)) if _finite_nonnegative(step.get("repair_seconds")) else 0.0
+        pp_seconds = float(step.get("pp_replan_seconds", 0.0)) if _finite_nonnegative(step.get("pp_replan_seconds")) else 0.0
+        total_seconds += selection + repair
+        pp_total += pp_seconds
+        if not _float_matches(step.get("total_seconds"), selection + repair):
+            errors.append(f"baseline step {position} total time differs")
+        before_conflicts = 0
+        after_conflicts = 0
+        try:
+            before_conflicts = int(step["conflicts_before"])
+            after_conflicts = int(step["conflicts_after"])
+            if before_conflicts != conflicts[position - 1] or after_conflicts != conflicts[position]:
+                errors.append(f"baseline step {position} conflict chain differs")
+            if int(step.get("conflict_reduction", -1)) != max(0, before_conflicts - after_conflicts):
+                errors.append(f"baseline step {position} reduction differs")
+        except (IndexError, KeyError, TypeError, ValueError):
+            errors.append(f"baseline step {position} conflicts are invalid")
+        if str(step.get("before_fingerprint")) != previous_full:
+            errors.append(f"baseline step {position} fingerprint chain differs")
+        if str(step.get("before_repair_fingerprint")) != previous_repair:
+            errors.append(f"baseline step {position} repair fingerprint chain differs")
+        previous_full = str(step.get("after_fingerprint"))
+        previous_repair = str(step.get("after_repair_fingerprint"))
+        action = step.get("action")
+        expected_mode = "official" if controller == "official_adaptive" else "explicit_neighborhood"
+        if not isinstance(action, dict) or str(action.get("mode")) != expected_mode:
+            errors.append(f"baseline step {position} action differs")
+        elif (
+            isinstance(action.get("random_seed"), bool)
+            or not isinstance(action.get("random_seed"), int)
+            or int(action["random_seed"]) < 0
+            or action.get("pp_random_seed") != action.get("random_seed")
+            or int(action["random_seed"])
+            != _paired_seed(
+                str(row.get("initial_repair_fingerprint")),
+                trial_index,
+                position,
+            )
+        ):
+            errors.append(f"baseline step {position} paired seed differs")
+        low_level = step.get("low_level_delta")
+        if not isinstance(low_level, dict):
+            errors.append(f"baseline step {position} low-level delta is invalid")
+        else:
+            for name in ("generated", "expanded", "reopened", "runs"):
+                try:
+                    value = int(low_level[name])
+                except (KeyError, TypeError, ValueError):
+                    errors.append(f"baseline step {position} low-level {name} is invalid")
+                    continue
+                if value < 0:
+                    errors.append(f"baseline step {position} low-level {name} is negative")
+                low_level_total[name] += value
+        terminated = step.get("terminated") is True
+        truncated = step.get("truncated") is True
+        done = step.get("done") is True
+        if done != (terminated or truncated) or terminated and truncated:
+            errors.append(f"baseline step {position} terminal flags differ")
+        try:
+            expected_outcome = classify_repair_outcome(
+                before_fingerprint=str(step["before_repair_fingerprint"]),
+                after_fingerprint=str(step["after_repair_fingerprint"]),
+                replan_success=step.get("replan_success") is True,
+                conflicts_before=before_conflicts,
+                conflicts_after=after_conflicts,
+                feasible=terminated,
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(f"baseline step {position} outcome is invalid: {error}")
+        else:
+            if str(step.get("repair_outcome")) != expected_outcome:
+                errors.append(f"baseline step {position} repair outcome differs")
+        terminal_seen = terminal_seen or done
+    if int(row.get("executed_steps", -1)) != len(steps):
+        errors.append("baseline executed_steps differs")
+    if steps and isinstance(steps[-1], dict) and steps[-1].get("done") is True:
+        expected_stop = (
+            "feasible"
+            if steps[-1].get("terminated") is True
+            else "deadline_or_iteration_truncation"
+        )
+        expected_truncated = steps[-1].get("truncated") is True
+    elif len(steps) == S3_HORIZON:
+        expected_stop = "horizon_complete"
+        expected_truncated = False
+    else:
+        expected_stop = ""
+        expected_truncated = False
+        errors.append("baseline stopped before a registered boundary")
+    if str(row.get("stop_reason")) != expected_stop:
+        errors.append("baseline stop_reason differs")
+    if row.get("truncated") is not expected_truncated:
+        errors.append("baseline truncated flag differs")
+    if str(row.get("final_fingerprint")) != previous_full:
+        errors.append("baseline final fingerprint differs")
+    if str(row.get("final_repair_fingerprint")) != previous_repair:
+        errors.append("baseline final repair fingerprint differs")
+    if not _float_matches(row.get("total_seconds"), total_seconds):
+        errors.append("baseline total_seconds differs")
+    if not _float_matches(row.get("pp_replan_seconds"), pp_total):
+        errors.append("baseline pp_replan_seconds differs")
+    for name in ("generated", "expanded", "reopened", "runs"):
+        if int(row.get(name, -1)) != int(low_level_total[name]):
+            errors.append(f"baseline {name} total differs")
+    if conflicts:
+        if int(row.get("conflict_reduction", -1)) != max(0, conflicts[0] - conflicts[-1]):
+            errors.append("baseline conflict_reduction differs")
+        if int(row.get("best_conflict_reduction", -1)) != max(0, conflicts[0] - min(conflicts)):
+            errors.append("baseline best_conflict_reduction differs")
+        if row.get("no_progress") is not (min(conflicts) >= conflicts[0]):
+            errors.append("baseline no_progress differs")
+    if row.get("feasible") is not (expected_stop == "feasible"):
+        errors.append("baseline feasible flag differs")
+    return errors
+
+
+def _state_artifact_errors(
+    payload: Any,
+    *,
+    run_fingerprint: str | None = None,
+    selected_row: dict[str, Any],
+    qualified: dict[str, Any],
+) -> list[str]:
+    errors = _artifact_header_errors(
+        payload, run_fingerprint=run_fingerprint, require_complete=True
+    )
+    if not isinstance(payload, dict):
+        return errors
+    decision = qualified.get("decision")
+    if not isinstance(decision, dict):
+        return [*errors, "state qualification decision is invalid"]
+    required_decision_fields = {
+        "state_id",
+        "before_fingerprint",
+        "before_repair_fingerprint",
+        "split",
+        "map_id",
+        "layout_mode",
+        "agent_count",
+        "source_stratum",
+        "temporal_context",
+    }
+    missing_decision_fields = sorted(required_decision_fields - set(decision))
+    if missing_decision_fields:
+        return [
+            *errors,
+            f"state qualification decision is missing {missing_decision_fields}",
+        ]
+    qualification_errors = _qualification_artifact_errors(
+        qualified,
+        run_fingerprint=run_fingerprint,
+        expected_decision=None,
+    )
+    errors.extend(f"qualification: {error}" for error in qualification_errors)
+    state_id = str(decision.get("state_id", ""))
+    for name in (
+        "state_id",
+        "before_fingerprint",
+        "before_repair_fingerprint",
+        "split",
+        "map_id",
+        "layout_mode",
+        "agent_count",
+    ):
+        if selected_row.get(name) != decision.get(name):
+            errors.append(f"state selection {name} differs from qualification")
+    if str(payload.get("state_id")) != state_id:
+        errors.append("state artifact state_id differs")
+    if not isinstance(payload.get("ambiguous"), bool):
+        errors.append("state artifact ambiguous flag is not boolean")
+    features = payload.get("features")
+    trials = payload.get("trials")
+    baselines = payload.get("external_baselines")
+    if not isinstance(features, list) or not isinstance(trials, list) or not isinstance(baselines, list):
+        return [*errors, "state artifact row groups are invalid"]
+
+    base_sequences = list(balanced_sequence_templates(state_id))
+    registered = {sequence_id(value): value for value in base_sequences}
+    if payload.get("ambiguous") is True:
+        try:
+            additions = _ambiguous_additional_sequences(qualified, state_id)
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(f"state ambiguous sequence reconstruction failed: {error}")
+            additions = ()
+        registered.update({sequence_id(value): value for value in additions})
+    feature_by_sequence: dict[str, dict[str, Any]] = {}
+    for index, feature in enumerate(features):
+        if not isinstance(feature, dict):
+            errors.append(f"state feature {index} is not an object")
+            continue
+        key = str(feature.get("sequence_id", ""))
+        if key in feature_by_sequence:
+            errors.append(f"state duplicate feature sequence {key}")
+            continue
+        feature_by_sequence[key] = feature
+        templates = registered.get(key)
+        if templates is None:
+            errors.append(f"state feature sequence {key} is unregistered")
+            continue
+        try:
+            expected = _sequence_feature(qualified, templates)
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(f"state feature {key} cannot be reconstructed: {error}")
+            continue
+        if feature != expected:
+            errors.append(f"state feature {key} differs from deterministic projection")
+        values = feature.get("feature_values")
+        if (
+            feature.get("feature_profile") != V3_S3_PROFILE
+            or tuple(map(str, feature.get("feature_names", ())))
+            != V3_S3_FULL_FEATURE_NAMES
+            or not isinstance(values, list)
+            or len(values) != len(V3_S3_FULL_FEATURE_NAMES)
+            or any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                for value in (values or ())
+            )
+        ):
+            errors.append(f"state feature {key} feature order or values are invalid")
+    if set(feature_by_sequence) != set(registered):
+        errors.append("state registered feature coverage differs")
+
+    trial_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    for index, trial in enumerate(trials):
+        if not isinstance(trial, dict):
+            errors.append(f"state trial {index} is not an object")
+            continue
+        try:
+            key = (str(trial["sequence_id"]), int(trial["trial_index"]))
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"state trial {index} identity is invalid")
+            continue
+        if key in trial_by_key:
+            errors.append(f"state duplicate trial {key}")
+            continue
+        trial_by_key[key] = trial
+        templates = registered.get(key[0])
+        if templates is None:
+            errors.append(f"state trial sequence {key[0]} is unregistered")
+            continue
+        try:
+            trial_errors = _sequence_trial_errors(
+                trial,
+                decision=decision,
+                expected_templates=templates,
+            )
+        except (KeyError, OverflowError, TypeError, ValueError) as error:
+            trial_errors = [f"validator rejected malformed trial: {error}"]
+        errors.extend(f"{key}: {error}" for error in trial_errors)
+        steps = trial.get("steps")
+        if isinstance(steps, list) and steps and isinstance(steps[0], dict):
+            first = steps[0]
+            if first.get("executed") is True:
+                try:
+                    candidate_index = int(
+                        qualified["template_indices"][templates[0].key]
+                    )
+                    candidate = qualified["candidates"][candidate_index]
+                except (IndexError, KeyError, TypeError, ValueError) as error:
+                    errors.append(f"{key}: first candidate lookup failed: {error}")
+                else:
+                    if (
+                        str(first.get("candidate_id"))
+                        != str(candidate.get("candidate_id"))
+                        or list(first.get("agents") or ())
+                        != list(candidate.get("agents") or ())
+                    ):
+                        errors.append(
+                            f"{key}: first candidate differs from qualification"
+                        )
+    primary_keys = {
+        (key, trial_index) for key in registered for trial_index in (0, 1)
+    }
+    expected_trial_keys = set(primary_keys)
+    if payload.get("ambiguous") is True and primary_keys <= set(trial_by_key):
+        primary_rows = {
+            key: [trial_by_key[(key, 0)], trial_by_key[(key, 1)]]
+            for key in registered
+        }
+        try:
+            top = sorted(
+                registered,
+                key=lambda key: (-_sequence_efficiency(primary_rows[key]), key),
+            )[:6]
+            expected_trial_keys.update(
+                (key, trial_index) for key in top for trial_index in (2, 3)
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(f"state ambiguous extra-trial ranking failed: {error}")
+    if set(trial_by_key) != expected_trial_keys:
+        errors.append("state sequence trial coverage differs")
+
+    baseline_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    for index, baseline in enumerate(baselines):
+        if not isinstance(baseline, dict):
+            errors.append(f"state baseline {index} is not an object")
+            continue
+        try:
+            key = (str(baseline["controller"]), int(baseline["trial_index"]))
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"state baseline {index} identity is invalid")
+            continue
+        if key in baseline_by_key:
+            errors.append(f"state duplicate baseline {key}")
+            continue
+        baseline_by_key[key] = baseline
+        try:
+            baseline_errors = _baseline_trial_errors(
+                baseline,
+                decision=decision,
+                controller=key[0],
+            )
+        except (KeyError, OverflowError, TypeError, ValueError) as error:
+            baseline_errors = [f"validator rejected malformed baseline: {error}"]
+        errors.extend(f"{key}: {error}" for error in baseline_errors)
+    expected_baselines = {
+        (controller, trial_index)
+        for controller in ("v2-full", "official_adaptive")
+        for trial_index in (0, 1)
+    }
+    if set(baseline_by_key) != expected_baselines:
+        errors.append("state external baseline coverage differs")
+    return errors
+
+
 def _state_collection_job(job: dict[str, Any]) -> dict[str, Any]:
     qualified = _read_json(Path(job["qualification_file"]))
+    qualification_errors = _qualification_artifact_errors(
+        qualified,
+        run_fingerprint=str(job["run_fingerprint"]),
+    )
+    if qualification_errors:
+        raise ValueError(
+            "v3-S3 qualification artifact is invalid: "
+            + "; ".join(qualification_errors[:5])
+        )
     decision = dict(qualified["decision"])
     output = Path(job["state_file"])
     if bool(job["resume"]) and output.is_file():
-        existing = _read_json(output)
-        if (
-            str(existing.get("run_fingerprint")) == str(job["run_fingerprint"])
-            and bool(existing.get("complete"))
-        ):
+        existing = _resume_completed_artifact(
+            output,
+            run_fingerprint=str(job["run_fingerprint"]),
+            validator=_state_artifact_errors,
+            label="v3-S3 state",
+            selected_row=decision,
+            qualified=qualified,
+        )
+        if existing is not None:
             return {"state_file": str(output), "status": "resumed"}
     base_sequences = list(balanced_sequence_templates(str(decision["state_id"])))
     features = [_sequence_feature(qualified, templates) for templates in base_sequences]
@@ -1525,6 +2488,7 @@ def _state_collection_job(job: dict[str, Any]) -> dict[str, Any]:
     ]
     payload = {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "run_fingerprint": str(job["run_fingerprint"]),
         "complete": True,
         "state_id": str(decision["state_id"]),
@@ -1561,9 +2525,12 @@ def _trial_semantics(row: dict[str, Any]) -> dict[str, Any]:
         "conflict_reduction": int(row["conflict_reduction"]),
         "no_progress": bool(row["no_progress"]),
         "feasible": bool(row["feasible"]),
+        "stop_reason": str(row["stop_reason"]),
+        "truncated": bool(row["truncated"]),
         "generated": int(row["generated"]),
         "expanded": int(row["expanded"]),
         "reopened": int(row["reopened"]),
+        "runs": int(row["runs"]),
         "steps": [
             {
                 "step": int(step["step"]),
@@ -1577,12 +2544,17 @@ def _trial_semantics(row: dict[str, Any]) -> dict[str, Any]:
                 "conflicts_after": step.get("conflicts_after"),
                 "conflict_reduction": step.get("conflict_reduction"),
                 "repair_outcome": step.get("repair_outcome"),
+                "replan_success": bool(step.get("replan_success")),
                 "before_fingerprint": step.get("before_fingerprint"),
                 "after_fingerprint": step.get("after_fingerprint"),
                 "before_repair_fingerprint": step.get(
                     "before_repair_fingerprint"
                 ),
                 "after_repair_fingerprint": step.get("after_repair_fingerprint"),
+                "low_level_delta": dict(step.get("low_level_delta") or {}),
+                "terminated": bool(step.get("terminated")),
+                "truncated": bool(step.get("truncated")),
+                "done": bool(step.get("done")),
             }
             for step in row["steps"]
         ],
@@ -1591,6 +2563,15 @@ def _trial_semantics(row: dict[str, Any]) -> dict[str, Any]:
 
 def _strict_retest_job(job: dict[str, Any]) -> dict[str, Any]:
     qualified = _read_json(Path(job["qualification_file"]))
+    qualification_errors = _qualification_artifact_errors(
+        qualified,
+        run_fingerprint=str(job["run_fingerprint"]),
+    )
+    if qualification_errors:
+        raise ValueError(
+            "strict retest qualification is invalid: "
+            + "; ".join(qualification_errors[:5])
+        )
     expected = dict(job["expected"])
     templates = tuple(
         S3ActionTemplate.from_payload(value) for value in expected["templates"]
@@ -1618,14 +2599,54 @@ def _strict_retest(
     fraction: float = 0.15,
 ) -> dict[str, Any]:
     report_path = output_root / "strict_retest_report.json"
-    if report_path.is_file():
-        previous = _read_json(report_path)
-        if str(previous.get("run_fingerprint")) == str(run_fingerprint):
-            return previous
     file_by_state = {}
-    for path in state_files:
+    input_files = []
+    for path in sorted(map(Path, state_files)):
         payload = _read_json(path)
-        file_by_state[str(payload["state_id"])] = (path, payload)
+        state_id = str(payload["state_id"])
+        file_by_state[state_id] = (path, payload)
+        input_files.append(
+            {
+                "kind": "state",
+                "state_id": state_id,
+                "path": str(path.resolve()),
+                "sha256": sha256_file(path),
+            }
+        )
+    for row in sorted(selected, key=lambda value: str(value["state_id"])):
+        qualification_path = Path(str(row["qualification_file"])).resolve()
+        input_files.append(
+            {
+                "kind": "qualification",
+                "state_id": str(row["state_id"]),
+                "path": str(qualification_path),
+                "sha256": sha256_file(qualification_path),
+            }
+        )
+    strict_input_identity = {
+        "run_fingerprint": str(run_fingerprint),
+        "fraction": float(fraction),
+        "input_files": input_files,
+        "controller_bundle_fingerprint": _directory_content_fingerprint(
+            Path(controller_bundle)
+        ),
+    }
+    strict_input_sha256 = _fingerprint(strict_input_identity)
+    if report_path.is_file():
+        try:
+            previous = _read_json(report_path)
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            previous = None
+        if (
+            isinstance(previous, dict)
+            and str(previous.get("schema")) == V3_S3_COLLECTION_SCHEMA
+            and previous.get("schema_version") == V3_S3_COLLECTION_VERSION
+            and str(previous.get("run_fingerprint")) == str(run_fingerprint)
+            and str(previous.get("input_sha256")) == strict_input_sha256
+            and previous.get("input_identity") == strict_input_identity
+            and isinstance(previous.get("passed"), bool)
+        ):
+            return previous
     count = max(1, math.ceil(float(fraction) * len(selected)))
     sample = sorted(
         selected,
@@ -1645,6 +2666,7 @@ def _strict_retest(
                 "state_id": str(row["state_id"]),
                 "qualification_file": str(row["qualification_file"]),
                 "expected": expected,
+                "run_fingerprint": str(run_fingerprint),
             }
         )
     completed, errors = _run_jobs(
@@ -1658,7 +2680,10 @@ def _strict_retest(
     mismatches = [row for row in completed if not bool(row["passed"])]
     report = {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "run_fingerprint": str(run_fingerprint),
+        "input_sha256": strict_input_sha256,
+        "input_identity": strict_input_identity,
         "fraction": float(fraction),
         "requested_state_count": count,
         "completed_state_count": len(completed),
@@ -1742,6 +2767,7 @@ def _run_jobs(
                 status_path,
                 {
                     "schema": V3_S3_COLLECTION_SCHEMA,
+                    "schema_version": V3_S3_COLLECTION_VERSION,
                     "phase": phase,
                     "status": "running",
                     "completed_states": len(completed),
@@ -1768,6 +2794,7 @@ def _run_jobs(
         status_path,
         {
             "schema": V3_S3_COLLECTION_SCHEMA,
+            "schema_version": V3_S3_COLLECTION_VERSION,
             "phase": phase,
             "status": "error" if errors else "complete",
             "completed_states": len(completed),
@@ -1820,6 +2847,7 @@ def _select_qualified_states(
         )
     return selected, {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "qualified_state_count": len(available),
         "selected_state_count": len(selected),
         "target_state_cap": S3_TARGET_STATE_CAP,
@@ -1880,133 +2908,71 @@ def _stream_manifests(
 
 
 def _coverage(
-    selected: list[dict[str, Any]], state_files: Iterable[Path]
+    selected: list[dict[str, Any]],
+    state_files: Iterable[Path],
+    *,
+    run_fingerprint: str | None = None,
 ) -> dict[str, Any]:
-    errors = []
-    covered = set()
-    selected_by_id = {str(row["state_id"]): row for row in selected}
+    errors: list[str] = []
+    covered: set[str] = set()
+    selected_by_id = {str(row.get("state_id")): row for row in selected}
     if len(selected_by_id) != len(selected):
         errors.append("selected states contain duplicate state_id values")
-    observed_state_ids = []
+    observed_state_ids: list[str] = []
     trial_count = 0
     feature_count = 0
     baseline_count = 0
     for path in map(Path, state_files):
-        payload = _read_json(path)
-        state_id = str(payload["state_id"])
+        try:
+            payload = _read_json(path)
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            errors.append(f"{path}: state artifact is unreadable: {error}")
+            continue
+        if not isinstance(payload, dict):
+            errors.append(f"{path}: state artifact is not an object")
+            continue
+        state_id = str(payload.get("state_id", ""))
         observed_state_ids.append(state_id)
         covered.add(state_id)
         selected_row = selected_by_id.get(state_id)
         if selected_row is None:
             errors.append(f"{state_id}: state file is not part of the selected cohort")
             continue
-        features = list(payload["features"])
-        trials = list(payload["trials"])
-        baselines = list(payload["external_baselines"])
-        feature_count += len(features)
-        trial_count += len(trials)
-        baseline_count += len(baselines)
-        base_sequences = list(balanced_sequence_templates(state_id))
-        base_ids = {sequence_id(sequence) for sequence in base_sequences}
-        ambiguous = bool(payload.get("ambiguous"))
-        registered_ids = set(base_ids)
-        if ambiguous:
-            qualification_file = selected_row.get("qualification_file")
-            if not qualification_file:
-                errors.append(f"{state_id}: missing qualification file")
-            else:
-                try:
-                    qualified = _read_json(Path(str(qualification_file)))
-                    registered_ids.update(
-                        sequence_id(sequence)
-                        for sequence in _ambiguous_additional_sequences(
-                            qualified, state_id
-                        )
-                    )
-                except (KeyError, OSError, ValueError) as error:
-                    errors.append(
-                        f"{state_id}: cannot reconstruct registered sequences: "
-                        f"{type(error).__name__}: {error}"
-                    )
-        represented = {str(row["sequence_id"]) for row in features}
-        if any(str(row.get("state_id")) != state_id for row in features):
-            errors.append(f"{state_id}: feature row belongs to another state")
-        if len(represented) != len(features):
-            errors.append(f"{state_id}: duplicate sequence feature")
-        if represented != registered_ids:
-            errors.append(f"{state_id}: registered sequence coverage differs")
-        if any(str(row.get("state_id")) != state_id for row in trials):
-            errors.append(f"{state_id}: trial row belongs to another state")
-        trial_keys = [
-            (str(row["sequence_id"]), int(row["trial_index"])) for row in trials
-        ]
-        if len(trial_keys) != len(set(trial_keys)):
-            errors.append(f"{state_id}: duplicate sequence trial")
-        unknown_trial_sequences = {
-            sequence for sequence, _trial in trial_keys if sequence not in represented
-        }
-        if unknown_trial_sequences:
-            errors.append(
-                f"{state_id}: trial without feature={sorted(unknown_trial_sequences)}"
-            )
-        required_registered_trials = {
-            (sequence, trial_index)
-            for sequence in registered_ids
-            for trial_index in (0, 1)
-        }
-        missing_registered_trials = required_registered_trials - set(trial_keys)
-        if missing_registered_trials:
-            errors.append(
-                f"{state_id}: missing registered trials="
-                f"{len(missing_registered_trials)}"
-            )
-        extra_trial_keys = set(trial_keys) - required_registered_trials
-        expected_extra_trials: set[tuple[str, int]] = set()
-        primary_trials: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
-        for row in trials:
-            sequence = str(row["sequence_id"])
-            trial_index = int(row["trial_index"])
-            if sequence in registered_ids and trial_index in (0, 1):
-                primary_trials[sequence].append(row)
-        if ambiguous and all(
-            len(primary_trials[sequence]) == 2 for sequence in registered_ids
-        ):
-            top = sorted(
-                registered_ids,
-                key=lambda sequence: (
-                    -_sequence_efficiency(primary_trials[sequence]),
-                    sequence,
+        qualification_file = selected_row.get("qualification_file")
+        if not qualification_file:
+            errors.append(f"{state_id}: missing qualification file")
+            continue
+        try:
+            qualified = _read_json(Path(str(qualification_file)))
+            state_errors = _state_artifact_errors(
+                payload,
+                run_fingerprint=(
+                    str(run_fingerprint)
+                    if run_fingerprint is not None
+                    else str(payload.get("run_fingerprint", ""))
                 ),
-            )[:6]
-            expected_extra_trials = {
-                (sequence, trial_index)
-                for sequence in top
-                for trial_index in (2, 3)
-            }
-        if extra_trial_keys != expected_extra_trials:
-            errors.append(f"{state_id}: invalid ambiguous extra trials")
-        if any(str(row.get("state_id")) != state_id for row in baselines):
-            errors.append(f"{state_id}: baseline row belongs to another state")
-        baseline_key_rows = [
-            (str(row["controller"]), int(row["trial_index"])) for row in baselines
-        ]
-        baseline_keys = set(baseline_key_rows)
-        if len(baseline_key_rows) != len(baseline_keys) or baseline_keys != {
-            (controller, trial)
-            for controller in ("v2-full", "official_adaptive")
-            for trial in (0, 1)
-        }:
-            errors.append(f"{state_id}: incomplete external baselines")
-        for row in trials:
-            if str(row["initial_fingerprint"]) != str(
-                selected_row["before_fingerprint"]
-            ):
-                errors.append(f"{state_id}: initial fingerprint mismatch")
-                break
-    expected = {str(row["state_id"]) for row in selected}
+                selected_row=selected_row,
+                qualified=qualified,
+            )
+        except (KeyError, OSError, TypeError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+            errors.append(
+                f"{state_id}: semantic validation failed: "
+                f"{type(error).__name__}: {error}"
+            )
+        else:
+            errors.extend(f"{state_id}: {error}" for error in state_errors)
+        features = payload.get("features")
+        trials = payload.get("trials")
+        baselines = payload.get("external_baselines")
+        feature_count += len(features) if isinstance(features, list) else 0
+        trial_count += len(trials) if isinstance(trials, list) else 0
+        baseline_count += len(baselines) if isinstance(baselines, list) else 0
+    expected = set(selected_by_id)
     if len(observed_state_ids) != len(set(observed_state_ids)):
         errors.append("state files contain duplicate state_id values")
     return {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "state_count": len(selected),
         "covered_state_count": len(covered),
         "feature_count": feature_count,
@@ -2032,8 +2998,15 @@ def collect_v3_s3_data(
     controller_path = Path(controller_bundle).resolve()
     decisions = source_decisions(source_roots)
     pool, pool_report = qualification_pool(decisions)
+    collection_producer_identity = producer_identity(
+        project_root=Path(__file__).resolve().parents[1],
+        source_files=V3_S3_COLLECTION_PRODUCER_FILES,
+        native_required=True,
+        optional_package_names=("joblib", "numpy", "scikit-learn"),
+    )
     identity = {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "trace_replay_contract": TRACE_REPLAY_CONTRACT,
         "source_run_fingerprints": sorted(
             {
@@ -2051,7 +3024,10 @@ def collect_v3_s3_data(
         "controller_bundle_fingerprint": _directory_content_fingerprint(
             controller_path
         ),
-        "implementation": _collection_implementation_fingerprint(),
+        "producer_identity": collection_producer_identity,
+        "producer_identity_fingerprint": _fingerprint(
+            collection_producer_identity
+        ),
         "workers": int(workers),
         "base_sequences_per_state": 36,
         "paired_trials": 2,
@@ -2130,6 +3106,7 @@ def collect_v3_s3_data(
         if not collection_errors and len(completed) == len(selected)
         else {
             "schema": V3_S3_COLLECTION_SCHEMA,
+            "schema_version": V3_S3_COLLECTION_VERSION,
             "run_fingerprint": run_fingerprint,
             "passed": False,
             "skipped": "incomplete sequence collection",
@@ -2143,10 +3120,13 @@ def collect_v3_s3_data(
         if state_collection_complete
         else {}
     )
-    coverage = _coverage(selected, state_files)
+    coverage = _coverage(
+        selected, state_files, run_fingerprint=run_fingerprint
+    )
     _write_json(output_root / "coverage_report.json", coverage)
     report = {
         "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
         "run_fingerprint": run_fingerprint,
         "qualification_pool": pool_report,
         "qualification_completed_count": len(qualified),
@@ -2189,6 +3169,7 @@ def collect_v3_s3_data(
         output_root / "status.json",
         {
             "schema": V3_S3_COLLECTION_SCHEMA,
+            "schema_version": V3_S3_COLLECTION_VERSION,
             "phase": "complete",
             "status": "complete" if report["complete"] else "error",
             "completed_states": len(completed),
@@ -2209,16 +3190,41 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
             raise FileNotFoundError(required)
 
     previous = _read_json(report_path)
+    if (
+        not isinstance(previous, dict)
+        or str(previous.get("schema")) != V3_S3_COLLECTION_SCHEMA
+        or previous.get("schema_version") != V3_S3_COLLECTION_VERSION
+        or not str(previous.get("run_fingerprint", ""))
+    ):
+        raise ValueError(
+            "legacy or malformed v3-S3 collection is read-only; "
+            "collect schema v2 into a new output directory"
+        )
     selected = _read_jsonl(selection_path)
     state_files = sorted((output_root / "states").rglob("*.json"))
     strict_retest = _read_json(strict_retest_path)
-    coverage = _coverage(selected, state_files)
+    if (
+        not isinstance(strict_retest, dict)
+        or str(strict_retest.get("schema")) != V3_S3_COLLECTION_SCHEMA
+        or strict_retest.get("schema_version") != V3_S3_COLLECTION_VERSION
+        or str(strict_retest.get("run_fingerprint"))
+        != str(previous["run_fingerprint"])
+        or not str(strict_retest.get("input_sha256", ""))
+        or not isinstance(strict_retest.get("passed"), bool)
+    ):
+        raise ValueError("v3-S3 strict-retest report is invalid")
+    coverage = _coverage(
+        selected,
+        state_files,
+        run_fingerprint=str(previous.get("run_fingerprint", "")),
+    )
     _write_json(output_root / "coverage_report.json", coverage)
 
     state_collection_complete = len(state_files) == len(selected)
+    state_collection_valid = state_collection_complete and bool(coverage["passed"])
     manifest_counts = (
         _stream_manifests(state_files, output_root)
-        if state_collection_complete
+        if state_collection_valid
         else {}
     )
     qualification_errors = list(previous.get("qualification_errors") or ())
@@ -2240,21 +3246,22 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
         "strict_retest": strict_retest,
         "sequence_features_sha256": (
             sha256_file(output_root / "sequence_features.jsonl")
-            if state_collection_complete
+            if state_collection_valid
             else None
         ),
         "sequence_trials_sha256": (
             sha256_file(output_root / "sequence_trials.jsonl")
-            if state_collection_complete
+            if state_collection_valid
             else None
         ),
         "external_baselines_sha256": (
             sha256_file(output_root / "external_baselines.jsonl")
-            if state_collection_complete
+            if state_collection_valid
             else None
         ),
         "revalidation": {
-            "schema": "lns2.v3_s3_revalidation.v1",
+            "schema": "lns2.v3_s3_revalidation.v2",
+            "schema_version": V3_S3_COLLECTION_VERSION,
             "coverage_contract": "ambiguous-additional-sequences-v2",
             "validator_sha256": sha256_file(Path(__file__).resolve()),
             "previous_complete": bool(previous.get("complete")),
@@ -2266,6 +3273,7 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
         output_root / "status.json",
         {
             "schema": V3_S3_COLLECTION_SCHEMA,
+            "schema_version": V3_S3_COLLECTION_VERSION,
             "phase": "complete",
             "status": "complete" if complete else "error",
             "completed_states": len(state_files),
@@ -2285,6 +3293,7 @@ __all__ = [
     "S3_STRATUM_QUOTAS",
     "S3_TARGET_STATE_CAP",
     "V3_S3_COLLECTION_SCHEMA",
+    "V3_S3_COLLECTION_VERSION",
     "audit_v3_s3_parallelism",
     "assign_source_strata",
     "collect_v3_s3_data",

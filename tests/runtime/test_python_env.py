@@ -3,17 +3,21 @@ from __future__ import annotations
 import math
 import os
 import sys
+import tempfile
+import time
 import unittest
+from pathlib import Path
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine
 from experiments.repair_collection import state_fingerprint
-from scripts import collect_closed_loop_confirmation as collector_cli
 
 try:
     import lns2_env
 except ModuleNotFoundError:
     lns2_env = None
+
+from scripts import collect_closed_loop_confirmation as collector_cli
 
 
 class NativeModuleDiscoveryTests(unittest.TestCase):
@@ -30,7 +34,7 @@ class RepairEnvironmentTests(unittest.TestCase):
     def test_native_timing_schema_is_current(self) -> None:
         self.assertEqual(
             lns2_env.repair_timing_schema,
-            "lns2.repair_timing.v1",
+            "lns2.repair_timing.v2",
         )
 
     def test_portable_tree_supports_raw_and_sigmoid_outputs(self) -> None:
@@ -65,6 +69,42 @@ class RepairEnvironmentTests(unittest.TestCase):
         ) / 2.0
         self.assertAlmostEqual(pair_scores[0], expected_pair)
         self.assertAlmostEqual(pair_scores[1], 1.0 - expected_pair)
+
+    def test_portable_tree_rejects_invalid_structure(self) -> None:
+        cyclic_tree = [
+            [
+                {
+                    "value": 0.0,
+                    "feature_idx": 0,
+                    "num_threshold": 0.0,
+                    "missing_go_to_left": True,
+                    "left": 0,
+                    "right": 1,
+                    "is_leaf": False,
+                },
+                {"value": 1.0, "is_leaf": True},
+            ]
+        ]
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            lns2_env.PortableTreeEnsemble(0.0, cyclic_tree)
+
+    def test_portable_tree_validates_a_deep_chain_without_recursion(self) -> None:
+        depth = 20_000
+        nodes = [
+            {
+                "value": 0.0,
+                "feature_idx": 0,
+                "num_threshold": 0.0,
+                "missing_go_to_left": True,
+                "left": index + 1,
+                "right": depth,
+                "is_leaf": False,
+            }
+            for index in range(depth)
+        ]
+        nodes.append({"value": 2.0, "is_leaf": True})
+        predictor = lns2_env.PortableTreeEnsemble(0.0, [nodes])
+        self.assertEqual(predictor.predict_raw([[-1.0]]), [2.0])
 
     def make_env(self) -> lns2_env.LNS2RepairEnv:
         return lns2_env.LNS2RepairEnv(
@@ -111,6 +151,134 @@ class RepairEnvironmentTests(unittest.TestCase):
             timings["reset_total_seconds"] + 1e-5,
         )
 
+    def test_default_context_is_isolated_and_observations_return_copies(self) -> None:
+        supplied_context = {"nested": {"source": True}}
+        first_env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            context=supplied_context,
+        )
+        second_env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+        )
+        first = first_env.reset(seed=17)
+        second = second_env.reset(seed=19)
+        supplied_context["nested"]["source"] = False
+        self.assertIsNot(first["context"], second["context"])
+        first["context"]["leaked"] = True
+        first["context"]["nested"]["source"] = False
+        self.assertNotIn("leaked", second["context"])
+        fresh = first_env.get_state()["context"]
+        self.assertNotIn("leaked", fresh)
+        self.assertTrue(fresh["nested"]["source"])
+
+    def test_constructor_rejects_unsafe_instance_inputs(self) -> None:
+        map_path = os.environ["LNS2_TEST_MAP"]
+        scenario_path = os.environ["LNS2_TEST_SCEN"]
+        with self.assertRaisesRegex(ValueError, "agent_count"):
+            lns2_env.LNS2RepairEnv(map_path, scenario_path, agent_count=0)
+        with self.assertRaises(TypeError):
+            lns2_env.LNS2RepairEnv(map_path, scenario_path)
+        with tempfile.TemporaryDirectory() as directory:
+            missing_scenario = Path(directory) / "missing.scen"
+            with self.assertRaisesRegex(ValueError, "scenario_path"):
+                lns2_env.LNS2RepairEnv(
+                    map_path,
+                    str(missing_scenario),
+                    agent_count=2,
+                )
+            self.assertFalse(missing_scenario.exists())
+
+            truncated_scenario = Path(directory) / "truncated.scen"
+            truncated_scenario.write_text("version 1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "fewer than 2 agents"):
+                lns2_env.LNS2RepairEnv(
+                    map_path,
+                    str(truncated_scenario),
+                    agent_count=2,
+                )
+
+            whitespace_scenario = Path(directory) / "whitespace.scen"
+            whitespace_scenario.write_text(
+                "version 1\n"
+                "0 map 32 32 0 0 1 1 1.0\n"
+                "0 map 32 32 1 1 2 2 1.0\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "malformed"):
+                lns2_env.LNS2RepairEnv(
+                    map_path,
+                    str(whitespace_scenario),
+                    agent_count=2,
+                )
+
+            tab_header_map = Path(directory) / "tab-header.map"
+            tab_header_map.write_text(
+                "type octile\n"
+                "height\t3\n"
+                "width 3\n"
+                "map\n"
+                "...\n"
+                "...\n"
+                "...\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "map header is malformed"):
+                lns2_env.LNS2RepairEnv(
+                    str(tab_header_map),
+                    scenario_path,
+                    agent_count=1,
+                )
+
+    def test_constructor_accepts_crlf_instances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            map_path = Path(directory) / "custom.map"
+            scenario_path = Path(directory) / "custom.scen"
+            map_path.write_bytes(b"3,3\r\n...\r\n...\r\n...\r\n")
+            scenario_path.write_bytes(
+                b"2\r\n0,0,2,2\r\n0,2,2,0\r\n"
+            )
+            env = lns2_env.LNS2RepairEnv(
+                str(map_path),
+                str(scenario_path),
+                agent_count=2,
+                time_limit=1.0,
+            )
+            state = env.reset(seed=7)
+            self.assertEqual((state["rows"], state["cols"]), (3, 3))
+            self.assertEqual(len(state["agents"]), 2)
+
+            moving_map_path = Path(directory) / "moving.map"
+            moving_scenario_path = Path(directory) / "moving.scen"
+            moving_map_path.write_bytes(
+                b"type octile\r\n"
+                b"height 3\r\n"
+                b"width 3\r\n"
+                b"map\r\n"
+                b"...\r\n"
+                b"...\r\n"
+                b"...\r\n"
+            )
+            moving_scenario_path.write_bytes(
+                b"version 1\r\n"
+                b"0\tmoving.map\t3\t3\t0\t0\t2\t2\t4\r\n"
+            )
+            moving_env = lns2_env.LNS2RepairEnv(
+                str(moving_map_path),
+                str(moving_scenario_path),
+                agent_count=1,
+                time_limit=1.0,
+            )
+            moving_state = moving_env.reset(seed=11)
+            self.assertEqual(
+                (moving_state["rows"], moving_state["cols"]),
+                (3, 3),
+            )
+            self.assertEqual(len(moving_state["agents"]), 1)
+
     def test_invalid_and_explicit_actions(self) -> None:
         env = self.make_env()
         state = env.reset(seed=19)
@@ -126,11 +294,13 @@ class RepairEnvironmentTests(unittest.TestCase):
                 "random_seed": 123,
             }
         )
+        self.assertTrue(result["metrics"]["step_applied"])
         self.assertFalse(result["metrics"]["action_valid"])
         self.assertTrue(result["metrics"]["generated"])
         self.assertEqual(result["metrics"]["requested_random_seed"], 123)
         for name in (
             "native_step_seconds",
+            "episode_runtime_delta_seconds",
             "native_neighborhood_generation_seconds",
             "native_replan_seconds",
             "pp_replan_seconds",
@@ -145,6 +315,10 @@ class RepairEnvironmentTests(unittest.TestCase):
             "binding_total_seconds",
         ):
             self.assertGreaterEqual(result["metrics"][name], 0.0)
+        self.assertEqual(
+            result["metrics"]["step_runtime"],
+            result["metrics"]["native_step_seconds"],
+        )
         native_partition = sum(
             result["metrics"][name]
             for name in (
@@ -154,6 +328,10 @@ class RepairEnvironmentTests(unittest.TestCase):
                 "native_repair_bookkeeping_seconds",
                 "native_residual_seconds",
             )
+        )
+        self.assertGreater(
+            result["metrics"]["native_state_snapshot_seconds"],
+            0.0,
         )
         self.assertAlmostEqual(
             result["metrics"]["pp_replan_seconds"],
@@ -205,6 +383,102 @@ class RepairEnvironmentTests(unittest.TestCase):
         self.assertEqual(sorted(result["metrics"]["neighborhood"]), sorted(edge))
         self.assertNotIn("reward", result)
 
+    def test_step_runtime_excludes_time_between_calls(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"]:
+            self.skipTest("initial soft PP was already feasible")
+        time.sleep(0.05)
+        result = env.step(
+            {
+                "mode": "seed",
+                "heuristic": "collision",
+                "seed_agent": 10_000,
+                "neighborhood_size": 8,
+                "random_seed": 123,
+            }
+        )
+        metrics = result["metrics"]
+        self.assertEqual(metrics["step_runtime"], metrics["native_step_seconds"])
+        self.assertGreaterEqual(metrics["episode_runtime_delta_seconds"], 0.04)
+        self.assertGreater(
+            metrics["episode_runtime_delta_seconds"],
+            metrics["step_runtime"],
+        )
+
+    def test_live_deadline_stops_state_and_proposals(self) -> None:
+        env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            time_limit=0.05,
+            neighborhood_size=8,
+            context={},
+        )
+        state = env.reset(seed=29)
+        if state["done"] or not state["conflict_edges"]:
+            self.skipTest("deadline source did not enter repair")
+        edge = state["conflict_edges"][0]
+        time.sleep(0.08)
+        expired = env.get_state()
+        self.assertTrue(expired["done"])
+        self.assertEqual(expired["runtime"], 0.05)
+        time.sleep(0.02)
+        self.assertEqual(env.get_state()["runtime"], expired["runtime"])
+        proposal = env.propose(
+            {
+                "mode": "seed",
+                "heuristic": "collision",
+                "seed_agent": edge[0],
+                "neighborhood_size": 8,
+                "random_seed": 555,
+            }
+        )
+        self.assertFalse(proposal["action_valid"])
+        self.assertFalse(proposal["generated"])
+        terminal = env.step({"mode": "official", "random_seed": 556})
+        self.assertFalse(terminal["metrics"]["step_applied"])
+        self.assertFalse(terminal["terminated"])
+        self.assertTrue(terminal["truncated"])
+        self.assertTrue(terminal["observation"]["done"])
+        self.assertEqual(terminal["metrics"]["native_step_seconds"], 0.0)
+
+    def test_non_time_terminal_runtime_is_frozen(self) -> None:
+        env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            time_limit=30.0,
+            neighborhood_size=8,
+            max_repair_iterations=1,
+            context={},
+        )
+        initial = env.reset(seed=29)
+        self.assertFalse(initial["done"], "runtime-freeze fixture must need repair")
+        terminal = env.step(
+            {"mode": "official", "random_seed": 31005}
+        )["observation"]
+        self.assertTrue(terminal["done"])
+        time.sleep(0.02)
+        self.assertEqual(env.get_state()["runtime"], terminal["runtime"])
+
+        incomplete_env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            time_limit=0.0,
+            neighborhood_size=8,
+            context={},
+        )
+        incomplete = incomplete_env.reset(seed=29)
+        self.assertTrue(incomplete["done"])
+        self.assertFalse(incomplete["initial_solution_complete"])
+        time.sleep(0.02)
+        self.assertEqual(
+            incomplete_env.get_state()["runtime"],
+            incomplete["runtime"],
+        )
+
     def test_proposal_is_deterministic_and_does_not_change_state(self) -> None:
         env = self.make_env()
         state = env.reset(seed=29)
@@ -241,7 +515,16 @@ class RepairEnvironmentTests(unittest.TestCase):
                 ),
             ],
         )
-        self.assertEqual(state, env.get_state())
+        after_proposals = env.get_state()
+        self.assertGreaterEqual(after_proposals["runtime"], state["runtime"])
+        self.assertEqual(
+            {key: value for key, value in state.items() if key != "runtime"},
+            {
+                key: value
+                for key, value in after_proposals.items()
+                if key != "runtime"
+            },
+        )
 
         result = env.step(action)
         self.assertEqual(first["neighborhood"], result["metrics"]["neighborhood"])
@@ -283,7 +566,16 @@ class RepairEnvironmentTests(unittest.TestCase):
                 actual,
             )
         self.assertEqual(revision, env.get_state_revision())
-        self.assertEqual(state, env.get_state())
+        after_proposals = env.get_state()
+        self.assertGreaterEqual(after_proposals["runtime"], state["runtime"])
+        self.assertEqual(
+            {key: value for key, value in state.items() if key != "runtime"},
+            {
+                key: value
+                for key, value in after_proposals.items()
+                if key != "runtime"
+            },
+        )
 
     def test_dense_native_features_match_projected_dicts(self) -> None:
         env = self.make_env()
@@ -420,6 +712,26 @@ class RepairEnvironmentTests(unittest.TestCase):
         )
         self.assertFalse(invalid["action_valid"])
         continued = second.step({"mode": "official"})
+        self.assertEqual(continued["metrics"]["requested_random_seed"], -1)
+
+    def test_invalid_proposal_does_not_require_a_seed_in_the_same_environment(
+        self,
+    ) -> None:
+        env = self.make_env()
+        state = env.reset(seed=29)
+        if state["done"] or not state["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        invalid = env.propose(
+            {
+                "mode": "seed",
+                "heuristic": "adaptive",
+                "seed_agent": state["conflict_edges"][0][0],
+                "neighborhood_size": 8,
+                "random_seed": 31005,
+            }
+        )
+        self.assertFalse(invalid["action_valid"])
+        continued = env.step({"mode": "official"})
         self.assertEqual(continued["metrics"]["requested_random_seed"], -1)
 
     def test_explicit_repair_order_is_applied_and_deterministic(self) -> None:
@@ -600,7 +912,7 @@ class RepairEnvironmentTests(unittest.TestCase):
             replay_state = replay.step(action)["observation"]
             self.assertEqual(state_fingerprint(replay_state), expected_fingerprint)
 
-    def test_partial_proposal_batch_still_protects_global_rng(self) -> None:
+    def test_proposal_batch_parse_failure_is_atomic(self) -> None:
         env = self.make_env()
         state = env.reset(seed=29)
         if state["done"] or not state["conflict_edges"]:
@@ -615,8 +927,10 @@ class RepairEnvironmentTests(unittest.TestCase):
         }
         with self.assertRaises((TypeError, ValueError)):
             env.propose_batch([action, "not-an-action"])
-        with self.assertRaises(ValueError):
-            env.step({"mode": "explicit_neighborhood", "agents": edge})
+        continued = env.step(
+            {"mode": "explicit_neighborhood", "agents": edge}
+        )
+        self.assertTrue(continued["metrics"]["action_valid"])
 
 
 if __name__ == "__main__":

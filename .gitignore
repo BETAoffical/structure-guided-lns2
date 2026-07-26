@@ -2,5 +2,6 @@
 /data/
 __pycache__/
 *.py[cod]
+*.obj
 *.txt
 !CMakeLists.txt

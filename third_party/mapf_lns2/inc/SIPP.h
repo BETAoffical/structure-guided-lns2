@@ -14,7 +14,7 @@ public:
 	int high_generation; // the upper bound with respect to generation
     int high_expansion; // the upper bound with respect to expansion
 	bool collision_v;
-    SIPPNode() : LLNode() {}
+    SIPPNode() : LLNode(), high_generation(0), high_expansion(0), collision_v(false) {}
 	SIPPNode(int loc, int g_val, int h_val, SIPPNode* parent, int timestep, int high_generation, int high_expansion,
 	        bool collision_v, int num_of_conflicts) :
             LLNode(loc, g_val, h_val, parent, timestep, num_of_conflicts), high_generation(high_generation),

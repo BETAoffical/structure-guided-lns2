@@ -24,7 +24,10 @@ public:
         const vector<RepairAction>& actions);
     bool run();
     bool isInitialized() const { return initialized; }
-    bool isFeasible() const { return initialized && num_of_colliding_pairs == 0; }
+    bool isFeasible() const
+    {
+        return initialized && initial_solution_complete && num_of_colliding_pairs == 0;
+    }
     bool isDone() const;
     bool isInitialSolutionComplete() const { return initial_solution_complete; }
     RepairState getRepairState() const;
@@ -58,6 +61,7 @@ private:
     bool initial_solution_complete = false;
     bool finish_notified = false;
     RepairTransition last_transition;
+    vector<unsigned char> obstacle_snapshot;
 
     struct ProposalTargetData
     {
@@ -89,6 +93,7 @@ private:
     bool generateNeighborByTarget(int forced_seed = -1, int requested_size = 0);
     bool generateNeighborRandomly(int forced_seed = -1, int requested_size = 0);
     RepairHeuristic currentRepairHeuristic() const;
+    double currentRuntime() const;
     void notifyFinish();
 
     // int findRandomAgent() const;

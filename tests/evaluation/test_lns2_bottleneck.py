@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import csv
+import gzip
+import hashlib
 import inspect
 import json
+import shutil
 import sys
 import tempfile
 import types
@@ -10,6 +13,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from experiments.closed_loop_trace_storage import (
+    EPISODE_SCHEMA_V1,
+    TRACE_FORMAT_DELTA_GZIP_V2,
+    TRACE_FORMAT_FULL_V1,
+    convert_v1_trace,
+    encode_finish_event,
+    encode_initial_event,
+    open_trace_text,
+    read_state_blob,
+    read_trace_events,
+    storage_fingerprint,
+)
 from experiments.lns2_bottleneck import (
     controller_pairwise_rows,
     controller_pairwise_summary,
@@ -19,14 +34,25 @@ from experiments.lns2_bottleneck import (
     _stall_promotion_gate,
     _v3_promotion_gate,
     generate_bottleneck_artifacts,
+    load_track,
     long_horizon_diagnostics,
     paired_decomposition,
     stall_prefix_equivalence,
     stall_guard_attempt_limit_violations,
     targeted_stall_recovery_diagnostic,
+    validate_manifest_trace,
+)
+from experiments.repair_collection import (
+    _write_jsonl as _real_write_jsonl,
+    state_fingerprint,
 )
 from scripts.run_lns2_tradeoff_evaluation import (
+    _atomic_copy_without_overwrite,
+    _compare_parallel_audit,
     _merge_lane_collection,
+    _merge_lane_collection_group,
+    _plan_lane_collection_merge,
+    _publish_lane_collection_merge,
     _rank_correlation,
     _require_native_timing_interface,
     _resolve_parallel_lanes,
@@ -46,7 +72,7 @@ def _event(controller_seconds: float, pp_seconds: float) -> dict:
         "decision_index": 0,
         "within_wall_budget": True,
         "elapsed_wall_seconds": 1.0,
-        "native_timing_schema": "lns2.repair_timing.v1",
+        "native_timing_schema": "lns2.repair_timing.v2",
         "metrics": {
             "conflicts_before": 10,
             "conflicts_after": 6,
@@ -69,9 +95,16 @@ def _event(controller_seconds: float, pp_seconds: float) -> dict:
             "ranking_inference_seconds": controller_seconds * 0.1,
             "selection_residual_seconds": controller_seconds * 0.1,
             "native_neighborhood_generation_seconds": native_neighborhood,
+            "native_step_seconds": native_neighborhood + pp_seconds + 0.02,
+            "episode_runtime_delta_seconds": native_neighborhood
+            + pp_seconds
+            + 0.02
+            + 0.03
+            + 0.01,
             "neighborhood_selection_seconds": selection,
             "pp_replan_seconds": pp_seconds,
             "repair_bookkeeping_seconds": 0.02,
+            "native_residual_seconds": 0.0,
             "state_export_seconds": 0.03,
             "environment_step_residual_seconds": 0.01,
             "environment_step_wall_seconds": native_neighborhood
@@ -197,50 +230,335 @@ def _write_run_config(
     )
 
 
+def _trace_state(
+    conflicts: int,
+    *,
+    iteration: int = 0,
+    low_level: dict | None = None,
+) -> dict:
+    return {
+        "initialized": True,
+        "initial_solution_complete": True,
+        "feasible": False,
+        "done": False,
+        "iteration": iteration,
+        "rows": 2,
+        "cols": 2,
+        "sum_of_costs": 4,
+        "num_of_colliding_pairs": conflicts,
+        "low_level": low_level
+        or {
+            "expanded": 0,
+            "generated": 0,
+            "reopened": 0,
+            "runs": 0,
+        },
+        "obstacles": [],
+        "conflict_edges": [[0, 1]],
+        "agents": [
+            {"id": 0, "path": [[0, 0], [0, 1]], "conflict_degree": 1},
+            {"id": 1, "path": [[0, 1], [0, 0]], "conflict_degree": 1},
+        ],
+    }
+
+
 def _write_manifest(
     root: Path,
     *,
     controller: str,
     keys: list[tuple[str, int]],
+    controller_seconds: float | None = None,
+    pp_seconds: float | None = None,
 ) -> None:
     manifest_name = (
         "official_adaptive_manifest.jsonl"
         if controller == "official_adaptive"
         else "realized_dynamic_manifest.jsonl"
     )
+    policy = (
+        "official_adaptive"
+        if controller == "official_adaptive"
+        else "realized_dynamic"
+    )
+    run_fingerprint = f"run-{controller}"
     sources = []
     for task_id, solver_seed in keys:
         source = _source(controller)
+        before = _trace_state(10)
+        after = _trace_state(
+            6,
+            iteration=1,
+            low_level={
+                "expanded": 100,
+                "generated": 200,
+                "reopened": 2,
+                "runs": 4,
+            },
+        )
+        episode_id = f"episode-{controller}-{task_id}-{solver_seed}"
+        trace_relative = (
+            Path("episodes") / f"{episode_id}.jsonl"
+        ).as_posix()
         source.update(
             {
-                "episode_id": f"episode-{controller}-{task_id}-{solver_seed}",
+                "episode_id": episode_id,
                 "task_id": task_id,
                 "solver_seed": solver_seed,
-                "trace_file": "episode.jsonl",
+                "policy": policy,
+                "trace_file": trace_relative,
+                "trace_format": TRACE_FORMAT_FULL_V1,
+                "storage_fingerprint": storage_fingerprint(
+                    TRACE_FORMAT_FULL_V1
+                ),
+                "initial_state_ref": None,
             }
         )
-        source["summary"]["transition_trace_write_seconds"] = [0.004]
+        source["summary"].update(
+            {
+                "initial_fingerprint": state_fingerprint(before),
+                "transition_trace_write_seconds": [0.004],
+                "transition_elapsed_seconds": [1.0],
+                "conflict_trajectory": [10, 6],
+                "conflict_auc": 8.0,
+                "wall_clock_conflict_auc": 1804.0,
+                "final_sum_of_costs": after["sum_of_costs"],
+                "final_low_level": after["low_level"],
+            }
+        )
+        transition = _event(
+            controller_seconds
+            if controller_seconds is not None
+            else (0.0 if controller == "official_adaptive" else 0.2),
+            pp_seconds
+            if pp_seconds is not None
+            else (0.4 if controller == "official_adaptive" else 0.5),
+        )
+        native_step = float(transition["timings"]["native_step_seconds"])
+        pp_replan = float(transition["timings"]["pp_replan_seconds"])
+        transition["metrics"].update(
+            {
+                "requested_pp_random_seed": -1,
+                "applied_pp_random_seed": -1,
+                "native_step_seconds": native_step,
+                "native_neighborhood_generation_seconds": 0.01,
+                "native_replan_seconds": pp_replan,
+                "pp_replan_seconds": pp_replan,
+                "native_state_snapshot_seconds": 0.0,
+                "native_repair_bookkeeping_seconds": 0.02,
+                "native_residual_seconds": 0.0,
+                "binding_solver_call_seconds": native_step,
+                "binding_state_snapshot_seconds": 0.01,
+                "state_to_python_seconds": 0.02,
+                "metrics_to_python_seconds": 0.0,
+                "binding_total_seconds": native_step + 0.03,
+                "binding_residual_seconds": 0.0,
+                "step_runtime": native_step,
+                "episode_runtime_delta_seconds": transition["timings"][
+                    "episode_runtime_delta_seconds"
+                ],
+            }
+        )
+        transition.update(
+            {
+                "schema": EPISODE_SCHEMA_V1,
+                "schema_version": 1,
+                "run_fingerprint": run_fingerprint,
+                "episode_id": episode_id,
+                "action": {"mode": "official", "pp_random_seed": -1},
+                "before_fingerprint": state_fingerprint(before),
+                "after_fingerprint": state_fingerprint(after),
+                "repair_wall_seconds": transition["timings"][
+                    "environment_step_wall_seconds"
+                ],
+                "controller": {
+                    "route": "official_adaptive",
+                    "controller_mode": "test",
+                    "selected_candidate_id": None,
+                },
+                "terminated": False,
+                "truncated": False,
+                "after": after,
+            }
+        )
+        events = (
+            {
+                "schema": EPISODE_SCHEMA_V1,
+                "schema_version": 1,
+                "event": "initial",
+                "run_fingerprint": run_fingerprint,
+                "episode_id": episode_id,
+                "policy": policy,
+                "solver_seed": solver_seed,
+                "state_fingerprint": state_fingerprint(before),
+                "state": before,
+            },
+            transition,
+            {
+                "schema": EPISODE_SCHEMA_V1,
+                "schema_version": 1,
+                "event": "finish",
+                "run_fingerprint": run_fingerprint,
+                "episode_id": episode_id,
+                "policy": policy,
+                "success": bool(source["summary"]["success"]),
+                "final_fingerprint": state_fingerprint(after),
+                "summary": source["summary"],
+            },
+        )
+        trace_path = root / trace_relative
+        trace_path.parent.mkdir(parents=True, exist_ok=True)
+        trace_path.write_text(
+            "".join(json.dumps(row) + "\n" for row in events),
+            encoding="utf-8",
+        )
+        trace_bytes = trace_path.read_bytes()
+        source["trace_bytes"] = len(trace_bytes)
+        source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+        source["trace_event_count"] = len(events)
         sources.append(source)
     (root / manifest_name).write_text(
         "".join(json.dumps(source) + "\n" for source in sources),
         encoding="utf-8",
     )
-    if sources:
-        (root / "episode.jsonl").write_text(
-            "\n".join(
-                json.dumps(row)
-                for row in (
-                    {"event": "initial"},
-                    _event(
-                        0.0 if controller == "official_adaptive" else 0.2,
-                        0.4 if controller == "official_adaptive" else 0.5,
-                    ),
-                    {"event": "finish"},
+
+
+def _compact_state() -> dict:
+    state = _trace_state(10)
+    state["test_context"] = {"fixture": "compact"}
+    return state
+
+
+def _write_compact_manifest(
+    root: Path,
+    *,
+    controller: str = "v2-full",
+    task_id: str = "task",
+    solver_seed: int = 1,
+) -> tuple[dict, Path, Path]:
+    policy = (
+        "official_adaptive"
+        if controller == "official_adaptive"
+        else "realized_dynamic"
+    )
+    manifest_name = (
+        "official_adaptive_manifest.jsonl"
+        if controller == "official_adaptive"
+        else "realized_dynamic_manifest.jsonl"
+    )
+    run_fingerprint = f"run-{controller}"
+    episode_id = f"episode-{controller}-{task_id}-{solver_seed}"
+    state = _compact_state()
+    summary = _source(controller)["summary"]
+    summary.update(
+        {
+            "initial_conflicts": 10,
+            "final_conflicts": 10,
+            "budget_final_conflicts": 10,
+            "repair_iterations": 0,
+            "repair_iterations_within_budget": 0,
+            "success": False,
+            "stop_reason": "test-fixture",
+            "transition_trace_write_seconds": [],
+            "transition_elapsed_seconds": [],
+            "conflict_trajectory": [10],
+            "conflict_auc": 0.0,
+            "wall_clock_conflict_auc": 3000.0,
+            "initial_fingerprint": state_fingerprint(state),
+            "final_sum_of_costs": state["sum_of_costs"],
+            "final_low_level": state["low_level"],
+        }
+    )
+    initial, state_reference = encode_initial_event(
+        {
+            "event": "initial",
+            "run_fingerprint": run_fingerprint,
+            "episode_id": episode_id,
+            "policy": policy,
+            "solver_seed": solver_seed,
+            "state_fingerprint": state_fingerprint(state),
+            "state": state,
+        },
+        state,
+        root,
+    )
+    finish = encode_finish_event(
+        {
+            "event": "finish",
+            "run_fingerprint": run_fingerprint,
+            "episode_id": episode_id,
+            "policy": policy,
+            "success": False,
+            "final_fingerprint": state_fingerprint(state),
+            "summary": summary,
+        }
+    )
+    trace_relative = (
+        Path("episodes") / f"{episode_id}.jsonl.gz"
+    ).as_posix()
+    trace_path = root / trace_relative
+    with open_trace_text(trace_path, "w") as stream:
+        for event in (initial, finish):
+            stream.write(
+                json.dumps(
+                    event,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
                 )
+                + "\n"
             )
-            + "\n",
-            encoding="utf-8",
-        )
+    trace_bytes = trace_path.read_bytes()
+    source = _source(controller)
+    source.update(
+        {
+            "episode_id": episode_id,
+            "task_id": task_id,
+            "solver_seed": solver_seed,
+            "policy": policy,
+            "trace_file": trace_relative,
+            "trace_format": TRACE_FORMAT_DELTA_GZIP_V2,
+            "storage_fingerprint": storage_fingerprint(
+                TRACE_FORMAT_DELTA_GZIP_V2
+            ),
+            "trace_bytes": len(trace_bytes),
+            "trace_sha256": hashlib.sha256(trace_bytes).hexdigest(),
+            "trace_event_count": 2,
+            "initial_state_ref": state_reference,
+            "summary": summary,
+        }
+    )
+    (root / manifest_name).write_text(
+        json.dumps(source, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return source, trace_path, root / state_reference
+
+
+def _write_compact_transition_manifest(
+    root: Path,
+) -> tuple[dict, Path, Path]:
+    _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+    manifest_path = root / "realized_dynamic_manifest.jsonl"
+    source = json.loads(manifest_path.read_text(encoding="utf-8"))
+    full_trace = root / source["trace_file"]
+    compact_trace = full_trace.with_suffix(f"{full_trace.suffix}.gz")
+    metadata = convert_v1_trace(full_trace, compact_trace, root)
+    source.update(
+        {
+            "trace_file": compact_trace.relative_to(root).as_posix(),
+            "trace_format": TRACE_FORMAT_DELTA_GZIP_V2,
+            "storage_fingerprint": storage_fingerprint(
+                TRACE_FORMAT_DELTA_GZIP_V2
+            ),
+            **metadata,
+        }
+    )
+    manifest_path.write_text(
+        json.dumps(source, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    full_trace.unlink()
+    return source, compact_trace, root / source["initial_state_ref"]
 
 
 class Lns2BottleneckTests(unittest.TestCase):
@@ -250,6 +568,8 @@ class Lns2BottleneckTests(unittest.TestCase):
         parallel = inspect.getsource(_run_isolated_parallel_collections)
         self.assertIn("return _run_dual_track_after_validation", entrypoint)
         self.assertIn("repair_aware_config", continuation)
+        self.assertIn('"parallel_runtime"', continuation)
+        self.assertIn('"closed_loop_trace_storage.py"', continuation)
         self.assertNotIn("repair_aware_config =", parallel)
 
     def test_parallel_lane_resolution_keeps_strict_single_worker(self) -> None:
@@ -264,6 +584,25 @@ class Lns2BottleneckTests(unittest.TestCase):
     def test_parallel_rank_correlation_detects_reversal(self) -> None:
         self.assertAlmostEqual(_rank_correlation([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]), 1.0)
         self.assertAlmostEqual(_rank_correlation([1.0, 2.0, 3.0], [3.0, 2.0, 1.0]), -1.0)
+        self.assertAlmostEqual(_rank_correlation([1.0, 1.0, 2.0], [1.0, 2.0, 2.0]), 0.5)
+
+    def test_parallel_audit_reports_empty_samples_instead_of_crashing(self) -> None:
+        collections = (
+            ("official_adaptive", "v1-full", "official_adaptive"),
+            ("v2-full", "v2-full", "realized_dynamic"),
+        )
+        empty = {
+            ("task", 1, "official_adaptive"): [],
+            ("task", 1, "v2-full"): [],
+        }
+        with patch(
+            "scripts.run_lns2_tradeoff_evaluation._parallel_audit_rows",
+            side_effect=[empty, empty],
+        ):
+            report = _compare_parallel_audit({}, {}, collections, 2)
+        self.assertFalse(report["passed"])
+        self.assertIsNone(report["pp_median_inflation"])
+        self.assertIn("no positive paired PP timing samples", report["failure_reasons"])
 
     def test_parallel_lane_merge_preserves_unique_episode_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -271,23 +610,18 @@ class Lns2BottleneckTests(unittest.TestCase):
             canonical = root / "canonical"
             lane0 = root / "lane0"
             lane1 = root / "lane1"
-            for lane, seed in ((lane0, 1), (lane1, 2)):
-                (lane / "episodes").mkdir(parents=True)
-                (lane / "episodes" / f"episode-{seed}.json").write_text(
-                    str(seed), encoding="utf-8"
-                )
-                (lane / "realized_dynamic_manifest.jsonl").write_text(
-                    json.dumps(
-                        {
-                            "task_id": "task",
-                            "solver_seed": seed,
-                            "trace_sha256": f"sha-{seed}",
-                        }
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
             canonical.mkdir()
+            _write_run_config(
+                canonical, controller="v2-full", keys=[("task", 1), ("task", 2)]
+            )
+            for lane, seed in ((lane0, 1), (lane1, 2)):
+                lane.mkdir()
+                _write_run_config(
+                    lane, controller="v2-full", keys=[("task", seed)]
+                )
+                _write_manifest(
+                    lane, controller="v2-full", keys=[("task", seed)]
+                )
             _merge_lane_collection(
                 canonical, [lane0, lane1], "realized_dynamic"
             )
@@ -298,8 +632,658 @@ class Lns2BottleneckTests(unittest.TestCase):
                 .splitlines()
             ]
             self.assertEqual([row["solver_seed"] for row in rows], [1, 2])
-            self.assertTrue((canonical / "episodes" / "episode-1.json").is_file())
-            self.assertTrue((canonical / "episodes" / "episode-2.json").is_file())
+            self.assertEqual(
+                len(list((canonical / "episodes").glob("*.jsonl"))), 2
+            )
+
+    def test_parallel_lane_merge_preserves_valid_compact_blob(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            source, trace_path, state_path = _write_compact_manifest(lane)
+
+            validated_trace, events, validated_state = validate_manifest_trace(
+                lane,
+                source,
+                run_fingerprint="run-v2-full",
+                expected_policy="realized_dynamic",
+            )
+            self.assertEqual(validated_trace, trace_path.resolve())
+            self.assertEqual(validated_state, state_path.resolve())
+            self.assertEqual([event["event"] for event in events], ["initial", "finish"])
+
+            _merge_lane_collection(canonical, [lane], "realized_dynamic")
+
+            self.assertEqual(
+                (canonical / source["trace_file"]).read_bytes(),
+                trace_path.read_bytes(),
+            )
+            self.assertEqual(
+                (canonical / source["initial_state_ref"]).read_bytes(),
+                state_path.read_bytes(),
+            )
+
+    def test_compact_trace_rejects_manifest_event_blob_reference_mismatch(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(
+                root, controller="v2-full", keys=[("task", 1)]
+            )
+            source, _trace_path, _state_path = _write_compact_manifest(root)
+            source["initial_state_ref"] = "state_blobs/different.json.gz"
+
+            with self.assertRaisesRegex(ValueError, "blob references differ"):
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+
+    def test_compact_trace_rejects_blob_content_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(
+                root, controller="v2-full", keys=[("task", 1)]
+            )
+            source, _trace_path, state_path = _write_compact_manifest(root)
+            state = read_state_blob(state_path)
+            state["sum_of_costs"] += 1
+            with gzip.open(state_path, "wt", encoding="utf-8") as stream:
+                json.dump(state, stream, ensure_ascii=True, sort_keys=True)
+
+            with self.assertRaisesRegex(
+                ValueError, "initial state fingerprint mismatch"
+            ):
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+
+    def test_compact_trace_rejects_corrupt_transition_delta(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(
+                root, controller="v2-full", keys=[("task", 1)]
+            )
+            source, trace_path, _state_path = (
+                _write_compact_transition_manifest(root)
+            )
+            events = read_trace_events(trace_path)
+            events[1]["state_delta"]["version"] = -1
+            with open_trace_text(trace_path, "w") as stream:
+                for event in events:
+                    stream.write(
+                        json.dumps(
+                            event,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
+            trace_bytes = trace_path.read_bytes()
+            source["trace_bytes"] = len(trace_bytes)
+            source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+
+            with self.assertRaisesRegex(
+                ValueError, "transition state delta is invalid"
+            ):
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+
+    def test_full_trace_markers_are_optional_but_must_match_when_present(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(
+                root, controller="v2-full", keys=[("task", 1)]
+            )
+            _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+            source = json.loads(
+                (root / "realized_dynamic_manifest.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            legacy_source = dict(source)
+            legacy_source.pop("trace_format")
+            legacy_source.pop("storage_fingerprint")
+            validate_manifest_trace(
+                root,
+                legacy_source,
+                run_fingerprint="run-v2-full",
+                expected_policy="realized_dynamic",
+            )
+
+            wrong_manifest = dict(source)
+            wrong_manifest["trace_format"] = TRACE_FORMAT_DELTA_GZIP_V2
+            with self.assertRaisesRegex(ValueError, "full trace format mismatch"):
+                validate_manifest_trace(
+                    root,
+                    wrong_manifest,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+
+            trace_path = root / source["trace_file"]
+            events = read_trace_events(trace_path)
+            events[1]["storage_fingerprint"] = "wrong-storage"
+            trace_path.write_text(
+                "".join(
+                    json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+                    for event in events
+                ),
+                encoding="utf-8",
+            )
+            trace_bytes = trace_path.read_bytes()
+            source["trace_bytes"] = len(trace_bytes)
+            source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+            with self.assertRaisesRegex(
+                ValueError, "full trace event storage fingerprint mismatch"
+            ):
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+
+    def test_legacy_v1_timing_view_remains_fully_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(
+                root, controller="v2-full", keys=[("task", 1)]
+            )
+            _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+            manifest_path = root / "realized_dynamic_manifest.jsonl"
+            source = json.loads(manifest_path.read_text(encoding="utf-8"))
+            trace_path = root / source["trace_file"]
+            events = read_trace_events(trace_path)
+            transition = events[1]
+            transition["native_timing_schema"] = "lns2.repair_timing.v1"
+            transition["metrics"].pop("episode_runtime_delta_seconds")
+            transition["timings"].pop("native_step_seconds")
+            transition["timings"].pop("episode_runtime_delta_seconds")
+            trace_path.write_text(
+                "".join(
+                    json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+                    for event in events
+                ),
+                encoding="utf-8",
+            )
+            trace_bytes = trace_path.read_bytes()
+            source["trace_bytes"] = len(trace_bytes)
+            source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+
+            validated_trace, validated_events, _state_path = (
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+            )
+            self.assertEqual(validated_trace, trace_path.resolve())
+            self.assertNotIn(
+                "native_step_seconds", validated_events[1]["timings"]
+            )
+
+    def test_manifest_evidence_rejects_trace_and_blob_symlinks(self) -> None:
+        for evidence_kind in ("trace", "blob"):
+            with self.subTest(evidence_kind=evidence_kind):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    _write_run_config(
+                        root, controller="v2-full", keys=[("task", 1)]
+                    )
+                    source, trace_path, state_path = _write_compact_manifest(root)
+                    link_path = trace_path if evidence_kind == "trace" else state_path
+                    real_is_symlink = Path.is_symlink
+
+                    def detected_symlink(path: Path) -> bool:
+                        return path == link_path or real_is_symlink(path)
+
+                    # Mock only the OS-level link detection so this regression
+                    # remains effective on Windows hosts without symlink privilege.
+                    with patch(
+                        "pathlib.Path.is_symlink",
+                        autospec=True,
+                        side_effect=detected_symlink,
+                    ):
+                        with self.assertRaisesRegex(ValueError, "symbolic link"):
+                            validate_manifest_trace(
+                                root,
+                                source,
+                                run_fingerprint="run-v2-full",
+                                expected_policy="realized_dynamic",
+                            )
+
+    def test_parallel_lane_preflight_failure_leaves_canonical_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+                _write_manifest(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            manifest_path = canonical / "realized_dynamic_manifest.jsonl"
+            canonical_manifest = manifest_path.read_bytes()
+            canonical_trace = next((canonical / "episodes").glob("*.jsonl"))
+            canonical_trace_bytes = canonical_trace.read_bytes()
+            lane_trace = next((lane / "episodes").glob("*.jsonl"))
+            lane_trace.write_bytes(lane_trace.read_bytes() + b"corrupt")
+
+            with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                _merge_lane_collection(canonical, [lane], "realized_dynamic")
+
+            self.assertEqual(manifest_path.read_bytes(), canonical_manifest)
+            self.assertEqual(canonical_trace.read_bytes(), canonical_trace_bytes)
+
+    def test_parallel_worker_completion_is_checked_before_merge(self) -> None:
+        source = inspect.getsource(_run_isolated_parallel_collections)
+        self.assertLess(
+            source.index("if not complete:"),
+            source.index("_merge_lane_collection_group("),
+        )
+        self.assertIn("for lane_id in range(parallel_lanes)", source)
+
+    def test_parallel_lane_publish_failure_rolls_back_new_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            _write_manifest(lane, controller="v2-full", keys=[("task", 1)])
+            with patch(
+                "scripts.run_lns2_tradeoff_evaluation._write_jsonl",
+                side_effect=OSError("publish failed"),
+            ):
+                with self.assertRaisesRegex(OSError, "publish failed"):
+                    _merge_lane_collection(canonical, [lane], "realized_dynamic")
+            self.assertFalse(
+                (canonical / "realized_dynamic_manifest.jsonl").exists()
+            )
+            self.assertEqual(list((canonical / "episodes").glob("*.jsonl")), [])
+
+    def test_parallel_lane_copy_failure_rolls_back_and_preserves_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection,
+                    controller="v2-full",
+                    keys=[("task", 1), ("task", 2)],
+                )
+            manifest_path = canonical / "realized_dynamic_manifest.jsonl"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "task_id": "old-task",
+                        "solver_seed": 9,
+                        "status": "error",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            original_manifest = manifest_path.read_bytes()
+            _write_manifest(
+                lane,
+                controller="v2-full",
+                keys=[("task", 1), ("task", 2)],
+            )
+            copy_count = 0
+
+            def flaky_copy(
+                source: Path, destination: Path, expected_sha256: str
+            ) -> bool:
+                nonlocal copy_count
+                copy_count += 1
+                if copy_count == 2:
+                    raise OSError("second copy failed")
+                return _atomic_copy_without_overwrite(
+                    source, destination, expected_sha256
+                )
+
+            with patch(
+                "scripts.run_lns2_tradeoff_evaluation._atomic_copy_without_overwrite",
+                side_effect=flaky_copy,
+            ):
+                with self.assertRaisesRegex(OSError, "second copy failed"):
+                    _merge_lane_collection(canonical, [lane], "realized_dynamic")
+            self.assertEqual(manifest_path.read_bytes(), original_manifest)
+            self.assertEqual(list((canonical / "episodes").glob("*.jsonl")), [])
+
+    def test_parallel_collection_group_rolls_back_when_second_publish_fails(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            specifications = []
+            snapshots = []
+            for controller, policy in (
+                ("official_adaptive", "official_adaptive"),
+                ("v2-full", "realized_dynamic"),
+            ):
+                canonical = root / f"canonical-{controller}"
+                lane = root / f"lane-{controller}"
+                for collection in (canonical, lane):
+                    collection.mkdir()
+                    _write_run_config(
+                        collection,
+                        controller=controller,
+                        keys=[("task", 1)],
+                    )
+                manifest_path = canonical / f"{policy}_manifest.jsonl"
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "task_id": "old-task",
+                            "solver_seed": 9,
+                            "status": "error",
+                        }
+                    )
+                    + "\n\n",
+                    encoding="utf-8",
+                )
+                _write_manifest(
+                    lane,
+                    controller=controller,
+                    keys=[("task", 1)],
+                )
+                specifications.append((canonical, [lane], policy))
+                snapshots.append((canonical, manifest_path, manifest_path.read_bytes()))
+
+            publish_count = 0
+
+            def fail_after_second_publish(path: Path, rows: list[dict]) -> None:
+                nonlocal publish_count
+                publish_count += 1
+                _real_write_jsonl(path, rows)
+                if publish_count == 2:
+                    raise OSError("second collection publish failed")
+
+            with patch(
+                "scripts.run_lns2_tradeoff_evaluation._write_jsonl",
+                side_effect=fail_after_second_publish,
+            ):
+                with self.assertRaisesRegex(
+                    OSError, "second collection publish failed"
+                ):
+                    _merge_lane_collection_group(specifications)
+
+            self.assertEqual(publish_count, 2)
+            for canonical, manifest_path, original_bytes in snapshots:
+                self.assertEqual(manifest_path.read_bytes(), original_bytes)
+                self.assertEqual(list((canonical / "episodes").glob("*.jsonl")), [])
+
+    def test_parallel_publish_rechecks_destination_after_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            _write_manifest(lane, controller="v2-full", keys=[("task", 1)])
+            plan = _plan_lane_collection_merge(
+                canonical, [lane], "realized_dynamic"
+            )
+            relative = next(iter(plan["pending_files"]))
+            conflict = canonical / relative
+            conflict.parent.mkdir(parents=True, exist_ok=True)
+            conflict.write_bytes(b"appeared after preflight")
+
+            with self.assertRaisesRegex(RuntimeError, "destination changed"):
+                _publish_lane_collection_merge(plan)
+
+            self.assertEqual(conflict.read_bytes(), b"appeared after preflight")
+            self.assertFalse(
+                (canonical / "realized_dynamic_manifest.jsonl").exists()
+            )
+
+    def test_parallel_preflight_rejects_destination_symlink_components(
+        self,
+    ) -> None:
+        for component_kind in ("destination", "parent"):
+            with self.subTest(component_kind=component_kind):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    canonical = root / "canonical"
+                    lane = root / "lane"
+                    for collection in (canonical, lane):
+                        collection.mkdir()
+                        _write_run_config(
+                            collection,
+                            controller="v2-full",
+                            keys=[("task", 1)],
+                        )
+                    _write_manifest(
+                        lane, controller="v2-full", keys=[("task", 1)]
+                    )
+                    row = json.loads(
+                        (lane / "realized_dynamic_manifest.jsonl").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    source = lane / row["trace_file"]
+                    destination = canonical / row["trace_file"]
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if component_kind == "destination":
+                        shutil.copyfile(source, destination)
+                    detected_component = (
+                        destination
+                        if component_kind == "destination"
+                        else destination.parent
+                    )
+                    real_is_symlink = Path.is_symlink
+
+                    def detected_symlink(path: Path) -> bool:
+                        return (
+                            path == detected_component or real_is_symlink(path)
+                        )
+
+                    with patch(
+                        "pathlib.Path.is_symlink",
+                        autospec=True,
+                        side_effect=detected_symlink,
+                    ):
+                        with self.assertRaisesRegex(
+                            RuntimeError, "destination traverses a symbolic link"
+                        ):
+                            _plan_lane_collection_merge(
+                                canonical, [lane], "realized_dynamic"
+                            )
+
+                    self.assertFalse(
+                        (canonical / "realized_dynamic_manifest.jsonl").exists()
+                    )
+
+    def test_parallel_copy_rejects_destination_symlink_components(self) -> None:
+        for component_kind in ("destination", "parent"):
+            with self.subTest(component_kind=component_kind):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    canonical = root / "canonical"
+                    lane = root / "lane"
+                    for collection in (canonical, lane):
+                        collection.mkdir()
+                        _write_run_config(
+                            collection,
+                            controller="v2-full",
+                            keys=[("task", 1)],
+                        )
+                    _write_manifest(
+                        lane, controller="v2-full", keys=[("task", 1)]
+                    )
+                    plan = _plan_lane_collection_merge(
+                        canonical, [lane], "realized_dynamic"
+                    )
+                    relative, (source, _digest) = next(
+                        iter(plan["pending_files"].items())
+                    )
+                    destination = canonical / relative
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if component_kind == "destination":
+                        shutil.copyfile(source, destination)
+                    detected_component = (
+                        destination
+                        if component_kind == "destination"
+                        else destination.parent
+                    )
+                    real_is_symlink = Path.is_symlink
+
+                    def detected_symlink(path: Path) -> bool:
+                        return (
+                            path == detected_component or real_is_symlink(path)
+                        )
+
+                    with patch(
+                        "pathlib.Path.is_symlink",
+                        autospec=True,
+                        side_effect=detected_symlink,
+                    ):
+                        with self.assertRaisesRegex(
+                            RuntimeError, "destination traverses a symbolic link"
+                        ):
+                            _publish_lane_collection_merge(plan)
+
+                    self.assertFalse(
+                        (canonical / "realized_dynamic_manifest.jsonl").exists()
+                    )
+
+    def test_parallel_publish_rejects_source_changed_after_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            _write_manifest(lane, controller="v2-full", keys=[("task", 1)])
+            plan = _plan_lane_collection_merge(
+                canonical, [lane], "realized_dynamic"
+            )
+            source, _digest = next(iter(plan["pending_files"].values()))
+            source.write_bytes(source.read_bytes() + b"changed after preflight")
+
+            with self.assertRaisesRegex(RuntimeError, "source changed after preflight"):
+                _publish_lane_collection_merge(plan)
+
+            self.assertFalse(
+                (canonical / "realized_dynamic_manifest.jsonl").exists()
+            )
+            self.assertEqual(list((canonical / "episodes").glob("*.jsonl")), [])
+
+    def test_parallel_publish_rejects_source_changed_during_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            canonical = root / "canonical"
+            lane = root / "lane"
+            for collection in (canonical, lane):
+                collection.mkdir()
+                _write_run_config(
+                    collection, controller="v2-full", keys=[("task", 1)]
+                )
+            _write_manifest(lane, controller="v2-full", keys=[("task", 1)])
+            plan = _plan_lane_collection_merge(
+                canonical, [lane], "realized_dynamic"
+            )
+            real_copyfile = shutil.copyfile
+
+            def racing_copy(source: Path, destination: Path) -> str:
+                source_path = Path(source)
+                source_path.write_bytes(
+                    source_path.read_bytes() + b"changed during copy"
+                )
+                return str(real_copyfile(source_path, destination))
+
+            with patch(
+                "scripts.run_lns2_tradeoff_evaluation.shutil.copyfile",
+                side_effect=racing_copy,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "source changed during copy"
+                ):
+                    _publish_lane_collection_merge(plan)
+
+            self.assertFalse(
+                (canonical / "realized_dynamic_manifest.jsonl").exists()
+            )
+            self.assertEqual(list((canonical / "episodes").glob("*.jsonl")), [])
+
+    def test_load_track_rejects_trace_hash_and_path_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(root, controller="v2-full", keys=[("task", 1)])
+            _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+            manifest_path = root / "realized_dynamic_manifest.jsonl"
+            source = json.loads(manifest_path.read_text(encoding="utf-8"))
+            trace_path = root / source["trace_file"]
+            trace_path.write_bytes(trace_path.read_bytes() + b"corrupt")
+            with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                load_track("wall-clock", {"v2-full": root})
+
+            source["trace_file"] = "../outside.jsonl"
+            manifest_path.write_text(json.dumps(source) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "contained relative path"):
+                load_track("wall-clock", {"v2-full": root})
+
+    def test_load_track_rejects_trace_identity_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(root, controller="v2-full", keys=[("task", 1)])
+            _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+            manifest_path = root / "realized_dynamic_manifest.jsonl"
+            source = json.loads(manifest_path.read_text(encoding="utf-8"))
+            trace_path = root / source["trace_file"]
+            events = [
+                json.loads(line)
+                for line in trace_path.read_text(encoding="utf-8").splitlines()
+            ]
+            events[1]["run_fingerprint"] = "different-run"
+            trace_path.write_text(
+                "".join(json.dumps(event) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            trace_bytes = trace_path.read_bytes()
+            source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+            source["trace_bytes"] = len(trace_bytes)
+            manifest_path.write_text(json.dumps(source) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "run fingerprint mismatch"):
+                load_track("wall-clock", {"v2-full": root})
 
     def test_v3_promotion_enforces_quality_speed_and_fallback_gates(self) -> None:
         wall = {
@@ -658,7 +1642,7 @@ class Lns2BottleneckTests(unittest.TestCase):
                 _require_native_timing_interface()
 
         current = types.ModuleType("lns2_env")
-        current.repair_timing_schema = "lns2.repair_timing.v1"
+        current.repair_timing_schema = "lns2.repair_timing.v2"
         current.__file__ = "/tmp/lns2_env.so"
 
         class Environment:
@@ -784,6 +1768,16 @@ class Lns2BottleneckTests(unittest.TestCase):
         self.assertAlmostEqual(iteration["neighborhood_selection_seconds"], 0.21)
         self.assertAlmostEqual(iteration["pp_replan_seconds"], 0.5)
         self.assertTrue(iteration["timing_instrumented"])
+        legacy_event = _event(0.2, 0.5)
+        legacy_event["native_timing_schema"] = "lns2.repair_timing.v1"
+        legacy_iteration = _iteration_row(
+            track="wall-clock-300",
+            controller="v2-full",
+            manifest=manifest,
+            event=legacy_event,
+            trace_write_seconds=0.004,
+        )
+        self.assertTrue(legacy_iteration["timing_instrumented"])
         episode = _episode_row(
             track="wall-clock-300",
             controller="v2-full",
@@ -980,50 +1974,17 @@ class Lns2BottleneckTests(unittest.TestCase):
                 collection = root / controller
                 collection.mkdir()
                 roots[controller] = collection
-                (collection / "run_config.json").write_text(
-                    json.dumps(
-                        {
-                            "run_fingerprint": f"run-{controller}",
-                            "dataset_fingerprint": "dataset",
-                            "configuration": {
-                                "stopping_rule": "wall-clock",
-                                "task_ids_override": ["task-a"],
-                                "solver_seeds": [1],
-                                "cohort_job_keys_override": None,
-                                "environment": {
-                                    "replan_algorithm": "PP",
-                                    "use_sipp": True,
-                                },
-                            },
-                            "controller_implementation": {
-                                "native_module": {"sha256": "native-module"}
-                            },
-                        }
-                    ),
-                    encoding="utf-8",
+                _write_run_config(
+                    collection,
+                    controller=controller,
+                    keys=[("task-a", 1)],
                 )
-                source = _source(controller)
-                source["trace_file"] = "episode.jsonl"
-                source["summary"]["transition_trace_write_seconds"] = [0.004]
-                manifest_name = (
-                    "official_adaptive_manifest.jsonl"
-                    if controller == "official_adaptive"
-                    else "realized_dynamic_manifest.jsonl"
-                )
-                (collection / manifest_name).write_text(
-                    json.dumps(source) + "\n", encoding="utf-8"
-                )
-                (collection / "episode.jsonl").write_text(
-                    "\n".join(
-                        json.dumps(row)
-                        for row in (
-                            {"event": "initial"},
-                            _event(controller_seconds, pp_seconds),
-                            {"event": "finish"},
-                        )
-                    )
-                    + "\n",
-                    encoding="utf-8",
+                _write_manifest(
+                    collection,
+                    controller=controller,
+                    keys=[("task-a", 1)],
+                    controller_seconds=controller_seconds,
+                    pp_seconds=pp_seconds,
                 )
             report = generate_bottleneck_artifacts(
                 {"wall-clock-300": roots}, root / "report"

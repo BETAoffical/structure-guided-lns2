@@ -2,10 +2,18 @@
 
 #include <stdexcept>
 
-JsonlRepairObserver::JsonlRepairObserver(const std::string& path) : output(path)
+JsonlRepairObserver::JsonlRepairObserver(const std::string& path) :
+    path(path), output(path)
 {
     if (!output)
         throw std::runtime_error("failed to open repair trace: " + path);
+}
+
+void JsonlRepairObserver::flushChecked()
+{
+    output.flush();
+    if (!output)
+        throw std::runtime_error("failed to write repair trace: " + path);
 }
 
 void JsonlRepairObserver::writeIntArray(std::ostream& stream, const vector<int>& values)
@@ -27,6 +35,7 @@ void JsonlRepairObserver::writeAction(const RepairAction& action)
            << "\",\"seed_agent\":" << action.seed_agent
            << ",\"neighborhood_size\":" << action.neighborhood_size
            << ",\"random_seed\":" << action.random_seed
+           << ",\"pp_random_seed\":" << action.pp_random_seed
            << ",\"agents\":";
     writeIntArray(output, action.agents);
     output << ",\"repair_order\":";
@@ -92,7 +101,7 @@ void JsonlRepairObserver::onInitialState(const RepairState& state)
     output << "{\"schema_version\":1,\"event\":\"initial\",\"state\":";
     writeState(state);
     output << "}\n";
-    output.flush();
+    flushChecked();
 }
 
 void JsonlRepairObserver::onTransition(const RepairState& before,
@@ -101,7 +110,8 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
 {
     output << "{\"schema_version\":1,\"event\":\"transition\",\"action\":";
     writeAction(transition.requested_action);
-    output << ",\"applied_heuristic\":\""
+    output << ",\"native_timing_schema\":\"lns2.repair_timing.v2\""
+           << ",\"applied_heuristic\":\""
            << repairHeuristicName(transition.applied_heuristic)
            << "\",\"action_valid\":" << (transition.action_valid ? "true" : "false")
            << ",\"generated\":" << (transition.generated ? "true" : "false")
@@ -117,6 +127,11 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
            << ",\"sum_of_costs_after\":" << transition.sum_of_costs_after
            << ",\"runtime_before\":" << transition.runtime_before
            << ",\"runtime_after\":" << transition.runtime_after
+           << ",\"step_runtime\":" << transition.native_step_seconds
+           << ",\"episode_runtime_delta_seconds\":"
+           << transition.runtime_after - transition.runtime_before
+           << ",\"applied_pp_random_seed\":"
+           << transition.applied_pp_random_seed
            << ",\"native_step_seconds\":" << transition.native_step_seconds
            << ",\"native_neighborhood_generation_seconds\":"
            << transition.neighborhood_generation_seconds
@@ -133,7 +148,7 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
     output << ",\"after\":";
     writeState(after);
     output << "}\n";
-    output.flush();
+    flushChecked();
 }
 
 void JsonlRepairObserver::onFinish(const RepairState& state, bool success)
@@ -142,5 +157,5 @@ void JsonlRepairObserver::onFinish(const RepairState& state, bool success)
            << (success ? "true" : "false") << ",\"state\":";
     writeState(state);
     output << "}\n";
-    output.flush();
+    flushChecked();
 }

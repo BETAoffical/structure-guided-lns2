@@ -16,8 +16,10 @@ public:
     void onFinish(const RepairState& state, bool success) override;
 
 private:
+    std::string path;
     std::ofstream output;
 
+    void flushChecked();
     void writeState(const RepairState& state);
     void writeAction(const RepairAction& action);
     static void writeIntArray(std::ostream& stream, const vector<int>& values);

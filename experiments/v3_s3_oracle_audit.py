@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import collections
-import csv
 import math
 import statistics
-import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import atomic_write_csv as _atomic_write_csv
 from experiments._common import read_json, sha256_file
 from experiments.repair_collection import _read_jsonl, _write_json
 from experiments.v3_s3 import (
@@ -26,28 +25,6 @@ from experiments.v3_s3_training import (
 V3_S3_ORACLE_AUDIT_SCHEMA = "lns2.v3_s3_oracle_audit.v1"
 QUALITY_RETENTION = 0.98
 RUNTIME_REPORT_SCHEMA = "lns2.v3_s3_runtime_comparison_report.v1"
-
-
-def _atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    materialized = list(rows)
-    if not materialized:
-        raise ValueError(f"cannot write an empty CSV: {path.name}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = sorted({name for row in materialized for name in row})
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(materialized)
-    temporary.replace(path)
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float:

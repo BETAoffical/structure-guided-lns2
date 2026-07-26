@@ -56,6 +56,9 @@ class StalledStateProbeTests(unittest.TestCase):
                     "decision_index": index,
                     "before_fingerprint": "b",
                     "after_fingerprint": "b",
+                    "before_repair_fingerprint": "repair-b",
+                    "after_repair_fingerprint": "repair-b",
+                    "repair_state_changed": False,
                     "before_conflicts": 1,
                     "actual_metrics": {"replan_success": False, "conflicts_after": 1},
                 }
@@ -65,6 +68,26 @@ class StalledStateProbeTests(unittest.TestCase):
         stall = find_terminal_stall(decisions)
         self.assertEqual(stall["start_decision_index"], 1)
         self.assertEqual(stall["length"], 4)
+
+    def test_terminal_stall_rejects_equal_conflicts_when_structure_changed(self) -> None:
+        decisions = [
+            {
+                "decision_index": index,
+                "before_fingerprint": f"full-{index}",
+                "after_fingerprint": f"full-{index + 1}",
+                "before_repair_fingerprint": f"repair-{index}",
+                "after_repair_fingerprint": f"repair-{index + 1}",
+                "repair_state_changed": True,
+                "before_conflicts": 1,
+                "actual_metrics": {
+                    "replan_success": False,
+                    "conflicts_after": 1,
+                },
+            }
+            for index in range(3)
+        ]
+        with self.assertRaisesRegex(ValueError, "no terminal unchanged-state"):
+            find_terminal_stall(decisions)
 
     def test_terminal_stall_rejects_short_or_successful_tail(self) -> None:
         with self.assertRaises(ValueError):

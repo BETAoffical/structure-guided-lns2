@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from experiments._common import (
     episode_id,
@@ -84,6 +85,64 @@ class RepositoryHygieneTests(unittest.TestCase):
             )
             self.assertEqual(len(groups), 1)
             self.assertEqual({row["name"] for row in groups[0]}, {"value"})
+
+    def test_untracked_files_are_diagnostic_not_tracked_audit_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracked = root / "scripts" / "tracked.py"
+            untracked = root / "scripts" / "scratch.py"
+            tracked.parent.mkdir()
+            tracked.write_text("VALUE = 1\n", encoding="utf-8")
+            untracked.write_text("VALUE = 2\n", encoding="utf-8")
+            config = json.loads(json.dumps(load_config()))
+            _write_json(
+                root / config["result_consolidation_config"],
+                {"experiments": []},
+            )
+            with patch(
+                "scripts.audit_repository_hygiene.tracked_files",
+                return_value=["scripts/tracked.py"],
+            ), patch(
+                "scripts.audit_repository_hygiene.untracked_files",
+                return_value=["scripts/scratch.py"],
+            ):
+                report = run_check(root, config)
+            self.assertEqual(report["tracked_file_count"], 1)
+            self.assertEqual(report["untracked_file_count"], 1)
+            self.assertNotIn("untracked_files", report["errors"])
+            self.assertEqual(
+                report["diagnostics"]["untracked_files"], ["scripts/scratch.py"]
+            )
+
+    def test_missing_evidence_is_a_hygiene_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = json.loads(json.dumps(load_config()))
+            _write_json(
+                root / config["result_consolidation_config"],
+                {
+                    "experiments": [
+                        {
+                            "id": "missing",
+                            "source": {
+                                "path": "build/missing/report.json",
+                                "sha256": "0" * 64,
+                            },
+                        }
+                    ]
+                },
+            )
+            with patch(
+                "scripts.audit_repository_hygiene.tracked_files", return_value=[]
+            ), patch(
+                "scripts.audit_repository_hygiene.untracked_files", return_value=[]
+            ):
+                report = run_check(root, config)
+            self.assertFalse(report["passed"])
+            self.assertEqual(
+                report["errors"]["missing_evidence_files"],
+                ["build/missing/report.json"],
+            )
 
     def test_build_plan_protects_evidence_and_never_deletes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

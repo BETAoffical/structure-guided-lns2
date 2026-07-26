@@ -5,13 +5,17 @@ import csv
 import math
 import os
 import statistics
-import tempfile
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
-from experiments.repair_aware import classify_repair_outcome
+from experiments._common import (
+    atomic_write_csv as _atomic_write_csv,
+    producer_identity,
+    read_json,
+    sha256_file,
+)
+from experiments.repair_aware import REPAIR_OUTCOMES, classify_repair_outcome
 from experiments.repair_collection import (
     _fingerprint,
     _low_level_delta,
@@ -29,7 +33,37 @@ from experiments.v3_s3_collection import (
 )
 
 
-V3_VALUE_PILOT_SCHEMA = "lns2.v3_value_label_pilot.v1"
+V3_VALUE_PILOT_SCHEMA = "lns2.v3_value_label_pilot.v2"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+V3_VALUE_PILOT_PRODUCER_FILES = (
+    "CMakeLists.txt",
+    "experiments/_common.py",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_trace_storage.py",
+    "experiments/compact_controller_model.py",
+    "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
+    "experiments/feature_schema_v3.py",
+    "experiments/neighborhood_candidates.py",
+    "experiments/neighborhood_features.py",
+    "experiments/online_feature_engine.py",
+    "experiments/parallel_runtime.py",
+    "experiments/repair_aware.py",
+    "experiments/repair_aware_training.py",
+    "experiments/repair_collection.py",
+    "experiments/stall_guard.py",
+    "experiments/state_analysis.py",
+    "experiments/trace_replay.py",
+    "experiments/v3_controller.py",
+    "experiments/v3_s3.py",
+    "experiments/v3_s3_collection.py",
+    "experiments/v3_value_pilot.py",
+    "src/python_bindings.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 DEFAULT_OVERHEAD_GRID = (0.0, 0.05, 0.10, 0.15)
 ARM_PRIORITY = (
     "v2_full",
@@ -38,28 +72,6 @@ ARM_PRIORITY = (
     "oracle_s3_quality_time",
     "oracle_h1_efficiency",
 )
-
-
-def _atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    materialized = list(rows)
-    if not materialized:
-        raise ValueError(f"cannot write empty CSV: {path.name}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = sorted({name for row in materialized for name in row})
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        delete=False,
-    ) as stream:
-        temporary = Path(stream.name)
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(materialized)
-    temporary.replace(path)
 
 
 def _candidate_from_sequence(
@@ -370,6 +382,9 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
     state_row = dict(job["state"])
     arm = dict(job["arm"])
     trial_index = int(job["trial_index"])
+    producer_fingerprint = str(job["producer_identity_fingerprint"])
+    if not producer_fingerprint:
+        raise ValueError("value rollout producer identity fingerprint is empty")
     decision = dict(state_row["decision"])
     replay, _configuration = _source_replay_job(decision)
     replay = _extend_replay_repair_budget(
@@ -442,6 +457,13 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
                 "conflict_reduction": conflicts_before - conflicts_after,
                 "repair_seconds": repair_seconds,
                 "pp_replan_seconds": pp_seconds,
+                "low_level": {
+                    name: int(low_level.get(name, 0))
+                    for name in ("generated", "expanded", "reopened", "runs")
+                },
+                "after_done": bool(state.get("done")),
+                "after_feasible": bool(state.get("feasible")),
+                "replan_success": bool(metrics.get("replan_success")),
                 "before_fingerprint": state_fingerprint(before),
                 "after_fingerprint": state_fingerprint(state),
                 "before_repair_fingerprint": before_repair,
@@ -465,8 +487,9 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
         for step in steps
     )
     shared_selection = float(state_row["shared_initial_selection_seconds"])
-    return {
+    result = {
         "schema": V3_VALUE_PILOT_SCHEMA,
+        "producer_identity_fingerprint": producer_fingerprint,
         "state_id": str(state_row["state_id"]),
         "split": str(state_row["split"]),
         "map_id": str(state_row["map_id"]),
@@ -508,6 +531,371 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
         },
         "complete": True,
     }
+    validate_value_rollout(
+        result,
+        state_plan=state_row,
+        arm_plan=arm,
+        max_repairs=int(job["max_repairs"]),
+        wall_clock_seconds=float(job["wall_clock_seconds"]),
+        expected_trial_index=trial_index,
+        expected_producer_fingerprint=producer_fingerprint,
+    )
+    return result
+
+
+def _finite_float(value: Any, *, field: str, nonnegative: bool = False) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"value rollout {field} is not numeric") from error
+    if not math.isfinite(result) or (nonnegative and result < 0.0):
+        qualifier = "finite and non-negative" if nonnegative else "finite"
+        raise ValueError(f"value rollout {field} must be {qualifier}")
+    return result
+
+
+def _float_matches(actual: Any, expected: float, *, field: str) -> None:
+    actual_value = _finite_float(actual, field=field)
+    expected_value = _finite_float(expected, field=f"expected {field}")
+    tolerance = max(1e-9, 1e-7 * max(abs(expected_value), 1.0))
+    if not math.isclose(
+        actual_value,
+        expected_value,
+        rel_tol=1e-7,
+        abs_tol=tolerance,
+    ):
+        raise ValueError(f"value rollout {field} mismatch")
+
+
+def _stored_fingerprint(value: Any, *, field: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"value rollout {field} must be a non-empty string")
+    return value
+
+
+def validate_value_rollout(
+    row: dict[str, Any],
+    *,
+    state_plan: dict[str, Any],
+    arm_plan: dict[str, Any],
+    max_repairs: int,
+    wall_clock_seconds: float,
+    expected_trial_index: int | None = None,
+    expected_producer_fingerprint: str | None = None,
+) -> None:
+    """Validate a completed value rollout against its immutable job plan."""
+
+    if str(row.get("schema")) != V3_VALUE_PILOT_SCHEMA:
+        raise ValueError("value rollout schema mismatch")
+    if row.get("complete") is not True:
+        raise ValueError("value rollout is incomplete")
+    wall_limit = _finite_float(
+        wall_clock_seconds,
+        field="wall_clock_seconds limit",
+        nonnegative=True,
+    )
+    if int(max_repairs) <= 0 or wall_limit <= 0.0:
+        raise ValueError("value rollout limits must be positive")
+    if expected_producer_fingerprint is not None:
+        if str(row.get("producer_identity_fingerprint")) != str(
+            expected_producer_fingerprint
+        ):
+            raise ValueError("value rollout producer identity mismatch")
+
+    state_id = str(state_plan["state_id"])
+    arm_id = str(arm_plan["arm_id"])
+    trial_index = int(row.get("trial_index", -1))
+    if str(row.get("state_id")) != state_id:
+        raise ValueError("value rollout state mismatch")
+    if str(row.get("arm_id")) != arm_id:
+        raise ValueError("value rollout arm mismatch")
+    if expected_trial_index is not None and trial_index != int(
+        expected_trial_index
+    ):
+        raise ValueError("value rollout trial mismatch")
+    for field in ("split", "map_id", "layout_mode", "source_stratum"):
+        if str(row.get(field)) != str(state_plan[field]):
+            raise ValueError(f"value rollout {field} mismatch")
+    if int(row.get("agent_count", -1)) != int(state_plan["agent_count"]):
+        raise ValueError("value rollout agent_count mismatch")
+    if list(map(str, row.get("arm_aliases", ()))) != list(
+        map(str, arm_plan["aliases"])
+    ):
+        raise ValueError("value rollout arm aliases mismatch")
+    if str(row.get("candidate_id")) != str(arm_plan["candidate_id"]):
+        raise ValueError("value rollout candidate mismatch")
+    expected_agents = list(map(int, arm_plan["agents"]))
+    if list(map(int, row.get("agents", ()))) != expected_agents:
+        raise ValueError("value rollout neighborhood mismatch")
+    if int(row.get("actual_size", -1)) != len(expected_agents):
+        raise ValueError("value rollout actual size mismatch")
+    if str(row.get("template_key")) != str(arm_plan.get("template_key", "")):
+        raise ValueError("value rollout template mismatch")
+
+    initial_full = str(state_plan["before_fingerprint"])
+    initial_repair = str(state_plan["before_repair_fingerprint"])
+    initial_conflicts = int(state_plan["initial_conflicts"])
+    if _stored_fingerprint(
+        row.get("initial_fingerprint"), field="initial fingerprint"
+    ) != initial_full:
+        raise ValueError("value rollout initial fingerprint mismatch")
+    if _stored_fingerprint(
+        row.get("initial_repair_fingerprint"),
+        field="initial repair fingerprint",
+    ) != initial_repair:
+        raise ValueError("value rollout initial repair fingerprint mismatch")
+    if int(row.get("initial_conflicts", -1)) != initial_conflicts:
+        raise ValueError("value rollout initial conflicts mismatch")
+
+    raw_steps = row.get("steps")
+    if not isinstance(raw_steps, list) or not raw_steps:
+        raise ValueError("value rollout has no repair steps")
+    if len(raw_steps) > int(max_repairs):
+        raise ValueError("value rollout exceeds its repair limit")
+    steps = []
+    for value in raw_steps:
+        if not isinstance(value, dict):
+            raise ValueError("value rollout step is not an object")
+        steps.append(dict(value))
+
+    previous_full = initial_full
+    previous_repair = initial_repair
+    trajectory = [initial_conflicts]
+    repair_seconds_values: list[float] = []
+    pp_seconds_values: list[float] = []
+    low_level_totals = collections.Counter()
+    conflict_auc = 0.0
+    for step_index, step in enumerate(steps, start=1):
+        if int(step.get("step", -1)) != step_index:
+            raise ValueError("value rollout step indexes are not contiguous")
+        if _stored_fingerprint(
+            step.get("before_fingerprint"),
+            field=f"steps[{step_index}].before fingerprint",
+        ) != previous_full:
+            raise ValueError("value rollout fingerprint chain mismatch")
+        if _stored_fingerprint(
+            step.get("before_repair_fingerprint"),
+            field=f"steps[{step_index}].before repair fingerprint",
+        ) != previous_repair:
+            raise ValueError("value rollout repair fingerprint chain mismatch")
+        previous_full = _stored_fingerprint(
+            step.get("after_fingerprint"),
+            field=f"steps[{step_index}].after fingerprint",
+        )
+        previous_repair = _stored_fingerprint(
+            step.get("after_repair_fingerprint"),
+            field=f"steps[{step_index}].after repair fingerprint",
+        )
+
+        conflicts_before = int(step.get("conflicts_before", -1))
+        conflicts_after = int(step.get("conflicts_after", -1))
+        if conflicts_before != trajectory[-1] or conflicts_after < 0:
+            raise ValueError("value rollout conflict trajectory is discontinuous")
+        if int(step.get("conflict_reduction", 0)) != (
+            conflicts_before - conflicts_after
+        ):
+            raise ValueError("value rollout conflict reduction mismatch")
+        trajectory.append(conflicts_after)
+        if not isinstance(step.get("after_done"), bool) or not isinstance(
+            step.get("after_feasible"), bool
+        ):
+            raise ValueError("value rollout step lacks terminal evidence")
+        after_done = bool(step["after_done"])
+        after_feasible = bool(step["after_feasible"])
+        if after_feasible != (conflicts_after == 0):
+            raise ValueError("value rollout step feasibility mismatch")
+        if after_feasible and not after_done:
+            raise ValueError("value rollout feasible step is not terminal")
+        if step_index < len(steps) and after_done:
+            raise ValueError("value rollout continues after a terminal step")
+        replan_success = step.get("replan_success")
+        if not isinstance(replan_success, bool):
+            raise ValueError("value rollout step lacks replan-success evidence")
+        outcome = str(step.get("repair_outcome", ""))
+        if outcome not in REPAIR_OUTCOMES:
+            raise ValueError("value rollout repair outcome is invalid")
+        expected_outcome = classify_repair_outcome(
+            before_fingerprint=_stored_fingerprint(
+                step.get("before_repair_fingerprint"),
+                field=f"steps[{step_index}].before repair fingerprint",
+            ),
+            after_fingerprint=previous_repair,
+            replan_success=replan_success,
+            conflicts_before=conflicts_before,
+            conflicts_after=conflicts_after,
+            feasible=after_feasible,
+        )
+        if outcome != expected_outcome:
+            raise ValueError("value rollout repair outcome mismatch")
+
+        expected_seed = _paired_seed(initial_repair, trial_index, step_index)
+        action = step.get("action")
+        if not isinstance(action, dict):
+            raise ValueError("value rollout step action is missing")
+        if int(action.get("pp_random_seed", -1)) != expected_seed:
+            raise ValueError("value rollout PP seed mismatch")
+        if step_index == 1:
+            if (
+                str(step.get("route")) != "explicit_first_action"
+                or str(action.get("mode")) != "explicit_neighborhood"
+                or list(map(int, action.get("agents", ()))) != expected_agents
+            ):
+                raise ValueError("value rollout first action mismatch")
+        elif (
+            str(step.get("route")) != "official_adaptive_continuation"
+            or str(action.get("mode")) != "official"
+        ):
+            raise ValueError("value rollout continuation action mismatch")
+
+        repair_seconds = _finite_float(
+            step.get("repair_seconds"),
+            field=f"steps[{step_index}].repair_seconds",
+            nonnegative=True,
+        )
+        pp_seconds = _finite_float(
+            step.get("pp_replan_seconds"),
+            field=f"steps[{step_index}].pp_replan_seconds",
+            nonnegative=True,
+        )
+        repair_seconds_values.append(repair_seconds)
+        pp_seconds_values.append(pp_seconds)
+        conflict_auc += float(conflicts_before) * repair_seconds
+        low_level = step.get("low_level")
+        if not isinstance(low_level, dict):
+            raise ValueError("value rollout step low-level metrics are missing")
+        for name in ("generated", "expanded", "reopened", "runs"):
+            value = int(low_level.get(name, -1))
+            if value < 0:
+                raise ValueError("value rollout low-level metric is negative")
+            low_level_totals[name] += value
+
+    if trajectory != list(map(int, row.get("conflict_trajectory", ()))):
+        raise ValueError("value rollout stored conflict trajectory mismatch")
+    if _stored_fingerprint(
+        row.get("final_fingerprint"), field="final fingerprint"
+    ) != previous_full:
+        raise ValueError("value rollout final fingerprint mismatch")
+    if _stored_fingerprint(
+        row.get("final_repair_fingerprint"), field="final repair fingerprint"
+    ) != previous_repair:
+        raise ValueError("value rollout final repair fingerprint mismatch")
+    final_conflicts = trajectory[-1]
+    if int(row.get("final_conflicts", -1)) != final_conflicts:
+        raise ValueError("value rollout final conflicts mismatch")
+    if int(row.get("conflict_reduction", 0)) != (
+        initial_conflicts - final_conflicts
+    ):
+        raise ValueError("value rollout total conflict reduction mismatch")
+    if int(row.get("repair_iterations", -1)) != len(steps):
+        raise ValueError("value rollout repair iteration count mismatch")
+    if int(row.get("continuation_iterations", -1)) != max(0, len(steps) - 1):
+        raise ValueError("value rollout continuation count mismatch")
+
+    feasible = final_conflicts == 0
+    if not isinstance(row.get("feasible"), bool) or not isinstance(
+        row.get("censored"), bool
+    ):
+        raise ValueError("value rollout final labels must be booleans")
+    if bool(row.get("feasible")) != feasible:
+        raise ValueError("value rollout final feasibility mismatch")
+    if bool(row.get("censored")) == feasible:
+        raise ValueError("value rollout censoring mismatch")
+    stop_reason = str(row.get("stop_reason"))
+    terminal = bool(steps[-1]["after_done"])
+    if stop_reason == "feasible":
+        valid_stop = feasible and terminal
+    elif stop_reason == "environment_terminal":
+        valid_stop = terminal and not feasible
+    elif stop_reason == "wall_clock_limit":
+        valid_stop = not terminal and len(steps) < int(max_repairs)
+    elif stop_reason == "repair_limit":
+        valid_stop = not terminal and len(steps) == int(max_repairs)
+    else:
+        valid_stop = False
+    if not valid_stop:
+        raise ValueError("value rollout stop reason mismatch")
+
+    shared_selection = _finite_float(
+        state_plan["shared_initial_selection_seconds"],
+        field="planned shared selection time",
+        nonnegative=True,
+    )
+    _float_matches(
+        row.get("shared_initial_selection_seconds"),
+        shared_selection,
+        field="shared_initial_selection_seconds",
+    )
+    rollout_wall = _finite_float(
+        row.get("rollout_wall_seconds"),
+        field="rollout_wall_seconds",
+        nonnegative=True,
+    )
+    repair_total = math.fsum(repair_seconds_values)
+    tolerance = max(1e-9, 1e-7 * max(rollout_wall, 1.0))
+    if repair_total > rollout_wall + tolerance:
+        raise ValueError("value rollout repair time exceeds rollout wall time")
+    if stop_reason == "wall_clock_limit" and rollout_wall + tolerance < wall_limit:
+        raise ValueError("value rollout stopped before its wall-clock limit")
+    _float_matches(
+        row.get("observed_total_seconds"),
+        shared_selection + rollout_wall,
+        field="observed_total_seconds",
+    )
+    _float_matches(
+        row.get("pp_replan_seconds"),
+        math.fsum(pp_seconds_values),
+        field="pp_replan_seconds",
+    )
+    _float_matches(
+        row.get("conflict_auc_seconds"),
+        conflict_auc,
+        field="conflict_auc_seconds",
+    )
+    _float_matches(
+        row.get("normalized_conflict_auc_seconds"),
+        conflict_auc / max(1, initial_conflicts),
+        field="normalized_conflict_auc_seconds",
+    )
+    low_level = row.get("low_level")
+    if not isinstance(low_level, dict):
+        raise ValueError("value rollout low-level summary is missing")
+    for name in ("generated", "expanded", "reopened", "runs"):
+        if int(low_level.get(name, -1)) != int(low_level_totals[name]):
+            raise ValueError(f"value rollout low-level {name} mismatch")
+
+
+def load_resumable_value_rollout(
+    path: Path,
+    *,
+    state_plan: dict[str, Any],
+    arm_plan: dict[str, Any],
+    max_repairs: int,
+    wall_clock_seconds: float,
+    expected_trial_index: int,
+    expected_producer_fingerprint: str,
+) -> dict[str, Any] | None:
+    """Return a valid completed row; only explicit incomplete rows may rerun."""
+
+    if not path.is_file():
+        return None
+    value = read_json(path)
+    if not isinstance(value, dict):
+        raise ValueError("completed value rollout is not an object")
+    row = dict(value)
+    if row.get("complete") is True:
+        validate_value_rollout(
+            row,
+            state_plan=state_plan,
+            arm_plan=arm_plan,
+            max_repairs=int(max_repairs),
+            wall_clock_seconds=float(wall_clock_seconds),
+            expected_trial_index=int(expected_trial_index),
+            expected_producer_fingerprint=expected_producer_fingerprint,
+        )
+        return row
+    if row.get("complete") is False:
+        return None
+    raise ValueError("existing value rollout is neither complete nor resumable")
 
 
 def _rollout_flat(row: dict[str, Any]) -> dict[str, Any]:
@@ -756,13 +1144,27 @@ def run_value_label_pilot(
 ) -> dict[str, Any]:
     if int(trials) <= 0 or int(max_repairs) <= 0:
         raise ValueError("trials and max_repairs must be positive")
-    if float(wall_clock_seconds) <= 0.0:
+    if not math.isfinite(float(wall_clock_seconds)) or float(
+        wall_clock_seconds
+    ) <= 0.0:
         raise ValueError("wall_clock_seconds must be positive")
     output_root = Path(output).resolve()
-    if output_root.exists() and any(output_root.iterdir()) and not bool(resume):
+    output_has_files = output_root.exists() and any(output_root.iterdir())
+    if output_has_files and not bool(resume):
         raise FileExistsError("value pilot output is non-empty; pass resume")
-    output_root.mkdir(parents=True, exist_ok=True)
     plan_path = output_root / "plan.json"
+    config_path = output_root / "run_config.json"
+    if output_has_files and not (plan_path.is_file() and config_path.is_file()):
+        raise ValueError(
+            "value pilot output lacks a resumable plan/config; use a new output"
+        )
+    identity = producer_identity(
+        project_root=PROJECT_ROOT,
+        source_files=V3_VALUE_PILOT_PRODUCER_FILES,
+        native_required=True,
+        optional_package_names=("numpy", "scikit-learn"),
+    )
+    identity_fingerprint = _fingerprint(identity)
     requested_plan = build_value_pilot_plan(
         source=source,
         oracle_state_comparison=oracle_state_comparison,
@@ -771,7 +1173,8 @@ def run_value_label_pilot(
     )
     config = {
         "schema": V3_VALUE_PILOT_SCHEMA,
-        "implementation_sha256": sha256_file(Path(__file__).resolve()),
+        "producer_identity": identity,
+        "producer_identity_fingerprint": identity_fingerprint,
         "state_count": int(state_count),
         "trials": int(trials),
         "max_repairs": int(max_repairs),
@@ -780,16 +1183,17 @@ def run_value_label_pilot(
         "smoke_only": bool(smoke_only),
         "plan_fingerprint": _fingerprint(requested_plan),
     }
-    if plan_path.is_file():
+    if output_has_files:
         existing_plan = dict(read_json(plan_path))
-        existing_config = dict(read_json(output_root / "run_config.json"))
+        existing_config = dict(read_json(config_path))
         if _fingerprint(existing_plan) != _fingerprint(requested_plan):
             raise ValueError("value pilot resume plan fingerprint mismatch")
         if existing_config != config:
             raise ValueError("value pilot resume configuration mismatch")
     else:
+        output_root.mkdir(parents=True, exist_ok=True)
         _write_json(plan_path, requested_plan)
-        _write_json(output_root / "run_config.json", config)
+        _write_json(config_path, config)
 
     rollout_root = output_root / "rollouts"
     rollout_root.mkdir(parents=True, exist_ok=True)
@@ -804,6 +1208,7 @@ def run_value_label_pilot(
                         "trial_index": trial_index,
                         "max_repairs": int(max_repairs),
                         "wall_clock_seconds": float(wall_clock_seconds),
+                        "producer_identity_fingerprint": identity_fingerprint,
                     }
                 )
     completed = []
@@ -817,13 +1222,16 @@ def run_value_label_pilot(
         )
         try:
             if bool(resume) and path.is_file():
-                row = dict(read_json(path))
-                if (
-                    str(row.get("state_id")) == state_id
-                    and str(row.get("arm_id")) == arm_id
-                    and int(row.get("trial_index", -1)) == trial_index
-                    and bool(row.get("complete"))
-                ):
+                row = load_resumable_value_rollout(
+                    path,
+                    state_plan=dict(job["state"]),
+                    arm_plan=dict(job["arm"]),
+                    max_repairs=int(max_repairs),
+                    wall_clock_seconds=float(wall_clock_seconds),
+                    expected_trial_index=trial_index,
+                    expected_producer_fingerprint=identity_fingerprint,
+                )
+                if row is not None:
                     completed.append(row)
                     continue
             row = run_value_rollout(job)

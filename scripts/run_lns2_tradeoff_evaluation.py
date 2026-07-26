@@ -7,9 +7,11 @@ import hashlib
 import json
 import logging
 import math
+import os
 import shutil
 import statistics
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,7 @@ from experiments.closed_loop_trace_storage import read_trace_events  # noqa: E40
 from experiments.compact_controller_model import load_controller_bundle  # noqa: E402
 from experiments.lns2_bottleneck import (  # noqa: E402
     generate_bottleneck_artifacts,
+    validate_manifest_trace,
 )
 from experiments.parallel_runtime import (  # noqa: E402
     initialize_isolated_worker,
@@ -38,6 +41,7 @@ from experiments.parallel_runtime import (  # noqa: E402
     parallel_runtime_metadata,
 )
 from experiments.repair_collection import (  # noqa: E402
+    _atomic_write_text,
     _load_dataset_rows,
     _read_json,
     _read_jsonl,
@@ -407,7 +411,8 @@ def _require_native_timing_interface(*, require_optimized: bool = False) -> str:
         ) from error
     if str(getattr(lns2_env, "repair_timing_schema", "")) != REPAIR_TIMING_SCHEMA:
         raise RuntimeError(
-            "lns2_env is stale and lacks repair timing schema v1; rebuild build/linux/project"
+            "lns2_env is stale and lacks repair timing schema "
+            f"{REPAIR_TIMING_SCHEMA}; rebuild build/linux/project"
         )
     if not callable(
         getattr(
@@ -859,36 +864,263 @@ def _prepare_lane_root(canonical: Path, lane: Path) -> None:
         shutil.copy2(canonical / name, lane / name)
 
 
+def _manifest_job_key(row: dict[str, Any]) -> tuple[str, int]:
+    task_id = str(row.get("task_id") or "")
+    if not task_id:
+        raise ValueError("parallel manifest row is missing task_id")
+    try:
+        solver_seed = int(row["solver_seed"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"parallel manifest row has invalid solver_seed: {task_id}") from error
+    return task_id, solver_seed
+
+
+def _equivalent_manifest_rows(
+    left: dict[str, Any], right: dict[str, Any]
+) -> bool:
+    left_value = dict(left)
+    right_value = dict(right)
+    left_value["status"] = "ok"
+    right_value["status"] = "ok"
+    return left_value == right_value
+
+
+def _reject_destination_symlink_components(destination: Path) -> None:
+    destination = destination.absolute()
+    for component in (*reversed(destination.parents), destination):
+        if component.is_symlink():
+            raise RuntimeError(
+                "parallel lane destination traverses a symbolic link: "
+                f"{component}"
+            )
+
+
+def _atomic_copy_without_overwrite(
+    source: Path, destination: Path, expected_sha256: str
+) -> bool:
+    _reject_destination_symlink_components(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _reject_destination_symlink_components(destination)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        shutil.copyfile(source, temporary)
+        if sha256_file(temporary) != expected_sha256:
+            raise RuntimeError(
+                f"parallel lane source changed during copy: {source}"
+            )
+        try:
+            _reject_destination_symlink_components(destination)
+            os.link(temporary, destination)
+        except FileExistsError:
+            _reject_destination_symlink_components(destination)
+            if sha256_file(destination) != expected_sha256:
+                raise RuntimeError(f"parallel lane destination changed: {destination}")
+            return False
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _plan_lane_collection_merge(
+    canonical: Path,
+    lane_roots: list[Path],
+    policy: str,
+) -> dict[str, Any]:
+    canonical = canonical.resolve()
+    canonical_config = _read_json(canonical / "run_config.json")
+    run_fingerprint = str(canonical_config.get("run_fingerprint") or "")
+    if not run_fingerprint:
+        raise ValueError(f"canonical collection has no run fingerprint: {canonical}")
+    manifest_path = canonical / f"{policy}_manifest.jsonl"
+    manifest_existed = manifest_path.is_file()
+    manifest_bytes = manifest_path.read_bytes() if manifest_existed else None
+    rows = _read_jsonl(manifest_path) if manifest_path.is_file() else []
+    merged: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in rows:
+        key = _manifest_job_key(row)
+        previous = merged.get(key)
+        if previous is not None and not _equivalent_manifest_rows(previous, row):
+            raise RuntimeError(f"canonical manifest contains conflicting rows for {key}")
+        if str(row.get("status")) in {"ok", "resumed"}:
+            validate_manifest_trace(
+                canonical,
+                row,
+                run_fingerprint=run_fingerprint,
+                expected_policy=policy,
+            )
+        merged[key] = row
+
+    pending_files: dict[str, tuple[Path, str]] = {}
+
+    def register_lane_file(lane: Path, source: Path) -> None:
+        relative = source.resolve().relative_to(lane.resolve()).as_posix()
+        digest = sha256_file(source)
+        previous = pending_files.get(relative)
+        if previous is not None and previous[1] != digest:
+            raise RuntimeError(f"parallel lane file conflict: {relative}")
+        destination = canonical / relative
+        _reject_destination_symlink_components(destination)
+        try:
+            destination.resolve().relative_to(canonical)
+        except ValueError as error:
+            raise RuntimeError(
+                f"parallel lane destination escapes canonical root: {relative}"
+            ) from error
+        if destination.exists():
+            if not destination.is_file() or sha256_file(destination) != digest:
+                raise RuntimeError(f"parallel lane destination conflict: {relative}")
+        pending_files[relative] = (source, digest)
+
+    for lane in lane_roots:
+        lane = lane.resolve()
+        if not lane.exists():
+            raise RuntimeError(f"parallel lane root is missing: {lane}")
+        lane_config_path = lane / "run_config.json"
+        if not lane_config_path.is_file():
+            raise RuntimeError(f"parallel lane is missing run_config.json: {lane}")
+        lane_config = _read_json(lane_config_path)
+        if str(lane_config.get("run_fingerprint") or "") != run_fingerprint:
+            raise RuntimeError(f"parallel lane contains a different run: {lane}")
+        path = lane / f"{policy}_manifest.jsonl"
+        if not path.is_file():
+            raise RuntimeError(f"parallel lane is missing its manifest: {lane}")
+        for row in _read_jsonl(path):
+            key = _manifest_job_key(row)
+            if str(row.get("status")) not in {"ok", "resumed"}:
+                raise RuntimeError(f"parallel lane contains an unsuccessful row for {key}")
+            trace_path, _events, state_path = validate_manifest_trace(
+                lane,
+                row,
+                run_fingerprint=run_fingerprint,
+                expected_policy=policy,
+            )
+            register_lane_file(lane, trace_path)
+            if state_path is not None:
+                register_lane_file(lane, state_path)
+            previous = merged.get(key)
+            if previous is not None and str(previous.get("status")) in {
+                "ok",
+                "resumed",
+            } and not _equivalent_manifest_rows(previous, row):
+                raise RuntimeError(f"parallel lane result mismatch for {key}")
+            merged[key] = row
+
+    return {
+        "canonical": canonical,
+        "manifest_path": manifest_path,
+        "manifest_existed": manifest_existed,
+        "manifest_bytes": manifest_bytes,
+        "merged_rows": [merged[key] for key in sorted(merged)],
+        "pending_files": pending_files,
+    }
+
+
+def _restore_lane_merge_manifest(plan: dict[str, Any]) -> None:
+    manifest_path = Path(plan["manifest_path"])
+    if bool(plan["manifest_existed"]):
+        manifest_bytes = plan["manifest_bytes"]
+        if not isinstance(manifest_bytes, bytes):
+            raise RuntimeError("parallel merge manifest snapshot is invalid")
+        _atomic_write_text(manifest_path, manifest_bytes.decode("utf-8"))
+    else:
+        manifest_path.unlink(missing_ok=True)
+
+
+def _rollback_lane_collection_publish(published: dict[str, Any]) -> None:
+    errors = []
+    try:
+        _restore_lane_merge_manifest(dict(published["plan"]))
+    except BaseException as error:
+        errors.append(f"manifest restore failed: {error}")
+    for destination in reversed(list(published["created_destinations"])):
+        try:
+            Path(destination).unlink(missing_ok=True)
+        except BaseException as error:
+            errors.append(f"file rollback failed for {destination}: {error}")
+    if errors:
+        raise RuntimeError("; ".join(errors))
+
+
+def _publish_lane_collection_merge(plan: dict[str, Any]) -> dict[str, Any]:
+    manifest_path = Path(plan["manifest_path"])
+    manifest_existed = bool(plan["manifest_existed"])
+    if manifest_path.is_file() != manifest_existed:
+        raise RuntimeError(f"canonical manifest changed after preflight: {manifest_path}")
+    if manifest_existed and manifest_path.read_bytes() != plan["manifest_bytes"]:
+        raise RuntimeError(f"canonical manifest changed after preflight: {manifest_path}")
+
+    pending_files = dict(plan["pending_files"])
+    created_destinations: list[Path] = []
+    try:
+        for relative in sorted(pending_files):
+            source, expected_digest = pending_files[relative]
+            if sha256_file(source) != expected_digest:
+                raise RuntimeError(f"parallel lane source changed after preflight: {source}")
+            destination = Path(plan["canonical"]) / relative
+            if _atomic_copy_without_overwrite(
+                source, destination, expected_digest
+            ):
+                created_destinations.append(destination)
+        # _write_jsonl is atomic. Publishing it last prevents partial file
+        # copies from becoming referenced evidence.
+        _write_jsonl(manifest_path, list(plan["merged_rows"]))
+        return {
+            "plan": plan,
+            "created_destinations": created_destinations,
+        }
+    except BaseException as error:
+        try:
+            _rollback_lane_collection_publish(
+                {
+                    "plan": plan,
+                    "created_destinations": created_destinations,
+                }
+            )
+        except BaseException as rollback_error:
+            raise RuntimeError(
+                f"parallel lane publish failed ({error}); rollback also failed: "
+                f"{rollback_error}"
+            ) from error
+        raise
+
+
+def _merge_lane_collection_group(
+    specifications: list[tuple[Path, list[Path], str]],
+) -> None:
+    # Complete every collection preflight before publishing any collection.
+    plans = [
+        _plan_lane_collection_merge(canonical, lane_roots, policy)
+        for canonical, lane_roots, policy in specifications
+    ]
+    published: list[dict[str, Any]] = []
+    try:
+        for plan in plans:
+            published.append(_publish_lane_collection_merge(plan))
+    except BaseException as error:
+        rollback_errors = []
+        for item in reversed(published):
+            try:
+                _rollback_lane_collection_publish(item)
+            except BaseException as rollback_error:
+                rollback_errors.append(str(rollback_error))
+        if rollback_errors:
+            raise RuntimeError(
+                f"parallel collection group publish failed ({error}); group rollback "
+                f"also failed: {'; '.join(rollback_errors)}"
+            ) from error
+        raise
+
+
 def _merge_lane_collection(
     canonical: Path,
     lane_roots: list[Path],
     policy: str,
 ) -> None:
-    for lane in lane_roots:
-        for directory in ("episodes", "state_blobs"):
-            source = lane / directory
-            if source.is_dir():
-                shutil.copytree(source, canonical / directory, dirs_exist_ok=True)
-    manifest_path = canonical / f"{policy}_manifest.jsonl"
-    rows = _read_jsonl(manifest_path) if manifest_path.is_file() else []
-    merged = {
-        (str(row["task_id"]), int(row["solver_seed"])): row for row in rows
-    }
-    for lane in lane_roots:
-        path = lane / f"{policy}_manifest.jsonl"
-        if not path.is_file():
-            continue
-        for row in _read_jsonl(path):
-            key = (str(row["task_id"]), int(row["solver_seed"]))
-            previous = merged.get(key)
-            if (
-                previous is not None
-                and str(previous.get("trace_sha256"))
-                != str(row.get("trace_sha256"))
-            ):
-                raise RuntimeError(f"parallel lane result mismatch for {key}")
-            merged[key] = row
-    _write_jsonl(manifest_path, [merged[key] for key in sorted(merged)])
+    _merge_lane_collection_group([(canonical, lane_roots, policy)])
 
 
 def _percentile(values: list[float], fraction: float) -> float:
@@ -903,14 +1135,23 @@ def _percentile(values: list[float], fraction: float) -> float:
 
 
 def _rank_correlation(left: list[float], right: list[float]) -> float:
-    if len(left) != len(right) or len(left) < 2:
-        return 1.0
+    if len(left) != len(right):
+        raise ValueError("rank correlation inputs must have equal lengths")
+    if len(left) < 2:
+        return 0.0
 
     def ranks(values: list[float]) -> list[float]:
         order = sorted(range(len(values)), key=lambda index: (values[index], index))
         result = [0.0] * len(values)
-        for rank, index in enumerate(order):
-            result[index] = float(rank)
+        start = 0
+        while start < len(order):
+            end = start + 1
+            while end < len(order) and values[order[end]] == values[order[start]]:
+                end += 1
+            average_rank = (start + end - 1) / 2.0
+            for index in order[start:end]:
+                result[index] = average_rank
+            start = end
         return result
 
     left_rank = ranks(left)
@@ -925,7 +1166,7 @@ def _rank_correlation(left: list[float], right: list[float]) -> float:
         math.fsum((value - left_mean) ** 2 for value in left_rank)
         * math.fsum((value - right_mean) ** 2 for value in right_rank)
     )
-    return numerator / denominator if denominator > 0.0 else 1.0
+    return numerator / denominator if denominator > 0.0 else 0.0
 
 
 def _parallel_audit_rows(
@@ -977,9 +1218,12 @@ def _compare_parallel_audit(
     semantic_mismatches = 0
     paired_pp_left: list[float] = []
     paired_pp_right: list[float] = []
+    transition_count_mismatches = 0
     for key in sorted(strict):
         strict_rows = strict[key]
         parallel_rows = parallel[key]
+        if len(strict_rows) != len(parallel_rows):
+            transition_count_mismatches += 1
         common = min(len(strict_rows), len(parallel_rows))
         for left, right in zip(strict_rows[:common], parallel_rows[:common]):
             if (
@@ -995,34 +1239,69 @@ def _compare_parallel_audit(
                 paired_pp_right.append(right["pp_seconds"])
             strict_iteration[key[2]].append(left["iteration_seconds"])
             parallel_iteration[key[2]].append(right["iteration_seconds"])
-    median_inflation = statistics.median(parallel_pp) / max(
-        1e-9, statistics.median(strict_pp)
+    pp_samples_ready = bool(strict_pp) and bool(parallel_pp)
+    iteration_samples_ready = bool(collections) and all(
+        strict_iteration[name] and parallel_iteration[name]
+        for name, _controller, _policy in collections
     )
-    p95_inflation = _percentile(parallel_pp, 0.95) / max(
-        1e-9, _percentile(strict_pp, 0.95)
+    median_inflation = (
+        statistics.median(parallel_pp) / max(1e-9, statistics.median(strict_pp))
+        if pp_samples_ready
+        else None
     )
-    correlation = _rank_correlation(paired_pp_left, paired_pp_right)
-    reference = collections[0][0]
-    pairwise_ratio_delta = 0.0
-    strict_reference = statistics.median(strict_iteration[reference])
-    parallel_reference = statistics.median(parallel_iteration[reference])
-    for name, _controller, _policy in collections[1:]:
-        strict_ratio = statistics.median(strict_iteration[name]) / max(
-            1e-9, strict_reference
-        )
-        parallel_ratio = statistics.median(parallel_iteration[name]) / max(
-            1e-9, parallel_reference
-        )
-        pairwise_ratio_delta = max(
-            pairwise_ratio_delta,
-            abs(parallel_ratio / max(1e-9, strict_ratio) - 1.0),
-        )
+    p95_inflation = (
+        _percentile(parallel_pp, 0.95) / max(1e-9, _percentile(strict_pp, 0.95))
+        if pp_samples_ready
+        else None
+    )
+    correlation = (
+        _rank_correlation(paired_pp_left, paired_pp_right)
+        if len(paired_pp_left) >= 2
+        else None
+    )
+    reference = collections[0][0] if collections else ""
+    pairwise_ratio_delta = None
+    if iteration_samples_ready:
+        pairwise_ratio_delta = 0.0
+        strict_reference = statistics.median(strict_iteration[reference])
+        parallel_reference = statistics.median(parallel_iteration[reference])
+        for name, _controller, _policy in collections[1:]:
+            strict_ratio = statistics.median(strict_iteration[name]) / max(
+                1e-9, strict_reference
+            )
+            parallel_ratio = statistics.median(parallel_iteration[name]) / max(
+                1e-9, parallel_reference
+            )
+            pairwise_ratio_delta = max(
+                pairwise_ratio_delta,
+                abs(parallel_ratio / max(1e-9, strict_ratio) - 1.0),
+            )
+    failure_reasons = []
+    if transition_count_mismatches:
+        failure_reasons.append("paired transition counts differ")
+    if not pp_samples_ready:
+        failure_reasons.append("no positive paired PP timing samples")
+    elif correlation is None:
+        failure_reasons.append("fewer than two paired PP timing samples")
+    if not iteration_samples_ready:
+        failure_reasons.append("one or more controllers have no paired iteration samples")
     checks = {
         "semantic_mismatches_zero": semantic_mismatches == 0,
-        "pp_median_inflation_at_most_3pct": median_inflation <= 1.03,
-        "pp_p95_inflation_at_most_5pct": p95_inflation <= 1.05,
-        "pp_rank_correlation_at_least_098": correlation >= 0.98,
-        "controller_ratio_delta_at_most_5pct": pairwise_ratio_delta <= 0.05,
+        "paired_transition_counts_match": transition_count_mismatches == 0,
+        "paired_pp_samples_present": pp_samples_ready,
+        "paired_iteration_samples_present": iteration_samples_ready,
+        "pp_median_inflation_at_most_3pct": (
+            median_inflation is not None and median_inflation <= 1.03
+        ),
+        "pp_p95_inflation_at_most_5pct": (
+            p95_inflation is not None and p95_inflation <= 1.05
+        ),
+        "pp_rank_correlation_at_least_098": (
+            correlation is not None and correlation >= 0.98
+        ),
+        "controller_ratio_delta_at_most_5pct": (
+            pairwise_ratio_delta is not None and pairwise_ratio_delta <= 0.05
+        ),
     }
     return {
         "schema": "lns2.paired_parallelism_audit.v1",
@@ -1030,10 +1309,12 @@ def _compare_parallel_audit(
         "paired_episode_count": len(strict),
         "paired_pp_count": len(paired_pp_left),
         "semantic_mismatch_count": semantic_mismatches,
+        "transition_count_mismatch_count": transition_count_mismatches,
         "pp_median_inflation": median_inflation,
         "pp_p95_inflation": p95_inflation,
         "pp_rank_correlation": correlation,
         "controller_pairwise_ratio_maximum_delta": pairwise_ratio_delta,
+        "failure_reasons": failure_reasons,
         "checks": checks,
         "passed": all(checks.values()),
     }
@@ -1210,14 +1491,22 @@ def _run_isolated_parallel_collections(
         lane_entries[index % parallel_lanes].append(entry)
     jobs = []
     for lane_id, entries in enumerate(lane_entries):
-        if not entries:
-            continue
         lane_roots = {
             name: lane_work / f"lane-{lane_id}" / name
             for name, _controller, _policy in collections
         }
         for name, lane_root in lane_roots.items():
             _prepare_lane_root(roots[name], lane_root)
+        if not entries:
+            for name, _controller, policy in collections:
+                # A parallelism audit may have fewer cohorts than requested
+                # lanes. Keep every lane root explicit while ensuring a stale
+                # manifest from an earlier schedule cannot be merged.
+                _write_jsonl(
+                    lane_roots[name] / f"{policy}_manifest.jsonl",
+                    [],
+                )
+            continue
         jobs.append(
             {
                 "lane_id": lane_id,
@@ -1273,28 +1562,48 @@ def _run_isolated_parallel_collections(
                     "parallel_runtime": runtime,
                 },
             )
-    for name, _controller, policy in collections:
-        _merge_lane_collection(
-            roots[name],
-            [lane_work / f"lane-{lane_id}" / name for lane_id in range(parallel_lanes)],
-            policy,
+    complete = completed == total and errors == 0
+    if not complete:
+        _write_json(
+            runner_progress,
+            {
+                "schema": "lns2.lns2_tradeoff_progress.v2",
+                "phase": "paired-isolated-parallel",
+                "status": "error",
+                "completed_jobs": completed,
+                "total_jobs": total,
+                "error_jobs": errors,
+                "parallel_runtime": runtime,
+            },
         )
+        raise RuntimeError(
+            f"isolated parallel paired collection incomplete: {completed}/{total}, errors={errors}"
+        )
+    _merge_lane_collection_group(
+        [
+            (
+                roots[name],
+                [
+                    lane_work / f"lane-{lane_id}" / name
+                    for lane_id in range(parallel_lanes)
+                ],
+                policy,
+            )
+            for name, _controller, policy in collections
+        ]
+    )
     _write_json(
         runner_progress,
         {
             "schema": "lns2.lns2_tradeoff_progress.v2",
             "phase": "paired-isolated-parallel",
-            "status": "complete" if errors == 0 else "error",
+            "status": "complete",
             "completed_jobs": completed,
             "total_jobs": total,
             "error_jobs": errors,
             "parallel_runtime": runtime,
         },
     )
-    if completed != total or errors:
-        raise RuntimeError(
-            f"isolated parallel paired collection incomplete: {completed}/{total}, errors={errors}"
-        )
 
 
 def _run_dual_track_after_validation(
@@ -1382,7 +1691,7 @@ def _run_dual_track_after_validation(
             resume=arguments.resume,
             identity={
                 "runner": "run_lns2_tradeoff_evaluation.dual_track",
-                "schema_version": 6,
+                "schema_version": 7,
                 "mode": arguments.mode,
                 "dataset": str(dataset),
                 "collection_config": str(collection_config),
@@ -1424,6 +1733,14 @@ def _run_dual_track_after_validation(
                     "runner": sha256_file(Path(__file__).resolve()),
                     "report": sha256_file(PROJECT_ROOT / "experiments" / "lns2_bottleneck.py"),
                     "collection": sha256_file(PROJECT_ROOT / "experiments" / "closed_loop_confirmation.py"),
+                    "trace_storage": sha256_file(
+                        PROJECT_ROOT
+                        / "experiments"
+                        / "closed_loop_trace_storage.py"
+                    ),
+                    "parallel_runtime": sha256_file(
+                        PROJECT_ROOT / "experiments" / "parallel_runtime.py"
+                    ),
                     "v3_controller": sha256_file(
                         PROJECT_ROOT / "experiments" / "v3_controller.py"
                     ),

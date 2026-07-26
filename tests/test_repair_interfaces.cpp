@@ -74,6 +74,29 @@ Snapshot initializeWithSeed(int seed)
     return snapshot;
 }
 
+void requireIncompleteInitialSolutionIsNotFeasible()
+{
+    Instance instance(TEST_MAP, TEST_SCEN, 80);
+    vector<Agent> agents;
+    agents.reserve(80);
+    for (int id = 0; id < 80; id++)
+        agents.emplace_back(instance, id, true);
+    srand(29);
+    InitLNS solver(instance, agents, 0, "PP", "Adaptive", 8, 0);
+    require(!solver.initialize(), "zero-budget initialization unexpectedly completed");
+    const RepairState state = solver.getRepairState();
+    require(!state.initial_solution_complete,
+            "zero-budget state claims the initial solution is complete");
+    require(!state.feasible && !solver.isFeasible(),
+            "incomplete initial solution was reported feasible");
+    require(state.done, "zero-budget incomplete state is not terminal");
+    require(!solver.step(),
+            "a terminal zero-budget solver unexpectedly applied a repair step");
+    const RepairState repeated = solver.getRepairState();
+    require(repeated.done && !repeated.feasible,
+            "terminal state changed after a rejected repair step");
+}
+
 bool sameState(const RepairState& left, const RepairState& right);
 
 Snapshot stepWithActionSeed(int solver_seed, int action_seed)
@@ -250,7 +273,6 @@ bool sameState(const RepairState& left, const RepairState& right)
         left.iteration != right.iteration || left.rows != right.rows ||
         left.cols != right.cols || left.sum_of_costs != right.sum_of_costs ||
         left.num_of_colliding_pairs != right.num_of_colliding_pairs ||
-        left.runtime != right.runtime ||
         left.low_level_expanded != right.low_level_expanded ||
         left.low_level_generated != right.low_level_generated ||
         left.low_level_reopened != right.low_level_reopened ||
@@ -274,6 +296,7 @@ bool sameState(const RepairState& left, const RepairState& right)
 
 int main()
 {
+    requireIncompleteInitialSolutionIsNotFeasible();
     const Snapshot first = initializeWithSeed(7);
     const Snapshot second = initializeWithSeed(7);
     require(first.conflicts == second.conflicts, "reset conflict count is not deterministic");

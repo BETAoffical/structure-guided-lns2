@@ -26,7 +26,7 @@ public:
   int getId() { return id; }
 
   std::vector<Node*> getG() { return G_OPEN; }
-  void setG(std::vector<Node*> g) { G_OPEN = g; }
+  void setG(const std::vector<Node*>& g) { G_OPEN = g; }
 
   void addNode(Node* v) { G_OPEN.push_back(v); }
 

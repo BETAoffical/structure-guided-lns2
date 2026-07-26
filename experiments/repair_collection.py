@@ -5,6 +5,7 @@ import datetime as dt
 import errno
 import hashlib
 import json
+import math
 import multiprocessing
 import os
 import random
@@ -18,12 +19,21 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from experiments._common import episode_id as _episode_id, read_jsonl as _read_jsonl
+from experiments._common import (
+    contained_file,
+    episode_id as _episode_id,
+    read_jsonl as _read_jsonl,
+)
 
 
 SCHEMA_VERSION = 1
-EPISODE_SCHEMA = "lns2.repair_episode.v1"
-COUNTERFACTUAL_SCHEMA = "lns2.counterfactual.v1"
+REPAIR_COLLECTION_ARTIFACT_VERSION = 2
+REPAIR_COLLECTION_SCHEMA = "lns2.repair_collection.v2"
+EPISODE_SCHEMA = "lns2.repair_episode.v2"
+COUNTERFACTUAL_SCHEMA = "lns2.counterfactual.v2"
+COUNTERFACTUAL_METADATA_SCHEMA = "lns2.counterfactual_metadata.v2"
+NATIVE_REPAIR_TIMING_SCHEMA = "lns2.repair_timing.v2"
+REPAIR_TIME_LABEL = "lns2.repair_time.native_step_seconds.v2"
 POLICY_DESTROY_STRATEGIES = {
     "official_adaptive": "Adaptive",
     "fixed_target": "Target",
@@ -49,10 +59,81 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONTROL_ROOT = PROJECT_ROOT / "build" / ".repair_collection_control"
 LOCK_POLL_SECONDS = 0.05
 PROCESS_STOP_GRACE_SECONDS = 5.0
+REPAIR_COLLECTION_IMPLEMENTATION_FILES = (
+    "CMakeLists.txt",
+    "experiments/_common.py",
+    "experiments/repair_collection.py",
+    "src/python_bindings.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 
 
 class CollectionLockError(RuntimeError):
     pass
+
+
+def _repair_time_semantics() -> dict[str, Any]:
+    return {
+        "label": REPAIR_TIME_LABEL,
+        "source_metric": "metrics.native_step_seconds",
+        "aggregation": "sum_over_executed_repair_calls",
+        "scope": (
+            "Native C++ repair-step wall time. Includes native neighborhood "
+            "generation, replanning, native state snapshot, bookkeeping, and "
+            "native residual time; excludes Python/controller orchestration, "
+            "time between calls, and binding/Python conversion outside the "
+            "native step."
+        ),
+        "required_native_timing_schema": NATIVE_REPAIR_TIMING_SCHEMA,
+    }
+
+
+def _producer_identity() -> dict[str, Any]:
+    files = {
+        relative: hashlib.sha256(
+            (PROJECT_ROOT / relative).read_bytes()
+        ).hexdigest()
+        for relative in REPAIR_COLLECTION_IMPLEMENTATION_FILES
+    }
+    native_module = None
+    try:
+        import lns2_env as module
+    except ImportError:
+        pass
+    else:
+        native_path = Path(str(module.__file__)).resolve()
+        native_module = {
+            "path": native_path.name,
+            "sha256": hashlib.sha256(native_path.read_bytes()).hexdigest(),
+            "repair_timing_schema": str(
+                getattr(module, "repair_timing_schema", "")
+            ),
+        }
+    return {
+        "name": "experiments.repair_collection",
+        "files": files,
+        "native_module": native_module,
+    }
+
+
+def _collection_identity() -> dict[str, Any]:
+    return {
+        "schema": REPAIR_COLLECTION_SCHEMA,
+        "schema_version": REPAIR_COLLECTION_ARTIFACT_VERSION,
+        "repair_time_semantics": _repair_time_semantics(),
+        "producer": _producer_identity(),
+    }
+
+
+def _artifact_fields(schema: str = REPAIR_COLLECTION_SCHEMA) -> dict[str, Any]:
+    return {
+        "schema": str(schema),
+        "schema_version": REPAIR_COLLECTION_ARTIFACT_VERSION,
+        "repair_time_label": REPAIR_TIME_LABEL,
+    }
 
 
 def _utc_now() -> str:
@@ -163,7 +244,7 @@ class _CollectionRunLock:
     ) -> None:
         pid = os.getpid()
         self.owner = {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "run_id": uuid.uuid4().hex,
             "run_fingerprint": run_fingerprint,
             "phase": phase,
@@ -409,6 +490,15 @@ def _make_environment(
     destroy_strategy: str,
 ) -> Any:
     module = _load_environment_module()
+    native_timing_schema = str(
+        getattr(module, "repair_timing_schema", "")
+    )
+    if native_timing_schema != NATIVE_REPAIR_TIMING_SCHEMA:
+        raise RuntimeError(
+            "repair collection requires native timing schema "
+            f"{NATIVE_REPAIR_TIMING_SCHEMA}; got "
+            f"{native_timing_schema or 'missing'}"
+        )
     split_root = Path(dataset_root) / str(row["split"])
     return module.LNS2RepairEnv(
         str(split_root / str(row["map_file"])),
@@ -434,6 +524,72 @@ def _low_level_delta(
     }
 
 
+def _native_step_seconds(metrics: dict[str, Any]) -> float:
+    """Validate and read the strict v2 native repair-step time metric."""
+
+    required = {
+        "native_step_seconds",
+        "step_runtime",
+        "episode_runtime_delta_seconds",
+    }
+    missing = sorted(required.difference(metrics))
+    if missing:
+        raise ValueError(
+            "repair collection requires native timing v2 metrics; "
+            f"missing {missing}"
+        )
+    raw_values = tuple(metrics[key] for key in sorted(required))
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        for value in raw_values
+    ):
+        raise ValueError("native timing v2 metrics must be numeric")
+    try:
+        native_step = float(metrics["native_step_seconds"])
+        step_runtime = float(metrics["step_runtime"])
+        episode_delta = float(metrics["episode_runtime_delta_seconds"])
+    except (OverflowError, TypeError, ValueError) as error:
+        raise ValueError("native timing v2 metrics must be numeric") from error
+    if any(
+        not math.isfinite(value) or value < 0.0
+        for value in (native_step, step_runtime, episode_delta)
+    ):
+        raise ValueError("native timing v2 metrics must be finite and non-negative")
+    tolerance = max(1e-6, 0.01 * max(native_step, step_runtime, 1e-6))
+    if not math.isclose(
+        step_runtime,
+        native_step,
+        rel_tol=0.01,
+        abs_tol=tolerance,
+    ):
+        raise ValueError(
+            "native timing v2 step_runtime does not match native_step_seconds"
+        )
+    if episode_delta + tolerance < native_step:
+        raise ValueError(
+            "native timing v2 episode_runtime_delta_seconds is below "
+            "native_step_seconds"
+        )
+    return native_step
+
+
+def _is_finite_json_tree(value: Any) -> bool:
+    """Return whether a value is a finite, JSON-shaped artifact tree."""
+
+    if value is None or isinstance(value, (bool, str, int)):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_is_finite_json_tree(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_finite_json_tree(item)
+            for key, item in value.items()
+        )
+    return False
+
+
 def _conflict_auc(values: list[int]) -> float:
     return sum(
         (float(values[index]) + float(values[index + 1])) / 2.0
@@ -450,7 +606,7 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
         )
         state = _plain(environment.reset(seed=solver_seed))
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "split": row["split"],
             "map_id": row["map_id"],
             "task_id": row["task_id"],
@@ -468,7 +624,7 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
     except Exception as error:
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "split": row["split"],
             "map_id": row["map_id"],
             "task_id": row["task_id"],
@@ -481,7 +637,14 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def _valid_episode_trace(path: Path, run_fingerprint: str) -> dict[str, Any] | None:
+def _valid_episode_trace(
+    path: Path,
+    run_fingerprint: str,
+    *,
+    expected_episode_id: str | None = None,
+    expected_policy: str | None = None,
+    expected_solver_seed: int | None = None,
+) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
@@ -490,11 +653,259 @@ def _valid_episode_trace(path: Path, run_fingerprint: str) -> dict[str, Any] | N
         return None
     if (
         not rows
-        or rows[-1].get("event") != "finish"
-        or rows[-1].get("run_fingerprint") != run_fingerprint
+        or any(
+            not isinstance(row, dict) or not _is_finite_json_tree(row)
+            for row in rows
+        )
+        or rows[0].get("event") != "initial"
     ):
         return None
-    return rows[-1].get("summary")
+    if rows[-1].get("event") != "finish":
+        return None
+    if any(str(row.get("event")) != "transition" for row in rows[1:-1]):
+        return None
+    for row in rows:
+        if (
+            str(row.get("schema")) != EPISODE_SCHEMA
+            or row.get("schema_version")
+            != REPAIR_COLLECTION_ARTIFACT_VERSION
+            or str(row.get("repair_time_label")) != REPAIR_TIME_LABEL
+            or str(row.get("run_fingerprint")) != str(run_fingerprint)
+        ):
+            return None
+    initial = rows[0]
+    finish = rows[-1]
+    episode_id = str(initial.get("episode_id") or "")
+    policy = str(initial.get("policy") or "")
+    solver_seed = _strict_int(initial.get("solver_seed"))
+    if solver_seed is None:
+        return None
+    if (
+        not episode_id
+        or not policy
+        or any(str(row.get("episode_id") or "") != episode_id for row in rows)
+        or (
+            expected_episode_id is not None
+            and episode_id != str(expected_episode_id)
+        )
+        or (expected_policy is not None and policy != str(expected_policy))
+        or (
+            expected_solver_seed is not None
+            and solver_seed != int(expected_solver_seed)
+        )
+    ):
+        return None
+    initial_state = initial.get("state")
+    if not isinstance(initial_state, dict):
+        return None
+    try:
+        if str(initial.get("state_fingerprint")) != state_fingerprint(
+            initial_state
+        ):
+            return None
+        initial_conflicts = _strict_int(
+            initial_state["num_of_colliding_pairs"]
+        )
+        initial_cost = _strict_int(initial_state["sum_of_costs"])
+        initial_low_level = _validated_low_level(initial_state["low_level"])
+        if (
+            initial_conflicts is None
+            or initial_conflicts < 0
+            or initial_cost is None
+            or initial_cost < 0
+            or initial_low_level is None
+            or not isinstance(initial_state.get("feasible"), bool)
+            or not isinstance(initial_state.get("done"), bool)
+        ):
+            return None
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return None
+    transitions = [
+        row for row in rows if str(row.get("event")) == "transition"
+    ]
+    state = initial_state
+    conflicts = [initial_conflicts]
+    native_step_times: list[float] = []
+    try:
+        for transition in transitions:
+            if (
+                str(transition.get("native_timing_schema"))
+                != NATIVE_REPAIR_TIMING_SCHEMA
+                or not isinstance(transition.get("metrics"), dict)
+                or transition.get("action") != {"mode": "official"}
+                or state.get("done") is not False
+            ):
+                return None
+            if str(transition.get("before_fingerprint")) != state_fingerprint(state):
+                return None
+            after = transition.get("after")
+            if (
+                not isinstance(after, dict)
+                or str(transition.get("after_fingerprint"))
+                != state_fingerprint(after)
+            ):
+                return None
+            if (
+                not isinstance(after.get("feasible"), bool)
+                or not isinstance(after.get("done"), bool)
+                or not isinstance(transition.get("terminated"), bool)
+                or not isinstance(transition.get("truncated"), bool)
+                or transition["terminated"] is not after["feasible"]
+                or transition["truncated"]
+                is not (after["done"] and not after["feasible"])
+                or after["done"]
+                is not (transition["terminated"] or transition["truncated"])
+            ):
+                return None
+            before_conflicts = _strict_int(state.get("num_of_colliding_pairs"))
+            after_conflicts = _strict_int(after.get("num_of_colliding_pairs"))
+            before_cost = _strict_int(state.get("sum_of_costs"))
+            after_cost = _strict_int(after.get("sum_of_costs"))
+            before_low_level = _validated_low_level(state.get("low_level"))
+            after_low_level = _validated_low_level(after.get("low_level"))
+            metrics = transition["metrics"]
+            if (
+                before_conflicts is None
+                or before_conflicts < 0
+                or after_conflicts is None
+                or after_conflicts < 0
+                or before_cost is None
+                or before_cost < 0
+                or after_cost is None
+                or after_cost < 0
+                or before_low_level is None
+                or after_low_level is None
+                or _strict_int(metrics.get("conflicts_before"))
+                != before_conflicts
+                or _strict_int(metrics.get("conflicts_after"))
+                != after_conflicts
+                or _strict_int(metrics.get("sum_of_costs_before"))
+                != before_cost
+                or _strict_int(metrics.get("sum_of_costs_after"))
+                != after_cost
+                or metrics.get("action_valid") is not True
+            ):
+                return None
+            expected_low_level_delta = {
+                key: after_low_level[key] - before_low_level[key]
+                for key in before_low_level
+            }
+            if (
+                any(value < 0 for value in expected_low_level_delta.values())
+                or _validated_low_level(transition.get("low_level_delta"))
+                != expected_low_level_delta
+            ):
+                return None
+            native_step_times.append(
+                _native_step_seconds(dict(metrics))
+            )
+            state = after
+            conflicts.append(after_conflicts)
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return None
+    try:
+        finish_state = finish.get("state")
+        if finish_state is not None:
+            if not isinstance(finish_state, dict):
+                return None
+            finish_fingerprint = state_fingerprint(finish_state)
+            if str(finish.get("final_fingerprint")) != finish_fingerprint:
+                return None
+            if finish_fingerprint != state_fingerprint(state):
+                prior_payload = {
+                    key: state[key] for key in STATE_FINGERPRINT_KEYS
+                }
+                final_payload = {
+                    key: finish_state[key] for key in STATE_FINGERPRINT_KEYS
+                }
+                prior_payload["done"] = final_payload["done"]
+                if (
+                    state.get("done") is not False
+                    or finish_state.get("done") is not True
+                    or finish_state.get("feasible") is not False
+                    or prior_payload != final_payload
+                ):
+                    return None
+            state = finish_state
+        finish_matches = (
+            str(finish.get("final_fingerprint")) == state_fingerprint(state)
+            and isinstance(finish.get("success"), bool)
+            and finish["success"] is state["feasible"]
+            and state["done"] is True
+        )
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return None
+    if not finish_matches:
+        return None
+    summary = finish.get("summary")
+    if (
+        not isinstance(summary, dict)
+        or str(summary.get("repair_step_runtime_label")) != REPAIR_TIME_LABEL
+        or str(summary.get("time_to_feasible_label")) != REPAIR_TIME_LABEL
+    ):
+        return None
+    native_step_total = sum(native_step_times)
+    try:
+        feasible = state["feasible"]
+        done = state["done"]
+        final_sum_of_costs = _strict_int(state["sum_of_costs"])
+        initial_runtime = _finite_number(initial_state["runtime"])
+        if (
+            final_sum_of_costs is None
+            or final_sum_of_costs < 0
+            or initial_runtime is None
+            or initial_runtime < 0.0
+        ):
+            return None
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return None
+    expected_time_to_feasible = native_step_total if feasible else None
+    exact_expected = {
+        "initial_conflicts": conflicts[0],
+        "final_conflicts": conflicts[-1],
+        "repairable": conflicts[0] > 0,
+        "success": feasible,
+        "truncated": bool(done and not feasible),
+        "repair_iterations": len(transitions),
+        "conflict_trajectory": conflicts,
+        "final_sum_of_costs": final_sum_of_costs,
+    }
+    if any(summary.get(key) != value for key, value in exact_expected.items()):
+        return None
+    try:
+        float_expected = {
+            "conflict_auc": _conflict_auc(conflicts),
+            "initial_runtime": initial_runtime,
+            "repair_step_runtime": native_step_total,
+        }
+        if any(
+            not math.isfinite(value) or value < 0.0
+            for value in float_expected.values()
+        ):
+            return None
+        if any(
+            not math.isclose(
+                float(summary[key]),
+                value,
+                rel_tol=1e-9,
+                abs_tol=1e-9,
+            )
+            for key, value in float_expected.items()
+        ):
+            return None
+        if expected_time_to_feasible is None:
+            if summary.get("time_to_feasible") is not None:
+                return None
+        elif not math.isclose(
+            float(summary["time_to_feasible"]),
+            expected_time_to_feasible,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            return None
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return None
+    return summary
 
 
 def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
@@ -506,10 +917,16 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
     trace_path = output_root / "episodes" / str(row["split"]) / policy / f"{episode_id}.jsonl"
     relative_trace = trace_path.relative_to(output_root).as_posix()
     if job["resume"]:
-        summary = _valid_episode_trace(trace_path, job["run_fingerprint"])
+        summary = _valid_episode_trace(
+            trace_path,
+            job["run_fingerprint"],
+            expected_episode_id=episode_id,
+            expected_policy=policy,
+            expected_solver_seed=solver_seed,
+        )
         if summary is not None:
             return {
-                "schema_version": SCHEMA_VERSION,
+                **_artifact_fields(),
                 "episode_id": episode_id,
                 "split": row["split"],
                 "map_id": row["map_id"],
@@ -524,6 +941,46 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "summary": summary,
                 "error": None,
             }
+        if trace_path.is_file():
+            try:
+                existing_rows = _read_jsonl(trace_path)
+            except (OSError, json.JSONDecodeError):
+                existing_rows = None
+            completed_or_corrupt = existing_rows is None
+            if existing_rows:
+                rows_are_objects = all(
+                    isinstance(item, dict) and _is_finite_json_tree(item)
+                    for item in existing_rows
+                )
+                incomplete_shape = (
+                    rows_are_objects
+                    and existing_rows[0].get("event") == "initial"
+                    and all(
+                        item.get("event") == "transition"
+                        for item in existing_rows[1:]
+                    )
+                )
+                completed_or_corrupt = not incomplete_shape
+            if completed_or_corrupt:
+                return {
+                    **_artifact_fields(),
+                    "episode_id": episode_id,
+                    "split": row["split"],
+                    "map_id": row["map_id"],
+                    "task_id": row["task_id"],
+                    "layout_mode": row["layout_mode"],
+                    "task_variant": row.get("task_variant"),
+                    "agent_count": int(row["agent_count"]),
+                    "solver_seed": solver_seed,
+                    "policy": policy,
+                    "trace_file": relative_trace,
+                    "status": "error",
+                    "summary": None,
+                    "error": (
+                        "existing completed or corrupt episode trace failed "
+                        "integrity validation; preserving it unchanged"
+                    ),
+                }
     try:
         environment = _make_environment(
             job["dataset_root"],
@@ -535,8 +992,7 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
         conflicts = [int(state["num_of_colliding_pairs"])]
         events: list[dict[str, Any]] = [
             {
-                "schema": EPISODE_SCHEMA,
-                "schema_version": SCHEMA_VERSION,
+                **_artifact_fields(EPISODE_SCHEMA),
                 "run_fingerprint": job["run_fingerprint"],
                 "event": "initial",
                 "episode_id": episode_id,
@@ -553,15 +1009,21 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
             result = _plain(environment.step(action))
             state = result["observation"]
             metrics = result["metrics"]
-            step_runtime += float(metrics["step_runtime"])
+            if metrics.get("step_applied") is False:
+                if not bool(result["truncated"]) or not bool(state["done"]):
+                    raise RuntimeError(
+                        "a non-applied repair step did not return a truncated terminal state"
+                    )
+                break
+            step_runtime += _native_step_seconds(metrics)
             conflicts.append(int(state["num_of_colliding_pairs"]))
             events.append(
                 {
-                    "schema": EPISODE_SCHEMA,
-                    "schema_version": SCHEMA_VERSION,
+                    **_artifact_fields(EPISODE_SCHEMA),
                     "run_fingerprint": job["run_fingerprint"],
                     "event": "transition",
                     "episode_id": episode_id,
+                    "native_timing_schema": NATIVE_REPAIR_TIMING_SCHEMA,
                     "action": action,
                     "before_fingerprint": state_fingerprint(before),
                     "after_fingerprint": state_fingerprint(state),
@@ -583,24 +1045,26 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
             "conflict_auc": _conflict_auc(conflicts),
             "initial_runtime": float(events[0]["state"]["runtime"]),
             "repair_step_runtime": step_runtime,
-            "time_to_feasible": float(state["runtime"]) if state["feasible"] else None,
+            "repair_step_runtime_label": REPAIR_TIME_LABEL,
+            "time_to_feasible": step_runtime if state["feasible"] else None,
+            "time_to_feasible_label": REPAIR_TIME_LABEL,
             "final_sum_of_costs": int(state["sum_of_costs"]),
         }
         events.append(
             {
-                "schema": EPISODE_SCHEMA,
-                "schema_version": SCHEMA_VERSION,
+                **_artifact_fields(EPISODE_SCHEMA),
                 "run_fingerprint": job["run_fingerprint"],
                 "event": "finish",
                 "episode_id": episode_id,
                 "success": bool(state["feasible"]),
                 "final_fingerprint": state_fingerprint(state),
+                "state": state,
                 "summary": summary,
             }
         )
         _write_jsonl(trace_path, events)
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "episode_id": episode_id,
             "split": row["split"],
             "map_id": row["map_id"],
@@ -617,7 +1081,7 @@ def _baseline_worker(job: dict[str, Any]) -> dict[str, Any]:
         }
     except Exception as error:
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "episode_id": episode_id,
             "split": row["split"],
             "map_id": row["map_id"],
@@ -745,6 +1209,7 @@ def _horizon_outcomes(
                 "branch_runtime": sum(
                     float(item.get("step_runtime", 0.0)) for item in selected[1:]
                 ),
+                "branch_runtime_label": REPAIR_TIME_LABEL,
                 "time_to_feasible": (
                     sum(
                         float(item.get("step_runtime", 0.0))
@@ -753,9 +1218,618 @@ def _horizon_outcomes(
                     if solved_step is not None
                     else None
                 ),
+                "time_to_feasible_label": REPAIR_TIME_LABEL,
             }
         )
     return results
+
+
+def _strict_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _finite_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    result = float(value)
+    return result if math.isfinite(result) else None
+
+
+def _valid_state_fingerprint(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _validated_low_level(value: Any) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, int] = {}
+    for key in ("expanded", "generated", "reopened", "runs"):
+        parsed = _strict_int(value.get(key))
+        if parsed is None or parsed < 0:
+            return None
+        result[key] = parsed
+    if set(value) != set(result):
+        return None
+    return result
+
+
+def _normalized_horizons(values: Any) -> list[int] | None:
+    if not isinstance(values, (list, tuple)) or not values:
+        return None
+    horizons: list[int] = []
+    for value in values:
+        parsed = _strict_int(value)
+        if parsed is None or parsed <= 0:
+            return None
+        horizons.append(parsed)
+    if len(horizons) != len(set(horizons)):
+        return None
+    return sorted(horizons)
+
+
+def _normalized_counterfactual_validation_config(
+    value: Any,
+) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not _is_finite_json_tree(value):
+        return None
+    trials = _strict_int(value.get("trials"))
+    maximum_seeds = _strict_int(value.get("max_seed_agents"))
+    heuristics = value.get("heuristics")
+    neighborhood_sizes = value.get("neighborhood_sizes")
+    horizons = _normalized_horizons(value.get("horizons"))
+    if (
+        trials is None
+        or trials <= 0
+        or maximum_seeds is None
+        or maximum_seeds <= 0
+        or not isinstance(heuristics, list)
+        or not heuristics
+        or any(
+            not isinstance(item, str)
+            or item not in {"target", "collision", "random"}
+            for item in heuristics
+        )
+        or not isinstance(neighborhood_sizes, list)
+        or not neighborhood_sizes
+        or any(
+            _strict_int(item) is None or item <= 0
+            for item in neighborhood_sizes
+        )
+        or horizons is None
+    ):
+        return None
+    return {
+        "trials": trials,
+        "max_seed_agents": maximum_seeds,
+        "heuristics": list(heuristics),
+        "neighborhood_sizes": list(neighborhood_sizes),
+        "horizons": horizons,
+    }
+
+
+def _counterfactual_outcome_timing_is_valid(
+    row: dict[str, Any],
+    *,
+    expected_horizons: list[int],
+) -> bool:
+    if str(row.get("step_runtime_label")) != REPAIR_TIME_LABEL:
+        return False
+    normalized_horizons = _normalized_horizons(expected_horizons)
+    if normalized_horizons is None:
+        return False
+    steps = row.get("steps")
+    horizons = row.get("horizon_outcomes")
+    if (
+        not isinstance(steps, list)
+        or len(steps) < 2
+        or not isinstance(horizons, list)
+        or len(horizons) != len(normalized_horizons)
+    ):
+        return False
+
+    step_times: list[float] = []
+    step_conflicts: list[int] = []
+    step_costs: list[int] = []
+    step_fingerprints: list[str] = []
+    step_low_levels: list[dict[str, int]] = []
+    try:
+        for expected_step, step_value in enumerate(steps):
+            if not isinstance(step_value, dict):
+                return False
+            step = dict(step_value)
+            if _strict_int(step.get("step")) != expected_step:
+                return False
+            stored = _finite_number(step.get("step_runtime"))
+            conflicts = _strict_int(step.get("conflicts"))
+            sum_of_costs = _strict_int(step.get("sum_of_costs"))
+            fingerprint = step.get("state_fingerprint")
+            low_level = _validated_low_level(step.get("low_level"))
+            terminated = step.get("terminated")
+            truncated = step.get("truncated")
+            if (
+                stored is None
+                or stored < 0.0
+                or conflicts is None
+                or conflicts < 0
+                or sum_of_costs is None
+                or sum_of_costs < 0
+                or not _valid_state_fingerprint(fingerprint)
+                or low_level is None
+                or not isinstance(terminated, bool)
+                or not isinstance(truncated, bool)
+                or (terminated and truncated)
+                or ((terminated or truncated) and expected_step != len(steps) - 1)
+            ):
+                return False
+            if expected_step == 0:
+                if (
+                    step.get("action") is not None
+                    or step.get("metrics") is not None
+                    or terminated
+                    or truncated
+                    or not math.isclose(
+                        stored, 0.0, rel_tol=0.0, abs_tol=1e-12
+                    )
+                ):
+                    return False
+            else:
+                metrics = step.get("metrics")
+                if (
+                    not isinstance(metrics, dict)
+                    or not isinstance(metrics.get("action_valid"), bool)
+                    or (
+                        expected_step > 1
+                        and step.get("action") != {"mode": "official"}
+                    )
+                ):
+                    return False
+                expected = _native_step_seconds(dict(metrics))
+                if not math.isclose(
+                    stored, expected, rel_tol=1e-9, abs_tol=1e-9
+                ):
+                    return False
+                metric_expectations = {
+                    "conflicts_before": step_conflicts[-1],
+                    "conflicts_after": conflicts,
+                    "sum_of_costs_before": step_costs[-1],
+                    "sum_of_costs_after": sum_of_costs,
+                }
+                if any(
+                    _strict_int(metrics.get(key)) != expected_value
+                    for key, expected_value in metric_expectations.items()
+                ):
+                    return False
+                if terminated is not (conflicts == 0):
+                    return False
+            step_times.append(stored)
+            step_conflicts.append(conflicts)
+            step_costs.append(sum_of_costs)
+            step_fingerprints.append(str(fingerprint))
+            step_low_levels.append(low_level)
+
+        if step_conflicts[0] <= 0:
+            return False
+        trajectory = row.get("conflict_trajectory")
+        if (
+            not isinstance(trajectory, list)
+            or len(trajectory) != len(step_conflicts)
+            or any(
+                _strict_int(value) != expected
+                for value, expected in zip(trajectory, step_conflicts)
+            )
+            or row.get("state_fingerprint") != step_fingerprints[0]
+        ):
+            return False
+        action_valid = row.get("action_valid")
+        first_action_valid = steps[1]["metrics"].get("action_valid")
+        if (
+            not isinstance(action_valid, bool)
+            or not isinstance(first_action_valid, bool)
+            or action_valid is not first_action_valid
+        ):
+            return False
+
+        actual_horizons: list[int] = []
+        for expected_horizon, horizon_value in zip(
+            normalized_horizons, horizons
+        ):
+            if not isinstance(horizon_value, dict):
+                return False
+            horizon_row = dict(horizon_value)
+            horizon = _strict_int(horizon_row.get("horizon"))
+            if horizon != expected_horizon:
+                return False
+            actual_horizons.append(horizon)
+            executed_steps = _strict_int(horizon_row.get("executed_steps"))
+            expected_executed = min(horizon, len(step_times) - 1)
+            if executed_steps != expected_executed:
+                return False
+            if len(step_times) - 1 >= horizon:
+                expected_available = True
+                point_index = horizon
+                selected_conflicts = step_conflicts[: horizon + 1]
+            elif step_conflicts[-1] == 0:
+                expected_available = True
+                point_index = len(step_times) - 1
+                selected_conflicts = list(step_conflicts)
+                selected_conflicts.extend(
+                    [step_conflicts[-1]]
+                    * (horizon + 1 - len(selected_conflicts))
+                )
+            else:
+                expected_available = False
+                point_index = len(step_times) - 1
+                selected_conflicts = list(step_conflicts)
+            if (
+                not isinstance(horizon_row.get("available"), bool)
+                or horizon_row["available"] is not expected_available
+            ):
+                return False
+            if str(horizon_row.get("branch_runtime_label")) != REPAIR_TIME_LABEL:
+                return False
+            if (
+                str(horizon_row.get("time_to_feasible_label"))
+                != REPAIR_TIME_LABEL
+            ):
+                return False
+            branch_runtime = _finite_number(horizon_row.get("branch_runtime"))
+            expected_branch = math.fsum(
+                step_times[1 : expected_executed + 1]
+            )
+            if (
+                branch_runtime is None
+                or branch_runtime < 0.0
+                or not math.isclose(
+                    branch_runtime,
+                    expected_branch,
+                    rel_tol=1e-9,
+                    abs_tol=1e-9,
+                )
+            ):
+                return False
+
+            expected_solved_step = next(
+                (
+                    index
+                    for index, conflicts in enumerate(selected_conflicts)
+                    if conflicts == 0
+                ),
+                None,
+            )
+            expected_solved = step_conflicts[point_index] == 0
+            if (
+                not isinstance(horizon_row.get("solved"), bool)
+                or horizon_row["solved"] is not expected_solved
+            ):
+                return False
+            solved_step_value = horizon_row.get("solved_step")
+            if expected_solved_step is None:
+                if (
+                    solved_step_value is not None
+                    or horizon_row.get("time_to_feasible") is not None
+                ):
+                    return False
+            else:
+                solved_step = _strict_int(solved_step_value)
+                if solved_step != expected_solved_step:
+                    return False
+                time_to_feasible = _finite_number(
+                    horizon_row.get("time_to_feasible")
+                )
+                expected_time = math.fsum(step_times[1 : solved_step + 1])
+                if (
+                    time_to_feasible is None
+                    or time_to_feasible < 0.0
+                    or not math.isclose(
+                        time_to_feasible,
+                        expected_time,
+                        rel_tol=1e-9,
+                        abs_tol=1e-9,
+                    )
+                ):
+                    return False
+            expected_auc = (
+                _conflict_auc(selected_conflicts)
+                if expected_available
+                else None
+            )
+            conflict_auc = horizon_row.get("conflict_auc")
+            if expected_auc is None:
+                if conflict_auc is not None:
+                    return False
+            else:
+                parsed_auc = _finite_number(conflict_auc)
+                if (
+                    parsed_auc is None
+                    or parsed_auc < 0.0
+                    or not math.isclose(
+                        parsed_auc,
+                        expected_auc,
+                        rel_tol=1e-9,
+                        abs_tol=1e-9,
+                    )
+                ):
+                    return False
+            integer_expectations = {
+                "conflicts_after": step_conflicts[point_index],
+                "conflict_reduction": (
+                    step_conflicts[0] - step_conflicts[point_index]
+                ),
+                "sum_of_costs_after": step_costs[point_index],
+                "cost_improvement": (
+                    step_costs[0] - step_costs[point_index]
+                ),
+            }
+            if any(
+                _strict_int(horizon_row.get(key)) != expected
+                for key, expected in integer_expectations.items()
+            ):
+                return False
+            expected_low_level = {
+                key: (
+                    step_low_levels[point_index][key]
+                    - step_low_levels[0][key]
+                )
+                for key in step_low_levels[0]
+            }
+            if any(value < 0 for value in expected_low_level.values()):
+                return False
+            if (
+                _validated_low_level(horizon_row.get("low_level_delta"))
+                != expected_low_level
+            ):
+                return False
+        if actual_horizons != normalized_horizons:
+            return False
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _counterfactual_artifact_rows_are_valid(
+    rows_by_field: dict[str, list[Any]],
+    *,
+    run_fingerprint: str,
+    episode_id: str,
+    counterfactual_config: dict[str, Any],
+) -> bool:
+    config = _normalized_counterfactual_validation_config(
+        counterfactual_config
+    )
+    if config is None or set(rows_by_field) != {
+        "states_file",
+        "outcomes_file",
+        "errors_file",
+    }:
+        return False
+    for field, rows in rows_by_field.items():
+        for row in rows:
+            if not isinstance(row, dict) or not _is_finite_json_tree(row):
+                return False
+            if (
+                str(row.get("schema")) != COUNTERFACTUAL_SCHEMA
+                or row.get("schema_version")
+                != REPAIR_COLLECTION_ARTIFACT_VERSION
+                or str(row.get("repair_time_label")) != REPAIR_TIME_LABEL
+                or str(row.get("run_fingerprint")) != str(run_fingerprint)
+                or str(row.get("episode_id")) != str(episode_id)
+            ):
+                return False
+
+    state_rows = rows_by_field["states_file"]
+    states: dict[str, dict[str, Any]] = {}
+    decision_indices: list[int] = []
+    try:
+        for row in state_rows:
+            state = row.get("state")
+            state_id = row.get("state_id")
+            decision_index = _strict_int(row.get("decision_index"))
+            prefix_actions = row.get("prefix_actions")
+            candidate_count = _strict_int(row.get("candidate_count"))
+            conflicts = (
+                _strict_int(state.get("num_of_colliding_pairs"))
+                if isinstance(state, dict)
+                else None
+            )
+            if (
+                not isinstance(state, dict)
+                or not isinstance(state_id, str)
+                or not state_id
+                or decision_index is None
+                or decision_index < 0
+                or state_id
+                != f"{episode_id}__decision_{decision_index:04d}"
+                or state_id in states
+                or not isinstance(prefix_actions, list)
+                or len(prefix_actions) != decision_index
+                or any(
+                    action != {"mode": "official"}
+                    for action in prefix_actions
+                )
+                or candidate_count is None
+                or candidate_count < 0
+                or state.get("done") is not False
+                or state.get("feasible") is not False
+                or conflicts is None
+                or conflicts <= 0
+                or _validated_low_level(state.get("low_level")) is None
+            ):
+                return False
+            fingerprint = state_fingerprint(state)
+            if (
+                row.get("state_fingerprint") != fingerprint
+                or not _valid_state_fingerprint(fingerprint)
+            ):
+                return False
+            actions = candidate_actions(
+                state,
+                config["max_seed_agents"],
+                config["heuristics"],
+                config["neighborhood_sizes"],
+            )
+            if candidate_count != len(actions):
+                return False
+            states[state_id] = {
+                "fingerprint": fingerprint,
+                "actions": actions,
+            }
+            decision_indices.append(decision_index)
+    except (KeyError, OverflowError, TypeError, ValueError):
+        return False
+    if (
+        decision_indices != sorted(decision_indices)
+        or len(decision_indices) != len(set(decision_indices))
+        or (decision_indices and decision_indices[0] != 0)
+    ):
+        return False
+
+    observed: set[tuple[str, int, int]] = set()
+    for field in ("outcomes_file", "errors_file"):
+        for row in rows_by_field[field]:
+            state_id = row.get("state_id")
+            candidate_index = _strict_int(row.get("candidate_index"))
+            trial_index = _strict_int(row.get("trial_index"))
+            if (
+                not isinstance(state_id, str)
+                or state_id not in states
+                or candidate_index is None
+                or candidate_index < 0
+                or candidate_index >= len(states[state_id]["actions"])
+                or trial_index is None
+                or trial_index < 0
+                or trial_index >= config["trials"]
+                or row.get("state_fingerprint")
+                != states[state_id]["fingerprint"]
+            ):
+                return False
+            key = (state_id, candidate_index, trial_index)
+            if key in observed:
+                return False
+            observed.add(key)
+            action = states[state_id]["actions"][candidate_index]
+            trial_seed = _trial_seed(
+                episode_id,
+                state_id,
+                action,
+                trial_index,
+            )
+            if _strict_int(row.get("trial_seed")) != trial_seed:
+                return False
+            if field == "outcomes_file":
+                expected_action = {**action, "random_seed": trial_seed}
+                steps = row.get("steps")
+                if (
+                    row.get("candidate_action") != expected_action
+                    or not isinstance(steps, list)
+                    or len(steps) < 2
+                    or not isinstance(steps[1], dict)
+                    or steps[1].get("action") != expected_action
+                    or not _counterfactual_outcome_timing_is_valid(
+                        row,
+                        expected_horizons=config["horizons"],
+                    )
+                ):
+                    return False
+            elif (
+                row.get("candidate_action") != action
+                or not isinstance(row.get("error"), str)
+                or not row["error"]
+            ):
+                return False
+
+    expected = {
+        (state_id, candidate_index, trial_index)
+        for state_id, state in states.items()
+        for candidate_index in range(len(state["actions"]))
+        for trial_index in range(config["trials"])
+    }
+    return observed == expected
+
+
+def _valid_counterfactual_resume_metadata(
+    metadata: dict[str, Any],
+    run_fingerprint: str,
+    output_root: Path,
+    *,
+    expected_episode_id: str,
+    expected_metadata_file: str,
+    counterfactual_config: dict[str, Any],
+) -> bool:
+    requested_config = (
+        _normalized_counterfactual_validation_config(counterfactual_config)
+        if counterfactual_config
+        else None
+    )
+    stored_config_value = metadata.get("counterfactual_config")
+    stored_config = (
+        _normalized_counterfactual_validation_config(stored_config_value)
+        if isinstance(stored_config_value, dict)
+        else None
+    )
+    if not isinstance(stored_config_value, dict) or stored_config is None:
+        return False
+    if (
+        requested_config is not None
+        and stored_config is not None
+        and requested_config != stored_config
+    ):
+        return False
+    validation_config = stored_config
+    metadata_parent = Path(expected_metadata_file).parent
+    expected_artifact_files = {
+        "states_file": (metadata_parent / "states.jsonl").as_posix(),
+        "outcomes_file": (metadata_parent / "outcomes.jsonl").as_posix(),
+        "errors_file": (metadata_parent / "errors.jsonl").as_posix(),
+    }
+    if not _is_finite_json_tree(metadata) or not (
+        str(metadata.get("schema")) == COUNTERFACTUAL_METADATA_SCHEMA
+        and metadata.get("schema_version")
+        == REPAIR_COLLECTION_ARTIFACT_VERSION
+        and str(metadata.get("repair_time_label")) == REPAIR_TIME_LABEL
+        and str(metadata.get("run_fingerprint")) == str(run_fingerprint)
+        and str(metadata.get("episode_id")) == str(expected_episode_id)
+        and str(metadata.get("metadata_file")) == str(expected_metadata_file)
+        and metadata.get("complete") is True
+        and str(metadata.get("status")) == "ok"
+        and all(
+            str(metadata.get(field)) == expected
+            for field, expected in expected_artifact_files.items()
+        )
+    ):
+        return False
+    expected_counts = {
+        "states_file": _strict_int(metadata.get("state_count")),
+        "outcomes_file": _strict_int(metadata.get("outcome_count")),
+        "errors_file": _strict_int(metadata.get("error_count")),
+    }
+    if any(value is None for value in expected_counts.values()):
+        return False
+    if any(value < 0 for value in expected_counts.values() if value is not None):
+        return False
+    rows_by_field: dict[str, list[dict[str, Any]]] = {}
+    try:
+        for field, expected_count in expected_counts.items():
+            path = contained_file(output_root, metadata.get(field), field=field)
+            rows = _read_jsonl(path)
+            if len(rows) != expected_count:
+                return False
+            rows_by_field[field] = rows
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    if expected_counts["errors_file"] != 0:
+        return False
+    return _counterfactual_artifact_rows_are_valid(
+        rows_by_field,
+        run_fingerprint=run_fingerprint,
+        episode_id=expected_episode_id,
+        counterfactual_config=validation_config,
+    )
 
 
 def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
@@ -766,17 +1840,75 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
     metadata_path = episode_root / "metadata.json"
     relative_metadata = metadata_path.relative_to(output_root).as_posix()
     if job["resume"] and metadata_path.is_file():
-        metadata = _read_json(metadata_path)
-        if (
-            metadata.get("run_fingerprint") == job["run_fingerprint"]
-            and metadata.get("complete") is True
+        try:
+            metadata = _read_json(metadata_path)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+            return {
+                **_artifact_fields(COUNTERFACTUAL_METADATA_SCHEMA),
+                "run_fingerprint": job["run_fingerprint"],
+                "episode_id": episode_id,
+                "split": manifest["split"],
+                "state_count": 0,
+                "outcome_count": 0,
+                "error_count": 1,
+                "metadata_file": relative_metadata,
+                "complete": False,
+                "status": "error",
+                "error": (
+                    "existing counterfactual metadata is not a valid JSON "
+                    f"object: {type(error).__name__}: {error}"
+                ),
+            }
+        if _valid_counterfactual_resume_metadata(
+            metadata,
+            str(job["run_fingerprint"]),
+            output_root,
+            expected_episode_id=episode_id,
+            expected_metadata_file=relative_metadata,
+            counterfactual_config=job.get("counterfactual", {}),
         ):
             metadata = dict(metadata)
             metadata["status"] = "resumed"
             return metadata
+        identity_compatible = (
+            _is_finite_json_tree(metadata)
+            and str(metadata.get("schema")) == COUNTERFACTUAL_METADATA_SCHEMA
+            and metadata.get("schema_version")
+            == REPAIR_COLLECTION_ARTIFACT_VERSION
+            and str(metadata.get("repair_time_label")) == REPAIR_TIME_LABEL
+            and str(metadata.get("run_fingerprint"))
+            == str(job["run_fingerprint"])
+        )
+        if not identity_compatible or metadata.get("complete") is True:
+            return {
+                **_artifact_fields(COUNTERFACTUAL_METADATA_SCHEMA),
+                "run_fingerprint": job["run_fingerprint"],
+                "episode_id": episode_id,
+                "split": manifest["split"],
+                "state_count": 0,
+                "outcome_count": 0,
+                "error_count": 1,
+                "metadata_file": relative_metadata,
+                "complete": False,
+                "status": "error",
+                "error": (
+                    "existing counterfactual metadata has an incompatible "
+                    "artifact schema, timing semantics, or run identity"
+                ),
+            }
     metadata_path.unlink(missing_ok=True)
     try:
         trace_path = output_root / str(manifest["trace_file"])
+        if _valid_episode_trace(
+            trace_path,
+            str(job["run_fingerprint"]),
+            expected_episode_id=episode_id,
+            expected_policy=str(manifest["policy"]),
+            expected_solver_seed=int(manifest["solver_seed"]),
+        ) is None:
+            raise ValueError(
+                "counterfactual source trace is legacy or timing-incompatible"
+            )
         events = _read_jsonl(trace_path)
         decisions = _select_evenly(
             _decision_states(events), int(job["counterfactual"]["max_states_per_episode"])
@@ -800,8 +1932,7 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             states.append(
                 {
-                    "schema": COUNTERFACTUAL_SCHEMA,
-                    "schema_version": SCHEMA_VERSION,
+                    **_artifact_fields(COUNTERFACTUAL_SCHEMA),
                     "run_fingerprint": job["run_fingerprint"],
                     "episode_id": episode_id,
                     "state_id": state_id,
@@ -841,6 +1972,9 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "action": None,
                                 "metrics": None,
                                 "step_runtime": 0.0,
+                                "low_level": dict(replayed["low_level"]),
+                                "terminated": False,
+                                "truncated": False,
                             }
                         ]
                         current = replayed
@@ -849,6 +1983,10 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 break
                             requested = action if step == 1 else {"mode": "official"}
                             result = _plain(environment.step(requested))
+                            if result["metrics"].get("step_applied") is False:
+                                raise RuntimeError(
+                                    "branch deadline expired before the repair step started"
+                                )
                             current = result["observation"]
                             points.append(
                                 {
@@ -856,17 +1994,17 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "state": current,
                                     "action": requested,
                                     "metrics": result["metrics"],
-                                    "step_runtime": float(
-                                        result["metrics"]["step_runtime"]
+                                    "step_runtime": _native_step_seconds(
+                                        result["metrics"]
                                     ),
+                                    "low_level": dict(current["low_level"]),
                                     "terminated": bool(result["terminated"]),
                                     "truncated": bool(result["truncated"]),
                                 }
                             )
                         outcomes.append(
                             {
-                                "schema": COUNTERFACTUAL_SCHEMA,
-                                "schema_version": SCHEMA_VERSION,
+                                **_artifact_fields(COUNTERFACTUAL_SCHEMA),
                                 "run_fingerprint": job["run_fingerprint"],
                                 "episode_id": episode_id,
                                 "state_id": state_id,
@@ -875,6 +2013,7 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "candidate_action": action,
                                 "trial_index": trial_index,
                                 "trial_seed": branch_seed,
+                                "step_runtime_label": REPAIR_TIME_LABEL,
                                 "action_valid": bool(
                                     points[1]["metrics"]["action_valid"]
                                 ),
@@ -909,10 +2048,11 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
                     except Exception as error:
                         errors.append(
                             {
-                                "schema": COUNTERFACTUAL_SCHEMA,
-                                "schema_version": SCHEMA_VERSION,
+                                **_artifact_fields(COUNTERFACTUAL_SCHEMA),
+                                "run_fingerprint": job["run_fingerprint"],
                                 "episode_id": episode_id,
                                 "state_id": state_id,
+                                "state_fingerprint": fingerprint,
                                 "candidate_index": candidate_index,
                                 "candidate_action": candidate,
                                 "trial_index": trial_index,
@@ -927,7 +2067,7 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
         _write_jsonl(outcomes_path, outcomes)
         _write_jsonl(errors_path, errors)
         metadata = {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(COUNTERFACTUAL_METADATA_SCHEMA),
             "run_fingerprint": job["run_fingerprint"],
             "episode_id": episode_id,
             "split": manifest["split"],
@@ -938,6 +2078,11 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
             "outcomes_file": outcomes_path.relative_to(output_root).as_posix(),
             "errors_file": errors_path.relative_to(output_root).as_posix(),
             "metadata_file": relative_metadata,
+            "counterfactual_config": (
+                _normalized_counterfactual_validation_config(
+                    dict(job["counterfactual"])
+                )
+            ),
             "complete": True,
             "status": "ok" if not errors else "error",
         }
@@ -945,7 +2090,7 @@ def _counterfactual_worker(job: dict[str, Any]) -> dict[str, Any]:
         return metadata
     except Exception as error:
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(COUNTERFACTUAL_METADATA_SCHEMA),
             "run_fingerprint": job["run_fingerprint"],
             "episode_id": episode_id,
             "split": manifest["split"],
@@ -975,7 +2120,7 @@ def _failed_job_result(
 ) -> dict[str, Any]:
     row = job["row"]
     common = {
-        "schema_version": SCHEMA_VERSION,
+        **_artifact_fields(),
         "split": row["split"],
         "map_id": row["map_id"],
         "task_id": row["task_id"],
@@ -1072,7 +2217,7 @@ def _write_progress(
     _write_json(
         path,
         {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "run_fingerprint": run_fingerprint,
             "phase": phase,
             "status": status,
@@ -1378,30 +2523,136 @@ def recover_counterfactual_manifest(output: str | Path) -> dict[str, Any]:
             "cannot recover a manifest while its collection is active"
         )
     run_config = _read_json(output_root / "run_config.json")
+    strict_v2 = (
+        str(run_config.get("schema")) == REPAIR_COLLECTION_SCHEMA
+        and run_config.get("schema_version")
+        == REPAIR_COLLECTION_ARTIFACT_VERSION
+        and str(run_config.get("repair_time_label")) == REPAIR_TIME_LABEL
+    )
+    legacy_identity = (
+        run_config.get("schema") in (None, "", "lns2.repair_collection.v1")
+        and run_config.get("schema_version") in (None, SCHEMA_VERSION)
+        and run_config.get("repair_time_label") in (None, "")
+    )
+    if not strict_v2 and not legacy_identity:
+        raise ValueError(
+            "counterfactual recovery run_config has an incomplete or "
+            "unsupported artifact identity"
+        )
+    counterfactual_config: dict[str, Any] = {}
+    if strict_v2:
+        configuration = run_config.get("configuration")
+        counterfactual = (
+            configuration.get("counterfactual")
+            if isinstance(configuration, dict)
+            else None
+        )
+        normalized_config = _normalized_counterfactual_validation_config(
+            counterfactual
+        )
+        if normalized_config is None:
+            raise ValueError(
+                "counterfactual recovery run_config has missing or invalid "
+                "counterfactual validation settings (horizons, trials, "
+                "candidate generation)"
+            )
+        counterfactual_config = dict(counterfactual)
     run_fingerprint = str(run_config["run_fingerprint"])
     rows = []
     invalid = []
     pattern = "counterfactual/*/*/metadata.json"
     for metadata_path in sorted(output_root.glob(pattern)):
-        metadata = _read_json(metadata_path)
+        try:
+            metadata = _read_json(metadata_path)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            invalid.append(
+                {
+                    "metadata_file": metadata_path.relative_to(
+                        output_root
+                    ).as_posix(),
+                    "reason": "invalid_metadata_json_object",
+                }
+            )
+            continue
         reason = None
-        if not bool(metadata.get("complete")):
+        if strict_v2 and (
+            not _is_finite_json_tree(metadata)
+            or str(metadata.get("schema")) != COUNTERFACTUAL_METADATA_SCHEMA
+            or metadata.get("schema_version")
+            != REPAIR_COLLECTION_ARTIFACT_VERSION
+            or str(metadata.get("repair_time_label")) != REPAIR_TIME_LABEL
+            or str(metadata.get("episode_id"))
+            != metadata_path.parent.name
+            or str(metadata.get("metadata_file"))
+            != metadata_path.relative_to(output_root).as_posix()
+            or any(
+                str(metadata.get(field))
+                != (metadata_path.parent / filename)
+                .relative_to(output_root)
+                .as_posix()
+                for field, filename in (
+                    ("states_file", "states.jsonl"),
+                    ("outcomes_file", "outcomes.jsonl"),
+                    ("errors_file", "errors.jsonl"),
+                )
+            )
+            or _normalized_counterfactual_validation_config(
+                metadata.get("counterfactual_config")
+            )
+            != _normalized_counterfactual_validation_config(
+                counterfactual_config
+            )
+        ):
+            reason = "artifact_schema_or_timing_mismatch"
+        elif metadata.get("complete") is not True:
             reason = "incomplete_metadata"
         elif str(metadata.get("run_fingerprint")) != run_fingerprint:
             reason = "run_fingerprint_mismatch"
         else:
+            rows_by_field: dict[str, list[dict[str, Any]]] = {}
             for key, count_key in (
                 ("states_file", "state_count"),
                 ("outcomes_file", "outcome_count"),
                 ("errors_file", "error_count"),
             ):
-                path = output_root / str(metadata.get(key, ""))
-                if not path.is_file():
+                try:
+                    path = contained_file(
+                        output_root, metadata.get(key), field=key
+                    )
+                    artifact_rows = _read_jsonl(path)
+                    expected_count = _strict_int(metadata.get(count_key))
+                except (
+                    OSError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ):
                     reason = f"missing_{key}"
                     break
-                if len(_read_jsonl(path)) != int(metadata.get(count_key, -1)):
+                if expected_count is None or expected_count < 0:
+                    reason = f"invalid_{count_key}"
+                    break
+                if len(artifact_rows) != expected_count:
                     reason = f"count_mismatch_{key}"
                     break
+                rows_by_field[key] = artifact_rows
+            if (
+                reason is None
+                and strict_v2
+                and not _counterfactual_artifact_rows_are_valid(
+                    rows_by_field,
+                    run_fingerprint=run_fingerprint,
+                    episode_id=str(metadata.get("episode_id")),
+                    counterfactual_config=counterfactual_config,
+                )
+            ):
+                reason = "artifact_schema_or_timing_mismatch"
+            if reason is None and strict_v2:
+                expected_status = (
+                    "ok" if not rows_by_field["errors_file"] else "error"
+                )
+                if str(metadata.get("status")) != expected_status:
+                    reason = "artifact_schema_or_timing_mismatch"
         if reason is None:
             rows.append(metadata)
         else:
@@ -1413,7 +2664,21 @@ def recover_counterfactual_manifest(output: str | Path) -> dict[str, Any]:
             )
     rows.sort(key=lambda row: str(row["episode_id"]))
     _write_jsonl(output_root / "counterfactual_manifest.jsonl", rows)
-    summary = _update_summary(output_root)
+    summary_identity = (
+        _artifact_fields()
+        if strict_v2
+        else {
+            key: run_config[key]
+            for key in ("schema", "schema_version", "repair_time_label")
+            if key in run_config
+        }
+    )
+    if "schema_version" not in summary_identity:
+        summary_identity["schema_version"] = SCHEMA_VERSION
+    summary = _update_summary(
+        output_root,
+        artifact_identity=summary_identity,
+    )
     expected = []
     source_path = output_root / "counterfactual_source_manifest.jsonl"
     if source_path.is_file():
@@ -1512,21 +2777,26 @@ def _run_metadata(
 ) -> tuple[str, dict[str, Any]]:
     dataset_hash = _dataset_fingerprint(dataset_root)
     configuration_hash = _fingerprint(config)
+    collection_identity = _collection_identity()
     fingerprint_payload: dict[str, Any] = {
         "dataset_fingerprint": dataset_hash,
         "configuration_fingerprint": configuration_hash,
         "splits": splits,
+        "collection_identity": collection_identity,
     }
     if task_ids is not None:
         fingerprint_payload["task_ids"] = task_ids
     run_fingerprint = _fingerprint(fingerprint_payload)
     run_config = {
-        "schema_version": SCHEMA_VERSION,
+        **_artifact_fields(),
         "dataset": str(dataset_root),
         "dataset_fingerprint": dataset_hash,
         "configuration": config,
         "configuration_fingerprint": configuration_hash,
         "splits": splits,
+        "input_config_schema_version": SCHEMA_VERSION,
+        "collection_identity": collection_identity,
+        "repair_time_semantics": _repair_time_semantics(),
         "run_fingerprint": run_fingerprint,
         "collection_control": {
             "workspace_exclusive_lock": True,
@@ -1554,11 +2824,35 @@ def _prepare_run(
     path = output_root / "run_config.json"
     if path.is_file():
         existing = _read_json(path)
+        if (
+            str(existing.get("schema")) != REPAIR_COLLECTION_SCHEMA
+            or existing.get("schema_version")
+            != REPAIR_COLLECTION_ARTIFACT_VERSION
+            or str(existing.get("repair_time_label")) != REPAIR_TIME_LABEL
+            or existing.get("collection_identity")
+            != run_config["collection_identity"]
+            or existing.get("repair_time_semantics")
+            != run_config["repair_time_semantics"]
+        ):
+            raise ValueError(
+                "output contains an incompatible repair collection "
+                "artifact schema, timing semantics, or producer"
+            )
         if existing.get("run_fingerprint") != run_fingerprint:
             raise ValueError("output contains a different dataset or collection config")
         if not resume:
             raise ValueError("output already exists; pass --resume to continue it")
     else:
+        existing_entries = [
+            entry
+            for entry in output_root.iterdir()
+            if entry.name != ".collection.lock"
+        ] if output_root.is_dir() else []
+        if existing_entries:
+            raise ValueError(
+                "output is non-empty but has no run_config.json; refusing to "
+                "adopt or overwrite existing artifacts"
+            )
         _write_json(path, run_config)
     return run_fingerprint, run_config
 
@@ -1710,8 +3004,14 @@ def _qualification_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _update_summary(output_root: Path) -> dict[str, Any]:
-    summary: dict[str, Any] = {"schema_version": SCHEMA_VERSION}
+def _update_summary(
+    output_root: Path,
+    *,
+    artifact_identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = dict(
+        artifact_identity if artifact_identity is not None else _artifact_fields()
+    )
     qualification_path = output_root / "qualification_manifest.jsonl"
     if qualification_path.is_file():
         summary["qualification"] = _qualification_summary(
@@ -1811,7 +3111,7 @@ def run_collection(
     run_fingerprint = metadata[0]
     if dry_run:
         return {
-            "schema_version": SCHEMA_VERSION,
+            **_artifact_fields(),
             "dry_run": True,
             "run_fingerprint": run_fingerprint,
             "phase": phase,
@@ -1823,6 +3123,16 @@ def run_collection(
 
     environment = dict(config["environment"])
     solver_seeds = [int(value) for value in config["solver_seeds"]]
+    run_config_path = output_root / "run_config.json"
+    if (
+        output_root.is_dir()
+        and not run_config_path.is_file()
+        and any(output_root.iterdir())
+    ):
+        raise ValueError(
+            "output is non-empty but has no run_config.json; refusing to "
+            "adopt or overwrite existing artifacts"
+        )
     with _CollectionRunLock(output_root, run_fingerprint, phase):
         _prepare_run(
             dataset_root,
@@ -1958,7 +3268,7 @@ def run_collection(
                 reason = _counterfactual_source_reason(row, config["counterfactual"])
                 source_selection.append(
                     {
-                        "schema_version": SCHEMA_VERSION,
+                        **_artifact_fields(),
                         "episode_id": str(row["episode_id"]),
                         "split": str(row["split"]),
                         "map_id": str(row["map_id"]),

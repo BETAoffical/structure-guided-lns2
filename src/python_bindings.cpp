@@ -3,6 +3,7 @@
 
 #include "InitLNS.h"
 #include "online_features.h"
+#include "structure_guided/instance_validation.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -40,6 +41,33 @@ uint64_t nextEnvironmentId()
 {
     static std::atomic<uint64_t> next_id(1);
     return next_id.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::unique_ptr<Instance> makeValidatedInstance(
+    const std::string& map_path,
+    const std::string& scenario_path,
+    int agent_count)
+{
+    structure_guided::validateInstanceFiles(
+        map_path, scenario_path, agent_count
+    );
+    return std::unique_ptr<Instance>(
+        new Instance(map_path, scenario_path, agent_count)
+    );
+}
+
+py::dict copyDict(const py::dict& source)
+{
+    return py::module_::import("copy").attr("deepcopy")(source).cast<py::dict>();
+}
+
+py::dict normalizeContext(const py::object& value)
+{
+    if (value.is_none())
+        return py::dict();
+    if (!py::isinstance<py::dict>(value))
+        throw py::type_error("context must be a dict or None");
+    return copyDict(py::cast<py::dict>(value));
 }
 }
 
@@ -83,6 +111,42 @@ public:
             }
             if (nodes.empty())
                 throw py::value_error("portable tree cannot be empty");
+            for (size_t index = 0; index < nodes.size(); index++)
+            {
+                const auto& node = nodes[index];
+                if (!node.is_leaf &&
+                    (node.feature < 0 || node.left < 0 || node.right < 0 ||
+                     node.left >= static_cast<int>(nodes.size()) ||
+                     node.right >= static_cast<int>(nodes.size())))
+                    throw py::value_error(
+                        "portable tree contains an invalid split node"
+                    );
+            }
+            vector<unsigned char> visit_state(nodes.size(), 0);
+            vector<pair<int, bool>> visit_stack;
+            visit_stack.emplace_back(0, false);
+            while (!visit_stack.empty())
+            {
+                const int index = visit_stack.back().first;
+                const bool exiting = visit_stack.back().second;
+                visit_stack.pop_back();
+                if (exiting)
+                {
+                    visit_state[index] = 2;
+                    continue;
+                }
+                if (visit_state[index] == 1)
+                    throw py::value_error("portable tree contains a cycle");
+                if (visit_state[index] == 2)
+                    continue;
+                visit_state[index] = 1;
+                visit_stack.emplace_back(index, true);
+                if (!nodes[index].is_leaf)
+                {
+                    visit_stack.emplace_back(nodes[index].right, false);
+                    visit_stack.emplace_back(nodes[index].left, false);
+                }
+            }
             trees.push_back(std::move(nodes));
         }
     }
@@ -215,7 +279,7 @@ py::dict stateToPython(const RepairState& state, const py::dict& context)
     result["sum_of_costs"] = state.sum_of_costs;
     result["num_of_colliding_pairs"] = state.num_of_colliding_pairs;
     result["runtime"] = state.runtime;
-    result["context"] = context;
+    result["context"] = copyDict(context);
 
     py::dict low_level;
     low_level["expanded"] = state.low_level_expanded;
@@ -324,7 +388,9 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["sum_of_costs_after"] = transition.sum_of_costs_after;
     result["runtime_before"] = transition.runtime_before;
     result["runtime_after"] = transition.runtime_after;
-    result["step_runtime"] = transition.runtime_after - transition.runtime_before;
+    result["step_runtime"] = transition.native_step_seconds;
+    result["episode_runtime_delta_seconds"] =
+        transition.runtime_after - transition.runtime_before;
     result["native_step_seconds"] = transition.native_step_seconds;
     result["native_neighborhood_generation_seconds"] =
         transition.neighborhood_generation_seconds;
@@ -359,13 +425,19 @@ public:
     LNS2RepairEnv(const std::string& map_path, const std::string& scenario_path,
                   int agent_count, double time_limit, int neighborhood_size,
                   const std::string& destroy_strategy, const std::string& replan_algorithm,
-                  bool use_sipp, int max_repair_iterations, int screen, py::dict context) :
-        instance(new Instance(map_path, scenario_path, agent_count)),
+                  bool use_sipp, int max_repair_iterations, int screen, py::object context) :
+        instance(makeValidatedInstance(map_path, scenario_path, agent_count)),
         time_limit(time_limit), neighborhood_size(neighborhood_size),
         destroy_strategy(destroy_strategy), replan_algorithm(replan_algorithm),
         use_sipp(use_sipp), max_repair_iterations(max_repair_iterations), screen(screen),
-        context(std::move(context))
+        context(normalizeContext(context))
     {
+        if (!std::isfinite(time_limit) || time_limit < 0)
+            throw py::value_error("time_limit must be finite and non-negative");
+        if (neighborhood_size <= 0)
+            throw py::value_error("neighborhood_size must be greater than zero");
+        if (max_repair_iterations < 0)
+            throw py::value_error("max_repair_iterations must be non-negative");
         if (destroy_strategy != "Adaptive" && destroy_strategy != "Target" &&
             destroy_strategy != "Collision" && destroy_strategy != "Random")
             throw py::value_error("destroy_strategy must be Adaptive, Target, Collision, or Random");
@@ -434,13 +506,12 @@ public:
         RepairAction action = parseAction(action_value);
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
-        if (solver->isDone())
-            throw std::runtime_error("the repair episode is already finished");
-        if (proposal_since_step && action.random_seed < 0)
+        const bool already_done = solver->isDone();
+        if (!already_done && proposal_since_step && action.random_seed < 0)
             throw py::value_error(
                 "step() after propose() requires an explicit random_seed because proposal generation "
                 "advances the process-global LNS2 random stream");
-        if (action.random_seed < 0 && !ownsRng(rng_state))
+        if (!already_done && action.random_seed < 0 && !ownsRng(rng_state))
             throw py::value_error(
                 "step() without random_seed cannot continue because another LNS2RepairEnv changed "
                 "the process-global LNS2 random stream; pass an explicit random_seed to recover "
@@ -449,18 +520,39 @@ public:
         double state_snapshot_seconds = 0.0;
         RepairState state;
         RepairTransition transition;
+        bool stepped = false;
         try
         {
-            const auto solver_started = DiagnosticClock::now();
-            solver->step(action);
-            solver_call_seconds = diagnosticSeconds(solver_started);
-            claimRngOwnership(rng_state);
-            proposal_since_step = false;
-            state_revision++;
-            const auto snapshot_started = DiagnosticClock::now();
-            state = solver->getRepairState();
-            state_snapshot_seconds = diagnosticSeconds(snapshot_started);
-            transition = solver->getLastTransition();
+            if (!already_done)
+            {
+                const auto solver_started = DiagnosticClock::now();
+                stepped = solver->step(action);
+                solver_call_seconds = diagnosticSeconds(solver_started);
+            }
+            if (stepped)
+            {
+                claimRngOwnership(rng_state);
+                proposal_since_step = false;
+                state_revision++;
+                const auto snapshot_started = DiagnosticClock::now();
+                state = solver->getRepairState();
+                state_snapshot_seconds = diagnosticSeconds(snapshot_started);
+                transition = solver->getLastTransition();
+            }
+            else
+            {
+                const auto snapshot_started = DiagnosticClock::now();
+                state = solver->getRepairState();
+                state_snapshot_seconds = diagnosticSeconds(snapshot_started);
+                transition.requested_action = action;
+                transition.action_valid = false;
+                transition.conflicts_before = state.num_of_colliding_pairs;
+                transition.conflicts_after = state.num_of_colliding_pairs;
+                transition.sum_of_costs_before = state.sum_of_costs;
+                transition.sum_of_costs_after = state.sum_of_costs;
+                transition.runtime_before = state.runtime;
+                transition.runtime_after = state.runtime;
+            }
         }
         catch (...)
         {
@@ -473,6 +565,7 @@ public:
         const double state_to_python_seconds = diagnosticSeconds(export_started);
         const auto metrics_started = DiagnosticClock::now();
         py::dict metrics = transitionToPython(transition);
+        metrics["step_applied"] = stepped;
         const double metrics_to_python_seconds = diagnosticSeconds(metrics_started);
         py::dict result;
         result["observation"] = observation;
@@ -496,7 +589,6 @@ public:
     {
         if (!solver)
             throw std::runtime_error("reset() must be called before propose()");
-        proposal_since_step = true;
         const RepairAction action = parseAction(action_value);
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
@@ -505,7 +597,10 @@ public:
         {
             proposal = solver->proposeNeighborhood(action);
             if (proposal.action_valid)
+            {
                 claimRngOwnership(rng_state);
+                proposal_since_step = true;
+            }
         }
         catch (...)
         {
@@ -520,8 +615,13 @@ public:
     {
         if (!solver)
             throw std::runtime_error("reset() must be called before propose_batch()");
-        if (!action_values.empty())
-            proposal_since_step = true;
+        vector<RepairAction> actions;
+        actions.reserve(py::len(action_values));
+        for (const py::handle& value : action_values)
+        {
+            const py::dict action_value = py::cast<py::dict>(value);
+            actions.push_back(parseAction(action_value));
+        }
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
         vector<RepairProposal> proposals;
@@ -529,20 +629,25 @@ public:
         bool rng_touched = false;
         try
         {
-            for (const py::handle& value : action_values)
+            for (const RepairAction& action : actions)
             {
-                const py::dict action_value = py::cast<py::dict>(value);
-                RepairProposal proposal = solver->proposeNeighborhood(parseAction(action_value));
+                RepairProposal proposal = solver->proposeNeighborhood(action);
                 rng_touched = rng_touched || proposal.action_valid;
                 proposals.push_back(std::move(proposal));
             }
             if (rng_touched)
+            {
                 claimRngOwnership(rng_state);
+                proposal_since_step = true;
+            }
         }
         catch (...)
         {
             if (rng_touched)
+            {
                 claimRngOwnership(rng_state);
+                proposal_since_step = true;
+            }
             else
                 invalidateRngOwnership(rng_state);
             throw;
@@ -558,8 +663,6 @@ public:
     {
         if (!solver)
             throw std::runtime_error("reset() must be called before propose_batch_compact()");
-        if (!action_values.empty())
-            proposal_since_step = true;
         vector<RepairAction> actions;
         actions.reserve(py::len(action_values));
         for (const py::handle& value : action_values)
@@ -576,7 +679,10 @@ public:
             if (std::any_of(
                     proposals.begin(), proposals.end(),
                     [](const RepairProposal& proposal) { return proposal.action_valid; }))
+            {
                 claimRngOwnership(rng_state);
+                proposal_since_step = true;
+            }
         }
         catch (...)
         {
@@ -661,7 +767,7 @@ private:
 PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
-    module.attr("repair_timing_schema") = "lns2.repair_timing.v1";
+    module.attr("repair_timing_schema") = "lns2.repair_timing.v2";
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))
         .def("predict_raw", &PortableTreeEnsemble::predictRaw, py::arg("vectors"))
@@ -670,12 +776,12 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("rows"), py::arg("modes"), py::arg("feature_indices"));
     py::class_<LNS2RepairEnv>(module, "LNS2RepairEnv")
         .def(py::init<const std::string&, const std::string&, int, double, int,
-                      const std::string&, const std::string&, bool, int, int, py::dict>(),
-             py::arg("map_path"), py::arg("scenario_path"), py::arg("agent_count") = 0,
+                      const std::string&, const std::string&, bool, int, int, py::object>(),
+             py::arg("map_path"), py::arg("scenario_path"), py::arg("agent_count"),
              py::arg("time_limit") = 60.0, py::arg("neighborhood_size") = 8,
              py::arg("destroy_strategy") = "Adaptive", py::arg("replan_algorithm") = "PP",
              py::arg("use_sipp") = true, py::arg("max_repair_iterations") = 0,
-             py::arg("screen") = 0, py::arg("context") = py::dict())
+             py::arg("screen") = 0, py::arg("context") = py::none())
         .def("reset", &LNS2RepairEnv::reset, py::arg("seed") = 0)
         .def("propose", &LNS2RepairEnv::propose, py::arg("action"))
         .def("propose_batch", &LNS2RepairEnv::proposeBatch, py::arg("actions"))

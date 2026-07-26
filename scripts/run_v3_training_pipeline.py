@@ -856,7 +856,10 @@ def main() -> int:
                     collection_source=reuse_sequence_collection,
                 )
             if arguments.stage in {"native-audit", "all"}:
-                report = run_v3_s3_native_audit_stage(output=output)
+                report = run_v3_s3_native_audit_stage(
+                    output=output,
+                    resume=arguments.resume,
+                )
         elif arguments.mode == "horizon-pilot":
             if not arguments.source:
                 raise ValueError("horizon-pilot requires --source")

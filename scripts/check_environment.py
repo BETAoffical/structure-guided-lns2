@@ -18,6 +18,7 @@ TRAINING_VERSIONS = {
     "scikit-learn": "1.5.0",
     "joblib": "1.4.2",
     "threadpoolctl": "3.5.0",
+    "pytest": "6.2.5",
 }
 
 
@@ -113,8 +114,8 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
     _check(
         rows,
         "lns2_env:repair-timing-schema",
-        timing_schema == "lns2.repair_timing.v1",
-        expected="lns2.repair_timing.v1",
+        timing_schema == "lns2.repair_timing.v2",
+        expected="lns2.repair_timing.v2",
         observed=timing_schema,
         detail="Rebuild build/linux/project before running the bottleneck evaluation.",
     )

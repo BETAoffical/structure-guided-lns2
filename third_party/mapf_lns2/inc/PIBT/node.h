@@ -20,7 +20,7 @@ public:
   ~Node() {};
 
   std::vector<Node*> getNeighbor() { return neighbor; }
-  void setNeighbor(std::vector<Node*> nodes) { neighbor = nodes; }
+  void setNeighbor(const std::vector<Node*>& nodes) { neighbor = nodes; }
 
   int getId() { return id; }
   int getIndex() { return index; }

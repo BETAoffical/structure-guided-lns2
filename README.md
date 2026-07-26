@@ -50,8 +50,8 @@ The normal build includes the official solver, repair wrapper, GPBS runner, Pyth
 environment, and native feature extension:
 
 ```bash
-cmake -S . -B build/linux
-cmake --build build/linux -j4
+cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux/project -j4
 ctest --test-dir build/linux/project --output-on-failure
 ```
 
@@ -146,6 +146,22 @@ python3 scripts/run_v3_training_pipeline.py \
 
 This pilot always stops after its final report. It never starts full data
 collection, quick, formal, or changes the default `v2-full` controller.
+
+Current V3 status is deliberately split into two meanings of "latest":
+
+- `v3-S3` is the latest runnable V3 controller, but its mixed-load pilot did
+  not pass promotion and it is not the default.
+- receding-Q is the newer V3 research chain. It currently produces and audits
+  labels only; it has not produced a deployable controller.
+- V2 and official Adaptive remain collection sources and external baselines in
+  these studies. Neither is called by the `v3-S3` online selector.
+
+New sequence/value/receding-Q runs bind their complete producer identity,
+including semantic source files, Python and training-library versions, and the
+actual loaded `lns2_env` binary/timing schema. Legacy-schema outputs and bundles
+remain readable historical evidence, but must not be resumed with the upgraded
+collectors. Use a new output directory after any schema, producer, native
+binary, controller-input, or platform identity change.
 
 If that pilot passes, a timing-qualified parallel quick can run different
 task/seed cohorts on isolated physical cores while keeping LNS2, v2, and v3-H3

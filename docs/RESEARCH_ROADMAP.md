@@ -24,14 +24,27 @@ These negative results remain part of the 24-entry evidence manifest and the
 Chinese final report. Historical source, tests, protocols, and detailed notes are
 available at Git tag `pre-minimal-runtime-2026-07-20`.
 
-## Current Runtime
+## Current Runtime and V3 Research Chain
 
-The supported learned controllers are `v1-full`, its exact accelerated
-implementation `v2-full`, and `v2-stall-safe`. Official Adaptive, Target,
-Collision, and Random remain the solver baselines.
+`v2-full` remains the default learned controller. Official Adaptive, Target,
+Collision, and Random remain solver baselines; V2 and Adaptive are also allowed
+as offline data sources or external comparisons for V3 studies.
 
-No new learning experiment should be added to this branch. A future study must be
-separately preregistered and should begin from one of these questions:
+`v3-S3` is the latest runnable V3 controller. It selects directly from its S3
+candidate/sequence model and makes no online V2 or Adaptive call, but it did not
+pass its promotion gate. The later receding-Q work is a label and stability
+research chain, not a controller. Legacy `v3-full`/`v3-h3` code is retained as
+historical evidence and is not in the S3 or receding-Q execution path.
+
+All new V3 artifacts use producer/native identities and upgraded schemas.
+Completed artifacts are semantically revalidated before reuse; a completed but
+invalid artifact is preserved and stops the run. Old artifacts remain readable
+but cannot be resumed across a schema, source, native binary, package-version,
+controller-input, or native-audit platform change. Start a new output directory
+instead.
+
+Any promotion study must be separately preregistered and should begin from one
+of these questions:
 
 1. Can proposal generation be made much cheaper without changing selected actions?
 2. Can a structured spatiotemporal representation demonstrate value on an

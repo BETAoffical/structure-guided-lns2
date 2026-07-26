@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import collections
-import math
 import os
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
+from experiments._common import read_json, sha256_file, standard_error as _standard_error
 from experiments.receding_q_pilot import _atomic_write_csv, _winner_key
 from experiments.receding_q_stability import (
     _outcome_score,
-    identify_stability_targets,
-    load_receding_q_rollouts,
-    merge_followup_rollouts,
+    load_validated_four_seed_stability,
 )
 from experiments.repair_collection import _write_json
 
@@ -70,13 +67,6 @@ def risk_policy_grid() -> list[dict[str, Any]]:
                 }
             )
     return result
-
-
-def _standard_error(values: Iterable[float]) -> float:
-    materialized = list(map(float, values))
-    if len(materialized) < 2:
-        return 0.0
-    return statistics.stdev(materialized) / math.sqrt(len(materialized))
 
 
 def risk_candidate_summary(
@@ -414,23 +404,19 @@ def audit_receding_q_risk(
         raise FileExistsError("risk audit output must be empty")
     output_root.mkdir(parents=True, exist_ok=True)
 
-    status = dict(read_json(stability_root / "status.json"))
-    if (
-        str(status.get("status")) != "complete"
-        or int(status.get("error_count", -1)) != 0
-    ):
-        raise ValueError("risk audit source is not complete and clean")
-    stability_report = dict(
-        read_json(stability_root / "receding_q_stability_report.json")
+    stability_config = dict(
+        read_json(stability_root / "run_config.json")
     )
     source_root = resolve_persisted_source_path(
-        str(dict(stability_report["run_config"])["source"]),
+        str(stability_config["source"]),
         sibling_root=stability_root.parent,
     )
-    source_rows = load_receding_q_rollouts(source_root)
-    followup_rows = load_receding_q_rollouts(stability_root)
-    merged = merge_followup_rollouts(source_rows, followup_rows)
-    targets = identify_stability_targets(source_rows)
+    validated = load_validated_four_seed_stability(
+        stability_root,
+        source_root,
+    )
+    merged = list(validated["merged_rows"])
+    targets = dict(validated["targets"])
     policies = risk_policy_grid()
     loo_rows = build_risk_loo_rows(
         merged,

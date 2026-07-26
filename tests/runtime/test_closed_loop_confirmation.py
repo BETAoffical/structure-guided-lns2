@@ -14,7 +14,9 @@ import numpy as np
 from experiments.closed_loop_confirmation import (
     _collection_policy_summary,
     _closed_loop_episode_worker,
+    _native_repair_timing_schema,
     _qualification_reuse_fingerprint,
+    _valid_episode_trace,
     _with_stopping_rule,
     _with_time_budget_overrides,
     ClosedLoopTraceError,
@@ -30,6 +32,8 @@ from experiments.closed_loop_confirmation import (
     repair_random_seed,
     load_frozen_policy_bundle,
     PortablePairwiseModel,
+    REPAIR_TIMING_SCHEMA_V1,
+    REPAIR_TIMING_SCHEMA_V2,
     score_online_candidates,
     validate_closed_loop_trace,
     wall_clock_conflict_auc,
@@ -179,8 +183,11 @@ class ZeroConflictEnvironment:
 
 
 class UnlimitedRepairEnvironment:
-    def __init__(self, solve_after: int = 101) -> None:
+    def __init__(
+        self, solve_after: int = 101, *, timing_v2: bool = False
+    ) -> None:
         self.solve_after = solve_after
+        self.timing_v2 = timing_v2
         self.iteration = 0
         self.state = make_state(1)
 
@@ -206,26 +213,37 @@ class UnlimitedRepairEnvironment:
                 "runs": self.state["low_level"]["runs"] + 1,
             },
         }
+        metrics = {
+            "iteration": self.iteration,
+            "action_valid": True,
+            "generated": True,
+            "replan_success": True,
+            "neighborhood": [0, 1],
+            "conflicts_before": before_conflicts,
+            "conflicts_after": 0 if solved else 1,
+            "requested_random_seed": -1,
+            "native_step_seconds": 0.0,
+            "native_neighborhood_generation_seconds": 0.0,
+            "native_replan_seconds": 0.0,
+            "pp_replan_seconds": 0.0,
+            "native_repair_bookkeeping_seconds": 0.0,
+            "native_state_snapshot_seconds": 0.0,
+            "native_residual_seconds": 0.0,
+            "binding_solver_call_seconds": 0.0,
+            "binding_state_snapshot_seconds": 0.0,
+            "state_to_python_seconds": 0.0,
+            "metrics_to_python_seconds": 0.0,
+            "binding_total_seconds": 0.0,
+            "binding_residual_seconds": 0.0,
+            "step_runtime": 0.0,
+        }
+        if self.timing_v2:
+            metrics["episode_runtime_delta_seconds"] = 0.0
         return {
             "observation": self.state,
             "terminated": solved,
             "truncated": False,
-            "metrics": {
-                "iteration": self.iteration,
-                "action_valid": True,
-                "generated": True,
-                "replan_success": True,
-                "neighborhood": [0, 1],
-                "conflicts_before": before_conflicts,
-                "conflicts_after": 0 if solved else 1,
-                "requested_random_seed": -1,
-                "native_neighborhood_generation_seconds": 0.0,
-                "pp_replan_seconds": 0.0,
-                "native_repair_bookkeeping_seconds": 0.0,
-                "native_state_snapshot_seconds": 0.0,
-                "binding_state_snapshot_seconds": 0.0,
-                "state_to_python_seconds": 0.0,
-            },
+            "metrics": metrics,
         }
 
 
@@ -275,6 +293,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 "solver_seed": 2,
                 "status": "ok",
                 "initial_conflicts": 4,
+                "initial_feasible": False,
+                "initial_complete": True,
                 "state_fingerprint": "state-a-2",
             }
         ]
@@ -296,6 +316,144 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(report["expected_reset_count"], 1)
         self.assertEqual(report["solver_seeds"], [2])
         self.assertEqual(report["registered_solver_seeds"], [1, 2, 3])
+
+    def test_qualification_rejects_an_incomplete_zero_conflict_reset(self) -> None:
+        rows = [
+            {
+                "task_id": "task-a",
+                "map_id": "map-a",
+                "agent_count": 100,
+                "layout_mode": "maze",
+                "task_variant": "random_4_agents_100",
+            }
+        ]
+        qualification = [
+            {
+                "task_id": "task-a",
+                "solver_seed": 2,
+                "status": "ok",
+                "initial_conflicts": 0,
+                "initial_feasible": True,
+                "initial_complete": False,
+                "state_fingerprint": "incomplete-state",
+            }
+        ]
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "solver_seeds": [2],
+                "severity_thresholds": {
+                    "low_max": 0.001,
+                    "medium_max": 0.01,
+                },
+                "qualification": {"minimum_nonzero_states": 0},
+            },
+            {"passed": True},
+            {"passed": True},
+            formal=False,
+        )
+        self.assertFalse(report["gates"]["all_resets_valid"])
+        self.assertEqual(report["initial_feasible_count"], 0)
+        self.assertEqual(report["incomplete_reset_count"], 1)
+        self.assertEqual(
+            report["incomplete_reset_job_keys"], [["task-a", 2]]
+        )
+        task = report["natural_distribution"]["tasks"][0]
+        self.assertFalse(task["initial_complete"])
+        self.assertTrue(task["reported_initial_feasible"])
+        self.assertFalse(task["initial_feasible"])
+
+    def test_qualification_rejects_inconsistent_initial_feasibility(self) -> None:
+        rows = [
+            {
+                "task_id": "task-a",
+                "map_id": "map-a",
+                "agent_count": 100,
+                "layout_mode": "maze",
+                "task_variant": "random_4_agents_100",
+            }
+        ]
+        qualification = [
+            {
+                "task_id": "task-a",
+                "solver_seed": 2,
+                "status": "ok",
+                "initial_conflicts": 0,
+                "initial_feasible": False,
+                "initial_complete": True,
+                "state_fingerprint": "state-a-2",
+            }
+        ]
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "solver_seeds": [2],
+                "severity_thresholds": {
+                    "low_max": 0.001,
+                    "medium_max": 0.01,
+                },
+                "qualification": {"minimum_nonzero_states": 0},
+            },
+            {"passed": True},
+            {"passed": True},
+            formal=False,
+        )
+        self.assertFalse(report["gates"]["all_resets_valid"])
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["initial_feasible_count"], 1)
+        self.assertEqual(report["inconsistent_initial_state_count"], 1)
+        self.assertEqual(
+            report["inconsistent_initial_state_job_keys"],
+            [["task-a", 2]],
+        )
+        task = report["natural_distribution"]["tasks"][0]
+        self.assertTrue(task["initial_feasible"])
+        self.assertFalse(task["reported_initial_feasible"])
+        self.assertFalse(task["initial_state_consistent"])
+
+    def test_native_repair_timing_schema_distinguishes_v1_and_v2(self) -> None:
+        metrics = {
+            "native_step_seconds": 0.1,
+            "native_neighborhood_generation_seconds": 0.01,
+            "native_replan_seconds": 0.04,
+            "pp_replan_seconds": 0.04,
+            "native_state_snapshot_seconds": 0.01,
+            "native_repair_bookkeeping_seconds": 0.01,
+            "native_residual_seconds": 0.03,
+            "binding_solver_call_seconds": 0.1,
+            "binding_state_snapshot_seconds": 0.01,
+            "state_to_python_seconds": 0.01,
+            "metrics_to_python_seconds": 0.01,
+            "binding_total_seconds": 0.13,
+            "binding_residual_seconds": 0.0,
+            "step_runtime": 0.2,
+        }
+        self.assertEqual(
+            _native_repair_timing_schema(metrics),
+            REPAIR_TIMING_SCHEMA_V1,
+        )
+        metrics["step_runtime"] = 0.1
+        metrics["episode_runtime_delta_seconds"] = 0.2
+        self.assertEqual(
+            _native_repair_timing_schema(metrics),
+            REPAIR_TIMING_SCHEMA_V2,
+        )
+        del metrics["step_runtime"]
+        with self.assertRaisesRegex(ValueError, "lacks step_runtime"):
+            _native_repair_timing_schema(metrics)
+        with self.assertRaisesRegex(ValueError, "v2 lacks native timing fields"):
+            _native_repair_timing_schema(
+                {
+                    "episode_runtime_delta_seconds": 0.2,
+                    "step_runtime": 0.1,
+                    "native_step_seconds": 0.1,
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "v1 lacks native timing fields"):
+            _native_repair_timing_schema({"native_step_seconds": 0.1})
+        self.assertIsNone(_native_repair_timing_schema({"step_runtime": 0.2}))
 
     def test_time_budget_override_updates_all_three_limits_without_changing_source(self) -> None:
         source = {
@@ -352,6 +510,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 {
                     **row,
                     "initial_conflicts": conflicts,
+                    "initial_feasible": conflicts == 0,
+                    "initial_complete": True,
                     "state_fingerprint": f"state-{index}",
                     "status": "ok",
                     "error": None,
@@ -435,6 +595,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                         **source,
                         "solver_seed": seed,
                         "initial_conflicts": 0 if seed == 2 and source is rows[0] else 5,
+                        "initial_feasible": seed == 2 and source is rows[0],
+                        "initial_complete": True,
                         "state_fingerprint": f"{source['task_id']}-{seed}",
                         "status": "ok",
                         "error": None,
@@ -484,6 +646,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                         **source,
                         "solver_seed": seed,
                         "initial_conflicts": 5,
+                        "initial_feasible": False,
+                        "initial_complete": True,
                         "state_fingerprint": f"{source['task_id']}-same",
                         "status": "ok",
                         "error": None,
@@ -844,6 +1008,11 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 json.loads(line)
                 for line in trace.read_text(encoding="utf-8").splitlines()
             ]
+            self.assertEqual(
+                baseline[1]["native_timing_schema"],
+                REPAIR_TIMING_SCHEMA_V1,
+            )
+            validate_closed_loop_trace(trace, "run")
 
             selection_events = json.loads(json.dumps(baseline))
             selection_events[1]["timings"]["neighborhood_selection_seconds"] = 1.0
@@ -866,6 +1035,116 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 ClosedLoopTraceError, "native step timing does not close"
             ):
                 validate_closed_loop_trace(trace, "run")
+
+            zero_parent_events = json.loads(json.dumps(baseline))
+            zero_parent_events[1]["metrics"][
+                "native_neighborhood_generation_seconds"
+            ] = 0.01
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in zero_parent_events
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "native step timing does not close"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            binding_events = json.loads(json.dumps(baseline))
+            binding_events[1]["metrics"]["binding_total_seconds"] = 1.0
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in binding_events
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "binding timing does not close"
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            copied_timing_events = json.loads(json.dumps(baseline))
+            copied_timing_events[1]["timings"]["pp_replan_seconds"] = 1.0
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in copied_timing_events
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError,
+                "pp_replan_seconds does not match metrics",
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            event_wall_events = json.loads(json.dumps(baseline))
+            event_wall_events[1]["timings"][
+                "environment_step_wall_seconds"
+            ] += 1.0
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in event_wall_events
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError,
+                "environment step timing does not match event",
+            ):
+                validate_closed_loop_trace(trace, "run")
+
+            v2_root = Path(directory) / "v2"
+            job["output_root"] = str(v2_root)
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(
+                    solve_after=1, timing_v2=True
+                ),
+            ):
+                v2_result = _closed_loop_episode_worker(job)
+            v2_trace = v2_root / v2_result["trace_file"]
+            v2_events = [
+                json.loads(line)
+                for line in v2_trace.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(
+                v2_events[1]["native_timing_schema"],
+                REPAIR_TIMING_SCHEMA_V2,
+            )
+            validate_closed_loop_trace(v2_trace, "run")
+
+            incomplete_v2 = json.loads(json.dumps(v2_events))
+            del incomplete_v2[1]["metrics"]["native_replan_seconds"]
+            v2_trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in incomplete_v2
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "native timing metrics are incomplete"
+            ):
+                validate_closed_loop_trace(v2_trace, "run")
+
+            missing_timings = json.loads(json.dumps(v2_events))
+            del missing_timings[1]["timings"]
+            v2_trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in missing_timings
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "instrumented transition is missing timings"
+            ):
+                validate_closed_loop_trace(v2_trace, "run")
 
     def test_trace_validation_rejects_inconsistent_pp_seed_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -961,6 +1240,87 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["stop_reason"], "success")
         self.assertIsNone(result["summary"]["fixed_budget_conflict_auc"])
 
+    def test_controller_stage_deadline_is_a_clean_wall_timeout(self) -> None:
+        class DeadlineEnvironment:
+            def __init__(self) -> None:
+                self.step_calls = 0
+
+            def reset(self, seed: int) -> dict:
+                return make_state(1)
+
+            def step(self, action: dict) -> dict:
+                self.step_calls += 1
+                raise RuntimeError("the repair episode is already finished")
+
+        class ManualClock:
+            def __init__(self) -> None:
+                self.value = 0.0
+
+            def __call__(self) -> float:
+                return self.value
+
+        with tempfile.TemporaryDirectory() as directory:
+            environment = DeadlineEnvironment()
+            clock = ManualClock()
+            fingerprint_calls = 0
+
+            def controller_stage_fingerprint(state: dict) -> str:
+                nonlocal fingerprint_calls
+                fingerprint_calls += 1
+                result = state_fingerprint(state)
+                # The first call fingerprints the initial state. Advance the
+                # fake clock during the next pre-repair controller stage so
+                # the loop's first budget check has already passed.
+                if fingerprint_calls == 2:
+                    clock.value = 2.0
+                return result
+
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 1.0,
+                "proposal": {},
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=environment,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.state_fingerprint",
+                    side_effect=controller_stage_fingerprint,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.time.perf_counter",
+                    side_effect=clock,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["summary"]["stop_reason"], "wall_timeout")
+        self.assertTrue(result["summary"]["external_timeout"])
+        self.assertEqual(result["summary"]["repair_iterations"], 0)
+        self.assertEqual(result["summary"]["model_decision_count"], 0)
+        self.assertEqual(result["summary"]["official_decision_count"], 0)
+        self.assertEqual(result["summary"]["route_switch_count"], 0)
+        self.assertEqual(environment.step_calls, 0)
+
     def test_trace_validation_rejects_wrong_episode_and_resume_reruns_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             job = {
@@ -1017,6 +1377,35 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             ):
                 rerun = _closed_loop_episode_worker(job)
             self.assertEqual(rerun["status"], "ok")
+
+            malformed = [
+                json.loads(line)
+                for line in trace.read_text(encoding="utf-8").splitlines()
+            ]
+            malformed[0]["schema_version"] = "not-an-integer"
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in malformed
+                ),
+                encoding="utf-8",
+            )
+            self.assertIsNone(
+                _valid_episode_trace(
+                    trace,
+                    "run",
+                    expected_episode_id=result["episode_id"],
+                    expected_policy="official_adaptive",
+                    expected_solver_seed=0,
+                    metric_iteration_budget=100,
+                )
+            )
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=ZeroConflictEnvironment(),
+            ):
+                malformed_rerun = _closed_loop_episode_worker(job)
+            self.assertEqual(malformed_rerun["status"], "ok")
 
     def test_comparison_uses_failure_penalties_and_map_pairing(self) -> None:
         def row(policy: str, map_id: str, task: str, auc: float, seconds: float) -> dict:

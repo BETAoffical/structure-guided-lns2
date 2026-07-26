@@ -2,18 +2,21 @@
 
 #include "LNS.h"
 #include "PIBT/pibt.h"
+#include "structure_guided/instance_validation.hpp"
 #include "structure_guided/jsonl_observer.hpp"
 
+#include <cmath>
 #include <memory>
+#include <stdexcept>
 
 namespace
 {
-RepairState feasibleState(const Instance& instance, const LNS& solver)
+RepairState terminalState(const Instance& instance, const LNS& solver, bool success)
 {
     RepairState state;
     state.initialized = true;
-    state.initial_solution_complete = true;
-    state.feasible = true;
+    state.initial_solution_complete = success;
+    state.feasible = success;
     state.done = true;
     state.rows = instance.num_of_rows;
     state.cols = instance.num_of_cols;
@@ -82,37 +85,84 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    srand(values["seed"].as<int>());
-    Instance instance(values["map"].as<string>(), values["agents"].as<string>(),
-                      values["agentNum"].as<int>());
-    std::unique_ptr<JsonlRepairObserver> observer;
-    if (values.count("trace"))
-        observer.reset(new JsonlRepairObserver(values["trace"].as<string>()));
+    try
+    {
+        const string map_path = values["map"].as<string>();
+        const string scenario_path = values["agents"].as<string>();
+        const int agent_count = values["agentNum"].as<int>();
+        const double cutoff_time = values["cutoffTime"].as<double>();
+        const int neighborhood_size = values["neighborSize"].as<int>();
+        const int max_repair_iterations =
+            values["maxRepairIterations"].as<int>();
+        const string replan_algorithm = values["replanAlgo"].as<string>();
+        const string destroy_strategy =
+            values["initDestroyStrategy"].as<string>();
 
-    PIBTPPS_option pibt_options;
-    pibt_options.windowSize = 5;
-    pibt_options.winPIBTSoft = true;
-    pibt_options.timestepLimit = 0;
-    LNS solver(instance, values["cutoffTime"].as<double>(), "PP",
-               values["replanAlgo"].as<string>(), "Adaptive",
-               values["neighborSize"].as<int>(), 0, true,
-               values["initDestroyStrategy"].as<string>(), values["sipp"].as<bool>(),
-               values["screen"].as<int>(), pibt_options, true, nullptr, observer.get(),
-               values["maxRepairIterations"].as<int>());
-    bool success = solver.run();
-    if (observer && solver.getInitLNS() == nullptr)
-    {
-        RepairState state = feasibleState(instance, solver);
-        observer->onInitialState(state);
-        observer->onFinish(state, success);
+        if (!std::isfinite(cutoff_time) || cutoff_time < 0)
+            throw std::invalid_argument(
+                "cutoffTime must be finite and non-negative"
+            );
+        if (neighborhood_size <= 0)
+            throw std::invalid_argument(
+                "neighborSize must be greater than zero"
+            );
+        if (max_repair_iterations < 0)
+            throw std::invalid_argument(
+                "maxRepairIterations must be non-negative"
+            );
+        if (replan_algorithm != "PP" && replan_algorithm != "GCBS" &&
+            replan_algorithm != "PBS")
+            throw std::invalid_argument(
+                "replanAlgo must be PP, GCBS, or PBS"
+            );
+        if (destroy_strategy != "Adaptive" &&
+            destroy_strategy != "Target" &&
+            destroy_strategy != "Collision" &&
+            destroy_strategy != "Random")
+            throw std::invalid_argument(
+                "initDestroyStrategy must be Adaptive, Target, Collision, or Random"
+            );
+        structure_guided::validateInstanceFiles(
+            map_path, scenario_path, agent_count
+        );
+
+        srand(values["seed"].as<int>());
+        Instance instance(map_path, scenario_path, agent_count);
+        std::unique_ptr<JsonlRepairObserver> observer;
+        if (values.count("trace"))
+            observer.reset(
+                new JsonlRepairObserver(values["trace"].as<string>())
+            );
+
+        PIBTPPS_option pibt_options;
+        pibt_options.windowSize = 5;
+        pibt_options.winPIBTSoft = true;
+        pibt_options.timestepLimit = 0;
+        LNS solver(instance, cutoff_time, "PP", replan_algorithm, "Adaptive",
+                   neighborhood_size, 0, true, destroy_strategy,
+                   values["sipp"].as<bool>(), values["screen"].as<int>(),
+                   pibt_options, true, nullptr, observer.get(),
+                   max_repair_iterations);
+        const bool success = solver.run();
+        if (observer && solver.getInitLNS() == nullptr)
+        {
+            RepairState state = terminalState(instance, solver, success);
+            observer->onInitialState(state);
+            observer->onFinish(state, success);
+        }
+        if (success)
+        {
+            solver.validateSolution();
+            if (values.count("outputPaths"))
+                solver.writePathsToFile(values["outputPaths"].as<string>());
+        }
+        if (values.count("output"))
+            solver.writeResultToFile(values["output"].as<string>());
+        return success ? 0 : 1;
     }
-    if (success)
+    catch (const std::exception& error)
     {
-        solver.validateSolution();
-        if (values.count("outputPaths"))
-            solver.writePathsToFile(values["outputPaths"].as<string>());
+        cerr << "lns2_repair: " << error.what() << endl;
+        return 2;
     }
-    if (values.count("output"))
-        solver.writeResultToFile(values["output"].as<string>());
-    return success ? 0 : 1;
 }

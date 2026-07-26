@@ -142,7 +142,27 @@ CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
 STOPPING_RULES = ("historical", "wall-clock")
 WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
-REPAIR_TIMING_SCHEMA = "lns2.repair_timing.v1"
+REPAIR_TIMING_SCHEMA_V1 = "lns2.repair_timing.v1"
+REPAIR_TIMING_SCHEMA_V2 = "lns2.repair_timing.v2"
+REPAIR_TIMING_SCHEMAS = (REPAIR_TIMING_SCHEMA_V1, REPAIR_TIMING_SCHEMA_V2)
+REPAIR_TIMING_SCHEMA = REPAIR_TIMING_SCHEMA_V2
+_NATIVE_REPAIR_TIMING_KEYS = frozenset(
+    {
+        "native_step_seconds",
+        "native_neighborhood_generation_seconds",
+        "native_replan_seconds",
+        "pp_replan_seconds",
+        "native_state_snapshot_seconds",
+        "native_repair_bookkeeping_seconds",
+        "native_residual_seconds",
+        "binding_solver_call_seconds",
+        "binding_state_snapshot_seconds",
+        "state_to_python_seconds",
+        "metrics_to_python_seconds",
+        "binding_total_seconds",
+        "binding_residual_seconds",
+    }
+)
 DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_REPAIR_AWARE_BUNDLE = "build/initlns-repair-aware-controller-v1"
 DEFAULT_V3_BUNDLE = "build/initlns-v3-pilot-v1/controller"
@@ -182,6 +202,31 @@ class ClosedLoopExecutionError(RuntimeError):
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
         self.kind = kind
+
+
+def _native_repair_timing_schema(metrics: dict[str, Any]) -> str | None:
+    if "episode_runtime_delta_seconds" in metrics:
+        missing = _NATIVE_REPAIR_TIMING_KEYS.difference(metrics)
+        if missing:
+            raise ValueError(
+                "repair timing v2 lacks native timing fields: "
+                + ", ".join(sorted(missing))
+            )
+        if "step_runtime" not in metrics:
+            raise ValueError("repair timing v2 lacks step_runtime")
+        return REPAIR_TIMING_SCHEMA_V2
+    present = _NATIVE_REPAIR_TIMING_KEYS.intersection(metrics)
+    if not present:
+        return None
+    missing = _NATIVE_REPAIR_TIMING_KEYS.difference(metrics)
+    if missing:
+        raise ValueError(
+            "repair timing v1 lacks native timing fields: "
+            + ", ".join(sorted(missing))
+        )
+    if "step_runtime" not in metrics:
+        raise ValueError("repair timing v1 lacks step_runtime")
+    return REPAIR_TIMING_SCHEMA_V1
 
 
 def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
@@ -456,6 +501,15 @@ def closed_loop_qualification_report(
             conflicts = int(result["initial_conflicts"])
             agents = int(source["agent_count"])
             density = conflict_density(conflicts, agents)
+            initial_complete = bool(result.get("initial_complete", False))
+            reported_initial_feasible = bool(
+                result.get("initial_feasible", False)
+            )
+            expected_initial_feasible = initial_complete and conflicts == 0
+            initial_state_consistent = (
+                reported_initial_feasible == expected_initial_feasible
+            )
+            initial_feasible = expected_initial_feasible
             cohort.append(
                 {
                     "map_id": str(source["map_id"]),
@@ -465,7 +519,10 @@ def closed_loop_qualification_report(
                     "task_variant": str(source["task_variant"]),
                     "agent_count": agents,
                     "initial_conflicts": conflicts,
-                    "initial_feasible": conflicts == 0,
+                    "initial_feasible": initial_feasible,
+                    "reported_initial_feasible": reported_initial_feasible,
+                    "initial_state_consistent": initial_state_consistent,
+                    "initial_complete": initial_complete,
                     "conflict_density": density,
                     "conflict_severity": conflict_severity(density, thresholds),
                     "state_fingerprint": str(result["state_fingerprint"]),
@@ -489,6 +546,16 @@ def closed_loop_qualification_report(
         [left, right]
         for left, right in itertools.combinations(expected_solver_seeds, 2)
         if fingerprints_by_seed[left] == fingerprints_by_seed[right]
+    ]
+    incomplete_resets = [
+        [str(row["task_id"]), int(row["solver_seed"])]
+        for row in cohort
+        if not bool(row["initial_complete"])
+    ]
+    inconsistent_initial_states = [
+        [str(row["task_id"]), int(row["solver_seed"])]
+        for row in cohort
+        if not bool(row["initial_state_consistent"])
     ]
     settings = dict(config["qualification"])
     qualification_mode = str(settings.get("mode", "structured"))
@@ -530,7 +597,12 @@ def closed_loop_qualification_report(
     gates = {
         "dataset_design": bool(design["passed"]) if formal else True,
         "seed_isolation": bool(isolation["passed"]),
-        "all_resets_valid": len(cohort) == len(expected_keys) and not errors,
+        "all_resets_valid": (
+            len(cohort) == len(expected_keys)
+            and not errors
+            and not incomplete_resets
+            and not inconsistent_initial_states
+        ),
         "distinct_solver_seed_trajectories": not duplicate_seed_streams,
         **sample_gates,
     }
@@ -548,7 +620,9 @@ def closed_loop_qualification_report(
         grouped[field] = {
             name: {
                 "task_count": len(group),
-                "initial_feasible_count": sum(int(item["initial_conflicts"]) == 0 for item in group),
+                "initial_feasible_count": sum(
+                    bool(item["initial_feasible"]) for item in group
+                ),
                 "conflicts": _number_summary(item["initial_conflicts"] for item in group),
                 "conflict_density": _number_summary(item["conflict_density"] for item in group),
             }
@@ -566,7 +640,13 @@ def closed_loop_qualification_report(
         "expected_reset_count": len(expected_keys),
         "solver_seeds": expected_solver_seeds,
         "registered_solver_seeds": list(solver_seeds),
-        "initial_feasible_count": len(cohort) - len(nonzero),
+        "initial_feasible_count": sum(
+            bool(item["initial_feasible"]) for item in cohort
+        ),
+        "incomplete_reset_count": len(incomplete_resets),
+        "incomplete_reset_job_keys": incomplete_resets,
+        "inconsistent_initial_state_count": len(inconsistent_initial_states),
+        "inconsistent_initial_state_job_keys": inconsistent_initial_states,
         "nonzero_state_count": len(nonzero),
         "nonzero_by_layout": dict(sorted(by_layout.items())),
         "nonzero_by_solver_seed": {
@@ -1628,6 +1708,162 @@ def validate_closed_loop_trace(
         action = event.get("action")
         if not isinstance(metrics, dict) or not isinstance(action, dict):
             raise ClosedLoopTraceError("transition is missing action or metrics")
+        declared_native_timing_schema = event.get("native_timing_schema")
+        if (
+            declared_native_timing_schema is not None
+            and str(declared_native_timing_schema) not in REPAIR_TIMING_SCHEMAS
+        ):
+            raise ClosedLoopTraceError(
+                "transition has an unsupported native timing schema"
+            )
+        try:
+            detected_native_timing_schema = _native_repair_timing_schema(
+                metrics
+            )
+        except (TypeError, ValueError) as error:
+            raise ClosedLoopTraceError(
+                f"transition native timing metrics are incomplete: {error}"
+            ) from error
+        if declared_native_timing_schema is None:
+            if detected_native_timing_schema is not None:
+                raise ClosedLoopTraceError(
+                    "transition native timing metrics are missing their schema"
+                )
+        elif detected_native_timing_schema != str(declared_native_timing_schema):
+            raise ClosedLoopTraceError(
+                "transition native timing schema does not match its metrics"
+            )
+        native_timing_schema = detected_native_timing_schema
+        if native_timing_schema is not None:
+            try:
+                native_values = {
+                    name: float(metrics[name])
+                    for name in _NATIVE_REPAIR_TIMING_KEYS
+                }
+            except (KeyError, TypeError, ValueError) as error:
+                raise ClosedLoopTraceError(
+                    "transition native timing metrics are incomplete"
+                ) from error
+            if any(
+                not math.isfinite(value) or value < 0.0
+                for value in native_values.values()
+            ):
+                raise ClosedLoopTraceError(
+                    "transition native timing metrics must be non-negative"
+                )
+            native_step = native_values["native_step_seconds"]
+            native_partition = sum(
+                native_values[name]
+                for name in (
+                    "native_neighborhood_generation_seconds",
+                    "native_replan_seconds",
+                    "native_state_snapshot_seconds",
+                    "native_repair_bookkeeping_seconds",
+                    "native_residual_seconds",
+                )
+            )
+            if not math.isclose(
+                native_partition,
+                native_step,
+                rel_tol=0.01,
+                abs_tol=max(1e-6, 0.01 * native_step),
+            ):
+                raise ClosedLoopTraceError("native step timing does not close")
+            if not math.isclose(
+                native_values["native_replan_seconds"],
+                native_values["pp_replan_seconds"],
+                rel_tol=0.01,
+                abs_tol=max(
+                    1e-6,
+                    0.01
+                    * max(
+                        native_values["native_replan_seconds"],
+                        native_values["pp_replan_seconds"],
+                    ),
+                ),
+            ):
+                raise ClosedLoopTraceError(
+                    "native replan timing does not match PP timing"
+                )
+            binding_partition = sum(
+                native_values[name]
+                for name in (
+                    "binding_solver_call_seconds",
+                    "binding_state_snapshot_seconds",
+                    "state_to_python_seconds",
+                    "metrics_to_python_seconds",
+                    "binding_residual_seconds",
+                )
+            )
+            binding_total = native_values["binding_total_seconds"]
+            binding_tolerance = max(
+                1e-6,
+                0.01 * max(binding_total, binding_partition, 1e-6),
+            )
+            if not math.isclose(
+                binding_partition,
+                binding_total,
+                rel_tol=0.01,
+                abs_tol=binding_tolerance,
+            ):
+                raise ClosedLoopTraceError("binding timing does not close")
+            if (
+                native_values["binding_solver_call_seconds"]
+                + max(1e-5, 0.01 * max(native_step, 1e-6))
+                < native_step
+            ):
+                raise ClosedLoopTraceError(
+                    "binding solver timing is below native step"
+                )
+            if native_timing_schema == REPAIR_TIMING_SCHEMA_V2:
+                try:
+                    step_runtime = float(metrics["step_runtime"])
+                    episode_runtime_delta = float(
+                        metrics["episode_runtime_delta_seconds"]
+                    )
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ClosedLoopTraceError(
+                        "repair timing v2 metrics are incomplete"
+                    ) from error
+                if (
+                    not math.isfinite(step_runtime)
+                    or step_runtime < 0.0
+                    or not math.isfinite(episode_runtime_delta)
+                    or episode_runtime_delta < 0.0
+                ):
+                    raise ClosedLoopTraceError(
+                        "repair timing v2 metrics must be non-negative"
+                    )
+                native_tolerance = max(
+                    1e-6, 0.01 * max(native_step, 1e-6)
+                )
+                if not math.isclose(
+                    step_runtime,
+                    native_step,
+                    rel_tol=0.01,
+                    abs_tol=native_tolerance,
+                ):
+                    raise ClosedLoopTraceError(
+                        "repair timing v2 step_runtime does not match native step"
+                    )
+                if episode_runtime_delta + native_tolerance < native_step:
+                    raise ClosedLoopTraceError(
+                        "repair timing v2 episode delta is below native step"
+                    )
+            else:
+                try:
+                    legacy_step_runtime = float(metrics["step_runtime"])
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ClosedLoopTraceError(
+                        "repair timing v1 metrics are incomplete"
+                    ) from error
+                if (
+                    not math.isfinite(legacy_step_runtime)
+                    or legacy_step_runtime < 0.0
+                ):
+                    raise ClosedLoopTraceError(
+                        "repair timing v1 metrics must be non-negative"
+                    )
         action_pp_seed = int(action.get("pp_random_seed", -1))
         requested_pp_seed = int(metrics.get("requested_pp_random_seed", -1))
         applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
@@ -1663,6 +1899,10 @@ def validate_closed_loop_trace(
             raise ClosedLoopTraceError("transition wall times are invalid")
         transition_elapsed_seconds.append(elapsed_seconds)
         timings = event.get("timings")
+        if native_timing_schema is not None and timings is None:
+            raise ClosedLoopTraceError(
+                "instrumented transition is missing timings"
+            )
         if timings is not None:
             if not isinstance(timings, dict):
                 raise ClosedLoopTraceError("transition timings are invalid")
@@ -1674,6 +1914,94 @@ def validate_closed_loop_trace(
                 for value in numeric_timings.values()
             ):
                 raise ClosedLoopTraceError("transition timings must be non-negative")
+            if native_timing_schema is not None:
+                timing_metric_pairs = {
+                    "native_step_seconds": native_values[
+                        "native_step_seconds"
+                    ],
+                    "episode_runtime_delta_seconds": float(
+                        metrics.get(
+                            "episode_runtime_delta_seconds",
+                            metrics["step_runtime"],
+                        )
+                    ),
+                    "native_neighborhood_generation_seconds": native_values[
+                        "native_neighborhood_generation_seconds"
+                    ],
+                    "pp_replan_seconds": native_values[
+                        "pp_replan_seconds"
+                    ],
+                    "repair_bookkeeping_seconds": native_values[
+                        "native_repair_bookkeeping_seconds"
+                    ],
+                    "native_residual_seconds": native_values[
+                        "native_residual_seconds"
+                    ],
+                    "state_export_seconds": sum(
+                        native_values[name]
+                        for name in (
+                            "native_state_snapshot_seconds",
+                            "binding_state_snapshot_seconds",
+                            "state_to_python_seconds",
+                        )
+                    ),
+                }
+                for name, expected_value in timing_metric_pairs.items():
+                    if name not in numeric_timings:
+                        raise ClosedLoopTraceError(
+                            f"transition timings are missing {name}"
+                        )
+                    actual_value = numeric_timings[name]
+                    field_tolerance = max(
+                        1e-6,
+                        0.01
+                        * max(
+                            actual_value,
+                            expected_value,
+                            1e-6,
+                        ),
+                    )
+                    if not math.isclose(
+                        actual_value,
+                        expected_value,
+                        rel_tol=0.01,
+                        abs_tol=field_tolerance,
+                    ):
+                        raise ClosedLoopTraceError(
+                            f"transition {name} does not match metrics"
+                        )
+                if "environment_step_wall_seconds" not in numeric_timings:
+                    raise ClosedLoopTraceError(
+                        "transition timings are missing environment_step_wall_seconds"
+                    )
+                repair_wall_seconds = float(
+                    event.get("repair_wall_seconds", -1.0)
+                )
+                step_wall_seconds = numeric_timings[
+                    "environment_step_wall_seconds"
+                ]
+                wall_tolerance = max(
+                    1e-6,
+                    0.01
+                    * max(
+                        repair_wall_seconds,
+                        step_wall_seconds,
+                        1e-6,
+                    ),
+                )
+                if (
+                    not math.isfinite(repair_wall_seconds)
+                    or repair_wall_seconds < 0.0
+                    or not math.isclose(
+                        step_wall_seconds,
+                        repair_wall_seconds,
+                        rel_tol=0.01,
+                        abs_tol=wall_tolerance,
+                    )
+                ):
+                    raise ClosedLoopTraceError(
+                        "transition environment step timing does not match event"
+                    )
             selection_expected = float(
                 numeric_timings.get("controller_before_repair_seconds", 0.0)
             ) + float(
@@ -1707,24 +2035,6 @@ def validate_closed_loop_trace(
             )
             if step_partition > step_wall + max(1e-5, 0.01 * step_wall):
                 raise ClosedLoopTraceError("environment step timing exceeds its parent")
-            native_step = float(metrics.get("native_step_seconds", 0.0))
-            native_partition = sum(
-                float(metrics.get(name, 0.0))
-                for name in (
-                    "native_neighborhood_generation_seconds",
-                    "native_replan_seconds",
-                    "native_state_snapshot_seconds",
-                    "native_repair_bookkeeping_seconds",
-                    "native_residual_seconds",
-                )
-            )
-            if native_step > 0.0 and not math.isclose(
-                native_partition,
-                native_step,
-                rel_tol=0.01,
-                abs_tol=max(1e-6, 0.01 * native_step),
-            ):
-                raise ClosedLoopTraceError("native step timing does not close")
         if learned_policy:
             controller = event.get("controller")
             if not isinstance(controller, dict):
@@ -1945,7 +2255,7 @@ def _valid_episode_trace(
             expected_solver_seed=expected_solver_seed,
             metric_iteration_budget=metric_iteration_budget,
         )
-    except ClosedLoopTraceError:
+    except (ClosedLoopTraceError, KeyError, TypeError, ValueError):
         return None
     return validated
 
@@ -3146,27 +3456,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         ] += float(diagnostic["outside_fraction"])
                         controller_totals["selected_feature_diagnostic_count"] += 1
                     controller_totals["learned_decisions"] += 1
-                if (
-                    (
-                        stall_guard is not None
-                        or repair_aware is not None
-                        or v3_state is not None
-                        or v3_s3_state is not None
-                    )
-                    and policy == "realized_dynamic"
-                ):
-                    route_prefix = "official" if route == "official_adaptive" else "model"
-                    controller_totals[f"{route_prefix}_decision_count"] += 1
-                    controller_totals[f"{route_prefix}_controller_seconds"] += float(
-                        controller.get("controller_seconds_before_repair", 0.0)
-                    )
-                    if route == "official_adaptive" and "candidate_pool" not in controller:
-                        controller_totals["controller_seconds_before_repair"] += float(
-                            controller.get("controller_seconds_before_repair", 0.0)
-                        )
-                    if previous_route is not None and previous_route != route:
-                        controller_totals["route_switch_count"] += 1
-                    previous_route = route
+                # Candidate generation and controller inference can consume the
+                # remaining wall budget.  Do not enter the native solver after
+                # its live deadline has expired: the environment correctly
+                # rejects that call, but an expected timeout must not turn the
+                # whole episode into an execution error.  Keep this before
+                # route counters so only executed repairs are counted.
+                if time.perf_counter() - started_wall >= wall_budget:
+                    external_timeout = True
+                    break
                 if bool(job.get("deterministic_pp_replay", False)):
                     # Explicit learned actions already seed immediately before
                     # PP because they do not run native neighborhood
@@ -3185,13 +3483,59 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             route,
                         )
                     )
+                if time.perf_counter() - started_wall >= wall_budget:
+                    external_timeout = True
+                    break
                 repair_started = time.perf_counter()
-                result = _plain(environment.step(action))
+                try:
+                    result = _plain(environment.step(action))
+                except RuntimeError as error:
+                    elapsed_after_error = time.perf_counter() - started_wall
+                    if (
+                        "repair episode" in str(error)
+                        and "finished" in str(error)
+                        and elapsed_after_error >= wall_budget
+                    ):
+                        external_timeout = True
+                        break
+                    raise
                 repair_wall_seconds = time.perf_counter() - repair_started
                 post_step_started = time.perf_counter()
                 total_repair_wall_seconds += repair_wall_seconds
                 state = result["observation"]
                 metrics = result["metrics"]
+                if (
+                    (
+                        stall_guard is not None
+                        or repair_aware is not None
+                        or v3_state is not None
+                        or v3_s3_state is not None
+                    )
+                    and policy == "realized_dynamic"
+                ):
+                    route_prefix = (
+                        "official" if route == "official_adaptive" else "model"
+                    )
+                    controller_totals[f"{route_prefix}_decision_count"] += 1
+                    controller_totals[
+                        f"{route_prefix}_controller_seconds"
+                    ] += float(
+                        controller.get("controller_seconds_before_repair", 0.0)
+                    )
+                    if (
+                        route == "official_adaptive"
+                        and "candidate_pool" not in controller
+                    ):
+                        controller_totals[
+                            "controller_seconds_before_repair"
+                        ] += float(
+                            controller.get(
+                                "controller_seconds_before_repair", 0.0
+                            )
+                        )
+                    if previous_route is not None and previous_route != route:
+                        controller_totals["route_switch_count"] += 1
+                    previous_route = route
                 if "pp_random_seed" in action:
                     requested_pp_seed = int(action["pp_random_seed"])
                     if int(metrics.get("requested_pp_random_seed", -1)) != requested_pp_seed:
@@ -3206,22 +3550,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "pp_seed_not_applied",
                             "native PP did not apply the deterministic replay seed",
                         )
-                required_native_timing_keys = {
-                    "native_step_seconds",
-                    "native_neighborhood_generation_seconds",
-                    "native_replan_seconds",
-                    "pp_replan_seconds",
-                    "native_state_snapshot_seconds",
-                    "native_repair_bookkeeping_seconds",
-                    "native_residual_seconds",
-                    "binding_solver_call_seconds",
-                    "binding_state_snapshot_seconds",
-                    "state_to_python_seconds",
-                    "metrics_to_python_seconds",
-                    "binding_total_seconds",
-                    "binding_residual_seconds",
-                }
-                native_timing_available = required_native_timing_keys.issubset(metrics)
+                try:
+                    native_timing_schema = _native_repair_timing_schema(metrics)
+                except (TypeError, ValueError) as error:
+                    raise ClosedLoopExecutionError(
+                        "invalid_native_timing", str(error)
+                    ) from error
                 low_level_delta = _low_level_delta(before, state)
                 actual = sorted(map(int, metrics.get("neighborhood", [])))
                 if policy in LEARNED_POLICIES and route == "model":
@@ -3269,6 +3603,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
 
                 controller_before_repair_seconds = float(
                     controller.get("controller_seconds_before_repair", 0.0)
+                )
+                native_step_seconds = float(
+                    metrics.get(
+                        "native_step_seconds",
+                        metrics.get("step_runtime", 0.0),
+                    )
+                )
+                episode_runtime_delta_seconds = float(
+                    metrics.get(
+                        "episode_runtime_delta_seconds",
+                        metrics.get("step_runtime", native_step_seconds),
+                    )
                 )
                 native_neighborhood_seconds = float(
                     metrics.get("native_neighborhood_generation_seconds", 0.0)
@@ -3474,6 +3820,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     ) + observe_seconds
                     controller_totals["v3_s3_seconds"] += observe_seconds
                 transition_timings = {
+                    "native_step_seconds": native_step_seconds,
+                    "episode_runtime_delta_seconds": (
+                        episode_runtime_delta_seconds
+                    ),
                     "pre_step_orchestration_seconds": pre_step_orchestration_seconds,
                     "controller_before_repair_seconds": controller_before_repair_seconds,
                     "candidate_generation_seconds": float(
@@ -3537,9 +3887,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     "repair_wall_seconds": repair_wall_seconds,
                     "elapsed_wall_seconds": elapsed_wall,
                     "within_wall_budget": within_wall_budget,
-                    "native_timing_schema": (
-                        REPAIR_TIMING_SCHEMA if native_timing_available else None
-                    ),
+                    "native_timing_schema": native_timing_schema,
                     "timings": transition_timings,
                     "controller": controller,
                     "terminated": bool(result["terminated"]),
@@ -4555,6 +4903,9 @@ __all__ = [
     "CollectionLockError",
     "LEARNED_POLICIES",
     "REPAIR_TIMING_SCHEMA",
+    "REPAIR_TIMING_SCHEMA_V1",
+    "REPAIR_TIMING_SCHEMA_V2",
+    "REPAIR_TIMING_SCHEMAS",
     "FIXED_POLICIES",
     "POLICIES",
     "SUPPORTED_POLICIES",

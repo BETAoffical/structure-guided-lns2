@@ -1,29 +1,39 @@
 from __future__ import annotations
 
 import collections
-import csv
-import math
 import os
 import statistics
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
+from experiments._common import (
+    config_producer_fingerprint as _config_producer_fingerprint,
+    producer_identity,
+    read_json,
+)
 from experiments.receding_q_pilot import (
+    PROJECT_ROOT,
     RECEDING_Q_PILOT_SCHEMA,
+    RECEDING_Q_PILOT_PRODUCER_FILES,
     _atomic_write_csv,
     _correlation,
     _rollout_file_name,
     _rollout_flat,
     _winner_key,
+    load_resumable_receding_q_rollout,
     run_receding_q_rollout,
+    validate_receding_q_rollout,
 )
 from experiments.repair_collection import _fingerprint, _write_json
 
 
-RECEDING_Q_STABILITY_SCHEMA = "lns2.receding_q_label_stability.v1"
+RECEDING_Q_STABILITY_SCHEMA = "lns2.receding_q_label_stability.v2"
 FOLLOWUP_TRIALS = (2, 3)
+RECEDING_Q_STABILITY_PRODUCER_FILES = (
+    *RECEDING_Q_PILOT_PRODUCER_FILES,
+    "experiments/receding_q_stability.py",
+)
 
 
 def _rollout_key(row: dict[str, Any]) -> tuple[str, str, int]:
@@ -36,10 +46,12 @@ def _rollout_key(row: dict[str, Any]) -> tuple[str, str, int]:
 
 def load_receding_q_rollouts(root: str | Path) -> list[dict[str, Any]]:
     rollout_root = Path(root).resolve() / "rollouts"
-    rows = [
-        dict(read_json(path))
-        for path in sorted(rollout_root.glob("*.json"))
-    ]
+    rows = []
+    for path in sorted(rollout_root.glob("*.json")):
+        value = read_json(path)
+        if not isinstance(value, dict):
+            raise ValueError(f"receding-Q rollout is not an object: {path.name}")
+        rows.append(dict(value))
     if not rows:
         raise ValueError("receding-Q source has no rollout files")
     keys = [_rollout_key(row) for row in rows]
@@ -48,6 +60,75 @@ def load_receding_q_rollouts(root: str | Path) -> list[dict[str, Any]]:
     if not all(bool(row.get("complete")) for row in rows):
         raise ValueError("receding-Q source contains incomplete rollouts")
     return rows
+
+
+def _validate_source_configuration(
+    plan: dict[str, Any],
+    config: dict[str, Any],
+) -> None:
+    if str(plan.get("schema")) != RECEDING_Q_PILOT_SCHEMA:
+        raise ValueError("source plan is not a receding-Q pilot")
+    if str(config.get("schema")) != RECEDING_Q_PILOT_SCHEMA:
+        raise ValueError("source configuration is not a receding-Q pilot")
+    if str(config.get("plan_fingerprint")) != _fingerprint(plan):
+        raise ValueError("source configuration plan fingerprint mismatch")
+    _config_producer_fingerprint(config, label="source configuration")
+    if int(config.get("trials", -1)) != 2:
+        raise ValueError("stability source must contain exactly two trials")
+
+
+def _validate_rollout_matrix(
+    rows: Iterable[dict[str, Any]],
+    *,
+    plan: dict[str, Any],
+    state_ids: set[str],
+    trial_indices: set[int],
+    horizon: int,
+    continuation_teacher: str,
+    producer_fingerprint: str | None = None,
+    allow_other_states: bool = False,
+) -> list[dict[str, Any]]:
+    materialized = [dict(row) for row in rows]
+    values = [
+        dict(row)
+        for row in materialized
+        if str(row.get("state_id")) in state_ids
+    ]
+    if not allow_other_states and len(values) != len(materialized):
+        raise ValueError("receding-Q rollout matrix contains unplanned states")
+    plan_states = {
+        str(state["state_id"]): dict(state)
+        for state in plan["states"]
+        if str(state["state_id"]) in state_ids
+    }
+    if set(plan_states) != state_ids:
+        raise ValueError("receding-Q rollout matrix contains states outside the plan")
+    plan_arms = {
+        (state_id, str(arm["candidate_id"])): dict(arm)
+        for state_id, state in plan_states.items()
+        for arm in state["arms"]
+    }
+    expected = {
+        (state_id, candidate_id, trial_index)
+        for state_id, candidate_id in plan_arms
+        for trial_index in trial_indices
+    }
+    observed = {_rollout_key(row) for row in values}
+    if len(observed) != len(values) or observed != expected:
+        raise ValueError("receding-Q rollout matrix coverage mismatch")
+    for row in values:
+        state_id, candidate_id, trial_index = _rollout_key(row)
+        validate_receding_q_rollout(
+            row,
+            state_plan=plan_states[state_id],
+            arm_plan=plan_arms[(state_id, candidate_id)],
+            feature_names=list(plan["feature_names"]),
+            horizon=int(horizon),
+            continuation_teacher=str(continuation_teacher),
+            expected_trial_index=trial_index,
+            expected_producer_fingerprint=producer_fingerprint,
+        )
+    return values
 
 
 def identify_stability_targets(
@@ -84,6 +165,162 @@ def identify_stability_targets(
         "target_state_count": len(target_states),
         "stable_state_count": len(stable_states),
         "source_state_count": len(state_trials),
+    }
+
+
+def _validate_complete_status(
+    root: Path,
+    *,
+    schema: str,
+    label: str,
+) -> dict[str, Any]:
+    status = dict(read_json(root / "status.json"))
+    if str(status.get("schema")) != str(schema):
+        raise ValueError(f"{label} status schema mismatch")
+    if (
+        str(status.get("status")) != "complete"
+        or int(status.get("error_count", -1)) != 0
+    ):
+        raise ValueError(f"{label} is not complete and clean")
+    return status
+
+
+def load_validated_four_seed_stability(
+    stability_root: str | Path,
+    source_root: str | Path,
+) -> dict[str, Any]:
+    """Load a stability cohort only after validating all persisted bindings."""
+
+    stability_path = Path(stability_root).resolve()
+    source_path = Path(source_root).resolve()
+    stability_status = _validate_complete_status(
+        stability_path,
+        schema=RECEDING_Q_STABILITY_SCHEMA,
+        label="receding-Q stability",
+    )
+    source_status = _validate_complete_status(
+        source_path,
+        schema=RECEDING_Q_PILOT_SCHEMA,
+        label="source receding-Q pilot",
+    )
+    stability_config = dict(
+        read_json(stability_path / "run_config.json")
+    )
+    if str(stability_config.get("schema")) != RECEDING_Q_STABILITY_SCHEMA:
+        raise ValueError("stability configuration schema mismatch")
+    stability_producer_fingerprint = _config_producer_fingerprint(
+        stability_config, label="stability configuration"
+    )
+    persisted_source_name = (
+        str(stability_config.get("source", ""))
+        .replace("\\", "/")
+        .rstrip("/")
+        .split("/")[-1]
+    )
+    if persisted_source_name != source_path.name:
+        raise ValueError("stability configuration source path mismatch")
+
+    source_plan = dict(read_json(source_path / "plan.json"))
+    source_config = dict(read_json(source_path / "run_config.json"))
+    _validate_source_configuration(source_plan, source_config)
+    source_producer_fingerprint = str(
+        source_config["producer_identity_fingerprint"]
+    )
+    if str(stability_config.get("source_producer_identity_fingerprint")) != (
+        source_producer_fingerprint
+    ):
+        raise ValueError("stability source producer identity mismatch")
+    plan_fingerprint = _fingerprint(source_plan)
+    if str(stability_config.get("source_plan_fingerprint")) != (
+        plan_fingerprint
+    ):
+        raise ValueError("stability source plan fingerprint mismatch")
+    if int(stability_config.get("horizon", -1)) != int(
+        source_config["horizon"]
+    ):
+        raise ValueError("stability/source horizon mismatch")
+    if str(stability_config.get("continuation_teacher")) != str(
+        source_config["continuation_teacher"]
+    ):
+        raise ValueError("stability/source continuation teacher mismatch")
+    if tuple(map(int, stability_config.get("followup_trial_indices", ()))) != (
+        FOLLOWUP_TRIALS
+    ):
+        raise ValueError("stability follow-up trial configuration mismatch")
+
+    targets = dict(read_json(stability_path / "targets.json"))
+    if str(stability_config.get("target_fingerprint")) != _fingerprint(
+        targets
+    ):
+        raise ValueError("stability target fingerprint mismatch")
+    target_state_ids = list(map(str, targets.get("target_state_ids", ())))
+    target_ids = set(target_state_ids)
+    if not target_ids or len(target_ids) != len(target_state_ids):
+        raise ValueError("stability targets are empty or repeated")
+
+    source_rows = load_receding_q_rollouts(source_path)
+    source_state_ids = {
+        str(state["state_id"]) for state in source_plan["states"]
+    }
+    _validate_rollout_matrix(
+        source_rows,
+        plan=source_plan,
+        state_ids=source_state_ids,
+        trial_indices={0, 1},
+        horizon=int(source_config["horizon"]),
+        continuation_teacher=str(source_config["continuation_teacher"]),
+        producer_fingerprint=source_producer_fingerprint,
+    )
+    source_rollout_fingerprint = _fingerprint(
+        sorted((_rollout_key(row), row) for row in source_rows)
+    )
+    if str(stability_config.get("source_rollout_fingerprint")) != (
+        source_rollout_fingerprint
+    ):
+        raise ValueError("stability source rollout fingerprint mismatch")
+    recomputed_targets = identify_stability_targets(source_rows)
+    if _fingerprint(recomputed_targets) != _fingerprint(targets):
+        raise ValueError("stability targets do not match source rollouts")
+
+    followup_rows = load_receding_q_rollouts(stability_path)
+    _validate_rollout_matrix(
+        followup_rows,
+        plan=source_plan,
+        state_ids=target_ids,
+        trial_indices=set(FOLLOWUP_TRIALS),
+        horizon=int(source_config["horizon"]),
+        continuation_teacher=str(source_config["continuation_teacher"]),
+        producer_fingerprint=stability_producer_fingerprint,
+    )
+    merged_rows = merge_followup_rollouts(source_rows, followup_rows)
+    _validate_rollout_matrix(
+        merged_rows,
+        plan=source_plan,
+        state_ids=target_ids,
+        trial_indices=set(range(4)),
+        horizon=int(source_config["horizon"]),
+        continuation_teacher=str(source_config["continuation_teacher"]),
+        allow_other_states=True,
+    )
+
+    for label, status, count in (
+        ("source pilot", source_status, len(source_rows)),
+        ("stability follow-up", stability_status, len(followup_rows)),
+    ):
+        if int(status.get("completed_rollout_count", -1)) != count:
+            raise ValueError(f"{label} completed rollout count mismatch")
+        if int(status.get("total_rollout_count", -1)) != count:
+            raise ValueError(f"{label} total rollout count mismatch")
+    return {
+        "source_root": source_path,
+        "stability_root": stability_path,
+        "source_plan": source_plan,
+        "source_config": source_config,
+        "stability_config": stability_config,
+        "targets": targets,
+        "source_rows": source_rows,
+        "followup_rows": followup_rows,
+        "merged_rows": merged_rows,
     }
 
 
@@ -229,16 +466,26 @@ def analyze_four_seed_stability(
     *,
     plan: dict[str, Any],
     targets: dict[str, Any],
+    horizon: int,
+    continuation_teacher: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     target_ids = set(map(str, targets["target_state_ids"]))
     plan_states = {
         str(state["state_id"]): dict(state) for state in plan["states"]
     }
+    validated_rows = _validate_rollout_matrix(
+        rows,
+        plan=plan,
+        state_ids=target_ids,
+        trial_indices=set(range(4)),
+        horizon=int(horizon),
+        continuation_teacher=str(continuation_teacher),
+        allow_other_states=True,
+    )
     grouped: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
-    for row in rows:
+    for row in validated_rows:
         state_id = str(row["state_id"])
-        if state_id in target_ids:
-            grouped[state_id].append(dict(row))
+        grouped[state_id].append(dict(row))
     if set(grouped) != target_ids:
         raise ValueError("merged stability rows do not cover all target states")
 
@@ -599,23 +846,39 @@ def run_receding_q_stability_followup(
 ) -> dict[str, Any]:
     source_root = Path(source).resolve()
     output_root = Path(output).resolve()
-    if output_root.exists() and any(output_root.iterdir()) and not bool(resume):
+    output_has_files = output_root.exists() and any(output_root.iterdir())
+    if output_has_files and not bool(resume):
         raise FileExistsError("stability output is non-empty; pass resume")
-    output_root.mkdir(parents=True, exist_ok=True)
 
-    source_status = dict(read_json(source_root / "status.json"))
-    if (
-        str(source_status.get("status")) != "complete"
-        or int(source_status.get("error_count", -1)) != 0
-    ):
-        raise ValueError("source receding-Q pilot is not complete and clean")
+    source_status = _validate_complete_status(
+        source_root,
+        schema=RECEDING_Q_PILOT_SCHEMA,
+        label="source receding-Q pilot",
+    )
     source_plan = dict(read_json(source_root / "plan.json"))
     source_config = dict(read_json(source_root / "run_config.json"))
-    if str(source_plan.get("schema")) != RECEDING_Q_PILOT_SCHEMA:
-        raise ValueError("source plan is not a receding-Q pilot")
-    if int(source_config["trials"]) != 2:
-        raise ValueError("stability source must contain exactly two trials")
+    _validate_source_configuration(source_plan, source_config)
+    source_producer_fingerprint = str(
+        source_config["producer_identity_fingerprint"]
+    )
     source_rows = load_receding_q_rollouts(source_root)
+    source_state_ids = {
+        str(state["state_id"]) for state in source_plan["states"]
+    }
+    _validate_rollout_matrix(
+        source_rows,
+        plan=source_plan,
+        state_ids=source_state_ids,
+        trial_indices={0, 1},
+        horizon=int(source_config["horizon"]),
+        continuation_teacher=str(source_config["continuation_teacher"]),
+        producer_fingerprint=source_producer_fingerprint,
+    )
+    if (
+        int(source_status.get("completed_rollout_count", -1)) != len(source_rows)
+        or int(source_status.get("total_rollout_count", -1)) != len(source_rows)
+    ):
+        raise ValueError("source receding-Q pilot status count mismatch")
     targets = identify_stability_targets(source_rows)
     jobs = build_followup_jobs(
         plan=source_plan,
@@ -623,10 +886,21 @@ def run_receding_q_stability_followup(
         horizon=int(source_config["horizon"]),
         continuation_teacher=str(source_config["continuation_teacher"]),
     )
+    identity = producer_identity(
+        project_root=PROJECT_ROOT,
+        source_files=RECEDING_Q_STABILITY_PRODUCER_FILES,
+        native_required=True,
+        optional_package_names=("numpy", "scikit-learn"),
+    )
+    identity_fingerprint = _fingerprint(identity)
+    for job in jobs:
+        job["producer_identity_fingerprint"] = identity_fingerprint
     config = {
         "schema": RECEDING_Q_STABILITY_SCHEMA,
-        "implementation_sha256": sha256_file(Path(__file__).resolve()),
+        "producer_identity": identity,
+        "producer_identity_fingerprint": identity_fingerprint,
         "source": str(source_root),
+        "source_producer_identity_fingerprint": source_producer_fingerprint,
         "source_plan_fingerprint": _fingerprint(source_plan),
         "source_rollout_fingerprint": _fingerprint(
             sorted((_rollout_key(row), row) for row in source_rows)
@@ -639,12 +913,17 @@ def run_receding_q_stability_followup(
     }
     config_path = output_root / "run_config.json"
     target_path = output_root / "targets.json"
-    if config_path.is_file():
+    if output_has_files and not (config_path.is_file() and target_path.is_file()):
+        raise ValueError(
+            "stability output lacks resumable config/targets; use a new output"
+        )
+    if output_has_files:
         if dict(read_json(config_path)) != config:
             raise ValueError("stability resume configuration mismatch")
         if dict(read_json(target_path)) != targets:
             raise ValueError("stability resume targets mismatch")
     else:
+        output_root.mkdir(parents=True, exist_ok=True)
         _write_json(config_path, config)
         _write_json(target_path, targets)
 
@@ -662,12 +941,19 @@ def run_receding_q_stability_followup(
         )
         try:
             if bool(resume) and path.is_file():
-                row = dict(read_json(path))
-                if (
-                    _rollout_key(row)
-                    == (state_id, candidate_id, trial_index)
-                    and bool(row.get("complete"))
-                ):
+                row = load_resumable_receding_q_rollout(
+                    path,
+                    state_plan=dict(job["state"]),
+                    arm_plan=dict(job["arm"]),
+                    feature_names=list(source_plan["feature_names"]),
+                    horizon=int(source_config["horizon"]),
+                    continuation_teacher=str(
+                        source_config["continuation_teacher"]
+                    ),
+                    expected_trial_index=trial_index,
+                    expected_producer_fingerprint=identity_fingerprint,
+                )
+                if row is not None:
                     completed.append(row)
                     continue
             row = run_receding_q_rollout(job)
@@ -706,7 +992,11 @@ def run_receding_q_stability_followup(
 
     merged = merge_followup_rollouts(source_rows, completed)
     report, state_rows, loo_rows = analyze_four_seed_stability(
-        merged, plan=source_plan, targets=targets
+        merged,
+        plan=source_plan,
+        targets=targets,
+        horizon=int(source_config["horizon"]),
+        continuation_teacher=str(source_config["continuation_teacher"]),
     )
     report["run_config"] = config
     report["source_state_count"] = int(targets["source_state_count"])
@@ -752,6 +1042,7 @@ __all__ = [
     "analyze_four_seed_stability",
     "build_followup_jobs",
     "identify_stability_targets",
+    "load_validated_four_seed_stability",
     "load_receding_q_rollouts",
     "merge_followup_rollouts",
     "run_receding_q_stability_followup",

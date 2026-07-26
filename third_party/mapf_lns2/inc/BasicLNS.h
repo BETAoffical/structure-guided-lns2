@@ -16,6 +16,25 @@ struct Agent
         else
             path_planner = new SpaceTimeAStar(instance, id);
     }
+    Agent(const Agent&) = delete;
+    Agent& operator=(const Agent&) = delete;
+    Agent(Agent&& other) noexcept :
+        id(other.id), path_planner(other.path_planner), path(std::move(other.path))
+    {
+        other.path_planner = nullptr;
+    }
+    Agent& operator=(Agent&& other) noexcept
+    {
+        if (this != &other)
+        {
+            delete path_planner;
+            id = other.id;
+            path_planner = other.path_planner;
+            path = std::move(other.path);
+            other.path_planner = nullptr;
+        }
+        return *this;
+    }
     ~Agent(){ delete path_planner; }
 
     int getNumOfDelays() const
@@ -62,7 +81,7 @@ protected:
     int selected_neighbor;
 
     // helper variables
-    high_resolution_clock::time_point start_time;
+    Time::time_point start_time;
     Neighbor neighbor;
 
     void rouletteWheel();

@@ -10,13 +10,12 @@ from experiments._common import read_json, sha256_file
 from experiments.receding_q_pilot import _atomic_write_csv
 from experiments.receding_q_risk_audit import resolve_persisted_source_path
 from experiments.receding_q_stability import (
-    load_receding_q_rollouts,
-    merge_followup_rollouts,
+    load_validated_four_seed_stability,
 )
 from experiments.repair_collection import _write_json
 
 
-RECEDING_Q_VARIANCE_AUDIT_SCHEMA = "lns2.receding_q_variance_audit.v1"
+RECEDING_Q_VARIANCE_AUDIT_SCHEMA = "lns2.receding_q_variance_audit.v2"
 
 
 def _root_step(row: dict[str, Any]) -> dict[str, Any]:
@@ -29,7 +28,8 @@ def _root_step(row: dict[str, Any]) -> dict[str, Any]:
 def _state_changed(row: dict[str, Any]) -> float:
     step = _root_step(row)
     return float(
-        str(step["after_fingerprint"]) != str(step["before_fingerprint"])
+        str(step["after_repair_fingerprint"])
+        != str(step["before_repair_fingerprint"])
     )
 
 
@@ -184,6 +184,8 @@ def validate_four_seed_rows(
         raise ValueError("variance audit does not cover every target state")
 
     candidate_count = 0
+    paired_step_group_count = 0
+    continuation_step_group_count = 0
     for state_id, state_rows in grouped.items():
         candidates = {str(row["candidate_id"]) for row in state_rows}
         trials = {int(row["trial_index"]) for row in state_rows}
@@ -206,19 +208,68 @@ def validate_four_seed_rows(
                 for row in state_rows
                 if int(row["trial_index"]) == trial
             ]
-            requested = {
-                int(_root_step(row)["requested_pp_seed"]) for row in trial_rows
-            }
-            applied = {
-                int(_root_step(row)["applied_pp_seed"]) for row in trial_rows
-            }
-            if len(requested) != 1 or requested != applied:
-                raise ValueError(f"state lacks paired PP seeds: {state_id}")
+            steps_by_candidate: dict[str, list[dict[str, Any]]] = {}
+            for row in trial_rows:
+                candidate_id = str(row["candidate_id"])
+                steps = list(row.get("steps", []))
+                if not steps:
+                    raise ValueError(
+                        f"state rollout lacks repair steps: {state_id}"
+                    )
+                normalized_steps = []
+                for expected_step, step in enumerate(steps, start=1):
+                    if not isinstance(step, dict) or int(
+                        step.get("step", -1)
+                    ) != expected_step:
+                        raise ValueError(
+                            f"state rollout has noncontiguous repair steps: {state_id}"
+                        )
+                    normalized_steps.append(dict(step))
+                steps_by_candidate[candidate_id] = normalized_steps
+
+            maximum_step = max(map(len, steps_by_candidate.values()))
+            for step_index in range(maximum_step):
+                paired_steps = [
+                    steps[step_index]
+                    for steps in steps_by_candidate.values()
+                    if step_index < len(steps)
+                ]
+                try:
+                    requested = {
+                        int(step["requested_pp_seed"]) for step in paired_steps
+                    }
+                    applied = {
+                        int(step["applied_pp_seed"]) for step in paired_steps
+                    }
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError(
+                        f"state has invalid PP seed metadata: {state_id}"
+                    ) from error
+                if len(requested) != 1:
+                    raise ValueError(
+                        f"state lacks paired PP seeds at step {step_index + 1}: "
+                        f"{state_id}"
+                    )
+                requested_seed = next(iter(requested))
+                if step_index == 0:
+                    valid_applied = applied == {requested_seed}
+                else:
+                    valid_applied = applied <= {-1, requested_seed}
+                if not valid_applied:
+                    raise ValueError(
+                        f"state applied an inconsistent PP seed at step "
+                        f"{step_index + 1}: {state_id}"
+                    )
+                paired_step_group_count += 1
+                if step_index > 0:
+                    continuation_step_group_count += 1
         candidate_count += len(candidates)
     return {
         "state_count": len(grouped),
         "unique_state_candidate_count": candidate_count,
         "rollout_count": sum(len(values) for values in grouped.values()),
+        "paired_step_group_count": paired_step_group_count,
+        "continuation_step_group_count": continuation_step_group_count,
     }
 
 
@@ -471,20 +522,17 @@ def audit_receding_q_variance(
         raise FileExistsError("variance audit output is non-empty")
     output_root.mkdir(parents=True, exist_ok=True)
 
-    status = dict(read_json(stability_root / "status.json"))
-    if str(status.get("status")) != "complete" or int(
-        status.get("error_count", -1)
-    ) != 0:
-        raise ValueError("stability source is not complete and clean")
     config = dict(read_json(stability_root / "run_config.json"))
     source_root = resolve_persisted_source_path(
         config["source"], sibling_root=stability_root.parent
     )
-    targets = dict(read_json(stability_root / "targets.json"))
+    validated = load_validated_four_seed_stability(
+        stability_root,
+        source_root,
+    )
+    targets = dict(validated["targets"])
     target_state_ids = list(map(str, targets["target_state_ids"]))
-    source_rows = load_receding_q_rollouts(source_root)
-    followup_rows = load_receding_q_rollouts(stability_root)
-    merged_rows = merge_followup_rollouts(source_rows, followup_rows)
+    merged_rows = list(validated["merged_rows"])
     coverage = validate_four_seed_rows(
         merged_rows, target_state_ids=target_state_ids
     )
