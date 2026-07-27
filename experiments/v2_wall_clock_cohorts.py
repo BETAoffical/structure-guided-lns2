@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import atomic_write_csv, read_json, sha256_file
-from experiments.lns2_bottleneck import load_track
+from experiments.lns2_bottleneck import _mean, load_track
 from experiments.repair_collection import _write_json
 from experiments.tradeoff_evaluation import _manifest_path as controller_manifest_path
 
@@ -34,11 +34,6 @@ EXPECTED_TASKS = (
 EXPECTED_SEEDS = (1, 2, 3)
 BOOTSTRAP_SAMPLES = 10_000
 BOOTSTRAP_SEED = 20260727
-
-
-def _mean(values: Iterable[float | int | None]) -> float | None:
-    numbers = [float(value) for value in values if value is not None]
-    return statistics.fmean(numbers) if numbers else None
 
 
 def _ratio_change(candidate: float | None, baseline: float | None) -> float | None:
@@ -509,6 +504,26 @@ def _paired_summary(rows: list[dict[str, Any]], label: str) -> dict[str, Any]:
     }
 
 
+def _initially_feasible_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "group": "initially_feasible",
+        "pair_count": len(rows),
+        "lns2_success_count": sum(bool(row["lns2_success"]) for row in rows),
+        "v2_success_count": sum(bool(row["v2_success"]) for row in rows),
+        "lns2_mean_initialization_seconds": _mean(
+            row["lns2_initialization_seconds"] for row in rows
+        ),
+        "v2_mean_initialization_seconds": _mean(
+            row["v2_initialization_seconds"] for row in rows
+        ),
+        "v2_initialization_relative_change": _ratio_change(
+            _mean(row["v2_initialization_seconds"] for row in rows),
+            _mean(row["lns2_initialization_seconds"] for row in rows),
+        ),
+        "note": "initially feasible; repair TTF/AUC/PP metrics intentionally omitted",
+    }
+
+
 def _per_map_rows(paired: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in paired:
@@ -662,8 +677,13 @@ def generate_v2_wall_clock_cohort_report(
 
     controller_summary = _controller_rows(episodes, paired)
     per_map = _per_map_rows(paired)
-    strata: list[dict[str, Any]] = []
-    for label in ("initially_feasible", "low_conflict_1_3", "repair_demanding_ge_4"):
+    initially_feasible_rows = [
+        row for row in paired if row["conflict_stratum"] == "initially_feasible"
+    ]
+    strata: list[dict[str, Any]] = [
+        _initially_feasible_summary(initially_feasible_rows)
+    ]
+    for label in ("low_conflict_1_3", "repair_demanding_ge_4"):
         rows = [row for row in paired if row["conflict_stratum"] == label]
         strata.append(_paired_summary(rows, label))
     repairable_rows = [row for row in paired if int(row["initial_conflicts"]) > 0]

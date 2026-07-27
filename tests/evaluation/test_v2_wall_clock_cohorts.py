@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -204,6 +205,13 @@ def test_generates_complete_report_and_filters_extra_controller(
     assert (output / "conflict_strata.csv").is_file()
     assert (output / "v2_lns2_seven_map_report.json").is_file()
     assert (output / "v2_lns2_seven_map_report.md").is_file()
+    with (output / "conflict_strata.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as stream:
+        strata = {row["group"]: row for row in csv.DictReader(stream)}
+    initially_feasible = strata["initially_feasible"]
+    assert initially_feasible["lns2_mean_capped_ttf"] == ""
+    assert float(initially_feasible["lns2_mean_initialization_seconds"]) > 0.0
 
 
 def test_rejects_overlapping_sources(
