@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import csv
 import statistics
 from pathlib import Path
 from typing import Any
 
 from experiments._common import atomic_write_csv
 from experiments.repair_collection import _write_json
+from experiments.wall_clock_report_utils import csv_boolean, read_csv_rows
 
 
 REPORT_SCHEMA = "lns2.v2_cost_top3_wall_clock_report.v1"
@@ -17,15 +17,6 @@ CONTROLLERS = (
 )
 
 
-def _read_rows(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as stream:
-        return list(csv.DictReader(stream))
-
-
-def _boolean(value: Any) -> bool:
-    return str(value).lower() == "true"
-
-
 def _mean(rows: list[dict[str, Any]], name: str) -> float | None:
     values = [float(row[name]) for row in rows if str(row.get(name, "")) != ""]
     return statistics.fmean(values) if values else None
@@ -34,7 +25,7 @@ def _mean(rows: list[dict[str, Any]], name: str) -> float | None:
 def generate_v2_cost_top3_wall_clock_report(
     timing_csv: Path, output: Path
 ) -> dict[str, Any]:
-    source_rows = _read_rows(Path(timing_csv))
+    source_rows = read_csv_rows(Path(timing_csv))
     rows = [
         row
         for row in source_rows
@@ -62,7 +53,7 @@ def generate_v2_cost_top3_wall_clock_report(
     for key in sorted(grouped):
         track, task_id, seed = key
         indexed = grouped[key]
-        all_success = all(_boolean(indexed[name]["success"]) for name in CONTROLLERS)
+        all_success = all(csv_boolean(indexed[name]["success"]) for name in CONTROLLERS)
         for controller in CONTROLLERS:
             row = indexed[controller]
             episode_rows.append(
@@ -74,7 +65,7 @@ def generate_v2_cost_top3_wall_clock_report(
                     "agent_count": int(row["agent_count"]),
                     "solver_seed": seed,
                     "controller": controller,
-                    "success": _boolean(row["success"]),
+                    "success": csv_boolean(row["success"]),
                     "three_way_common_success": all_success,
                     "capped_time_to_feasible": float(
                         row["restricted_time_to_feasible"]
@@ -86,7 +77,7 @@ def generate_v2_cost_top3_wall_clock_report(
                     "repair_iterations": int(row["repair_iterations"]),
                     "soc_at_feasible": (
                         int(float(row["budget_final_sum_of_costs"]))
-                        if _boolean(row["success"])
+                        if csv_boolean(row["success"])
                         else None
                     ),
                 }

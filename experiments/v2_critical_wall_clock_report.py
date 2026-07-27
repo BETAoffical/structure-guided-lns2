@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-import csv
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import atomic_write_csv
 from experiments.repair_collection import _write_json
+from experiments.wall_clock_report_utils import csv_boolean, read_csv_rows
 
 
 REPORT_SCHEMA = "lns2.v2_critical_wall_clock_report.v1"
 CONTROLLERS = ("official_adaptive", "v2-full", "v2-critical")
 ROOM600_TASK = "room-64-64-16__random_04__agents_0600"
-
-
-def _read_rows(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as stream:
-        return list(csv.DictReader(stream))
-
-
-def _boolean(value: Any) -> bool:
-    return str(value).lower() == "true"
 
 
 def _number(value: Any) -> float:
@@ -41,7 +32,7 @@ def _ratio(candidate: float | None, baseline: float | None) -> float | None:
 def _episode_row(source: dict[str, str]) -> dict[str, Any]:
     iterations = int(source["repair_iterations"])
     no_improvement = int(source["no_improvement_repair_count"])
-    success = _boolean(source["success"])
+    success = csv_boolean(source["success"])
     return {
         "track": str(source["track"]),
         "task_id": str(source["task_id"]),
@@ -131,7 +122,7 @@ def generate_v2_critical_wall_clock_report(
 ) -> dict[str, Any]:
     rows = [
         _episode_row(row)
-        for row in _read_rows(Path(timing_csv))
+        for row in read_csv_rows(Path(timing_csv))
         if str(row.get("controller")) in CONTROLLERS
         and str(row.get("track", "")).startswith("wall-clock-")
     ]
