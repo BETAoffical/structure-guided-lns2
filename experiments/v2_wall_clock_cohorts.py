@@ -541,6 +541,24 @@ def _per_map_rows(paired: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "initial_conflict_min": min(int(row["initial_conflicts"]) for row in rows),
                 "initial_conflict_mean": statistics.fmean(float(row["initial_conflicts"]) for row in rows),
                 "initial_conflict_max": max(int(row["initial_conflicts"]) for row in rows),
+                "lns2_mean_repair_iterations": _mean(
+                    row["lns2_repair_iterations"] for row in rows
+                ),
+                "v2_mean_repair_iterations": _mean(
+                    row["v2_repair_iterations"] for row in rows
+                ),
+                "lns2_mean_selection_seconds": _mean(
+                    row["lns2_selection_seconds"] for row in rows
+                ),
+                "v2_mean_selection_seconds": _mean(
+                    row["v2_selection_seconds"] for row in rows
+                ),
+                "lns2_mean_pp_seconds": _mean(
+                    row["lns2_pp_seconds"] for row in rows
+                ),
+                "v2_mean_pp_seconds": _mean(
+                    row["v2_pp_seconds"] for row in rows
+                ),
             }
         )
         result.append(summary)
@@ -627,13 +645,17 @@ def _markdown(report: dict[str, Any], per_map: list[dict[str, Any]]) -> str:
         "",
         "## Per task",
         "",
-        "| Task | Initial conflicts | Success LNS2/v2 | Mean capped TTF LNS2/v2 (s) | LNS2/v2 speedup |",
-        "|---|---:|---:|---:|---:|",
+        "| Task | Initial conflicts min/mean/max | Success LNS2/v2 | Mean TTF LNS2/v2 (s) | Mean repairs LNS2/v2 | Mean selection LNS2/v2 (s) | Mean PP LNS2/v2 (s) | LNS2 time / v2 time |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in per_map:
         lines.append(
             "| {task_id} | {initial_conflict_min}/{initial_conflict_mean:.1f}/{initial_conflict_max} | "
-            "{lns2_success_count}/{v2_success_count} | {lns2_mean_capped_ttf:.4f}/{v2_mean_capped_ttf:.4f} | {speedup_lns2_over_v2:.3f}x |".format(**row)
+            "{lns2_success_count}/{v2_success_count} | {lns2_mean_capped_ttf:.4f}/{v2_mean_capped_ttf:.4f} | "
+            "{lns2_mean_repair_iterations:.2f}/{v2_mean_repair_iterations:.2f} | "
+            "{lns2_mean_selection_seconds:.4f}/{v2_mean_selection_seconds:.4f} | "
+            "{lns2_mean_pp_seconds:.4f}/{v2_mean_pp_seconds:.4f} | "
+            "{speedup_lns2_over_v2:.3f}x |".format(**row)
         )
     lines.extend(
         [

@@ -205,6 +205,14 @@ def test_generates_complete_report_and_filters_extra_controller(
     assert (output / "conflict_strata.csv").is_file()
     assert (output / "v2_lns2_seven_map_report.json").is_file()
     assert (output / "v2_lns2_seven_map_report.md").is_file()
+    with (output / "per_map_results.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as stream:
+        per_map = list(csv.DictReader(stream))
+    assert len(per_map) == 7
+    assert float(per_map[0]["lns2_mean_repair_iterations"]) >= 0.0
+    assert float(per_map[0]["v2_mean_selection_seconds"]) >= 0.0
+    assert float(per_map[0]["v2_mean_pp_seconds"]) >= 0.0
     with (output / "conflict_strata.csv").open(
         "r", encoding="utf-8", newline=""
     ) as stream:
