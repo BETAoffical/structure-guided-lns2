@@ -51,6 +51,9 @@ from experiments.repair_collection import (  # noqa: E402
 )
 from experiments.run_output_guard import prepare_run_output  # noqa: E402
 from experiments.v3_controller import load_v3_controller_bundle  # noqa: E402
+from experiments.v2_cost_top3_wall_clock_report import (  # noqa: E402
+    generate_v2_cost_top3_wall_clock_report,
+)
 
 
 QUICK_TASKS = (
@@ -77,12 +80,21 @@ REPAIR_AWARE_COLLECTION = (
 )
 V3_COLLECTION = ("v3-full", "v3-full", "realized_dynamic")
 V3_H3_COLLECTION = ("v3-h3", "v3-h3", "realized_dynamic")
+V2_COST_TOP3_COLLECTION = (
+    "v2-cost-top3-frozen",
+    "v2-cost-top3-frozen",
+    "realized_dynamic",
+)
+V3_ASSISTED_CONTROLLERS = frozenset(
+    {"v2-cost-top3-frozen", "v3-full", "v3-h3"}
+)
 CONTROLLER_COLLECTIONS = {
     item[0]: item
     for item in (
         *DUAL_COLLECTIONS,
         STALL_SAFE_COLLECTION,
         REPAIR_AWARE_COLLECTION,
+        V2_COST_TOP3_COLLECTION,
         V3_COLLECTION,
         V3_H3_COLLECTION,
     )
@@ -171,6 +183,7 @@ def _run_interleaved_collections(
     job_keys: set[tuple[str, int]] | None = None,
     wall_time_budget_seconds: float | None = None,
     episode_process_timeout_seconds: float | None = None,
+    environment_time_limit_seconds: float | None = None,
     stopping_rule: str = "historical",
     collections: tuple[tuple[str, str, str], ...] = DUAL_COLLECTIONS,
     controller_runtime: str = "reference",
@@ -206,11 +219,12 @@ def _run_interleaved_collections(
             repair_aware_bundle=(
                 repair_aware_bundle if controller == "v2-repair-aware" else None
             ),
-            v3_bundle=v3_bundle if controller in {"v3-full", "v3-h3"} else None,
+            v3_bundle=v3_bundle if controller in V3_ASSISTED_CONTROLLERS else None,
             job_keys=job_keys,
             cohort_job_keys=job_keys,
             wall_time_budget_seconds=wall_time_budget_seconds,
             episode_process_timeout_seconds=episode_process_timeout_seconds,
+            environment_time_limit_seconds=environment_time_limit_seconds,
             stopping_rule=stopping_rule,
             qualification_source=qualification_root,
         )
@@ -265,6 +279,7 @@ def _run_interleaved_collections(
             job_keys=job_keys,
             wall_time_budget_seconds=wall_time_budget_seconds,
             episode_process_timeout_seconds=episode_process_timeout_seconds,
+            environment_time_limit_seconds=environment_time_limit_seconds,
             stopping_rule=stopping_rule,
             collections=collections,
             controller_runtime=controller_runtime,
@@ -318,11 +333,12 @@ def _run_interleaved_collections(
                     if controller == "v2-repair-aware"
                     else None
                 ),
-                v3_bundle=v3_bundle if controller in {"v3-full", "v3-h3"} else None,
+                v3_bundle=v3_bundle if controller in V3_ASSISTED_CONTROLLERS else None,
                 job_keys={(task_id, seed)},
                 cohort_job_keys=job_keys,
                 wall_time_budget_seconds=wall_time_budget_seconds,
                 episode_process_timeout_seconds=episode_process_timeout_seconds,
+                environment_time_limit_seconds=environment_time_limit_seconds,
                 stopping_rule=stopping_rule,
             )
             completed += 1
@@ -476,7 +492,7 @@ def _dual_preflight(
         raise ValueError("the active runtime does not support pruned controller bundles")
     v3_approval: dict[str, Any] | None = None
     if any(
-        controller in {"v3-full", "v3-h3"}
+        controller in V3_ASSISTED_CONTROLLERS
         for _name, controller, _policy in collections
     ):
         if v3_bundle is None:
@@ -523,7 +539,7 @@ def _dual_preflight(
                     else None
                 ),
                 v3_bundle=(
-                    v3_bundle if controller in {"v3-full", "v3-h3"} else None
+                    v3_bundle if controller in V3_ASSISTED_CONTROLLERS else None
                 ),
                 cohort_job_keys=cohort_job_keys,
                 wall_time_budget_seconds=budget,
@@ -694,9 +710,9 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 raise ValueError(
                     "--allow-unpromoted-v3-diagnostic is restricted to a quick diagnostic subset"
                 )
-            if not {"v3-full", "v3-h3"} & set(controllers):
+            if not V3_ASSISTED_CONTROLLERS & set(controllers):
                 raise ValueError(
-                    "--allow-unpromoted-v3-diagnostic requires a v3 controller"
+                    "--allow-unpromoted-v3-diagnostic requires a v3-assisted controller"
                 )
         if (
             (
@@ -704,6 +720,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
                 or "v2-repair-aware" in controllers
                 or "v3-full" in controllers
                 or "v3-h3" in controllers
+                or "v2-cost-top3-frozen" in controllers
                 or arguments.diagnostic_subset
             )
             and not arguments.output
@@ -814,7 +831,7 @@ def _paired_lane_worker(job: dict[str, Any]) -> dict[str, Any]:
                 ),
                 v3_bundle=(
                     job["v3_bundle"]
-                    if controller in {"v3-full", "v3-h3"}
+                    if controller in V3_ASSISTED_CONTROLLERS
                     else None
                 ),
                 job_keys={(task_id, seed)},
@@ -822,6 +839,9 @@ def _paired_lane_worker(job: dict[str, Any]) -> dict[str, Any]:
                 wall_time_budget_seconds=job["wall_time_budget_seconds"],
                 episode_process_timeout_seconds=job[
                     "episode_process_timeout_seconds"
+                ],
+                environment_time_limit_seconds=job[
+                    "environment_time_limit_seconds"
                 ],
                 stopping_rule=job["stopping_rule"],
                 use_global_collection_lock=False,
@@ -1372,6 +1392,11 @@ def _run_parallelism_audit(
         len(audit_keys),
         audit_seconds,
     )
+    # The wall budget starts after environment construction/reset, while the
+    # process watchdog includes both.  Large 600-agent resets can legitimately
+    # exceed a short 20-60 second audit budget, so retain the primary run's
+    # 360-second watchdog floor instead of misclassifying reset as an error.
+    audit_process_timeout_seconds = max(audit_seconds + 60.0, 360.0)
     _run_interleaved_collections(
         roots=strict_roots,
         dataset=dataset,
@@ -1389,7 +1414,8 @@ def _run_parallelism_audit(
         schedule_path=root / "strict" / "execution_schedule.json",
         job_keys=audit_keys,
         wall_time_budget_seconds=audit_seconds,
-        episode_process_timeout_seconds=audit_seconds + 60.0,
+        episode_process_timeout_seconds=audit_process_timeout_seconds,
+        environment_time_limit_seconds=300.0,
         stopping_rule="wall-clock",
         collections=collections,
         controller_runtime=controller_runtime,
@@ -1422,7 +1448,8 @@ def _run_parallelism_audit(
             schedule_path=root / f"lanes-{lanes}" / "execution_schedule.json",
             job_keys=audit_keys,
             wall_time_budget_seconds=audit_seconds,
-            episode_process_timeout_seconds=audit_seconds + 60.0,
+            episode_process_timeout_seconds=audit_process_timeout_seconds,
+            environment_time_limit_seconds=300.0,
             stopping_rule="wall-clock",
             collections=collections,
             controller_runtime=controller_runtime,
@@ -1470,6 +1497,7 @@ def _run_isolated_parallel_collections(
     job_keys: set[tuple[str, int]] | None,
     wall_time_budget_seconds: float | None,
     episode_process_timeout_seconds: float | None,
+    environment_time_limit_seconds: float | None,
     stopping_rule: str,
     collections: tuple[tuple[str, str, str], ...],
     controller_runtime: str,
@@ -1533,6 +1561,7 @@ def _run_isolated_parallel_collections(
                 "job_keys": [list(value) for value in sorted(effective_job_keys)],
                 "wall_time_budget_seconds": wall_time_budget_seconds,
                 "episode_process_timeout_seconds": episode_process_timeout_seconds,
+                "environment_time_limit_seconds": environment_time_limit_seconds,
                 "stopping_rule": stopping_rule,
             }
         )
@@ -1634,7 +1663,7 @@ def _run_dual_track_after_validation(
     )
     v3_bundle = (
         _resolve(arguments.v3_bundle)
-        if {"v3-full", "v3-h3"} & set(controllers)
+        if V3_ASSISTED_CONTROLLERS & set(controllers)
         else None
     )
     task_ids = (
@@ -1691,7 +1720,7 @@ def _run_dual_track_after_validation(
             resume=arguments.resume,
             identity={
                 "runner": "run_lns2_tradeoff_evaluation.dual_track",
-                "schema_version": 7,
+                "schema_version": 8,
                 "mode": arguments.mode,
                 "dataset": str(dataset),
                 "collection_config": str(collection_config),
@@ -1743,6 +1772,11 @@ def _run_dual_track_after_validation(
                     ),
                     "v3_controller": sha256_file(
                         PROJECT_ROOT / "experiments" / "v3_controller.py"
+                    ),
+                    "v2_cost_top3_runtime": sha256_file(
+                        PROJECT_ROOT
+                        / "experiments"
+                        / "v2_cost_top3_runtime.py"
                     ),
                 },
             },
@@ -1946,6 +1980,12 @@ def _run_dual_track_after_validation(
         report = generate_bottleneck_artifacts(track_roots, output / "report")
         if not bool(dict(report.get("validation") or {}).get("passed")):
             raise RuntimeError("bottleneck timing validation failed")
+        cost_top3_report = None
+        if "v2-cost-top3-frozen" in controllers:
+            cost_top3_report = generate_v2_cost_top3_wall_clock_report(
+                output / "report" / "episode_timing_breakdown.csv",
+                output / "report" / "cost-top3",
+            )
         _write_json(
             output / "collection_progress.json",
             {
@@ -1992,6 +2032,11 @@ def _run_dual_track_after_validation(
             stall_promotion=report.get("stall_promotion"),
             repair_aware_promotion=report.get("repair_aware_promotion"),
             v3_promotion=report.get("v3_promotion"),
+            cost_top3_decision=(
+                cost_top3_report.get("decision")
+                if cost_top3_report is not None
+                else None
+            ),
             targeted_stall_recovery=report.get("targeted_stall_recovery"),
             episode_count=report["episode_count"],
             iteration_count=report["iteration_count"],
@@ -2021,7 +2066,8 @@ def main() -> int:
         default="official_adaptive,v2-full",
         help=(
             "Active controllers: official_adaptive, v2-full, "
-            "v2-stall-safe, v2-repair-aware, v3-full, v3-h3."
+            "v2-stall-safe, v2-repair-aware, v2-cost-top3-frozen, "
+            "v3-full, v3-h3."
         ),
     )
     parser.add_argument("--wall-clock-seconds", type=float, default=300.0)

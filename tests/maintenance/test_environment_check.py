@@ -38,6 +38,7 @@ class EnvironmentCheckTests(unittest.TestCase):
                 {
                     "get_last_reset_timings": lambda self: {},
                     "propose_batch_compact": lambda self, actions: [],
+                    "propose_seed_grid_grouped": lambda self, *args: {},
                 },
             ),
             PortableTreeEnsemble=lambda: None,

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import ratio as _ratio
-from experiments.repair_collection import _fingerprint, _read_jsonl
+from experiments.repair_collection import _read_jsonl
 
 
 def _candidate_id(agents: Iterable[int]) -> str:
-    return f"neighborhood-{_fingerprint(sorted(map(int, agents)))[:16]}"
+    ordered = sorted(map(int, agents))
+    payload = "[" + ",".join(map(str, ordered)) + "]"
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"neighborhood-{digest[:16]}"
 
 
 def _jaccard(left: Iterable[Any], right: Iterable[Any]) -> float:
@@ -26,18 +30,37 @@ def _distance(left: tuple[int, ...], right: tuple[int, ...]) -> float:
 def select_representative_neighborhoods(
     proposals: list[dict[str, Any]], candidates_per_family: int
 ) -> list[dict[str, Any]]:
+    groups = [
+        {
+            "agents": list(map(int, proposal["agents"])),
+            "sources": [
+                {
+                    "family": str(proposal["family"]),
+                    "seed_agent": int(proposal["seed_agent"]),
+                    "proposal_seed": int(proposal["proposal_seed"]),
+                }
+            ],
+        }
+        for proposal in proposals
+    ]
+    return select_representative_neighborhood_groups(
+        groups, candidates_per_family
+    )
+
+
+def select_representative_neighborhood_groups(
+    groups: list[dict[str, Any]], candidates_per_family: int
+) -> list[dict[str, Any]]:
     if candidates_per_family <= 0:
         raise ValueError("candidates_per_family must be positive")
     by_agents: dict[tuple[int, ...], dict[str, Any]] = {}
     by_family: dict[str, collections.Counter[tuple[int, ...]]] = (
         collections.defaultdict(collections.Counter)
     )
-    for proposal in proposals:
-        agents = tuple(sorted(int(value) for value in proposal["agents"]))
+    for group in groups:
+        agents = tuple(sorted(int(value) for value in group["agents"]))
         if not agents or len(agents) != len(set(agents)):
             raise ValueError("proposal agents must be a non-empty unique set")
-        family = str(proposal["family"])
-        by_family[family][agents] += 1
         record = by_agents.setdefault(
             agents,
             {
@@ -50,9 +73,36 @@ def select_representative_neighborhoods(
                 "selection_rank_by_family": {},
             },
         )
-        record["proposal_count_by_family"][family] += 1
-        record["proposal_seeds"].add(int(proposal["proposal_seed"]))
-        record["seed_agents"].add(int(proposal["seed_agent"]))
+        sources = list(group.get("sources", []))
+        if not sources:
+            raise ValueError("proposal group has no source requests")
+        for source in sources:
+            family = str(source["family"])
+            by_family[family][agents] += 1
+            record["proposal_count_by_family"][family] += 1
+            record["proposal_seeds"].add(int(source["proposal_seed"]))
+            record["seed_agents"].add(int(source["seed_agent"]))
+
+    agent_sets = {agents: frozenset(agents) for agents in by_agents}
+    candidate_ids = {
+        agents: str(record["candidate_id"]) for agents, record in by_agents.items()
+    }
+    distance_cache: dict[tuple[tuple[int, ...], tuple[int, ...]], float] = {}
+
+    def cached_distance(
+        left: tuple[int, ...], right: tuple[int, ...]
+    ) -> float:
+        key = (left, right) if left <= right else (right, left)
+        value = distance_cache.get(key)
+        if value is None:
+            left_set = agent_sets[left]
+            right_set = agent_sets[right]
+            union_size = len(left_set | right_set)
+            value = 1.0 - (
+                len(left_set & right_set) / union_size if union_size else 1.0
+            )
+            distance_cache[key] = value
+        return value
 
     for family, counts in sorted(by_family.items()):
         remaining = set(counts)
@@ -61,15 +111,15 @@ def select_representative_neighborhoods(
             if not chosen:
                 selected = min(
                     remaining,
-                    key=lambda agents: (-counts[agents], _candidate_id(agents)),
+                    key=lambda agents: (-counts[agents], candidate_ids[agents]),
                 )
             else:
                 selected = min(
                     remaining,
                     key=lambda agents: (
-                        -min(_distance(agents, previous) for previous in chosen),
+                        -min(cached_distance(agents, previous) for previous in chosen),
                         -counts[agents],
-                        _candidate_id(agents),
+                        candidate_ids[agents],
                     ),
                 )
             rank = len(chosen)

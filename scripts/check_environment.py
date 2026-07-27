@@ -147,6 +147,27 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
             else None
         ),
     )
+    grouped_grid_method = (
+        getattr(
+            getattr(module, "LNS2RepairEnv", object),
+            "propose_seed_grid_grouped",
+            None,
+        )
+        if module is not None
+        else None
+    )
+    _check(
+        rows,
+        "lns2_env:propose-seed-grid-grouped",
+        callable(grouped_grid_method),
+        expected="callable",
+        observed=(
+            type(grouped_grid_method).__name__
+            if grouped_grid_method is not None
+            else None
+        ),
+        detail="Rebuild build/linux/project to enable exact grouped proposal output.",
+    )
     required_paths = {
         "controller-v2": (
             PROJECT_ROOT

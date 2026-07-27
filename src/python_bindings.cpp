@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 
@@ -670,26 +671,7 @@ public:
             const py::dict action_value = py::cast<py::dict>(value);
             actions.push_back(parseAction(action_value));
         }
-        ProcessGlobalRngState& rng_state = processGlobalRngState();
-        std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
-        vector<RepairProposal> proposals;
-        try
-        {
-            proposals = solver->proposeNeighborhoodBatch(actions);
-            if (std::any_of(
-                    proposals.begin(), proposals.end(),
-                    [](const RepairProposal& proposal) { return proposal.action_valid; }))
-            {
-                claimRngOwnership(rng_state);
-                proposal_since_step = true;
-            }
-        }
-        catch (...)
-        {
-            invalidateRngOwnership(rng_state);
-            throw;
-        }
-        rng_lock.unlock();
+        vector<RepairProposal> proposals = proposeActionsLocked(actions);
         py::list results;
         for (const RepairProposal& proposal : proposals)
         {
@@ -700,6 +682,71 @@ public:
             results.append(std::move(compact));
         }
         return results;
+    }
+
+    py::list proposeSeedGridCompact(
+        const vector<int>& seed_agents,
+        const vector<std::string>& heuristic_names,
+        const vector<int>& neighborhood_sizes,
+        const vector<int>& random_seeds,
+        int trials)
+    {
+        if (!solver)
+            throw std::runtime_error(
+                "reset() must be called before propose_seed_grid_compact()");
+        const vector<RepairAction> actions = makeSeedGridActions(
+            seed_agents, heuristic_names, neighborhood_sizes, random_seeds,
+            trials);
+        vector<RepairProposal> proposals = proposeActionsLocked(actions);
+
+        py::list results;
+        for (const RepairProposal& proposal : proposals)
+        {
+            py::tuple compact(3);
+            compact[0] = py::bool_(proposal.action_valid);
+            compact[1] = py::bool_(proposal.generated);
+            compact[2] = py::cast(proposal.neighborhood);
+            results.append(std::move(compact));
+        }
+        return results;
+    }
+
+    py::dict proposeSeedGridGrouped(
+        const vector<int>& seed_agents,
+        const vector<std::string>& heuristic_names,
+        const vector<int>& neighborhood_sizes,
+        const vector<int>& random_seeds,
+        int trials)
+    {
+        if (!solver)
+            throw std::runtime_error(
+                "reset() must be called before propose_seed_grid_grouped()");
+        const vector<RepairAction> actions = makeSeedGridActions(
+            seed_agents, heuristic_names, neighborhood_sizes, random_seeds,
+            trials);
+        const vector<RepairProposal> proposals = proposeActionsLocked(actions);
+        std::map<vector<int>, vector<int>> grouped;
+        vector<int> invalid_indices;
+        for (size_t index = 0; index < proposals.size(); index++)
+        {
+            const RepairProposal& proposal = proposals[index];
+            if (!proposal.action_valid || !proposal.generated ||
+                proposal.neighborhood.empty())
+            {
+                invalid_indices.push_back((int)index);
+                continue;
+            }
+            grouped[proposal.neighborhood].push_back((int)index);
+        }
+        py::list rows;
+        for (const auto& item : grouped)
+            rows.append(py::make_tuple(item.first, item.second));
+        py::dict result;
+        result["proposal_count"] = proposals.size();
+        result["unique_neighborhood_count"] = grouped.size();
+        result["invalid_indices"] = invalid_indices;
+        result["rows"] = rows;
+        return result;
     }
 
     py::dict getState() const
@@ -722,6 +769,82 @@ public:
     }
 
 private:
+    vector<RepairAction> makeSeedGridActions(
+        const vector<int>& seed_agents,
+        const vector<std::string>& heuristic_names,
+        const vector<int>& neighborhood_sizes,
+        const vector<int>& random_seeds,
+        int trials) const
+    {
+        if (trials <= 0 || seed_agents.empty() || heuristic_names.empty() ||
+            neighborhood_sizes.empty())
+            throw py::value_error("proposal seed grid dimensions must be positive");
+        const size_t expected = seed_agents.size() * heuristic_names.size() *
+                                neighborhood_sizes.size() * (size_t)trials;
+        if (random_seeds.size() != expected)
+            throw py::value_error("proposal seed grid has the wrong random-seed count");
+        vector<RepairAction> actions;
+        actions.reserve(expected);
+        size_t seed_index = 0;
+        for (int seed_agent : seed_agents)
+        {
+            for (const std::string& heuristic_name : heuristic_names)
+            {
+                const RepairHeuristic heuristic = parseHeuristic(heuristic_name);
+                if (heuristic == RepairHeuristic::ADAPTIVE)
+                    throw py::value_error(
+                        "proposal seed grid does not support adaptive heuristic");
+                for (int neighborhood_size : neighborhood_sizes)
+                {
+                    if (neighborhood_size <= 0)
+                        throw py::value_error(
+                            "proposal neighborhood sizes must be positive");
+                    for (int trial = 0; trial < trials; trial++)
+                    {
+                        RepairAction action;
+                        action.mode = RepairActionMode::SEED;
+                        action.heuristic = heuristic;
+                        action.seed_agent = seed_agent;
+                        action.neighborhood_size = neighborhood_size;
+                        action.random_seed = random_seeds[seed_index++];
+                        if (action.random_seed < 0)
+                            throw py::value_error(
+                                "proposal random seeds must be non-negative");
+                        actions.push_back(std::move(action));
+                    }
+                }
+            }
+        }
+        return actions;
+    }
+
+    vector<RepairProposal> proposeActionsLocked(
+        const vector<RepairAction>& actions)
+    {
+        ProcessGlobalRngState& rng_state = processGlobalRngState();
+        std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
+        vector<RepairProposal> proposals;
+        try
+        {
+            proposals = solver->proposeNeighborhoodBatch(actions);
+            if (std::any_of(
+                    proposals.begin(), proposals.end(),
+                    [](const RepairProposal& proposal) {
+                        return proposal.action_valid;
+                    }))
+            {
+                claimRngOwnership(rng_state);
+                proposal_since_step = true;
+            }
+        }
+        catch (...)
+        {
+            invalidateRngOwnership(rng_state);
+            throw;
+        }
+        return proposals;
+    }
+
     bool ownsRng(const ProcessGlobalRngState& rng_state) const
     {
         return rng_state.owner_environment_id == environment_id &&
@@ -787,6 +910,14 @@ PYBIND11_MODULE(lns2_env, module)
         .def("propose_batch", &LNS2RepairEnv::proposeBatch, py::arg("actions"))
         .def("propose_batch_compact", &LNS2RepairEnv::proposeBatchCompact,
              py::arg("actions"))
+        .def("propose_seed_grid_compact", &LNS2RepairEnv::proposeSeedGridCompact,
+             py::arg("seed_agents"), py::arg("heuristics"),
+             py::arg("neighborhood_sizes"), py::arg("random_seeds"),
+             py::arg("trials"))
+        .def("propose_seed_grid_grouped", &LNS2RepairEnv::proposeSeedGridGrouped,
+             py::arg("seed_agents"), py::arg("heuristics"),
+             py::arg("neighborhood_sizes"), py::arg("random_seeds"),
+             py::arg("trials"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
         .def("get_state", &LNS2RepairEnv::getState)
         .def("get_state_revision", &LNS2RepairEnv::getStateRevision)

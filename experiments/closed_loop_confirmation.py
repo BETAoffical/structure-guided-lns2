@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 import itertools
 import json
 import math
@@ -59,6 +60,7 @@ from experiments.neighborhood_candidates import (
     conflict_severity,
     no_pruning_metrics,
     select_representative_neighborhoods,
+    select_representative_neighborhood_groups,
 )
 from experiments.online_feature_engine import (
     FEATURE_BACKENDS,
@@ -112,6 +114,11 @@ from experiments.v3_controller import (
     V3ControllerState,
     load_v3_controller_bundle,
 )
+from experiments.v2_cost_top3_runtime import (
+    FrozenV2CostTop3Config,
+    load_v2_cost_top3_config,
+    select_v2_cost_top3,
+)
 from experiments.v3_s3 import (
     V3_S3_BUNDLE_SCHEMA,
     V3_S3_FEATURE_SCHEMA_ID,
@@ -134,6 +141,7 @@ CONTROLLER_MODES = (
     "v2-full",
     "v2-stall-safe",
     "v2-repair-aware",
+    "v2-cost-top3-frozen",
     "v3-full",
     "v3-h3",
     "v3-s3",
@@ -166,6 +174,7 @@ _NATIVE_REPAIR_TIMING_KEYS = frozenset(
 DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_REPAIR_AWARE_BUNDLE = "build/initlns-repair-aware-controller-v1"
 DEFAULT_V3_BUNDLE = "build/initlns-v3-pilot-v1/controller"
+DEFAULT_V2_COST_TOP3_CONFIG = "configs/v2_cost_top3_frozen_v1.json"
 DEFAULT_V3_S3_BUNDLE = (
     "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller"
 )
@@ -183,6 +192,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/repair_collection.py",
     "experiments/stall_guard.py",
     "experiments/repair_aware.py",
+    "experiments/v2_cost_top3_runtime.py",
     "experiments/v3_controller.py",
     "experiments/v3_s3.py",
     "src/python_bindings.cpp",
@@ -1077,22 +1087,63 @@ def proposal_random_seed(
     size: int,
     trial_index: int,
 ) -> int:
-    return int(
-        _fingerprint(
-            {
-                "namespace": "closed-loop-proposal-v1",
-                "task_id": task_id,
-                "solver_seed": solver_seed,
-                "state_fingerprint": state_hash,
-                "decision_index": decision_index,
-                "seed_agent": seed_agent,
-                "heuristic": heuristic,
-                "size": size,
-                "trial_index": trial_index,
-            }
-        )[:16],
-        16,
-    ) % (2**31)
+    return proposal_random_seeds(
+        task_id,
+        solver_seed,
+        state_hash,
+        decision_index,
+        [(seed_agent, heuristic, size, trial_index)],
+    )[0]
+
+
+def proposal_random_seeds(
+    task_id: str,
+    solver_seed: int,
+    state_hash: str,
+    decision_index: int,
+    requests: Iterable[tuple[int, str, int, int]],
+) -> list[int]:
+    """Return the exact v1 proposal seeds without rebuilding generic dicts.
+
+    The payload below is the byte-for-byte ``sort_keys=True`` JSON form used by
+    ``_fingerprint``.  Encoding the invariant strings once removes most of the
+    old 288-request Python bookkeeping while preserving every historical seed.
+    """
+
+    task_json = json.dumps(str(task_id), ensure_ascii=True, separators=(",", ":"))
+    state_json = json.dumps(
+        str(state_hash), ensure_ascii=True, separators=(",", ":")
+    )
+    namespace_json = '"closed-loop-proposal-v1"'
+    result: list[int] = []
+    for seed_agent, heuristic, size, trial_index in requests:
+        heuristic_json = json.dumps(
+            str(heuristic), ensure_ascii=True, separators=(",", ":")
+        )
+        payload = (
+            '{"decision_index":'
+            + str(int(decision_index))
+            + ',"heuristic":'
+            + heuristic_json
+            + ',"namespace":'
+            + namespace_json
+            + ',"seed_agent":'
+            + str(int(seed_agent))
+            + ',"size":'
+            + str(int(size))
+            + ',"solver_seed":'
+            + str(int(solver_seed))
+            + ',"state_fingerprint":'
+            + state_json
+            + ',"task_id":'
+            + task_json
+            + ',"trial_index":'
+            + str(int(trial_index))
+            + "}"
+        )
+        digest = hashlib.sha256(payload.encode("utf-8")).digest()
+        result.append(int.from_bytes(digest[:8], "big") % (2**31))
+    return result
 
 
 def repair_random_seed(
@@ -1358,52 +1409,143 @@ def generate_online_candidates(
     get_revision = getattr(environment, "get_state_revision", None)
     revision_before = int(get_revision()) if callable(get_revision) else None
     request_generation_started = time.perf_counter()
+    seed_agents = select_seed_agents(
+        state,
+        int(proposal_config["max_seed_agents"]),
+        state_hash=state_hash,
+    )
+    heuristics = list(map(str, proposal_config["heuristics"]))
+    sizes = list(map(int, proposal_config["neighborhood_sizes"]))
+    trials = int(proposal_config["trials"])
+    request_specs: list[tuple[int, str, int, int]] = []
+    for seed_agent in seed_agents:
+        for heuristic in heuristics:
+            for size in sizes:
+                for trial_index in range(trials):
+                    request_specs.append(
+                        (seed_agent, heuristic, size, trial_index)
+                    )
+    random_seeds = proposal_random_seeds(
+        task_id,
+        solver_seed,
+        state_hash,
+        decision_index,
+        request_specs,
+    )
     requests: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for seed_agent in select_seed_agents(state, int(proposal_config["max_seed_agents"])):
-        for heuristic in map(str, proposal_config["heuristics"]):
-            for size in map(int, proposal_config["neighborhood_sizes"]):
-                for trial_index in range(int(proposal_config["trials"])):
-                    random_seed = proposal_random_seed(
-                        task_id,
-                        solver_seed,
-                        state_hash,
-                        decision_index,
-                        seed_agent,
-                        heuristic,
-                        size,
-                        trial_index,
-                    )
-                    action = {
-                        "mode": "seed",
-                        "heuristic": heuristic,
-                        "seed_agent": seed_agent,
-                        "neighborhood_size": size,
-                        "random_seed": random_seed,
-                    }
-                    requests.append(
-                        (
-                            action,
-                            {
-                                "family": f"{heuristic}:{size}",
-                                "seed_agent": seed_agent,
-                                "proposal_seed": random_seed,
-                                "requested_size": size,
-                            },
-                        )
-                    )
+    for (seed_agent, heuristic, size, _trial_index), random_seed in zip(
+        request_specs, random_seeds
+    ):
+        action = {
+            "mode": "seed",
+            "heuristic": heuristic,
+            "seed_agent": seed_agent,
+            "neighborhood_size": size,
+            "random_seed": random_seed,
+        }
+        requests.append(
+            (
+                action,
+                {
+                    "family": f"{heuristic}:{size}",
+                    "seed_agent": seed_agent,
+                    "proposal_seed": random_seed,
+                    "requested_size": size,
+                },
+            )
+        )
     request_generation_seconds = time.perf_counter() - request_generation_started
     actions = [action for action, _ in requests]
     started = time.perf_counter()
     propose_compact = getattr(environment, "propose_batch_compact", None)
+    propose_seed_grid = getattr(environment, "propose_seed_grid_compact", None)
+    propose_seed_grid_grouped = getattr(
+        environment, "propose_seed_grid_grouped", None
+    )
     propose_batch = getattr(environment, "propose_batch", None)
+    use_seed_grid_grouped = proposal_backend in {
+        "optimized",
+        "auto",
+    } and callable(propose_seed_grid_grouped)
+    use_seed_grid = proposal_backend in {"optimized", "auto"} and callable(
+        propose_seed_grid
+    )
     use_compact = proposal_backend in {"optimized", "auto"} and callable(
         propose_compact
     )
-    if proposal_backend == "optimized" and not callable(propose_compact):
+    if proposal_backend == "optimized" and not (
+        callable(propose_seed_grid_grouped)
+        or callable(propose_seed_grid)
+        or callable(propose_compact)
+    ):
         raise RuntimeError(
             "optimized controller runtime requires propose_batch_compact"
         )
-    if use_compact:
+    proposal_groups: list[dict[str, Any]] | None = None
+    results: list[dict[str, Any]] | None = None
+    if use_seed_grid_grouped:
+        grouped_payload = _plain(
+            propose_seed_grid_grouped(
+                seed_agents,
+                heuristics,
+                sizes,
+                random_seeds,
+                trials,
+            )
+        )
+        if not isinstance(grouped_payload, dict):
+            raise RuntimeError("grouped proposal grid returned an invalid payload")
+        if int(grouped_payload.get("proposal_count", -1)) != len(requests):
+            raise RuntimeError("grouped proposal grid returned the wrong request count")
+        invalid_indices = list(map(int, grouped_payload.get("invalid_indices", [])))
+        if invalid_indices:
+            raise RuntimeError("valid online proposal was rejected")
+        proposal_groups = []
+        for value in list(grouped_payload.get("rows", [])):
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise RuntimeError("grouped proposal grid returned an invalid row")
+            agents = list(map(int, value[0]))
+            source_indices = list(map(int, value[1]))
+            if not agents or not source_indices:
+                raise RuntimeError("grouped proposal grid returned an empty group")
+            if any(index < 0 or index >= len(requests) for index in source_indices):
+                raise RuntimeError("grouped proposal grid returned an invalid source")
+            proposal_groups.append(
+                {
+                    "agents": agents,
+                    "sources": [requests[index][1] for index in source_indices],
+                    "source_indices": source_indices,
+                }
+            )
+        if len(proposal_groups) != int(
+            grouped_payload.get("unique_neighborhood_count", -1)
+        ):
+            raise RuntimeError("grouped proposal grid returned the wrong group count")
+        backend = "grouped_seed_grid"
+    elif use_seed_grid:
+        compact_results = [
+            _plain(value)
+            for value in propose_seed_grid(
+                seed_agents,
+                heuristics,
+                sizes,
+                random_seeds,
+                trials,
+            )
+        ]
+        results = []
+        for value in compact_results:
+            if not isinstance(value, (list, tuple)) or len(value) != 3:
+                raise RuntimeError("compact proposal grid returned an invalid row")
+            results.append(
+                {
+                    "action_valid": bool(value[0]),
+                    "generated": bool(value[1]),
+                    "neighborhood": list(map(int, value[2])),
+                }
+            )
+        backend = "compact_seed_grid"
+    elif use_compact:
         compact_results = [_plain(value) for value in propose_compact(actions)]
         results = []
         for value in compact_results:
@@ -1427,7 +1569,7 @@ def generate_online_candidates(
     proposal_shadow_seconds = 0.0
     if shadow_validation:
         shadow_started = time.perf_counter()
-        if use_compact:
+        if use_seed_grid_grouped or use_seed_grid or use_compact:
             if not callable(propose_batch):
                 raise RuntimeError("proposal shadow validation requires propose_batch")
             shadow_results = [_plain(value) for value in propose_batch(actions)]
@@ -1448,14 +1590,26 @@ def generate_online_candidates(
                     }
                 )
         proposal_shadow_seconds = time.perf_counter() - shadow_started
-        primary_signature = [
-            (
-                bool(value.get("action_valid")),
-                bool(value.get("generated")),
-                tuple(sorted(map(int, value.get("neighborhood", [])))),
-            )
-            for value in results
-        ]
+        if proposal_groups is not None:
+            primary_signature: list[tuple[bool, bool, tuple[int, ...]] | None] = [
+                None
+            ] * len(requests)
+            for group in proposal_groups:
+                signature = (True, True, tuple(map(int, group["agents"])))
+                for index in group["source_indices"]:
+                    primary_signature[index] = signature
+            if any(value is None for value in primary_signature):
+                raise RuntimeError("grouped proposal grid omitted a request")
+        else:
+            assert results is not None
+            primary_signature = [
+                (
+                    bool(value.get("action_valid")),
+                    bool(value.get("generated")),
+                    tuple(sorted(map(int, value.get("neighborhood", [])))),
+                )
+                for value in results
+            ]
         shadow_signature = [
             (
                 bool(value.get("action_valid")),
@@ -1469,7 +1623,7 @@ def generate_online_candidates(
                 "proposal_shadow_mismatch",
                 "reference and compact proposal batches differ",
             )
-    if len(results) != len(requests):
+    if results is not None and len(results) != len(requests):
         raise RuntimeError("online proposal batch returned an unexpected result count")
     state_check_started = time.perf_counter()
     revision_after = int(get_revision()) if callable(get_revision) else None
@@ -1498,22 +1652,31 @@ def generate_online_candidates(
             )
     state_check_seconds = time.perf_counter() - state_check_started
     candidate_postprocess_started = time.perf_counter()
-    proposals = []
-    for (_, metadata), result in zip(requests, results):
-        if not bool(result.get("action_valid")) or not bool(result.get("generated")):
-            raise RuntimeError("valid online proposal was rejected")
-        agents = sorted(map(int, result.get("neighborhood", [])))
-        if not agents or len(agents) != len(set(agents)):
-            raise RuntimeError("online proposal returned an invalid neighborhood")
-        proposals.append(
-            {
-                **metadata,
-                "agents": agents,
-            }
+    proposals: list[dict[str, Any]] = []
+    if proposal_groups is not None:
+        candidates = select_representative_neighborhood_groups(
+            proposal_groups, int(proposal_config["candidates_per_family"])
         )
-    candidates = select_representative_neighborhoods(
-        proposals, int(proposal_config["candidates_per_family"])
-    )
+        proposal_count = len(requests)
+        unique_neighborhood_count = len(proposal_groups)
+    else:
+        assert results is not None
+        for (_, metadata), result in zip(requests, results):
+            if not bool(result.get("action_valid")) or not bool(
+                result.get("generated")
+            ):
+                raise RuntimeError("valid online proposal was rejected")
+            agents = sorted(map(int, result.get("neighborhood", [])))
+            if not agents or len(agents) != len(set(agents)):
+                raise RuntimeError("online proposal returned an invalid neighborhood")
+            proposals.append({**metadata, "agents": agents})
+        candidates = select_representative_neighborhoods(
+            proposals, int(proposal_config["candidates_per_family"])
+        )
+        proposal_count = len(proposals)
+        unique_neighborhood_count = len(
+            {tuple(row["agents"]) for row in proposals}
+        )
     if not candidates:
         raise RuntimeError("online proposal stage produced no explicit candidates")
     candidate_postprocess_seconds = (
@@ -1525,8 +1688,8 @@ def generate_online_candidates(
         + candidate_postprocess_seconds
     )
     return candidates, {
-        "proposal_count": len(proposals),
-        "unique_neighborhood_count": len({tuple(row["agents"]) for row in proposals}),
+        "proposal_count": proposal_count,
+        "unique_neighborhood_count": unique_neighborhood_count,
         "candidate_count": len(candidates),
         "proposal_seconds": proposal_seconds,
         "proposal_shadow_seconds": proposal_shadow_seconds,
@@ -2075,6 +2238,25 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError(
                         "repair-aware transition has an invalid outcome"
                     )
+            if str(controller.get("controller_mode")) == "v2-cost-top3-frozen":
+                cost_top3 = controller.get("cost_top3")
+                if not isinstance(cost_top3, dict):
+                    raise ClosedLoopTraceError(
+                        "cost Top-3 transition is missing diagnostics"
+                    )
+                if str(cost_top3.get("route")) != route or route != "model":
+                    raise ClosedLoopTraceError("cost Top-3 route mismatch")
+                if str(cost_top3.get("selected_candidate_id")) != str(
+                    controller.get("selected_candidate_id")
+                ):
+                    raise ClosedLoopTraceError(
+                        "cost Top-3 selected candidate mismatch"
+                    )
+                rank = int(cost_top3.get("selected_v2_rank", 0))
+                if rank < 1 or rank > 3:
+                    raise ClosedLoopTraceError(
+                        "cost Top-3 selected rank is outside the frozen Top-3"
+                    )
             if str(controller.get("controller_mode")) in {"v3-full", "v3-h3"}:
                 v3 = controller.get("v3")
                 if not isinstance(v3, dict):
@@ -2358,6 +2540,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     stall_guard_config: StallGuardConfig | None = None
     repair_aware_config: RepairAwareConfig | None = None
     repair_aware_bundle: RepairAwareBundle | None = None
+    cost_top3_config: FrozenV2CostTop3Config | None = None
     v3_bundle: V3ControllerBundle | None = None
     v3_s3_bundle: V3S3Bundle | None = None
     if controller_mode == "v2-stall-safe":
@@ -2374,6 +2557,19 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
         repair_aware_config = load_repair_aware_config(raw_repair_aware)
         repair_aware_bundle = load_repair_aware_bundle(raw_repair_bundle)
+    if controller_mode == "v2-cost-top3-frozen":
+        raw_cost_top3_config = job.get("cost_top3_config")
+        raw_v3_bundle = job.get("v3_bundle")
+        if raw_cost_top3_config is None or raw_v3_bundle is None:
+            raise ValueError(
+                "v2-cost-top3-frozen requires frozen config and v3 bundle"
+            )
+        cost_top3_config = load_v2_cost_top3_config(raw_cost_top3_config)
+        v3_bundle = load_v3_controller_bundle(raw_v3_bundle)
+        if v3_bundle.schema == V3_H3_BUNDLE_SCHEMA:
+            raise ValueError(
+                "v2-cost-top3-frozen requires the one-step v3 prediction bundle"
+            )
     if controller_mode in {"v3-full", "v3-h3"}:
         raw_v3_bundle = job.get("v3_bundle")
         if raw_v3_bundle is None:
@@ -2426,6 +2622,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                 ):
                     raise ValueError("v3 bundle was trained for a different v2 ranker")
+                if cost_top3_config is not None and str(
+                    cost_top3_config.source.get(
+                        "main_ranker_semantic_fingerprint", ""
+                    )
+                ) != str(
+                    compact_bundle.manifest.get(
+                        "main_ranker_semantic_fingerprint", ""
+                    )
+                ):
+                    raise ValueError(
+                        "cost Top-3 config was calibrated for a different v2 ranker"
+                    )
             else:
                 runtime_models = {
                     name: compact_runtime_model(model)
@@ -2708,6 +2916,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     proposal_rows: list[dict[str, Any]] | None = None
                     state_analysis_seconds = 0.0
                     repair_aware_seconds = 0.0
+                    cost_top3_seconds = 0.0
                     v3_seconds = 0.0
                     stateful_predictions: dict[str, list[float]] | None = None
                     if cache_hit:
@@ -3026,6 +3235,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             float(controller_totals["shadow_score_max_delta"]),
                             maximum_score_delta,
                         )
+                    if cost_top3_config is not None:
+                        cost_top3_started = time.perf_counter()
+                        assert v3_bundle is not None
+                        cost_top3_predictions = v3_bundle.predict(candidate_rows)
+                        cost_selected_index, cost_top3_diagnostic = (
+                            select_v2_cost_top3(
+                                candidates,
+                                scores,
+                                cost_top3_predictions,
+                                cost_top3_config,
+                                agent_count=int(row["agent_count"]),
+                            )
+                        )
+                        cost_top3_seconds = (
+                            time.perf_counter() - cost_top3_started
+                        )
+                        selected_local_index = cost_selected_index
+                        controller["cost_top3"] = cost_top3_diagnostic
+                        controller_totals["cost_top3_seconds"] += (
+                            cost_top3_seconds
+                        )
+                        controller_totals["cost_top3_decision_count"] += 1
+                        controller_totals["cost_top3_override_count"] += int(
+                            cost_top3_diagnostic["override"]
+                        )
+                        controller_totals[
+                            f"cost_top3_selected_rank_{int(cost_top3_diagnostic['selected_v2_rank'])}_count"
+                        ] += 1
                     guard_seconds = 0.0
                     if stall_guard is not None:
                         guard_started = time.perf_counter()
@@ -3272,6 +3509,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + feature_seconds
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
+                        + cost_top3_seconds
                         + guard_seconds
                         + repair_aware_seconds
                         + v3_seconds
@@ -3283,6 +3521,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + feature_seconds
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
+                        + cost_top3_seconds
                         + guard_seconds
                         + repair_aware_seconds
                         + v3_seconds
@@ -3385,6 +3624,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 )
                             ),
                             "ranking_inference_seconds": inference_seconds,
+                            "cost_top3_seconds": cost_top3_seconds,
                             "stall_guard_seconds": guard_seconds,
                             "repair_aware_seconds": repair_aware_seconds,
                             "v3_seconds": v3_seconds,
@@ -3514,6 +3754,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     (
                         stall_guard is not None
                         or repair_aware is not None
+                        or cost_top3_config is not None
                         or v3_state is not None
                         or v3_s3_state is not None
                     )
@@ -3853,6 +4094,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     "ranking_inference_seconds": float(
                         controller.get("ranking_inference_seconds", 0.0)
                     ),
+                    "cost_top3_seconds": float(
+                        controller.get("cost_top3_seconds", 0.0)
+                    ),
                     "stall_guard_seconds": float(
                         controller.get("stall_guard_seconds", 0.0)
                     ),
@@ -3985,6 +4229,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 (
                     stall_guard is not None
                     or repair_aware is not None
+                    or cost_top3_config is not None
                     or v3_state is not None
                     or v3_s3_state is not None
                 )
@@ -4077,6 +4322,39 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "repair_aware": (
                     repair_aware.summary()
                     if repair_aware is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "cost_top3": (
+                    {
+                        "schema": cost_top3_config.raw["schema"],
+                        "top_k": cost_top3_config.top_k,
+                        "decision_count": int(
+                            controller_totals["cost_top3_decision_count"]
+                        ),
+                        "override_count": int(
+                            controller_totals["cost_top3_override_count"]
+                        ),
+                        "override_fraction": (
+                            float(controller_totals["cost_top3_override_count"])
+                            / float(controller_totals["cost_top3_decision_count"])
+                            if controller_totals["cost_top3_decision_count"]
+                            else 0.0
+                        ),
+                        "selected_rank_counts": {
+                            str(rank): int(
+                                controller_totals[
+                                    f"cost_top3_selected_rank_{rank}_count"
+                                ]
+                            )
+                            for rank in range(1, cost_top3_config.top_k + 1)
+                        },
+                        "seconds": float(
+                            controller_totals["cost_top3_seconds"]
+                        ),
+                        "source": dict(cost_top3_config.source),
+                    }
+                    if cost_top3_config is not None
+                    and policy == "realized_dynamic"
                     else None
                 ),
                 "v3": (
@@ -4250,29 +4528,46 @@ def _with_time_budget_overrides(
     config: dict[str, Any],
     wall_time_budget_seconds: float | None,
     episode_process_timeout_seconds: float | None,
+    environment_time_limit_seconds: float | None = None,
 ) -> dict[str, Any]:
     result = {**config, "environment": dict(config["environment"])}
     if wall_time_budget_seconds is None:
-        if episode_process_timeout_seconds is not None:
+        if (
+            episode_process_timeout_seconds is not None
+            or environment_time_limit_seconds is not None
+        ):
             raise ValueError(
-                "episode process timeout override requires a wall-time budget override"
+                "time-limit overrides require a wall-time budget override"
             )
         return result
     wall_budget = float(wall_time_budget_seconds)
     if not math.isfinite(wall_budget) or wall_budget <= 0.0:
         raise ValueError("wall-time budget override must be finite and positive")
+    environment_limit = float(
+        environment_time_limit_seconds
+        if environment_time_limit_seconds is not None
+        else wall_budget
+    )
+    if not math.isfinite(environment_limit) or environment_limit <= 0.0:
+        raise ValueError(
+            "environment time-limit override must be finite and positive"
+        )
     process_timeout = float(
         episode_process_timeout_seconds
         if episode_process_timeout_seconds is not None
-        else wall_budget + 60.0
+        else max(wall_budget, environment_limit) + 60.0
     )
-    if not math.isfinite(process_timeout) or process_timeout <= wall_budget:
+    if (
+        not math.isfinite(process_timeout)
+        or process_timeout <= max(wall_budget, environment_limit)
+    ):
         raise ValueError(
-            "episode process timeout must be finite and greater than the wall-time budget"
+            "episode process timeout must be finite and greater than both the "
+            "wall-time budget and environment time limit"
         )
     result["wall_time_budget_seconds"] = wall_budget
     result["episode_process_timeout_seconds"] = process_timeout
-    result["environment"]["time_limit"] = wall_budget
+    result["environment"]["time_limit"] = environment_limit
     return result
 
 
@@ -4323,12 +4618,14 @@ def run_closed_loop_collection(
     stall_guard_config: str | Path | dict[str, Any] | None = None,
     repair_aware_config: str | Path | dict[str, Any] | None = None,
     repair_aware_bundle: str | Path | None = None,
+    cost_top3_config: str | Path | dict[str, Any] | None = None,
     v3_bundle: str | Path | None = None,
     v3_s3_bundle: str | Path | None = None,
     job_keys: set[tuple[str, int]] | None = None,
     cohort_job_keys: set[tuple[str, int]] | None = None,
     wall_time_budget_seconds: float | None = None,
     episode_process_timeout_seconds: float | None = None,
+    environment_time_limit_seconds: float | None = None,
     stopping_rule: str = "historical",
     qualification_source: str | Path | None = None,
     use_global_collection_lock: bool = True,
@@ -4342,7 +4639,10 @@ def run_closed_loop_collection(
     if not isinstance(config.get("deterministic_pp_replay", False), bool):
         raise ValueError("deterministic_pp_replay must be boolean")
     config = _with_time_budget_overrides(
-        config, wall_time_budget_seconds, episode_process_timeout_seconds
+        config,
+        wall_time_budget_seconds,
+        episode_process_timeout_seconds,
+        environment_time_limit_seconds,
     )
     config = _with_stopping_rule(config, stopping_rule)
     if trace_format not in TRACE_FORMATS:
@@ -4360,6 +4660,7 @@ def run_closed_loop_collection(
     repair_aware_payload: dict[str, Any] | None = None
     repair_aware_root: Path | None = None
     repair_aware_manifest: dict[str, Any] | None = None
+    cost_top3_payload: dict[str, Any] | None = None
     v3_root: Path | None = None
     v3_manifest: dict[str, Any] | None = None
     v3_s3_root: Path | None = None
@@ -4401,6 +4702,55 @@ def run_closed_loop_collection(
         raise ValueError(
             "repair-aware config/bundle are only valid with v2-repair-aware"
         )
+    if controller_mode == "v2-cost-top3-frozen":
+        loaded_cost_top3 = load_v2_cost_top3_config(
+            cost_top3_config or project_root / DEFAULT_V2_COST_TOP3_CONFIG
+        )
+        cost_top3_payload = loaded_cost_top3.payload()
+        v3_root = Path(str(v3_bundle or DEFAULT_V3_BUNDLE))
+        if not v3_root.is_absolute():
+            v3_root = project_root / v3_root
+        v3_root = v3_root.resolve()
+        loaded_v3 = load_v3_controller_bundle(v3_root)
+        v3_manifest = loaded_v3.manifest
+        expected_v3_manifest_sha256 = str(
+            loaded_cost_top3.source.get("v3_manifest_sha256", "")
+        ).lower()
+        actual_v3_manifest_sha256 = _sha256(v3_root / "v3_manifest.json")
+        if (
+            not expected_v3_manifest_sha256
+            or expected_v3_manifest_sha256 != actual_v3_manifest_sha256
+        ):
+            raise ValueError(
+                "cost Top-3 config does not identify the loaded v3 bundle"
+            )
+        if loaded_v3.schema == V3_H3_BUNDLE_SCHEMA:
+            raise ValueError(
+                "v2-cost-top3-frozen requires the one-step v3 prediction bundle"
+            )
+        if controller_manifest is None or str(
+            v3_manifest.get("main_ranker_semantic_fingerprint", "")
+        ) != str(controller_manifest.get("main_ranker_semantic_fingerprint", "")):
+            raise ValueError(
+                "cost Top-3 v3 bundle does not match the selected v2 ranker"
+            )
+        if str(
+            loaded_cost_top3.source.get(
+                "main_ranker_semantic_fingerprint", ""
+            )
+        ) != str(controller_manifest.get("main_ranker_semantic_fingerprint", "")):
+            raise ValueError(
+                "cost Top-3 config does not match the selected v2 ranker"
+            )
+        proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
+        if proposal_sizes != {4, 8, 16}:
+            raise ValueError(
+                "v2-cost-top3-frozen requires the frozen 4/8/16 candidate space"
+            )
+    elif cost_top3_config is not None:
+        raise ValueError(
+            "cost_top3_config is only valid with v2-cost-top3-frozen"
+        )
     if controller_mode in {"v3-full", "v3-h3"}:
         v3_root = Path(str(v3_bundle or DEFAULT_V3_BUNDLE))
         if not v3_root.is_absolute():
@@ -4419,8 +4769,10 @@ def run_closed_loop_collection(
         proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
         if proposal_sizes != {4, 8, 16}:
             raise ValueError(f"{controller_mode} requires the frozen 4/8/16 candidate space")
-    elif v3_bundle is not None:
-        raise ValueError("v3_bundle is only valid with v3-full or v3-h3")
+    elif v3_bundle is not None and controller_mode != "v2-cost-top3-frozen":
+        raise ValueError(
+            "v3_bundle is only valid with v2-cost-top3-frozen, v3-full, or v3-h3"
+        )
     if controller_mode == "v3-s3":
         v3_s3_root = Path(
             str(v3_s3_bundle or DEFAULT_V3_S3_BUNDLE)
@@ -4538,6 +4890,7 @@ def run_closed_loop_collection(
         "repair_aware_bundle": (
             str(repair_aware_root) if repair_aware_root is not None else None
         ),
+        "cost_top3_config": cost_top3_payload,
         "v3_bundle": str(v3_root) if v3_root is not None else None,
         "v3_s3_bundle": (
             str(v3_s3_root) if v3_s3_root is not None else None
@@ -4551,6 +4904,7 @@ def run_closed_loop_collection(
             "freeze_manifest": bundle.manifest,
             "controller_bundle_manifest": controller_manifest,
             "repair_aware_bundle_manifest": repair_aware_manifest,
+            "cost_top3_config": cost_top3_payload,
             "v3_bundle_manifest": v3_manifest,
             "v3_s3_bundle_manifest": v3_s3_manifest,
             "controller_implementation": implementation,
@@ -4622,6 +4976,7 @@ def run_closed_loop_collection(
             ),
             "controller_bundle": controller_manifest,
             "stall_guard_config": stall_guard_payload,
+            "cost_top3_config": cost_top3_payload,
             "v3_bundle": v3_manifest,
             "v3_s3_bundle": v3_s3_manifest,
             "controller_implementation": implementation,
@@ -4661,6 +5016,7 @@ def run_closed_loop_collection(
         ),
         "controller_bundle": controller_manifest,
         "stall_guard_config": stall_guard_payload,
+        "cost_top3_config": cost_top3_payload,
         "v3_bundle": v3_manifest,
         "v3_s3_bundle": v3_s3_manifest,
         "controller_implementation": implementation,
@@ -4846,6 +5202,7 @@ def run_closed_loop_collection(
                 "repair_aware_bundle": (
                     str(repair_aware_root) if repair_aware_root is not None else None
                 ),
+                "cost_top3_config": cost_top3_payload,
                 "v3_bundle": str(v3_root) if v3_root is not None else None,
                 "v3_s3_bundle": (
                     str(v3_s3_root) if v3_s3_root is not None else None

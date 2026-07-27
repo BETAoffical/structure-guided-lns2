@@ -382,7 +382,12 @@ def state_fingerprint(state: dict[str, Any]) -> str:
     return _fingerprint({key: state[key] for key in STATE_FINGERPRINT_KEYS})
 
 
-def select_seed_agents(state: dict[str, Any], maximum: int) -> list[int]:
+def select_seed_agents(
+    state: dict[str, Any],
+    maximum: int,
+    *,
+    state_hash: str | None = None,
+) -> list[int]:
     if maximum <= 0:
         raise ValueError("maximum seed count must be positive")
     conflicting = [
@@ -421,7 +426,11 @@ def select_seed_agents(state: dict[str, Any], maximum: int) -> list[int]:
         for item in conflicting
         if int(item["id"]) not in selected
     ]
-    rng = random.Random(int(state_fingerprint(state)[:16], 16))
+    # Online callers already fingerprint the complete solver state for action
+    # seeding and trace validation. Reusing that digest avoids hashing every
+    # path a second time merely to shuffle the final seed-agent tie group.
+    fingerprint = state_fingerprint(state) if state_hash is None else str(state_hash)
+    rng = random.Random(int(fingerprint[:16], 16))
     rng.shuffle(remaining)
     for agent_id in remaining:
         if len(selected) >= maximum:

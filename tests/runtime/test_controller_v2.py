@@ -89,6 +89,7 @@ class ControllerV2Tests(unittest.TestCase):
                 "v2-full",
                 "v2-stall-safe",
                 "v2-repair-aware",
+                "v2-cost-top3-frozen",
                 "v3-full",
                 "v3-h3",
                 "v3-s3",
@@ -478,6 +479,74 @@ class ControllerV2Tests(unittest.TestCase):
             shadow_validation=True,
         )
         self.assertEqual(metrics["backend"], "compact")
+        self.assertTrue(metrics["shadow_validation_passed"])
+        self.assertEqual(candidates[0]["agents"], [0, 1])
+
+    def test_grouped_seed_grid_backend_matches_reference_shadow(self) -> None:
+        state = make_state()
+
+        class Environment:
+            revision = 13
+
+            def get_state_revision(self) -> int:
+                return self.revision
+
+            def propose_batch(self, actions: list[dict]) -> list[dict]:
+                return [
+                    {
+                        "action_valid": True,
+                        "generated": True,
+                        "neighborhood": [0, 1],
+                    }
+                    for _ in actions
+                ]
+
+            def propose_seed_grid_grouped(
+                self,
+                seed_agents: list[int],
+                heuristics: list[str],
+                sizes: list[int],
+                random_seeds: list[int],
+                trials: int,
+            ) -> dict:
+                self.assert_grid = (
+                    seed_agents,
+                    heuristics,
+                    sizes,
+                    len(random_seeds),
+                    trials,
+                )
+                return {
+                    "proposal_count": len(random_seeds),
+                    "unique_neighborhood_count": 1,
+                    "invalid_indices": [],
+                    "rows": [([0, 1], list(range(len(random_seeds))))],
+                }
+
+            def get_state(self) -> dict:
+                return state
+
+        environment = Environment()
+        candidates, metrics = generate_online_candidates(
+            environment,
+            state,
+            task_id="task",
+            solver_seed=1,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+            },
+            state_hash=state_fingerprint(state),
+            proposal_backend="optimized",
+            shadow_validation=True,
+        )
+        self.assertEqual(metrics["backend"], "grouped_seed_grid")
+        self.assertEqual(metrics["proposal_count"], 4)
+        self.assertEqual(metrics["unique_neighborhood_count"], 1)
         self.assertTrue(metrics["shadow_validation_passed"])
         self.assertEqual(candidates[0]["agents"], [0, 1])
 

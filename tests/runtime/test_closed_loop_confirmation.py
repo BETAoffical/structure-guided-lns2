@@ -30,6 +30,7 @@ from experiments.closed_loop_confirmation import (
     generate_online_candidates,
     online_candidate_rows,
     proposal_random_seed,
+    proposal_random_seeds,
     repair_random_seed,
     load_frozen_policy_bundle,
     PortablePairwiseModel,
@@ -478,6 +479,22 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "greater than"):
             _with_time_budget_overrides(source, 600.0, 600.0)
 
+    def test_short_audit_can_keep_primary_environment_initialization_limit(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "wall_time_budget_seconds": 300.0,
+            "episode_process_timeout_seconds": 360.0,
+        }
+        updated = _with_time_budget_overrides(
+            source,
+            20.0,
+            360.0,
+            environment_time_limit_seconds=300.0,
+        )
+        self.assertEqual(updated["wall_time_budget_seconds"], 20.0)
+        self.assertEqual(updated["environment"]["time_limit"], 300.0)
+        self.assertEqual(updated["episode_process_timeout_seconds"], 360.0)
+
     def test_wall_clock_stopping_rule_removes_both_repair_limits(self) -> None:
         source = {
             "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
@@ -802,6 +819,39 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             repair,
             repair_random_seed("task", 0, "state", 1, "candidate", [proposal]),
         )
+
+    def test_batched_proposal_seeds_match_the_historical_fingerprint(self) -> None:
+        requests = [
+            (2, "target", 4, 0),
+            (9, "collision", 8, 3),
+            (12, "random", 16, 7),
+        ]
+        actual = proposal_random_seeds(
+            'task-"unicode-\u03b2', 19, "a" * 64, 23, requests
+        )
+        expected = []
+        for seed_agent, heuristic, size, trial_index in requests:
+            payload = json.dumps(
+                {
+                    "namespace": "closed-loop-proposal-v1",
+                    "task_id": 'task-"unicode-\u03b2',
+                    "solver_seed": 19,
+                    "state_fingerprint": "a" * 64,
+                    "decision_index": 23,
+                    "seed_agent": seed_agent,
+                    "heuristic": heuristic,
+                    "size": size,
+                    "trial_index": trial_index,
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            expected.append(
+                int(hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16], 16)
+                % (2**31)
+            )
+        self.assertEqual(actual, expected)
 
     def test_pairwise_scoring_is_deterministic_and_hash_breaks_ties(self) -> None:
         rows = [
