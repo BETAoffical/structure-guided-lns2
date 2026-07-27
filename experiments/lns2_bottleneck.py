@@ -582,6 +582,7 @@ def _episode_row(
     stall_guard = dict(summary.get("stall_guard") or {})
     repair_aware = dict(summary.get("repair_aware") or {})
     v3 = dict(summary.get("v3") or {})
+    critical_seed = dict(summary.get("critical_seed") or {})
     repairable = bool(summary.get("repairable"))
     initial_conflicts = int(summary.get("initial_conflicts", 0))
     fixed_auc = summary.get("fixed_budget_conflict_auc")
@@ -699,6 +700,14 @@ def _episode_row(
         "model_decision_count": int(summary.get("model_decision_count", 0)),
         "official_decision_count": int(summary.get("official_decision_count", 0)),
         "model_route_fraction": _number(summary.get("model_route_fraction")),
+        "critical_seed_mean_count": _number(critical_seed.get("mean_seed_count")),
+        "critical_seed_full_fraction": _number(
+            critical_seed.get("full_seed_fraction")
+        ),
+        "critical_seed_profile": critical_seed.get("profile"),
+        "critical_seed_diagnostic_only": bool(
+            critical_seed.get("diagnostic_only", False)
+        ),
         "stall_guard_size_backoff_count": int(
             stall_guard.get("size_backoff_count", 0)
         ),

@@ -44,6 +44,12 @@ from experiments.compact_controller_model import (
     compact_runtime_model,
     load_controller_bundle,
 )
+from experiments.critical_conflicts import (
+    CriticalSeedConfig,
+    load_critical_seed_config,
+    select_critical_seed_agents,
+    update_edge_ages,
+)
 from experiments.feature_schema_v2 import (
     FEATURE_SCHEMA_ID,
     FEATURE_SCHEMA_SHA256,
@@ -141,6 +147,7 @@ CONTROLLER_MODES = (
     "v2-full",
     "v2-stall-safe",
     "v2-repair-aware",
+    "v2-critical",
     "v2-cost-top3-frozen",
     "v3-full",
     "v3-h3",
@@ -175,6 +182,7 @@ DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_REPAIR_AWARE_BUNDLE = "build/initlns-repair-aware-controller-v1"
 DEFAULT_V3_BUNDLE = "build/initlns-v3-pilot-v1/controller"
 DEFAULT_V2_COST_TOP3_CONFIG = "configs/v2_cost_top3_frozen_v1.json"
+DEFAULT_V2_CRITICAL_CONFIG = "configs/v2_critical_diagnostic_temporal_v1.json"
 DEFAULT_V3_S3_BUNDLE = (
     "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller"
 )
@@ -183,6 +191,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/_common.py",
     "experiments/closed_loop_confirmation.py",
     "experiments/compact_controller_model.py",
+    "experiments/critical_conflicts.py",
     "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
     "experiments/state_analysis.py",
@@ -1402,6 +1411,7 @@ def generate_online_candidates(
     verify_full_state: bool = True,
     proposal_backend: str = "reference",
     shadow_validation: bool = False,
+    seed_agents_override: Iterable[int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if proposal_backend not in CONTROLLER_RUNTIMES:
         raise ValueError(f"unsupported proposal backend: {proposal_backend}")
@@ -1409,11 +1419,26 @@ def generate_online_candidates(
     get_revision = getattr(environment, "get_state_revision", None)
     revision_before = int(get_revision()) if callable(get_revision) else None
     request_generation_started = time.perf_counter()
-    seed_agents = select_seed_agents(
-        state,
-        int(proposal_config["max_seed_agents"]),
-        state_hash=state_hash,
-    )
+    if seed_agents_override is None:
+        seed_agents = select_seed_agents(
+            state,
+            int(proposal_config["max_seed_agents"]),
+            state_hash=state_hash,
+        )
+    else:
+        seed_agents = list(map(int, seed_agents_override))
+        conflicting_agents = {
+            int(agent["id"])
+            for agent in state.get("agents", [])
+            if int(agent.get("conflict_degree", 0)) > 0
+        }
+        if (
+            not seed_agents
+            or len(seed_agents) != len(set(seed_agents))
+            or len(seed_agents) > int(proposal_config["max_seed_agents"])
+            or not set(seed_agents) <= conflicting_agents
+        ):
+            raise ValueError("proposal seed override is not a valid conflicting subset")
     heuristics = list(map(str, proposal_config["heuristics"]))
     sizes = list(map(int, proposal_config["neighborhood_sizes"]))
     trials = int(proposal_config["trials"])
@@ -1691,6 +1716,9 @@ def generate_online_candidates(
         "proposal_count": proposal_count,
         "unique_neighborhood_count": unique_neighborhood_count,
         "candidate_count": len(candidates),
+        "seed_agents": list(seed_agents),
+        "seed_agent_count": len(seed_agents),
+        "seed_agents_overridden": seed_agents_override is not None,
         "proposal_seconds": proposal_seconds,
         "proposal_shadow_seconds": proposal_shadow_seconds,
         "request_generation_seconds": request_generation_seconds,
@@ -2238,6 +2266,26 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError(
                         "repair-aware transition has an invalid outcome"
                     )
+            if str(controller.get("controller_mode")) == "v2-critical":
+                critical = controller.get("critical_seed")
+                if not isinstance(critical, dict):
+                    raise ClosedLoopTraceError(
+                        "v2-critical transition is missing seed diagnostics"
+                    )
+                selected_seeds = list(
+                    map(int, critical.get("selected_seed_agents", []))
+                )
+                if route != "model" or not 1 <= len(selected_seeds) <= 4:
+                    raise ClosedLoopTraceError(
+                        "v2-critical transition has invalid seed routing"
+                    )
+                for candidate in controller.get("candidate_pool", []):
+                    if not set(map(int, candidate.get("seed_agents", []))) <= set(
+                        selected_seeds
+                    ):
+                        raise ClosedLoopTraceError(
+                            "v2-critical candidate escaped the retained seed set"
+                        )
             if str(controller.get("controller_mode")) == "v2-cost-top3-frozen":
                 cost_top3 = controller.get("cost_top3")
                 if not isinstance(cost_top3, dict):
@@ -2540,6 +2588,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     stall_guard_config: StallGuardConfig | None = None
     repair_aware_config: RepairAwareConfig | None = None
     repair_aware_bundle: RepairAwareBundle | None = None
+    critical_seed_config: CriticalSeedConfig | None = None
     cost_top3_config: FrozenV2CostTop3Config | None = None
     v3_bundle: V3ControllerBundle | None = None
     v3_s3_bundle: V3S3Bundle | None = None
@@ -2557,6 +2606,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
         repair_aware_config = load_repair_aware_config(raw_repair_aware)
         repair_aware_bundle = load_repair_aware_bundle(raw_repair_bundle)
+    if controller_mode == "v2-critical":
+        raw_critical_seed_config = job.get("critical_seed_config")
+        if raw_critical_seed_config is None:
+            raise ValueError("v2-critical requires a diagnostic seed config")
+        critical_seed_config = load_critical_seed_config(
+            raw_critical_seed_config,
+            allow_unpromoted_diagnostic=True,
+        )
+        if not critical_seed_config.diagnostic_only:
+            raise ValueError("v2-critical runtime is restricted to diagnostic configs")
     if controller_mode == "v2-cost-top3-frozen":
         raw_cost_top3_config = job.get("cost_top3_config")
         raw_v3_bundle = job.get("v3_bundle")
@@ -2778,6 +2837,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
             pending_changed_agents: set[int] = set()
+            critical_edge_ages = (
+                update_edge_ages({}, state)
+                if critical_seed_config is not None
+                and policy == "realized_dynamic"
+                else {}
+            )
             previous_route: str | None = None
             stall_guard = (
                 StallGuardState(stall_guard_config)
@@ -2915,6 +2980,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     realized_feature_metrics = {"realized_feature_seconds": 0.0}
                     proposal_rows: list[dict[str, Any]] | None = None
                     state_analysis_seconds = 0.0
+                    critical_seed_diagnostic: dict[str, Any] | None = None
                     repair_aware_seconds = 0.0
                     cost_top3_seconds = 0.0
                     v3_seconds = 0.0
@@ -2959,6 +3025,25 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             verification_mode == "sampled"
                             and decision_index % 20 == 0
                         )
+                        critical_seed_agents: list[int] | None = None
+                        if critical_seed_config is not None:
+                            critical_seed_agents, critical_seed_diagnostic = (
+                                select_critical_seed_agents(
+                                    state,
+                                    profile=critical_seed_config.profile,
+                                    margin_threshold=(
+                                        critical_seed_config.margin_threshold
+                                    ),
+                                    minimum_seeds=(
+                                        critical_seed_config.minimum_seeds
+                                    ),
+                                    maximum_seeds=(
+                                        critical_seed_config.maximum_seeds
+                                    ),
+                                    state_hash=before_hash,
+                                    edge_ages=critical_edge_ages,
+                                )
+                            )
                         candidates, proposal_metrics = generate_online_candidates(
                             environment,
                             state,
@@ -2973,7 +3058,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 job.get("proposal_shadow_validation", False)
                                 and optimized_runtime_available
                             ),
+                            seed_agents_override=critical_seed_agents,
                         )
+                        if critical_seed_diagnostic is not None:
+                            proposal_metrics["critical_seed"] = dict(
+                                critical_seed_diagnostic
+                            )
                         proposal_metrics["repair_aware_cache_hit"] = False
                         proposal_metrics["v3_cache_hit"] = False
                         if controller_mode == "v1-full":
@@ -3569,6 +3659,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 else None
                             ),
                             "candidate_pool": candidate_pool,
+                            "critical_seed": proposal_metrics.get("critical_seed"),
                             "pruning": pruning_metrics,
                             "feature_timings": {
                                 **state_feature_metrics,
@@ -3647,6 +3738,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         for family in selected["selection_families"]:
                             selected_families[str(family)] += 1
                     controller_totals["proposal_count"] += int(proposal_metrics["proposal_count"])
+                    if critical_seed_diagnostic is not None:
+                        controller_totals["critical_seed_decision_count"] += 1
+                        controller_totals["critical_seed_count_sum"] += len(
+                            critical_seed_diagnostic["selected_seed_agents"]
+                        )
+                        controller_totals["critical_full_seed_count"] += int(
+                            bool(critical_seed_diagnostic["fallback_to_full"])
+                        )
                     controller_totals["candidate_count"] += int(proposal_metrics["candidate_count"])
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
@@ -3749,11 +3848,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 post_step_started = time.perf_counter()
                 total_repair_wall_seconds += repair_wall_seconds
                 state = result["observation"]
+                if critical_seed_config is not None:
+                    critical_edge_ages = update_edge_ages(
+                        critical_edge_ages, state
+                    )
                 metrics = result["metrics"]
                 if (
                     (
                         stall_guard is not None
                         or repair_aware is not None
+                        or critical_seed_config is not None
                         or cost_top3_config is not None
                         or v3_state is not None
                         or v3_s3_state is not None
@@ -3822,6 +3926,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     (
                         stall_guard is not None
                         or repair_aware is not None
+                        or critical_seed_config is not None
                         or v3_state is not None
                     )
                     and policy == "realized_dynamic"
@@ -4229,6 +4334,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 (
                     stall_guard is not None
                     or repair_aware is not None
+                    or critical_seed_config is not None
                     or cost_top3_config is not None
                     or v3_state is not None
                     or v3_s3_state is not None
@@ -4322,6 +4428,33 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "repair_aware": (
                     repair_aware.summary()
                     if repair_aware is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "critical_seed": (
+                    {
+                        "schema": critical_seed_config.raw["schema"],
+                        "diagnostic_only": critical_seed_config.diagnostic_only,
+                        "deployment_promoted": bool(
+                            critical_seed_config.raw.get("deployment_promoted", False)
+                        ),
+                        "profile": critical_seed_config.profile,
+                        "margin_threshold": critical_seed_config.margin_threshold,
+                        "mean_seed_count": (
+                            float(controller_totals["critical_seed_count_sum"])
+                            / float(controller_totals["critical_seed_decision_count"])
+                            if controller_totals["critical_seed_decision_count"]
+                            else 0.0
+                        ),
+                        "full_seed_fraction": (
+                            float(controller_totals["critical_full_seed_count"])
+                            / float(controller_totals["critical_seed_decision_count"])
+                            if controller_totals["critical_seed_decision_count"]
+                            else 0.0
+                        ),
+                        "source": dict(critical_seed_config.source),
+                    }
+                    if critical_seed_config is not None
+                    and policy == "realized_dynamic"
                     else None
                 ),
                 "cost_top3": (
@@ -4616,6 +4749,7 @@ def run_closed_loop_collection(
     controller_runtime: str = "reference",
     verification_profile: str = "audit",
     stall_guard_config: str | Path | dict[str, Any] | None = None,
+    critical_seed_config: str | Path | dict[str, Any] | None = None,
     repair_aware_config: str | Path | dict[str, Any] | None = None,
     repair_aware_bundle: str | Path | None = None,
     cost_top3_config: str | Path | dict[str, Any] | None = None,
@@ -4657,6 +4791,7 @@ def run_closed_loop_collection(
         project_root, controller, controller_bundle
     )
     stall_guard_payload: dict[str, Any] | None = None
+    critical_seed_payload: dict[str, Any] | None = None
     repair_aware_payload: dict[str, Any] | None = None
     repair_aware_root: Path | None = None
     repair_aware_manifest: dict[str, Any] | None = None
@@ -4675,6 +4810,38 @@ def run_closed_loop_collection(
         stall_guard_payload = loaded_stall_guard.payload()
     elif stall_guard_config is not None:
         raise ValueError("stall_guard_config is only valid with v2-stall-safe")
+    if controller_mode == "v2-critical":
+        loaded_critical_seed = load_critical_seed_config(
+            critical_seed_config or project_root / DEFAULT_V2_CRITICAL_CONFIG,
+            allow_unpromoted_diagnostic=True,
+        )
+        if not loaded_critical_seed.diagnostic_only:
+            raise ValueError(
+                "v2-critical is an unpromoted diagnostic controller only"
+            )
+        if int(config["proposal"]["max_seed_agents"]) != 4:
+            raise ValueError("v2-critical requires the frozen four-seed v2 pool")
+        audit_path = Path(str(loaded_critical_seed.source.get("audit_report", "")))
+        if not audit_path.is_absolute():
+            audit_path = project_root / audit_path
+        expected_audit_sha = str(
+            loaded_critical_seed.source.get("audit_report_sha256", "")
+        ).lower()
+        if (
+            not audit_path.is_file()
+            or not expected_audit_sha
+            or _sha256(audit_path) != expected_audit_sha
+        ):
+            raise ValueError("v2-critical diagnostic audit evidence is missing or changed")
+        audit_report = _read_json(audit_path)
+        if (
+            str(audit_report.get("decision")) != "keep_v2_full"
+            or bool(audit_report.get("deployment_promoted"))
+        ):
+            raise ValueError("v2-critical diagnostic requires a failed promotion audit")
+        critical_seed_payload = loaded_critical_seed.payload()
+    elif critical_seed_config is not None:
+        raise ValueError("critical_seed_config is only valid with v2-critical")
     if controller_mode == "v2-repair-aware":
         if repair_aware_config is None:
             raise ValueError("v2-repair-aware requires --repair-aware-config")
@@ -4886,6 +5053,7 @@ def run_closed_loop_collection(
             and controller_runtime in {"optimized", "auto"}
         ),
         "stall_guard_config": stall_guard_payload,
+        "critical_seed_config": critical_seed_payload,
         "repair_aware_config": repair_aware_payload,
         "repair_aware_bundle": (
             str(repair_aware_root) if repair_aware_root is not None else None
@@ -4904,6 +5072,7 @@ def run_closed_loop_collection(
             "freeze_manifest": bundle.manifest,
             "controller_bundle_manifest": controller_manifest,
             "repair_aware_bundle_manifest": repair_aware_manifest,
+            "critical_seed_config": critical_seed_payload,
             "cost_top3_config": cost_top3_payload,
             "v3_bundle_manifest": v3_manifest,
             "v3_s3_bundle_manifest": v3_s3_manifest,
@@ -4976,6 +5145,7 @@ def run_closed_loop_collection(
             ),
             "controller_bundle": controller_manifest,
             "stall_guard_config": stall_guard_payload,
+            "critical_seed_config": critical_seed_payload,
             "cost_top3_config": cost_top3_payload,
             "v3_bundle": v3_manifest,
             "v3_s3_bundle": v3_s3_manifest,
@@ -5016,6 +5186,7 @@ def run_closed_loop_collection(
         ),
         "controller_bundle": controller_manifest,
         "stall_guard_config": stall_guard_payload,
+        "critical_seed_config": critical_seed_payload,
         "cost_top3_config": cost_top3_payload,
         "v3_bundle": v3_manifest,
         "v3_s3_bundle": v3_s3_manifest,
@@ -5198,6 +5369,7 @@ def run_closed_loop_collection(
                     and controller_runtime in {"optimized", "auto"}
                 ),
                 "stall_guard_config": stall_guard_payload,
+                "critical_seed_config": critical_seed_payload,
                 "repair_aware_config": repair_aware_payload,
                 "repair_aware_bundle": (
                     str(repair_aware_root) if repair_aware_root is not None else None

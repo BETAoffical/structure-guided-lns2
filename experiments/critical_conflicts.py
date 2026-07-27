@@ -126,6 +126,7 @@ def critical_agent_features(
     state: dict[str, Any],
     *,
     edge_ages: dict[tuple[int, int], int] | None = None,
+    include_path_bottleneck: bool = True,
 ) -> dict[int, dict[str, float]]:
     adjacency, bridges, articulation = _conflict_graph(state)
     components = _component_sizes(adjacency)
@@ -147,8 +148,10 @@ def critical_agent_features(
             "two_hop_reach": float(len(two_hop)),
             "persistence": float(sum(ages.get(edge, 1) for edge in incident)),
             "delay": float(agent.get("delay", 0.0)),
-            "path_bottleneck_ratio": _path_bottleneck_ratio(
-                state, agent.get("path", [])
+            "path_bottleneck_ratio": (
+                _path_bottleneck_ratio(state, agent.get("path", []))
+                if include_path_bottleneck
+                else 0.0
             ),
         }
     return result
@@ -173,7 +176,11 @@ def critical_agent_scores(
 ) -> dict[int, float]:
     if profile not in CRITICAL_PROFILES:
         raise ValueError(f"unsupported critical-conflict profile: {profile}")
-    rows = critical_agent_features(state, edge_ages=edge_ages)
+    rows = critical_agent_features(
+        state,
+        edge_ages=edge_ages,
+        include_path_bottleneck=profile == "topology",
+    )
     normalized = {
         name: _normalize(rows, name)
         for name in (
@@ -257,16 +264,26 @@ class CriticalSeedConfig:
     margin_threshold: float
     minimum_seeds: int
     maximum_seeds: int
+    diagnostic_only: bool
     source: dict[str, Any]
+    raw: dict[str, Any]
+
+    def payload(self) -> dict[str, Any]:
+        return dict(self.raw)
 
 
 def load_critical_seed_config(
-    value: str | Path | dict[str, Any]
+    value: str | Path | dict[str, Any],
+    *,
+    allow_unpromoted_diagnostic: bool = False,
 ) -> CriticalSeedConfig:
     payload = _read_json(Path(value)) if isinstance(value, (str, Path)) else dict(value)
     if str(payload.get("schema")) != CRITICAL_CONFIG_SCHEMA:
         raise ValueError("invalid v2-critical seed config schema")
-    if not bool(payload.get("deployment_promoted")):
+    diagnostic_only = bool(payload.get("diagnostic_only", False))
+    if not bool(payload.get("deployment_promoted")) and not (
+        allow_unpromoted_diagnostic and diagnostic_only
+    ):
         raise ValueError("v2-critical seed config did not pass its offline audit")
     profile = str(payload.get("profile"))
     if profile not in CRITICAL_PROFILES:
@@ -275,10 +292,15 @@ def load_critical_seed_config(
     maximum = int(payload.get("maximum_seeds", 0))
     if not 1 <= minimum <= maximum:
         raise ValueError("v2-critical config has invalid seed bounds")
+    margin = float(payload["margin_threshold"])
+    if not math.isfinite(margin) or margin < 0.0:
+        raise ValueError("v2-critical config has an invalid margin threshold")
     return CriticalSeedConfig(
         profile=profile,
-        margin_threshold=float(payload["margin_threshold"]),
+        margin_threshold=margin,
         minimum_seeds=minimum,
         maximum_seeds=maximum,
+        diagnostic_only=diagnostic_only,
         source=dict(payload.get("source") or {}),
+        raw=payload,
     )

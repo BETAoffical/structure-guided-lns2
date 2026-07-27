@@ -54,6 +54,9 @@ from experiments.v3_controller import load_v3_controller_bundle  # noqa: E402
 from experiments.v2_cost_top3_wall_clock_report import (  # noqa: E402
     generate_v2_cost_top3_wall_clock_report,
 )
+from experiments.v2_critical_wall_clock_report import (  # noqa: E402
+    generate_v2_critical_wall_clock_report,
+)
 
 
 QUICK_TASKS = (
@@ -78,6 +81,7 @@ REPAIR_AWARE_COLLECTION = (
     "v2-repair-aware",
     "realized_dynamic",
 )
+V2_CRITICAL_COLLECTION = ("v2-critical", "v2-critical", "realized_dynamic")
 V3_COLLECTION = ("v3-full", "v3-full", "realized_dynamic")
 V3_H3_COLLECTION = ("v3-h3", "v3-h3", "realized_dynamic")
 V2_COST_TOP3_COLLECTION = (
@@ -94,6 +98,7 @@ CONTROLLER_COLLECTIONS = {
         *DUAL_COLLECTIONS,
         STALL_SAFE_COLLECTION,
         REPAIR_AWARE_COLLECTION,
+        V2_CRITICAL_COLLECTION,
         V2_COST_TOP3_COLLECTION,
         V3_COLLECTION,
         V3_H3_COLLECTION,
@@ -171,6 +176,7 @@ def _run_interleaved_collections(
     collection_config: Path,
     controller_bundle: Path,
     stall_guard_config: Path | None,
+    critical_seed_config: Path | None,
     repair_aware_config: Path | None,
     repair_aware_bundle: Path | None,
     v3_bundle: Path | None,
@@ -212,6 +218,9 @@ def _run_interleaved_collections(
             controller_bundle=controller_bundle,
             stall_guard_config=(
                 stall_guard_config if controller == "v2-stall-safe" else None
+            ),
+            critical_seed_config=(
+                critical_seed_config if controller == "v2-critical" else None
             ),
             repair_aware_config=(
                 repair_aware_config if controller == "v2-repair-aware" else None
@@ -268,6 +277,7 @@ def _run_interleaved_collections(
             collection_config=collection_config,
             controller_bundle=controller_bundle,
             stall_guard_config=stall_guard_config,
+            critical_seed_config=critical_seed_config,
             repair_aware_config=repair_aware_config,
             repair_aware_bundle=repair_aware_bundle,
             v3_bundle=v3_bundle,
@@ -322,6 +332,9 @@ def _run_interleaved_collections(
                 controller_bundle=controller_bundle,
                 stall_guard_config=(
                     stall_guard_config if controller == "v2-stall-safe" else None
+                ),
+                critical_seed_config=(
+                    critical_seed_config if controller == "v2-critical" else None
                 ),
                 repair_aware_config=(
                     repair_aware_config
@@ -470,6 +483,7 @@ def _dual_preflight(
     collections: tuple[tuple[str, str, str], ...] = DUAL_COLLECTIONS,
     cohort_job_keys: set[tuple[str, int]] | None = None,
     stall_guard_config: Path | None = None,
+    critical_seed_config: Path | None = None,
     repair_aware_config: Path | None = None,
     repair_aware_bundle: Path | None = None,
     v3_bundle: Path | None = None,
@@ -527,6 +541,9 @@ def _dual_preflight(
                 controller_bundle=controller_bundle,
                 stall_guard_config=(
                     stall_guard_config if controller == "v2-stall-safe" else None
+                ),
+                critical_seed_config=(
+                    critical_seed_config if controller == "v2-critical" else None
                 ),
                 repair_aware_config=(
                     repair_aware_config
@@ -718,6 +735,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
             (
                 "v2-stall-safe" in controllers
                 or "v2-repair-aware" in controllers
+                or "v2-critical" in controllers
                 or "v3-full" in controllers
                 or "v3-h3" in controllers
                 or "v2-cost-top3-frozen" in controllers
@@ -771,6 +789,11 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         if "v2-stall-safe" in controllers
         else None
     )
+    critical_seed_config = (
+        _resolve(arguments.critical_seed_config)
+        if "v2-critical" in controllers
+        else None
+    )
     return _run_dual_track_after_validation(
         arguments,
         parser,
@@ -785,6 +808,7 @@ def _run_dual_track(arguments: argparse.Namespace, parser: argparse.ArgumentPars
         collection_config=collection_config,
         controller_bundle=controller_bundle,
         stall_guard_config=stall_guard_config,
+        critical_seed_config=critical_seed_config,
     )
 
 
@@ -817,6 +841,11 @@ def _paired_lane_worker(job: dict[str, Any]) -> dict[str, Any]:
                 stall_guard_config=(
                     job["stall_guard_config"]
                     if controller == "v2-stall-safe"
+                    else None
+                ),
+                critical_seed_config=(
+                    job["critical_seed_config"]
+                    if controller == "v2-critical"
                     else None
                 ),
                 repair_aware_config=(
@@ -1347,6 +1376,7 @@ def _run_parallelism_audit(
     collection_config: Path,
     controller_bundle: Path,
     stall_guard_config: Path | None,
+    critical_seed_config: Path | None,
     repair_aware_config: Path | None,
     repair_aware_bundle: Path | None,
     v3_bundle: Path | None,
@@ -1403,6 +1433,7 @@ def _run_parallelism_audit(
         collection_config=collection_config,
         controller_bundle=controller_bundle,
         stall_guard_config=stall_guard_config,
+        critical_seed_config=critical_seed_config,
         repair_aware_config=repair_aware_config,
         repair_aware_bundle=repair_aware_bundle,
         v3_bundle=v3_bundle,
@@ -1437,6 +1468,7 @@ def _run_parallelism_audit(
             collection_config=collection_config,
             controller_bundle=controller_bundle,
             stall_guard_config=stall_guard_config,
+            critical_seed_config=critical_seed_config,
             repair_aware_config=repair_aware_config,
             repair_aware_bundle=repair_aware_bundle,
             v3_bundle=v3_bundle,
@@ -1486,6 +1518,7 @@ def _run_isolated_parallel_collections(
     collection_config: Path,
     controller_bundle: Path,
     stall_guard_config: Path | None,
+    critical_seed_config: Path | None,
     repair_aware_config: Path | None,
     repair_aware_bundle: Path | None,
     v3_bundle: Path | None,
@@ -1546,6 +1579,11 @@ def _run_isolated_parallel_collections(
                 "controller_bundle": str(controller_bundle),
                 "stall_guard_config": (
                     str(stall_guard_config) if stall_guard_config is not None else None
+                ),
+                "critical_seed_config": (
+                    str(critical_seed_config)
+                    if critical_seed_config is not None
+                    else None
                 ),
                 "repair_aware_config": (
                     str(repair_aware_config) if repair_aware_config is not None else None
@@ -1650,6 +1688,7 @@ def _run_dual_track_after_validation(
     collection_config: Path,
     controller_bundle: Path,
     stall_guard_config: Path | None,
+    critical_seed_config: Path | None,
 ) -> int:
     repair_aware_config = (
         _resolve(arguments.repair_aware_config)
@@ -1704,6 +1743,7 @@ def _run_dual_track_after_validation(
             collections=collections,
             cohort_job_keys=cohort_job_keys,
             stall_guard_config=stall_guard_config,
+            critical_seed_config=critical_seed_config,
             repair_aware_config=repair_aware_config,
             repair_aware_bundle=repair_aware_bundle,
             v3_bundle=v3_bundle,
@@ -1742,6 +1782,9 @@ def _run_dual_track_after_validation(
                 "long_horizon_auto_extend_seconds": arguments.long_horizon_auto_extend_seconds,
                 "stall_guard_config": str(stall_guard_config)
                 if stall_guard_config is not None
+                else None,
+                "critical_seed_config": str(critical_seed_config)
+                if critical_seed_config is not None
                 else None,
                 "repair_aware_config": str(repair_aware_config)
                 if repair_aware_config is not None
@@ -1819,6 +1862,7 @@ def _run_dual_track_after_validation(
                 collection_config=collection_config,
                 controller_bundle=controller_bundle,
                 stall_guard_config=stall_guard_config,
+                critical_seed_config=critical_seed_config,
                 repair_aware_config=repair_aware_config,
                 repair_aware_bundle=repair_aware_bundle,
                 v3_bundle=v3_bundle,
@@ -1857,6 +1901,7 @@ def _run_dual_track_after_validation(
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    critical_seed_config=critical_seed_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
                     v3_bundle=v3_bundle,
@@ -1897,6 +1942,7 @@ def _run_dual_track_after_validation(
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    critical_seed_config=critical_seed_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
                     v3_bundle=v3_bundle,
@@ -1948,6 +1994,7 @@ def _run_dual_track_after_validation(
                     collection_config=collection_config,
                     controller_bundle=controller_bundle,
                     stall_guard_config=stall_guard_config,
+                    critical_seed_config=critical_seed_config,
                     repair_aware_config=repair_aware_config,
                     repair_aware_bundle=repair_aware_bundle,
                     v3_bundle=v3_bundle,
@@ -1985,6 +2032,12 @@ def _run_dual_track_after_validation(
             cost_top3_report = generate_v2_cost_top3_wall_clock_report(
                 output / "report" / "episode_timing_breakdown.csv",
                 output / "report" / "cost-top3",
+            )
+        critical_report = None
+        if "v2-critical" in controllers:
+            critical_report = generate_v2_critical_wall_clock_report(
+                output / "report" / "episode_timing_breakdown.csv",
+                output / "report" / "critical",
             )
         _write_json(
             output / "collection_progress.json",
@@ -2037,6 +2090,11 @@ def _run_dual_track_after_validation(
                 if cost_top3_report is not None
                 else None
             ),
+            critical_decision=(
+                critical_report.get("decision")
+                if critical_report is not None
+                else None
+            ),
             targeted_stall_recovery=report.get("targeted_stall_recovery"),
             episode_count=report["episode_count"],
             iteration_count=report["iteration_count"],
@@ -2066,7 +2124,8 @@ def main() -> int:
         default="official_adaptive,v2-full",
         help=(
             "Active controllers: official_adaptive, v2-full, "
-            "v2-stall-safe, v2-repair-aware, v2-cost-top3-frozen, "
+            "v2-stall-safe, v2-repair-aware, v2-critical, "
+            "v2-cost-top3-frozen, "
             "v3-full, v3-h3."
         ),
     )
@@ -2099,6 +2158,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--stall-guard-config", default="configs/v2_stall_guard_v1.json"
+    )
+    parser.add_argument(
+        "--critical-seed-config",
+        default="configs/v2_critical_diagnostic_temporal_v1.json",
+        help="Unpromoted critical-seed config; accepted only by v2-critical diagnostics.",
     )
     parser.add_argument(
         "--repair-aware-config", default="configs/v2_repair_aware_v1.json"

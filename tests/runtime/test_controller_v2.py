@@ -89,6 +89,7 @@ class ControllerV2Tests(unittest.TestCase):
                 "v2-full",
                 "v2-stall-safe",
                 "v2-repair-aware",
+                "v2-critical",
                 "v2-cost-top3-frozen",
                 "v3-full",
                 "v3-h3",
@@ -549,6 +550,57 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(metrics["unique_neighborhood_count"], 1)
         self.assertTrue(metrics["shadow_validation_passed"])
         self.assertEqual(candidates[0]["agents"], [0, 1])
+
+    def test_proposal_seed_override_restricts_grouped_native_grid(self) -> None:
+        state = make_state()
+
+        class Environment:
+            revision = 17
+
+            def get_state_revision(self) -> int:
+                return self.revision
+
+            def propose_seed_grid_grouped(
+                self,
+                seed_agents: list[int],
+                heuristics: list[str],
+                sizes: list[int],
+                random_seeds: list[int],
+                trials: int,
+            ) -> dict:
+                self.seed_agents = list(seed_agents)
+                return {
+                    "proposal_count": len(random_seeds),
+                    "unique_neighborhood_count": 1,
+                    "invalid_indices": [],
+                    "rows": [([0, 1], list(range(len(random_seeds))))],
+                }
+
+            def get_state(self) -> dict:
+                return state
+
+        environment = Environment()
+        _candidates, metrics = generate_online_candidates(
+            environment,
+            state,
+            task_id="task",
+            solver_seed=1,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target"],
+                "neighborhood_sizes": [4],
+                "trials": 1,
+                "candidates_per_family": 1,
+            },
+            state_hash=state_fingerprint(state),
+            proposal_backend="optimized",
+            shadow_validation=False,
+            seed_agents_override=[1],
+        )
+        self.assertEqual(environment.seed_agents, [1])
+        self.assertEqual(metrics["seed_agents"], [1])
+        self.assertTrue(metrics["seed_agents_overridden"])
 
     def test_v2_full_worker_executes_one_learned_decision(self) -> None:
         initial = make_state()

@@ -71,6 +71,22 @@ class CriticalConflictTests(unittest.TestCase):
                 }
             )
 
+    def test_unpromoted_diagnostic_requires_explicit_runtime_opt_in(self) -> None:
+        payload = {
+            "schema": CRITICAL_CONFIG_SCHEMA,
+            "deployment_promoted": False,
+            "diagnostic_only": True,
+            "profile": "temporal",
+            "margin_threshold": 0.2,
+            "minimum_seeds": 2,
+            "maximum_seeds": 4,
+        }
+        config = load_critical_seed_config(
+            payload, allow_unpromoted_diagnostic=True
+        )
+        self.assertTrue(config.diagnostic_only)
+        self.assertFalse(config.raw["deployment_promoted"])
+
     def test_promoted_config_is_loaded_exactly(self) -> None:
         config = load_critical_seed_config(
             {
