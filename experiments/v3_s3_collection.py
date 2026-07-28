@@ -10,7 +10,11 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import (
+    producer_identity,
+    sha256_file,
+    strict_nonnegative_int as _strict_nonnegative_int,
+)
 from experiments.closed_loop_confirmation import (
     generate_online_candidates,
     score_online_candidates,
@@ -58,8 +62,9 @@ from experiments.v3_s3 import (
 )
 
 
-V3_S3_COLLECTION_SCHEMA = "lns2.v3_s3_collection.v2"
-V3_S3_COLLECTION_VERSION = 2
+V3_S3_COLLECTION_SCHEMA = "lns2.v3_s3_collection.v3"
+V3_S3_COLLECTION_VERSION = 3
+V3_S3_CANDIDATE_GENERATION_SCHEMA = "lns2.v3_s3_candidate_generation.v1"
 V3_S3_STOP_REASONS = frozenset(
     {
         "feasible",
@@ -644,6 +649,136 @@ def _finite_nonnegative(value: Any) -> bool:
     return _finite_number(value) and float(value) >= 0.0
 
 
+def _stored_fingerprint(value: Any) -> str | None:
+    return value if isinstance(value, str) and bool(value) else None
+
+
+def _stored_agent_ids(
+    value: Any,
+    *,
+    agent_count: int,
+    allow_empty: bool = False,
+) -> list[int] | None:
+    if not isinstance(value, list):
+        return None
+    if any(
+        isinstance(agent, bool)
+        or not isinstance(agent, int)
+        or agent < 0
+        or agent >= int(agent_count)
+        for agent in value
+    ):
+        return None
+    if len(set(value)) != len(value) or (not allow_empty and not value):
+        return None
+    return list(value)
+
+
+def _candidate_semantics(candidate: Any) -> dict[str, Any]:
+    if not isinstance(candidate, dict):
+        raise ValueError("candidate is not an object")
+    candidate_id = candidate.get("candidate_id")
+    agents = candidate.get("agents")
+    families = candidate.get("selection_families")
+    ranks = candidate.get("selection_rank_by_family")
+    if not isinstance(candidate_id, str) or not candidate_id:
+        raise ValueError("candidate_id is empty")
+    if not isinstance(agents, list) or any(
+        isinstance(agent, bool) or not isinstance(agent, int) or agent < 0
+        for agent in agents
+    ):
+        raise ValueError("candidate agents are invalid")
+    if len(set(agents)) != len(agents) or not agents:
+        raise ValueError("candidate agents are empty or duplicated")
+    if not isinstance(families, list) or any(
+        not isinstance(name, str) or not name for name in families
+    ):
+        raise ValueError("candidate selection families are invalid")
+    if not isinstance(ranks, dict):
+        raise ValueError("candidate selection ranks are invalid")
+    normalized_ranks: dict[str, int] = {}
+    for name, rank in ranks.items():
+        if (
+            not isinstance(name, str)
+            or not name
+            or isinstance(rank, bool)
+            or not isinstance(rank, int)
+            or rank < 0
+        ):
+            raise ValueError("candidate selection rank is invalid")
+        normalized_ranks[name] = rank
+    actual_size = candidate.get("actual_size", len(agents))
+    if not _strict_nonnegative_int(actual_size) or actual_size != len(agents):
+        raise ValueError("candidate actual_size differs from agents")
+    return {
+        "candidate_id": candidate_id,
+        "agents": list(agents),
+        "actual_size": actual_size,
+        "selection_families": list(families),
+        "selection_rank_by_family": {
+            name: normalized_ranks[name] for name in sorted(normalized_ranks)
+        },
+    }
+
+
+def _candidate_generation_record(
+    candidates: list[dict[str, Any]],
+    template: S3ActionTemplate,
+    *,
+    before_fingerprint: str,
+    decision_index: int,
+    source: str,
+    include_pool: bool,
+) -> dict[str, Any]:
+    """Bind each chosen continuation to the exact pool that produced it.
+
+    The first step is already cross-bound to the qualification artifact, so its
+    pool is referenced by fingerprint only.  Dynamic continuation pools are
+    small and are stored in full, allowing resume validation to reconstruct the
+    template mapping instead of trusting the selected candidate fields.
+    """
+
+    if source not in {"qualification_pool", "restricted_dynamic"}:
+        raise ValueError("unsupported candidate-generation source")
+    if not isinstance(before_fingerprint, str) or not before_fingerprint:
+        raise ValueError("candidate-generation fingerprint is empty")
+    if not _strict_nonnegative_int(decision_index):
+        raise ValueError("candidate-generation decision index is invalid")
+    expected_proposal_fingerprint = (
+        _fingerprint(_restricted_proposal(template))
+        if source == "restricted_dynamic"
+        else ""
+    )
+    normalized = [_candidate_semantics(candidate) for candidate in candidates]
+    indices = candidate_template_indices(normalized)
+    selected_index = indices.get(template.key, -1)
+    selected = normalized[selected_index] if selected_index >= 0 else None
+    payload = {
+        "schema": V3_S3_CANDIDATE_GENERATION_SCHEMA,
+        "source": source,
+        "before_fingerprint": before_fingerprint,
+        "decision_index": decision_index,
+        "template": template.payload(),
+        "candidate_count": len(normalized),
+        "candidate_pool_fingerprint": _fingerprint(normalized),
+        "candidate_pool": normalized if include_pool else None,
+        "selected_index": selected_index,
+        "selected_candidate_fingerprint": (
+            _fingerprint(selected) if selected is not None else ""
+        ),
+        "proposal_fingerprint": expected_proposal_fingerprint,
+    }
+    return {**payload, "fingerprint": _fingerprint(payload)}
+
+
+def _restricted_proposal(template: S3ActionTemplate) -> dict[str, Any]:
+    return {
+        "heuristics": [template.family],
+        "neighborhood_sizes": [int(template.requested_size)],
+        "candidates_per_family": 2,
+    }
+
+
 def _artifact_header_errors(
     payload: Any,
     *,
@@ -654,13 +789,13 @@ def _artifact_header_errors(
         return ["artifact payload is not a JSON object"]
     errors = []
     if str(payload.get("schema")) != V3_S3_COLLECTION_SCHEMA:
-        errors.append("artifact schema is not v3-S3 collection v2")
-    try:
-        schema_version = int(payload.get("schema_version", -1))
-    except (TypeError, ValueError):
-        schema_version = -1
-    if schema_version != V3_S3_COLLECTION_VERSION:
-        errors.append("artifact schema_version is not 2")
+        errors.append("artifact schema is not v3-S3 collection v3")
+    schema_version = payload.get("schema_version")
+    if (
+        not _strict_nonnegative_int(schema_version)
+        or schema_version != V3_S3_COLLECTION_VERSION
+    ):
+        errors.append("artifact schema_version is not 3")
     if run_fingerprint is not None and str(payload.get("run_fingerprint")) != str(
         run_fingerprint
     ):
@@ -776,10 +911,10 @@ def _resume_completed_artifact(
     label: str,
     **validator_kwargs: Any,
 ) -> dict[str, Any] | None:
-    """Return a verified completed artifact, or allow a v2 incomplete rewrite.
+    """Return a verified completed artifact, or allow an incomplete rewrite.
 
     Existing malformed, legacy, foreign-run, or semantically invalid artifacts
-    are deliberately left untouched and fail closed.  Only a current-run v2
+    are deliberately left untouched and fail closed.  Only a current-schema
     object explicitly marked incomplete may be atomically replaced.
     """
 
@@ -1324,11 +1459,8 @@ def _restricted_candidate(
     template: S3ActionTemplate,
     *,
     decision_index: int,
-) -> tuple[dict[str, Any] | None, float]:
-    restricted = dict(proposal)
-    restricted["heuristics"] = [template.family]
-    restricted["neighborhood_sizes"] = [int(template.requested_size)]
-    restricted["candidates_per_family"] = 2
+) -> tuple[dict[str, Any] | None, float, dict[str, Any]]:
+    restricted = {**proposal, **_restricted_proposal(template)}
     started = time.perf_counter()
     candidates, _metrics = generate_online_candidates(
         environment,
@@ -1343,8 +1475,59 @@ def _restricted_candidate(
         shadow_validation=False,
     )
     elapsed = time.perf_counter() - started
-    index = candidate_template_indices(candidates).get(template.key)
-    return (candidates[index] if index is not None else None), elapsed
+    generation = _candidate_generation_record(
+        candidates,
+        template,
+        before_fingerprint=state_fingerprint(state),
+        decision_index=decision_index,
+        source="restricted_dynamic",
+        include_pool=True,
+    )
+    index = int(generation["selected_index"])
+    return (candidates[index] if index >= 0 else None), elapsed, generation
+
+
+def _native_repair_evidence(
+    metrics: dict[str, Any],
+    *,
+    expected_seed: int,
+    agent_count: int,
+    expected_agents: list[int] | None = None,
+) -> tuple[list[int], list[int], int]:
+    if metrics.get("step_applied") is not True:
+        raise RuntimeError("v3-S3 native step ended before applying a repair")
+    if not isinstance(metrics.get("replan_success"), bool):
+        raise RuntimeError("v3-S3 native replan-success evidence is not boolean")
+    requested_seed = metrics.get("requested_pp_random_seed")
+    if (
+        not _strict_nonnegative_int(requested_seed)
+        or requested_seed != expected_seed
+    ):
+        raise RuntimeError("v3-S3 requested PP seed mismatch")
+    neighborhood = _stored_agent_ids(
+        metrics.get("neighborhood"), agent_count=agent_count
+    )
+    repair_order = _stored_agent_ids(
+        metrics.get("repair_order"),
+        agent_count=agent_count,
+        allow_empty=True,
+    )
+    if neighborhood is None or repair_order is None:
+        raise RuntimeError("v3-S3 native neighborhood evidence is invalid")
+    if expected_agents is not None and (
+        len(neighborhood) != len(expected_agents)
+        or set(neighborhood) != set(expected_agents)
+    ):
+        raise RuntimeError("v3-S3 native neighborhood differs from action")
+    if repair_order and set(repair_order) != set(neighborhood):
+        raise RuntimeError("v3-S3 repair order differs from neighborhood")
+    applied_seed = metrics.get("applied_pp_random_seed")
+    if isinstance(applied_seed, bool) or not isinstance(applied_seed, int):
+        raise RuntimeError("v3-S3 applied PP seed is invalid")
+    expected_applied_seed = expected_seed if repair_order else -1
+    if applied_seed != expected_applied_seed:
+        raise RuntimeError("v3-S3 applied PP seed mismatch")
+    return neighborhood, repair_order, applied_seed
 
 
 def _terminal_flags(
@@ -1352,10 +1535,18 @@ def _terminal_flags(
 ) -> tuple[bool, bool, bool]:
     if "terminated" not in result or "truncated" not in result:
         raise RuntimeError("v3-S3 native step omitted terminal flags")
-    terminated = bool(result["terminated"])
-    truncated = bool(result["truncated"])
-    done = bool(state.get("done"))
-    feasible = bool(state.get("feasible"))
+    if not isinstance(result["terminated"], bool) or not isinstance(
+        result["truncated"], bool
+    ):
+        raise RuntimeError("v3-S3 native terminal flags are not boolean")
+    if not isinstance(state.get("done"), bool) or not isinstance(
+        state.get("feasible"), bool
+    ):
+        raise RuntimeError("v3-S3 native observation terminal flags are not boolean")
+    terminated = result["terminated"]
+    truncated = result["truncated"]
+    done = state["done"]
+    feasible = state["feasible"]
     if terminated != feasible or truncated != (done and not feasible):
         raise RuntimeError("v3-S3 native terminal flags disagree with observation")
     if done != (terminated or truncated):
@@ -1405,8 +1596,16 @@ def _sequence_trial(
         if offset == 0:
             candidate = initial_candidates[initial_indices[template.key]]
             selection_seconds = float(qualified["timing"]["full_pool_seconds"])
+            generation = _candidate_generation_record(
+                initial_candidates,
+                template,
+                before_fingerprint=before_full,
+                decision_index=int(decision["decision_index"]),
+                source="qualification_pool",
+                include_pool=False,
+            )
         else:
-            candidate, selection_seconds = _restricted_candidate(
+            candidate, selection_seconds, generation = _restricted_candidate(
                 environment,
                 before,
                 decision,
@@ -1422,22 +1621,30 @@ def _sequence_trial(
                     "template_valid": False,
                     "executed": False,
                     "selection_seconds": selection_seconds,
+                    "candidate_generation": generation,
                 }
             )
             total_seconds += selection_seconds
             stop_reason = "template_unavailable"
             truncated = False
             break
+        seed = _paired_seed(initial_repair, trial_index, offset + 1)
         action = _paired_repair_action(
             "explicit_neighborhood",
             agents=candidate["agents"],
-            random_seed=_paired_seed(initial_repair, trial_index, offset + 1),
+            random_seed=seed,
         )
         repair_started = time.perf_counter()
         result = _plain(environment.step(action))
         repair_seconds = time.perf_counter() - repair_started
         state = dict(result["observation"])
         metrics = dict(result["metrics"])
+        _neighborhood, repair_order, applied_seed = _native_repair_evidence(
+            metrics,
+            expected_seed=seed,
+            agent_count=int(decision["agent_count"]),
+            expected_agents=list(map(int, candidate["agents"])),
+        )
         terminated, step_truncated, done = _terminal_flags(result, state)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_repair = repair_structure_fingerprint(state)
@@ -1449,6 +1656,12 @@ def _sequence_trial(
             conflicts_after=conflicts_after,
             feasible=bool(state.get("feasible")),
         )
+        if not repair_order and (
+            metrics["replan_success"] or outcome != "hard_failure"
+        ):
+            raise RuntimeError(
+                "v3-S3 empty repair order is only valid for a hard failure"
+            )
         low_level = _low_level_delta(before, state)
         for name in ("generated", "expanded", "reopened", "runs"):
             low_level_total[name] += int(low_level.get(name, 0))
@@ -1465,7 +1678,12 @@ def _sequence_trial(
                 "executed": True,
                 "candidate_id": str(candidate["candidate_id"]),
                 "agents": list(map(int, candidate["agents"])),
+                "candidate_generation": generation,
                 "action": action,
+                "repair_order": repair_order,
+                "requested_pp_seed": seed,
+                "applied_pp_seed": applied_seed,
+                "step_applied": True,
                 "selection_seconds": selection_seconds,
                 "repair_seconds": repair_seconds,
                 "pp_replan_seconds": pp_seconds,
@@ -1606,6 +1824,16 @@ def _baseline_trial(
         repair_seconds = time.perf_counter() - started
         state = dict(result["observation"])
         metrics = dict(result["metrics"])
+        neighborhood, repair_order, applied_seed = _native_repair_evidence(
+            metrics,
+            expected_seed=seed,
+            agent_count=int(decision["agent_count"]),
+            expected_agents=(
+                list(map(int, action["agents"]))
+                if controller == "v2-full"
+                else None
+            ),
+        )
         terminated, step_truncated, done = _terminal_flags(result, state)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_repair = repair_structure_fingerprint(state)
@@ -1617,6 +1845,12 @@ def _baseline_trial(
             conflicts_after=conflicts_after,
             feasible=bool(state.get("feasible")),
         )
+        if not repair_order and (
+            metrics["replan_success"] or outcome != "hard_failure"
+        ):
+            raise RuntimeError(
+                "v3-S3 empty repair order is only valid for a hard failure"
+            )
         step_total = selection_seconds + repair_seconds
         total_seconds += step_total
         pp_seconds = max(0.0, float(metrics.get("pp_replan_seconds", 0.0)))
@@ -1629,7 +1863,16 @@ def _baseline_trial(
             {
                 "step": offset + 1,
                 "candidate_id": candidate_id,
+                "agents": (
+                    list(map(int, action["agents"]))
+                    if controller == "v2-full"
+                    else neighborhood
+                ),
                 "action": action,
+                "repair_order": repair_order,
+                "requested_pp_seed": seed,
+                "applied_pp_seed": applied_seed,
+                "step_applied": True,
                 "selection_seconds": selection_seconds,
                 "repair_seconds": repair_seconds,
                 "pp_replan_seconds": pp_seconds,
@@ -1800,10 +2043,102 @@ def _row_identity_errors(
     return errors
 
 
+def _candidate_generation_errors(
+    record: Any,
+    *,
+    position: int,
+    template: S3ActionTemplate,
+    expected_before_fingerprint: str | None,
+    decision: dict[str, Any],
+    qualified: dict[str, Any],
+    executed: bool,
+    candidate_id: Any,
+    agents: Any,
+) -> list[str]:
+    label = f"sequence trial step {position} candidate generation"
+    if not isinstance(record, dict):
+        return [f"{label} is missing"]
+    errors: list[str] = []
+    if record.get("schema") != V3_S3_CANDIDATE_GENERATION_SCHEMA:
+        errors.append(f"{label} schema differs")
+    stored_record_fingerprint = _stored_fingerprint(record.get("fingerprint"))
+    payload = {name: value for name, value in record.items() if name != "fingerprint"}
+    if (
+        stored_record_fingerprint is None
+        or stored_record_fingerprint != _fingerprint(payload)
+    ):
+        errors.append(f"{label} fingerprint differs")
+    expected_source = "qualification_pool" if position == 1 else "restricted_dynamic"
+    if record.get("source") != expected_source:
+        errors.append(f"{label} source differs")
+    if (
+        expected_before_fingerprint is None
+        or record.get("before_fingerprint") != expected_before_fingerprint
+    ):
+        errors.append(f"{label} state differs")
+    if not _strict_nonnegative_int(record.get("decision_index")) or record.get(
+        "decision_index"
+    ) != int(decision["decision_index"]) + position - 1:
+        errors.append(f"{label} decision index differs")
+    if record.get("template") != template.payload():
+        errors.append(f"{label} template differs")
+
+    if position == 1:
+        if record.get("candidate_pool") is not None:
+            errors.append(f"{label} embeds the qualification pool")
+        if record.get("proposal_fingerprint") != "":
+            errors.append(f"{label} proposal fingerprint differs")
+        raw_pool = qualified.get("candidates")
+    else:
+        raw_pool = record.get("candidate_pool")
+        expected_proposal_fingerprint = _fingerprint(
+            _restricted_proposal(template)
+        )
+        if record.get("proposal_fingerprint") != expected_proposal_fingerprint:
+            errors.append(f"{label} proposal fingerprint differs")
+    if not isinstance(raw_pool, list):
+        return [*errors, f"{label} pool is invalid"]
+    try:
+        normalized_pool = [_candidate_semantics(value) for value in raw_pool]
+    except (TypeError, ValueError) as error:
+        return [*errors, f"{label} pool is invalid: {error}"]
+    if position > 1 and normalized_pool != raw_pool:
+        errors.append(f"{label} pool is not canonical")
+    if not _strict_nonnegative_int(record.get("candidate_count")) or record.get(
+        "candidate_count"
+    ) != len(normalized_pool):
+        errors.append(f"{label} candidate count differs")
+    if record.get("candidate_pool_fingerprint") != _fingerprint(normalized_pool):
+        errors.append(f"{label} pool fingerprint differs")
+    try:
+        selected_index = candidate_template_indices(normalized_pool).get(
+            template.key, -1
+        )
+    except (TypeError, ValueError) as error:
+        return [*errors, f"{label} mapping is invalid: {error}"]
+    if record.get("selected_index") != selected_index:
+        errors.append(f"{label} selected index differs")
+    selected = normalized_pool[selected_index] if selected_index >= 0 else None
+    expected_selected_fingerprint = (
+        _fingerprint(selected) if selected is not None else ""
+    )
+    if record.get("selected_candidate_fingerprint") != expected_selected_fingerprint:
+        errors.append(f"{label} selected candidate fingerprint differs")
+    if executed != (selected is not None):
+        errors.append(f"{label} availability differs")
+    if executed and selected is not None:
+        if candidate_id != selected["candidate_id"]:
+            errors.append(f"{label} candidate_id differs")
+        if agents != selected["agents"]:
+            errors.append(f"{label} agents differ")
+    return errors
+
+
 def _sequence_trial_errors(
     row: Any,
     *,
     decision: dict[str, Any],
+    qualified: dict[str, Any],
     expected_templates: tuple[S3ActionTemplate, ...],
 ) -> list[str]:
     errors = _artifact_header_errors(
@@ -1823,18 +2158,17 @@ def _sequence_trial_errors(
     expected_sequence_id = sequence_id(expected_templates)
     if str(row.get("sequence_id")) != expected_sequence_id:
         errors.append("sequence trial sequence_id differs")
-    try:
-        trial_index = int(row["trial_index"])
-    except (KeyError, TypeError, ValueError):
+    trial_index = row.get("trial_index")
+    if not _strict_nonnegative_int(trial_index):
         trial_index = -1
         errors.append("sequence trial index is invalid")
-    if trial_index < 0:
-        errors.append("sequence trial index is negative")
-    if str(row.get("initial_fingerprint")) != str(decision["before_fingerprint"]):
+    if _stored_fingerprint(row.get("initial_fingerprint")) != decision[
+        "before_fingerprint"
+    ]:
         errors.append("sequence trial initial fingerprint differs")
-    if str(row.get("initial_repair_fingerprint")) != str(
-        decision["before_repair_fingerprint"]
-    ):
+    if _stored_fingerprint(row.get("initial_repair_fingerprint")) != decision[
+        "before_repair_fingerprint"
+    ]:
         errors.append("sequence trial initial repair fingerprint differs")
 
     steps = row.get("steps")
@@ -1843,26 +2177,23 @@ def _sequence_trial_errors(
         return [*errors, "sequence trial step coverage is invalid"]
     if not isinstance(trajectory, list) or not trajectory:
         return [*errors, "sequence trial conflict trajectory is invalid"]
-    try:
-        conflicts = list(map(int, trajectory))
-    except (TypeError, ValueError):
+    if any(not _strict_nonnegative_int(value) for value in trajectory):
         return [*errors, "sequence trial conflict trajectory is non-integral"]
-    if conflicts[0] < 0:
-        errors.append("sequence trial initial conflicts is negative")
+    conflicts = list(trajectory)
     executed = 0
     selection_total = 0.0
     repair_total = 0.0
     pp_total = 0.0
     low_level_total = collections.Counter()
-    previous_full = str(row.get("initial_fingerprint"))
-    previous_repair = str(row.get("initial_repair_fingerprint"))
+    previous_full = _stored_fingerprint(row.get("initial_fingerprint"))
+    previous_repair = _stored_fingerprint(row.get("initial_repair_fingerprint"))
     terminal_seen = False
     unavailable_seen = False
     for position, step in enumerate(steps, 1):
         if not isinstance(step, dict):
             errors.append(f"sequence trial step {position} is not an object")
             continue
-        if int(step.get("step", -1)) != position:
+        if not _strict_nonnegative_int(step.get("step")) or step.get("step") != position:
             errors.append(f"sequence trial step {position} index differs")
         expected_template = expected_templates[position - 1]
         if step.get("template") != expected_template.payload():
@@ -1873,6 +2204,21 @@ def _sequence_trial_errors(
             selection = 0.0
         selection_total += float(selection)
         is_executed = step.get("executed") is True
+        if not isinstance(step.get("executed"), bool):
+            errors.append(f"sequence trial step {position} executed flag is invalid")
+        errors.extend(
+            _candidate_generation_errors(
+                step.get("candidate_generation"),
+                position=position,
+                template=expected_template,
+                expected_before_fingerprint=previous_full,
+                decision=decision,
+                qualified=qualified,
+                executed=is_executed,
+                candidate_id=step.get("candidate_id"),
+                agents=step.get("agents"),
+            )
+        )
         if not is_executed:
             unavailable_seen = True
             if step.get("template_valid") is not False or position != len(steps):
@@ -1902,36 +2248,40 @@ def _sequence_trial_errors(
             step.get("total_seconds"), float(selection) + repair_seconds
         ):
             errors.append(f"sequence trial step {position} total time differs")
-        try:
-            before_conflicts = int(step["conflicts_before"])
-            after_conflicts = int(step["conflicts_after"])
-        except (KeyError, TypeError, ValueError):
+        before_conflicts = step.get("conflicts_before")
+        after_conflicts = step.get("conflicts_after")
+        if not _strict_nonnegative_int(before_conflicts) or not _strict_nonnegative_int(
+            after_conflicts
+        ):
             errors.append(f"sequence trial step {position} conflicts are invalid")
             continue
         if before_conflicts != conflicts[executed - 1]:
             errors.append(f"sequence trial step {position} before conflicts differs")
         if len(conflicts) <= executed or after_conflicts != conflicts[executed]:
             errors.append(f"sequence trial step {position} after conflicts differs")
-        if int(step.get("conflict_reduction", -1)) != max(
+        if not _strict_nonnegative_int(step.get("conflict_reduction")) or step.get("conflict_reduction") != max(
             0, before_conflicts - after_conflicts
         ):
             errors.append(f"sequence trial step {position} reduction differs")
-        if str(step.get("before_fingerprint")) != previous_full:
+        if _stored_fingerprint(step.get("before_fingerprint")) != previous_full:
             errors.append(f"sequence trial step {position} fingerprint chain differs")
-        if str(step.get("before_repair_fingerprint")) != previous_repair:
+        if _stored_fingerprint(step.get("before_repair_fingerprint")) != previous_repair:
             errors.append(
                 f"sequence trial step {position} repair fingerprint chain differs"
             )
-        previous_full = str(step.get("after_fingerprint"))
-        previous_repair = str(step.get("after_repair_fingerprint"))
-        if not previous_full or not previous_repair:
+        previous_full = _stored_fingerprint(step.get("after_fingerprint"))
+        previous_repair = _stored_fingerprint(step.get("after_repair_fingerprint"))
+        if previous_full is None or previous_repair is None:
             errors.append(f"sequence trial step {position} final fingerprint is empty")
         action = step.get("action")
         agents = step.get("agents")
+        stored_agents = _stored_agent_ids(
+            agents, agent_count=int(decision["agent_count"])
+        )
         if (
             not isinstance(action, dict)
             or str(action.get("mode")) != "explicit_neighborhood"
-            or not isinstance(agents, list)
+            or stored_agents is None
             or list(action.get("agents") or ()) != agents
         ):
             errors.append(f"sequence trial step {position} action differs")
@@ -1953,23 +2303,42 @@ def _sequence_trial_errors(
             errors.append(f"sequence trial step {position} low-level delta is invalid")
         else:
             for name in ("generated", "expanded", "reopened", "runs"):
-                try:
-                    value = int(low_level[name])
-                except (KeyError, TypeError, ValueError):
+                value = low_level.get(name)
+                if not _strict_nonnegative_int(value):
                     errors.append(
                         f"sequence trial step {position} low-level {name} is invalid"
                     )
                     continue
-                if value < 0:
-                    errors.append(
-                        f"sequence trial step {position} low-level {name} is negative"
-                    )
                 low_level_total[name] += value
+        if any(
+            not isinstance(step.get(name), bool)
+            for name in ("terminated", "truncated", "done", "replan_success")
+        ):
+            errors.append(f"sequence trial step {position} boolean evidence is invalid")
         terminated = step.get("terminated") is True
         truncated = step.get("truncated") is True
         done = step.get("done") is True
         if done != (terminated or truncated) or terminated and truncated:
             errors.append(f"sequence trial step {position} terminal flags differ")
+        if step.get("step_applied") is not True:
+            errors.append(f"sequence trial step {position} was not applied")
+        repair_order = _stored_agent_ids(
+            step.get("repair_order"),
+            agent_count=int(decision["agent_count"]),
+            allow_empty=True,
+        )
+        if repair_order is None or (
+            repair_order and stored_agents is not None and set(repair_order) != set(stored_agents)
+        ):
+            errors.append(f"sequence trial step {position} repair order differs")
+        expected_seed = _paired_seed(
+            row.get("initial_repair_fingerprint"), trial_index, position
+        )
+        if step.get("requested_pp_seed") != expected_seed:
+            errors.append(f"sequence trial step {position} requested PP seed differs")
+        expected_applied = expected_seed if repair_order else -1
+        if step.get("applied_pp_seed") != expected_applied:
+            errors.append(f"sequence trial step {position} applied PP seed differs")
         try:
             expected_outcome = classify_repair_outcome(
                 before_fingerprint=str(step["before_repair_fingerprint"]),
@@ -1988,11 +2357,20 @@ def _sequence_trial_errors(
                 errors.append(
                     f"sequence trial step {position} repair outcome differs"
                 )
+            if not repair_order and (
+                step.get("replan_success") is True
+                or expected_outcome != "hard_failure"
+            ):
+                errors.append(
+                    f"sequence trial step {position} empty repair order differs"
+                )
         terminal_seen = terminal_seen or done
 
     if len(conflicts) != executed + 1:
         errors.append("sequence trial trajectory length differs from executed steps")
-    if int(row.get("executed_steps", -1)) != executed:
+    if not _strict_nonnegative_int(row.get("executed_steps")) or row.get(
+        "executed_steps"
+    ) != executed:
         errors.append("sequence trial executed_steps differs")
     if unavailable_seen:
         expected_stop = "template_unavailable"
@@ -2017,23 +2395,29 @@ def _sequence_trial_errors(
         errors.append("sequence trial truncated flag differs")
     if str(row.get("stop_reason")) not in V3_S3_STOP_REASONS:
         errors.append("sequence trial stop_reason is unsupported")
-    if str(row.get("final_fingerprint")) != previous_full:
+    if _stored_fingerprint(row.get("final_fingerprint")) != previous_full:
         errors.append("sequence trial final fingerprint differs")
-    if str(row.get("final_repair_fingerprint")) != previous_repair:
+    if _stored_fingerprint(row.get("final_repair_fingerprint")) != previous_repair:
         errors.append("sequence trial final repair fingerprint differs")
     if not _float_matches(row.get("total_seconds"), selection_total + repair_total):
         errors.append("sequence trial total_seconds differs")
     if not _float_matches(row.get("pp_replan_seconds"), pp_total):
         errors.append("sequence trial pp_replan_seconds differs")
     for name in ("generated", "expanded", "reopened", "runs"):
-        if int(row.get(name, -1)) != int(low_level_total[name]):
+        if not _strict_nonnegative_int(row.get(name)) or row.get(name) != int(
+            low_level_total[name]
+        ):
             errors.append(f"sequence trial {name} total differs")
     if conflicts:
         expected_reduction = max(0, conflicts[0] - conflicts[-1])
         expected_best = max(0, conflicts[0] - min(conflicts))
-        if int(row.get("conflict_reduction", -1)) != expected_reduction:
+        if not _strict_nonnegative_int(row.get("conflict_reduction")) or row.get(
+            "conflict_reduction"
+        ) != expected_reduction:
             errors.append("sequence trial conflict_reduction differs")
-        if int(row.get("best_conflict_reduction", -1)) != expected_best:
+        if not _strict_nonnegative_int(row.get("best_conflict_reduction")) or row.get(
+            "best_conflict_reduction"
+        ) != expected_best:
             errors.append("sequence trial best_conflict_reduction differs")
         if row.get("no_progress") is not (min(conflicts) >= conflicts[0]):
             errors.append("sequence trial no_progress differs")
@@ -2056,42 +2440,44 @@ def _baseline_trial_errors(
     errors.extend(_row_identity_errors(row, decision, label="baseline trial"))
     if str(row.get("controller")) != controller:
         errors.append("baseline controller differs")
-    if str(row.get("initial_fingerprint")) != str(decision["before_fingerprint"]):
+    if _stored_fingerprint(row.get("initial_fingerprint")) != decision[
+        "before_fingerprint"
+    ]:
         errors.append("baseline initial fingerprint differs")
-    if str(row.get("initial_repair_fingerprint")) != str(
-        decision["before_repair_fingerprint"]
-    ):
+    if _stored_fingerprint(row.get("initial_repair_fingerprint")) != decision[
+        "before_repair_fingerprint"
+    ]:
         errors.append("baseline initial repair fingerprint differs")
-    try:
-        trial_index = int(row["trial_index"])
-    except (KeyError, TypeError, ValueError):
+    trial_index = row.get("trial_index")
+    if not _strict_nonnegative_int(trial_index):
         trial_index = -1
         errors.append("baseline trial index is invalid")
-    if trial_index < 0:
-        errors.append("baseline trial index is negative")
     steps = row.get("steps")
     trajectory = row.get("conflict_trajectory")
     if not isinstance(steps, list) or not 0 <= len(steps) <= S3_HORIZON:
         return [*errors, "baseline step coverage is invalid"]
     if not isinstance(trajectory, list):
         return [*errors, "baseline conflict trajectory is invalid"]
-    try:
-        conflicts = list(map(int, trajectory))
-    except (TypeError, ValueError):
+    if any(not _strict_nonnegative_int(value) for value in trajectory):
         return [*errors, "baseline conflict trajectory is non-integral"]
+    conflicts = list(trajectory)
     if len(conflicts) != len(steps) + 1 or not conflicts:
         errors.append("baseline trajectory length differs")
     total_seconds = 0.0
     pp_total = 0.0
     low_level_total = collections.Counter()
-    previous_full = str(row.get("initial_fingerprint"))
-    previous_repair = str(row.get("initial_repair_fingerprint"))
+    previous_full = _stored_fingerprint(row.get("initial_fingerprint"))
+    previous_repair = _stored_fingerprint(row.get("initial_repair_fingerprint"))
     terminal_seen = False
     for position, step in enumerate(steps, 1):
         if not isinstance(step, dict):
             errors.append(f"baseline step {position} is not an object")
             continue
-        if int(step.get("step", -1)) != position or terminal_seen:
+        if (
+            not _strict_nonnegative_int(step.get("step"))
+            or step.get("step") != position
+            or terminal_seen
+        ):
             errors.append(f"baseline step {position} order differs")
         for name in ("selection_seconds", "repair_seconds", "pp_replan_seconds"):
             if not _finite_nonnegative(step.get(name)):
@@ -2106,23 +2492,40 @@ def _baseline_trial_errors(
         before_conflicts = 0
         after_conflicts = 0
         try:
-            before_conflicts = int(step["conflicts_before"])
-            after_conflicts = int(step["conflicts_after"])
+            before_conflicts = step["conflicts_before"]
+            after_conflicts = step["conflicts_after"]
+            if not _strict_nonnegative_int(before_conflicts) or not _strict_nonnegative_int(
+                after_conflicts
+            ):
+                raise TypeError("conflicts are not strict integers")
             if before_conflicts != conflicts[position - 1] or after_conflicts != conflicts[position]:
                 errors.append(f"baseline step {position} conflict chain differs")
-            if int(step.get("conflict_reduction", -1)) != max(0, before_conflicts - after_conflicts):
+            if not _strict_nonnegative_int(step.get("conflict_reduction")) or step.get("conflict_reduction") != max(0, before_conflicts - after_conflicts):
                 errors.append(f"baseline step {position} reduction differs")
         except (IndexError, KeyError, TypeError, ValueError):
             errors.append(f"baseline step {position} conflicts are invalid")
-        if str(step.get("before_fingerprint")) != previous_full:
+        if _stored_fingerprint(step.get("before_fingerprint")) != previous_full:
             errors.append(f"baseline step {position} fingerprint chain differs")
-        if str(step.get("before_repair_fingerprint")) != previous_repair:
+        if _stored_fingerprint(step.get("before_repair_fingerprint")) != previous_repair:
             errors.append(f"baseline step {position} repair fingerprint chain differs")
-        previous_full = str(step.get("after_fingerprint"))
-        previous_repair = str(step.get("after_repair_fingerprint"))
+        previous_full = _stored_fingerprint(step.get("after_fingerprint"))
+        previous_repair = _stored_fingerprint(step.get("after_repair_fingerprint"))
+        if previous_full is None or previous_repair is None:
+            errors.append(f"baseline step {position} final fingerprint is empty")
         action = step.get("action")
+        stored_agents = _stored_agent_ids(
+            step.get("agents"), agent_count=int(decision["agent_count"])
+        )
         expected_mode = "official" if controller == "official_adaptive" else "explicit_neighborhood"
-        if not isinstance(action, dict) or str(action.get("mode")) != expected_mode:
+        if (
+            not isinstance(action, dict)
+            or str(action.get("mode")) != expected_mode
+            or stored_agents is None
+            or (
+                controller == "v2-full"
+                and list(action.get("agents") or ()) != stored_agents
+            )
+        ):
             errors.append(f"baseline step {position} action differs")
         elif (
             isinstance(action.get("random_seed"), bool)
@@ -2142,19 +2545,40 @@ def _baseline_trial_errors(
             errors.append(f"baseline step {position} low-level delta is invalid")
         else:
             for name in ("generated", "expanded", "reopened", "runs"):
-                try:
-                    value = int(low_level[name])
-                except (KeyError, TypeError, ValueError):
+                value = low_level.get(name)
+                if not _strict_nonnegative_int(value):
                     errors.append(f"baseline step {position} low-level {name} is invalid")
                     continue
-                if value < 0:
-                    errors.append(f"baseline step {position} low-level {name} is negative")
                 low_level_total[name] += value
+        if any(
+            not isinstance(step.get(name), bool)
+            for name in ("terminated", "truncated", "done", "replan_success")
+        ):
+            errors.append(f"baseline step {position} boolean evidence is invalid")
         terminated = step.get("terminated") is True
         truncated = step.get("truncated") is True
         done = step.get("done") is True
         if done != (terminated or truncated) or terminated and truncated:
             errors.append(f"baseline step {position} terminal flags differ")
+        if step.get("step_applied") is not True:
+            errors.append(f"baseline step {position} was not applied")
+        repair_order = _stored_agent_ids(
+            step.get("repair_order"),
+            agent_count=int(decision["agent_count"]),
+            allow_empty=True,
+        )
+        if repair_order is None or (
+            repair_order and stored_agents is not None and set(repair_order) != set(stored_agents)
+        ):
+            errors.append(f"baseline step {position} repair order differs")
+        expected_seed = _paired_seed(
+            row.get("initial_repair_fingerprint"), trial_index, position
+        )
+        if step.get("requested_pp_seed") != expected_seed:
+            errors.append(f"baseline step {position} requested PP seed differs")
+        expected_applied = expected_seed if repair_order else -1
+        if step.get("applied_pp_seed") != expected_applied:
+            errors.append(f"baseline step {position} applied PP seed differs")
         try:
             expected_outcome = classify_repair_outcome(
                 before_fingerprint=str(step["before_repair_fingerprint"]),
@@ -2169,8 +2593,17 @@ def _baseline_trial_errors(
         else:
             if str(step.get("repair_outcome")) != expected_outcome:
                 errors.append(f"baseline step {position} repair outcome differs")
+            if not repair_order and (
+                step.get("replan_success") is True
+                or expected_outcome != "hard_failure"
+            ):
+                errors.append(
+                    f"baseline step {position} empty repair order differs"
+                )
         terminal_seen = terminal_seen or done
-    if int(row.get("executed_steps", -1)) != len(steps):
+    if not _strict_nonnegative_int(row.get("executed_steps")) or row.get(
+        "executed_steps"
+    ) != len(steps):
         errors.append("baseline executed_steps differs")
     if steps and isinstance(steps[-1], dict) and steps[-1].get("done") is True:
         expected_stop = (
@@ -2190,21 +2623,25 @@ def _baseline_trial_errors(
         errors.append("baseline stop_reason differs")
     if row.get("truncated") is not expected_truncated:
         errors.append("baseline truncated flag differs")
-    if str(row.get("final_fingerprint")) != previous_full:
+    if _stored_fingerprint(row.get("final_fingerprint")) != previous_full:
         errors.append("baseline final fingerprint differs")
-    if str(row.get("final_repair_fingerprint")) != previous_repair:
+    if _stored_fingerprint(row.get("final_repair_fingerprint")) != previous_repair:
         errors.append("baseline final repair fingerprint differs")
     if not _float_matches(row.get("total_seconds"), total_seconds):
         errors.append("baseline total_seconds differs")
     if not _float_matches(row.get("pp_replan_seconds"), pp_total):
         errors.append("baseline pp_replan_seconds differs")
     for name in ("generated", "expanded", "reopened", "runs"):
-        if int(row.get(name, -1)) != int(low_level_total[name]):
+        if not _strict_nonnegative_int(row.get(name)) or row.get(name) != int(low_level_total[name]):
             errors.append(f"baseline {name} total differs")
     if conflicts:
-        if int(row.get("conflict_reduction", -1)) != max(0, conflicts[0] - conflicts[-1]):
+        if not _strict_nonnegative_int(row.get("conflict_reduction")) or row.get(
+            "conflict_reduction"
+        ) != max(0, conflicts[0] - conflicts[-1]):
             errors.append("baseline conflict_reduction differs")
-        if int(row.get("best_conflict_reduction", -1)) != max(0, conflicts[0] - min(conflicts)):
+        if not _strict_nonnegative_int(row.get("best_conflict_reduction")) or row.get(
+            "best_conflict_reduction"
+        ) != max(0, conflicts[0] - min(conflicts)):
             errors.append("baseline best_conflict_reduction differs")
         if row.get("no_progress") is not (min(conflicts) >= conflicts[0]):
             errors.append("baseline no_progress differs")
@@ -2238,6 +2675,7 @@ def _state_artifact_errors(
         "agent_count",
         "source_stratum",
         "temporal_context",
+        "decision_index",
     }
     missing_decision_fields = sorted(required_decision_fields - set(decision))
     if missing_decision_fields:
@@ -2343,32 +2781,12 @@ def _state_artifact_errors(
             trial_errors = _sequence_trial_errors(
                 trial,
                 decision=decision,
+                qualified=qualified,
                 expected_templates=templates,
             )
         except (KeyError, OverflowError, TypeError, ValueError) as error:
             trial_errors = [f"validator rejected malformed trial: {error}"]
         errors.extend(f"{key}: {error}" for error in trial_errors)
-        steps = trial.get("steps")
-        if isinstance(steps, list) and steps and isinstance(steps[0], dict):
-            first = steps[0]
-            if first.get("executed") is True:
-                try:
-                    candidate_index = int(
-                        qualified["template_indices"][templates[0].key]
-                    )
-                    candidate = qualified["candidates"][candidate_index]
-                except (IndexError, KeyError, TypeError, ValueError) as error:
-                    errors.append(f"{key}: first candidate lookup failed: {error}")
-                else:
-                    if (
-                        str(first.get("candidate_id"))
-                        != str(candidate.get("candidate_id"))
-                        or list(first.get("agents") or ())
-                        != list(candidate.get("agents") or ())
-                    ):
-                        errors.append(
-                            f"{key}: first candidate differs from qualification"
-                        )
     primary_keys = {
         (key, trial_index) for key in registered for trial_index in (0, 1)
     }
@@ -3198,7 +3616,7 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
     ):
         raise ValueError(
             "legacy or malformed v3-S3 collection is read-only; "
-            "collect schema v2 into a new output directory"
+            "collect the current schema into a new output directory"
         )
     selected = _read_jsonl(selection_path)
     state_files = sorted((output_root / "states").rglob("*.json"))

@@ -105,6 +105,12 @@ from experiments.stall_guard import (
     load_stall_guard_config,
     repair_structure_fingerprint,
 )
+from experiments.stall_shadow import (
+    STALL_SHADOW_TRANSITION_SCHEMA,
+    StallShadowConfig,
+    StallShadowState,
+    load_stall_shadow_config,
+)
 from experiments.repair_aware import (
     RepairAwareBundle,
     RepairAwareConfig,
@@ -145,6 +151,7 @@ LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_MODES = (
     "v1-full",
     "v2-full",
+    "v2-stall-shadow",
     "v2-stall-safe",
     "v2-repair-aware",
     "v2-critical",
@@ -200,6 +207,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
     "experiments/stall_guard.py",
+    "experiments/stall_shadow.py",
     "experiments/repair_aware.py",
     "experiments/v2_cost_top3_runtime.py",
     "experiments/v3_controller.py",
@@ -2248,6 +2256,51 @@ def validate_closed_loop_trace(
                     )
                 if str(guard.get("route")) != route:
                     raise ClosedLoopTraceError("stall guard route mismatch")
+            if str(controller.get("controller_mode")) == "v2-stall-shadow":
+                shadow = controller.get("stall_shadow")
+                if not isinstance(shadow, dict):
+                    raise ClosedLoopTraceError(
+                        "stall-shadow transition is missing diagnostics"
+                    )
+                if route != "model" or str(shadow.get("route")) != "model":
+                    raise ClosedLoopTraceError("stall shadow changed the v2 route")
+                if str(shadow.get("schema")) != STALL_SHADOW_TRANSITION_SCHEMA:
+                    raise ClosedLoopTraceError("stall shadow transition schema mismatch")
+                if shadow.get("base_selection_preserved") is not True or shadow.get(
+                    "action_preserved"
+                ) is not True:
+                    raise ClosedLoopTraceError("stall shadow changed the v2 action")
+                if str(shadow.get("effective_selected_candidate_id")) != str(
+                    controller.get("selected_candidate_id")
+                ):
+                    raise ClosedLoopTraceError(
+                        "stall shadow selected candidate does not match v2"
+                    )
+                state_unchanged = shadow.get("state_unchanged")
+                replan_success = metrics.get("replan_success")
+                if not isinstance(state_unchanged, bool) or not isinstance(
+                    replan_success, bool
+                ):
+                    raise ClosedLoopTraceError(
+                        "stall shadow transition has non-boolean outcome evidence"
+                    )
+                try:
+                    expected_shadow_outcome = classify_repair_outcome(
+                        before_fingerprint="state",
+                        after_fingerprint=("state" if state_unchanged else "changed"),
+                        replan_success=replan_success,
+                        conflicts_before=int(metrics["conflicts_before"]),
+                        conflicts_after=int(metrics["conflicts_after"]),
+                        feasible=bool(after.get("feasible")),
+                    )
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ClosedLoopTraceError(
+                        "stall shadow transition outcome evidence is inconsistent"
+                    ) from error
+                if str(shadow.get("repair_outcome")) != expected_shadow_outcome:
+                    raise ClosedLoopTraceError(
+                        "stall shadow transition outcome mismatch"
+                    )
             if str(controller.get("controller_mode")) == "v2-repair-aware":
                 repair = controller.get("repair_aware")
                 if not isinstance(repair, dict):
@@ -2586,6 +2639,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     if verification_profile not in VERIFICATION_PROFILES:
         raise ValueError(f"unsupported verification profile: {verification_profile}")
     stall_guard_config: StallGuardConfig | None = None
+    stall_shadow_config: StallShadowConfig | None = None
     repair_aware_config: RepairAwareConfig | None = None
     repair_aware_bundle: RepairAwareBundle | None = None
     critical_seed_config: CriticalSeedConfig | None = None
@@ -2597,6 +2651,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         if raw_stall_guard is None:
             raise ValueError("v2-stall-safe requires a frozen stall guard config")
         stall_guard_config = load_stall_guard_config(raw_stall_guard)
+    if controller_mode == "v2-stall-shadow":
+        raw_stall_shadow = job.get("stall_shadow_config")
+        if raw_stall_shadow is None:
+            raise ValueError("v2-stall-shadow requires a frozen shadow config")
+        stall_shadow_config = load_stall_shadow_config(raw_stall_shadow)
     if controller_mode == "v2-repair-aware":
         raw_repair_aware = job.get("repair_aware_config")
         raw_repair_bundle = job.get("repair_aware_bundle")
@@ -2850,6 +2909,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 and policy == "realized_dynamic"
                 else None
             )
+            stall_shadow = (
+                StallShadowState(stall_shadow_config)
+                if stall_shadow_config is not None
+                and policy == "realized_dynamic"
+                else None
+            )
             repair_aware = (
                 RepairAwareState(repair_aware_config, repair_aware_bundle)
                 if repair_aware_config is not None
@@ -2888,6 +2953,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "wall-clock execution reached its diagnostic safety limit",
                     )
                 if time.perf_counter() - started_wall >= wall_budget:
+                    if (
+                        stall_shadow is not None
+                        and stall_shadow.pending_selection is not None
+                    ):
+                        stall_shadow.abort_selection()
                     external_timeout = True
                     break
                 iteration_started = time.perf_counter()
@@ -2898,6 +2968,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     repair_structure_fingerprint(before)
                     if (
                         repair_aware is not None
+                        or stall_shadow is not None
                         or v3_state is not None
                         or v3_s3_state is not None
                     )
@@ -2983,6 +3054,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     critical_seed_diagnostic: dict[str, Any] | None = None
                     repair_aware_seconds = 0.0
                     cost_top3_seconds = 0.0
+                    stall_shadow_seconds = 0.0
                     v3_seconds = 0.0
                     stateful_predictions: dict[str, list[float]] | None = None
                     if cache_hit:
@@ -3353,6 +3425,29 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals[
                             f"cost_top3_selected_rank_{int(cost_top3_diagnostic['selected_v2_rank'])}_count"
                         ] += 1
+                    if stall_shadow is not None:
+                        shadow_started = time.perf_counter()
+                        shadow_selected_index, shadow_diagnostic = (
+                            stall_shadow.before_selection(
+                                candidates,
+                                scores,
+                                base_selected_local_index,
+                                before_fingerprint=before_repair_hash,
+                                decision_index=decision_index,
+                            )
+                        )
+                        stall_shadow_seconds = time.perf_counter() - shadow_started
+                        if shadow_selected_index != base_selected_local_index:
+                            raise ClosedLoopExecutionError(
+                                "stall_shadow_action_override",
+                                "shadow-only stall detector changed the frozen v2 action",
+                            )
+                        selected_local_index = shadow_selected_index
+                        controller["stall_shadow"] = shadow_diagnostic
+                        controller["stall_shadow_seconds"] = stall_shadow_seconds
+                        controller_totals["stall_shadow_seconds"] += (
+                            stall_shadow_seconds
+                        )
                     guard_seconds = 0.0
                     if stall_guard is not None:
                         guard_started = time.perf_counter()
@@ -3600,6 +3695,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
                         + cost_top3_seconds
+                        + stall_shadow_seconds
                         + guard_seconds
                         + repair_aware_seconds
                         + v3_seconds
@@ -3612,6 +3708,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
                         + cost_top3_seconds
+                        + stall_shadow_seconds
                         + guard_seconds
                         + repair_aware_seconds
                         + v3_seconds
@@ -3716,6 +3813,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             ),
                             "ranking_inference_seconds": inference_seconds,
                             "cost_top3_seconds": cost_top3_seconds,
+                            "stall_shadow_seconds": stall_shadow_seconds,
                             "stall_guard_seconds": guard_seconds,
                             "repair_aware_seconds": repair_aware_seconds,
                             "v3_seconds": v3_seconds,
@@ -3808,6 +3906,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 # whole episode into an execution error.  Keep this before
                 # route counters so only executed repairs are counted.
                 if time.perf_counter() - started_wall >= wall_budget:
+                    if stall_shadow is not None and stall_shadow.pending_selection is not None:
+                        stall_shadow.abort_selection()
                     external_timeout = True
                     break
                 if bool(job.get("deterministic_pp_replay", False)):
@@ -3829,6 +3929,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                     )
                 if time.perf_counter() - started_wall >= wall_budget:
+                    if (
+                        stall_shadow is not None
+                        and stall_shadow.pending_selection is not None
+                    ):
+                        stall_shadow.abort_selection()
                     external_timeout = True
                     break
                 repair_started = time.perf_counter()
@@ -3841,6 +3946,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         and "finished" in str(error)
                         and elapsed_after_error >= wall_budget
                     ):
+                        if (
+                            stall_shadow is not None
+                            and stall_shadow.pending_selection is not None
+                        ):
+                            stall_shadow.abort_selection()
                         external_timeout = True
                         break
                     raise
@@ -3856,6 +3966,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if (
                     (
                         stall_guard is not None
+                        or stall_shadow is not None
                         or repair_aware is not None
                         or critical_seed_config is not None
                         or cost_top3_config is not None
@@ -3925,6 +4036,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if (
                     (
                         stall_guard is not None
+                        or stall_shadow is not None
                         or repair_aware is not None
                         or critical_seed_config is not None
                         or v3_state is not None
@@ -4032,6 +4144,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     repair_structure_fingerprint(state)
                     if (
                         repair_aware is not None
+                        or stall_shadow is not None
                         or v3_state is not None
                         or v3_s3_state is not None
                     )
@@ -4077,6 +4190,63 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     ) + guard_observe_seconds
                     controller_totals["stall_guard_seconds"] += (
                         guard_observe_seconds
+                    )
+                if stall_shadow is not None:
+                    shadow_observe_started = time.perf_counter()
+                    if selected is None:
+                        raise ClosedLoopExecutionError(
+                            "stall_shadow_missing_candidate",
+                            "shadow-only controller lost the frozen v2 candidate",
+                        )
+                    raw_replan_success = metrics.get("replan_success")
+                    raw_feasible = state.get("feasible")
+                    if not isinstance(raw_replan_success, bool) or not isinstance(
+                        raw_feasible, bool
+                    ):
+                        raise ClosedLoopExecutionError(
+                            "stall_shadow_invalid_outcome_flags",
+                            "shadow-only controller received non-boolean outcome flags",
+                        )
+                    raw_requested_pp_seed = metrics.get("requested_pp_random_seed")
+                    requested_pp_seed = (
+                        int(raw_requested_pp_seed)
+                        if raw_requested_pp_seed is not None
+                        and int(raw_requested_pp_seed) >= 0
+                        else None
+                    )
+                    raw_applied_pp_seed = metrics.get("applied_pp_random_seed")
+                    applied_pp_seed = (
+                        int(raw_applied_pp_seed)
+                        if raw_applied_pp_seed is not None
+                        and int(raw_applied_pp_seed) >= 0
+                        else None
+                    )
+                    observed = stall_shadow.observe(
+                        before_fingerprint=before_repair_hash,
+                        after_fingerprint=after_repair_hash,
+                        replan_success=raw_replan_success,
+                        conflicts_before=int(before["num_of_colliding_pairs"]),
+                        conflicts_after=int(state["num_of_colliding_pairs"]),
+                        feasible=raw_feasible,
+                        candidate_id=str(selected["candidate_id"]),
+                        actual_agents=actual,
+                        step_random_seed=int(action["random_seed"]),
+                        requested_pp_seed=requested_pp_seed,
+                        applied_pp_seed=applied_pp_seed,
+                        repair_order=metrics.get("repair_order", ()),
+                    )
+                    shadow_observe_seconds = (
+                        time.perf_counter() - shadow_observe_started
+                    )
+                    controller["stall_shadow"] = {
+                        **dict(controller.get("stall_shadow") or {}),
+                        **observed,
+                    }
+                    controller["stall_shadow_seconds"] = float(
+                        controller.get("stall_shadow_seconds", 0.0)
+                    ) + shadow_observe_seconds
+                    controller_totals["stall_shadow_seconds"] += (
+                        shadow_observe_seconds
                     )
                 if repair_aware is not None:
                     repair_observe_started = time.perf_counter()
@@ -4204,6 +4374,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     ),
                     "stall_guard_seconds": float(
                         controller.get("stall_guard_seconds", 0.0)
+                    ),
+                    "stall_shadow_seconds": float(
+                        controller.get("stall_shadow_seconds", 0.0)
                     ),
                     "repair_aware_seconds": float(
                         controller.get("repair_aware_seconds", 0.0)
@@ -4333,6 +4506,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             if (
                 (
                     stall_guard is not None
+                    or stall_shadow is not None
                     or repair_aware is not None
                     or critical_seed_config is not None
                     or cost_top3_config is not None
@@ -4423,6 +4597,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "stall_guard": (
                     stall_guard.summary()
                     if stall_guard is not None and policy == "realized_dynamic"
+                    else None
+                ),
+                "stall_shadow": (
+                    stall_shadow.summary()
+                    if stall_shadow is not None and policy == "realized_dynamic"
                     else None
                 ),
                 "repair_aware": (
@@ -4749,6 +4928,7 @@ def run_closed_loop_collection(
     controller_runtime: str = "reference",
     verification_profile: str = "audit",
     stall_guard_config: str | Path | dict[str, Any] | None = None,
+    stall_shadow_config: str | Path | dict[str, Any] | None = None,
     critical_seed_config: str | Path | dict[str, Any] | None = None,
     repair_aware_config: str | Path | dict[str, Any] | None = None,
     repair_aware_bundle: str | Path | None = None,
@@ -4791,6 +4971,7 @@ def run_closed_loop_collection(
         project_root, controller, controller_bundle
     )
     stall_guard_payload: dict[str, Any] | None = None
+    stall_shadow_payload: dict[str, Any] | None = None
     critical_seed_payload: dict[str, Any] | None = None
     repair_aware_payload: dict[str, Any] | None = None
     repair_aware_root: Path | None = None
@@ -4810,6 +4991,16 @@ def run_closed_loop_collection(
         stall_guard_payload = loaded_stall_guard.payload()
     elif stall_guard_config is not None:
         raise ValueError("stall_guard_config is only valid with v2-stall-safe")
+    if controller_mode == "v2-stall-shadow":
+        if stall_shadow_config is None:
+            raise ValueError("v2-stall-shadow requires --stall-shadow-config")
+        stall_shadow_payload = load_stall_shadow_config(
+            stall_shadow_config
+        ).payload()
+    elif stall_shadow_config is not None:
+        raise ValueError(
+            "stall_shadow_config is only valid with v2-stall-shadow"
+        )
     if controller_mode == "v2-critical":
         loaded_critical_seed = load_critical_seed_config(
             critical_seed_config or project_root / DEFAULT_V2_CRITICAL_CONFIG,
@@ -5053,6 +5244,7 @@ def run_closed_loop_collection(
             and controller_runtime in {"optimized", "auto"}
         ),
         "stall_guard_config": stall_guard_payload,
+        "stall_shadow_config": stall_shadow_payload,
         "critical_seed_config": critical_seed_payload,
         "repair_aware_config": repair_aware_payload,
         "repair_aware_bundle": (
@@ -5071,6 +5263,7 @@ def run_closed_loop_collection(
             "configuration_fingerprint": config_fp,
             "freeze_manifest": bundle.manifest,
             "controller_bundle_manifest": controller_manifest,
+            "stall_shadow_config": stall_shadow_payload,
             "repair_aware_bundle_manifest": repair_aware_manifest,
             "critical_seed_config": critical_seed_payload,
             "cost_top3_config": cost_top3_payload,
@@ -5145,6 +5338,7 @@ def run_closed_loop_collection(
             ),
             "controller_bundle": controller_manifest,
             "stall_guard_config": stall_guard_payload,
+            "stall_shadow_config": stall_shadow_payload,
             "critical_seed_config": critical_seed_payload,
             "cost_top3_config": cost_top3_payload,
             "v3_bundle": v3_manifest,
@@ -5186,6 +5380,7 @@ def run_closed_loop_collection(
         ),
         "controller_bundle": controller_manifest,
         "stall_guard_config": stall_guard_payload,
+        "stall_shadow_config": stall_shadow_payload,
         "critical_seed_config": critical_seed_payload,
         "cost_top3_config": cost_top3_payload,
         "v3_bundle": v3_manifest,
@@ -5369,6 +5564,7 @@ def run_closed_loop_collection(
                     and controller_runtime in {"optimized", "auto"}
                 ),
                 "stall_guard_config": stall_guard_payload,
+                "stall_shadow_config": stall_shadow_payload,
                 "critical_seed_config": critical_seed_payload,
                 "repair_aware_config": repair_aware_payload,
                 "repair_aware_bundle": (

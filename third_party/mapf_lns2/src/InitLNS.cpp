@@ -99,6 +99,107 @@ bool InitLNS::initialize()
     return initial_solution_complete;
 }
 
+void InitLNS::validateRestoredPaths(
+    const Instance& instance, const vector<vector<int>>& locations)
+{
+    if (locations.size() !=
+        static_cast<size_t>(instance.getDefaultNumberOfAgents()))
+        throw std::invalid_argument(
+            "restorePaths() received the wrong number of agent paths");
+
+    const vector<int> starts = instance.getStarts();
+    const vector<int> goals = instance.getGoals();
+    for (size_t agent_id = 0; agent_id < locations.size(); agent_id++)
+    {
+        const vector<int>& source = locations[agent_id];
+        if (source.empty())
+            throw std::invalid_argument("restorePaths() received an empty path");
+        if (source.front() != starts[agent_id])
+            throw std::invalid_argument(
+                "restorePaths() path does not start at the agent start");
+        if (source.back() != goals[agent_id])
+            throw std::invalid_argument(
+                "restorePaths() path does not end at the agent goal");
+
+        for (size_t timestep = 0; timestep < source.size(); timestep++)
+        {
+            const int location = source[timestep];
+            if (location < 0 || location >= instance.map_size ||
+                instance.isObstacle(location))
+                throw std::invalid_argument(
+                    "restorePaths() path contains an invalid location");
+            if (timestep > 0 &&
+                !instance.validMove(source[timestep - 1], location))
+                throw std::invalid_argument(
+                    "restorePaths() path contains an invalid move");
+        }
+    }
+}
+
+void InitLNS::restorePaths(const vector<vector<int>>& locations)
+{
+    validateRestoredPaths(instance, locations);
+
+    vector<Path> restored_paths;
+    restored_paths.reserve(locations.size());
+    for (const vector<int>& source : locations)
+    {
+        Path path;
+        path.reserve(source.size());
+        for (int location : source)
+            path.emplace_back(location);
+        restored_paths.push_back(std::move(path));
+    }
+
+    for (size_t agent_id = 0; agent_id < agents.size(); agent_id++)
+        agents[agent_id].path = std::move(restored_paths[agent_id]);
+
+    path_table.reset();
+    collision_graph.assign(agents.size(), {});
+    set<pair<int, int>> colliding_pairs;
+    sum_of_costs = 0;
+    for (size_t agent_id = 0; agent_id < agents.size(); agent_id++)
+    {
+        updateCollidingPairs(
+            colliding_pairs, agents[agent_id].id, agents[agent_id].path);
+        sum_of_costs += (int)agents[agent_id].path.size() - 1;
+        path_table.insertPath(agents[agent_id].id, agents[agent_id].path);
+    }
+    num_of_colliding_pairs = (int)colliding_pairs.size();
+    for (const auto& pair : colliding_pairs)
+    {
+        collision_graph[pair.first].emplace(pair.second);
+        collision_graph[pair.second].emplace(pair.first);
+    }
+
+    // This is a validated warm start, not an exact continuation.  Paths and
+    // their derived repair state are restored exactly, while adaptive weights,
+    // the random stream, counters, and the wall-clock budget start afresh.
+    for (Agent& agent : agents)
+        agent.path_planner->clearStatistics();
+    num_of_failures = 0;
+    average_group_size = -1;
+    repair_iteration = 0;
+    runtime = 0;
+    initialized = true;
+    initial_solution_complete = true;
+    finish_notified = false;
+    last_transition = RepairTransition{};
+    neighbor = Neighbor{};
+    proposal_batch_cache_active = false;
+    proposal_collision_component_cache.clear();
+    proposal_target_cache.clear();
+    iteration_stats.clear();
+    iteration_stats.emplace_back(
+        0, sum_of_costs, 0, "RESTORE", 0, num_of_colliding_pairs);
+    if (ALNS)
+    {
+        destroy_weights.assign(INIT_COUNT, 1);
+        selected_neighbor = 0;
+    }
+    start_time = Time::now();
+}
+
 bool InitLNS::run()
 {
     initialize();

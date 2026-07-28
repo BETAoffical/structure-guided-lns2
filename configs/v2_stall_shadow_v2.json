@@ -1,0 +1,11 @@
+{
+  "schema": "lns2.stall_shadow.v2",
+  "schema_version": 2,
+  "mode": "shadow",
+  "unchanged_attempt_thresholds": [3, 4, 6],
+  "minimum_distinct_pp_attempts": 2,
+  "future_observation_decisions": 3,
+  "maximum_false_trigger_rate": 0.01,
+  "post_state_change_cooldown_decisions": 2,
+  "deployment_enabled": false
+}

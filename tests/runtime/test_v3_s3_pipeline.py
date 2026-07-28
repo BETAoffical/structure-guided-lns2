@@ -15,6 +15,7 @@ from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import configured_policies
 from experiments.repair_aware import load_portable_scalar_model
 from experiments.repair_collection import (
+    _fingerprint,
     _read_json,
     _write_json,
     _write_jsonl,
@@ -35,6 +36,7 @@ from experiments.v3_s3_collection import (
     V3_S3_COLLECTION_VERSION,
     _ambiguous_additional_sequences,
     _audit_state_sample,
+    _candidate_generation_record,
     _coverage,
     _job_progress,
     _outcome_row,
@@ -123,6 +125,7 @@ def _semantic_qualification(root: Path, *, ambiguous: bool = True):
         "layout_mode": "regular_beltway",
         "agent_count": 100,
         "source_stratum": "ordinary_progress",
+        "decision_index": 0,
         "before_fingerprint": "full-0",
         "before_repair_fingerprint": "repair-0",
         "temporal_context": temporal_context([], 100),
@@ -183,6 +186,28 @@ def _semantic_sequence_trial(decision, templates, trial_index):
         terminated = index == len(templates)
         candidate_index = S3_ACTION_TEMPLATES.index(template)
         agents = [candidate_index]
+        candidate = {
+            "candidate_id": f"candidate-{candidate_index}",
+            "agents": agents,
+            "selection_families": [template.family_key],
+            "selection_rank_by_family": {
+                template.family_key: template.representative
+            },
+        }
+        if index == 1:
+            candidate_pool = [
+                {
+                    "candidate_id": f"candidate-{pool_index}",
+                    "agents": [pool_index],
+                    "selection_families": [pool_template.family_key],
+                    "selection_rank_by_family": {
+                        pool_template.family_key: pool_template.representative
+                    },
+                }
+                for pool_index, pool_template in enumerate(S3_ACTION_TEMPLATES)
+            ]
+        else:
+            candidate_pool = [candidate]
         steps.append(
             {
                 "step": index,
@@ -191,6 +216,16 @@ def _semantic_sequence_trial(decision, templates, trial_index):
                 "executed": True,
                 "candidate_id": f"candidate-{candidate_index}",
                 "agents": agents,
+                "candidate_generation": _candidate_generation_record(
+                    candidate_pool,
+                    template,
+                    before_fingerprint=f"full-{index - 1}",
+                    decision_index=int(decision["decision_index"]) + index - 1,
+                    source=(
+                        "qualification_pool" if index == 1 else "restricted_dynamic"
+                    ),
+                    include_pool=index > 1,
+                ),
                 "action": {
                     "mode": "explicit_neighborhood",
                     "agents": agents,
@@ -210,6 +245,14 @@ def _semantic_sequence_trial(decision, templates, trial_index):
                 "conflict_reduction": 1,
                 "repair_outcome": "feasible" if terminated else "conflict_reduced",
                 "replan_success": True,
+                "step_applied": True,
+                "repair_order": agents,
+                "requested_pp_seed": _paired_seed(
+                    "repair-0", trial_index, index
+                ),
+                "applied_pp_seed": _paired_seed(
+                    "repair-0", trial_index, index
+                ),
                 "before_fingerprint": f"full-{index - 1}",
                 "after_fingerprint": f"full-{index}",
                 "before_repair_fingerprint": f"repair-{index - 1}",
@@ -272,6 +315,7 @@ def _semantic_baseline(decision, controller, trial_index):
         step.pop("template")
         step.pop("template_valid")
         step.pop("executed")
+        step.pop("candidate_generation")
         if controller == "official_adaptive":
             step["candidate_id"] = "official_adaptive"
             step["action"] = {
@@ -1143,6 +1187,66 @@ class V3S3PipelineTest(unittest.TestCase):
                     qualified=qualified,
                 )
             )
+
+    def test_state_validator_rejects_dynamic_candidate_and_strict_type_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, qualified, selected, _path, payload = _semantic_state_artifact(
+                root, ambiguous=False
+            )
+
+            dynamic_candidate = copy.deepcopy(payload)
+            dynamic_candidate["trials"][0]["steps"][1]["candidate_id"] = "other"
+            self.assertTrue(
+                _state_artifact_errors(
+                    dynamic_candidate,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+
+            wrong_state = copy.deepcopy(payload)
+            generation = wrong_state["trials"][0]["steps"][1][
+                "candidate_generation"
+            ]
+            generation["before_fingerprint"] = "different-state"
+            generation["fingerprint"] = _fingerprint(
+                {key: value for key, value in generation.items() if key != "fingerprint"}
+            )
+            self.assertTrue(
+                _state_artifact_errors(
+                    wrong_state,
+                    run_fingerprint=run,
+                    selected_row=selected,
+                    qualified=qualified,
+                )
+            )
+
+            for corrupt in (
+                ("null-fingerprint", None),
+                ("fractional-counter", 0.5),
+                ("nonboolean-terminal", None),
+            ):
+                tampered = copy.deepcopy(payload)
+                if corrupt[0] == "null-fingerprint":
+                    tampered["trials"][0]["steps"][0]["after_fingerprint"] = None
+                    tampered["trials"][0]["final_fingerprint"] = None
+                elif corrupt[0] == "fractional-counter":
+                    tampered["trials"][0]["steps"][0]["low_level_delta"][
+                        "generated"
+                    ] = corrupt[1]
+                else:
+                    tampered["trials"][0]["steps"][0]["terminated"] = None
+                self.assertTrue(
+                    _state_artifact_errors(
+                        tampered,
+                        run_fingerprint=run,
+                        selected_row=selected,
+                        qualified=qualified,
+                    ),
+                    corrupt[0],
+                )
             terminal_tamper = copy.deepcopy(payload)
             terminal_tamper["trials"][0]["stop_reason"] = "horizon_complete"
             self.assertTrue(
@@ -1265,7 +1369,16 @@ class V3S3PipelineTest(unittest.TestCase):
         templates = balanced_sequence_templates(decision["state_id"])[0]
         qualified = {
             "decision": decision,
-            "candidates": [{"candidate_id": "first", "agents": [0]}],
+            "candidates": [
+                {
+                    "candidate_id": "first",
+                    "agents": [0],
+                    "selection_families": [templates[0].family_key],
+                    "selection_rank_by_family": {
+                        templates[0].family_key: templates[0].representative
+                    },
+                }
+            ],
             "template_indices": {templates[0].key: 0},
             "timing": {"full_pool_seconds": 0.0},
         }
@@ -1274,13 +1387,18 @@ class V3S3PipelineTest(unittest.TestCase):
             def __init__(self):
                 self.calls = 0
 
-            def step(self, _action):
+            def step(self, action):
                 self.calls += 1
                 return {
                     "observation": copy.deepcopy(after),
                     "metrics": {
                         "replan_success": False,
                         "pp_replan_seconds": 0.0,
+                        "step_applied": True,
+                        "neighborhood": [0],
+                        "repair_order": [0],
+                        "requested_pp_random_seed": action["pp_random_seed"],
+                        "applied_pp_random_seed": action["pp_random_seed"],
                     },
                     "terminated": False,
                     "truncated": True,

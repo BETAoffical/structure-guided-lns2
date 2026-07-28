@@ -118,6 +118,25 @@ public:
     uint64_t getTotalNumGenerated() const { return accumulated_num_generated + num_generated; }
     uint64_t getTotalNumReopened() const { return accumulated_num_reopened + num_reopened; }
     uint64_t getTotalNumRuns() const { return num_runs + (num_generated > 0 ? 1 : 0); }
+
+    // Start a logically independent repair episode without rebuilding the
+    // planner's immutable heuristic table.  reset() deliberately rolls the
+    // current search into the accumulated counters, so it cannot be used for
+    // a warm-start boundary where all low-level evidence must restart at zero.
+    void clearStatistics()
+    {
+        accumulated_num_expanded = 0;
+        accumulated_num_generated = 0;
+        accumulated_num_reopened = 0;
+        num_runs = 0;
+        num_expanded = 0;
+        num_generated = 0;
+        num_reopened = 0;
+        num_collisions = -1;
+        runtime_build_CT = 0;
+        runtime_build_CAT = 0;
+    }
+
 	// int getStartLocation() const {return instance.start_locations[agent]; }
 	// int getGoalLocation() const {return instance.goal_locations[agent]; }
 

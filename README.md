@@ -35,6 +35,8 @@ from Git tag `pre-minimal-runtime-2026-07-20`.
 - `v1-full`: frozen portable pairwise GBDT using `realized_dynamic` features.
 - `v2-full`: exactly equivalent action selection with accelerated feature and tree inference.
 - `v2-stall-safe`: v2 plus the registered stall guard.
+- `v2-stall-shadow`: diagnostic-only conservative stall detection. It always
+  executes the frozen v2 action and cannot enable recovery.
 - `v2-repair-aware`: experimental v2 rescue controller. It preserves the first
   v2 decision on every repair-relevant state, then reuses the unchanged-state
   candidate pool and consults policy-train-only repairability/cost models after

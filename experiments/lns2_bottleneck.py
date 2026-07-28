@@ -38,6 +38,7 @@ CONTROLLERS = ("official_adaptive", "v2-full")
 LABELS = {
     "official_adaptive": "Original LNS2 Adaptive",
     "v2-full": "Optimized model (v2)",
+    "v2-stall-shadow": "Optimized model (v2 stall shadow)",
     "v2-stall-safe": "Optimized model (v2 stall-safe)",
     "v2-repair-aware": "Optimized model (v2 repair-aware)",
     "v3-full": "Cost-aware model (v3)",
@@ -46,6 +47,7 @@ LABELS = {
 CONTROLLER_COLORS = {
     "official_adaptive": "#4c78a8",
     "v2-full": "#f58518",
+    "v2-stall-shadow": "#72b7b2",
     "v2-stall-safe": "#54a24b",
     "v2-repair-aware": "#b279a2",
     "v3-full": "#e45756",
@@ -63,6 +65,7 @@ TIMING_FIELDS = (
     "realized_feature_seconds",
     "ranking_inference_seconds",
     "stall_guard_seconds",
+    "stall_shadow_seconds",
     "repair_aware_seconds",
     "v3_seconds",
     "selection_residual_seconds",
@@ -429,6 +432,7 @@ def _iteration_row(
     controller_data = dict(event.get("controller") or {})
     proposal = dict(controller_data.get("proposal") or {})
     guard = dict(controller_data.get("stall_guard") or {})
+    stall_shadow = dict(controller_data.get("stall_shadow") or {})
     repair_aware = dict(controller_data.get("repair_aware") or {})
     v3 = dict(controller_data.get("v3") or {})
     neighborhood = list(metrics.get("neighborhood") or [])
@@ -495,6 +499,18 @@ def _iteration_row(
         "stall_guard_stagnant_attempt": guard.get("stagnant_attempt"),
         "stall_guard_backoff_triggered": guard.get("backoff_triggered"),
         "stall_guard_fallback_reason": guard.get("fallback_reason"),
+        "stall_shadow_repair_outcome": stall_shadow.get("repair_outcome"),
+        "stall_shadow_action_preserved": stall_shadow.get("action_preserved"),
+        "stall_shadow_unchanged_attempt_count": stall_shadow.get(
+            "unchanged_attempt_count_after"
+        ),
+        "stall_shadow_distinct_pp_attempt_count": stall_shadow.get(
+            "distinct_pp_attempt_count_after"
+        ),
+        "stall_shadow_triggered_thresholds": json.dumps(
+            stall_shadow.get("triggered_thresholds", []),
+            separators=(",", ":"),
+        ),
         "repair_outcome": repair_aware.get(
             "repair_outcome", v3.get("repair_outcome")
         ),
@@ -580,6 +596,7 @@ def _episode_row(
     finalization = dict(source.get("episode_finalization_timings") or {})
     budget_low_level = dict(summary.get("budget_final_low_level") or {})
     stall_guard = dict(summary.get("stall_guard") or {})
+    stall_shadow = dict(summary.get("stall_shadow") or {})
     repair_aware = dict(summary.get("repair_aware") or {})
     v3 = dict(summary.get("v3") or {})
     critical_seed = dict(summary.get("critical_seed") or {})
@@ -734,6 +751,18 @@ def _episode_row(
         ),
         "stall_guard_rescued_state_count": int(
             stall_guard.get("rescued_state_count", 0)
+        ),
+        "stall_shadow_action_override_count": int(
+            stall_shadow.get("action_override_count", 0)
+        ),
+        "stall_shadow_longest_unchanged_streak": int(
+            stall_shadow.get("longest_unchanged_streak", 0)
+        ),
+        "stall_shadow_state_changed_no_reduction_reset_count": int(
+            stall_shadow.get("state_changed_no_reduction_reset_count", 0)
+        ),
+        "stall_shadow_most_conservative_passing_threshold": (
+            stall_shadow.get("most_conservative_passing_threshold")
         ),
         "repair_aware_no_progress_count": int(
             repair_aware.get("no_progress_count", 0)

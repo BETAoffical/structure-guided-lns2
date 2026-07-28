@@ -129,8 +129,16 @@ def _semantic_rollout() -> tuple[dict, dict, dict]:
                 "action": {
                     "mode": "explicit_neighborhood",
                     "agents": [1, 2, 3, 4],
+                    "random_seed": seed,
                     "pp_random_seed": seed,
                 },
+                "agents": [1, 2, 3, 4],
+                "repair_order": [1, 2, 3, 4],
+                "requested_pp_seed": seed,
+                "applied_pp_seed": seed,
+                "step_applied": True,
+                "terminated": True,
+                "truncated": False,
                 "repair_outcome": "feasible",
                 "conflicts_before": 10,
                 "conflicts_after": 0,
@@ -337,7 +345,7 @@ class V3ValueIntegrityTests(unittest.TestCase):
             config_path = output / "run_config.json"
             plan_path.write_text(json.dumps(requested_plan), encoding="utf-8")
             config_path.write_text(
-                json.dumps({"schema": "lns2.v3_value_label_pilot.v1"}),
+                json.dumps({"schema": "lns2.v3_value_label_pilot.v2"}),
                 encoding="utf-8",
             )
             before = {path.name: path.read_bytes() for path in output.iterdir()}
@@ -362,7 +370,7 @@ class V3ValueIntegrityTests(unittest.TestCase):
             self.assertEqual(after, before)
 
     def test_schema_and_full_rollout_validation(self) -> None:
-        self.assertEqual(V3_VALUE_PILOT_SCHEMA, "lns2.v3_value_label_pilot.v2")
+        self.assertEqual(V3_VALUE_PILOT_SCHEMA, "lns2.v3_value_label_pilot.v3")
         state, arm, row = _semantic_rollout()
         validate_value_rollout(
             row,
@@ -438,6 +446,84 @@ class V3ValueIntegrityTests(unittest.TestCase):
                 expected_producer_fingerprint="producer",
             )
 
+    def test_rollout_rejects_nonapplied_and_noncanonical_step_evidence(self) -> None:
+        state, arm, row = _semantic_rollout()
+        mutations = (
+            ("step_applied", False, "non-applied"),
+            ("terminated", None, "terminal"),
+            ("requested_pp_seed", row["steps"][0]["requested_pp_seed"] + 1, "seed"),
+        )
+        for field, value, message in mutations:
+            corrupt = json.loads(json.dumps(row))
+            corrupt["steps"][0][field] = value
+            with self.assertRaisesRegex(ValueError, message):
+                validate_value_rollout(
+                    corrupt,
+                    state_plan=state,
+                    arm_plan=arm,
+                    max_repairs=30,
+                    wall_clock_seconds=60.0,
+                    expected_trial_index=0,
+                    expected_producer_fingerprint="producer",
+                )
+
+        fractional = json.loads(json.dumps(row))
+        fractional["steps"][0]["low_level"]["generated"] = 5.5
+        with self.assertRaisesRegex(ValueError, "low-level metric is invalid"):
+            validate_value_rollout(
+                fractional,
+                state_plan=state,
+                arm_plan=arm,
+                max_repairs=30,
+                wall_clock_seconds=60.0,
+                expected_trial_index=0,
+                expected_producer_fingerprint="producer",
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "before applying"):
+            module._native_repair_evidence(
+                {"step_applied": False},
+                expected_seed=1,
+                expected_agents=[1],
+                agent_count=10,
+            )
+
+    def test_repair_limit_wins_when_last_allowed_step_crosses_wall_limit(self) -> None:
+        state, arm, row = _semantic_rollout()
+        step = row["steps"][0]
+        step["repair_outcome"] = "state_changed_no_reduction"
+        step["conflicts_after"] = 10
+        step["conflict_reduction"] = 0
+        step["after_done"] = False
+        step["after_feasible"] = False
+        step["terminated"] = False
+        row["final_conflicts"] = 10
+        row["conflict_trajectory"] = [10, 10]
+        row["conflict_reduction"] = 0
+        row["feasible"] = False
+        row["censored"] = True
+        row["stop_reason"] = "repair_limit"
+        validate_value_rollout(
+            row,
+            state_plan=state,
+            arm_plan=arm,
+            max_repairs=1,
+            wall_clock_seconds=0.1,
+            expected_trial_index=0,
+            expected_producer_fingerprint="producer",
+        )
+        row["stop_reason"] = "wall_clock_limit"
+        with self.assertRaisesRegex(ValueError, "stop reason"):
+            validate_value_rollout(
+                row,
+                state_plan=state,
+                arm_plan=arm,
+                max_repairs=1,
+                wall_clock_seconds=0.1,
+                expected_trial_index=0,
+                expected_producer_fingerprint="producer",
+            )
+
     def test_no_progress_repair_outcome_is_recomputed(self) -> None:
         state, arm, row = _semantic_rollout()
         step = row["steps"][0]
@@ -445,6 +531,8 @@ class V3ValueIntegrityTests(unittest.TestCase):
         step["conflicts_after"] = 10
         step["conflict_reduction"] = 0
         step["after_feasible"] = False
+        step["terminated"] = False
+        step["truncated"] = True
         row["final_conflicts"] = 10
         row["conflict_trajectory"] = [10, 10]
         row["conflict_reduction"] = 0

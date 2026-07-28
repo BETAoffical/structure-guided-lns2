@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from experiments.stalled_state_probe import (
+    _checkpoint_valid,
     choose_probe_branches,
     find_terminal_stall,
     paired_probe_seed,
@@ -119,13 +123,34 @@ class StalledStateProbeTests(unittest.TestCase):
         self.assertEqual(aliases["size_le_4"], "c4")
         self.assertEqual(len(branches), 4)
 
+    def test_all_candidate_probe_covers_every_unique_candidate(self) -> None:
+        candidates = [
+            {"candidate_id": "c4", "actual_size": 4, "agents": [0, 1]},
+            {"candidate_id": "c8", "actual_size": 8, "agents": [2, 3]},
+            {"candidate_id": "c16", "actual_size": 16, "agents": [4, 5]},
+        ]
+        branches, aliases = choose_probe_branches(
+            candidates, [0.2, 0.9, 0.5], all_candidates=True
+        )
+        self.assertEqual(len(branches), 4)
+        by_alias = {
+            alias: next(
+                row for row in branches if row["branch_key"] == branch_key
+            )["candidate"]["candidate_id"]
+            for alias, branch_key in aliases.items()
+            if alias != "official_adaptive"
+        }
+        self.assertEqual(by_alias["rank1"], "c8")
+        self.assertEqual(by_alias["rank_2"], "c16")
+        self.assertEqual(by_alias["rank_3"], "c4")
+
     def test_paired_seeds_are_stable_and_unique(self) -> None:
         first = [paired_probe_seed("state", index) for index in range(8)]
         second = [paired_probe_seed("state", index) for index in range(8)]
         self.assertEqual(first, second)
         self.assertEqual(len(first), len(set(first)))
 
-    def test_gate_accepts_success_rate_or_positive_escape(self) -> None:
+    def test_one_step_summary_never_claims_an_oracle_gate(self) -> None:
         aliases = {
             "rank1": "rank1",
             "rank2": "rank2",
@@ -149,10 +174,41 @@ class StalledStateProbeTests(unittest.TestCase):
                     }
                 )
         _summaries, gate = summarize_probe_trials(trials, aliases)
-        self.assertTrue(gate["passed"])
-        self.assertEqual(
-            set(gate["supported_alternatives"]), {"size_le_8", "official_adaptive"}
-        )
+        self.assertFalse(gate["passed"])
+        self.assertEqual(gate["status"], "oracle_audit_required")
+        self.assertEqual(gate["supported_alternatives"], [])
+
+    def test_completed_v1_checkpoint_is_rejected_and_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "checkpoint.json"
+            payload = {
+                "schema": "lns2.stalled_state_probe.v1",
+                "schema_version": 1,
+                "complete": True,
+            }
+            original = json.dumps(payload)
+            path.write_text(original, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "checkpoint is invalid"):
+                _checkpoint_valid(
+                    path,
+                    run_fingerprint="run",
+                    branch={
+                        "branch_key": "candidate",
+                        "aliases": ["rank1"],
+                        "mode": "explicit_neighborhood",
+                        "candidate": {
+                            "candidate_id": "candidate",
+                            "agents": [1, 2],
+                            "actual_size": 2,
+                        },
+                        "rank": 1,
+                        "score": 1.0,
+                    },
+                    trial_index=0,
+                    before_fingerprint="before",
+                    before_repair_fingerprint="repair-before",
+                )
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

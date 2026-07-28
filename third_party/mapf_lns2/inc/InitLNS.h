@@ -17,6 +17,9 @@ public:
 
     bool getInitialSolution();
     bool initialize();
+    static void validateRestoredPaths(
+        const Instance& instance, const vector<vector<int>>& paths);
+    void restorePaths(const vector<vector<int>>& paths);
     bool step();
     bool step(const RepairAction& action);
     RepairProposal proposeNeighborhood(const RepairAction& action);

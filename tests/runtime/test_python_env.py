@@ -577,6 +577,92 @@ class RepairEnvironmentTests(unittest.TestCase):
             },
         )
 
+    def test_restore_paths_rebuilds_repair_state_and_resets_budget(self) -> None:
+        source = self.make_env()
+        initial = source.reset(seed=31)
+        paths = [list(agent["path"]) for agent in initial["agents"]]
+
+        env = self.make_env()
+        restored = env.reset_paths(paths, seed=41007)
+
+        self.assertEqual(env.get_state_revision(), 1)
+        self.assertEqual(
+            [agent["path"] for agent in restored["agents"]], paths
+        )
+        self.assertEqual(
+            restored["num_of_colliding_pairs"],
+            initial["num_of_colliding_pairs"],
+        )
+        self.assertEqual(restored["conflict_edges"], initial["conflict_edges"])
+        self.assertEqual(restored["sum_of_costs"], initial["sum_of_costs"])
+        self.assertEqual(restored["iteration"], 0)
+        self.assertEqual(
+            restored["low_level"],
+            {"expanded": 0, "generated": 0, "reopened": 0, "runs": 0},
+        )
+        self.assertLess(restored["runtime"], 0.1)
+        self.assertEqual(
+            env.get_last_reset_timings()["initial_solution_seconds"], 0.0
+        )
+        self.assertGreaterEqual(
+            env.get_last_reset_timings()["path_restore_seconds"], 0.0
+        )
+
+        if restored["done"]:
+            self.skipTest("warm-start fixture is already terminal")
+        stepped = env.step({"mode": "official"})
+        self.assertTrue(stepped["metrics"]["step_applied"])
+        self.assertGreater(stepped["observation"]["low_level"]["runs"], 0)
+
+        restored_again = env.restore_paths(paths, seed=41009)
+        self.assertEqual(env.get_state_revision(), 3)
+        self.assertEqual(restored_again["conflict_edges"], initial["conflict_edges"])
+        self.assertEqual(
+            restored_again["low_level"],
+            {"expanded": 0, "generated": 0, "reopened": 0, "runs": 0},
+        )
+        restore_timings = env.get_last_reset_timings()
+        self.assertEqual(restore_timings["initial_solution_seconds"], 0.0)
+        self.assertGreaterEqual(restore_timings["path_restore_seconds"], 0.0)
+
+        invalid = [list(path) for path in paths]
+        invalid[0][0] = invalid[0][0] + 1
+        before_invalid = env.get_state()
+        revision_before_invalid = env.get_state_revision()
+        with self.assertRaisesRegex(ValueError, "does not start"):
+            env.reset_paths(invalid, seed=41008)
+        after_invalid = env.get_state()
+        self.assertEqual(env.get_state_revision(), revision_before_invalid)
+        self.assertEqual(
+            {key: value for key, value in after_invalid.items() if key != "runtime"},
+            {
+                key: value
+                for key, value in before_invalid.items()
+                if key != "runtime"
+            },
+        )
+
+        other = self.make_env()
+        with self.assertRaisesRegex(ValueError, "does not start"):
+            other.reset_paths(invalid, seed=41010)
+        # The rejected reset did not touch the process-global random stream,
+        # so the still-live owner can continue without an explicit seed.
+        continued = env.step({"mode": "official"})
+        self.assertTrue(continued["metrics"]["step_applied"])
+
+    def test_reset_rejects_negative_seed_without_replacing_state(self) -> None:
+        env = self.make_env()
+        state = env.reset(seed=31)
+        revision = env.get_state_revision()
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            env.reset(seed=-1)
+        self.assertEqual(env.get_state_revision(), revision)
+        after = env.get_state()
+        self.assertEqual(
+            {key: value for key, value in after.items() if key != "runtime"},
+            {key: value for key, value in state.items() if key != "runtime"},
+        )
+
     def test_dense_native_features_match_projected_dicts(self) -> None:
         env = self.make_env()
         state = env.reset(seed=37)

@@ -47,6 +47,42 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as directory:
         temporary = Path(directory)
+        partial_trace = temporary / "partial-initial-solution.jsonl"
+        partial_result = subprocess.run(
+            [
+                executable,
+                "--map",
+                map_path,
+                "--agents",
+                scenario_path,
+                "--agentNum",
+                "200",
+                "--cutoffTime",
+                "0.01",
+                "--seed",
+                "29",
+                "--trace",
+                str(partial_trace),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert partial_result.returncode == 1, partial_result
+        partial_rows = [
+            json.loads(line)
+            for line in partial_trace.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        partial_state = partial_rows[-1]["state"]
+        path_costs = [
+            int(agent["path_cost"])
+            for agent in partial_state["agents"]
+            if int(agent["path_cost"]) >= 0
+        ]
+        assert path_costs, "partial-timeout fixture produced no paths"
+        assert partial_state["sum_of_costs"] == sum(path_costs)
+
         missing_scenario = temporary / "must-not-be-created.scen"
         missing_result = subprocess.run(
             [

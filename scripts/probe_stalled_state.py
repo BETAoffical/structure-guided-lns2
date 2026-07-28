@@ -27,6 +27,11 @@ def main() -> int:
     target.add_argument("--auto-terminal-stall", action="store_true")
     target.add_argument("--decision-index", type=int)
     parser.add_argument("--trials", type=int, default=8)
+    parser.add_argument(
+        "--all-candidates",
+        action="store_true",
+        help="Probe every candidate in the frozen full v2 representative pool.",
+    )
     parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
     report = run_stalled_state_probe(
@@ -37,6 +42,7 @@ def main() -> int:
         trials=arguments.trials,
         auto_terminal_stall=arguments.auto_terminal_stall,
         decision_index=arguments.decision_index,
+        all_candidates=arguments.all_candidates,
         resume=arguments.resume,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

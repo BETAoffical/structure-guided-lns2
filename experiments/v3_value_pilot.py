@@ -14,6 +14,7 @@ from experiments._common import (
     producer_identity,
     read_json,
     sha256_file,
+    strict_nonnegative_int as _strict_nonnegative_int,
 )
 from experiments.repair_aware import REPAIR_OUTCOMES, classify_repair_outcome
 from experiments.repair_collection import (
@@ -33,7 +34,7 @@ from experiments.v3_s3_collection import (
 )
 
 
-V3_VALUE_PILOT_SCHEMA = "lns2.v3_value_label_pilot.v2"
+V3_VALUE_PILOT_SCHEMA = "lns2.v3_value_label_pilot.v3"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 V3_VALUE_PILOT_PRODUCER_FILES = (
     "CMakeLists.txt",
@@ -378,6 +379,86 @@ def _extend_replay_repair_budget(
     return prepared
 
 
+def _agent_ids(
+    value: Any,
+    *,
+    agent_count: int,
+    allow_empty: bool = False,
+) -> list[int] | None:
+    if not isinstance(value, list):
+        return None
+    if any(
+        isinstance(agent, bool)
+        or not isinstance(agent, int)
+        or agent < 0
+        or agent >= int(agent_count)
+        for agent in value
+    ):
+        return None
+    if len(set(value)) != len(value) or (not allow_empty and not value):
+        return None
+    return list(value)
+
+
+def _terminal_flags(
+    transition: dict[str, Any], state: dict[str, Any]
+) -> tuple[bool, bool, bool]:
+    if not isinstance(transition.get("terminated"), bool) or not isinstance(
+        transition.get("truncated"), bool
+    ):
+        raise RuntimeError("value pilot native step omitted boolean terminal flags")
+    if not isinstance(state.get("done"), bool) or not isinstance(
+        state.get("feasible"), bool
+    ):
+        raise RuntimeError("value pilot observation omitted boolean terminal flags")
+    terminated = transition["terminated"]
+    truncated = transition["truncated"]
+    done = state["done"]
+    feasible = state["feasible"]
+    if terminated != feasible or truncated != (done and not feasible):
+        raise RuntimeError("value pilot native terminal flags disagree with observation")
+    if done != (terminated or truncated):
+        raise RuntimeError("value pilot native done flag is inconsistent")
+    return terminated, truncated, done
+
+
+def _native_repair_evidence(
+    metrics: dict[str, Any],
+    *,
+    expected_seed: int,
+    expected_agents: list[int] | None,
+    agent_count: int,
+) -> tuple[list[int], list[int], int]:
+    if metrics.get("step_applied") is not True:
+        raise RuntimeError("value pilot native step ended before applying a repair")
+    if not isinstance(metrics.get("replan_success"), bool):
+        raise RuntimeError("value pilot native replan-success evidence is not boolean")
+    requested = metrics.get("requested_pp_random_seed")
+    if not _strict_nonnegative_int(requested) or requested != expected_seed:
+        raise RuntimeError("value pilot requested PP seed mismatch")
+    neighborhood = _agent_ids(metrics.get("neighborhood"), agent_count=agent_count)
+    repair_order = _agent_ids(
+        metrics.get("repair_order"),
+        agent_count=agent_count,
+        allow_empty=True,
+    )
+    if neighborhood is None or repair_order is None:
+        raise RuntimeError("value pilot native neighborhood evidence is invalid")
+    if expected_agents is not None and (
+        len(neighborhood) != len(expected_agents)
+        or set(neighborhood) != set(expected_agents)
+    ):
+        raise RuntimeError("value pilot first neighborhood differs from action")
+    if repair_order and set(repair_order) != set(neighborhood):
+        raise RuntimeError("value pilot repair order differs from neighborhood")
+    applied = metrics.get("applied_pp_random_seed")
+    if isinstance(applied, bool) or not isinstance(applied, int):
+        raise RuntimeError("value pilot applied PP seed is invalid")
+    if applied != (expected_seed if repair_order else -1):
+        raise RuntimeError("value pilot applied PP seed mismatch")
+    return neighborhood, repair_order, applied
+
+
 def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
     state_row = dict(job["state"])
     arm = dict(job["arm"])
@@ -386,7 +467,7 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
     if not producer_fingerprint:
         raise ValueError("value rollout producer identity fingerprint is empty")
     decision = dict(state_row["decision"])
-    replay, _configuration = _source_replay_job(decision)
+    replay, _ = _source_replay_job(decision)
     replay = _extend_replay_repair_budget(
         replay,
         prefix_length=len(decision["prefix_actions"]),
@@ -395,12 +476,10 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
     environment, state = replay_prefix(replay, decision["prefix_actions"])
     if state_fingerprint(state) != str(state_row["before_fingerprint"]):
         raise RuntimeError("value pilot replay fingerprint mismatch")
-    if repair_structure_fingerprint(state) != str(
-        state_row["before_repair_fingerprint"]
-    ):
+    initial_repair = repair_structure_fingerprint(state)
+    if initial_repair != str(state_row["before_repair_fingerprint"]):
         raise RuntimeError("value pilot repair fingerprint mismatch")
 
-    initial_repair = repair_structure_fingerprint(state)
     initial_conflicts = int(state["num_of_colliding_pairs"])
     trajectory = [initial_conflicts]
     steps = []
@@ -408,7 +487,10 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
     total_pp_seconds = 0.0
     total_low_level = collections.Counter()
     stop_reason = "repair_limit"
-    for offset in range(int(job["max_repairs"])):
+    max_repairs = int(job["max_repairs"])
+    if bool(state.get("done")):
+        raise RuntimeError("value pilot source state is already terminal")
+    for offset in range(max_repairs):
         before = state
         before_repair = repair_structure_fingerprint(before)
         conflicts_before = int(before["num_of_colliding_pairs"])
@@ -428,6 +510,13 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
         repair_seconds = time.perf_counter() - started
         state = dict(transition["observation"])
         metrics = dict(transition["metrics"])
+        neighborhood, repair_order, applied_seed = _native_repair_evidence(
+            metrics,
+            expected_seed=seed,
+            expected_agents=(list(map(int, arm["agents"])) if offset == 0 else None),
+            agent_count=int(state_row["agent_count"]),
+        )
+        terminated, truncated, done = _terminal_flags(transition, state)
         conflicts_after = int(state["num_of_colliding_pairs"])
         after_repair = repair_structure_fingerprint(state)
         outcome = classify_repair_outcome(
@@ -436,8 +525,14 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
             replan_success=bool(metrics.get("replan_success")),
             conflicts_before=conflicts_before,
             conflicts_after=conflicts_after,
-            feasible=bool(state.get("feasible")),
+            feasible=terminated,
         )
+        if not repair_order and (
+            metrics["replan_success"] or outcome != "hard_failure"
+        ):
+            raise RuntimeError(
+                "value pilot empty repair order is only valid for a hard failure"
+            )
         low_level = _low_level_delta(before, state)
         for name in ("generated", "expanded", "reopened", "runs"):
             total_low_level[name] += int(low_level.get(name, 0))
@@ -451,6 +546,17 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
                 "step": offset + 1,
                 "route": route,
                 "action": action,
+                "agents": (
+                    list(map(int, action["agents"]))
+                    if offset == 0
+                    else neighborhood
+                ),
+                "repair_order": repair_order,
+                "requested_pp_seed": seed,
+                "applied_pp_seed": applied_seed,
+                "step_applied": True,
+                "terminated": terminated,
+                "truncated": truncated,
                 "repair_outcome": outcome,
                 "conflicts_before": conflicts_before,
                 "conflicts_after": conflicts_after,
@@ -461,8 +567,8 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
                     name: int(low_level.get(name, 0))
                     for name in ("generated", "expanded", "reopened", "runs")
                 },
-                "after_done": bool(state.get("done")),
-                "after_feasible": bool(state.get("feasible")),
+                "after_done": done,
+                "after_feasible": terminated,
                 "replan_success": bool(metrics.get("replan_success")),
                 "before_fingerprint": state_fingerprint(before),
                 "after_fingerprint": state_fingerprint(state),
@@ -470,14 +576,16 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
                 "after_repair_fingerprint": after_repair,
             }
         )
-        if bool(state.get("feasible")):
+        if terminated:
             stop_reason = "feasible"
             break
-        if bool(state.get("done")):
+        if done:
             stop_reason = "environment_terminal"
             break
-        if time.perf_counter() - rollout_started >= float(
-            job["wall_clock_seconds"]
+        if (
+            offset + 1 < max_repairs
+            and time.perf_counter() - rollout_started
+            >= float(job["wall_clock_seconds"])
         ):
             stop_reason = "wall_clock_limit"
             break
@@ -604,7 +712,9 @@ def validate_value_rollout(
 
     state_id = str(state_plan["state_id"])
     arm_id = str(arm_plan["arm_id"])
-    trial_index = int(row.get("trial_index", -1))
+    trial_index = row.get("trial_index")
+    if not _strict_nonnegative_int(trial_index):
+        raise ValueError("value rollout trial index is invalid")
     if str(row.get("state_id")) != state_id:
         raise ValueError("value rollout state mismatch")
     if str(row.get("arm_id")) != arm_id:
@@ -616,7 +726,9 @@ def validate_value_rollout(
     for field in ("split", "map_id", "layout_mode", "source_stratum"):
         if str(row.get(field)) != str(state_plan[field]):
             raise ValueError(f"value rollout {field} mismatch")
-    if int(row.get("agent_count", -1)) != int(state_plan["agent_count"]):
+    if not _strict_nonnegative_int(row.get("agent_count")) or row.get(
+        "agent_count"
+    ) != int(state_plan["agent_count"]):
         raise ValueError("value rollout agent_count mismatch")
     if list(map(str, row.get("arm_aliases", ()))) != list(
         map(str, arm_plan["aliases"])
@@ -625,9 +737,14 @@ def validate_value_rollout(
     if str(row.get("candidate_id")) != str(arm_plan["candidate_id"]):
         raise ValueError("value rollout candidate mismatch")
     expected_agents = list(map(int, arm_plan["agents"]))
-    if list(map(int, row.get("agents", ()))) != expected_agents:
+    stored_root_agents = _agent_ids(
+        row.get("agents"), agent_count=int(state_plan["agent_count"])
+    )
+    if stored_root_agents != expected_agents:
         raise ValueError("value rollout neighborhood mismatch")
-    if int(row.get("actual_size", -1)) != len(expected_agents):
+    if not _strict_nonnegative_int(row.get("actual_size")) or row.get(
+        "actual_size"
+    ) != len(expected_agents):
         raise ValueError("value rollout actual size mismatch")
     if str(row.get("template_key")) != str(arm_plan.get("template_key", "")):
         raise ValueError("value rollout template mismatch")
@@ -644,7 +761,9 @@ def validate_value_rollout(
         field="initial repair fingerprint",
     ) != initial_repair:
         raise ValueError("value rollout initial repair fingerprint mismatch")
-    if int(row.get("initial_conflicts", -1)) != initial_conflicts:
+    if not _strict_nonnegative_int(row.get("initial_conflicts")) or row.get(
+        "initial_conflicts"
+    ) != initial_conflicts:
         raise ValueError("value rollout initial conflicts mismatch")
 
     raw_steps = row.get("steps")
@@ -666,7 +785,9 @@ def validate_value_rollout(
     low_level_totals = collections.Counter()
     conflict_auc = 0.0
     for step_index, step in enumerate(steps, start=1):
-        if int(step.get("step", -1)) != step_index:
+        if not _strict_nonnegative_int(step.get("step")) or step.get(
+            "step"
+        ) != step_index:
             raise ValueError("value rollout step indexes are not contiguous")
         if _stored_fingerprint(
             step.get("before_fingerprint"),
@@ -687,12 +808,22 @@ def validate_value_rollout(
             field=f"steps[{step_index}].after repair fingerprint",
         )
 
-        conflicts_before = int(step.get("conflicts_before", -1))
-        conflicts_after = int(step.get("conflicts_after", -1))
-        if conflicts_before != trajectory[-1] or conflicts_after < 0:
+        conflicts_before = step.get("conflicts_before")
+        conflicts_after = step.get("conflicts_after")
+        if (
+            not _strict_nonnegative_int(conflicts_before)
+            or not _strict_nonnegative_int(conflicts_after)
+            or conflicts_before != trajectory[-1]
+        ):
             raise ValueError("value rollout conflict trajectory is discontinuous")
-        if int(step.get("conflict_reduction", 0)) != (
+        reduction = step.get("conflict_reduction")
+        if (
+            isinstance(reduction, bool)
+            or not isinstance(reduction, int)
+            or reduction
+            != (
             conflicts_before - conflicts_after
+            )
         ):
             raise ValueError("value rollout conflict reduction mismatch")
         trajectory.append(conflicts_after)
@@ -702,12 +833,36 @@ def validate_value_rollout(
             raise ValueError("value rollout step lacks terminal evidence")
         after_done = bool(step["after_done"])
         after_feasible = bool(step["after_feasible"])
+        if step.get("step_applied") is not True:
+            raise ValueError("value rollout contains a non-applied repair")
+        if not isinstance(step.get("terminated"), bool) or not isinstance(
+            step.get("truncated"), bool
+        ):
+            raise ValueError("value rollout step lacks native terminal flags")
+        terminated = step["terminated"]
+        truncated = step["truncated"]
+        if terminated != after_feasible or truncated != (
+            after_done and not after_feasible
+        ):
+            raise ValueError("value rollout native terminal evidence mismatch")
+        if after_done != (terminated or truncated):
+            raise ValueError("value rollout done/terminal evidence mismatch")
         if after_feasible != (conflicts_after == 0):
             raise ValueError("value rollout step feasibility mismatch")
         if after_feasible and not after_done:
             raise ValueError("value rollout feasible step is not terminal")
         if step_index < len(steps) and after_done:
             raise ValueError("value rollout continues after a terminal step")
+        step_agents = _agent_ids(
+            step.get("agents"), agent_count=int(state_plan["agent_count"])
+        )
+        repair_order = _agent_ids(
+            step.get("repair_order"),
+            agent_count=int(state_plan["agent_count"]),
+            allow_empty=True,
+        )
+        if step_agents is None or repair_order is None:
+            raise ValueError("value rollout step neighborhood evidence is invalid")
         replan_success = step.get("replan_success")
         if not isinstance(replan_success, bool):
             raise ValueError("value rollout step lacks replan-success evidence")
@@ -727,18 +882,41 @@ def validate_value_rollout(
         )
         if outcome != expected_outcome:
             raise ValueError("value rollout repair outcome mismatch")
+        if repair_order:
+            if set(repair_order) != set(step_agents):
+                raise ValueError("value rollout repair order differs from neighborhood")
+        elif replan_success or outcome != "hard_failure":
+            raise ValueError(
+                "value rollout empty repair order is only valid for a hard failure"
+            )
 
         expected_seed = _paired_seed(initial_repair, trial_index, step_index)
         action = step.get("action")
         if not isinstance(action, dict):
             raise ValueError("value rollout step action is missing")
-        if int(action.get("pp_random_seed", -1)) != expected_seed:
+        if (
+            not _strict_nonnegative_int(action.get("random_seed"))
+            or action.get("random_seed") != expected_seed
+            or not _strict_nonnegative_int(action.get("pp_random_seed"))
+            or action.get("pp_random_seed") != expected_seed
+        ):
             raise ValueError("value rollout PP seed mismatch")
+        if step.get("requested_pp_seed") != expected_seed:
+            raise ValueError("value rollout requested PP seed mismatch")
+        if step.get("applied_pp_seed") != (
+            expected_seed if repair_order else -1
+        ):
+            raise ValueError("value rollout applied PP seed mismatch")
         if step_index == 1:
             if (
                 str(step.get("route")) != "explicit_first_action"
                 or str(action.get("mode")) != "explicit_neighborhood"
-                or list(map(int, action.get("agents", ()))) != expected_agents
+                or _agent_ids(
+                    action.get("agents"),
+                    agent_count=int(state_plan["agent_count"]),
+                )
+                != expected_agents
+                or step_agents != expected_agents
             ):
                 raise ValueError("value rollout first action mismatch")
         elif (
@@ -764,12 +942,17 @@ def validate_value_rollout(
         if not isinstance(low_level, dict):
             raise ValueError("value rollout step low-level metrics are missing")
         for name in ("generated", "expanded", "reopened", "runs"):
-            value = int(low_level.get(name, -1))
-            if value < 0:
-                raise ValueError("value rollout low-level metric is negative")
+            value = low_level.get(name)
+            if not _strict_nonnegative_int(value):
+                raise ValueError("value rollout low-level metric is invalid")
             low_level_totals[name] += value
 
-    if trajectory != list(map(int, row.get("conflict_trajectory", ()))):
+    stored_trajectory = row.get("conflict_trajectory")
+    if (
+        not isinstance(stored_trajectory, list)
+        or any(not _strict_nonnegative_int(value) for value in stored_trajectory)
+        or trajectory != stored_trajectory
+    ):
         raise ValueError("value rollout stored conflict trajectory mismatch")
     if _stored_fingerprint(
         row.get("final_fingerprint"), field="final fingerprint"
@@ -780,15 +963,24 @@ def validate_value_rollout(
     ) != previous_repair:
         raise ValueError("value rollout final repair fingerprint mismatch")
     final_conflicts = trajectory[-1]
-    if int(row.get("final_conflicts", -1)) != final_conflicts:
+    if not _strict_nonnegative_int(row.get("final_conflicts")) or row.get(
+        "final_conflicts"
+    ) != final_conflicts:
         raise ValueError("value rollout final conflicts mismatch")
-    if int(row.get("conflict_reduction", 0)) != (
-        initial_conflicts - final_conflicts
+    total_reduction = row.get("conflict_reduction")
+    if (
+        isinstance(total_reduction, bool)
+        or not isinstance(total_reduction, int)
+        or total_reduction != initial_conflicts - final_conflicts
     ):
         raise ValueError("value rollout total conflict reduction mismatch")
-    if int(row.get("repair_iterations", -1)) != len(steps):
+    if not _strict_nonnegative_int(row.get("repair_iterations")) or row.get(
+        "repair_iterations"
+    ) != len(steps):
         raise ValueError("value rollout repair iteration count mismatch")
-    if int(row.get("continuation_iterations", -1)) != max(0, len(steps) - 1):
+    if not _strict_nonnegative_int(row.get("continuation_iterations")) or row.get(
+        "continuation_iterations"
+    ) != max(0, len(steps) - 1):
         raise ValueError("value rollout continuation count mismatch")
 
     feasible = final_conflicts == 0
@@ -860,7 +1052,9 @@ def validate_value_rollout(
     if not isinstance(low_level, dict):
         raise ValueError("value rollout low-level summary is missing")
     for name in ("generated", "expanded", "reopened", "runs"):
-        if int(low_level.get(name, -1)) != int(low_level_totals[name]):
+        if not _strict_nonnegative_int(low_level.get(name)) or low_level.get(
+            name
+        ) != int(low_level_totals[name]):
             raise ValueError(f"value rollout low-level {name} mismatch")
 
 

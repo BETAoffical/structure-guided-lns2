@@ -42,7 +42,7 @@ Explorer 默认隐藏但必须保留：
 | `neighborhood_candidates.py` | 候选去重、代表邻域和确定性 seed。 |
 | `context_audit.py` | 仅保留旧 sklearn pickle 所需的 `PairwiseModel` 兼容类。 |
 | `compact_controller_model.py` | 紧凑 portable tree bundle 导出和读取。 |
-| `stall_guard.py`、`stalled_state_probe.py` | stall-safe 判定与诊断。 |
+| `stall_guard.py`、`stall_shadow.py`、`stall_oracle.py`、`stalled_state_probe.py` | 旧 stall-safe、只观察停滞判定与同状态 Oracle 诊断。 |
 | `closed_loop_trace_storage.py`、`closed_loop_trace_conversion.py` | 紧凑 trace 写入与迁移。 |
 | `closed_loop_confirmation_analysis.py` | 同族闭环分析。 |
 | `movingai_ood_confirmation.py` | 标准 MovingAI OOD 分析。 |

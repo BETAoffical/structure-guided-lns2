@@ -13,7 +13,6 @@ import importlib
 import importlib.metadata
 import json
 import math
-import os
 import platform
 import statistics
 import tempfile
@@ -22,6 +21,32 @@ from typing import Any, Iterable
 
 
 PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v1"
+
+
+def strict_nonnegative_int(value: Any) -> bool:
+    """Return whether *value* is a non-boolean, non-negative integer."""
+
+    return type(value) is int and value >= 0
+
+
+def strict_bool(value: Any, *, field: str) -> bool:
+    """Return a JSON boolean while rejecting truthy substitutes."""
+
+    if type(value) is not bool:
+        raise ValueError(f"{field} must be boolean")
+    return value
+
+
+def strict_int(
+    value: Any, *, field: str, minimum: int | None = 0
+) -> int:
+    """Return a JSON integer while rejecting booleans and numeric coercion."""
+
+    if type(value) is not int:
+        raise ValueError(f"{field} must be an integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{field} must be at least {minimum}")
+    return value
 
 
 def mean(values: Iterable[float | int | bool]) -> float:
@@ -325,13 +350,6 @@ def write_json(path: Path, value: Any) -> None:
     )
 
 
-def write_jsonl(path: Path, values: Iterable[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as stream:
-        for value in values:
-            stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
-
-
 def atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     materialized = list(rows)
     if not materialized:
@@ -357,14 +375,6 @@ def atomic_write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-
-
-def append_jsonl_fsync(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as stream:
-        stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
-        stream.flush()
-        os.fsync(stream.fileno())
 
 
 def resolve_within(root: Path, relative: str) -> Path:
@@ -421,10 +431,6 @@ def episode_id(row: dict[str, Any], solver_seed: int, policy: str) -> str:
     return f"{row['task_id']}__seed_{solver_seed:04d}__{policy}"
 
 
-def action_family(action: dict[str, Any]) -> str:
-    return f"{action['heuristic']}:{int(action['neighborhood_size'])}"
-
-
 def select_rows_by_task_id(
     rows: list[dict[str, Any]], task_ids: list[str] | None
 ) -> list[dict[str, Any]]:
@@ -440,9 +446,7 @@ def select_rows_by_task_id(
 
 __all__ = [
     "PRODUCER_IDENTITY_SCHEMA",
-    "action_family",
     "add_categorical_feature",
-    "append_jsonl_fsync",
     "atomic_write_csv",
     "contained_file",
     "config_producer_fingerprint",
@@ -464,8 +468,10 @@ __all__ = [
     "state_storage_id",
     "state_groups",
     "standard_error",
+    "strict_bool",
+    "strict_int",
+    "strict_nonnegative_int",
     "trial_job_id",
     "validate_producer_identity",
     "write_json",
-    "write_jsonl",
 ]

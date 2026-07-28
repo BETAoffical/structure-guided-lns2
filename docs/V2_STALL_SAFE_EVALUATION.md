@@ -17,14 +17,22 @@ The guard is configured by `configs/v2_stall_guard_v1.json`. `state_revision` is
 the native environment increments it after failed attempts too. The trace therefore records both the
 unmodified model winner and the final guarded choice, cap, blacklist, route, and guard overhead.
 
-## Required staged evaluation
+## Historical staged evaluation (retired)
 
-First run the same-state probe documented in the README. The guard should proceed only if a smaller
-candidate or Adaptive improves PP success by at least 25 percentage points, or if rank 1 never reduces
-conflicts while an alternative reduces them in at least two of eight paired trials.
+The original study used a one-step same-state gate: a smaller candidate or
+Adaptive had to improve PP success by at least 25 percentage points, or reduce
+conflicts in at least two of eight attempts when rank 1 never did. That gate is
+retired. The preserved v1 probe did not bind independent low-level PP
+seed/order evidence and did not cover the full unique candidate pool, so its
+historical `passed=true` result is descriptive only.
 
-If the probe passes, run the single target episode with an unlimited repair count and a 600-second wall
-clock budget:
+Do not use that result to claim `selector_failure` or to start a new promotion
+run. New investigations must use the full-pool paired Oracle workflow in
+`docs/EXPERIMENT_LESSONS.md`; a guard may proceed only after that audit produces
+the required classification.
+
+The following command records the historical follow-up protocol. It is retained
+for reproducibility and is not an instruction to promote `v2-stall-safe`:
 
 ```bash
 python3 scripts/run_lns2_tradeoff_evaluation.py \

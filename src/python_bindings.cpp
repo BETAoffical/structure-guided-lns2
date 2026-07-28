@@ -448,6 +448,8 @@ public:
 
     py::dict reset(int seed)
     {
+        if (seed < 0)
+            throw py::value_error("reset seed must be non-negative");
         const auto reset_started = DiagnosticClock::now();
         const auto setup_started = DiagnosticClock::now();
         ProcessGlobalRngState& rng_state = processGlobalRngState();
@@ -493,6 +495,68 @@ public:
         last_reset_timings = py::dict();
         last_reset_timings["agent_and_solver_setup_seconds"] = setup_seconds;
         last_reset_timings["initial_solution_seconds"] = initial_solution_seconds;
+        last_reset_timings["state_snapshot_seconds"] = state_snapshot_seconds;
+        last_reset_timings["state_to_python_seconds"] = state_to_python_seconds;
+        last_reset_timings["reset_total_seconds"] = diagnosticSeconds(reset_started);
+        return observation;
+    }
+
+    py::dict resetPaths(const vector<vector<int>>& paths, int seed)
+    {
+        if (seed < 0)
+            throw py::value_error("restore seed must be non-negative");
+        const auto reset_started = DiagnosticClock::now();
+        // Reject malformed input before replacing a valid live episode.  The
+        // native restore repeats this check as the C++ API's own contract.
+        InitLNS::validateRestoredPaths(*instance, paths);
+        const auto setup_started = DiagnosticClock::now();
+        ProcessGlobalRngState& rng_state = processGlobalRngState();
+        std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
+        double setup_seconds = 0.0;
+        double restore_seconds = 0.0;
+        double state_snapshot_seconds = 0.0;
+        RepairState state;
+        bool rng_touched = false;
+        try
+        {
+            solver.reset();
+            agents.clear();
+            proposal_since_step = false;
+            state_revision = 0;
+            const int count = instance->getDefaultNumberOfAgents();
+            if ((int)agents.capacity() < count)
+                agents.reserve(count);
+            for (int id = 0; id < count; id++)
+                agents.emplace_back(*instance, id, use_sipp);
+            solver.reset(new InitLNS(*instance, agents, time_limit, replan_algorithm,
+                                     destroy_strategy, neighborhood_size, screen,
+                                     nullptr, nullptr, max_repair_iterations));
+            setup_seconds = diagnosticSeconds(setup_started);
+            const auto restore_started = DiagnosticClock::now();
+            solver->restorePaths(paths);
+            restore_seconds = diagnosticSeconds(restore_started);
+            rng_touched = true;
+            srand(seed);
+            claimRngOwnership(rng_state);
+            state_revision = 1;
+            const auto snapshot_started = DiagnosticClock::now();
+            state = solver->getRepairState();
+            state_snapshot_seconds = diagnosticSeconds(snapshot_started);
+        }
+        catch (...)
+        {
+            if (rng_touched)
+                invalidateRngOwnership(rng_state);
+            throw;
+        }
+        rng_lock.unlock();
+        const auto export_started = DiagnosticClock::now();
+        py::dict observation = stateToPython(state, context);
+        const double state_to_python_seconds = diagnosticSeconds(export_started);
+        last_reset_timings = py::dict();
+        last_reset_timings["agent_and_solver_setup_seconds"] = setup_seconds;
+        last_reset_timings["initial_solution_seconds"] = 0.0;
+        last_reset_timings["path_restore_seconds"] = restore_seconds;
         last_reset_timings["state_snapshot_seconds"] = state_snapshot_seconds;
         last_reset_timings["state_to_python_seconds"] = state_to_python_seconds;
         last_reset_timings["reset_total_seconds"] = diagnosticSeconds(reset_started);
@@ -584,6 +648,55 @@ public:
             binding_total_seconds - solver_call_seconds - state_snapshot_seconds -
                 state_to_python_seconds - metrics_to_python_seconds);
         return result;
+    }
+
+    py::dict restorePaths(const vector<vector<int>>& paths, int seed)
+    {
+        if (!solver)
+            throw std::runtime_error(
+                "reset() must be called before restore_paths()");
+        if (seed < 0)
+            throw py::value_error("restore seed must be non-negative");
+        const auto reset_started = DiagnosticClock::now();
+        InitLNS::validateRestoredPaths(*instance, paths);
+        ProcessGlobalRngState& rng_state = processGlobalRngState();
+        std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
+        double restore_seconds = 0.0;
+        double state_snapshot_seconds = 0.0;
+        RepairState state;
+        bool rng_touched = false;
+        try
+        {
+            const auto restore_started = DiagnosticClock::now();
+            solver->restorePaths(paths);
+            restore_seconds = diagnosticSeconds(restore_started);
+            rng_touched = true;
+            srand(seed);
+            claimRngOwnership(rng_state);
+            proposal_since_step = false;
+            state_revision++;
+            const auto snapshot_started = DiagnosticClock::now();
+            state = solver->getRepairState();
+            state_snapshot_seconds = diagnosticSeconds(snapshot_started);
+        }
+        catch (...)
+        {
+            if (rng_touched)
+                invalidateRngOwnership(rng_state);
+            throw;
+        }
+        rng_lock.unlock();
+        const auto export_started = DiagnosticClock::now();
+        py::dict observation = stateToPython(state, context);
+        const double state_to_python_seconds = diagnosticSeconds(export_started);
+        last_reset_timings = py::dict();
+        last_reset_timings["agent_and_solver_setup_seconds"] = 0.0;
+        last_reset_timings["initial_solution_seconds"] = 0.0;
+        last_reset_timings["path_restore_seconds"] = restore_seconds;
+        last_reset_timings["state_snapshot_seconds"] = state_snapshot_seconds;
+        last_reset_timings["state_to_python_seconds"] = state_to_python_seconds;
+        last_reset_timings["reset_total_seconds"] = diagnosticSeconds(reset_started);
+        return observation;
     }
 
     py::dict propose(const py::dict& action_value)
@@ -906,6 +1019,10 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("use_sipp") = true, py::arg("max_repair_iterations") = 0,
              py::arg("screen") = 0, py::arg("context") = py::none())
         .def("reset", &LNS2RepairEnv::reset, py::arg("seed") = 0)
+        .def("reset_paths", &LNS2RepairEnv::resetPaths,
+             py::arg("paths"), py::arg("seed") = 0)
+        .def("restore_paths", &LNS2RepairEnv::restorePaths,
+             py::arg("paths"), py::arg("seed") = 0)
         .def("propose", &LNS2RepairEnv::propose, py::arg("action"))
         .def("propose_batch", &LNS2RepairEnv::proposeBatch, py::arg("actions"))
         .def("propose_batch_compact", &LNS2RepairEnv::proposeBatchCompact,

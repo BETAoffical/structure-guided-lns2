@@ -20,7 +20,7 @@ RepairState terminalState(const Instance& instance, const LNS& solver, bool succ
     state.done = true;
     state.rows = instance.num_of_rows;
     state.cols = instance.num_of_cols;
-    state.sum_of_costs = solver.sum_of_costs;
+    state.sum_of_costs = 0;
     state.runtime = solver.runtime;
     for (int location = 0; location < instance.map_size; location++)
         state.obstacles.push_back(instance.isObstacle(location) ? 1 : 0);
@@ -33,6 +33,8 @@ RepairState terminalState(const Instance& instance, const LNS& solver, bool succ
         value.shortest_path_cost =
             agent.path_planner->my_heuristic[agent.path_planner->start_location];
         value.path_cost = agent.path.empty() ? -1 : (int)agent.path.size() - 1;
+        if (value.path_cost >= 0)
+            state.sum_of_costs += value.path_cost;
         value.delay = agent.path.empty() ? -1 : agent.getNumOfDelays();
         for (const auto& entry : agent.path)
             value.path.push_back(entry.location);

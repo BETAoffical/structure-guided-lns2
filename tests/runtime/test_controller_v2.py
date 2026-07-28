@@ -87,6 +87,7 @@ class ControllerV2Tests(unittest.TestCase):
             (
                 "v1-full",
                 "v2-full",
+                "v2-stall-shadow",
                 "v2-stall-safe",
                 "v2-repair-aware",
                 "v2-critical",
@@ -712,6 +713,194 @@ class ControllerV2Tests(unittest.TestCase):
         )
         self.assertGreater(
             result["summary"]["controller_totals"]["realized_feature_seconds"], 0
+        )
+
+    def test_v2_stall_shadow_records_trigger_without_changing_v2_action(self) -> None:
+        initial = make_state()
+        _refresh_conflicts(initial)
+        solved = copy.deepcopy(initial)
+        solved["conflict_edges"] = []
+        solved["num_of_colliding_pairs"] = 0
+        solved["feasible"] = True
+        solved["done"] = True
+
+        class Environment:
+            def __init__(self) -> None:
+                self.index = 0
+
+            def reset(self, seed: int) -> dict:
+                return copy.deepcopy(initial)
+
+            def step(self, action: dict) -> dict:
+                if action.get("mode") != "explicit_neighborhood" or list(
+                    action.get("agents", [])
+                ) != [0, 1, 2, 3]:
+                    raise AssertionError(f"stall shadow changed v2 action: {action}")
+                self.index += 1
+                after = copy.deepcopy(solved if self.index == 4 else initial)
+                after["iteration"] = self.index
+                after["low_level"] = {
+                    **dict(after["low_level"]),
+                    "generated": int(after["low_level"]["generated"])
+                    + self.index,
+                    "runs": int(after["low_level"]["runs"]) + 1,
+                }
+                seed = int(action["random_seed"])
+                return {
+                    "observation": after,
+                    "metrics": {
+                        "action_valid": True,
+                        "neighborhood": [0, 1, 2, 3],
+                        "requested_random_seed": seed,
+                        "repair_order": [0, 1, 2, 3],
+                        "replan_success": True,
+                        "conflicts_before": int(
+                            initial["num_of_colliding_pairs"]
+                        ),
+                        "conflicts_after": int(after["num_of_colliding_pairs"]),
+                    },
+                    "terminated": bool(after["feasible"]),
+                    "truncated": False,
+                }
+
+        class FeatureEngine:
+            def __init__(self, state: dict, **_kwargs: object) -> None:
+                self.backend = "fixture"
+                self.last_prepare_metrics = {"state_analysis_seconds": 0.0}
+                self.last_shadow_rows: dict[str, list[dict]] = {}
+
+            def prepare(self, state: dict, *, changed_agents: list[int]) -> dict:
+                return {"state_analysis_seconds": 0.0}
+
+            def realized_rows(
+                self, candidates: list[dict], *, state_hash: str
+            ) -> tuple[list[dict], dict]:
+                return (
+                    [
+                        {
+                            "candidate_id": candidate["candidate_id"],
+                            "candidate_key": candidate["candidate_id"],
+                            "features": {"realized_dynamic": {}},
+                        }
+                        for candidate in candidates
+                    ],
+                    {"realized_feature_seconds": 0.0},
+                )
+
+        candidate = {
+            "candidate_id": "base",
+            "agents": [0, 1, 2, 3],
+            "actual_size": 4,
+            "selection_families": ["target:4"],
+            "proposal_count_by_family": {"target:4": 1},
+            "proposal_seeds": [10],
+            "seed_agents": [0],
+        }
+
+        def generated(*_args: object, **_kwargs: object) -> tuple[list[dict], dict]:
+            return (
+                [copy.deepcopy(candidate)],
+                {
+                    "proposal_count": 1,
+                    "candidate_count": 1,
+                    "proposal_seconds": 0.0,
+                    "candidate_generation_seconds": 0.0,
+                    "state_check_seconds": 0.0,
+                    "state_check_fingerprint_seconds": 0.0,
+                    "state_check_backend": "fixture",
+                    "full_state_verified": True,
+                    "state_revision": 1,
+                    "backend": "fixture",
+                },
+            )
+
+        config = json.loads(
+            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 1,
+                "output_root": directory,
+                "run_fingerprint": "stall-shadow-run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 5,
+                "metric_iteration_budget": 5,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                "model_registration": config["model_registration"],
+                "controller": "v2-stall-shadow",
+                "stall_shadow_config": json.loads(
+                    (
+                        PROJECT_ROOT
+                        / "configs"
+                        / "v2_stall_shadow_v2.json"
+                    ).read_text(encoding="utf-8")
+                ),
+                "feature_backend": "python",
+                "controller_bundle": str(
+                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2"
+                ),
+                "feature_shadow_validation": False,
+                "proposal_state_verification": "always",
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=Environment(),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    FeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generated,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.score_online_candidates",
+                    return_value=(0, [1.0], 0.0),
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            self.assertEqual(result["status"], "ok", result.get("error"))
+            events = read_trace_events(Path(directory) / result["trace_file"])
+
+        transitions = [row for row in events if row.get("event") == "transition"]
+        self.assertEqual(len(transitions), 4)
+        self.assertEqual(
+            transitions[3]["controller"]["stall_shadow"]["triggered_thresholds"],
+            [3],
+        )
+        self.assertTrue(
+            all(
+                row["controller"]["stall_shadow"]["action_preserved"]
+                for row in transitions
+            )
+        )
+        summary = result["summary"]["stall_shadow"]
+        self.assertEqual(summary["action_override_count"], 0)
+        self.assertEqual(
+            summary["thresholds"]["3"]["premature_trigger_count"], 1
         )
 
     def test_v2_repair_aware_reuses_the_unchanged_state_pool(self) -> None:
