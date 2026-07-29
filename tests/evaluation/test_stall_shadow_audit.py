@@ -7,7 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from experiments.stall_shadow import StallShadowState, load_stall_shadow_config
-from experiments.stall_shadow_audit import audit_stall_shadow_collection
+from experiments.stall_shadow_audit import (
+    _compare_transition_prefix,
+    audit_stall_shadow_collection,
+)
 
 
 RAW_CONFIG = {
@@ -72,6 +75,49 @@ def _events() -> list[dict]:
 
 
 class StallShadowAuditTests(unittest.TestCase):
+    def test_v2_common_prefix_ignores_only_a_legal_budget_length_difference(self) -> None:
+        def transition(index: int, *, truncated: bool = False) -> dict:
+            return {
+                "event": "transition",
+                "decision_index": index,
+                "before_fingerprint": f"before-{index}",
+                "after_fingerprint": f"after-{index}",
+                "action": {"mode": "explicit_neighborhood", "agents": [1, 2]},
+                "low_level_delta": {"generated": index},
+                "metrics": {"conflicts_before": 2, "conflicts_after": 1},
+                "controller": {
+                    "candidate_pool": [{"candidate_id": "winner", "score": 2.0}],
+                    "base_selected_candidate_id": "winner",
+                    "selected_candidate_id": "winner",
+                    "base_selected_score": 2.0,
+                    "selected_score": 2.0,
+                },
+                "truncated": truncated,
+            }
+
+        reference = [transition(0), transition(1), transition(2)]
+        shadow = [transition(0), transition(1, truncated=True)]
+
+        report = _compare_transition_prefix(
+            reference,
+            shadow,
+            reference_external_timeout=True,
+            shadow_external_timeout=True,
+        )
+
+        self.assertTrue(report["passed"])
+        self.assertTrue(report["budget_boundary_length_difference"])
+        self.assertEqual(report["candidate_score_comparison_count"], 2)
+        shadow[0]["action"]["agents"] = [3, 4]
+        mismatch = _compare_transition_prefix(
+            reference,
+            shadow,
+            reference_external_timeout=True,
+            shadow_external_timeout=True,
+        )
+        self.assertFalse(mismatch["passed"])
+        self.assertEqual(mismatch["semantic_mismatch_count"], 1)
+
     def _source(self, directory: str) -> tuple[Path, Path]:
         root = Path(directory) / "source"
         output = Path(directory) / "report"
@@ -109,11 +155,17 @@ class StallShadowAuditTests(unittest.TestCase):
                 return_value=(root / "trace", _events(), None),
             ):
                 report = audit_stall_shadow_collection(root, output)
+            trigger_rows = (output / "stall_shadow_triggers.csv").read_text(
+                encoding="utf-8"
+            )
         self.assertEqual(report["most_conservative_passing_threshold"], 1)
         self.assertTrue(report["shadow_integrity_passed"])
         self.assertFalse(report["deployment_promoted"])
         self.assertEqual(report["decision"], "shadow_candidate_threshold_found")
         self.assertEqual(report["expected_episode_count"], 1)
+        self.assertEqual(report["trigger_evidence_count"], 1)
+        self.assertIn("confirmed_stall", trigger_rows)
+        self.assertIn("trigger_decision_index", trigger_rows)
 
     def test_rejects_tampered_runtime_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -133,6 +185,79 @@ class StallShadowAuditTests(unittest.TestCase):
             run = json.loads((root / "run_config.json").read_text(encoding="utf-8"))
             run["configuration"]["cohort_job_keys_override"].append(["missing", 1])
             (root / "run_config.json").write_text(json.dumps(run), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "registered cohort"):
+                audit_stall_shadow_collection(root, output)
+
+    def test_accepts_complete_qualification_registered_cohort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, output = self._source(directory)
+            run = json.loads((root / "run_config.json").read_text(encoding="utf-8"))
+            run["configuration"]["cohort_job_keys_override"] = None
+            (root / "run_config.json").write_text(json.dumps(run), encoding="utf-8")
+            (root / "qualification_report.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "lns2.closed_loop_confirmation.v1",
+                        "decision": "eligible_for_closed_loop",
+                        "passed": True,
+                        "valid_count": 1,
+                        "expected_reset_count": 1,
+                        "incomplete_reset_count": 0,
+                        "inconsistent_initial_state_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "qualification_manifest.jsonl").write_text(
+                json.dumps(
+                    {"status": "ok", "task_id": "task", "solver_seed": 1}
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with patch(
+                "experiments.stall_shadow_audit.validate_manifest_trace",
+                return_value=(root / "trace", _events(), None),
+            ):
+                report = audit_stall_shadow_collection(root, output)
+        self.assertEqual(report["cohort_source"], "qualification_report")
+        self.assertEqual(report["expected_episode_count"], 1)
+
+    def test_rejects_incomplete_qualification_registered_cohort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, output = self._source(directory)
+            run = json.loads((root / "run_config.json").read_text(encoding="utf-8"))
+            run["configuration"]["cohort_job_keys_override"] = None
+            (root / "run_config.json").write_text(json.dumps(run), encoding="utf-8")
+            (root / "qualification_report.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "lns2.closed_loop_confirmation.v1",
+                        "decision": "eligible_for_closed_loop",
+                        "passed": True,
+                        "valid_count": 2,
+                        "expected_reset_count": 2,
+                        "incomplete_reset_count": 0,
+                        "inconsistent_initial_state_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "qualification_manifest.jsonl").write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in (
+                        {"status": "ok", "task_id": "task", "solver_seed": 1},
+                        {
+                            "status": "ok",
+                            "task_id": "missing",
+                            "solver_seed": 1,
+                        },
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             with self.assertRaisesRegex(ValueError, "registered cohort"):
                 audit_stall_shadow_collection(root, output)
 

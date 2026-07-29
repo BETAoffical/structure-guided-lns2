@@ -23,6 +23,26 @@ from typing import Any, Iterable
 PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v1"
 
 
+def _native_filesystem_path(path: Path) -> Path:
+    """Return a Windows extended path when the absolute path is long.
+
+    The experiment outputs deliberately use descriptive episode names.  A
+    valid contained trace can therefore exceed the legacy Win32 MAX_PATH even
+    though the same file is readable from WSL.  Keep all containment checks on
+    the ordinary resolved path, then use the extended prefix only for native
+    filesystem operations.
+    """
+
+    if platform.system() != "Windows" or not path.is_absolute():
+        return path
+    text = str(path)
+    if text.startswith("\\\\?\\") or len(text) < 248:
+        return path
+    if text.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + text.lstrip("\\"))
+    return Path("\\\\?\\" + text)
+
+
 def strict_nonnegative_int(value: Any) -> bool:
     """Return whether *value* is a non-boolean, non-negative integer."""
 
@@ -105,16 +125,17 @@ def contained_file(root: Path, value: Any, *, field: str) -> Path:
     path = root
     for part in relative.parts:
         path /= part
-        if path.is_symlink():
+        if _native_filesystem_path(path).is_symlink():
             raise ValueError(f"{field} must not traverse a symbolic link")
     resolved = path.resolve()
     try:
         resolved.relative_to(root)
     except ValueError as error:
         raise ValueError(f"{field} escapes its collection root: {value}") from error
-    if not resolved.is_file():
+    filesystem_path = _native_filesystem_path(resolved)
+    if not filesystem_path.is_file():
         raise FileNotFoundError(f"{field} does not exist: {value}")
-    return resolved
+    return filesystem_path
 
 
 def sha256_file(path: Path) -> str:

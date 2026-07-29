@@ -7,6 +7,7 @@ from experiments.stall_oracle import classify_stall_oracle_trials
 from experiments.stalled_state_probe import (
     STALLED_STATE_PROBE_SCHEMA,
     STALLED_STATE_PROBE_VERSION,
+    TRIAL_STATE_RESTORE,
     paired_probe_seed,
 )
 
@@ -41,6 +42,11 @@ def _trial(
         "after_fingerprint": f"full-after-{branch}-{trial}" if escaped else "full-before",
         "after_repair_fingerprint": after_repair,
         "replay_fingerprint_match": True,
+        "trial_state_restore": TRIAL_STATE_RESTORE,
+        "source_before_fingerprint": "full-before",
+        "restored_before_fingerprint": "restored-before",
+        "full_state_fingerprint_match": "False",
+        "repair_state_fingerprint_match": "True",
         "replan_success": "True",
         "repair_outcome": "conflict_reduced" if escaped else "accepted_noop",
         "terminated": "False",
@@ -56,6 +62,39 @@ def _trial(
 
 
 class StallOracleTests(unittest.TestCase):
+    def test_official_reference_may_generate_different_neighborhoods(self) -> None:
+        rows = [
+            *[
+                _trial("winner", 1, trial, escaped=False, agents=[1, 2, 3, 4])
+                for trial in range(4)
+            ],
+        ]
+        for trial in range(4):
+            row = _trial(
+                "official_adaptive",
+                2,
+                trial,
+                escaped=trial == 0,
+                agents=[10 + trial, 20 + trial],
+            )
+            row.update(
+                {
+                    "branch_aliases": "official_adaptive",
+                    "branch_mode": "official",
+                    "candidate_id": None,
+                    "candidate_rank": None,
+                    "candidate_score": None,
+                }
+            )
+            rows.append(row)
+        report = classify_stall_oracle_trials(rows)
+        official = next(
+            row for row in report["branches"] if row["branch_mode"] == "official"
+        )
+        self.assertEqual(official["unique_actual_neighborhood_count"], 4)
+        self.assertIsNone(official["candidate_size"])
+        self.assertEqual(report["classification"], "candidate_pool_failure")
+
     def test_selector_failure_requires_stable_same_pool_alternative(self) -> None:
         rows = [
             *[

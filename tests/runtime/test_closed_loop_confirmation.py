@@ -1118,6 +1118,20 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             )
             validate_closed_loop_trace(trace, "run")
 
+            legacy_v1_events = json.loads(json.dumps(baseline))
+            legacy_v1_events[1]["timings"].pop("native_step_seconds", None)
+            legacy_v1_events[1]["timings"].pop(
+                "episode_runtime_delta_seconds", None
+            )
+            trace.write_text(
+                "".join(
+                    json.dumps(event, sort_keys=True) + "\n"
+                    for event in legacy_v1_events
+                ),
+                encoding="utf-8",
+            )
+            validate_closed_loop_trace(trace, "run")
+
             selection_events = json.loads(json.dumps(baseline))
             selection_events[1]["timings"]["neighborhood_selection_seconds"] = 1.0
             trace.write_text(
@@ -1311,6 +1325,13 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
 
     def test_wall_clock_episode_can_execute_more_than_one_hundred_repairs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
+            fingerprint_calls = 0
+
+            def counted_fingerprint(state: dict) -> str:
+                nonlocal fingerprint_calls
+                fingerprint_calls += 1
+                return state_fingerprint(state)
+
             job = {
                 "row": {
                     "split": "closed_loop",
@@ -1333,9 +1354,15 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 "stopping_rule": "wall-clock",
                 "proposal": {},
             }
-            with patch(
-                "experiments.closed_loop_confirmation._make_environment",
-                return_value=UnlimitedRepairEnvironment(),
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=UnlimitedRepairEnvironment(),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.state_fingerprint",
+                    side_effect=counted_fingerprint,
+                ),
             ):
                 result = _closed_loop_episode_worker(job)
         self.assertEqual(result["status"], "ok")
@@ -1343,6 +1370,12 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["repair_iterations"], 101)
         self.assertEqual(result["summary"]["stop_reason"], "success")
         self.assertIsNone(result["summary"]["fixed_budget_conflict_auc"])
+        # Trace encoding and transition-contract checks deliberately retain
+        # their own fingerprints.  The optimized loop performs three scans
+        # per state (initial plus 101 transitions), but no fourth scan at the
+        # next iteration boundary.  The previous implementation made 407
+        # calls for this fixture; the exact action-preserving cache makes 306.
+        self.assertEqual(fingerprint_calls, 3 * (101 + 1))
 
     def test_controller_stage_deadline_is_a_clean_wall_timeout(self) -> None:
         class DeadlineEnvironment:
@@ -1359,25 +1392,22 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         class ManualClock:
             def __init__(self) -> None:
                 self.value = 0.0
+                self.calls = 0
 
             def __call__(self) -> float:
+                self.calls += 1
+                # The episode performs initialization and one live budget
+                # check before reaching the controller-stage deadline.  The
+                # before-state fingerprint is now correctly reused from the
+                # previous after-state, so the test must not depend on a
+                # redundant fingerprint call to advance its fake clock.
+                if self.calls >= 17:
+                    self.value = 2.0
                 return self.value
 
         with tempfile.TemporaryDirectory() as directory:
             environment = DeadlineEnvironment()
             clock = ManualClock()
-            fingerprint_calls = 0
-
-            def controller_stage_fingerprint(state: dict) -> str:
-                nonlocal fingerprint_calls
-                fingerprint_calls += 1
-                result = state_fingerprint(state)
-                # The first call fingerprints the initial state. Advance the
-                # fake clock during the next pre-repair controller stage so
-                # the loop's first budget check has already passed.
-                if fingerprint_calls == 2:
-                    clock.value = 2.0
-                return result
 
             job = {
                 "row": {
@@ -1404,10 +1434,6 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 patch(
                     "experiments.closed_loop_confirmation._make_environment",
                     return_value=environment,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.state_fingerprint",
-                    side_effect=controller_stage_fingerprint,
                 ),
                 patch(
                     "experiments.closed_loop_confirmation.time.perf_counter",

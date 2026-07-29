@@ -38,6 +38,7 @@ from experiments.feature_schema_v2 import (
 from experiments.state_analysis import analyze_state, reconstruct_conflicts
 from experiments.online_feature_engine import OnlineFeatureEngine, _native_batch_function
 from experiments.repair_collection import state_fingerprint
+from experiments.stall_guard import repair_structure_fingerprint
 from experiments.v3_controller import V3ControllerBundle
 from tests.runtime.test_closed_loop_confirmation import make_candidate, make_state
 
@@ -880,6 +881,10 @@ class ControllerV2Tests(unittest.TestCase):
                     "experiments.closed_loop_confirmation.score_online_candidates",
                     return_value=(0, [1.0], 0.0),
                 ),
+                patch(
+                    "experiments.closed_loop_confirmation.repair_structure_fingerprint",
+                    wraps=repair_structure_fingerprint,
+                ) as repair_fingerprint,
             ):
                 result = _closed_loop_episode_worker(job)
             self.assertEqual(result["status"], "ok", result.get("error"))
@@ -902,6 +907,7 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(
             summary["thresholds"]["3"]["premature_trigger_count"], 1
         )
+        self.assertEqual(repair_fingerprint.call_count, 0)
 
     def test_v2_repair_aware_reuses_the_unchanged_state_pool(self) -> None:
         initial = make_state()

@@ -2121,15 +2121,6 @@ def validate_closed_loop_trace(
                 raise ClosedLoopTraceError("transition timings must be non-negative")
             if native_timing_schema is not None:
                 timing_metric_pairs = {
-                    "native_step_seconds": native_values[
-                        "native_step_seconds"
-                    ],
-                    "episode_runtime_delta_seconds": float(
-                        metrics.get(
-                            "episode_runtime_delta_seconds",
-                            metrics["step_runtime"],
-                        )
-                    ),
                     "native_neighborhood_generation_seconds": native_values[
                         "native_neighborhood_generation_seconds"
                     ],
@@ -2151,6 +2142,39 @@ def validate_closed_loop_trace(
                         )
                     ),
                 }
+                if native_timing_schema == REPAIR_TIMING_SCHEMA_V2:
+                    timing_metric_pairs.update(
+                        {
+                            "native_step_seconds": native_values[
+                                "native_step_seconds"
+                            ],
+                            "episode_runtime_delta_seconds": float(
+                                metrics["episode_runtime_delta_seconds"]
+                            ),
+                        }
+                    )
+                else:
+                    # Timing-v1 traces produced before the wall-clock
+                    # decomposition did not copy these two aggregate values
+                    # into event["timings"].  They remain fully represented
+                    # in the native metrics, so accept their absence while
+                    # still validating them when a later v1 producer included
+                    # the optional copies.
+                    optional_v1_pairs = {
+                        "native_step_seconds": native_values[
+                            "native_step_seconds"
+                        ],
+                        "episode_runtime_delta_seconds": float(
+                            metrics["step_runtime"]
+                        ),
+                    }
+                    timing_metric_pairs.update(
+                        {
+                            name: value
+                            for name, value in optional_v1_pairs.items()
+                            if name in numeric_timings
+                        }
+                    )
                 for name, expected_value in timing_metric_pairs.items():
                     if name not in numeric_timings:
                         raise ClosedLoopTraceError(
@@ -2814,6 +2838,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             initial_fingerprint_started = time.perf_counter()
             initial_fingerprint = state_fingerprint(state)
+            # The post-step fingerprint is also the next iteration's before
+            # fingerprint.  Keep the exact value instead of rescanning every
+            # agent path at the top of the next loop.  This changes neither the
+            # fingerprint definition nor any controller/random-seed semantics.
+            current_state_fingerprint = initial_fingerprint
             initial_fingerprint_seconds = (
                 time.perf_counter() - initial_fingerprint_started
             )
@@ -2943,6 +2972,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             v3_s3_history: list[dict[str, Any]] = []
             stateful_cache: dict[str, Any] | None = None
+            stall_shadow_repair_hash: str | None = None
             controller_stalled = False
             while not bool(state["done"]) and (
                 max_decisions <= 0 or len(conflicts) - 1 < max_decisions
@@ -2963,17 +2993,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 iteration_started = time.perf_counter()
                 before = state
                 before_fingerprint_started = time.perf_counter()
-                before_hash = state_fingerprint(before)
-                before_repair_hash = (
-                    repair_structure_fingerprint(before)
-                    if (
-                        repair_aware is not None
-                        or stall_shadow is not None
-                        or v3_state is not None
-                        or v3_s3_state is not None
-                    )
-                    else before_hash
-                )
+                before_hash = current_state_fingerprint
+                if (
+                    repair_aware is not None
+                    or v3_state is not None
+                    or v3_s3_state is not None
+                ):
+                    before_repair_hash = repair_structure_fingerprint(before)
+                elif stall_shadow is not None:
+                    if stall_shadow_repair_hash is None:
+                        # The regular state fingerprint is already available here.
+                        # Keep it as an opaque structural-state token and retain it
+                        # across accepted no-ops instead of scanning every path a
+                        # second time solely for shadow diagnostics.
+                        stall_shadow_repair_hash = before_hash
+                    before_repair_hash = stall_shadow_repair_hash
+                else:
+                    before_repair_hash = before_hash
                 before_fingerprint_seconds = (
                     time.perf_counter() - before_fingerprint_started
                 )
@@ -4140,21 +4176,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
 
                 after_fingerprint_started = time.perf_counter()
                 after_hash = state_fingerprint(state)
-                after_repair_hash = (
-                    repair_structure_fingerprint(state)
-                    if (
-                        repair_aware is not None
-                        or stall_shadow is not None
-                        or v3_state is not None
-                        or v3_s3_state is not None
-                    )
-                    else after_hash
-                )
-                state_fingerprint_seconds = before_fingerprint_seconds + (
-                    time.perf_counter() - after_fingerprint_started
-                ) + float(controller.get("state_check_fingerprint_seconds", 0.0))
-                if stall_guard is not None:
-                    guard_observe_started = time.perf_counter()
+                current_state_fingerprint = after_hash
+                repair_paths_changed = False
+                repair_conflict_graph_changed = False
+                repair_sum_of_costs_changed = False
+                if stall_guard is not None or stall_shadow is not None:
                     actual_agent_ids = set(map(int, actual))
                     before_selected_paths = {
                         int(agent["id"]): agent["path"]
@@ -4170,16 +4196,49 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         after_selected_paths
                     ) != actual_agent_ids:
                         raise RuntimeError(
-                            "stall guard could not compare every repaired agent path"
+                            "stall diagnostics could not compare every repaired "
+                            "agent path"
                         )
+                    repair_paths_changed = (
+                        before_selected_paths != after_selected_paths
+                    )
+                    repair_conflict_graph_changed = (
+                        before["conflict_edges"] != state["conflict_edges"]
+                    )
+                    repair_sum_of_costs_changed = int(
+                        before["sum_of_costs"]
+                    ) != int(state["sum_of_costs"])
+                repair_structure_changed = bool(
+                    repair_paths_changed
+                    or repair_conflict_graph_changed
+                    or repair_sum_of_costs_changed
+                )
+                if (
+                    repair_aware is not None
+                    or v3_state is not None
+                    or v3_s3_state is not None
+                ):
+                    after_repair_hash = repair_structure_fingerprint(state)
+                elif stall_shadow is not None:
+                    after_repair_hash = (
+                        after_hash
+                        if repair_structure_changed
+                        else before_repair_hash
+                    )
+                    stall_shadow_repair_hash = after_repair_hash
+                else:
+                    after_repair_hash = after_hash
+                state_fingerprint_seconds = before_fingerprint_seconds + (
+                    time.perf_counter() - after_fingerprint_started
+                ) + float(controller.get("state_check_fingerprint_seconds", 0.0))
+                if stall_guard is not None:
+                    guard_observe_started = time.perf_counter()
                     controller["stall_guard"] = stall_guard.observe(
                         after_fingerprint=after_hash,
                         replan_success=bool(metrics.get("replan_success")),
-                        paths_changed=before_selected_paths != after_selected_paths,
-                        conflict_graph_changed=before["conflict_edges"]
-                        != state["conflict_edges"],
-                        sum_of_costs_changed=int(before["sum_of_costs"])
-                        != int(state["sum_of_costs"]),
+                        paths_changed=repair_paths_changed,
+                        conflict_graph_changed=repair_conflict_graph_changed,
+                        sum_of_costs_changed=repair_sum_of_costs_changed,
                         actual_neighborhood_size=len(actual),
                     )
                     guard_observe_seconds = (
@@ -4729,7 +4788,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "budget_final_low_level": budget_final_low_level,
             }
             final_fingerprint_started = time.perf_counter()
-            final_fingerprint = state_fingerprint(state)
+            final_fingerprint = current_state_fingerprint
             final_fingerprint_seconds = time.perf_counter() - final_fingerprint_started
             summary["final_fingerprint_seconds"] = final_fingerprint_seconds
             finish_event = {

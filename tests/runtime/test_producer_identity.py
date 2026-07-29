@@ -1,17 +1,42 @@
 from __future__ import annotations
 
 import importlib.metadata
+import platform
+import shutil
 import tempfile
 import types
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from experiments._common import producer_identity
+from experiments._common import contained_file, producer_identity
 from experiments.run_output_guard import prepare_run_output
 
 
 class ProducerIdentityResumeTest(unittest.TestCase):
+    @unittest.skipUnless(
+        platform.system() == "Windows", "extended paths are Windows-specific"
+    )
+    def test_contained_file_supports_a_long_windows_output_path(self) -> None:
+        directory = tempfile.mkdtemp()
+        try:
+            root = Path(directory).resolve()
+            relative = Path(
+                *(f"descriptive-episode-segment-{index:02d}" for index in range(9)),
+                "trace.jsonl.gz",
+            )
+            ordinary = root / relative
+            self.assertGreater(len(str(ordinary)), 260)
+            extended = Path("\\\\?\\" + str(ordinary))
+            extended.parent.mkdir(parents=True)
+            extended.write_bytes(b"trace")
+
+            resolved = contained_file(root, relative.as_posix(), field="trace")
+
+            self.assertEqual(resolved.read_bytes(), b"trace")
+        finally:
+            shutil.rmtree("\\\\?\\" + directory)
+
     def test_required_package_must_have_a_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)

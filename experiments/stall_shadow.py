@@ -37,13 +37,15 @@ class StallShadowConfig:
     maximum_false_trigger_rate: float
     post_state_change_cooldown_decisions: int
     deployment_enabled: bool
+    trigger_basis: str = "all_no_progress"
+    rescue_rank_sequence: tuple[int, ...] = ()
 
     @property
     def fingerprint(self) -> str:
         return _fingerprint(self.payload())
 
     def payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema": STALL_SHADOW_SCHEMA,
             "schema_version": STALL_SHADOW_VERSION,
             "mode": "shadow",
@@ -58,6 +60,10 @@ class StallShadowConfig:
             ),
             "deployment_enabled": self.deployment_enabled,
         }
+        if self.trigger_basis != "all_no_progress" or self.rescue_rank_sequence:
+            payload["trigger_basis"] = self.trigger_basis
+            payload["rescue_rank_sequence"] = list(self.rescue_rank_sequence)
+        return payload
 
 
 def load_stall_shadow_config(
@@ -128,6 +134,24 @@ def load_stall_shadow_config(
         raise ValueError(
             "stall shadow v2 is diagnostic-only and cannot enable deployment"
         )
+    trigger_basis = str(raw.get("trigger_basis", "all_no_progress"))
+    if trigger_basis not in {"all_no_progress", "same_actual_neighborhood"}:
+        raise ValueError("stall shadow trigger_basis is unsupported")
+    raw_rescue_ranks = raw.get("rescue_rank_sequence", [])
+    if not isinstance(raw_rescue_ranks, list):
+        raise ValueError("stall shadow rescue ranks must be a list")
+    rescue_ranks = tuple(
+        _strict_int(rank, field="stall shadow rescue rank", minimum=2)
+        for rank in raw_rescue_ranks
+    )
+    if rescue_ranks and tuple(sorted(set(rescue_ranks))) != rescue_ranks:
+        raise ValueError("stall shadow rescue ranks must be unique and ascending")
+    if trigger_basis == "same_actual_neighborhood" and not rescue_ranks:
+        raise ValueError(
+            "same-neighborhood stall shadow requires rescue rank suggestions"
+        )
+    if trigger_basis == "all_no_progress" and rescue_ranks:
+        raise ValueError("legacy stall shadow cannot include rescue rank suggestions")
     return StallShadowConfig(
         unchanged_attempt_thresholds=thresholds,
         minimum_distinct_pp_attempts=distinct,
@@ -135,6 +159,8 @@ def load_stall_shadow_config(
         maximum_false_trigger_rate=false_rate,
         post_state_change_cooldown_decisions=cooldown,
         deployment_enabled=False,
+        trigger_basis=trigger_basis,
+        rescue_rank_sequence=rescue_ranks,
     )
 
 
@@ -287,6 +313,21 @@ class StallShadowState:
     def _distinct_attempt_count(self) -> int:
         return len({str(row["attempt_key"]) for row in self.unchanged_attempts})
 
+    def _trigger_evidence(self) -> tuple[int, list[str]]:
+        if self.config.trigger_basis == "all_no_progress":
+            return len(self.unchanged_attempts), []
+        attempts_by_neighborhood: dict[str, set[str]] = collections.defaultdict(set)
+        for row in self.unchanged_attempts:
+            attempts_by_neighborhood[str(row["neighborhood_key"])].add(
+                str(row["attempt_key"])
+            )
+        maximum = max(map(len, attempts_by_neighborhood.values()), default=0)
+        return maximum, sorted(
+            neighborhood
+            for neighborhood, attempts in attempts_by_neighborhood.items()
+            if len(attempts) == maximum and maximum > 0
+        )
+
     def before_selection(
         self,
         candidates: list[dict[str, Any]],
@@ -324,12 +365,13 @@ class StallShadowState:
             )
         cooldown_before = self.cooldown_remaining
         distinct_attempts = self._distinct_attempt_count()
+        trigger_measure, trigger_neighborhoods = self._trigger_evidence()
         triggered_now: list[int] = []
         if cooldown_before == 0:
             for threshold in self.config.unchanged_attempt_thresholds:
                 if (
                     threshold not in self.triggered_thresholds
-                    and len(self.unchanged_attempts) >= threshold
+                    and trigger_measure >= threshold
                     and distinct_attempts
                     >= self.config.minimum_distinct_pp_attempts
                 ):
@@ -340,6 +382,10 @@ class StallShadowState:
                             "threshold": threshold,
                             "decision_index": int(decision_index),
                             "observed_decisions": 0,
+                            "trigger_basis": self.config.trigger_basis,
+                            "trigger_neighborhood_keys": list(
+                                trigger_neighborhoods
+                            ),
                         }
                     )
                     self.totals[f"threshold_{threshold}_trigger_count"] += 1
@@ -352,7 +398,28 @@ class StallShadowState:
             "triggered_thresholds": list(triggered_now),
             "decision_index": int(decision_index),
             "cooldown_before": int(cooldown_before),
+            "rescue_suggestion_count": 0,
         }
+        suggested_rescue_candidates = [
+            {
+                "rank": int(candidate["rank"]),
+                "candidate_id": str(candidate["candidate_id"]),
+                "neighborhood_key": str(candidate["neighborhood_key"]),
+                "actual_size": int(candidate["actual_size"]),
+            }
+            for candidate in ranked
+            if triggered_now
+            and int(candidate["rank"]) in self.config.rescue_rank_sequence
+            and str(candidate["neighborhood_key"]) not in trigger_neighborhoods
+        ]
+        if suggested_rescue_candidates:
+            self.pending_selection["rescue_suggestion_count"] = len(
+                suggested_rescue_candidates
+            )
+            self.totals["rescue_suggestion_event_count"] += 1
+            self.totals["rescue_suggested_candidate_count"] += len(
+                suggested_rescue_candidates
+            )
         self.totals["decision_count"] += 1
         self.totals["cooldown_decision_count"] += int(cooldown_before > 0)
         return base_index, {
@@ -368,7 +435,11 @@ class StallShadowState:
             "unchanged_attempt_count_before": len(self.unchanged_attempts),
             "distinct_pp_attempt_count_before": distinct_attempts,
             "cooldown_remaining_before": cooldown_before,
+            "trigger_basis": self.config.trigger_basis,
+            "trigger_measure_before": trigger_measure,
+            "trigger_neighborhood_keys": trigger_neighborhoods,
             "triggered_thresholds": triggered_now,
+            "suggested_rescue_candidates": suggested_rescue_candidates,
         }
 
     def abort_selection(self) -> None:
@@ -393,6 +464,10 @@ class StallShadowState:
         self.cooldown_remaining = cooldown_before
         self.totals["decision_count"] -= 1
         self.totals["cooldown_decision_count"] -= int(cooldown_before > 0)
+        suggestion_count = int(self.pending_selection["rescue_suggestion_count"])
+        if suggestion_count:
+            self.totals["rescue_suggestion_event_count"] -= 1
+            self.totals["rescue_suggested_candidate_count"] -= suggestion_count
         self.pending_selection = None
 
     def _resolve_pending(self, outcome: str) -> list[dict[str, Any]]:
@@ -562,6 +637,12 @@ class StallShadowState:
             ),
             "longest_unchanged_streak": int(
                 self.totals["longest_unchanged_streak"]
+            ),
+            "rescue_suggestion_event_count": int(
+                self.totals["rescue_suggestion_event_count"]
+            ),
+            "rescue_suggested_candidate_count": int(
+                self.totals["rescue_suggested_candidate_count"]
             ),
             "thresholds": thresholds,
             "most_conservative_passing_threshold": None,

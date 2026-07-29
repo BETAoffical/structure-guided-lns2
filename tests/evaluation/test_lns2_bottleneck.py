@@ -844,6 +844,41 @@ class Lns2BottleneckTests(unittest.TestCase):
                 "native_step_seconds", validated_events[1]["timings"]
             )
 
+    def test_legacy_v1_negative_runtime_uses_authenticated_native_view(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_run_config(root, controller="v2-full", keys=[("task", 1)])
+            _write_manifest(root, controller="v2-full", keys=[("task", 1)])
+            manifest_path = root / "realized_dynamic_manifest.jsonl"
+            source = json.loads(manifest_path.read_text(encoding="utf-8"))
+            trace_path = root / source["trace_file"]
+            events = read_trace_events(trace_path)
+            transition = events[1]
+            transition["native_timing_schema"] = "lns2.repair_timing.v1"
+            transition["metrics"].pop("episode_runtime_delta_seconds")
+            transition["metrics"]["step_runtime"] = -0.25
+            transition["timings"].pop("episode_runtime_delta_seconds")
+            trace_path.write_text(
+                "".join(
+                    json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+                    for event in events
+                ),
+                encoding="utf-8",
+            )
+            trace_bytes = trace_path.read_bytes()
+            source["trace_bytes"] = len(trace_bytes)
+            source["trace_sha256"] = hashlib.sha256(trace_bytes).hexdigest()
+
+            _validated_trace, validated_events, _state_path = (
+                validate_manifest_trace(
+                    root,
+                    source,
+                    run_fingerprint="run-v2-full",
+                    expected_policy="realized_dynamic",
+                )
+            )
+            self.assertEqual(validated_events[1]["metrics"]["step_runtime"], -0.25)
+
     def test_manifest_evidence_rejects_trace_and_blob_symlinks(self) -> None:
         for evidence_kind in ("trace", "blob"):
             with self.subTest(evidence_kind=evidence_kind):

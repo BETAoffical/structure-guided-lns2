@@ -224,6 +224,50 @@ class StallShadowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be an integer"):
             _config(minimum_distinct_pp_attempts="2")
 
+    def test_legacy_config_payload_remains_compatible(self) -> None:
+        payload = _config().payload()
+        self.assertNotIn("trigger_basis", payload)
+        self.assertNotIn("rescue_rank_sequence", payload)
+
+    def test_same_neighborhood_trigger_suggests_ranked_rescue_only(self) -> None:
+        state = StallShadowState(
+            _config(
+                unchanged_attempt_thresholds=[3],
+                minimum_distinct_pp_attempts=3,
+                trigger_basis="same_actual_neighborhood",
+                rescue_rank_sequence=[2],
+            )
+        )
+        for decision, seed in enumerate((21, 22, 23)):
+            self._step(
+                state,
+                decision=decision,
+                before="same",
+                after="same",
+                replan_success=False,
+                seed=seed,
+            )
+        selected, diagnostic = state.before_selection(
+            CANDIDATES,
+            SCORES,
+            0,
+            before_fingerprint="same",
+            decision_index=3,
+        )
+        self.assertEqual(selected, 0)
+        self.assertEqual(diagnostic["trigger_basis"], "same_actual_neighborhood")
+        self.assertEqual(diagnostic["trigger_measure_before"], 3)
+        self.assertEqual(diagnostic["triggered_thresholds"], [3])
+        self.assertEqual(
+            [row["candidate_id"] for row in diagnostic["suggested_rescue_candidates"]],
+            ["backup"],
+        )
+        self.assertTrue(diagnostic["base_selection_preserved"])
+
+    def test_same_neighborhood_trigger_rejects_missing_rescue_ranks(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires rescue rank"):
+            _config(trigger_basis="same_actual_neighborhood")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -881,6 +881,47 @@ class V3S3PipelineTest(unittest.TestCase):
                 }
             )
 
+    def test_trace_replay_accepts_legacy_seeded_explicit_transition(self) -> None:
+        action = recorded_replay_action(
+            {
+                "action": {
+                    "mode": "explicit_neighborhood",
+                    "agents": [2, 5],
+                    "random_seed": 917,
+                },
+                "metrics": {
+                    "neighborhood": [2, 5],
+                    "repair_order": [5, 2],
+                    "requested_random_seed": 917,
+                },
+            }
+        )
+        self.assertEqual(
+            action,
+            {
+                "mode": "explicit_neighborhood",
+                "agents": [2, 5],
+                "random_seed": 917,
+            },
+        )
+
+    def test_trace_replay_rejects_legacy_explicit_seed_mismatch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "deterministic source evidence"):
+            recorded_replay_action(
+                {
+                    "action": {
+                        "mode": "explicit_neighborhood",
+                        "agents": [2, 5],
+                        "random_seed": 917,
+                    },
+                    "metrics": {
+                        "neighborhood": [2, 5],
+                        "repair_order": [5, 2],
+                        "requested_random_seed": 918,
+                    },
+                }
+            )
+
     def test_trace_replay_rejects_empty_recorded_neighborhood(self) -> None:
         with self.assertRaisesRegex(ValueError, "empty recorded neighborhood"):
             recorded_replay_action(

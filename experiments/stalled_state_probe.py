@@ -12,7 +12,6 @@ from experiments.closed_loop_confirmation import (
     feature_range_diagnostic,
     generate_online_candidates,
     score_online_candidates,
-    validate_closed_loop_trace,
 )
 from experiments._common import (
     atomic_write_csv as _write_csv,
@@ -20,11 +19,13 @@ from experiments._common import (
     strict_bool as _strict_bool,
 )
 from experiments.compact_controller_model import load_controller_bundle
+from experiments.lns2_bottleneck import validate_manifest_trace
 from experiments.online_feature_engine import OnlineFeatureEngine
 from experiments.repair_collection import (
     _fingerprint,
     _load_dataset_rows,
     _low_level_delta,
+    _make_environment,
     _plain,
     _read_json,
     _read_jsonl,
@@ -39,12 +40,14 @@ from experiments.stall_guard import repair_structure_fingerprint
 
 STALLED_STATE_PROBE_SCHEMA = "lns2.stalled_state_probe.v2"
 STALLED_STATE_PROBE_VERSION = 2
+TRIAL_STATE_RESTORE = "reset_paths-exact-repair-state-v1"
 STALLED_STATE_PROBE_PRODUCER_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
     "experiments/closed_loop_confirmation.py",
     "experiments/compact_controller_model.py",
     "experiments/feature_schema_v2.py",
+    "experiments/lns2_bottleneck.py",
     "experiments/neighborhood_candidates.py",
     "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
@@ -149,6 +152,19 @@ def _candidate_pool_signature(
     return sorted(signature, key=lambda row: row["candidate_id"])
 
 
+def _source_v2_selection_ids(controller: dict[str, Any]) -> tuple[str, str]:
+    """Return base/effective ids while accepting pre-reranker v2 traces."""
+
+    selected = str(controller.get("selected_candidate_id") or "")
+    if not selected:
+        raise ValueError("source target is missing its selected candidate id")
+    base_raw = controller.get("base_selected_candidate_id")
+    base = selected if base_raw is None else str(base_raw)
+    if not base:
+        raise ValueError("source target has an empty base selected candidate id")
+    return base, selected
+
+
 def _repair_state_unchanged(row: dict[str, Any]) -> bool:
     reported = row.get("repair_state_changed")
     before = row.get("before_repair_fingerprint")
@@ -161,6 +177,62 @@ def _repair_state_unchanged(row: dict[str, Any]) -> bool:
     if reported is None:
         raise ValueError("decision lacks repair-structure state-change evidence")
     return not bool(reported)
+
+
+def _state_paths(state: dict[str, Any]) -> list[list[int]]:
+    agents = state.get("agents")
+    if not isinstance(agents, list) or not agents:
+        raise ValueError("stalled-state target has no agents")
+    paths: list[list[int]] = []
+    for expected_id, agent in enumerate(agents):
+        if (
+            not isinstance(agent, dict)
+            or _strict_int(agent.get("id"), field="target agent id", minimum=0)
+            != expected_id
+        ):
+            raise ValueError("stalled-state target agents are not contiguous")
+        path = agent.get("path")
+        if (
+            not isinstance(path, list)
+            or not path
+            or any(
+                isinstance(location, bool)
+                or not isinstance(location, int)
+                or location < 0
+                for location in path
+            )
+        ):
+            raise ValueError("stalled-state target contains an invalid path")
+        paths.append(list(path))
+    return paths
+
+
+def _restore_trial_state(
+    job: dict[str, Any],
+    source_state: dict[str, Any],
+    *,
+    seed: int,
+) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    destroy_strategy = str(job.get("replay_destroy_strategy", "Adaptive"))
+    environment = _make_environment(
+        job["dataset_root"], job["row"], job["environment"], destroy_strategy
+    )
+    restored = _plain(environment.reset_paths(_state_paths(source_state), seed=seed))
+    source_full = state_fingerprint(source_state)
+    restored_full = state_fingerprint(restored)
+    source_repair = repair_structure_fingerprint(source_state)
+    restored_repair = repair_structure_fingerprint(restored)
+    if restored_repair != source_repair:
+        raise RuntimeError(
+            "stalled-state reset_paths did not restore the exact repair state"
+        )
+    return environment, restored, {
+        "trial_state_restore": TRIAL_STATE_RESTORE,
+        "source_before_fingerprint": source_full,
+        "restored_before_fingerprint": restored_full,
+        "full_state_fingerprint_match": restored_full == source_full,
+        "repair_state_fingerprint_match": True,
+    }
 
 
 def find_terminal_stall(decisions: list[dict[str, Any]], minimum: int = 3) -> dict[str, Any]:
@@ -438,8 +510,25 @@ def _checkpoint_valid(
             trial_index
         ):
             raise ValueError("trial index mismatch")
-        if row.get("replay_fingerprint_match") is not True:
-            raise ValueError("replay fingerprint evidence is invalid")
+        if (
+            row.get("replay_fingerprint_match") is not True
+            or row.get("repair_state_fingerprint_match") is not True
+            or str(row.get("trial_state_restore")) != TRIAL_STATE_RESTORE
+        ):
+            raise ValueError("repair-state restore evidence is invalid")
+        restored_before_fingerprint = str(
+            row.get("restored_before_fingerprint") or ""
+        )
+        if not restored_before_fingerprint:
+            raise ValueError("restored before-state fingerprint is missing")
+        full_state_match = _strict_bool(
+            row.get("full_state_fingerprint_match"),
+            field="full_state_fingerprint_match",
+        )
+        if full_state_match != (
+            restored_before_fingerprint == before_fingerprint
+        ):
+            raise ValueError("full-state restore evidence is inconsistent")
         expected_seed = paired_probe_seed(before_fingerprint, trial_index)
         if _strict_int(
             row.get("random_seed"), field="random_seed", minimum=0
@@ -586,16 +675,22 @@ def _run_trial(
     *,
     job: dict[str, Any],
     decision: dict[str, Any],
+    source_state: dict[str, Any],
     branch: dict[str, Any],
     trial_index: int,
     selection_seconds: float,
     run_fingerprint: str,
 ) -> dict[str, Any]:
-    environment, before = replay_prefix(job, decision["prefix_actions"])
-    before_fingerprint = state_fingerprint(before)
-    if before_fingerprint != str(decision["before_fingerprint"]):
-        raise RuntimeError("stalled-state replay fingerprint mismatch")
-    random_seed = paired_probe_seed(before_fingerprint, trial_index)
+    source_before_fingerprint = str(decision["before_fingerprint"])
+    random_seed = paired_probe_seed(source_before_fingerprint, trial_index)
+    environment, before, restore_evidence = _restore_trial_state(
+        job, source_state, seed=random_seed
+    )
+    if (
+        str(restore_evidence["source_before_fingerprint"])
+        != source_before_fingerprint
+    ):
+        raise RuntimeError("stalled-state source fingerprint changed before trial")
     if str(branch["mode"]) == "official":
         action = {
             "mode": "official",
@@ -720,11 +815,12 @@ def _run_trial(
             repair_order,
             separators=(",", ":"),
         ),
-        "before_fingerprint": before_fingerprint,
+        "before_fingerprint": source_before_fingerprint,
         "before_repair_fingerprint": before_repair_fingerprint,
+        **restore_evidence,
+        "replay_fingerprint_match": True,
         "after_fingerprint": state_fingerprint(after),
         "after_repair_fingerprint": after_repair_fingerprint,
-        "replay_fingerprint_match": True,
         "replan_success": replan_success,
         "repair_outcome": repair_outcome,
         "terminated": terminated,
@@ -816,15 +912,11 @@ def run_stalled_state_probe(
     if len(manifests) != 1:
         raise ValueError("source collection does not contain exactly one requested episode")
     manifest = dict(manifests[0])
-    trace_path = collection_root / str(manifest["trace_file"])
-    validate_closed_loop_trace(
-        trace_path,
-        str(source_run["run_fingerprint"]),
-        expected_episode_id=str(manifest["episode_id"]),
+    validate_manifest_trace(
+        collection_root,
+        manifest,
+        run_fingerprint=str(source_run["run_fingerprint"]),
         expected_policy="realized_dynamic",
-        expected_solver_seed=int(solver_seed),
-        metric_iteration_budget=configuration.get("metric_iteration_budget"),
-        collection_root=collection_root,
     )
     decisions, _events = decision_rows(collection_root, manifest)
     if auto_terminal_stall:
@@ -901,12 +993,10 @@ def run_stalled_state_probe(
             "current candidate pool or scores differ from the source transition"
         )
     current_selected_id = str(candidates[int(selection["selected_index"])]["candidate_id"])
-    if (
-        str(source_controller.get("base_selected_candidate_id"))
-        != current_selected_id
-        or str(source_controller.get("selected_candidate_id"))
-        != current_selected_id
-    ):
+    source_base_id, source_selected_id = _source_v2_selection_ids(
+        source_controller
+    )
+    if source_base_id != current_selected_id or source_selected_id != current_selected_id:
         raise ValueError("current v2 rank1 differs from the source transition")
     candidate_pool_fingerprint = _fingerprint(current_pool_signature)
     branches, alias_to_key = choose_probe_branches(
@@ -932,6 +1022,7 @@ def run_stalled_state_probe(
         "decision_index": int(decision["decision_index"]),
         "trials": int(trials),
         "all_candidates": bool(all_candidates),
+        "trial_state_restore": TRIAL_STATE_RESTORE,
         "producer_identity": producer,
         "producer_identity_fingerprint": _fingerprint(producer),
     }
@@ -986,6 +1077,7 @@ def run_stalled_state_probe(
             result = _run_trial(
                 job=job,
                 decision=decision,
+                source_state=before,
                 branch=branch,
                 trial_index=trial_index,
                 selection_seconds=float(selection["selection_seconds"]),
@@ -1020,6 +1112,7 @@ def run_stalled_state_probe(
         "trials_per_branch": int(trials),
         "unique_branch_count": len(branches),
         "all_candidates": bool(all_candidates),
+        "trial_state_restore": TRIAL_STATE_RESTORE,
         "candidate_count": len(candidates),
         "candidate_pool_fingerprint": candidate_pool_fingerprint,
         "candidate_pool": current_pool_signature,

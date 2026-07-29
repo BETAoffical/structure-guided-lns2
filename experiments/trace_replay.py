@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable
 
+from experiments._common import contained_file
 from experiments.closed_loop_trace_storage import (
     EPISODE_SCHEMA_V2,
     apply_extras_delta,
@@ -46,6 +47,37 @@ def recorded_replay_action(event: dict[str, Any]) -> dict[str, Any]:
     applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
     if requested_pp_seed != action_pp_seed:
         raise ValueError("source transition requested PP seed does not match its action")
+    legacy_unseeded_explicit = (
+        repair_order
+        and requested_pp_seed < 0
+        and action_pp_seed < 0
+        and applied_pp_seed < 0
+        and str(source_action.get("mode")) == "explicit_neighborhood"
+    )
+    if legacy_unseeded_explicit:
+        source_agents = source_action.get("agents")
+        source_random_seed = int(source_action.get("random_seed", -1))
+        requested_random_seed = int(metrics.get("requested_random_seed", -1))
+        if (
+            not isinstance(source_agents, list)
+            or list(map(int, source_agents)) != list(map(int, neighborhood))
+            or sorted(map(int, repair_order)) != sorted(map(int, neighborhood))
+            or source_random_seed < 0
+            or source_random_seed != requested_random_seed
+        ):
+            raise ValueError(
+                "legacy unseeded explicit transition lacks deterministic source evidence"
+            )
+        # Historical v2 explicit actions seeded the process RNG before PP and
+        # then let PP generate the recorded order. Replaying the exact source
+        # action reproduces both that shuffle and the following low-level RNG
+        # position. Supplying the recorded order directly would skip the
+        # shuffle and therefore change the low-level search stream.
+        return {
+            "mode": "explicit_neighborhood",
+            "agents": list(map(int, source_agents)),
+            "random_seed": source_random_seed,
+        }
     if repair_order and applied_pp_seed < 0:
         raise ValueError(
             "source transition ran PP without a deterministic pp_random_seed"
@@ -83,7 +115,11 @@ def _initial_state(
 def decision_rows(
     collection_root: Path, manifest: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    trace_path = collection_root / str(manifest["trace_file"])
+    trace_path = contained_file(
+        collection_root,
+        manifest.get("trace_file"),
+        field="trace_file",
+    )
     events = read_trace_events(trace_path)
     state = _initial_state(collection_root, trace_path, events[0])
     prefix: list[dict[str, Any]] = []

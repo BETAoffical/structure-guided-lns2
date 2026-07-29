@@ -17,6 +17,7 @@ from experiments.stall_shadow import neighborhood_key, pp_attempt_key
 from experiments.stalled_state_probe import (
     STALLED_STATE_PROBE_SCHEMA,
     STALLED_STATE_PROBE_VERSION,
+    TRIAL_STATE_RESTORE,
     paired_probe_seed,
 )
 
@@ -118,6 +119,33 @@ def _validated_trial(row: dict[str, Any]) -> dict[str, Any]:
         row.get("replay_fingerprint_match"), field="replay_fingerprint_match"
     ):
         raise ValueError("stall Oracle trial replay did not match its source")
+    if (
+        str(row.get("trial_state_restore")) != TRIAL_STATE_RESTORE
+        or not _strict_bool(
+            row.get("repair_state_fingerprint_match"),
+            field="repair_state_fingerprint_match",
+        )
+    ):
+        raise ValueError("stall Oracle trial lacks exact repair-state restoration")
+    source_before_fingerprint = str(
+        row.get("source_before_fingerprint") or ""
+    )
+    restored_before_fingerprint = str(
+        row.get("restored_before_fingerprint") or ""
+    )
+    if (
+        source_before_fingerprint != before_fingerprint
+        or not restored_before_fingerprint
+    ):
+        raise ValueError("stall Oracle trial restore fingerprints are invalid")
+    full_state_match = _strict_bool(
+        row.get("full_state_fingerprint_match"),
+        field="full_state_fingerprint_match",
+    )
+    if full_state_match != (
+        restored_before_fingerprint == source_before_fingerprint
+    ):
+        raise ValueError("stall Oracle trial full-state evidence is inconsistent")
 
     branch_key = str(row.get("branch_key") or "")
     branch_mode = str(row.get("branch_mode") or "")
@@ -277,14 +305,25 @@ def classify_stall_oracle_trials(
                 row["candidate_id"],
                 row["candidate_rank"],
                 row["candidate_score"],
-                row["candidate_size"],
-                tuple(row["candidate_agents_list"]),
-                row["neighborhood_key"],
             )
             for row in trials
         }
         if len(metadata) != 1:
             raise ValueError(f"stall Oracle branch metadata changes: {branch_key}")
+        fixed_neighborhood = str(trials[0]["branch_mode"]) == "explicit_neighborhood"
+        if fixed_neighborhood:
+            neighborhoods = {
+                (
+                    row["candidate_size"],
+                    tuple(row["candidate_agents_list"]),
+                    row["neighborhood_key"],
+                )
+                for row in trials
+            }
+            if len(neighborhoods) != 1:
+                raise ValueError(
+                    f"stall Oracle model neighborhood changes: {branch_key}"
+                )
         if len(trials) < minimum_trials:
             raise ValueError(f"stall Oracle branch has too few trials: {branch_key}")
         outcomes: dict[str, int] = {}
@@ -303,8 +342,15 @@ def classify_stall_oracle_trials(
                 "branch_mode": str(first["branch_mode"]),
                 "candidate_id": first["candidate_id"],
                 "candidate_rank": first["candidate_rank"],
-                "candidate_size": int(first["candidate_size"]),
-                "neighborhood_key": str(first["neighborhood_key"]),
+                "candidate_size": (
+                    int(first["candidate_size"]) if fixed_neighborhood else None
+                ),
+                "neighborhood_key": (
+                    str(first["neighborhood_key"]) if fixed_neighborhood else None
+                ),
+                "unique_actual_neighborhood_count": len(
+                    {str(row["neighborhood_key"]) for row in trials}
+                ),
                 "trial_count": len(trials),
                 "distinct_pp_attempt_count": len(attempt_keys),
                 "escape_count": escape_count,
@@ -388,6 +434,8 @@ def _validate_probe_binding(
         raise ValueError("stall Oracle requires a current v2 probe report")
     if probe_report.get("all_candidates") is not True:
         raise ValueError("stall Oracle requires a probe generated with --all-candidates")
+    if str(probe_report.get("trial_state_restore")) != TRIAL_STATE_RESTORE:
+        raise ValueError("stall Oracle probe uses an unsupported trial restore")
     reproduction = probe_report.get("source_reproduction")
     if not isinstance(reproduction, dict) or not reproduction or any(
         value is not True for value in reproduction.values()
@@ -571,6 +619,7 @@ def _validate_runner_binding(
         "decision_index": "decision_index",
         "trials": "trials_per_branch",
         "all_candidates": "all_candidates",
+        "trial_state_restore": "trial_state_restore",
         "producer_identity": "producer_identity",
         "producer_identity_fingerprint": "producer_identity_fingerprint",
     }

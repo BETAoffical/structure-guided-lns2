@@ -25,6 +25,22 @@ class NativeModuleDiscoveryTests(unittest.TestCase):
         if collector_cli.NATIVE_BUILD.is_dir():
             self.assertIn(str(collector_cli.NATIVE_BUILD), sys.path)
 
+    def test_collector_cli_builds_a_registered_seed_subset(self) -> None:
+        self.assertEqual(
+            collector_cli._selected_job_keys(["task-b", "task-a"], [3, 1]),
+            {
+                ("task-a", 1),
+                ("task-a", 3),
+                ("task-b", 1),
+                ("task-b", 3),
+            },
+        )
+        self.assertIsNone(collector_cli._selected_job_keys(["task-a"], None))
+        with self.assertRaisesRegex(ValueError, "requires at least one"):
+            collector_cli._selected_job_keys(None, [1])
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            collector_cli._selected_job_keys(["task-a"], [-1])
+
 
 @unittest.skipUnless(
     lns2_env is not None and "LNS2_TEST_MAP" in os.environ,

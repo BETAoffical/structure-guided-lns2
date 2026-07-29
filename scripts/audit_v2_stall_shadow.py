@@ -20,8 +20,13 @@ def main() -> int:
     )
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--reference-v2")
     arguments = parser.parse_args()
-    report = audit_stall_shadow_collection(arguments.source, arguments.output)
+    report = audit_stall_shadow_collection(
+        arguments.source,
+        arguments.output,
+        reference_v2=arguments.reference_v2,
+    )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

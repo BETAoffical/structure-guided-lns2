@@ -946,11 +946,19 @@ def validate_manifest_trace(
             and isinstance(event.get("metrics"), dict)
         ):
             timings = dict(event["timings"])
-            metrics = event["metrics"]
+            metrics = dict(event["metrics"])
+            raw_step_runtime = metrics.get("step_runtime")
+            legacy_negative_step_runtime = bool(
+                isinstance(raw_step_runtime, (int, float))
+                and not isinstance(raw_step_runtime, bool)
+                and math.isfinite(float(raw_step_runtime))
+                and float(raw_step_runtime) < 0.0
+            )
             derived = {
                 "native_step_seconds": metrics.get("native_step_seconds"),
                 "episode_runtime_delta_seconds": metrics.get(
-                    "episode_runtime_delta_seconds", metrics.get("step_runtime")
+                    "episode_runtime_delta_seconds",
+                    None if legacy_negative_step_runtime else raw_step_runtime,
                 ),
             }
             for name, value in derived.items():
@@ -958,6 +966,30 @@ def validate_manifest_trace(
                     timings[name] = value
                     legacy_timing_view = True
             validation_event["timings"] = timings
+            # Three authenticated pilot traces predate the native timing v2
+            # contract and contain a negative legacy ``step_runtime`` even
+            # though their independently recorded native timing partition is
+            # complete and non-negative.  Validate a derived compatibility
+            # view against that native partition while returning the original
+            # immutable events to the caller.  Current v2 traces and any v1
+            # trace without valid native evidence remain strict failures.
+            native_step = timings.get("native_step_seconds")
+            if (
+                legacy_negative_step_runtime
+                and isinstance(native_step, (int, float))
+                and not isinstance(native_step, bool)
+                and math.isfinite(float(native_step))
+                and float(native_step) >= 0.0
+            ):
+                metrics["step_runtime"] = float(native_step)
+                if (
+                    isinstance(timings.get("episode_runtime_delta_seconds"), (int, float))
+                    and float(timings["episode_runtime_delta_seconds"]) < 0.0
+                ):
+                    timings.pop("episode_runtime_delta_seconds")
+                    validation_event["timings"] = timings
+                validation_event["metrics"] = metrics
+                legacy_timing_view = True
         validation_events.append(validation_event)
 
     def validate_trace(validation_path: Path) -> dict[str, Any]:

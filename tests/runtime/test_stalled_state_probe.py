@@ -4,9 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from experiments.stalled_state_probe import (
     _checkpoint_valid,
+    _restore_trial_state,
+    _source_v2_selection_ids,
     choose_probe_branches,
     find_terminal_stall,
     paired_probe_seed,
@@ -16,6 +19,78 @@ from experiments.stall_guard import repair_structure_fingerprint
 
 
 class StalledStateProbeTests(unittest.TestCase):
+    def test_trial_restore_requires_exact_repair_structure(self) -> None:
+        source = {
+            "initialized": True,
+            "initial_solution_complete": True,
+            "feasible": False,
+            "done": False,
+            "iteration": 9,
+            "runtime": 5.0,
+            "rows": 1,
+            "cols": 2,
+            "sum_of_costs": 1,
+            "num_of_colliding_pairs": 1,
+            "obstacles": [0, 0],
+            "conflict_edges": [[0, 0]],
+            "low_level": {"expanded": 7},
+            "agents": [{"id": 0, "path": [0, 1]}],
+        }
+        restored = dict(source)
+        restored.update(
+            {
+                "iteration": 0,
+                "runtime": 0.0,
+                "low_level": {"expanded": 0},
+            }
+        )
+
+        class FakeEnvironment:
+            def reset_paths(self, paths, *, seed):
+                self.paths = paths
+                self.seed = seed
+                return restored
+
+        fake = FakeEnvironment()
+        with patch(
+            "experiments.stalled_state_probe._make_environment",
+            return_value=fake,
+        ):
+            environment, actual, evidence = _restore_trial_state(
+                {
+                    "dataset_root": "dataset",
+                    "row": {},
+                    "environment": {},
+                },
+                source,
+                seed=17,
+            )
+        self.assertIs(environment, fake)
+        self.assertEqual(actual, restored)
+        self.assertEqual(fake.paths, [[0, 1]])
+        self.assertEqual(fake.seed, 17)
+        self.assertTrue(evidence["repair_state_fingerprint_match"])
+        self.assertFalse(evidence["full_state_fingerprint_match"])
+
+    def test_legacy_v2_selection_uses_effective_id_as_base(self) -> None:
+        self.assertEqual(
+            _source_v2_selection_ids(
+                {"selected_candidate_id": "candidate-a"}
+            ),
+            ("candidate-a", "candidate-a"),
+        )
+
+    def test_present_v2_base_selection_remains_authoritative(self) -> None:
+        self.assertEqual(
+            _source_v2_selection_ids(
+                {
+                    "base_selected_candidate_id": "candidate-a",
+                    "selected_candidate_id": "candidate-b",
+                }
+            ),
+            ("candidate-a", "candidate-b"),
+        )
+
     def test_repair_structure_ignores_attempt_counters_and_timeout_flag(self) -> None:
         base = {
             "initialized": True,
