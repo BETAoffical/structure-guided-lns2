@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import collections
 import csv
-import json
 import math
 import os
 from pathlib import Path
@@ -23,7 +22,7 @@ from experiments.closed_loop_trace_storage import (
     read_trace_events,
 )
 from experiments.online_feature_engine import OnlineFeatureEngine
-from experiments.repair_collection import _fingerprint, state_fingerprint
+from experiments.repair_collection import state_fingerprint
 from experiments.run_output_guard import prepare_run_output
 from experiments.stall_escape_qualification import _candidate_pool
 from experiments.stall_guard import repair_structure_fingerprint

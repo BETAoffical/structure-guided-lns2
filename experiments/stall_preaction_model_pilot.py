@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import collections
-import csv
 import math
 from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import atomic_write_csv, read_json, sha256_file, write_json
 from experiments.run_output_guard import prepare_run_output
-from experiments.stall_preaction_features import FEATURE_NAMES
+from experiments.stall_preaction_features import FEATURE_NAMES, _bool, _read_csv
 from experiments.stall_trigger_policy_audit import wilson_upper
 
 
@@ -21,21 +20,6 @@ TRIGGER_FEATURE_NAMES = tuple(
 RESCUE_FEATURE_NAMES = FEATURE_NAMES
 TRIGGER_THRESHOLD_GRID = (0.50, 0.60, 0.70, 0.80, 0.90, 0.95)
 RESCUE_ESCAPE_PROBABILITY_FLOOR = 0.50
-
-
-def _read_csv(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
-def _bool(value: Any, *, field: str) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value in {"True", "true", "1"}:
-        return True
-    if value in {"False", "false", "0"}:
-        return False
-    raise ValueError(f"{field} is not a strict boolean")
 
 
 def _values(row: dict[str, Any], names: Iterable[str]) -> list[float]:

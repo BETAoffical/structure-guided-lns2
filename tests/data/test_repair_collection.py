@@ -19,6 +19,7 @@ from experiments.repair_collection import (
     REPAIR_COLLECTION_SCHEMA,
     REPAIR_TIME_LABEL,
     SCHEMA_VERSION,
+    STATE_FINGERPRINT_KEYS,
     CollectionLockError,
     _AtomicProcessLock,
     _atomic_write_text,
@@ -26,6 +27,7 @@ from experiments.repair_collection import (
     _counterfactual_worker,
     _counterfactual_source_eligible,
     _counterfactual_source_reason,
+    _fingerprint,
     _horizon_outcomes,
     _make_environment,
     _native_step_seconds,
@@ -1582,6 +1584,13 @@ class RepairCollectionTests(unittest.TestCase):
         self.assertEqual(state_fingerprint(first), state_fingerprint(second))
         second["agents"][0]["path"][-1] = 4
         self.assertNotEqual(state_fingerprint(first), state_fingerprint(second))
+
+    def test_state_fingerprint_fast_path_matches_historical_canonical_hash(self) -> None:
+        state = sample_state()
+        historical = _fingerprint(
+            {key: state[key] for key in STATE_FINGERPRINT_KEYS}
+        )
+        self.assertEqual(state_fingerprint(state), historical)
 
     def test_candidate_selection_is_deterministic_and_stratified(self) -> None:
         state = sample_state()

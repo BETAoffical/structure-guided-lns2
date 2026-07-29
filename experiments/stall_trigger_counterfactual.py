@@ -4,7 +4,6 @@ import collections
 import csv
 import hashlib
 import json
-import math
 import statistics
 import subprocess
 import sys

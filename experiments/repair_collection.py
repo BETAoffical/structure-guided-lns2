@@ -379,7 +379,21 @@ def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
 def state_fingerprint(state: dict[str, Any]) -> str:
     """Hash deterministic solver state while excluding wall-clock and context."""
 
-    return _fingerprint({key: state[key] for key in STATE_FINGERPRINT_KEYS})
+    # Repair states are already normalized to JSON-native dictionaries/lists by
+    # the binding boundary (or by json.load during replay).  Calling the generic
+    # ``_fingerprint`` helper would recursively copy every agent path solely to
+    # normalize values that are already plain.  Large 400/600-agent states make
+    # that defensive copy a measurable per-repair cost, so serialize the schema-
+    # constrained state directly while retaining the exact canonical JSON and
+    # SHA256 representation used by historical traces.
+    deterministic_state = {key: state[key] for key in STATE_FINGERPRINT_KEYS}
+    canonical = json.dumps(
+        deterministic_state,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def select_seed_agents(

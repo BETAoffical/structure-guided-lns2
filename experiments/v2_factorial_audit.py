@@ -16,6 +16,7 @@ from experiments.feature_schema_v2 import (
     STATE_FEATURE_NAMES,
     canonicalize_features,
 )
+from experiments.repair_aware import classify_repair_outcome
 from experiments.repair_aware_training import _balanced_map_folds
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 
@@ -36,15 +37,17 @@ def _outcome_name(outcome: dict[str, Any]) -> str:
     registered = outcome.get("repair_outcome")
     if registered is not None:
         return str(registered)
-    if bool(outcome.get("hard_failure")):
-        return "hard_failure"
     before = int(outcome["conflicts_before"])
     after = int(outcome["conflicts_after"])
-    if after == 0:
-        return "feasible"
-    if not bool(outcome.get("repair_state_changed", after != before)):
-        return "accepted_noop"
-    return "conflict_reduced" if after < before else "state_changed_no_reduction"
+    changed = bool(outcome.get("repair_state_changed", after != before))
+    return classify_repair_outcome(
+        before_fingerprint="before",
+        after_fingerprint="after" if changed else "before",
+        replan_success=not bool(outcome.get("hard_failure")),
+        conflicts_before=before,
+        conflicts_after=after,
+        feasible=after == 0,
+    )
 
 
 def effectiveness_dominates(left: dict[str, float], right: dict[str, float]) -> bool:
