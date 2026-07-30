@@ -14,6 +14,7 @@ from experiments.balanced_wall_clock import (
     conflict_stratum,
     initial_pp_load_stratum,
     materialize_compute_load_candidate_pool,
+    prepare_movingai_dataset,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
 )
@@ -23,6 +24,67 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_movingai_preparation_can_select_a_registered_source_subset(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fetched = root / "fetched"
+            (fetched / "maps").mkdir(parents=True)
+            (fetched / "scenarios").mkdir(parents=True)
+            source_rows = []
+            for map_id in ("keep", "extra"):
+                map_path = fetched / "maps" / f"{map_id}.map"
+                map_path.write_text(
+                    "type octile\nheight 3\nwidth 3\nmap\n...\n...\n...\n",
+                    encoding="utf-8",
+                )
+                scenario_path = fetched / "scenarios" / f"{map_id}-random-11.scen"
+                scenario_path.write_text(
+                    f"version 1\n0\t{map_id}.map\t3\t3\t0\t0\t2\t2\t4\n",
+                    encoding="utf-8",
+                )
+                source_rows.append(
+                    {
+                        "id": map_id,
+                        "map_file": f"maps/{map_id}.map",
+                        "map_sha256": hashlib.sha256(map_path.read_bytes()).hexdigest(),
+                        "scenarios": [
+                            {
+                                "index": 11,
+                                "file": f"scenarios/{map_id}-random-11.scen",
+                                "sha256": hashlib.sha256(
+                                    scenario_path.read_bytes()
+                                ).hexdigest(),
+                            }
+                        ],
+                    }
+                )
+            (fetched / "manifest.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in source_rows),
+                encoding="utf-8",
+            )
+            config = root / "config.json"
+            payload = {
+                "scenario_indices": [11],
+                "benchmarks": [
+                    {"id": "keep", "layout_family": "test", "agent_counts": [1]}
+                ],
+            }
+            config.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "differs from registration"):
+                prepare_movingai_dataset(fetched, config, root / "strict")
+
+            payload["allow_fetched_superset"] = True
+            config.write_text(json.dumps(payload), encoding="utf-8")
+            report = prepare_movingai_dataset(fetched, config, root / "subset")
+            self.assertEqual(report["splits"]["balanced_wall_clock"]["map_count"], 1)
+            rows = [
+                json.loads(line)
+                for line in (
+                    root / "subset" / "balanced_wall_clock" / "manifest.jsonl"
+                ).read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual({row["map_id"] for row in rows}, {"keep"})
+
     def test_compute_load_pool_materialization_excludes_registered_duplicate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

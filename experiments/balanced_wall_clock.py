@@ -138,8 +138,16 @@ def prepare_movingai_dataset(
     source_rows = _read_jsonl(fetched_root / "manifest.jsonl")
     source_index = {str(row["id"]): row for row in source_rows}
     case_index = {str(row["id"]): dict(row) for row in config["benchmarks"]}
-    if set(source_index) != set(case_index):
+    allow_fetched_superset = bool(config.get("allow_fetched_superset", False))
+    registered_ids = set(case_index)
+    fetched_ids = set(source_index)
+    if (
+        not registered_ids <= fetched_ids
+        or not allow_fetched_superset
+        and fetched_ids != registered_ids
+    ):
         raise ValueError("fetched MovingAI manifest differs from registration")
+    source_index = {map_id: source_index[map_id] for map_id in registered_ids}
     split_root = output_root / SPLIT
     manifest = []
     for map_id in sorted(source_index):
