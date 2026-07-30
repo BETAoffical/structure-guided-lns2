@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from experiments.balanced_wall_clock import (
     collect_scheduled,
     conflict_stratum,
     initial_pp_load_stratum,
+    materialize_compute_load_candidate_pool,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
 )
@@ -21,6 +23,100 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_compute_load_pool_materialization_excludes_registered_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = []
+            excluded_sha = None
+            for source_index in range(2):
+                source = root / f"source-{source_index}"
+                split = source / "balanced_wall_clock"
+                (split / "maps").mkdir(parents=True)
+                source_config = root / "configs" / f"source-{source_index}.json"
+                source_config.parent.mkdir(parents=True, exist_ok=True)
+                source_config.write_text("{}", encoding="utf-8")
+                fingerprint = hashlib.sha256(b"{}").hexdigest()
+                (source / "dataset_summary.json").write_text(
+                    json.dumps({"configuration_fingerprint": fingerprint}),
+                    encoding="utf-8",
+                )
+                rows = []
+                map_ids = (
+                    ("keep-a", "drop-duplicate")
+                    if source_index == 0
+                    else ("keep-b",)
+                )
+                for map_id in map_ids:
+                    relative = Path("maps") / f"{map_id}.map"
+                    payload = f"map:{map_id}".encode()
+                    (split / relative).write_bytes(payload)
+                    if map_id == "drop-duplicate":
+                        excluded_sha = hashlib.sha256(payload).hexdigest()
+                    rows.append(
+                        {
+                            "split": "balanced_wall_clock",
+                            "map_id": map_id,
+                            "task_id": f"task-{map_id}",
+                            "layout_mode": "regular_beltway",
+                            "map_file": relative.as_posix(),
+                        }
+                    )
+                (split / "manifest.jsonl").write_text(
+                    "".join(json.dumps(row) + "\n" for row in rows),
+                    encoding="utf-8",
+                )
+                sources.append(
+                    {
+                        "config": source_config.relative_to(root).as_posix(),
+                        "dataset": source.relative_to(root).as_posix(),
+                    }
+                )
+            registry = {
+                "schema_version": 1,
+                "generated_sources": sources,
+                "excluded_map_ids": [
+                    {
+                        "map_id": "drop-duplicate",
+                        "map_sha256": excluded_sha,
+                        "reason": "test",
+                    }
+                ],
+                "expected_usable": {
+                    "map_count": 2,
+                    "instance_count": 2,
+                    "layout_map_counts": {"regular_beltway": 2},
+                },
+            }
+            registry_path = root / "configs" / "registry.json"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+
+            summary = materialize_compute_load_candidate_pool(
+                registry_path, root / "output"
+            )
+
+            self.assertEqual(
+                summary["splits"]["balanced_wall_clock"]["map_count"], 2
+            )
+            rows = [
+                json.loads(line)
+                for line in (
+                    root / "output" / "balanced_wall_clock" / "manifest.jsonl"
+                )
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            self.assertEqual({row["map_id"] for row in rows}, {"keep-a", "keep-b"})
+            self.assertTrue(all(row["source_group"] == "generated" for row in rows))
+            self.assertFalse(
+                (
+                    root
+                    / "output"
+                    / "balanced_wall_clock"
+                    / "maps"
+                    / "drop-duplicate.map"
+                ).exists()
+            )
+
     def test_replacement_dataset_keeps_only_registered_maps(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

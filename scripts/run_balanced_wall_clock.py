@@ -17,6 +17,7 @@ from experiments.balanced_wall_clock import (  # noqa: E402
     audit_balanced_cohort_difficulty,
     build_replacement_dataset,
     collect_scheduled,
+    materialize_compute_load_candidate_pool,
     merge_datasets,
     prepare_movingai_dataset,
     select_balanced_cohort,
@@ -43,6 +44,7 @@ def main() -> int:
             "prepare-movingai",
             "merge",
             "replace",
+            "materialize-load-pool",
             "select",
             "select-load-balanced",
             "dry-run",
@@ -75,6 +77,14 @@ def main() -> int:
     parser.add_argument(
         "--replacement-output",
         default="build/initlns-v2-mixed-balanced-dataset-v2",
+    )
+    parser.add_argument(
+        "--load-pool-config",
+        default="configs/balanced_wall_clock_compute_load_pool_v3.json",
+    )
+    parser.add_argument(
+        "--load-pool-dataset",
+        default="build/initlns-v2-mixed-compute-load-pool-v3",
     )
     parser.add_argument("--config", default="configs/balanced_wall_clock_collection.json")
     parser.add_argument("--qualification", default="build/initlns-v2-mixed-balanced-qualification-v1")
@@ -115,6 +125,11 @@ def main() -> int:
             ),
             selection_config=_resolve(arguments.replacement_config),
             output=_resolve(arguments.replacement_output),
+        )
+    elif arguments.phase == "materialize-load-pool":
+        result = materialize_compute_load_candidate_pool(
+            _resolve(arguments.load_pool_config),
+            _resolve(arguments.load_pool_dataset),
         )
     elif arguments.phase == "select":
         result = select_balanced_cohort(

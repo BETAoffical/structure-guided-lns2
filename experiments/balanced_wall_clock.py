@@ -395,6 +395,147 @@ def build_replacement_dataset(
     return summary
 
 
+def materialize_compute_load_candidate_pool(
+    registry: str | Path, output: str | Path
+) -> dict[str, Any]:
+    """Build the registered generated-only qualification pool."""
+
+    registry_path = Path(registry).resolve()
+    config = _read_json(registry_path)
+    project_root = registry_path.parent.parent
+    output_root = Path(output).resolve()
+    split_output = output_root / SPLIT
+    source_specs = [dict(value) for value in config["generated_sources"]]
+    if not source_specs:
+        raise ValueError("candidate pool must register at least one source")
+    source_roots = [
+        (project_root / str(value["dataset"])).resolve() for value in source_specs
+    ]
+    if output_root in source_roots:
+        raise ValueError("candidate pool output must differ from every source dataset")
+
+    registry_fingerprint = _fingerprint(config)
+    summary_path = output_root / "dataset_summary.json"
+    if summary_path.is_file():
+        existing = _read_json(summary_path)
+        if existing.get("configuration_fingerprint") != registry_fingerprint:
+            raise ValueError("candidate pool output belongs to a different registry")
+    elif output_root.is_dir() and any(output_root.iterdir()):
+        raise ValueError("candidate pool output is non-empty but has no summary")
+
+    excluded_rows = [dict(value) for value in config.get("excluded_map_ids", [])]
+    excluded = {str(value["map_id"]): value for value in excluded_rows}
+    if len(excluded) != len(excluded_rows):
+        raise ValueError("candidate pool repeats an excluded map id")
+
+    manifest: list[dict[str, Any]] = []
+    observed_excluded: set[str] = set()
+    source_registration: list[dict[str, Any]] = []
+    for spec, source_root in zip(source_specs, source_roots):
+        source_config_path = (project_root / str(spec["config"])).resolve()
+        source_summary_path = source_root / "dataset_summary.json"
+        source_manifest_path = source_root / SPLIT / "manifest.jsonl"
+        source_config = _read_json(source_config_path)
+        source_summary = _read_json(source_summary_path)
+        expected_fingerprint = _fingerprint(source_config)
+        if source_summary.get("configuration_fingerprint") != expected_fingerprint:
+            raise ValueError("generated source fingerprint differs from its config")
+        rows = _read_jsonl(source_manifest_path)
+        source_registration.append(
+            {
+                "config": str(spec["config"]),
+                "config_sha256": sha256_file(source_config_path),
+                "dataset": str(spec["dataset"]),
+                "dataset_fingerprint": expected_fingerprint,
+                "manifest_sha256": sha256_file(source_manifest_path),
+            }
+        )
+        split_root = source_root / SPLIT
+        for raw in rows:
+            map_id = str(raw["map_id"])
+            if map_id in excluded:
+                map_relative = Path(str(raw["map_file"]))
+                map_path = split_root / map_relative
+                if sha256_file(map_path) != str(excluded[map_id]["map_sha256"]):
+                    raise ValueError("excluded map SHA differs from its registration")
+                observed_excluded.add(map_id)
+                continue
+            row = dict(raw)
+            row["source_group"] = "generated"
+            for field in (
+                "map_file",
+                "scenario_file",
+                "map_metadata_file",
+                "task_file",
+                "legacy_instance_file",
+            ):
+                if not row.get(field):
+                    continue
+                relative = Path(str(row[field]))
+                source = split_root / relative
+                if not source.is_file():
+                    raise ValueError(f"candidate pool source file is missing: {source}")
+                destination = split_output / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if destination.is_file() and sha256_file(destination) != sha256_file(source):
+                    raise ValueError(f"candidate pool file collision: {relative}")
+                if not destination.is_file():
+                    shutil.copy2(source, destination)
+            manifest.append(row)
+
+    if observed_excluded != set(excluded):
+        raise ValueError("candidate pool did not observe every excluded map")
+    task_ids = [str(row["task_id"]) for row in manifest]
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError("candidate pool contains duplicate task ids")
+    map_layouts: dict[str, str] = {}
+    map_hashes: dict[str, str] = {}
+    for row in manifest:
+        map_id = str(row["map_id"])
+        layout = str(row["layout_mode"])
+        if map_id in map_layouts and map_layouts[map_id] != layout:
+            raise ValueError("candidate pool map has inconsistent layouts")
+        map_layouts[map_id] = layout
+        map_path = split_output / str(row["map_file"])
+        map_hashes[map_id] = sha256_file(map_path)
+    if len(set(map_hashes.values())) != len(map_hashes):
+        raise ValueError("candidate pool contains duplicate map grids")
+
+    expected = dict(config["expected_usable"])
+    layout_counts = dict(sorted(collections.Counter(map_layouts.values()).items()))
+    expected_layouts = {
+        str(name): int(value)
+        for name, value in dict(expected["layout_map_counts"]).items()
+    }
+    if (
+        len(map_layouts) != int(expected["map_count"])
+        or len(manifest) != int(expected["instance_count"])
+        or layout_counts != expected_layouts
+    ):
+        raise ValueError("candidate pool dimensions differ from registration")
+
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    _write_jsonl_atomic(split_output / "manifest.jsonl", manifest)
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": "balanced-wall-clock-compute-load-pool-v3",
+        "configuration_fingerprint": registry_fingerprint,
+        "registry_sha256": sha256_file(registry_path),
+        "source_registration": source_registration,
+        "excluded_map_ids": sorted(excluded),
+        "splits": {
+            SPLIT: {
+                "map_count": len(map_layouts),
+                "instance_count": len(manifest),
+                "source_counts": {"generated": len(manifest)},
+                "layout_map_counts": layout_counts,
+            }
+        },
+    }
+    _write_json(summary_path, summary)
+    return summary
+
+
 def conflict_stratum(conflicts: int) -> str | None:
     for name, lower, upper in STRATA:
         if lower <= conflicts <= upper:
