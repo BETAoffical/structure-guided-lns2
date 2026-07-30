@@ -46,6 +46,61 @@ class StaticGridAnalysis:
     obstacle_rate_4: dict[int, float]
 
 
+def summarize_initial_state_complexity(state: dict[str, Any]) -> dict[str, Any]:
+    """Return controller-independent complexity statistics for an initial state."""
+
+    agents = list(state.get("agents", []))
+    if not agents:
+        raise ValueError("state must contain at least one agent")
+    agent_ids = [int(agent["id"]) for agent in agents]
+    if len(agent_ids) != len(set(agent_ids)):
+        raise ValueError("state contains duplicate agent ids")
+    paths = [[int(cell) for cell in agent.get("path", [])] for agent in agents]
+    if any(not path for path in paths):
+        raise ValueError("state contains an empty agent path")
+
+    events = reconstruct_conflicts(agents)
+    pair_set = {(event.left, event.right) for event in events}
+    reported_edges = {
+        tuple(sorted((int(edge[0]), int(edge[1]))))
+        for edge in state.get("conflict_edges", [])
+    }
+    if pair_set != reported_edges:
+        raise ValueError("reconstructed conflicts disagree with solver conflict edges")
+    reported_pairs = int(state.get("num_of_colliding_pairs", -1))
+    if reported_pairs != len(pair_set):
+        raise ValueError("reconstructed conflicts disagree with solver conflict count")
+
+    _component_id, components = _conflict_components(agent_ids, pair_set)
+    active_agents = {agent_id for edge in pair_set for agent_id in edge}
+    path_costs = [len(path) - 1 for path in paths]
+    low_level = dict(state.get("low_level", {}))
+    agent_count = len(agents)
+    denominator = agent_count * (agent_count - 1)
+    return {
+        "agent_count": agent_count,
+        "grid_rows": int(state["rows"]),
+        "grid_cols": int(state["cols"]),
+        "free_cell_count": sum(not int(value) for value in state["obstacles"]),
+        "conflict_pair_count": len(pair_set),
+        "conflict_event_count": len(events),
+        "conflict_pair_density": (2.0 * len(pair_set) / denominator if denominator else 0.0),
+        "active_conflict_agent_count": len(active_agents),
+        "active_conflict_agent_ratio": len(active_agents) / agent_count,
+        "largest_conflict_component_size": max(map(len, components.values()), default=0),
+        "largest_conflict_component_ratio": (
+            max(map(len, components.values()), default=0) / agent_count
+        ),
+        "total_path_cost": sum(path_costs),
+        "mean_path_cost": sum(path_costs) / agent_count,
+        "max_path_cost": max(path_costs),
+        "initial_low_level_generated": int(low_level.get("generated", 0)),
+        "initial_low_level_expanded": int(low_level.get("expanded", 0)),
+        "initial_low_level_reopened": int(low_level.get("reopened", 0)),
+        "initial_low_level_runs": int(low_level.get("runs", 0)),
+    }
+
+
 def reconstruct_conflicts(agents: list[dict[str, Any]]) -> list[ConflictEvent]:
     agent_ids = [int(agent["id"]) for agent in agents]
     if len(agent_ids) != len(set(agent_ids)):

@@ -24,6 +24,7 @@ from experiments._common import (
     episode_id as _episode_id,
     read_jsonl as _read_jsonl,
 )
+from experiments.state_analysis import summarize_initial_state_complexity
 
 
 SCHEMA_VERSION = 1
@@ -63,6 +64,7 @@ REPAIR_COLLECTION_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
     "experiments/repair_collection.py",
+    "experiments/state_analysis.py",
     "src/python_bindings.cpp",
     "third_party/mapf_lns2/inc/BasicLNS.h",
     "third_party/mapf_lns2/inc/InitLNS.h",
@@ -628,6 +630,7 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
             job["dataset_root"], row, job["environment"], "Adaptive"
         )
         state = _plain(environment.reset(seed=solver_seed))
+        initial_complexity = summarize_initial_state_complexity(state)
         return {
             **_artifact_fields(),
             "split": row["split"],
@@ -642,6 +645,7 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
             "initial_feasible": bool(state["feasible"]),
             "initial_complete": bool(state["initial_solution_complete"]),
             "state_fingerprint": state_fingerprint(state),
+            "initial_complexity": initial_complexity,
             "status": "ok",
             "error": None,
         }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import csv
 import hashlib
 import itertools
 import json
@@ -13,12 +14,29 @@ from typing import Any, Iterable
 
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import run_closed_loop_collection
-from experiments.repair_collection import _read_json, _read_jsonl, _write_json
+from experiments.closed_loop_trace_storage import read_state_blob
+from experiments.repair_collection import (
+    _read_json,
+    _read_jsonl,
+    _write_json,
+    state_fingerprint,
+)
+from experiments.state_analysis import summarize_initial_state_complexity
 
 
 SPLIT = "balanced_wall_clock"
 CONTROLLERS = ("official_adaptive", "v2-full", "mixed-full-v2")
 STRATA = (("low", 1, 10), ("medium", 11, 100), ("high", 101, 500))
+INITIAL_PP_LOAD_STRATA = (
+    ("low", 0, 100_000),
+    ("medium", 100_001, 1_000_000),
+    ("high", 1_000_001, None),
+)
+DEFAULT_DIFFICULTY_CONFIG = (
+    Path(__file__).resolve().parents[1]
+    / "configs"
+    / "balanced_wall_clock_difficulty_audit.json"
+)
 
 
 def _fingerprint(value: Any) -> str:
@@ -384,6 +402,35 @@ def conflict_stratum(conflicts: int) -> str | None:
     return None
 
 
+def initial_pp_load_stratum(generated_nodes: int) -> str:
+    if generated_nodes < 0:
+        raise ValueError("initial PP generated-node count cannot be negative")
+    for name, lower, upper in INITIAL_PP_LOAD_STRATA:
+        if generated_nodes >= lower and (upper is None or generated_nodes <= upper):
+            return name
+    raise AssertionError("initial PP load strata do not cover the nonnegative integers")
+
+
+def _load_difficulty_config(config: str | Path) -> tuple[Path, dict[str, Any]]:
+    config_path = Path(config).resolve()
+    payload = _read_json(config_path)
+    configured_conflicts = tuple(
+        (name, int(bounds[0]), int(bounds[1]))
+        for name, bounds in payload["conflict_strata"].items()
+    )
+    configured_load = tuple(
+        (
+            name,
+            int(bounds[0]),
+            int(bounds[1]) if bounds[1] is not None else None,
+        )
+        for name, bounds in payload["initial_pp_load_strata"].items()
+    )
+    if configured_conflicts != STRATA or configured_load != INITIAL_PP_LOAD_STRATA:
+        raise ValueError("difficulty audit config differs from the implemented strata")
+    return config_path, payload
+
+
 def _agent_band(count: int) -> str:
     return "small" if count <= 200 else "medium" if count <= 400 else "large"
 
@@ -513,6 +560,210 @@ def select_balanced_cohort(
         "passed": selection_passed and len(selected) == 36,
         "decision": "eligible_for_formal" if selection_passed else "data_gate_failed",
         "formal_collection_allowed": selection_passed,
+    }
+    _write_json(output_root / "cohort_report.json", report)
+    return report
+
+
+def select_compute_load_balanced_cohort(
+    dataset: str | Path,
+    qualification: str | Path,
+    output: str | Path,
+    config: str | Path = DEFAULT_DIFFICULTY_CONFIG,
+) -> dict[str, Any]:
+    """Freeze a 3x3 conflict/load cohort without consulting controller outcomes."""
+
+    config_path, audit_config = _load_difficulty_config(config)
+    selection = dict(audit_config["future_cohort_selection"])
+    jobs_per_cell = int(selection["jobs_per_conflict_load_cell"])
+    jobs_per_source = int(selection["jobs_per_source_per_cell"])
+    map_cap = int(selection["global_jobs_per_map_cap"])
+    minimum_maps = int(selection["minimum_distinct_maps"])
+    if jobs_per_cell != jobs_per_source * 2:
+        raise ValueError("future cohort cell quota must equal two source quotas")
+
+    dataset_root = Path(dataset).resolve()
+    qualification_root = Path(qualification).resolve()
+    output_root = Path(output).resolve()
+    tasks = {
+        str(row["task_id"]): row
+        for row in _read_jsonl(dataset_root / SPLIT / "manifest.jsonl")
+    }
+    qualified = _read_jsonl(qualification_root / "qualification_manifest.jsonl")
+    keys = [(str(row["task_id"]), int(row["solver_seed"])) for row in qualified]
+    if len(keys) != len(set(keys)):
+        raise ValueError("qualification contains duplicate task/solver-seed results")
+
+    candidates = []
+    for result in qualified:
+        if str(result.get("status")) != "ok" or not bool(result.get("initial_complete")):
+            raise ValueError("qualification contains an invalid reset")
+        complexity = result.get("initial_complexity")
+        if not isinstance(complexity, dict):
+            raise ValueError(
+                "qualification lacks initial_complexity; rerun qualification with the current collector"
+            )
+        task = tasks[str(result["task_id"])]
+        conflicts = int(result["initial_conflicts"])
+        if int(complexity.get("conflict_pair_count", -1)) != conflicts:
+            raise ValueError("qualification complexity disagrees with initial conflict count")
+        generated_nodes = int(complexity["initial_low_level_generated"])
+        conflict_level = conflict_stratum(conflicts)
+        candidates.append(
+            {
+                "task_id": str(result["task_id"]),
+                "solver_seed": int(result["solver_seed"]),
+                "map_id": str(result["map_id"]),
+                "layout_mode": str(result["layout_mode"]),
+                "source_group": str(task["source_group"]),
+                "agent_count": int(result["agent_count"]),
+                "agent_band": _agent_band(int(result["agent_count"])),
+                "initial_conflicts": conflicts,
+                "conflict_stratum": conflict_level,
+                "initial_pp_load_stratum": initial_pp_load_stratum(generated_nodes),
+                "initial_low_level_generated": generated_nodes,
+                "initial_low_level_expanded": int(
+                    complexity["initial_low_level_expanded"]
+                ),
+                "total_path_cost": int(complexity["total_path_cost"]),
+                "conflict_event_count": int(complexity["conflict_event_count"]),
+                "active_conflict_agent_ratio": float(
+                    complexity["active_conflict_agent_ratio"]
+                ),
+                "largest_conflict_component_ratio": float(
+                    complexity["largest_conflict_component_ratio"]
+                ),
+                "state_fingerprint": str(result["state_fingerprint"]),
+            }
+        )
+
+    eligible = [row for row in candidates if row["conflict_stratum"] is not None]
+    cell_specs = [
+        (conflict, load)
+        for conflict in ("low", "medium", "high")
+        for load in ("low", "medium", "high")
+    ]
+    cell_specs.sort(
+        key=lambda cell: (
+            sum(
+                row["conflict_stratum"] == cell[0]
+                and row["initial_pp_load_stratum"] == cell[1]
+                for row in eligible
+            ),
+            cell,
+        )
+    )
+    selected: list[dict[str, Any]] = []
+    map_counts: collections.Counter[str] = collections.Counter()
+    cell_reports: dict[str, dict[str, Any]] = {}
+    for conflict_level, load_level in cell_specs:
+        cell_name = f"{conflict_level}__{load_level}"
+        pool = [
+            row
+            for row in eligible
+            if row["conflict_stratum"] == conflict_level
+            and row["initial_pp_load_stratum"] == load_level
+        ]
+        chosen: list[dict[str, Any]] = []
+        chosen_maps: set[str] = set()
+        for source in ("generated", "movingai"):
+            source_pool = sorted(
+                (row for row in pool if row["source_group"] == source),
+                key=lambda row: (
+                    map_counts[row["map_id"]],
+                    _fingerprint(
+                        [
+                            "compute-load-balanced-cohort-v1-source",
+                            conflict_level,
+                            load_level,
+                            source,
+                            row["task_id"],
+                            row["solver_seed"],
+                        ]
+                    ),
+                ),
+            )
+            for row in source_pool:
+                if sum(item["source_group"] == source for item in chosen) >= jobs_per_source:
+                    break
+                if (
+                    row["map_id"] in chosen_maps
+                    or map_counts[row["map_id"]] >= map_cap
+                ):
+                    continue
+                chosen.append(row)
+                chosen_maps.add(row["map_id"])
+                map_counts[row["map_id"]] += 1
+        source_counts = collections.Counter(row["source_group"] for row in chosen)
+        checks = {
+            "cell_count": len(chosen) == jobs_per_cell,
+            "generated_count": source_counts.get("generated", 0) == jobs_per_source,
+            "movingai_count": source_counts.get("movingai", 0) == jobs_per_source,
+            "distinct_maps": len(chosen_maps) == jobs_per_cell,
+        }
+        cell_reports[cell_name] = {
+            "eligible_count": len(pool),
+            "eligible_by_source": dict(
+                sorted(collections.Counter(row["source_group"] for row in pool).items())
+            ),
+            "selected_count": len(chosen),
+            "checks": checks,
+            "passed": all(checks.values()),
+        }
+        selected.extend(chosen)
+
+    overall_checks = {
+        "all_nine_cells_pass": all(row["passed"] for row in cell_reports.values()),
+        "selected_count": len(selected) == jobs_per_cell * len(cell_specs),
+        "minimum_distinct_maps": len({row["map_id"] for row in selected}) >= minimum_maps,
+        "global_map_cap": max(map_counts.values(), default=0) <= map_cap,
+        "exact_source_balance": all(
+            sum(row["source_group"] == source for row in selected)
+            == jobs_per_source * len(cell_specs)
+            for source in ("generated", "movingai")
+        ),
+    }
+    passed = all(overall_checks.values())
+    if passed:
+        selected.sort(
+            key=lambda row: (
+                str(row["conflict_stratum"]),
+                str(row["initial_pp_load_stratum"]),
+                str(row["map_id"]),
+                str(row["task_id"]),
+                int(row["solver_seed"]),
+            )
+        )
+        permutations = list(itertools.permutations(CONTROLLERS))
+        schedule = [
+            {
+                **row,
+                "schedule_group": index % len(permutations),
+                "controller_order": list(permutations[index % len(permutations)]),
+            }
+            for index, row in enumerate(selected)
+        ]
+        _write_jsonl_atomic(output_root / "cohort.jsonl", selected)
+        _write_json(
+            output_root / "execution_schedule.json",
+            {
+                "schema": "lns2.controller_execution_schedule.compute_load_v1",
+                "selection_blind_to_controller_outcomes": True,
+                "entries": schedule,
+            },
+        )
+    report = {
+        "schema": "lns2.compute_load_balanced_wall_clock_cohort.v1",
+        "configuration_sha256": sha256_file(config_path),
+        "qualification_count": len(qualified),
+        "eligible_nonzero_nonextreme_count": len(eligible),
+        "selected_count": len(selected),
+        "selection_blind_to_controller_outcomes": True,
+        "cell_reports": dict(sorted(cell_reports.items())),
+        "overall_checks": overall_checks,
+        "passed": passed,
+        "decision": "eligible_for_formal" if passed else "compute_load_data_gate_failed",
+        "formal_collection_allowed": passed,
     }
     _write_json(output_root / "cohort_report.json", report)
     return report
@@ -770,26 +1021,30 @@ def _paired_group_comparison(
     return result
 
 
-def analyze_scheduled(
-    collection: str | Path, schedule_root: str | Path, output: str | Path
-) -> dict[str, Any]:
-    collection_root = Path(collection).resolve()
-    schedule = _read_json(Path(schedule_root).resolve() / "execution_schedule.json")
+def _load_scheduled_controller_rows(
+    collection_root: Path, schedule: dict[str, Any]
+) -> tuple[
+    dict[tuple[str, int], dict[str, Any]],
+    dict[str, list[dict[str, Any]]],
+    dict[str, dict[tuple[str, int], dict[str, Any]]],
+]:
     schedule_index = {_episode_key(row): dict(row) for row in schedule["entries"]}
     expected = set(schedule_index)
     rows = []
     for group in range(6):
         for controller in CONTROLLERS:
             phase = "official_adaptive" if controller == "official_adaptive" else "realized_dynamic"
-            path = collection_root / f"order_{group}" / controller / f"{phase}_manifest.jsonl"
-            for row in _read_jsonl(path):
-                rows.append({**row, "controller_id": controller})
+            lane = collection_root / f"order_{group}" / controller
+            path = lane / f"{phase}_manifest.jsonl"
+            rows.extend(
+                {**row, "controller_id": controller, "_lane_root": str(lane)}
+                for row in _read_jsonl(path)
+            )
     by_controller: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
     for row in rows:
         by_controller[str(row["controller_id"])].append(row)
     if any(
-        {(str(row["task_id"]), int(row["solver_seed"])) for row in by_controller[name]}
-        != expected
+        {_episode_key(row) for row in by_controller[name]} != expected
         for name in CONTROLLERS
     ):
         raise ValueError("formal controller coverage differs from the frozen cohort")
@@ -797,6 +1052,452 @@ def analyze_scheduled(
         controller: {_episode_key(row): row for row in by_controller[controller]}
         for controller in CONTROLLERS
     }
+    return schedule_index, by_controller, indexed
+
+
+def _average_ranks(values: list[float]) -> list[float]:
+    ordered = sorted(range(len(values)), key=lambda index: (values[index], index))
+    ranks = [0.0] * len(values)
+    cursor = 0
+    while cursor < len(ordered):
+        end = cursor + 1
+        while end < len(ordered) and values[ordered[end]] == values[ordered[cursor]]:
+            end += 1
+        average = (cursor + end - 1) / 2.0
+        for index in ordered[cursor:end]:
+            ranks[index] = average
+        cursor = end
+    return ranks
+
+
+def _spearman(left: list[float], right: list[float]) -> float:
+    if len(left) != len(right) or len(left) < 2:
+        return 0.0
+    left_ranks, right_ranks = _average_ranks(left), _average_ranks(right)
+    left_mean, right_mean = _mean(left_ranks), _mean(right_ranks)
+    numerator = sum(
+        (a - left_mean) * (b - right_mean)
+        for a, b in zip(left_ranks, right_ranks)
+    )
+    left_scale = math.sqrt(sum((value - left_mean) ** 2 for value in left_ranks))
+    right_scale = math.sqrt(sum((value - right_mean) ** 2 for value in right_ranks))
+    return numerator / (left_scale * right_scale) if left_scale and right_scale else 0.0
+
+
+def _controller_group_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    aggregate = _aggregate_rows(rows)
+    summaries = [dict(row["summary"]) for row in rows]
+    successes = [row for row in summaries if bool(row["success"])]
+    return {
+        **aggregate,
+        "mean_actual_observed_wall_seconds": _mean(
+            float(row["episode_observed_wall_seconds"]) for row in summaries
+        ),
+        "mean_initial_pp_seconds": _mean(
+            float(dict(row.get("reset_timings", {})).get("initial_solution_seconds", 0.0))
+            for row in summaries
+        ),
+        "mean_success_wall_ttf": _mean(
+            float(row["wall_time_to_feasible"]) for row in successes
+        ),
+        "failure_cap_penalty_seconds": sum(
+            max(
+                0.0,
+                float(row["capped_wall_time_to_feasible"])
+                - float(row["episode_observed_wall_seconds"]),
+            )
+            for row in summaries
+            if not bool(row["success"])
+        ),
+    }
+
+
+def _paired_controller_comparison(
+    baseline: dict[tuple[str, int], dict[str, Any]],
+    candidate: dict[tuple[str, int], dict[str, Any]],
+    keys: list[tuple[str, int]],
+) -> dict[str, Any]:
+    left = [_scientific_summary(baseline[key]) for key in keys]
+    right = [_scientific_summary(candidate[key]) for key in keys]
+
+    def improvement(field: str) -> float:
+        return _relative_improvement(
+            _mean(row[field] for row in left), _mean(row[field] for row in right)
+        )
+
+    return {
+        "episode_count": len(keys),
+        "baseline_success_count": sum(row["success"] for row in left),
+        "candidate_success_count": sum(row["success"] for row in right),
+        "capped_wall_ttf_improvement": improvement("capped_wall_ttf"),
+        "fixed_auc_improvement": improvement("fixed_auc"),
+        "repair_wall_improvement": improvement("repair_wall_seconds"),
+        "actual_observed_wall_improvement": _relative_improvement(
+            _mean(
+                float(baseline[key]["summary"]["episode_observed_wall_seconds"])
+                for key in keys
+            ),
+            _mean(
+                float(candidate[key]["summary"]["episode_observed_wall_seconds"])
+                for key in keys
+            ),
+        ),
+    }
+
+
+def _grouped_difficulty_results(
+    complexity_rows: list[dict[str, Any]],
+    indexed: dict[str, dict[tuple[str, int], dict[str, Any]]],
+    field: str,
+) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in complexity_rows:
+        grouped[str(row[field])].append(row)
+    output = {}
+    for name, rows in sorted(grouped.items()):
+        keys = [(str(row["task_id"]), int(row["solver_seed"])) for row in rows]
+        output[name] = {
+            "episode_count": len(rows),
+            "source_counts": dict(
+                sorted(collections.Counter(str(row["source_group"]) for row in rows).items())
+            ),
+            "mean_initial_conflicts": _mean(float(row["initial_conflicts"]) for row in rows),
+            "mean_initial_pp_generated": _mean(
+                float(row["initial_low_level_generated"]) for row in rows
+            ),
+            "mean_total_path_cost": _mean(float(row["total_path_cost"]) for row in rows),
+            "controllers": {
+                controller: _controller_group_summary([indexed[controller][key] for key in keys])
+                for controller in CONTROLLERS
+            },
+            "comparisons": {
+                "v2_vs_adaptive": _paired_controller_comparison(
+                    indexed["official_adaptive"], indexed["v2-full"], keys
+                ),
+                "mixed_vs_adaptive": _paired_controller_comparison(
+                    indexed["official_adaptive"], indexed["mixed-full-v2"], keys
+                ),
+                "mixed_vs_v2": _paired_controller_comparison(
+                    indexed["v2-full"], indexed["mixed-full-v2"], keys
+                ),
+            },
+        }
+    return output
+
+
+def _write_difficulty_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".partial")
+    fieldnames = list(rows[0]) if rows else []
+    with partial.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    partial.replace(path)
+
+
+def _difficulty_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "# V2/Mixed Full 分层墙钟难度审计",
+        "",
+        f"结论：`{report['decision']}`。本报告是对冻结正式结果的事后方法审计，不重新训练或运行控制器。",
+        "",
+        "## 分层完整性",
+        "",
+        "| 分层 | low | medium | high |",
+        "| --- | ---: | ---: | ---: |",
+        "| 唯一冲突 agent 对 | "
+        + " | ".join(str(report["stratification"]["conflict_counts"].get(name, 0)) for name in ("low", "medium", "high"))
+        + " |",
+        "| 初始 PP generated nodes | "
+        + " | ".join(str(report["stratification"]["initial_pp_load_counts"].get(name, 0)) for name in ("low", "medium", "high"))
+        + " |",
+        "",
+        "初始 PP 负载阈值固定为：low <= 100,000，medium 100,001-1,000,000，high > 1,000,000 generated nodes。",
+        "",
+        "## 来源与负载",
+        "",
+        "| 来源 | low | medium | high |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for source in ("generated", "movingai"):
+        counts = report["stratification"]["source_by_initial_pp_load"].get(source, {})
+        lines.append(
+            f"| {source} | {counts.get('low', 0)} | {counts.get('medium', 0)} | {counts.get('high', 0)} |"
+        )
+    lines.extend(
+        [
+            "",
+            "当前 cohort 的来源与计算负载完全混杂，因此只能支持同一实例内的控制器配对比较，不能把来源差异解释为等难度下的地图结构差异。",
+            "",
+            "## 难度相关性",
+            "",
+            "Spearman 相关性使用官方 Adaptive 的初始状态和时间，仅作解释性诊断。",
+            "",
+            "| 初始指标 | initial PP time | actual episode time | capped TTF |",
+            "| --- | ---: | ---: | ---: |",
+        ]
+    )
+    for name, values in report["difficulty_correlations"].items():
+        lines.append(
+            f"| {name} | {values['initial_pp_seconds']:.3f} | {values['actual_episode_seconds']:.3f} | {values['capped_wall_ttf']:.3f} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 解释边界",
+            "",
+            "- `num_of_colliding_pairs` 是唯一冲突 agent 对数，不是重复时空冲突事件数。",
+            "- capped TTF 对失败按 600 秒记账；actual episode time 是实际观察到的执行时间。",
+            "- 旧结论保留为固定 cohort 上的配对结果，但不再称为计算负载均衡确认。",
+            "- 下一次正式实验必须先通过来源与初始 PP 负载重叠门槛，再运行控制器。",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def audit_balanced_cohort_difficulty(
+    collection: str | Path,
+    schedule_root: str | Path,
+    output: str | Path,
+    config: str | Path = DEFAULT_DIFFICULTY_CONFIG,
+) -> dict[str, Any]:
+    config_path, _audit_config = _load_difficulty_config(config)
+    collection_root = Path(collection).resolve()
+    schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
+    schedule = _read_json(schedule_path)
+    schedule_index, _by_controller, indexed = _load_scheduled_controller_rows(
+        collection_root, schedule
+    )
+    complexity_rows = []
+    integrity_errors = []
+    for key in sorted(schedule_index):
+        source = indexed["official_adaptive"][key]
+        lane_root = Path(str(source["_lane_root"])).resolve()
+        reference = str(source.get("initial_state_ref") or "")
+        if not reference:
+            raise ValueError(f"official episode is missing initial_state_ref: {key}")
+        blob = (lane_root / reference).resolve()
+        try:
+            blob.relative_to(lane_root)
+        except ValueError as error:
+            raise ValueError(f"initial state reference escapes controller lane: {key}") from error
+        state = read_state_blob(blob)
+        complexity = summarize_initial_state_complexity(state)
+        expected_fingerprint = str(source["summary"]["initial_fingerprint"])
+        errors = []
+        if state_fingerprint(state) != expected_fingerprint:
+            errors.append("state_fingerprint")
+        if int(complexity["conflict_pair_count"]) != int(
+            schedule_index[key]["initial_conflicts"]
+        ):
+            errors.append("initial_conflicts")
+        if conflict_stratum(int(complexity["conflict_pair_count"])) != str(
+            schedule_index[key]["conflict_stratum"]
+        ):
+            errors.append("conflict_stratum")
+        if int(complexity["agent_count"]) != int(schedule_index[key]["agent_count"]):
+            errors.append("agent_count")
+        if errors:
+            integrity_errors.append(
+                {"task_id": key[0], "solver_seed": key[1], "fields": errors}
+            )
+        complexity_rows.append(
+            {
+                "task_id": key[0],
+                "solver_seed": key[1],
+                "map_conflict_cell": (
+                    f"{schedule_index[key]['map_id']}::{schedule_index[key]['conflict_stratum']}"
+                ),
+                **{
+                    name: schedule_index[key][name]
+                    for name in (
+                        "map_id",
+                        "source_group",
+                        "layout_mode",
+                        "agent_count",
+                        "agent_band",
+                        "initial_conflicts",
+                        "conflict_stratum",
+                    )
+                },
+                "initial_pp_load_stratum": initial_pp_load_stratum(
+                    int(complexity["initial_low_level_generated"])
+                ),
+                **complexity,
+            }
+        )
+    if integrity_errors:
+        raise ValueError(f"initial-state complexity audit failed: {integrity_errors[:3]}")
+
+    conflict_counts = collections.Counter(
+        str(row["conflict_stratum"]) for row in complexity_rows
+    )
+    load_counts = collections.Counter(
+        str(row["initial_pp_load_stratum"]) for row in complexity_rows
+    )
+    source_by_load: dict[str, dict[str, int]] = {}
+    for source in sorted({str(row["source_group"]) for row in complexity_rows}):
+        source_by_load[source] = dict(
+            sorted(
+                collections.Counter(
+                    str(row["initial_pp_load_stratum"])
+                    for row in complexity_rows
+                    if str(row["source_group"]) == source
+                ).items()
+            )
+        )
+    conflict_by_load: dict[str, dict[str, int]] = {}
+    for conflict in ("low", "medium", "high"):
+        conflict_by_load[conflict] = dict(
+            sorted(
+                collections.Counter(
+                    str(row["initial_pp_load_stratum"])
+                    for row in complexity_rows
+                    if str(row["conflict_stratum"]) == conflict
+                ).items()
+            )
+        )
+
+    official = indexed["official_adaptive"]
+    targets = {
+        "initial_pp_seconds": [
+            float(dict(official[(row["task_id"], row["solver_seed"])]["summary"].get("reset_timings", {})).get("initial_solution_seconds", 0.0))
+            for row in complexity_rows
+        ],
+        "actual_episode_seconds": [
+            float(official[(row["task_id"], row["solver_seed"])]["summary"]["episode_observed_wall_seconds"])
+            for row in complexity_rows
+        ],
+        "capped_wall_ttf": [
+            float(official[(row["task_id"], row["solver_seed"])]["summary"]["capped_wall_time_to_feasible"])
+            for row in complexity_rows
+        ],
+    }
+    predictor_names = (
+        "conflict_pair_count",
+        "conflict_event_count",
+        "active_conflict_agent_ratio",
+        "largest_conflict_component_ratio",
+        "agent_count",
+        "total_path_cost",
+        "initial_low_level_generated",
+        "initial_low_level_expanded",
+    )
+    correlations = {
+        name: {
+            target: _spearman(
+                [float(row[name]) for row in complexity_rows], values
+            )
+            for target, values in targets.items()
+        }
+        for name in predictor_names
+    }
+    source_overlap = all(
+        all(source_by_load.get(source, {}).get(load, 0) > 0 for source in ("generated", "movingai"))
+        for load in ("low", "medium", "high")
+    )
+    load_sizes = [load_counts.get(name, 0) for name in ("low", "medium", "high")]
+    load_balanced = max(load_sizes) - min(load_sizes) <= 1
+    gates = {
+        "conflict_tiers_have_12_each": all(conflict_counts.get(name, 0) == 12 for name in ("low", "medium", "high")),
+        "initial_pp_load_tiers_balanced": load_balanced,
+        "generated_and_movingai_overlap_in_every_load_tier": source_overlap,
+        "initial_state_integrity": not integrity_errors,
+    }
+
+    csv_rows = []
+    for row in complexity_rows:
+        key = (str(row["task_id"]), int(row["solver_seed"]))
+        flat = dict(row)
+        for controller in CONTROLLERS:
+            summary = dict(indexed[controller][key]["summary"])
+            prefix = controller.replace("-", "_")
+            flat.update(
+                {
+                    f"{prefix}_success": bool(summary["success"]),
+                    f"{prefix}_capped_wall_ttf": float(summary["capped_wall_time_to_feasible"]),
+                    f"{prefix}_actual_episode_seconds": float(summary["episode_observed_wall_seconds"]),
+                    f"{prefix}_initial_pp_seconds": float(dict(summary.get("reset_timings", {})).get("initial_solution_seconds", 0.0)),
+                    f"{prefix}_repair_wall_seconds": float(summary.get("repair_wall_seconds", 0.0)),
+                    f"{prefix}_fixed_auc": float(summary["fixed_budget_conflict_auc"]),
+                }
+            )
+        csv_rows.append(flat)
+
+    report = {
+        "schema": "lns2.balanced_wall_clock_difficulty_audit.v1",
+        "evidence_level": "post_hoc_methodology_audit_of_frozen_end_to_end_results",
+        "input": {
+            "config_sha256": sha256_file(config_path),
+            "schedule_sha256": sha256_file(schedule_path),
+            "implementation_sha256": {
+                relative: sha256_file(Path(__file__).resolve().parents[1] / relative)
+                for relative in (
+                    "experiments/balanced_wall_clock.py",
+                    "experiments/closed_loop_trace_storage.py",
+                    "experiments/state_analysis.py",
+                )
+            },
+            "episode_count": len(complexity_rows),
+            "controller_episode_count": len(complexity_rows) * len(CONTROLLERS),
+        },
+        "stratification": {
+            "conflict_definition": "unique unordered colliding-agent pairs",
+            "conflict_thresholds": [list(value) for value in STRATA],
+            "initial_pp_load_definition": "initial PP low-level generated nodes",
+            "initial_pp_load_thresholds": [list(value) for value in INITIAL_PP_LOAD_STRATA],
+            "conflict_counts": dict(sorted(conflict_counts.items())),
+            "initial_pp_load_counts": dict(sorted(load_counts.items())),
+            "conflict_by_initial_pp_load": conflict_by_load,
+            "source_by_initial_pp_load": source_by_load,
+        },
+        "difficulty_correlations": correlations,
+        "grouped_results": {
+            "conflict_stratum": _grouped_difficulty_results(
+                complexity_rows, indexed, "conflict_stratum"
+            ),
+            "initial_pp_load_stratum": _grouped_difficulty_results(
+                complexity_rows, indexed, "initial_pp_load_stratum"
+            ),
+            "source_group": _grouped_difficulty_results(
+                complexity_rows, indexed, "source_group"
+            ),
+            "map_conflict_cell": _grouped_difficulty_results(
+                complexity_rows, indexed, "map_conflict_cell"
+            ),
+        },
+        "methodology_gates": gates,
+        "decision": (
+            "compute_load_balanced_confirmation"
+            if all(gates.values())
+            else "conflict_count_balanced_pilot_with_compute_load_confounding"
+        ),
+        "interpretation": (
+            "Paired controller comparisons on each frozen instance remain valid, but the pooled "
+            "cohort is not a balanced computational-load benchmark and cannot isolate source or "
+            "map-family effects at matched difficulty."
+        ),
+    }
+    output_root = Path(output).resolve()
+    _write_json(output_root / "difficulty_audit.json", report)
+    _write_difficulty_csv(output_root / "difficulty_episodes.csv", csv_rows)
+    markdown = _difficulty_markdown(report)
+    markdown_path = output_root / "difficulty_audit_zh.md"
+    markdown_path.write_text(markdown, encoding="utf-8", newline="\n")
+    return report
+
+
+def analyze_scheduled(
+    collection: str | Path, schedule_root: str | Path, output: str | Path
+) -> dict[str, Any]:
+    collection_root = Path(collection).resolve()
+    schedule = _read_json(Path(schedule_root).resolve() / "execution_schedule.json")
+    schedule_index, by_controller, indexed = _load_scheduled_controller_rows(
+        collection_root, schedule
+    )
+    expected = set(schedule_index)
     integrity_errors = []
     for key in sorted(expected):
         summaries_at_key = [indexed[name][key]["summary"] for name in CONTROLLERS]
@@ -885,12 +1586,16 @@ def analyze_scheduled(
 
 __all__ = [
     "CONTROLLERS",
+    "INITIAL_PP_LOAD_STRATA",
     "STRATA",
     "analyze_scheduled",
+    "audit_balanced_cohort_difficulty",
     "build_replacement_dataset",
     "collect_scheduled",
     "conflict_stratum",
+    "initial_pp_load_stratum",
     "merge_datasets",
     "prepare_movingai_dataset",
     "select_balanced_cohort",
+    "select_compute_load_balanced_cohort",
 ]

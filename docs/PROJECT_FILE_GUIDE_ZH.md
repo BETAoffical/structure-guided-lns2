@@ -49,6 +49,7 @@ Explorer 默认隐藏但必须保留：
 | `lns2_bottleneck.py`、`tradeoff_evaluation.py` | 当前双轨评测与 manifest 兼容接口。 |
 | `repair_collection.py`、`repair_quality.py` | 基础修复经验采集与质量报告。 |
 | `result_consolidation.py` | 24 项冻结证据的确定性汇总。 |
+| `balanced_wall_clock.py` | V2/Mixed Full 分层墙钟运行、冻结结果分析和计算负载审计。 |
 
 ## scripts 目录
 
@@ -63,6 +64,7 @@ Explorer 默认隐藏但必须保留：
 - `consolidate_research_results.py`
 - `audit_repository_hygiene.py`
 - `check_environment.py`
+- `run_balanced_wall_clock.py`：使用 `audit-difficulty` 复核冲突分层与初始 PP 负载。
 
 其余脚本用于 trace 转换、等价性验证、性能 benchmark、模型导出或旧采集 manifest 恢复，仍有测试或正式证据依赖。
 
@@ -71,6 +73,8 @@ Explorer 默认隐藏但必须保留：
 `configs/` 只保留当前可执行协议：闭环、MovingAI OOD、repair collection、stall guard、数据生成、结果收束和仓库维护。配置中的历史文档链接指向安全标签，不要求当前分支保留历史源码。
 
 `artifacts/initlns-closed-loop-policy-v1` 是 canonical v1；`artifacts/initlns-closed-loop-controller-v2` 是 canonical v2。不得用确认集结果重新训练或替换它们。
+
+当前 V2/Mixed Full 墙钟结果必须结合 `V2_BALANCED_DIFFICULTY_AUDIT_ZH.md` 阅读：旧 cohort 的冲突对数分层正确，但生成地图与 MovingAI 的初始 PP 负载没有重叠，因此它是固定实例配对 Pilot，不是等计算负载的跨来源速度确认。
 
 ## build 目录
 

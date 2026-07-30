@@ -1,0 +1,65 @@
+{
+  "schema": "lns2.balanced_wall_clock_difficulty_audit_evidence.v1",
+  "evidence_level": "post_hoc_methodology_audit_of_frozen_end_to_end_results",
+  "formal_report_sha256_unchanged": "953af2f961650062263511fac3c4cd722d2d8d78fbf389836c71a8e63f95ace0",
+  "difficulty_config_sha256": "0cba12c36116835ca3d9240c85a1a87c1693c92a6b2584aa222146a017879265",
+  "execution_schedule_sha256": "6d53c38fe6d374335514c9003f0cda3a776dab9b4b4c57ca19b64388c32f3868",
+  "full_difficulty_audit_sha256": "e77ff911d80eff1ffdf4920f29285893fd97c2672ab1a43b235774fcd762a5a3",
+  "difficulty_episode_csv_sha256": "0c46bd9a58a6e94a575b25b9f59b25fc5939d255b247bf6451a653bf5e047570",
+  "integrity": {
+    "initial_state_count": 36,
+    "controller_episode_count": 108,
+    "state_fingerprint_mismatch_count": 0,
+    "conflict_reconstruction_mismatch_count": 0
+  },
+  "stratification": {
+    "conflict_pair_counts": {
+      "low": 12,
+      "medium": 12,
+      "high": 12
+    },
+    "initial_pp_generated_node_counts": {
+      "low": 19,
+      "medium": 5,
+      "high": 12
+    },
+    "source_by_initial_pp_load": {
+      "generated": {
+        "low": 19,
+        "medium": 5,
+        "high": 0
+      },
+      "movingai": {
+        "low": 0,
+        "medium": 0,
+        "high": 12
+      }
+    }
+  },
+  "spearman_with_initial_pp_seconds": {
+    "unique_conflict_pairs": 0.4357901738430578,
+    "agent_count": 0.8506799202880757,
+    "total_path_cost": 0.9806949806949807,
+    "initial_low_level_generated": 0.9935649935649936
+  },
+  "source_results": {
+    "generated": {
+      "success_adaptive_v2_mixed": [23, 23, 24],
+      "mean_actual_seconds_adaptive_v2_mixed": [0.4396011278749845, 0.5905766547083542, 0.4462107664583357],
+      "mean_capped_ttf_adaptive_v2_mixed": [25.385520041166682, 25.471557310458333, 0.4442615316666509]
+    },
+    "movingai": {
+      "success_adaptive_v2_mixed": [11, 11, 11],
+      "mean_actual_seconds_adaptive_v2_mixed": [84.84222643625, 93.92304799658338, 92.30183291083331],
+      "mean_capped_ttf_adaptive_v2_mixed": [123.50715115650003, 130.74939197883336, 130.40069072899993]
+    }
+  },
+  "methodology_gates": {
+    "conflict_tiers_have_12_each": true,
+    "initial_pp_load_tiers_balanced": false,
+    "generated_and_movingai_overlap_in_every_load_tier": false,
+    "initial_state_integrity": true
+  },
+  "decision": "conflict_count_balanced_pilot_with_compute_load_confounding",
+  "interpretation": "The paired controller outcomes remain valid on the frozen instances. The pooled result is not a computational-load-balanced confirmation and cannot isolate source or map-family effects at matched difficulty."
+}

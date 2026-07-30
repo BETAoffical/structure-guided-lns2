@@ -7,11 +7,17 @@ from pathlib import Path
 
 from experiments.balanced_wall_clock import (
     analyze_scheduled,
+    audit_balanced_cohort_difficulty,
     build_replacement_dataset,
     collect_scheduled,
     conflict_stratum,
+    initial_pp_load_stratum,
     select_balanced_cohort,
+    select_compute_load_balanced_cohort,
 )
+from experiments.closed_loop_trace_storage import write_state_blob
+from experiments.repair_collection import state_fingerprint
+from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
@@ -110,6 +116,34 @@ class BalancedWallClockTests(unittest.TestCase):
         self.assertEqual(conflict_stratum(101), "high")
         self.assertEqual(conflict_stratum(500), "high")
         self.assertIsNone(conflict_stratum(501))
+        self.assertEqual(initial_pp_load_stratum(0), "low")
+        self.assertEqual(initial_pp_load_stratum(100_000), "low")
+        self.assertEqual(initial_pp_load_stratum(100_001), "medium")
+        self.assertEqual(initial_pp_load_stratum(1_000_000), "medium")
+        self.assertEqual(initial_pp_load_stratum(1_000_001), "high")
+        with self.assertRaisesRegex(ValueError, "cannot be negative"):
+            initial_pp_load_stratum(-1)
+
+    def test_initial_complexity_distinguishes_pairs_events_and_pp_load(self) -> None:
+        state = {
+            "rows": 2,
+            "cols": 3,
+            "obstacles": [0] * 6,
+            "agents": [
+                {"id": 10, "path": [0, 0, 1]},
+                {"id": 20, "path": [0, 0, 2]},
+            ],
+            "conflict_edges": [[10, 20]],
+            "num_of_colliding_pairs": 1,
+            "low_level": {"generated": 250_000, "expanded": 100_000, "reopened": 3, "runs": 2},
+        }
+        summary = summarize_initial_state_complexity(state)
+        self.assertEqual(summary["conflict_pair_count"], 1)
+        self.assertEqual(summary["conflict_event_count"], 2)
+        self.assertEqual(summary["active_conflict_agent_ratio"], 1.0)
+        self.assertEqual(summary["largest_conflict_component_size"], 2)
+        self.assertEqual(summary["total_path_cost"], 4)
+        self.assertEqual(summary["initial_low_level_generated"], 250_000)
 
     def test_selector_is_blind_and_balances_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -205,19 +239,113 @@ class BalancedWallClockTests(unittest.TestCase):
                     resume=False,
                 )
 
+    def test_compute_load_selector_requires_all_source_cell_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dataset = root / "dataset" / "balanced_wall_clock"
+            qualification = root / "qualification"
+            dataset.mkdir(parents=True)
+            qualification.mkdir(parents=True)
+            tasks = []
+            results = []
+            conflict_values = {"low": 5, "medium": 50, "high": 200}
+            load_values = {"low": 50_000, "medium": 500_000, "high": 2_000_000}
+            for conflict_level, conflicts in conflict_values.items():
+                for load_level, generated in load_values.items():
+                    for source in ("generated", "movingai"):
+                        for copy in range(2):
+                            task_id = (
+                                f"{conflict_level}-{load_level}-{source}-{copy}"
+                            )
+                            map_id = f"map-{task_id}"
+                            tasks.append(
+                                {
+                                    "split": "balanced_wall_clock",
+                                    "task_id": task_id,
+                                    "map_id": map_id,
+                                    "layout_mode": source,
+                                    "source_group": source,
+                                    "agent_count": 200,
+                                }
+                            )
+                            results.append(
+                                {
+                                    "status": "ok",
+                                    "initial_complete": True,
+                                    "task_id": task_id,
+                                    "map_id": map_id,
+                                    "layout_mode": source,
+                                    "agent_count": 200,
+                                    "solver_seed": 1,
+                                    "initial_conflicts": conflicts,
+                                    "state_fingerprint": task_id,
+                                    "initial_complexity": {
+                                        "conflict_pair_count": conflicts,
+                                        "initial_low_level_generated": generated,
+                                        "initial_low_level_expanded": generated // 2,
+                                        "total_path_cost": generated // 10,
+                                        "conflict_event_count": conflicts * 2,
+                                        "active_conflict_agent_ratio": 0.5,
+                                        "largest_conflict_component_ratio": 0.25,
+                                    },
+                                }
+                            )
+            (dataset / "manifest.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in tasks), encoding="utf-8"
+            )
+            manifest = qualification / "qualification_manifest.jsonl"
+            manifest.write_text(
+                "".join(json.dumps(row) + "\n" for row in results), encoding="utf-8"
+            )
+
+            report = select_compute_load_balanced_cohort(
+                root / "dataset", qualification, root / "selected"
+            )
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["selected_count"], 36)
+            self.assertEqual(len(report["cell_reports"]), 9)
+            self.assertTrue(all(row["passed"] for row in report["cell_reports"].values()))
+            schedule = json.loads(
+                (root / "selected" / "execution_schedule.json").read_text()
+            )["entries"]
+            self.assertEqual(
+                {source: sum(row["source_group"] == source for row in schedule) for source in ("generated", "movingai")},
+                {"generated": 18, "movingai": 18},
+            )
+            self.assertEqual(
+                {load: sum(row["initial_pp_load_stratum"] == load for row in schedule) for load in ("low", "medium", "high")},
+                {"low": 12, "medium": 12, "high": 12},
+            )
+
+            del results[0]["initial_complexity"]
+            manifest.write_text(
+                "".join(json.dumps(row) + "\n" for row in results), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "lacks initial_complexity"):
+                select_compute_load_balanced_cohort(
+                    root / "dataset", qualification, root / "invalid"
+                )
+
     def test_analysis_uses_paired_map_and_stratum_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             schedule_rows = []
             for index in range(12):
+                stratum = ("low", "medium", "high")[index % 3]
+                initial_conflicts = {"low": 1, "medium": 11, "high": 101}[stratum]
+                agent_count = initial_conflicts * 2
+                source_group = "movingai" if stratum == "high" else "generated"
                 schedule_rows.append(
                     {
                         "task_id": f"task-{index}",
                         "solver_seed": 1,
                         "map_id": f"map-{index}",
-                        "source_group": "movingai" if index % 2 else "generated",
-                        "agent_band": "small" if index % 2 else "large",
-                        "conflict_stratum": ("low", "medium", "high")[index % 3],
+                        "source_group": source_group,
+                        "layout_mode": source_group,
+                        "agent_count": agent_count,
+                        "agent_band": "small" if agent_count <= 200 else "medium",
+                        "initial_conflicts": initial_conflicts,
+                        "conflict_stratum": stratum,
                         "schedule_group": index % 6,
                         "controller_order": [
                             "official_adaptive",
@@ -244,22 +372,67 @@ class BalancedWallClockTests(unittest.TestCase):
                     path.mkdir(parents=True)
                     rows = []
                     for item in selected:
+                        initial_conflicts = int(item["initial_conflicts"])
+                        agents = [
+                            {"id": 2 * pair + offset, "path": [pair]}
+                            for pair in range(initial_conflicts)
+                            for offset in (0, 1)
+                        ]
+                        generated = (50_000, 500_000, 2_000_000)[
+                            int(item["task_id"].split("-")[-1]) % 3
+                        ]
+                        state = {
+                            "initialized": True,
+                            "initial_solution_complete": True,
+                            "feasible": False,
+                            "done": False,
+                            "iteration": 0,
+                            "rows": 1,
+                            "cols": initial_conflicts,
+                            "sum_of_costs": 0,
+                            "num_of_colliding_pairs": initial_conflicts,
+                            "low_level": {
+                                "generated": generated,
+                                "expanded": generated // 2,
+                                "reopened": 0,
+                                "runs": len(agents),
+                            },
+                            "obstacles": [0] * initial_conflicts,
+                            "conflict_edges": [
+                                [2 * pair, 2 * pair + 1]
+                                for pair in range(initial_conflicts)
+                            ],
+                            "agents": agents,
+                        }
+                        initial_state_ref = None
+                        if controller == "official_adaptive":
+                            initial_state_ref, _blob = write_state_blob(path, state)
                         ttf = 120.0 if controller == "official_adaptive" else 100.0
                         if controller == "mixed-full-v2":
                             ttf = 90.0
                         rows.append(
                             {
                                 **{key: item[key] for key in ("task_id", "solver_seed", "map_id")},
+                                "agent_count": int(item["agent_count"]),
+                                "initial_state_ref": (
+                                    initial_state_ref.as_posix()
+                                    if isinstance(initial_state_ref, Path)
+                                    else initial_state_ref
+                                ),
                                 "status": "ok",
                                 "summary": {
                                     "success": True,
-                                    "initial_fingerprint": f"fp-{item['task_id']}",
-                                    "initial_conflicts": 10,
+                                    "initial_fingerprint": state_fingerprint(state),
+                                    "initial_conflicts": initial_conflicts,
                                     "capped_wall_time_to_feasible": ttf,
+                                    "wall_time_to_feasible": ttf,
+                                    "episode_observed_wall_seconds": ttf,
                                     "fixed_budget_conflict_auc": ttf,
                                     "normalized_fixed_budget_conflict_auc": ttf / 1000.0,
                                     "repair_iterations": 2,
-                                    "final_low_level": {"generated": 10, "expanded": 5},
+                                    "repair_wall_seconds": ttf / 2.0,
+                                    "reset_timings": {"initial_solution_seconds": ttf / 4.0},
+                                    "final_low_level": {"generated": generated, "expanded": generated // 2},
                                     "invalid_action_count": 0,
                                     "fingerprint_mismatch_count": 0,
                                     "controller_totals": {},
@@ -278,6 +451,23 @@ class BalancedWallClockTests(unittest.TestCase):
             self.assertEqual(
                 report["comparisons"]["mixed_vs_v2_map_bootstrap"]["map_count"], 12
             )
+            audit = audit_balanced_cohort_difficulty(
+                collection, cohort, root / "difficulty-report"
+            )
+            self.assertEqual(
+                audit["decision"],
+                "conflict_count_balanced_pilot_with_compute_load_confounding",
+            )
+            self.assertEqual(
+                audit["stratification"]["initial_pp_load_counts"],
+                {"high": 4, "low": 4, "medium": 4},
+            )
+            self.assertFalse(
+                audit["methodology_gates"][
+                    "generated_and_movingai_overlap_in_every_load_tier"
+                ]
+            )
+            self.assertTrue((root / "difficulty-report" / "difficulty_episodes.csv").is_file())
 
 
 if __name__ == "__main__":

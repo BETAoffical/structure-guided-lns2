@@ -14,11 +14,13 @@ if NATIVE_BUILD.is_dir():
 
 from experiments.balanced_wall_clock import (  # noqa: E402
     analyze_scheduled,
+    audit_balanced_cohort_difficulty,
     build_replacement_dataset,
     collect_scheduled,
     merge_datasets,
     prepare_movingai_dataset,
     select_balanced_cohort,
+    select_compute_load_balanced_cohort,
 )
 
 
@@ -31,7 +33,9 @@ def _resolve(value: str) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Prepare and run the conflict-balanced V2/Mixed Full wall-clock study."
+        description=(
+            "Prepare, run, and audit the conflict-balanced V2/Mixed Full wall-clock study."
+        )
     )
     parser.add_argument(
         "phase",
@@ -40,9 +44,11 @@ def main() -> int:
             "merge",
             "replace",
             "select",
+            "select-load-balanced",
             "dry-run",
             "collect",
             "analyze",
+            "audit-difficulty",
         ),
     )
     parser.add_argument("--fetched-movingai", default="build/initlns-v2-mixed-movingai-raw-v1")
@@ -75,6 +81,10 @@ def main() -> int:
     parser.add_argument("--cohort", default="build/initlns-v2-mixed-balanced-cohort-v1")
     parser.add_argument("--collection", default="build/initlns-v2-mixed-balanced-collection-v1")
     parser.add_argument("--report", default="build/initlns-v2-mixed-balanced-report-v1")
+    parser.add_argument(
+        "--difficulty-config",
+        default="configs/balanced_wall_clock_difficulty_audit.json",
+    )
     parser.add_argument(
         "--original-bundle", default="artifacts/initlns-closed-loop-controller-v2"
     )
@@ -112,6 +122,13 @@ def main() -> int:
             _resolve(arguments.qualification),
             _resolve(arguments.cohort),
         )
+    elif arguments.phase == "select-load-balanced":
+        result = select_compute_load_balanced_cohort(
+            _resolve(arguments.dataset),
+            _resolve(arguments.qualification),
+            _resolve(arguments.cohort),
+            _resolve(arguments.difficulty_config),
+        )
     elif arguments.phase in {"dry-run", "collect"}:
         result = collect_scheduled(
             dataset=_resolve(arguments.dataset),
@@ -124,11 +141,18 @@ def main() -> int:
             resume=arguments.resume,
             dry_run=arguments.phase == "dry-run",
         )
-    else:
+    elif arguments.phase == "analyze":
         result = analyze_scheduled(
             _resolve(arguments.collection),
             _resolve(arguments.cohort),
             _resolve(arguments.report),
+        )
+    else:
+        result = audit_balanced_cohort_difficulty(
+            _resolve(arguments.collection),
+            _resolve(arguments.cohort),
+            _resolve(arguments.report),
+            _resolve(arguments.difficulty_config),
         )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

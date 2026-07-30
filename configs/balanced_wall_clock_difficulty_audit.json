@@ -1,0 +1,29 @@
+{
+  "schema": "lns2.balanced_wall_clock_difficulty_audit_config.v1",
+  "evidence_level": "post_hoc_methodology_audit",
+  "conflict_metric": "unique_unordered_colliding_agent_pairs",
+  "conflict_strata": {
+    "low": [1, 10],
+    "medium": [11, 100],
+    "high": [101, 500]
+  },
+  "initial_pp_load_metric": "initial_low_level_generated",
+  "initial_pp_load_strata": {
+    "low": [0, 100000],
+    "medium": [100001, 1000000],
+    "high": [1000001, null]
+  },
+  "methodology_gates": {
+    "conflict_tiers_have_12_each": true,
+    "initial_pp_load_tiers_differ_by_at_most_one": true,
+    "generated_and_movingai_overlap_in_every_load_tier": true,
+    "initial_state_integrity": true
+  },
+  "future_cohort_selection": {
+    "jobs_per_conflict_load_cell": 4,
+    "jobs_per_source_per_cell": 2,
+    "global_jobs_per_map_cap": 4,
+    "minimum_distinct_maps": 9
+  },
+  "boundary": "The frozen controller results are not rerun. These load tiers audit cohort composition and do not redefine the preregistered promotion gate after observing controller outcomes."
+}
