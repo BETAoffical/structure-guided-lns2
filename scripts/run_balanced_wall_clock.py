@@ -19,6 +19,7 @@ from experiments.balanced_wall_clock import (  # noqa: E402
     collect_scheduled,
     materialize_compute_load_candidate_pool,
     merge_datasets,
+    prepare_movingai_map_derived_dataset,
     prepare_movingai_dataset,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
@@ -42,6 +43,7 @@ def main() -> int:
         "phase",
         choices=(
             "prepare-movingai",
+            "prepare-map-derived-movingai",
             "merge",
             "replace",
             "materialize-load-pool",
@@ -56,6 +58,10 @@ def main() -> int:
     parser.add_argument("--fetched-movingai", default="build/initlns-v2-mixed-movingai-raw-v1")
     parser.add_argument(
         "--movingai-config", default="configs/balanced_wall_clock_movingai_source.json"
+    )
+    parser.add_argument(
+        "--movingai-map-config",
+        default="configs/balanced_wall_clock_movingai_map_derived_candidates_v4.json",
     )
     parser.add_argument("--movingai-dataset", default="build/initlns-v2-mixed-movingai-v1")
     parser.add_argument("--generated-dataset", default="build/initlns-v2-mixed-balanced-generated-v1")
@@ -107,6 +113,12 @@ def main() -> int:
         result = prepare_movingai_dataset(
             _resolve(arguments.fetched_movingai),
             _resolve(arguments.movingai_config),
+            _resolve(arguments.movingai_dataset),
+        )
+    elif arguments.phase == "prepare-map-derived-movingai":
+        result = prepare_movingai_map_derived_dataset(
+            _resolve(arguments.fetched_movingai),
+            _resolve(arguments.movingai_map_config),
             _resolve(arguments.movingai_dataset),
         )
     elif arguments.phase == "merge":

@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from experiments.balanced_wall_clock import (
@@ -14,6 +15,7 @@ from experiments.balanced_wall_clock import (
     conflict_stratum,
     initial_pp_load_stratum,
     materialize_compute_load_candidate_pool,
+    prepare_movingai_map_derived_dataset,
     prepare_movingai_dataset,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
@@ -24,6 +26,145 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_map_derived_movingai_tasks_are_pinned_unique_and_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fetched = root / "fetched"
+            archives = fetched / "_archives"
+            archives.mkdir(parents=True)
+            map_text = (
+                "type octile\nheight 5\nwidth 6\nmap\n"
+                "......\n......\n......\n......\n......\n"
+            )
+            archive = archives / "maps.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("compact.map", map_text)
+            map_sha = hashlib.sha256(map_text.encode("utf-8")).hexdigest()
+            config = root / "config.json"
+            payload = {
+                "schema_version": 1,
+                "dataset_revision": "test-derived-v1",
+                "source": "https://example.test/maps",
+                "master_seed": 1234,
+                "task_seeds": [11],
+                "task_variants": ["uniform_random", "opposite_exchange"],
+                "map_archive": {
+                    "url": "https://example.test/maps.zip",
+                    "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                },
+                "expected_map_count": 1,
+                "expected_instance_count": 2,
+                "benchmarks": [
+                    {
+                        "id": "compact",
+                        "layout_family": "test_compact",
+                        "member": "compact.map",
+                        "member_sha256": map_sha,
+                        "agent_counts": [8],
+                    }
+                ],
+            }
+            config.write_text(json.dumps(payload), encoding="utf-8")
+
+            first = prepare_movingai_map_derived_dataset(
+                fetched, config, root / "first"
+            )
+            second = prepare_movingai_map_derived_dataset(
+                fetched, config, root / "second"
+            )
+
+            self.assertEqual(first, second)
+            split = root / "first" / "balanced_wall_clock"
+            rows = [
+                json.loads(line)
+                for line in (split / "manifest.jsonl").read_text(
+                    encoding="utf-8"
+                ).splitlines()
+            ]
+            self.assertEqual(len(rows), 2)
+            self.assertEqual({row["source_group"] for row in rows}, {"movingai"})
+            self.assertEqual(
+                {row["instance_origin"] for row in rows},
+                {"movingai_map_project_derived_od"},
+            )
+            self.assertEqual(
+                hashlib.sha256((split / "maps" / "compact.map").read_bytes()).hexdigest(),
+                map_sha,
+            )
+            scenario_hashes = []
+            for row in rows:
+                scenario = split / row["scenario_file"]
+                scenario_hashes.append(hashlib.sha256(scenario.read_bytes()).hexdigest())
+                fields = [
+                    line.split()
+                    for line in scenario.read_text(encoding="utf-8").splitlines()[1:]
+                ]
+                starts = [(int(value[4]), int(value[5])) for value in fields]
+                goals = [(int(value[6]), int(value[7])) for value in fields]
+                self.assertEqual(len(starts), 8)
+                self.assertEqual(len(set(starts)), 8)
+                self.assertEqual(len(set(goals)), 8)
+                self.assertTrue(all(start != goal for start, goal in zip(starts, goals)))
+                self.assertTrue(all(int(value[8]) > 0 for value in fields))
+            second_split = root / "second" / "balanced_wall_clock"
+            self.assertEqual(
+                scenario_hashes,
+                [
+                    hashlib.sha256(
+                        (second_split / row["scenario_file"]).read_bytes()
+                    ).hexdigest()
+                    for row in rows
+                ],
+            )
+
+    def test_map_derived_movingai_rejects_member_sha_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archives = root / "fetched" / "_archives"
+            archives.mkdir(parents=True)
+            archive = archives / "maps.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr(
+                    "compact.map",
+                    "type octile\nheight 2\nwidth 2\nmap\n..\n..\n",
+                )
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "dataset_revision": "test",
+                        "source": "https://example.test",
+                        "master_seed": 1,
+                        "task_seeds": [1],
+                        "task_variants": [
+                            "uniform_random",
+                            "opposite_exchange",
+                        ],
+                        "map_archive": {
+                            "url": "https://example.test/maps.zip",
+                            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                        },
+                        "expected_map_count": 1,
+                        "expected_instance_count": 2,
+                        "benchmarks": [
+                            {
+                                "id": "compact",
+                                "layout_family": "test",
+                                "member": "compact.map",
+                                "member_sha256": "0" * 64,
+                                "agent_counts": [2],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "member SHA mismatch"):
+                prepare_movingai_map_derived_dataset(
+                    root / "fetched", config, root / "output"
+                )
+
     def test_movingai_preparation_can_select_a_registered_source_subset(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

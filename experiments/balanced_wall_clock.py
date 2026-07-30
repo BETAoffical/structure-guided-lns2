@@ -9,6 +9,7 @@ import math
 import random
 import shutil
 import statistics
+import zipfile
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -105,6 +106,363 @@ def _map_metrics(path: Path) -> dict[str, Any]:
         "dead_end_cell_count": sum(value <= 1 for value in degrees),
         "low_degree_cell_ratio": sum(value <= 2 for value in degrees) / len(degrees),
     }
+
+
+def _movingai_passable_cells(path: Path) -> tuple[int, int, list[str], set[tuple[int, int]]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    headers: dict[str, str] = {}
+    marker = None
+    for index, line in enumerate(lines):
+        if line.strip().lower() == "map":
+            marker = index
+            break
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            headers[parts[0].lower()] = parts[1]
+    if marker is None or "height" not in headers or "width" not in headers:
+        raise ValueError(f"invalid MovingAI map: {path}")
+    rows, cols = int(headers["height"]), int(headers["width"])
+    grid = lines[marker + 1 : marker + 1 + rows]
+    if len(grid) != rows or any(len(row) != cols for row in grid):
+        raise ValueError(f"MovingAI map dimensions differ from header: {path}")
+    passable = {
+        (row, col)
+        for row, values in enumerate(grid)
+        for col, value in enumerate(values)
+        if value in {".", "G", "S"}
+    }
+    if not passable:
+        raise ValueError(f"MovingAI map has no passable cells: {path}")
+    return rows, cols, grid, passable
+
+
+def _largest_four_connected_component(
+    passable: set[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    remaining = set(passable)
+    components: list[list[tuple[int, int]]] = []
+    while remaining:
+        start = min(remaining)
+        remaining.remove(start)
+        component = [start]
+        queue: collections.deque[tuple[int, int]] = collections.deque([start])
+        while queue:
+            row, col = queue.popleft()
+            for neighbor in (
+                (row - 1, col),
+                (row + 1, col),
+                (row, col - 1),
+                (row, col + 1),
+            ):
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    component.append(neighbor)
+                    queue.append(neighbor)
+        components.append(component)
+    components.sort(key=lambda values: (-len(values), min(values)))
+    return sorted(components[0])
+
+
+def _derived_endpoint_seed(
+    master_seed: int,
+    map_id: str,
+    task_seed: int,
+    variant: str,
+    agent_count: int,
+) -> int:
+    digest = hashlib.sha256(
+        json.dumps(
+            [master_seed, map_id, task_seed, variant, agent_count],
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def _derived_endpoints(
+    component: list[tuple[int, int]],
+    agent_count: int,
+    variant: str,
+    seed: int,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    if agent_count <= 0 or agent_count > len(component):
+        raise ValueError("derived task agent count exceeds component capacity")
+    rng = random.Random(seed)
+    if variant == "uniform_random":
+        starts = rng.sample(component, agent_count)
+        for _ in range(1_000):
+            goals = rng.sample(component, agent_count)
+            if all(start != goal for start, goal in zip(starts, goals)):
+                return starts, goals
+        raise ValueError("unable to derive a fixed-point-free uniform task")
+    if variant == "opposite_exchange":
+        sampled = rng.sample(component, agent_count)
+        row_span = max(row for row, _col in sampled) - min(row for row, _col in sampled)
+        col_span = max(col for _row, col in sampled) - min(col for _row, col in sampled)
+        axis = 0 if row_span >= col_span else 1
+        ordered = sorted(sampled, key=lambda cell: (cell[axis], cell[1 - axis]))
+        goals = list(reversed(ordered))
+        for offset in range(len(goals)):
+            rotated = goals[offset:] + goals[:offset]
+            if all(start != goal for start, goal in zip(ordered, rotated)):
+                pairs = list(zip(ordered, rotated))
+                rng.shuffle(pairs)
+                return [start for start, _goal in pairs], [goal for _start, goal in pairs]
+        raise ValueError("unable to derive a fixed-point-free exchange task")
+    raise ValueError(f"unsupported map-derived task variant: {variant}")
+
+
+def _four_neighbor_distances(
+    passable: set[tuple[int, int]],
+    starts: list[tuple[int, int]],
+    goals: list[tuple[int, int]],
+) -> list[int]:
+    result = []
+    for start, goal in zip(starts, goals):
+        distances = {start: 0}
+        queue: collections.deque[tuple[int, int]] = collections.deque([start])
+        while queue and goal not in distances:
+            row, col = queue.popleft()
+            for neighbor in (
+                (row - 1, col),
+                (row + 1, col),
+                (row, col - 1),
+                (row, col + 1),
+            ):
+                if neighbor in passable and neighbor not in distances:
+                    distances[neighbor] = distances[(row, col)] + 1
+                    queue.append(neighbor)
+        if goal not in distances:
+            raise ValueError(f"derived task has no four-neighbor path: {start} -> {goal}")
+        result.append(distances[goal])
+    return result
+
+
+def _write_derived_scenario(
+    path: Path,
+    map_name: str,
+    rows: int,
+    cols: int,
+    starts: list[tuple[int, int]],
+    goals: list[tuple[int, int]],
+    distances: list[int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".partial")
+    with partial.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write("version 1\n")
+        for start, goal, distance in zip(starts, goals, distances):
+            stream.write(
+                "\t".join(
+                    (
+                        "0",
+                        map_name,
+                        str(cols),
+                        str(rows),
+                        str(start[1]),
+                        str(start[0]),
+                        str(goal[1]),
+                        str(goal[0]),
+                        str(distance),
+                    )
+                )
+                + "\n"
+            )
+    partial.replace(path)
+
+
+def prepare_movingai_map_derived_dataset(
+    fetched: str | Path, source_config: str | Path, output: str | Path
+) -> dict[str, Any]:
+    """Create deterministic MAPF OD tasks on checksum-pinned MovingAI maps."""
+
+    fetched_root = Path(fetched).resolve()
+    config_path = Path(source_config).resolve()
+    output_root = Path(output).resolve()
+    config = _read_json(config_path)
+    configuration_fingerprint = _fingerprint(config)
+    summary_path = output_root / "dataset_summary.json"
+    if summary_path.is_file():
+        existing = _read_json(summary_path)
+        if existing.get("configuration_fingerprint") != configuration_fingerprint:
+            raise ValueError("map-derived output belongs to a different configuration")
+    elif output_root.is_dir() and any(output_root.iterdir()):
+        raise ValueError("map-derived output is non-empty but has no summary")
+    archive_spec = dict(config["map_archive"])
+    archive_name = Path(str(archive_spec["url"])).name
+    archive_path = fetched_root / "_archives" / archive_name
+    if not archive_path.is_file():
+        raise ValueError(f"MovingAI map archive is missing: {archive_path}")
+    archive_sha = sha256_file(archive_path)
+    if archive_sha != str(archive_spec["sha256"]):
+        raise ValueError("MovingAI map archive SHA mismatch")
+
+    task_seeds = [int(value) for value in config["task_seeds"]]
+    variants = [str(value) for value in config["task_variants"]]
+    if (
+        not task_seeds
+        or len(task_seeds) != len(set(task_seeds))
+        or set(variants) != {"uniform_random", "opposite_exchange"}
+    ):
+        raise ValueError("map-derived task seeds or variants differ from registration")
+    master_seed = int(config["master_seed"])
+    split_root = output_root / SPLIT
+    manifest: list[dict[str, Any]] = []
+    map_ids: set[str] = set()
+    with zipfile.ZipFile(archive_path) as bundle:
+        for raw_case in config["benchmarks"]:
+            case = dict(raw_case)
+            map_id = str(case["id"])
+            member = str(case["member"])
+            if map_id in map_ids:
+                raise ValueError(f"map-derived registration repeats map id: {map_id}")
+            map_ids.add(map_id)
+            map_path = split_root / "maps" / f"{map_id}.map"
+            map_path.parent.mkdir(parents=True, exist_ok=True)
+            partial = map_path.with_name(map_path.name + ".partial")
+            try:
+                with bundle.open(member) as source, partial.open("wb") as stream:
+                    shutil.copyfileobj(source, stream)
+            except KeyError as error:
+                partial.unlink(missing_ok=True)
+                raise ValueError(f"MovingAI map archive has no member: {member}") from error
+            partial.replace(map_path)
+            member_sha = sha256_file(map_path)
+            if member_sha != str(case["member_sha256"]):
+                raise ValueError(f"MovingAI map member SHA mismatch: {map_id}")
+
+            rows, cols, _grid, passable = _movingai_passable_cells(map_path)
+            component = _largest_four_connected_component(passable)
+            metrics = _map_metrics(map_path)
+            metadata_path = split_root / "maps" / f"{map_id}.json"
+            _write_json(
+                metadata_path,
+                {
+                    "schema_version": 1,
+                    "benchmark_id": map_id,
+                    "source": "MovingAI 2D grid benchmark",
+                    "source_page": str(config["source"]),
+                    "source_archive_url": str(archive_spec["url"]),
+                    "source_archive_sha256": archive_sha,
+                    "source_member": member,
+                    "map_sha256": member_sha,
+                    "largest_four_connected_component": len(component),
+                    "topology_metrics": metrics,
+                },
+            )
+            agent_counts = [int(value) for value in case["agent_counts"]]
+            if (
+                not agent_counts
+                or len(agent_counts) != len(set(agent_counts))
+                or any(value <= 0 or value > len(component) for value in agent_counts)
+            ):
+                raise ValueError(f"invalid map-derived agent counts: {map_id}")
+            for task_seed in task_seeds:
+                for variant in variants:
+                    for agent_count in agent_counts:
+                        endpoint_seed = _derived_endpoint_seed(
+                            master_seed, map_id, task_seed, variant, agent_count
+                        )
+                        starts, goals = _derived_endpoints(
+                            component, agent_count, variant, endpoint_seed
+                        )
+                        distances = _four_neighbor_distances(
+                            passable, starts, goals
+                        )
+                        task_id = (
+                            f"{map_id}__derived_{variant}__task_seed_{task_seed:04d}"
+                            f"__agents_{agent_count:04d}"
+                        )
+                        scenario_path = split_root / "scenarios" / f"{task_id}.scen"
+                        _write_derived_scenario(
+                            scenario_path,
+                            map_path.name,
+                            rows,
+                            cols,
+                            starts,
+                            goals,
+                            distances,
+                        )
+                        task_path = split_root / "tasks" / f"{task_id}.json"
+                        task_payload = {
+                            "schema_version": 1,
+                            "task_semantics_version": 1,
+                            "task_semantics": (
+                                "project-derived static MAPF OD on an official "
+                                "MovingAI 2D benchmark map"
+                            ),
+                            "benchmark_id": map_id,
+                            "source_map_sha256": member_sha,
+                            "od_variant": variant,
+                            "task_seed": task_seed,
+                            "endpoint_seed": endpoint_seed,
+                            "agent_count": agent_count,
+                            "agent_density_largest_component": agent_count / len(component),
+                            "unique_starts": len(set(starts)) == agent_count,
+                            "unique_goals": len(set(goals)) == agent_count,
+                            "fixed_point_count": sum(
+                                start == goal for start, goal in zip(starts, goals)
+                            ),
+                            "distance_metric": "four_neighbor_unit",
+                            "minimum_shortest_distance": min(distances),
+                            "maximum_shortest_distance": max(distances),
+                            "mean_shortest_distance": statistics.fmean(distances),
+                            "scenario_sha256": sha256_file(scenario_path),
+                        }
+                        _write_json(task_path, task_payload)
+                        manifest.append(
+                            {
+                                "split": SPLIT,
+                                "source_group": "movingai",
+                                "instance_origin": "movingai_map_project_derived_od",
+                                "map_id": map_id,
+                                "task_id": task_id,
+                                "map_file": f"maps/{map_path.name}",
+                                "scenario_file": f"scenarios/{scenario_path.name}",
+                                "map_metadata_file": f"maps/{metadata_path.name}",
+                                "task_file": f"tasks/{task_path.name}",
+                                "layout_mode": str(case["layout_family"]),
+                                "layout_variant": map_id,
+                                "scenario_type": f"movingai_map_derived_{variant}",
+                                "task_variant": (
+                                    f"{variant}_seed_{task_seed}_agents_{agent_count}"
+                                ),
+                                "agent_count": agent_count,
+                                "topology_metrics": metrics,
+                                "dominant_flow_ratio": 0.0,
+                                "hotspot_skew": 0.0,
+                                "required_bottleneck_crossing_ratio": 0.0,
+                                "mean_shortest_distance": task_payload[
+                                    "mean_shortest_distance"
+                                ],
+                            }
+                        )
+
+    expected_maps = int(config["expected_map_count"])
+    expected_instances = int(config["expected_instance_count"])
+    if len(map_ids) != expected_maps or len(manifest) != expected_instances:
+        raise ValueError("map-derived dataset dimensions differ from registration")
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    _write_jsonl_atomic(split_root / "manifest.jsonl", manifest)
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": str(config["dataset_revision"]),
+        "configuration_fingerprint": configuration_fingerprint,
+        "source": (
+            "MovingAI 2D benchmark maps with project-derived static MAPF OD tasks"
+        ),
+        "official_map_archive_sha256": archive_sha,
+        "task_semantics": "derived_not_official_mapf_scenarios",
+        "splits": {
+            SPLIT: {
+                "map_count": len(map_ids),
+                "instance_count": len(manifest),
+                "source_counts": {"movingai": len(manifest)},
+            }
+        },
+    }
+    _write_json(output_root / "dataset_summary.json", summary)
+    return summary
 
 
 def _scenario_metrics(path: Path, agent_count: int) -> dict[str, Any]:
@@ -1744,6 +2102,7 @@ __all__ = [
     "conflict_stratum",
     "initial_pp_load_stratum",
     "merge_datasets",
+    "prepare_movingai_map_derived_dataset",
     "prepare_movingai_dataset",
     "select_balanced_cohort",
     "select_compute_load_balanced_cohort",
