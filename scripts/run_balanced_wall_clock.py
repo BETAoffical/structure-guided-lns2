@@ -22,8 +22,10 @@ from experiments.balanced_wall_clock import (  # noqa: E402
 
 
 def _resolve(value: str) -> Path:
-    path = Path(value)
-    return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path.resolve(strict=False)
 
 
 def main() -> int:

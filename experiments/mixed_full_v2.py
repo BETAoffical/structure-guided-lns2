@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
+import os
 import pickle
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -136,14 +135,15 @@ def export_mixed_full_v2(
     sklearn_sha = sha256_file(sklearn_path)
 
     source_bundle_root = output_root / "source_portable"
+    duplicate_proposal = source_bundle_root / "pairwise__proposal_dynamic.json"
+    if duplicate_proposal.is_file():
+        duplicate_proposal.unlink()
     source_manifest = _read_json(source_root / "portable_manifest.json")
     source_models = {
         str(row["profile"]): dict(row) for row in source_manifest["models"]
     }
     proposal_source = source_root / str(source_models["proposal_dynamic"]["file"])
-    proposal_destination = source_bundle_root / "pairwise__proposal_dynamic.json"
-    proposal_destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(proposal_source, proposal_destination)
+    proposal_reference = Path(os.path.relpath(proposal_source, source_bundle_root))
     realized_destination = source_bundle_root / "pairwise__realized_dynamic.json"
     _write_json(realized_destination, _portable_payload(sklearn_model, sklearn_sha))
 
@@ -155,8 +155,8 @@ def export_mixed_full_v2(
         "models": [
             {
                 "profile": "proposal_dynamic",
-                "file": proposal_destination.relative_to(source_bundle_root).as_posix(),
-                "sha256": sha256_file(proposal_destination),
+                "file": proposal_reference.as_posix(),
+                "sha256": sha256_file(proposal_source),
                 "source_model_sha256": str(
                     source_models["proposal_dynamic"]["source_model_sha256"]
                 ),
@@ -194,6 +194,22 @@ def export_mixed_full_v2(
             "note": "Runtime parity only; end-to-end promotion remains pending.",
         },
     )
+    controller_manifest_path = output_root / "controller_manifest.json"
+    controller_manifest = _read_json(controller_manifest_path)
+    generated_proposal = output_root / str(
+        controller_manifest["main_rankers"]["proposal_dynamic"]["file"]
+    )
+    canonical_controller = source_root.parent / "initlns-closed-loop-controller-v2"
+    canonical_proposal = canonical_controller / "main__proposal_dynamic.json"
+    if not canonical_proposal.is_file() or sha256_file(canonical_proposal) != sha256_file(
+        generated_proposal
+    ):
+        raise ValueError("canonical V1 proposal model differs from Mixed Full export")
+    controller_manifest["main_rankers"]["proposal_dynamic"]["file"] = Path(
+        os.path.relpath(canonical_proposal, output_root)
+    ).as_posix()
+    _write_json(controller_manifest_path, controller_manifest)
+    generated_proposal.unlink()
     compact = load_controller_bundle(output_root)
     compact_model = compact.main_models["realized_dynamic"]
     mismatches = []

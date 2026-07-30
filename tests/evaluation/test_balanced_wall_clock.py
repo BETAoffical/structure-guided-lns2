@@ -7,6 +7,7 @@ from pathlib import Path
 
 from experiments.balanced_wall_clock import (
     analyze_scheduled,
+    collect_scheduled,
     conflict_stratum,
     select_balanced_cohort,
 )
@@ -90,6 +91,32 @@ class BalancedWallClockTests(unittest.TestCase):
             orders = [tuple(row["controller_order"]) for row in schedule["entries"]]
             self.assertEqual(len(set(orders)), 6)
             self.assertTrue(all(orders.count(order) == 6 for order in set(orders)))
+
+            results[0]["initial_conflicts"] = 0
+            # Remove one high-stratum result, leaving only eleven eligible jobs.
+            high_index = next(
+                index for index, row in enumerate(results) if row["initial_conflicts"] == 200
+            )
+            results[high_index]["initial_conflicts"] = 0
+            (qualification / "qualification_manifest.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in results), encoding="utf-8"
+            )
+            failed_root = root / "failed"
+            failed = select_balanced_cohort(root / "dataset", qualification, failed_root)
+            self.assertFalse(failed["passed"])
+            self.assertEqual(failed["decision"], "data_gate_failed")
+            self.assertFalse((failed_root / "execution_schedule.json").exists())
+            with self.assertRaisesRegex(ValueError, "did not pass"):
+                collect_scheduled(
+                    dataset=root / "dataset",
+                    config=root / "unused.json",
+                    qualification=qualification,
+                    schedule_root=failed_root,
+                    output=root / "unused-output",
+                    original_bundle=root / "unused-v1",
+                    mixed_bundle=root / "unused-mixed",
+                    resume=False,
+                )
 
     def test_analysis_uses_paired_map_and_stratum_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

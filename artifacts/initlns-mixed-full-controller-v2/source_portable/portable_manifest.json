@@ -893,7 +893,7 @@
   "models": [
     {
       "feature_count": 94,
-      "file": "pairwise__proposal_dynamic.json",
+      "file": "../../initlns-closed-loop-policy-v1/pairwise__proposal_dynamic.json",
       "profile": "proposal_dynamic",
       "sha256": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
       "source_model_sha256": "5e4eaeebf69bf8b660d079d214c50504f9ed5ab4311d9e0c4f58ccc5fee801e4",

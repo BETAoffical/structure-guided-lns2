@@ -1,9 +1,9 @@
 {
   "artifacts": {
-    "base_controller_manifest_sha256": "156eef2f16aec75be79c2b4a37a1dab83dd0f4b10137f113c71911c480852cee",
+    "base_controller_manifest_sha256": "58930aa5c9272bc881c1e2bffb6d441ac3f5ab9b515c378dac12cbb6c5cbe93e",
     "sklearn_model": "sklearn/mixed_full_v2.pkl",
     "sklearn_model_sha256": "b29d4106a44fd0c64e8d76253e656d489def94af1ca82359ad34e9fc16b28d89",
-    "source_portable_manifest_sha256": "3d25ab4912155d2e30bb1f89de6018d384923dcd64b34566159a2b6a98c82351"
+    "source_portable_manifest_sha256": "fef739ba5903dd52b4315075cc8d24be77ed6c42dc663d3ce7611cc63e667156"
   },
   "base_feature_count": 124,
   "controller_id": "mixed-full-v2",

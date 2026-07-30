@@ -1,0 +1,52 @@
+{
+  "schema": "lns2.balanced_wall_clock_qualification_gate.v1",
+  "evidence_level": "preregistered_initial_pp_qualification",
+  "preregistration_commit": "9d12420c1fe27c475750538c9c23ad50369d618e",
+  "mixed_full_sklearn_model_sha256": "b29d4106a44fd0c64e8d76253e656d489def94af1ca82359ad34e9fc16b28d89",
+  "mixed_full_canonical_controller_manifest_sha256": "b2ec8775ffc589c2fe5cf0553997889d6352f8a354278a1c701734b8827e59c5",
+  "dataset_manifest_sha256": "f6c04c96cdfa16ae16e28a807838aaed42ae8c195b48c8b922f90787008a8d4b",
+  "qualification_manifest_sha256": "74823615be499e8a53a655d9ad1e7397815dffee623b252e6a644c54ae63621e",
+  "qualification_report_sha256": "ad76ff1c9df9575d03a364c6d90185f90127ee6a0e00046491ce5c33d227aa2a",
+  "cohort_report_sha256": "14ff418ed78ec90c5d26d1cc9946b6261fad428ea72aca30e510ee174bbab649",
+  "qualification": {
+    "reset_count": 216,
+    "valid_count": 216,
+    "error_count": 0,
+    "timeout_count": 0,
+    "initial_feasible_count": 98,
+    "nonzero_conflict_count": 118,
+    "active_map_count": 7,
+    "mean_initial_colliding_pairs": 19.921296296296298,
+    "median_initial_colliding_pairs": 2.0,
+    "maximum_initial_colliding_pairs": 412
+  },
+  "conflict_strata": {
+    "zero": 98,
+    "low_1_to_10": {
+      "count": 62,
+      "generated": 53,
+      "movingai": 9
+    },
+    "medium_11_to_100": {
+      "count": 45,
+      "generated": 38,
+      "movingai": 7
+    },
+    "high_101_to_500": {
+      "count": 11,
+      "generated": 9,
+      "movingai": 2
+    },
+    "over_500": 0
+  },
+  "cohort_gate": {
+    "required_per_stratum": 12,
+    "required_movingai_per_stratum": 4,
+    "required_generated_per_stratum": 4,
+    "maximum_per_map_per_stratum": 2,
+    "passed": false,
+    "formal_collection_allowed": false,
+    "reason": "All three strata fail the registered source-diversity and map-cap constraints; the high stratum also has only 11 eligible instance-seeds."
+  },
+  "decision": "data_gate_failed_no_formal_episode_run"
+}

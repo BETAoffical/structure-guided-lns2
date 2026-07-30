@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import run_closed_loop_collection
-from experiments.repair_collection import _read_json, _read_jsonl, _write_json, _write_jsonl
+from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 
 
 SPLIT = "balanced_wall_clock"
@@ -309,6 +309,8 @@ def select_balanced_cohort(
         )
 
     selected = []
+    stratum_reports: dict[str, dict[str, Any]] = {}
+    selection_passed = True
     for stratum, _lower, _upper in STRATA:
         eligible = [row for row in candidates if row["conflict_stratum"] == stratum]
         eligible.sort(
@@ -345,49 +347,60 @@ def select_balanced_cohort(
             "agent_band_count": len({row["agent_band"] for row in chosen}) >= 2,
             "map_cap": max(map_counts.values(), default=0) <= 2,
         }
-        if not all(checks.values()):
-            raise ValueError(
-                f"insufficient preregistered {stratum} cohort: "
-                f"eligible={len(eligible)}, checks={checks}"
-            )
+        stratum_reports[stratum] = {
+            "eligible": len(eligible),
+            "eligible_by_source": dict(
+                sorted(collections.Counter(row["source_group"] for row in eligible).items())
+            ),
+            "eligible_map_count": len({row["map_id"] for row in eligible}),
+            "provisional_selected": len(chosen),
+            "checks": checks,
+            "passed": all(checks.values()),
+        }
+        selection_passed &= all(checks.values())
         selected.extend(chosen)
 
-    selected.sort(key=lambda row: (row["conflict_stratum"], row["map_id"], row["task_id"], row["solver_seed"]))
-    permutations = list(itertools.permutations(CONTROLLERS))
-    schedule = []
-    for index, row in enumerate(selected):
-        schedule.append(
-            {
-                **row,
-                "schedule_group": index % len(permutations),
-                "controller_order": list(permutations[index % len(permutations)]),
-            }
+    if selection_passed:
+        selected.sort(
+            key=lambda row: (
+                row["conflict_stratum"],
+                row["map_id"],
+                row["task_id"],
+                row["solver_seed"],
+            )
         )
-    _write_jsonl_atomic(output_root / "cohort.jsonl", selected)
-    _write_json(
-        output_root / "execution_schedule.json",
-        {
-            "schema": "lns2.controller_execution_schedule.v1",
-            "selection_blind_to_controller_outcomes": True,
-            "entries": schedule,
-        },
-    )
+        permutations = list(itertools.permutations(CONTROLLERS))
+        schedule = []
+        for index, row in enumerate(selected):
+            schedule.append(
+                {
+                    **row,
+                    "schedule_group": index % len(permutations),
+                    "controller_order": list(permutations[index % len(permutations)]),
+                }
+            )
+        _write_jsonl_atomic(output_root / "cohort.jsonl", selected)
+        _write_json(
+            output_root / "execution_schedule.json",
+            {
+                "schema": "lns2.controller_execution_schedule.v1",
+                "selection_blind_to_controller_outcomes": True,
+                "entries": schedule,
+            },
+        )
     report = {
         "schema": "lns2.balanced_wall_clock_cohort.v1",
         "qualification_count": len(qualified),
         "selected_count": len(selected),
-        "strata": {
-            name: {
-                "eligible": sum(row["conflict_stratum"] == name for row in candidates),
-                "selected": sum(row["conflict_stratum"] == name for row in selected),
-            }
-            for name, _lower, _upper in STRATA
-        },
+        "selection_blind_to_controller_outcomes": True,
+        "strata": stratum_reports,
         "excluded": {
             "zero_conflict": sum(row["initial_conflicts"] == 0 for row in candidates),
             "over_500": sum(row["initial_conflicts"] > 500 for row in candidates),
         },
-        "passed": len(selected) == 36,
+        "passed": selection_passed and len(selected) == 36,
+        "decision": "eligible_for_formal" if selection_passed else "data_gate_failed",
+        "formal_collection_allowed": selection_passed,
     }
     _write_json(output_root / "cohort_report.json", report)
     return report
@@ -405,7 +418,11 @@ def collect_scheduled(
     resume: bool,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
+    schedule_root_path = Path(schedule_root).resolve()
+    cohort_report = _read_json(schedule_root_path / "cohort_report.json")
+    if not bool(cohort_report.get("formal_collection_allowed", False)):
+        raise ValueError("balanced wall-clock cohort did not pass the preregistered data gate")
+    schedule_path = schedule_root_path / "execution_schedule.json"
     schedule = _read_json(schedule_path)
     entries = list(schedule["entries"])
     output_root = Path(output).resolve()

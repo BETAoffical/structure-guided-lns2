@@ -46,3 +46,11 @@ Mixed Full 只有同时满足以下条件才替代 V2：成功数不降低；总
 - 旧七图报告提交：`bf9318ae967d6bdcda46c6b6d7535c29072dcacb`
 
 正式 episode 开始前必须提交并推送以上配置、模型 SHA、指标和门槛。
+
+## Qualification 结果
+
+预注册提交 `9d12420c1fe27c475750538c9c23ad50369d618e` 后运行了全部 216 次初始 PP reset。216 次均有效，无错误和超时；98 次初始即无冲突，118 次存在冲突。唯一冲突 agent 对分布为：低 62、中 45、高 11、超过 500 为 0。
+
+正式 cohort 门槛未通过。高冲突层不足 12 个；同时 MovingAI 的非零冲突状态主要集中在 `maze-128-128-2`，在“单图每层最多两个实例”的限制下，三个层级都无法达到每层至少 4 个 MovingAI 实例。因此决策为 `data_gate_failed_no_formal_episode_run`，未运行 108 个正式控制器 episode，也没有事后调整阈值、scenario、agent 数量或地图。
+
+紧凑结果登记位于 `artifacts/initlns-v2-mixed-balanced-wall-clock-v1/qualification_gate.json`；完整 qualification 数据继续保存在忽略的 `build/` 下。

@@ -576,7 +576,7 @@
   "main_ranker_semantic_fingerprint": "edffaa38f4a8aee050659665db430ca97ac5c794eec95ce7b79ebe08cb6c11bd",
   "main_rankers": {
     "proposal_dynamic": {
-      "file": "main__proposal_dynamic.json",
+      "file": "../initlns-closed-loop-controller-v2/main__proposal_dynamic.json",
       "pairwise_input_dimension": 55,
       "semantic_fingerprint": "daaa8e0afa31b019a713cc626e73f75c0697d32b6f2e15b3f1a0bb59e37bdf8c",
       "sha256": "c667276baf8e5a3f216e8605db7f295bc6c02805c53c083f54e50044321bfd32",
@@ -876,7 +876,7 @@
   },
   "mixed_full_export_report": {
     "file": "mixed_full_export_report.json",
-    "sha256": "780b53c40558549166fbce6ecffa1f409ac0b700b1f2a6cf4d97fba905d668eb"
+    "sha256": "ad3129c7c0296913b78d7cdadab93e13bba13fe896789a2dd52df595b91eb408"
   },
   "promotion_report": {
     "file": "promotion_report.json",
@@ -887,7 +887,7 @@
   "schema_version": 3,
   "source_bundle": {
     "confirmation_labels_seen": false,
-    "manifest_sha256": "3d25ab4912155d2e30bb1f89de6018d384923dcd64b34566159a2b6a98c82351"
+    "manifest_sha256": "fef739ba5903dd52b4315075cc8d24be77ed6c42dc663d3ce7611cc63e667156"
   },
   "storage_format_dependency": null
 }

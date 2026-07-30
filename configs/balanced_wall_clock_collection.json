@@ -63,7 +63,7 @@
     },
     "registered_controller_bundles": {
       "mixed-full-v2": {
-        "controller_manifest_sha256": "ac8228ec107e05d0e06fbc22fd23b4516593d10658929902977fefd1191b7c33"
+        "controller_manifest_sha256": "b2ec8775ffc589c2fe5cf0553997889d6352f8a354278a1c701734b8827e59c5"
       }
     }
   }
