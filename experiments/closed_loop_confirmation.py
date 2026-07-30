@@ -350,6 +350,15 @@ def closed_loop_dataset_design(
             settings.get("map_count", -1)
         ):
             errors.append("dataset dimensions differ from registration")
+        layout_counts = collections.Counter(str(row["layout_mode"]) for row in rows)
+        expected_layouts = {
+            str(name): int(count)
+            for name, count in dict(settings.get("layout_counts", {})).items()
+        }
+        if expected_layouts and dict(sorted(layout_counts.items())) != dict(
+            sorted(expected_layouts.items())
+        ):
+            errors.append("dataset layout counts differ from registration")
         return {
             "passed": not errors,
             "errors": errors,
@@ -357,9 +366,7 @@ def closed_loop_dataset_design(
             "map_count": len(by_map),
             "task_count": len(rows),
             "source_counts": dict(sorted(source_counts.items())),
-            "layout_counts": dict(
-                sorted(collections.Counter(str(row["layout_mode"]) for row in rows).items())
-            ),
+            "layout_counts": dict(sorted(layout_counts.items())),
         }
     expected_tasks = set(
         map(

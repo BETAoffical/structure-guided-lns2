@@ -589,6 +589,32 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         )
         self.assertTrue(design["passed"], design["errors"])
 
+    def test_balanced_wall_clock_design_validates_registered_layout_counts(self) -> None:
+        rows = [
+            {
+                "split": "balanced_wall_clock",
+                "task_id": f"task-{index}",
+                "map_id": f"map-{index // 2}",
+                "layout_mode": "regular_beltway" if index < 2 else "dead_end_aisles",
+                "source_group": "generated",
+            }
+            for index in range(4)
+        ]
+        settings = {
+            "mode": "balanced_wall_clock",
+            "map_count": 2,
+            "instance_count": 4,
+            "source_counts": {"generated": 4},
+            "layout_counts": {"regular_beltway": 2, "dead_end_aisles": 2},
+        }
+        design = closed_loop_dataset_design(rows, "balanced_wall_clock", settings)
+        self.assertTrue(design["passed"], design["errors"])
+
+        settings["layout_counts"] = {"regular_beltway": 4}
+        changed = closed_loop_dataset_design(rows, "balanced_wall_clock", settings)
+        self.assertFalse(changed["passed"])
+        self.assertIn("dataset layout counts differ from registration", changed["errors"])
+
     def test_multiseed_design_and_qualification_keep_repeated_measurements_grouped(self) -> None:
         rows = make_dataset_rows(replicates=4, split="closed_loop_multiseed")
         design = closed_loop_dataset_design(

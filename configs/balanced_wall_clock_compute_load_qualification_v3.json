@@ -18,11 +18,16 @@
   },
   "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
   "dataset_design": {
-    "mode": "balanced_wall_clock_compute_load_qualification",
+    "mode": "balanced_wall_clock",
     "dataset_revision": "balanced-wall-clock-compute-load-pool-v3",
     "map_count": 12,
     "instance_count": 228,
     "source_counts": {"generated": 228},
+    "layout_counts": {
+      "regular_beltway": 76,
+      "compartmentalized": 76,
+      "dead_end_aisles": 76
+    },
     "historical_map_ids": [
       "balanced_wall_clock_load_v3_regular_beltway_0003",
       "random-32-32-10", "random-64-64-10", "random-64-64-20",
