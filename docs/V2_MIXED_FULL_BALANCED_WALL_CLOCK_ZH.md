@@ -72,3 +72,19 @@ V2 的活动入口为：
 - 本地数据集：`build/initlns-v2-mixed-balanced-dataset-v2c`
 - 本地 qualification：`build/initlns-v2-mixed-balanced-qualification-v2c`
 - 本地冻结 cohort：`build/initlns-v2-mixed-balanced-cohort-v2c`
+
+## 正式墙钟结果
+
+预注册提交 `9d7bf5524c09adc170c38576f06813d4931d84e4` 后，按冻结 schedule 完成了 36 个实例乘 3 个控制器，共 108 个正式 episode。运行采用单 worker、600 秒 solver budget、660 秒外部超时和 100 次修复上限。108 条结果全部为 `ok`，非法动作、fingerprint mismatch、采集错误和外部超时均为 0。
+
+| 控制器 | 成功数 | 平均 capped wall TTF | 固定 100 步冲突 AUC | 平均修复次数 |
+| --- | ---: | ---: | ---: | ---: |
+| 官方 Adaptive | 34/36 | 58.093 秒 | 1114.486 | 28.278 |
+| V2 Full | 34/36 | 60.564 秒 | 499.472 | 20.139 |
+| Mixed Full V2 | 35/36 | 43.763 秒 | 507.944 | 19.861 |
+
+Mixed Full V2 相对 V2 Full 的 capped wall TTF 改善 `27.741%`，成功数增加 1；固定冲突 AUC 退化 `1.696%`，仍在预注册的 2% 容许范围内。它在 9/12 张地图、2/3 个冲突层级上不劣于 V2；地图级 paired bootstrap 的 TTF 改善 95% 区间为 `[-2.299%, 98.867%]`，未显示显著退化，但区间跨过 0，因此不能声称墙钟改善已经达到传统统计显著性。因此八项晋级门槛全部通过，正式 decision 为 `mixed_full_candidate`，本 cohort 上应将 Mixed Full V2 晋级为优先控制器。
+
+相对官方 Adaptive，Mixed Full V2 的 capped wall TTF 改善 `24.667%`，固定冲突 AUC 改善 `54.423%`。但该结果仅支持冻结的 balanced cohort，不能自动外推为所有 MovingAI 地图都更快，也不能恢复静态地图/OD/密度上下文的迁移主张。
+
+完整正式数据保存在 `build/initlns-v2-mixed-balanced-formal-v2c`，确定性报告位于 `build/initlns-v2-mixed-balanced-report-v2c/balanced_wall_clock_report.json`，SHA256 为 `953af2f961650062263511fac3c4cd722d2d8d78fbf389836c71a8e63f95ace0`。紧凑 Git 证据位于 `artifacts/initlns-v2-mixed-balanced-wall-clock-v2/formal_result.json`。

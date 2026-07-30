@@ -1,0 +1,76 @@
+{
+  "schema": "lns2.balanced_wall_clock_formal_result.v1",
+  "evidence_level": "preregistered_end_to_end_balanced_wall_clock",
+  "preregistration_commit": "9d7bf5524c09adc170c38576f06813d4931d84e4",
+  "formal_report_sha256": "953af2f961650062263511fac3c4cd722d2d8d78fbf389836c71a8e63f95ace0",
+  "collection_progress_sha256": "aff5dfea38868b1325c1810529d0f186439b0a5b5e0a77462570bd845412e330",
+  "qualification_manifest_sha256": "92906260df12e2c985a47f03df1293e33cd5e74877523080ac9b65cb9f9cbe2b",
+  "cohort_sha256": "cb2de6151dca956fb8141ca496f4240f210156d81b205e5a6b29a9d999f20c8a",
+  "execution_schedule_sha256": "6d53c38fe6d374335514c9003f0cda3a776dab9b4b4c57ca19b64388c32f3868",
+  "protocol": {
+    "paired_instance_count": 36,
+    "controller_count": 3,
+    "episode_count": 108,
+    "worker_count": 1,
+    "repair_iteration_limit": 100,
+    "solver_budget_seconds": 600,
+    "external_timeout_seconds": 660,
+    "controller_order_groups": 6
+  },
+  "integrity": {
+    "ok_episode_count": 108,
+    "error_count": 0,
+    "timeout_count": 0,
+    "invalid_action_count": 0,
+    "fingerprint_mismatch_count": 0,
+    "identical_initial_states": true
+  },
+  "summaries": {
+    "official_adaptive": {
+      "success_count": 34,
+      "mean_capped_wall_ttf_seconds": 58.09273041294447,
+      "mean_fixed_budget_conflict_auc": 1114.486111111111,
+      "mean_repair_iterations": 28.27777777777778
+    },
+    "v2-full": {
+      "success_count": 34,
+      "mean_capped_wall_ttf_seconds": 60.564168866583344,
+      "mean_fixed_budget_conflict_auc": 499.47222222222223,
+      "mean_repair_iterations": 20.13888888888889
+    },
+    "mixed-full-v2": {
+      "success_count": 35,
+      "mean_capped_wall_ttf_seconds": 43.763071264111076,
+      "mean_fixed_budget_conflict_auc": 507.94444444444446,
+      "mean_repair_iterations": 19.86111111111111
+    }
+  },
+  "comparisons": {
+    "mixed_vs_v2_capped_ttf_improvement": 0.2774098599368773,
+    "mixed_vs_v2_auc_degradation": 0.01696234914632111,
+    "mixed_vs_adaptive_capped_ttf_improvement": 0.24666871477675278,
+    "mixed_vs_adaptive_auc_improvement": 0.5442343880463093,
+    "v2_vs_adaptive_capped_ttf_improvement": -0.04254299007932638,
+    "v2_vs_adaptive_auc_improvement": 0.5518362972471118,
+    "mixed_vs_v2_map_bootstrap_ttf_improvement_95_ci": [
+      -0.022992197391268454,
+      0.9886659869414001
+    ],
+    "maps_not_worse": 9,
+    "strata_not_worse": 2
+  },
+  "promotion_gate": {
+    "success_not_lower_than_v2": true,
+    "ttf_improvement_at_least_5_percent": true,
+    "auc_not_worse_than_2_percent": true,
+    "at_least_8_of_12_maps_not_worse": true,
+    "at_least_2_of_3_strata_not_worse": true,
+    "map_bootstrap_no_significant_degradation": true,
+    "identical_initial_states": true,
+    "zero_experiment_errors": true,
+    "passed": true
+  },
+  "report_decision": "mixed_full_candidate",
+  "decision": "promotion_gate_passed_mixed_full_candidate",
+  "boundary": "This result supports the frozen Mixed Full controller on the preregistered balanced cohort; it does not establish universal MovingAI or static-context transfer."
+}
