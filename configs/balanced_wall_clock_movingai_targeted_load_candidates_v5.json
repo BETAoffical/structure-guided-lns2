@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "role": "qualification_only_targeted_missing_compute_load_cells",
+  "dataset_revision": "balanced-wall-clock-movingai-targeted-load-candidates-v5",
+  "source": "https://www.movingai.com/benchmarks/dao/index.html",
+  "master_seed": 20271022,
+  "task_seeds": [23, 29],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
+    "sha256": "229393af31caaec732e5f4fd923940845ab056e94dadfb96b8afc24da472d3af"
+  },
+  "expected_map_count": 12,
+  "expected_instance_count": 144,
+  "benchmarks": [
+    {
+      "id": "den404d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "den404d.map",
+      "member_sha256": "d9e35f584ca9ad2b0159077825c4faedd0dbdeca7267ae40eb7c78bdd0627a87",
+      "agent_counts": [80, 180, 280]
+    },
+    {
+      "id": "den408d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "den408d.map",
+      "member_sha256": "2f8198b8af734bd328f231cdfbc2c2c97011607b336420b5761e8831b266ed43",
+      "agent_counts": [100, 240, 400]
+    },
+    {
+      "id": "lak101d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "lak101d.map",
+      "member_sha256": "701b2d222fa1dc97c76c2f28a60c238f1af166c4af933092ad837000b5e6aa12",
+      "agent_counts": [70, 160, 240]
+    },
+    {
+      "id": "lak108d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "lak108d.map",
+      "member_sha256": "122a45317517888b5316e8a76adf1ec305bd647d36c2063faaf782532084ed6d",
+      "agent_counts": [60, 140, 220]
+    },
+    {
+      "id": "lak110d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "lak110d.map",
+      "member_sha256": "0e3e88b44af738d3d5a3f11497bcf496fa376bbdf1542e8dbd59983cb743ae63",
+      "agent_counts": [40, 90, 140]
+    },
+    {
+      "id": "ost102d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "ost102d.map",
+      "member_sha256": "44eaf2e95fba8e9dfbaeb47ae2aced17db3ddfbb4fc63ed5275bebee7abb7da5",
+      "agent_counts": [50, 120, 200]
+    },
+    {
+      "id": "arena2",
+      "layout_family": "dao_large_game",
+      "member": "arena2.map",
+      "member_sha256": "9c8255e89179fa1b8098f5744d9392ed78de479a08fda8fb170c05a10f22ce2a",
+      "agent_counts": [200, 400, 600]
+    },
+    {
+      "id": "brc300d",
+      "layout_family": "dao_large_game",
+      "member": "brc300d.map",
+      "member_sha256": "9bf92fe59259d815cde4fc89c54896d79bb8b5b3e7ac440fc87b64c3d0302868",
+      "agent_counts": [160, 320, 500]
+    },
+    {
+      "id": "brc502d",
+      "layout_family": "dao_large_game",
+      "member": "brc502d.map",
+      "member_sha256": "fba3294e4725e67662cc452882d3ce038b6f97bdfe375f24ec779fac8c140012",
+      "agent_counts": [160, 320, 500]
+    },
+    {
+      "id": "combat",
+      "layout_family": "dao_large_game",
+      "member": "combat.map",
+      "member_sha256": "e687779553c1a448c82207c7bc126bc5e1a9717f41ad4a6fefbc6967f96b22d8",
+      "agent_counts": [300, 600, 900]
+    },
+    {
+      "id": "den001d",
+      "layout_family": "dao_large_game",
+      "member": "den001d.map",
+      "member_sha256": "90b8eedb8ad09e3a898ee27e7413c0fce88b84193e61b97d0b60740a65ec354a",
+      "agent_counts": [200, 400, 600]
+    },
+    {
+      "id": "den005d",
+      "layout_family": "dao_large_game",
+      "member": "den005d.map",
+      "member_sha256": "228cec96f01d0f3882b2bec71fd9b8ded947b57e8cdf6814865964cd2a44dd36",
+      "agent_counts": [250, 500, 750]
+    }
+  ]
+}

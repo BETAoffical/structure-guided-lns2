@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections
 import csv
 import hashlib
+import heapq
 import itertools
 import json
 import math
@@ -220,18 +221,37 @@ def _four_neighbor_distances(
     result = []
     for start, goal in zip(starts, goals):
         distances = {start: 0}
-        queue: collections.deque[tuple[int, int]] = collections.deque([start])
-        while queue and goal not in distances:
-            row, col = queue.popleft()
+        queue = [
+            (
+                abs(start[0] - goal[0]) + abs(start[1] - goal[1]),
+                0,
+                start,
+            )
+        ]
+        while queue:
+            _estimate, distance, cell = heapq.heappop(queue)
+            if distances.get(cell) != distance:
+                continue
+            if cell == goal:
+                break
+            row, col = cell
             for neighbor in (
                 (row - 1, col),
                 (row + 1, col),
                 (row, col - 1),
                 (row, col + 1),
             ):
-                if neighbor in passable and neighbor not in distances:
-                    distances[neighbor] = distances[(row, col)] + 1
-                    queue.append(neighbor)
+                candidate = distance + 1
+                if neighbor in passable and candidate < distances.get(
+                    neighbor, candidate + 1
+                ):
+                    distances[neighbor] = candidate
+                    heuristic = abs(neighbor[0] - goal[0]) + abs(
+                        neighbor[1] - goal[1]
+                    )
+                    heapq.heappush(
+                        queue, (candidate + heuristic, candidate, neighbor)
+                    )
         if goal not in distances:
             raise ValueError(f"derived task has no four-neighbor path: {start} -> {goal}")
         result.append(distances[goal])

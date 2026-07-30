@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 from experiments.balanced_wall_clock import (
+    _four_neighbor_distances,
     analyze_scheduled,
     audit_balanced_cohort_difficulty,
     build_replacement_dataset,
@@ -26,6 +27,22 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_map_derived_astar_distances_match_four_neighbor_paths(self) -> None:
+        passable = {
+            (row, col)
+            for row in range(5)
+            for col in range(5)
+            if (row, col) not in {(1, 0), (1, 1), (1, 2), (1, 3)}
+        }
+        self.assertEqual(
+            _four_neighbor_distances(
+                passable,
+                [(0, 0), (4, 0)],
+                [(2, 0), (4, 4)],
+            ),
+            [10, 4],
+        )
+
     def test_map_derived_movingai_tasks_are_pinned_unique_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
