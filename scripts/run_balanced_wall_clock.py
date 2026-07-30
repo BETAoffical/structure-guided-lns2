@@ -14,6 +14,7 @@ if NATIVE_BUILD.is_dir():
 
 from experiments.balanced_wall_clock import (  # noqa: E402
     analyze_scheduled,
+    build_replacement_dataset,
     collect_scheduled,
     merge_datasets,
     prepare_movingai_dataset,
@@ -34,7 +35,15 @@ def main() -> int:
     )
     parser.add_argument(
         "phase",
-        choices=("prepare-movingai", "merge", "select", "dry-run", "collect", "analyze"),
+        choices=(
+            "prepare-movingai",
+            "merge",
+            "replace",
+            "select",
+            "dry-run",
+            "collect",
+            "analyze",
+        ),
     )
     parser.add_argument("--fetched-movingai", default="build/initlns-v2-mixed-movingai-raw-v1")
     parser.add_argument(
@@ -43,6 +52,24 @@ def main() -> int:
     parser.add_argument("--movingai-dataset", default="build/initlns-v2-mixed-movingai-v1")
     parser.add_argument("--generated-dataset", default="build/initlns-v2-mixed-balanced-generated-v1")
     parser.add_argument("--dataset", default="build/initlns-v2-mixed-balanced-dataset-v1")
+    parser.add_argument("--original-dataset", default="build/initlns-v2-mixed-balanced-dataset-v1")
+    parser.add_argument(
+        "--movingai-candidates", default="build/initlns-v2-mixed-movingai-candidates-v2"
+    )
+    parser.add_argument(
+        "--generated-candidates", default="build/initlns-v2-mixed-generated-candidates-v2b"
+    )
+    parser.add_argument(
+        "--additional-generated-candidates",
+        default="build/initlns-v2-mixed-generated-high-pool-v2",
+    )
+    parser.add_argument(
+        "--replacement-config", default="configs/balanced_wall_clock_replacement_v2.json"
+    )
+    parser.add_argument(
+        "--replacement-output",
+        default="build/initlns-v2-mixed-balanced-dataset-v2",
+    )
     parser.add_argument("--config", default="configs/balanced_wall_clock_collection.json")
     parser.add_argument("--qualification", default="build/initlns-v2-mixed-balanced-qualification-v1")
     parser.add_argument("--cohort", default="build/initlns-v2-mixed-balanced-cohort-v1")
@@ -67,6 +94,17 @@ def main() -> int:
             _resolve(arguments.generated_dataset),
             _resolve(arguments.movingai_dataset),
             _resolve(arguments.dataset),
+        )
+    elif arguments.phase == "replace":
+        result = build_replacement_dataset(
+            original=_resolve(arguments.original_dataset),
+            movingai_candidates=_resolve(arguments.movingai_candidates),
+            generated_candidates=_resolve(arguments.generated_candidates),
+            additional_generated_candidates=_resolve(
+                arguments.additional_generated_candidates
+            ),
+            selection_config=_resolve(arguments.replacement_config),
+            output=_resolve(arguments.replacement_output),
         )
     elif arguments.phase == "select":
         result = select_balanced_cohort(

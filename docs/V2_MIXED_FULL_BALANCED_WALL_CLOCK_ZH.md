@@ -54,3 +54,21 @@ Mixed Full 只有同时满足以下条件才替代 V2：成功数不降低；总
 正式 cohort 门槛未通过。高冲突层不足 12 个；同时 MovingAI 的非零冲突状态主要集中在 `maze-128-128-2`，在“单图每层最多两个实例”的限制下，三个层级都无法达到每层至少 4 个 MovingAI 实例。因此决策为 `data_gate_failed_no_formal_episode_run`，未运行 108 个正式控制器 episode，也没有事后调整阈值、scenario、agent 数量或地图。
 
 紧凑结果登记位于 `artifacts/initlns-v2-mixed-balanced-wall-clock-v1/qualification_gate.json`；完整 qualification 数据继续保存在忽略的 `build/` 下。
+
+## 局部替换数据集 V2
+
+V1 门槛失败后没有整体重做地图。V2 保留原数据中 7 张能够提供有效冲突层级的地图，只移除 5 张在固定 scenario、agent 数量和 solver seed 下始终为零冲突的 MovingAI 地图。候选补充过程仍只运行初始 PP qualification，不读取 Adaptive、V2 或 Mixed Full 的任何控制器结果。
+
+最终补入 5 张地图：MovingAI 的 `lt_gallowstemplar_n`，以及 4 张独立 master seed 生成的 compartmentalized/dead-end 地图。候选 `ht_mansion_n` 能提供低、中冲突，但不能满足高冲突层的跨地图上限，因此没有进入最终数据集。MovingAI 文件来自官方 [MAPF benchmark](https://movingai.com/benchmarks/mapf/index.html)，下载 URL、archive SHA256 和成员路径固定在 `configs/balanced_wall_clock_movingai_candidates_v2.json`。
+
+最终 V2 数据集含 12 张地图、72 个任务和 solver seeds `[1,2,3]`。216/216 次 reset 有效，错误和超时均为 0；初始唯一冲突 agent 对分布为：零冲突 14、低冲突 78、中冲突 90、高冲突 31、超过 500 的极端实例 3。零冲突与极端实例保留在 qualification 报告中，但不进入正式速度 cohort。
+
+盲选器最终在低、中、高三层各冻结 12 条，共 36 条配对实例。三层的来源下限、agent 数量区间、单图每层最多 2 条和地图多样性检查全部通过，decision 为 `eligible_for_formal`。紧凑登记位于 `artifacts/initlns-v2-mixed-balanced-wall-clock-v2/qualification_gate.json`；正式 Adaptive/V2/Mixed Full 控制器 episode 尚未运行，因此本节只证明数据门槛通过，不构成模型速度或质量结论。
+
+V2 的活动入口为：
+
+- 替换清单：`configs/balanced_wall_clock_replacement_v2.json`
+- 最终采集配置：`configs/balanced_wall_clock_collection_v2.json`
+- 本地数据集：`build/initlns-v2-mixed-balanced-dataset-v2c`
+- 本地 qualification：`build/initlns-v2-mixed-balanced-qualification-v2c`
+- 本地冻结 cohort：`build/initlns-v2-mixed-balanced-cohort-v2c`

@@ -337,7 +337,9 @@ def closed_loop_dataset_design(
         by_map: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
         for row in rows:
             by_map[str(row["map_id"])].append(row)
-        source_counts = collections.Counter(str(row.get("source_group")) for row in rows)
+        source_counts = collections.Counter(
+            str(row.get("source_group", "generated")) for row in rows
+        )
         expected_sources = {
             str(name): int(count)
             for name, count in dict(settings.get("source_counts", {})).items()

@@ -507,6 +507,26 @@ class WarehouseGeneratorTests(unittest.TestCase):
                 (Path(directory) / "train" / first_row["scenario_file"]).is_file()
             )
 
+    def test_dataset_accepts_unique_map_id_prefix(self) -> None:
+        config = {
+            **EXAMPLE_CONFIG,
+            "map_id_prefix": "replacement_20270901",
+            "splits": {"train": {"layout_counts": {"regular_beltway": 1}}},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            generate_dataset(config, directory)
+            row = json.loads(
+                (Path(directory) / "train" / "manifest.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()[0]
+            )
+            self.assertTrue(row["map_id"].startswith("replacement_20270901_"))
+
+        invalid = {**config, "map_id_prefix": "replacement-v2"}
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "map_id_prefix"):
+                generate_dataset(invalid, directory)
+
 
 if __name__ == "__main__":
     unittest.main()

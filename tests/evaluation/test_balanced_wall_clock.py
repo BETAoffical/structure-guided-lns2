@@ -7,6 +7,7 @@ from pathlib import Path
 
 from experiments.balanced_wall_clock import (
     analyze_scheduled,
+    build_replacement_dataset,
     collect_scheduled,
     conflict_stratum,
     select_balanced_cohort,
@@ -14,6 +15,92 @@ from experiments.balanced_wall_clock import (
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_replacement_dataset_keeps_only_registered_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = {
+                "original": ("keep-original", "drop-original", "generated"),
+                "movingai_candidates": ("keep-movingai", None, "movingai"),
+                "generated_candidates": ("keep-generated", None, "generated"),
+                "additional_generated_candidates": (
+                    "keep-additional",
+                    None,
+                    "generated",
+                ),
+            }
+            for source_name, (selected, removed, source_group) in sources.items():
+                split = root / source_name / "balanced_wall_clock"
+                split.mkdir(parents=True)
+                rows = []
+                for map_id in (selected, removed):
+                    if map_id is None:
+                        continue
+                    relative = Path("maps") / f"{map_id}.map"
+                    (split / relative).parent.mkdir(parents=True, exist_ok=True)
+                    (split / relative).write_text(f"map:{map_id}", encoding="utf-8")
+                    rows.append(
+                        {
+                            "map_id": map_id,
+                            "task_id": f"task-{map_id}",
+                            "source_group": source_group,
+                            "map_file": relative.as_posix(),
+                        }
+                    )
+                (split / "manifest.jsonl").write_text(
+                    "".join(json.dumps(row) + "\n" for row in rows),
+                    encoding="utf-8",
+                )
+            selection = {
+                "schema_version": 1,
+                "dataset_revision": "test-replacement-v1",
+                "expected_map_count": 4,
+                "expected_instance_count": 4,
+                "source_counts": {"generated": 3, "movingai": 1},
+                "original_map_ids": ["keep-original"],
+                "movingai_candidates_map_ids": ["keep-movingai"],
+                "generated_candidates_map_ids": ["keep-generated"],
+                "additional_generated_candidates_map_ids": ["keep-additional"],
+                "removed_map_ids": ["drop-original"],
+            }
+            selection_path = root / "selection.json"
+            selection_path.write_text(json.dumps(selection), encoding="utf-8")
+
+            summary = build_replacement_dataset(
+                original=root / "original",
+                movingai_candidates=root / "movingai_candidates",
+                generated_candidates=root / "generated_candidates",
+                additional_generated_candidates=root / "additional_generated_candidates",
+                selection_config=selection_path,
+                output=root / "output",
+            )
+
+            self.assertEqual(summary["splits"]["balanced_wall_clock"]["map_count"], 4)
+            self.assertEqual(
+                summary["splits"]["balanced_wall_clock"]["source_counts"],
+                {"generated": 3, "movingai": 1},
+            )
+            output_rows = [
+                json.loads(line)
+                for line in (
+                    root / "output" / "balanced_wall_clock" / "manifest.jsonl"
+                )
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            self.assertNotIn("drop-original", {row["map_id"] for row in output_rows})
+            self.assertFalse(
+                (root / "output" / "balanced_wall_clock" / "maps" / "drop-original.map").exists()
+            )
+            with self.assertRaisesRegex(ValueError, "output must differ"):
+                build_replacement_dataset(
+                    original=root / "original",
+                    movingai_candidates=root / "movingai_candidates",
+                    generated_candidates=root / "generated_candidates",
+                    additional_generated_candidates=root / "additional_generated_candidates",
+                    selection_config=selection_path,
+                    output=root / "original",
+                )
+
     def test_conflict_strata_are_fixed_and_exclude_zero_and_extreme(self) -> None:
         self.assertIsNone(conflict_stratum(0))
         self.assertEqual(conflict_stratum(1), "low")

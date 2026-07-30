@@ -202,7 +202,12 @@ def prepare_movingai_dataset(
             }
         ),
         "source": "MovingAI MAPF benchmark random scenarios",
-        "splits": {SPLIT: {"map_count": 6, "instance_count": len(manifest)}},
+        "splits": {
+            SPLIT: {
+                "map_count": len(source_index),
+                "instance_count": len(manifest),
+            }
+        },
     }
     _write_json(output_root / "dataset_summary.json", summary)
     return summary
@@ -258,6 +263,113 @@ def merge_datasets(
                 "source_counts": dict(
                     sorted(collections.Counter(str(row["source_group"]) for row in manifest).items())
                 ),
+            }
+        },
+    }
+    _write_json(output_root / "dataset_summary.json", summary)
+    return summary
+
+
+def build_replacement_dataset(
+    *,
+    original: str | Path,
+    movingai_candidates: str | Path,
+    generated_candidates: str | Path,
+    additional_generated_candidates: str | Path,
+    selection_config: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    config_path = Path(selection_config).resolve()
+    config = _read_json(config_path)
+    source_roots = {
+        "original": Path(original).resolve(),
+        "movingai_candidates": Path(movingai_candidates).resolve(),
+        "generated_candidates": Path(generated_candidates).resolve(),
+        "additional_generated_candidates": Path(additional_generated_candidates).resolve(),
+    }
+    selected_by_source = {
+        name: set(map(str, config[f"{name}_map_ids"])) for name in source_roots
+    }
+    selected_ids = set().union(*selected_by_source.values())
+    if len(selected_ids) != int(config["expected_map_count"]):
+        raise ValueError("replacement map registration is repeated or incomplete")
+    removed = set(map(str, config["removed_map_ids"]))
+    if selected_ids & removed:
+        raise ValueError("a removed map is still selected for the replacement dataset")
+
+    output_root = Path(output).resolve()
+    if output_root in source_roots.values():
+        raise ValueError("replacement output must differ from every source dataset")
+    manifest: list[dict[str, Any]] = []
+    observed_by_source: dict[str, set[str]] = {}
+    for source_name, source_root in source_roots.items():
+        split_root = source_root / SPLIT
+        rows = _read_jsonl(split_root / "manifest.jsonl")
+        available = {str(row["map_id"]) for row in rows}
+        requested = selected_by_source[source_name]
+        if not requested <= available:
+            raise ValueError(
+                f"replacement source {source_name} is missing maps: "
+                f"{sorted(requested - available)}"
+            )
+        observed_by_source[source_name] = set()
+        for raw in rows:
+            if str(raw["map_id"]) not in requested:
+                continue
+            row = dict(raw)
+            row["source_group"] = str(row.get("source_group", "generated"))
+            for field in (
+                "map_file",
+                "scenario_file",
+                "map_metadata_file",
+                "task_file",
+                "legacy_instance_file",
+            ):
+                if not row.get(field):
+                    continue
+                relative = Path(str(row[field]))
+                source = split_root / relative
+                if not source.is_file():
+                    raise ValueError(f"replacement dataset file is missing: {source}")
+                destination = output_root / SPLIT / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if destination.is_file() and sha256_file(destination) != sha256_file(source):
+                    raise ValueError(f"replacement dataset file collision: {relative}")
+                if not destination.is_file():
+                    shutil.copy2(source, destination)
+            observed_by_source[source_name].add(str(row["map_id"]))
+            manifest.append(row)
+
+    map_ids = {str(row["map_id"]) for row in manifest}
+    task_ids = {str(row["task_id"]) for row in manifest}
+    expected_tasks = int(config["expected_instance_count"])
+    if map_ids != selected_ids or len(manifest) != expected_tasks or len(task_ids) != expected_tasks:
+        raise ValueError("replacement dataset dimensions differ from registration")
+    source_counts = dict(
+        sorted(collections.Counter(str(row["source_group"]) for row in manifest).items())
+    )
+    expected_source_counts = {
+        str(name): int(value) for name, value in dict(config["source_counts"]).items()
+    }
+    if source_counts != expected_source_counts:
+        raise ValueError("replacement dataset source counts differ from registration")
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    _write_jsonl_atomic(output_root / SPLIT / "manifest.jsonl", manifest)
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": str(config["dataset_revision"]),
+        "configuration_fingerprint": _fingerprint(config),
+        "selection_config_sha256": sha256_file(config_path),
+        "removed_map_ids": sorted(removed),
+        "selected_map_ids": sorted(selected_ids),
+        "source_map_counts": {
+            name: len(values) for name, values in sorted(observed_by_source.items())
+        },
+        "splits": {
+            SPLIT: {
+                "map_count": len(map_ids),
+                "instance_count": len(manifest),
+                "source_counts": source_counts,
             }
         },
     }
@@ -775,6 +887,7 @@ __all__ = [
     "CONTROLLERS",
     "STRATA",
     "analyze_scheduled",
+    "build_replacement_dataset",
     "collect_scheduled",
     "conflict_stratum",
     "merge_datasets",

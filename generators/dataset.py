@@ -211,6 +211,12 @@ def generate_dataset(
     split_configs = dict(config.get("splits", {}))
     if not split_configs:
         raise ValueError("dataset config must define at least one split")
+    map_id_prefix = str(config.get("map_id_prefix", "")).strip()
+    if map_id_prefix and (
+        not map_id_prefix.isascii()
+        or not map_id_prefix.replace("_", "").isalnum()
+    ):
+        raise ValueError("map_id_prefix must contain only letters, digits, and underscores")
 
     all_map_seeds: set[int] = set()
     variant_schedules = _variant_schedules(
@@ -249,6 +255,7 @@ def generate_dataset(
         split_map_seeds: list[int] = []
 
         layout_indices: dict[str, int] = {}
+        current_prefix = map_id_prefix or split_name
         for map_index, layout_mode in enumerate(layout_schedule):
             map_seed = seed_rng.randrange(1, 2**31)
             while map_seed in all_map_seeds:
@@ -258,7 +265,7 @@ def generate_dataset(
             current_map_config = dict(map_config)
             layout_variant: str | None = None
             if layout_mode is None:
-                map_id = f"{split_name}_warehouse_{map_index:04d}"
+                map_id = f"{current_prefix}_warehouse_{map_index:04d}"
             else:
                 layout_index = layout_indices.get(layout_mode, 0)
                 layout_indices[layout_mode] = layout_index + 1
@@ -273,12 +280,12 @@ def generate_dataset(
                         current_map_config, variant["map"]
                     )
                     map_id = (
-                        f"{split_name}_{layout_mode}_"
+                        f"{current_prefix}_{layout_mode}_"
                         f"{layout_variant}_{layout_index:04d}"
                     )
                 else:
                     map_id = (
-                        f"{split_name}_{layout_mode}_{layout_index:04d}"
+                        f"{current_prefix}_{layout_mode}_{layout_index:04d}"
                     )
             map_data = generate_warehouse(
                 current_map_config, map_seed, map_id

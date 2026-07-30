@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "dataset_revision": "balanced-wall-clock-replacement-v2",
+  "expected_map_count": 12,
+  "expected_instance_count": 72,
+  "source_counts": {"generated": 60, "movingai": 12},
+  "original_map_ids": [
+    "balanced_wall_clock_compartmentalized_cross_four_gate_0001",
+    "balanced_wall_clock_compartmentalized_double_horizontal_0000",
+    "balanced_wall_clock_dead_end_aisles_0000",
+    "balanced_wall_clock_dead_end_aisles_0001",
+    "balanced_wall_clock_regular_beltway_0000",
+    "balanced_wall_clock_regular_beltway_0001",
+    "maze-128-128-2"
+  ],
+  "movingai_candidates_map_ids": [
+    "lt_gallowstemplar_n"
+  ],
+  "generated_candidates_map_ids": [
+    "balanced_wall_clock_v2_replacement_compartmentalized_cross_four_gate_0000",
+    "balanced_wall_clock_v2_replacement_dead_end_aisles_0000"
+  ],
+  "additional_generated_candidates_map_ids": [
+    "balanced_wall_clock_v2_high_pool_compartmentalized_cross_four_gate_0000",
+    "balanced_wall_clock_v2_high_pool_compartmentalized_cross_four_gate_0003"
+  ],
+  "removed_map_ids": [
+    "Berlin_1_256",
+    "Boston_0_256",
+    "Paris_1_256",
+    "brc202d",
+    "ost003d",
+    "orz900d",
+    "w_woundedcoast",
+    "ht_chantry",
+    "ht_mansion_n"
+  ],
+  "selection_basis": "initial PP qualification only; no controller outcomes observed",
+  "high_pool_selection": {
+    "master_seed": 20270903,
+    "eligibility": "at least two instance-seeds with 101-500 initial colliding pairs",
+    "tie_break": "minimum SHA256 of canonical JSON ['high-pool-selection-v1', map_id]",
+    "initial_selected_hash": "02bed27644155d00b2a50a6aa955f2af786fde14caaf5f8115804ac99797af99",
+    "diversity_replacement": {
+      "reason": "the first replacement set yielded only 11 high-stratum jobs under the two-per-map cap",
+      "eligibility": "at least four 101-500 jobs and zero jobs over 500",
+      "selected_map_id": "balanced_wall_clock_v2_high_pool_compartmentalized_cross_four_gate_0000",
+      "selected_hash": "929ac5268d5f07a82f5626912315033af2bd2b9bcc2cb6ccfa7577cce4f5cc77"
+    }
+  }
+}

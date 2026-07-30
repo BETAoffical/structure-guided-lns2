@@ -1,0 +1,63 @@
+{
+  "schema": "lns2.balanced_wall_clock_qualification_gate.v2",
+  "evidence_level": "initial_pp_data_qualification_only",
+  "base_commit": "c85b73ceec412f30a18f4c2548bb3cf420d52c4f",
+  "selection_blind_to_controller_outcomes": true,
+  "formal_controller_episodes_run": 0,
+  "replacement_config_sha256": "bdb7171ccaf74c82751a5e389d991a2751e7c974584653f52b9c63f3ebb7ea67",
+  "collection_config_sha256": "63f792e3d968f5f278f19877cc47e187d95fcb3afdbb0a410b6d3118531f3029",
+  "dataset_manifest_sha256": "fb27a1da3f389348c8e27ba360f8c07483a6dfba3fdccc30f0828a3abd273fb0",
+  "dataset_summary_sha256": "2720031bba4bab4560bdaf44ed414e570ecd00abb7c5026280d0858324e27def",
+  "qualification_manifest_sha256": "92906260df12e2c985a47f03df1293e33cd5e74877523080ac9b65cb9f9cbe2b",
+  "qualification_report_sha256": "9dfa05e82589a9591b87b91366c82f8fdc4aa02afcda73659d83aa40a7c26622",
+  "cohort_sha256": "cb2de6151dca956fb8141ca496f4240f210156d81b205e5a6b29a9d999f20c8a",
+  "cohort_report_sha256": "a54e2a20a755b294d0ded77688787235a548e77b4741de61c8d70798fae49000",
+  "execution_schedule_sha256": "6d53c38fe6d374335514c9003f0cda3a776dab9b4b4c57ca19b64388c32f3868",
+  "dataset": {
+    "map_count": 12,
+    "instance_count": 72,
+    "solver_seeds": [1, 2, 3],
+    "reset_count": 216,
+    "retained_original_map_count": 7,
+    "replacement_map_count": 5,
+    "source_counts": {"generated": 60, "movingai": 12},
+    "selected_map_ids": [
+      "balanced_wall_clock_compartmentalized_cross_four_gate_0001",
+      "balanced_wall_clock_compartmentalized_double_horizontal_0000",
+      "balanced_wall_clock_dead_end_aisles_0000",
+      "balanced_wall_clock_dead_end_aisles_0001",
+      "balanced_wall_clock_regular_beltway_0000",
+      "balanced_wall_clock_regular_beltway_0001",
+      "balanced_wall_clock_v2_high_pool_compartmentalized_cross_four_gate_0000",
+      "balanced_wall_clock_v2_high_pool_compartmentalized_cross_four_gate_0003",
+      "balanced_wall_clock_v2_replacement_compartmentalized_cross_four_gate_0000",
+      "balanced_wall_clock_v2_replacement_dead_end_aisles_0000",
+      "lt_gallowstemplar_n",
+      "maze-128-128-2"
+    ]
+  },
+  "qualification": {
+    "valid_count": 216,
+    "error_count": 0,
+    "timeout_count": 0,
+    "initial_feasible_count": 14,
+    "active_map_count": 12,
+    "mean_initial_colliding_pairs": 69.30092592592592,
+    "maximum_initial_colliding_pairs": 1813,
+    "conflict_strata": {
+      "zero": 14,
+      "low_1_to_10": 78,
+      "medium_11_to_100": 90,
+      "high_101_to_500": 31,
+      "over_500": 3
+    }
+  },
+  "cohort_gate": {
+    "required_per_stratum": 12,
+    "selected_per_stratum": {"low": 12, "medium": 12, "high": 12},
+    "selected_count": 36,
+    "passed": true,
+    "formal_collection_allowed": true
+  },
+  "decision": "eligible_for_formal_wall_clock_collection"
+}
