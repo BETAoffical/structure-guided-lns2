@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "role": "qualification_only_compute_load_targeted_gap_pool",
+  "generated_sources": [
+    {
+      "config": "configs/balanced_wall_clock_compute_load_compact_candidates_v3.json",
+      "dataset": "build/initlns-v2-mixed-compute-load-compact-candidates-v3"
+    },
+    {
+      "config": "configs/balanced_wall_clock_compute_load_midsize_candidates_v3.json",
+      "dataset": "build/initlns-v2-mixed-compute-load-midsize-candidates-v3"
+    }
+  ],
+  "excluded_map_ids": [],
+  "expected_usable": {
+    "map_count": 12,
+    "instance_count": 132,
+    "layout_map_counts": {"compartmentalized": 12}
+  },
+  "qualification": {
+    "solver_seeds": [1, 2, 3],
+    "measure_only": [
+      "num_of_colliding_pairs",
+      "initial_low_level_generated",
+      "initial_low_level_expanded",
+      "total_path_cost",
+      "conflict_event_count"
+    ],
+    "run_controllers": false
+  }
+}
