@@ -107,6 +107,10 @@ def main() -> int:
     )
     parser.add_argument("--stall-guard-config")
     parser.add_argument("--stall-shadow-config")
+    parser.add_argument(
+        "--qualification-source",
+        help="Reuse a compatible qualification collection instead of resetting again.",
+    )
     parser.add_argument("--wall-time-budget-seconds", type=float)
     parser.add_argument("--episode-process-timeout-seconds", type=float)
     parser.add_argument("--environment-time-limit-seconds", type=float)
@@ -145,6 +149,7 @@ def main() -> int:
                 arguments.environment_time_limit_seconds
             ),
             stopping_rule=arguments.stopping_rule,
+            qualification_source=arguments.qualification_source,
         )
     except CollectionLockError as error:
         print(json.dumps({"status": "locked", "error": str(error)}), file=sys.stderr)

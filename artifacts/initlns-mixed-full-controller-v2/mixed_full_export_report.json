@@ -1,0 +1,46 @@
+{
+  "artifacts": {
+    "base_controller_manifest_sha256": "156eef2f16aec75be79c2b4a37a1dab83dd0f4b10137f113c71911c480852cee",
+    "sklearn_model": "sklearn/mixed_full_v2.pkl",
+    "sklearn_model_sha256": "b29d4106a44fd0c64e8d76253e656d489def94af1ca82359ad34e9fc16b28d89",
+    "source_portable_manifest_sha256": "3d25ab4912155d2e30bb1f89de6018d384923dcd64b34566159a2b6a98c82351"
+  },
+  "base_feature_count": 124,
+  "controller_id": "mixed-full-v2",
+  "coverage": {
+    "combined_candidate_count": 8149,
+    "combined_state_count": 455,
+    "high_load_state_count": 144,
+    "legacy_state_count": 311
+  },
+  "equivalence": {
+    "maximum_score_delta": 3.552713678800501e-15,
+    "passed": true,
+    "selection_mismatch_count": 0,
+    "state_count": 455
+  },
+  "input_dimension": 147,
+  "inputs": {
+    "high_feature_index_sha256": "fbc10e1c8be5d4aa311808da6de91a71b81c7aa96ccd2a9fb9b057bb826aae06",
+    "high_trial_manifest_sha256": "834a6f5be32cdfc129afe6dd68ed64adc570cbb006100d507ee17e72a47b1215",
+    "legacy_training_sha256": "b586f5a7ef58f27241d0d2028a2358d971babb0e55febf7ea9ecef025dbce3be",
+    "source_portable_manifest_sha256": "d87b649459cf0dde44ed1491ae32f8bc2397728230c33c15caeb036005e5970d"
+  },
+  "model_parameters": {
+    "early_stopping": false,
+    "l2_regularization": 0.1,
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "random_state": 20260714
+  },
+  "pair_diagnostics": {
+    "dominance_pairs": 54610,
+    "indistinguishable_or_non_dominating": 14317,
+    "state_count": 455,
+    "training_examples": 109220
+  },
+  "schema": "lns2.mixed_full_v2_export.v1",
+  "scientific_status": "unconfirmed_end_to_end"
+}

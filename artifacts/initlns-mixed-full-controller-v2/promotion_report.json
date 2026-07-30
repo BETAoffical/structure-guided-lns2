@@ -1,0 +1,10 @@
+{
+  "default_controller": "v2-full",
+  "exact_acceleration_passed": true,
+  "feature_performance_passed": true,
+  "feature_schema_id": "lns2.realized_features.v2",
+  "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+  "note": "Runtime parity only; end-to-end promotion remains pending.",
+  "schema": "lns2.controller_promotion_report.v2",
+  "scientific_promotion_passed": false
+}

@@ -324,8 +324,41 @@ def closed_loop_dataset_design(
     registered: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     settings = dict(registered or {})
-    if str(settings.get("mode", "structured")) == "movingai_ood":
+    mode = str(settings.get("mode", "structured"))
+    if mode == "movingai_ood":
         return movingai_ood_dataset_design(rows, split, settings)
+    if mode == "balanced_wall_clock":
+        errors: list[str] = []
+        if any(str(row.get("split")) != split for row in rows):
+            errors.append("dataset contains an unexpected split")
+        task_ids = [str(row.get("task_id", "")) for row in rows]
+        if not all(task_ids) or len(task_ids) != len(set(task_ids)):
+            errors.append("dataset task IDs are empty or repeated")
+        by_map: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+        for row in rows:
+            by_map[str(row["map_id"])].append(row)
+        source_counts = collections.Counter(str(row.get("source_group")) for row in rows)
+        expected_sources = {
+            str(name): int(count)
+            for name, count in dict(settings.get("source_counts", {})).items()
+        }
+        if dict(sorted(source_counts.items())) != dict(sorted(expected_sources.items())):
+            errors.append("dataset source counts differ from registration")
+        if len(rows) != int(settings.get("instance_count", -1)) or len(by_map) != int(
+            settings.get("map_count", -1)
+        ):
+            errors.append("dataset dimensions differ from registration")
+        return {
+            "passed": not errors,
+            "errors": errors,
+            "mode": mode,
+            "map_count": len(by_map),
+            "task_count": len(rows),
+            "source_counts": dict(sorted(source_counts.items())),
+            "layout_counts": dict(
+                sorted(collections.Counter(str(row["layout_mode"]) for row in rows).items())
+            ),
+        }
     expected_tasks = set(
         map(
             str,
@@ -5251,13 +5284,14 @@ def run_closed_loop_collection(
     design = closed_loop_dataset_design(
         all_rows, split, dict(config.get("dataset_design", {}))
     )
-    if str(config.get("dataset_design", {}).get("mode", "structured")) == "movingai_ood":
+    dataset_mode = str(config.get("dataset_design", {}).get("mode", "structured"))
+    if dataset_mode in {"movingai_ood", "balanced_wall_clock"}:
         registered_ids = set(map(str, config["dataset_design"].get("historical_map_ids", [])))
         current_ids = {str(row["map_id"]) for row in all_rows}
         overlap = sorted(current_ids & registered_ids)
         isolation = {
             "passed": not overlap,
-            "mode": "movingai_map_id",
+            "mode": f"{dataset_mode}_map_id",
             "current_map_ids": sorted(current_ids),
             "historical_overlap": overlap,
         }
@@ -5276,7 +5310,21 @@ def run_closed_loop_collection(
         actual_source_manifest = str(
             controller_manifest.get("source_bundle", {}).get("manifest_sha256", "")
         ).lower()
-        if actual_source_manifest != expected_source_manifest:
+        registered_alternatives = dict(
+            config["model_registration"].get("registered_controller_bundles", {})
+        )
+        controller_id = str(controller_manifest.get("controller_id", ""))
+        alternative = dict(registered_alternatives.get(controller_id, {}))
+        alternative_manifest_sha = str(
+            alternative.get("controller_manifest_sha256", "")
+        ).lower()
+        loaded_manifest_sha = _sha256(controller_root / "controller_manifest.json")
+        registered_alternative = bool(
+            controller_id
+            and alternative_manifest_sha
+            and loaded_manifest_sha == alternative_manifest_sha
+        )
+        if actual_source_manifest != expected_source_manifest and not registered_alternative:
             raise ValueError("controller-v2 was built from a different v1 deployment bundle")
     effective_workers = int(workers or config["workers"])
     dataset_fp = _dataset_fingerprint(dataset_root)
