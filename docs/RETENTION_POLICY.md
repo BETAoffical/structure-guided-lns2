@@ -1,0 +1,25 @@
+# Active-code retention policy
+
+Every production Python module and pytest file is assigned one of these roles
+in the generated retention manifest:
+
+- `active`: directly required by an active controller or the V3-S3 pipeline;
+- `shared`: algorithm-neutral code used by at least two retained subsystems;
+- `reproducibility`: required to rebuild a retained bundle or reproduce a
+  current formal result;
+- `compatibility`: the minimum read-only support for a frozen artifact schema;
+- `evidence-only`: scientific evidence is retained but executable code is not;
+- `obsolete`: no active caller, current reproduction role, or shared contract.
+
+Only the first four roles remain executable on the active branch. A utility is
+not retained merely because it might be useful someday: it must have at least
+two retained callers or a named reproduction obligation.
+
+Tests protect public behavior, known bug boundaries, artifact identity, or a
+retained reproduction contract. Tests that only pin the iteration at which an
+unpromoted controller falls back, its private attempt limit, cooldown, or
+promotion threshold are removed together with that controller.
+
+Before every pruning phase, the clean predecessor commit is pushed and tagged.
+The generated manifest must contain no unclassified production module or test.
+

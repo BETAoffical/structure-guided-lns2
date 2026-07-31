@@ -1,0 +1,21 @@
+{
+  "source_state_count": 12,
+  "stable_state_count": 5,
+  "stable_state_ids": [
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0007__seed_0000__realized_dynamic__decision_0000__0000",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0010__seed_0000__official_adaptive__decision_0001__0007",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0013__seed_0000__fixed_random__decision_0003__0016",
+    "s3__policy_train__policy_train_dead_end_aisles_0002__task_0012__seed_0000__realized_dynamic__decision_0000__0090",
+    "s3__policy_train__policy_train_regular_beltway_0002__task_0011__seed_0000__official_adaptive__decision_0000__0109"
+  ],
+  "target_state_count": 7,
+  "target_state_ids": [
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0008__seed_0000__realized_dynamic__decision_0000__0006",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0006__seed_0000__fixed_random__decision_0009__0001",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0014__seed_0000__realized_dynamic__decision_0007__0017",
+    "s3__policy_train__policy_train_dead_end_aisles_0002__task_0019__seed_0000__official_adaptive__decision_0000__0093",
+    "s3__policy_train__policy_train_regular_beltway_0000__task_0016__seed_0000__official_adaptive__decision_0004__0113",
+    "s3__policy_train__policy_train_regular_beltway_0002__task_0015__seed_0000__realized_dynamic__decision_0000__0110"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "lns2.receding_q_gate_audit.v1",
+  "state_ids": [
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0001__task_0016__seed_0000__official_adaptive__decision_0000__0040",
+    "s3__policy_train__policy_train_compartmentalized_double_horizontal_0002__task_0014__seed_0000__realized_dynamic__decision_0007__0017",
+    "s3__policy_train__policy_train_regular_beltway_0000__task_0016__seed_0000__official_adaptive__decision_0004__0113"
+  ]
+}

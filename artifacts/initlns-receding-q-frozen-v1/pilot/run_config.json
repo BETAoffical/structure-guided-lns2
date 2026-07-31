@@ -1,0 +1,60 @@
+{
+  "continuation_teacher": "official_adaptive",
+  "horizon": 3,
+  "plan_fingerprint": "a0ec2d3f3b2bff27a10a7eb0e0db950dfcbcc44c8c7bb13dfa806da7286e25e9",
+  "producer_identity": {
+    "native": {
+      "path": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/linux/project/lns2_env.cpython-310-x86_64-linux-gnu.so",
+      "repair_timing_schema": "lns2.repair_timing.v2",
+      "sha256": "14cf46aa364181c146ed665f95816210ea4510904af633961b93a94ca5c2b765"
+    },
+    "native_required": true,
+    "packages": {
+      "numpy": "1.21.5",
+      "scikit-learn": null
+    },
+    "python": {
+      "implementation": "CPython",
+      "version": "3.10.12"
+    },
+    "schema": "lns2.producer_identity.v1",
+    "source_sha256": {
+      "CMakeLists.txt": "ec6e4b1ecf77f16f9b3e7e6287ed497cdb0be7dcf7ad16069d398ffcd8773c9f",
+      "experiments/_common.py": "9cdb268b5cd834b27eb091489b9a298b39277567a5b64486ee86b87e0efccfcd",
+      "experiments/closed_loop_confirmation.py": "9250ec1ce6e7978cb19f9046d84086b6f0197c8e5d55e8755219341bf2c01366",
+      "experiments/closed_loop_trace_storage.py": "cd1f30c7e48d89ac6d715c3e3361dc56531efa45805ade682b09448331062070",
+      "experiments/compact_controller_model.py": "b9d415495db44687319ce5cadc6b529a4cc530e1ce29eb84da07d080d5463ae3",
+      "experiments/context_audit.py": "9ea080a2f7070d96a6c820999c5eaaf07aefe90a2bd8f8bdeb53b007fa9ca9ba",
+      "experiments/feature_schema_v2.py": "c532162257b1dc68de455fa04e5550e7891ce6c5a8ae6d61aaf64476f371e553",
+      "experiments/feature_schema_v3.py": "9e1066b655d996c7a297e7f66eeeeb3ba26980d4323ab63e51a211bbf0e3a79f",
+      "experiments/neighborhood_candidates.py": "c3e5e53f1b50d9399418c588369add03639ee86240e7304c0af0136a1bda2bdc",
+      "experiments/neighborhood_features.py": "4d12be5d9a711751d56fa1424ce4cfc4529f4093ed620d581af3c265575bce35",
+      "experiments/online_feature_engine.py": "420bf804c8c00e6f3fa73c34e3cd2d0431219f0bc2a448545b3ee2b2ba751a73",
+      "experiments/parallel_runtime.py": "eee461b79fea32f47bf9d3fd11e550ad0254a21ec8808dab5d9b6ddadea410a3",
+      "experiments/receding_q_pilot.py": "e832b638efa67321d93e3bbf3cd239bbdf699f5393f6c297cb7dc9aecc58405b",
+      "experiments/repair_aware.py": "6e3299b6b127b608923f453a563b5b7a4a804a72a086975832b996d89e317a05",
+      "experiments/repair_aware_training.py": "31fe318bdf5aeb5cc35571f95f509ff4207911c7ba9c262fe6a437eeb552a9be",
+      "experiments/repair_collection.py": "25394b1f2a6b27b533c47bbc8caa27e7914b78a43c6f83ea5612e7ba29a5b0e6",
+      "experiments/stall_guard.py": "f2e50b6e785c37aa0f07812deabff40e9e1e8738744fac76e8c18979e82949b7",
+      "experiments/state_analysis.py": "d660ade6cd24f8abbd040377b815d813e4b4f684a3ce90b79f9f8785b4c5983a",
+      "experiments/trace_replay.py": "4d481e71e45feaf1d31f318eb429e35f728d551d3eeec4ee53cccf2c1abf4687",
+      "experiments/v3_controller.py": "86bd29cf5ed439c05ceea6a5a033822543ec4eb5bc428e43917f7155f326bc9a",
+      "experiments/v3_s3.py": "d5e44aad8997da7c5b74bb16006a62d325ba6bca90e941ed6e9669deb1353414",
+      "experiments/v3_s3_collection.py": "6726841693b988db88e15d1cb1bb3db4ea52211ba2363a085792cc625773ecd4",
+      "experiments/v3_value_pilot.py": "e940ee0d82c3bf28893fcce3b3fb60b7cf29e168b8991fbba6274ec8297df9b7",
+      "src/python_bindings.cpp": "55e190ae12c3a113de3aa21ad403df2bcf72a76c168100586ba2976c04704640",
+      "third_party/mapf_lns2/inc/BasicLNS.h": "95a9cde106c2fa9987f7915bbbef5712d9d980d8323b7be3176c36a9a3f70283",
+      "third_party/mapf_lns2/inc/InitLNS.h": "e0a3716016a12e197ffe78125d7e5933e219d377f51af232330bee97f15c2059",
+      "third_party/mapf_lns2/inc/RepairPolicy.h": "c99a63b3fd852a0ae307b33bb80e8cd83f87bbf53a83292ee0291c2ab65906ba",
+      "third_party/mapf_lns2/src/InitLNS.cpp": "804b63466929373a25acb3cadc95f5595167a8da09ec06088f61329766729958"
+    }
+  },
+  "producer_identity_fingerprint": "6672138aa09b88cc5f5fdfc079bc4dedbe9d681f74645debbab2280cb047ae88",
+  "schema": "lns2.receding_q_label_pilot.v2",
+  "smoke_only": false,
+  "source": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/initlns-v3-s3-stable-pilot-v2",
+  "split": "policy_train",
+  "state_count": 12,
+  "trials": 2,
+  "workers": 1
+}

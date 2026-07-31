@@ -1,0 +1,8 @@
+{
+  "completed_rollout_count": 430,
+  "decision": "fresh_receding_q_labels_insufficient",
+  "error_count": 0,
+  "schema": "lns2.receding_q_label_pilot.v2",
+  "status": "complete",
+  "total_rollout_count": 430
+}

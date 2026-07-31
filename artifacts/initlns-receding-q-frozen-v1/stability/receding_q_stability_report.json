@@ -1,0 +1,63 @@
+{
+  "checks": {
+    "followup_coverage_complete": true,
+    "half_top3_overlap_on_at_least_80pct_states": true,
+    "loo_feasible_rate_not_below_v2": true,
+    "loo_normalized_step_auc_not_worse_than_v2_by_2pct": true,
+    "loo_wins_not_below_losses": true,
+    "mean_pairwise_rank_correlation_at_least_50pct": true,
+    "operational_stability_on_at_least_70pct_states": false
+  },
+  "decision": "four_seed_receding_q_labels_insufficient",
+  "followup_rollout_count": 252,
+  "followup_trial_indices": [
+    2,
+    3
+  ],
+  "half_top3_overlap_fraction": 0.8571428571428571,
+  "half_winner_exact_fraction": 0.2857142857142857,
+  "limitations": [
+    "Only the states whose trial-0 and trial-1 exact winners differed receive two additional PP seeds.",
+    "Exact winner identity is diagnostic; the gate uses rank correlation, Top-3 overlap, cross-half outcome regret, and leave-one-seed-out behavior.",
+    "The leave-one-seed-out policy uses measured outcomes from three seeds and is an optimistic label diagnostic, not a trained deployable controller.",
+    "Continuation still uses the Adaptive teacher and the horizon remains three repairs; no complete episode is evaluated."
+  ],
+  "loo": {
+    "feasible_rate_delta": 0.0357142857142857,
+    "fold_count": 28,
+    "losses": 9,
+    "mean_final_conflict_ratio_delta": -0.016952196739430783,
+    "mean_normalized_step_auc_delta": -0.017624574007552733,
+    "mean_oracle_normalized_step_auc_regret": 0.06509394860458691,
+    "mean_total_seconds_delta": -0.003658593285702949,
+    "selected_feasible_rate": 0.6071428571428571,
+    "ties": 2,
+    "v2_feasible_rate": 0.5714285714285714,
+    "wins": 17
+  },
+  "mean_cross_half_final_conflict_ratio_regret": 0.05372340425531915,
+  "mean_cross_half_normalized_step_auc_regret": 0.10158308004052685,
+  "mean_pairwise_rank_correlation": 0.500536733484344,
+  "merged_rollout_count": 682,
+  "operational_stability_fraction": 0.2857142857142857,
+  "run_config": {
+    "continuation_teacher": "official_adaptive",
+    "followup_trial_indices": [
+      2,
+      3
+    ],
+    "horizon": 3,
+    "implementation_sha256": "e16fb2e9c941f814d0f90c756e0f1307a8f19ca35080408560d977f969a52d8a",
+    "schema": "lns2.receding_q_label_stability.v1",
+    "source": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/initlns-receding-q-label-pilot-v1",
+    "source_plan_fingerprint": "77e0ce4d833ffcdd6d24d7411253e614bfe86d0a011c9ecb9fdc8b423a99bb40",
+    "source_rollout_fingerprint": "b0a580e789ba87488d8e349dcd24fdd7afe28d341ad9225f76dc14380a49ef49",
+    "target_fingerprint": "f7406c6981188d131c097bafbcb924c428b6e475c92ffe65c7e70780089f5dba",
+    "worker_count": 1
+  },
+  "schema": "lns2.receding_q_label_stability.v1",
+  "source_rollout_count": 430,
+  "source_state_count": 12,
+  "stable_source_state_count": 5,
+  "target_state_count": 7
+}
