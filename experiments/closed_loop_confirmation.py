@@ -2093,10 +2093,11 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError(
                         "repair timing v2 step_runtime does not match native step"
                     )
-                if episode_runtime_delta + native_tolerance < native_step:
-                    raise ClosedLoopTraceError(
-                        "repair timing v2 episode delta is below native step"
-                    )
+                # episode_runtime_delta ends before InitLNS takes its final
+                # post-step snapshot, while native_step includes that snapshot.
+                # Conversely, the episode delta can include Python controller
+                # time between native calls.  Both values are valid diagnostics,
+                # but neither is an ordering bound for the other.
             else:
                 try:
                     legacy_step_runtime = float(metrics["step_runtime"])

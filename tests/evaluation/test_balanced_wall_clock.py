@@ -1190,6 +1190,11 @@ class BalancedWallClockTests(unittest.TestCase):
                 ]
             )
             self.assertTrue((root / "difficulty-report" / "difficulty_episodes.csv").is_file())
+            markdown = (
+                root / "difficulty-report" / "difficulty_audit_zh.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("# V2 / Mixed Full 分层墙钟确认", markdown)
+            self.assertIn("未通过计算负载平衡门槛", markdown)
 
 
 if __name__ == "__main__":

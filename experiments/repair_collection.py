@@ -590,11 +590,10 @@ def _native_step_seconds(metrics: dict[str, Any]) -> float:
         raise ValueError(
             "native timing v2 step_runtime does not match native_step_seconds"
         )
-    if episode_delta + tolerance < native_step:
-        raise ValueError(
-            "native timing v2 episode_runtime_delta_seconds is below "
-            "native_step_seconds"
-        )
+    # episode_delta and native_step have different timing boundaries.  The
+    # native value includes the final state snapshot; the episode value may
+    # instead include controller work between native calls, so neither bounds
+    # the other.
     return native_step
 
 

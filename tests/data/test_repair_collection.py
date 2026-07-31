@@ -394,6 +394,16 @@ class RepairCollectionTests(unittest.TestCase):
             ),
             0.125,
         )
+        self.assertEqual(
+            _native_step_seconds(
+                {
+                    "step_runtime": 0.125,
+                    "native_step_seconds": 0.125,
+                    "episode_runtime_delta_seconds": 0.12,
+                }
+            ),
+            0.125,
+        )
         with self.assertRaisesRegex(ValueError, "native_step_seconds"):
             _native_step_seconds({"step_runtime": 0.25})
         with self.assertRaisesRegex(

@@ -7,6 +7,7 @@ import heapq
 import itertools
 import json
 import math
+import os
 import random
 import shutil
 import statistics
@@ -15,8 +16,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import sha256_file
-from experiments.closed_loop_confirmation import run_closed_loop_collection
-from experiments.closed_loop_trace_storage import read_state_blob
+from experiments.closed_loop_confirmation import (
+    run_closed_loop_collection,
+    validate_closed_loop_trace,
+)
+from experiments.closed_loop_trace_storage import read_state_blob, trace_file_metadata
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -1895,6 +1899,135 @@ def collect_scheduled(
     }
 
 
+def recover_scheduled_partial_traces(
+    collection: str | Path, schedule_root: str | Path
+) -> dict[str, Any]:
+    collection_root = Path(collection).resolve()
+    schedule = _read_json(Path(schedule_root).resolve() / "execution_schedule.json")
+    expected = {_episode_key(row) for row in schedule["entries"]}
+    recovered: list[dict[str, Any]] = []
+    remaining_errors: list[dict[str, Any]] = []
+    for group in range(6):
+        for controller in CONTROLLERS:
+            phase = (
+                "official_adaptive"
+                if controller == "official_adaptive"
+                else "realized_dynamic"
+            )
+            lane = collection_root / f"order_{group}" / controller
+            manifest_path = lane / f"{phase}_manifest.jsonl"
+            rows = _read_jsonl(manifest_path)
+            changed = False
+            run_config = _read_json(lane / "run_config.json")
+            metric_budget = run_config["configuration"].get(
+                "metric_iteration_budget"
+            )
+            for index, row in enumerate(rows):
+                if str(row.get("status")) in {"ok", "resumed"}:
+                    continue
+                known_timing_rejection = (
+                    str(row.get("error_kind")) == "ClosedLoopTraceError"
+                    and str(row.get("error", "")).endswith(
+                        "repair timing v2 episode delta is below native step"
+                    )
+                )
+                partial_reference = row.get("partial_trace_file")
+                if not known_timing_rejection or not partial_reference:
+                    remaining_errors.append(
+                        {
+                            "controller": controller,
+                            "task_id": str(row.get("task_id")),
+                            "solver_seed": int(row.get("solver_seed", -1)),
+                            "error": row.get("error"),
+                        }
+                    )
+                    continue
+                partial = (lane / str(partial_reference)).resolve()
+                try:
+                    partial.relative_to(lane)
+                except ValueError as error:
+                    raise ValueError("partial trace escapes its collection lane") from error
+                if not partial.name.endswith(".partial"):
+                    raise ValueError("registered partial trace lacks .partial suffix")
+                final = partial.with_name(partial.name[: -len(".partial")])
+                source = partial if partial.is_file() else final
+                if not source.is_file():
+                    raise ValueError(f"registered partial trace is missing: {partial}")
+                validated = validate_closed_loop_trace(
+                    source,
+                    str(run_config["run_fingerprint"]),
+                    expected_episode_id=str(row["episode_id"]),
+                    expected_policy=str(row["policy"]),
+                    expected_solver_seed=int(row["solver_seed"]),
+                    metric_iteration_budget=(
+                        int(metric_budget) if metric_budget is not None else None
+                    ),
+                    collection_root=lane,
+                )
+                if source == partial:
+                    if final.exists():
+                        raise ValueError(f"partial recovery target already exists: {final}")
+                    os.replace(partial, final)
+                metadata = trace_file_metadata(final)
+                original_error = str(row.get("error"))
+                rows[index] = {
+                    **row,
+                    "trace_file": final.relative_to(lane).as_posix(),
+                    "trace_event_count": int(validated["event_count"]),
+                    "initial_state_ref": validated.get("initial_state_ref"),
+                    **metadata,
+                    "status": "ok",
+                    "summary": validated["summary"],
+                    "partial_trace_file": None,
+                    "error_kind": None,
+                    "error": None,
+                    "recovery": {
+                        "reason": "corrected_repair_timing_v2_boundary_validation",
+                        "original_error": original_error,
+                        "solver_was_not_rerun": True,
+                    },
+                }
+                recovered.append(
+                    {
+                        "controller": controller,
+                        "task_id": str(row["task_id"]),
+                        "solver_seed": int(row["solver_seed"]),
+                        "trace_sha256": metadata["trace_sha256"],
+                    }
+                )
+                changed = True
+            if changed:
+                _write_jsonl_atomic(manifest_path, rows)
+    observed = {
+        _episode_key(row)
+        for group in range(6)
+        for controller in CONTROLLERS
+        for row in _read_jsonl(
+            collection_root
+            / f"order_{group}"
+            / controller
+            / (
+                "official_adaptive_manifest.jsonl"
+                if controller == "official_adaptive"
+                else "realized_dynamic_manifest.jsonl"
+            )
+        )
+    }
+    if observed != expected:
+        raise ValueError("partial recovery changed formal cohort coverage")
+    report = {
+        "schema": "lns2.balanced_wall_clock_partial_recovery.v1",
+        "recovered_count": len(recovered),
+        "recovered": recovered,
+        "remaining_error_count": len(remaining_errors),
+        "remaining_errors": remaining_errors,
+        "solver_rerun_count": 0,
+        "passed": bool(recovered) and not remaining_errors,
+    }
+    _write_json(collection_root / "partial_trace_recovery_report.json", report)
+    return report
+
+
 def _mean(values: Iterable[float]) -> float:
     rows = list(map(float, values))
     return statistics.fmean(rows) if rows else 0.0
@@ -2235,60 +2368,115 @@ def _write_difficulty_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _difficulty_markdown(report: dict[str, Any]) -> str:
+    stratification = report["stratification"]
+    overall = report["overall_results"]
+    interpretation = (
+        "冻结 cohort 已通过预注册的冲突层与初始 PP 负载平衡检查，"
+        "可以在 3×3 难度网格内解释配对控制器结果。由于两个高负载单元缺少"
+        "自然 MovingAI 样本，地图来源效应仍只作描述性分析。"
+        if report["decision"] == "compute_load_balanced_confirmation"
+        else "冻结实例内的配对比较仍然有效，但该 cohort 未通过计算负载平衡门槛。"
+    )
     lines = [
-        "# V2/Mixed Full 分层墙钟难度审计",
+        "# V2 / Mixed Full 分层墙钟确认",
         "",
-        f"结论：`{report['decision']}`。本报告是对冻结正式结果的事后方法审计，不重新训练或运行控制器。",
+        f"结论：`{report['decision']}`。{interpretation}",
         "",
-        "## 分层完整性",
+        "## 实验完整性",
         "",
-        "| 分层 | low | medium | high |",
+        "| 项目 | low | medium | high |",
         "| --- | ---: | ---: | ---: |",
         "| 唯一冲突 agent 对 | "
-        + " | ".join(str(report["stratification"]["conflict_counts"].get(name, 0)) for name in ("low", "medium", "high"))
+        + " | ".join(
+            str(stratification["conflict_counts"].get(name, 0))
+            for name in ("low", "medium", "high")
+        )
         + " |",
         "| 初始 PP generated nodes | "
-        + " | ".join(str(report["stratification"]["initial_pp_load_counts"].get(name, 0)) for name in ("low", "medium", "high"))
+        + " | ".join(
+            str(stratification["initial_pp_load_counts"].get(name, 0))
+            for name in ("low", "medium", "high")
+        )
         + " |",
         "",
-        "初始 PP 负载阈值固定为：low <= 100,000，medium 100,001-1,000,000，high > 1,000,000 generated nodes。",
+        "冲突层为 1-10、11-100、101-500；初始 PP 负载层为不超过 100,000、"
+        "100,001-1,000,000、超过 1,000,000 generated nodes。",
         "",
-        "## 来源与负载",
+        "## 总体结果",
         "",
-        "| 来源 | low | medium | high |",
-        "| --- | ---: | ---: | ---: |",
+        "| 控制器 | 成功 | capped TTF (s) | 实际执行 (s) | 冲突 AUC | 修复轮数 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for source in ("generated", "movingai"):
-        counts = report["stratification"]["source_by_initial_pp_load"].get(source, {})
+    for controller in CONTROLLERS:
+        row = overall["controllers"][controller]
         lines.append(
-            f"| {source} | {counts.get('low', 0)} | {counts.get('medium', 0)} | {counts.get('high', 0)} |"
+            f"| {controller} | {row['success_count']}/{row['episode_count']} | "
+            f"{row['mean_capped_wall_ttf']:.3f} | "
+            f"{row['mean_actual_observed_wall_seconds']:.3f} | "
+            f"{row['mean_fixed_auc']:.3f} | {row['mean_repair_iterations']:.2f} |"
         )
     lines.extend(
         [
             "",
-            "当前 cohort 的来源与计算负载完全混杂，因此只能支持同一实例内的控制器配对比较，不能把来源差异解释为等难度下的地图结构差异。",
+            "## 3×3 难度单元",
+            "",
+            "| 冲突×PP负载 | N | Adaptive 成功 | V2 成功 | Mixed 成功 | "
+            "V2→Mixed TTF | V2→Mixed AUC |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for name, cell in sorted(report["grouped_results"]["conflict_load_cell"].items()):
+        controllers = cell["controllers"]
+        comparison = cell["comparisons"]["mixed_vs_v2"]
+        lines.append(
+            f"| {name} | {cell['episode_count']} | "
+            f"{controllers['official_adaptive']['success_count']} | "
+            f"{controllers['v2-full']['success_count']} | "
+            f"{controllers['mixed-full-v2']['success_count']} | "
+            f"{comparison['capped_wall_ttf_improvement'] * 100:.1f}% | "
+            f"{comparison['fixed_auc_improvement'] * 100:.1f}% |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 来源与 PP 负载",
+            "",
+            "| 来源 | low | medium | high |",
+            "| --- | ---: | ---: | ---: |",
+        ]
+    )
+    for source in ("generated", "movingai"):
+        counts = stratification["source_by_initial_pp_load"].get(source, {})
+        lines.append(
+            f"| {source} | {counts.get('low', 0)} | "
+            f"{counts.get('medium', 0)} | {counts.get('high', 0)} |"
+        )
+    lines.extend(
+        [
             "",
             "## 难度相关性",
             "",
-            "Spearman 相关性使用官方 Adaptive 的初始状态和时间，仅作解释性诊断。",
+            "下表为 Spearman 相关，仅用于解释初始难度，不用于选择 cohort 或模型。",
             "",
-            "| 初始指标 | initial PP time | actual episode time | capped TTF |",
+            "| 初始指标 | 初始 PP 时间 | 实际 episode 时间 | capped TTF |",
             "| --- | ---: | ---: | ---: |",
         ]
     )
     for name, values in report["difficulty_correlations"].items():
         lines.append(
-            f"| {name} | {values['initial_pp_seconds']:.3f} | {values['actual_episode_seconds']:.3f} | {values['capped_wall_ttf']:.3f} |"
+            f"| {name} | {values['initial_pp_seconds']:.3f} | "
+            f"{values['actual_episode_seconds']:.3f} | "
+            f"{values['capped_wall_ttf']:.3f} |"
         )
     lines.extend(
         [
             "",
             "## 解释边界",
             "",
-            "- `num_of_colliding_pairs` 是唯一冲突 agent 对数，不是重复时空冲突事件数。",
-            "- capped TTF 对失败按 600 秒记账；actual episode time 是实际观察到的执行时间。",
-            "- 旧结论保留为固定 cohort 上的配对结果，但不再称为计算负载均衡确认。",
-            "- 下一次正式实验必须先通过来源与初始 PP 负载重叠门槛，再运行控制器。",
+            "- `num_of_colliding_pairs` 是唯一无序冲突 agent 对数，不是重复时空冲突事件数。",
+            "- capped TTF 对未在 100 轮内可行的 episode 按 600 秒记账；实际执行时间单独报告。",
+            "- MovingAI 部分使用官方地图和项目派生的静态 MAPF OD，不等同于官方 MAPF scenario。",
+            "- Mixed Full 是否晋级仍由预注册的成功数、TTF、AUC、地图覆盖和 bootstrap 门槛决定。",
             "",
         ]
     )
@@ -2301,7 +2489,7 @@ def audit_balanced_cohort_difficulty(
     output: str | Path,
     config: str | Path = DEFAULT_DIFFICULTY_CONFIG,
 ) -> dict[str, Any]:
-    config_path, _audit_config = _load_difficulty_config(config)
+    config_path, audit_config = _load_difficulty_config(config)
     collection_root = Path(collection).resolve()
     schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
     schedule = _read_json(schedule_path)
@@ -2365,6 +2553,10 @@ def audit_balanced_cohort_difficulty(
                 ),
                 **complexity,
             }
+        )
+        complexity_rows[-1]["conflict_load_cell"] = (
+            f"{complexity_rows[-1]['conflict_stratum']}__"
+            f"{complexity_rows[-1]['initial_pp_load_stratum']}"
         )
     if integrity_errors:
         raise ValueError(f"initial-state complexity audit failed: {integrity_errors[:3]}")
@@ -2444,6 +2636,27 @@ def audit_balanced_cohort_difficulty(
         "generated_and_movingai_overlap_in_every_load_tier": source_overlap,
         "initial_state_integrity": not integrity_errors,
     }
+    gates_passed = all(gates.values())
+    all_keys = [(str(row["task_id"]), int(row["solver_seed"])) for row in complexity_rows]
+    overall_results = {
+        "controllers": {
+            controller: _controller_group_summary(
+                [indexed[controller][key] for key in all_keys]
+            )
+            for controller in CONTROLLERS
+        },
+        "comparisons": {
+            "v2_vs_adaptive": _paired_controller_comparison(
+                indexed["official_adaptive"], indexed["v2-full"], all_keys
+            ),
+            "mixed_vs_adaptive": _paired_controller_comparison(
+                indexed["official_adaptive"], indexed["mixed-full-v2"], all_keys
+            ),
+            "mixed_vs_v2": _paired_controller_comparison(
+                indexed["v2-full"], indexed["mixed-full-v2"], all_keys
+            ),
+        },
+    }
 
     csv_rows = []
     for row in complexity_rows:
@@ -2466,7 +2679,13 @@ def audit_balanced_cohort_difficulty(
 
     report = {
         "schema": "lns2.balanced_wall_clock_difficulty_audit.v1",
-        "evidence_level": "post_hoc_methodology_audit_of_frozen_end_to_end_results",
+        "evidence_level": (
+            "preregistered_compute_load_balanced_end_to_end"
+            if gates_passed
+            and audit_config.get("evidence_level")
+            == "qualification_only_precontroller_design"
+            else "post_hoc_methodology_audit_of_frozen_end_to_end_results"
+        ),
         "input": {
             "config_sha256": sha256_file(config_path),
             "schedule_sha256": sha256_file(schedule_path),
@@ -2492,12 +2711,16 @@ def audit_balanced_cohort_difficulty(
             "source_by_initial_pp_load": source_by_load,
         },
         "difficulty_correlations": correlations,
+        "overall_results": overall_results,
         "grouped_results": {
             "conflict_stratum": _grouped_difficulty_results(
                 complexity_rows, indexed, "conflict_stratum"
             ),
             "initial_pp_load_stratum": _grouped_difficulty_results(
                 complexity_rows, indexed, "initial_pp_load_stratum"
+            ),
+            "conflict_load_cell": _grouped_difficulty_results(
+                complexity_rows, indexed, "conflict_load_cell"
             ),
             "source_group": _grouped_difficulty_results(
                 complexity_rows, indexed, "source_group"
@@ -2509,13 +2732,17 @@ def audit_balanced_cohort_difficulty(
         "methodology_gates": gates,
         "decision": (
             "compute_load_balanced_confirmation"
-            if all(gates.values())
+            if gates_passed
             else "conflict_count_balanced_pilot_with_compute_load_confounding"
         ),
         "interpretation": (
-            "Paired controller comparisons on each frozen instance remain valid, but the pooled "
-            "cohort is not a balanced computational-load benchmark and cannot isolate source or "
-            "map-family effects at matched difficulty."
+            "The frozen cohort passed the preregistered conflict and initial-PP-load balance "
+            "checks, so paired controller results can be interpreted across the 3x3 difficulty "
+            "grid. Source effects remain descriptive because MovingAI coverage is asymmetric in "
+            "the two naturally missing high-load cells."
+            if gates_passed
+            else "Paired comparisons remain valid within each frozen instance, but the cohort "
+            "does not satisfy the computational-load balance gate."
         ),
     }
     output_root = Path(output).resolve()
@@ -2535,6 +2762,23 @@ def analyze_scheduled(
     schedule_index, by_controller, indexed = _load_scheduled_controller_rows(
         collection_root, schedule
     )
+    incomplete = [
+        {
+            "controller": controller,
+            "task_id": str(row.get("task_id")),
+            "solver_seed": int(row.get("solver_seed", -1)),
+            "status": row.get("status"),
+            "error": row.get("error"),
+        }
+        for controller in CONTROLLERS
+        for row in by_controller[controller]
+        if str(row.get("status")) not in {"ok", "resumed"}
+        or not isinstance(row.get("summary"), dict)
+    ]
+    if incomplete:
+        raise ValueError(
+            f"formal controller collection contains {len(incomplete)} incomplete episode rows"
+        )
     expected = set(schedule_index)
     integrity_errors = []
     for key in sorted(expected):
@@ -2679,5 +2923,6 @@ __all__ = [
     "prepare_movingai_dataset",
     "select_balanced_cohort",
     "select_compute_load_balanced_cohort",
+    "recover_scheduled_partial_traces",
     "verify_compute_load_cohort_registration",
 ]

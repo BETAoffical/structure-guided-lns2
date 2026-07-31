@@ -23,6 +23,7 @@ from experiments.balanced_wall_clock import (  # noqa: E402
     merge_datasets,
     prepare_movingai_map_derived_dataset,
     prepare_movingai_dataset,
+    recover_scheduled_partial_traces,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
     verify_compute_load_cohort_registration,
@@ -55,6 +56,7 @@ def main() -> int:
             "select-load-balanced",
             "verify-load-cohort",
             "materialize-registered-cohort",
+            "recover-partials",
             "dry-run",
             "collect",
             "analyze",
@@ -218,6 +220,11 @@ def main() -> int:
                 if arguments.cohort_registration is not None
                 else None
             ),
+        )
+    elif arguments.phase == "recover-partials":
+        result = recover_scheduled_partial_traces(
+            _resolve(arguments.collection),
+            _resolve(arguments.cohort),
         )
     elif arguments.phase == "analyze":
         result = analyze_scheduled(
