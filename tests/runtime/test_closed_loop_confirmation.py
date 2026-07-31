@@ -264,7 +264,7 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             "controller_implementation": {"native": "sha"},
             "controller": "v2-full",
         }
-        another_controller = {**base, "controller": "v3-full"}
+        another_controller = {**base, "controller": "mixed-full-v2"}
         self.assertEqual(
             _qualification_reuse_fingerprint(base),
             _qualification_reuse_fingerprint(another_controller),

@@ -47,7 +47,7 @@ def _make_source(
     )
     runner_controllers = [*CONTROLLERS]
     if extra_controller:
-        runner_controllers.append("v2-critical")
+        runner_controllers.append("unexpected-controller")
     _write_json(
         root / "runner_config.json",
         {

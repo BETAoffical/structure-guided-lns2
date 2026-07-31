@@ -26,20 +26,12 @@ from experiments.closed_loop_trace_storage import (
     storage_fingerprint,
 )
 from experiments.lns2_bottleneck import (
-    controller_pairwise_rows,
-    controller_pairwise_summary,
     _episode_row,
     _iteration_row,
     _sensitivity_rows,
-    _stall_promotion_gate,
-    _v3_promotion_gate,
     generate_bottleneck_artifacts,
     load_track,
-    long_horizon_diagnostics,
     paired_decomposition,
-    stall_prefix_equivalence,
-    stall_guard_attempt_limit_violations,
-    targeted_stall_recovery_diagnostic,
     validate_manifest_trace,
 )
 from experiments.repair_collection import (
@@ -60,7 +52,6 @@ from scripts.run_lns2_tradeoff_evaluation import (
     _run_dual_track_after_validation,
     _run_isolated_parallel_collections,
     _unsolved_job_keys,
-    _v3_evaluation_approval,
 )
 
 
@@ -567,10 +558,10 @@ class Lns2BottleneckTests(unittest.TestCase):
         continuation = inspect.getsource(_run_dual_track_after_validation)
         parallel = inspect.getsource(_run_isolated_parallel_collections)
         self.assertIn("return _run_dual_track_after_validation", entrypoint)
-        self.assertIn("repair_aware_config", continuation)
+        self.assertIn("v3_bundle", continuation)
         self.assertIn('"parallel_runtime"', continuation)
         self.assertIn('"closed_loop_trace_storage.py"', continuation)
-        self.assertNotIn("repair_aware_config =", parallel)
+        self.assertNotIn("repair_aware_config", parallel)
 
     def test_parallel_lane_resolution_keeps_strict_single_worker(self) -> None:
         self.assertEqual(_resolve_parallel_lanes("strict", "auto"), 1)
@@ -588,7 +579,7 @@ class Lns2BottleneckTests(unittest.TestCase):
 
     def test_parallel_audit_reports_empty_samples_instead_of_crashing(self) -> None:
         collections = (
-            ("official_adaptive", "v1-full", "official_adaptive"),
+            ("official_adaptive", "official_adaptive", "official_adaptive"),
             ("v2-full", "v2-full", "realized_dynamic"),
         )
         empty = {
@@ -1320,355 +1311,6 @@ class Lns2BottleneckTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "run fingerprint mismatch"):
                 load_track("wall-clock", {"v2-full": root})
 
-    def test_v3_promotion_enforces_quality_speed_and_fallback_gates(self) -> None:
-        wall = {
-            "official_adaptive": {
-                "success_count": 6,
-                "mean_normalized_wall_clock_conflict_auc": 0.50,
-                "mean_iteration_selection_seconds": 0.01,
-                "total_repair_iterations": 60,
-                "no_improvement_repair_count": 20,
-                "mean_longest_failed_replan_streak": 4.0,
-            },
-            "v2-full": {
-                "success_count": 6,
-                "mean_normalized_wall_clock_conflict_auc": 0.45,
-                "mean_iteration_selection_seconds": 0.10,
-                "total_repair_iterations": 60,
-                "no_improvement_repair_count": 18,
-                "mean_longest_failed_replan_streak": 3.0,
-            },
-            "v3-full": {
-                "success_count": 6,
-                "mean_normalized_wall_clock_conflict_auc": 0.44,
-                "mean_iteration_selection_seconds": 0.104,
-                "total_repair_iterations": 60,
-                "v3_no_progress_count": 10,
-                "v3_adaptive_fallback_decision_count": 2,
-                "v3_cache_hit_count": 10,
-                "v3_rescued_state_count": 3,
-                "mean_v3_longest_unchanged_streak": 2.0,
-            },
-        }
-        summaries = [
-            {
-                "track": "wall-clock-300",
-                "controller": controller,
-                "group_type": "all",
-                **values,
-            }
-            for controller, values in wall.items()
-        ] + [
-            {
-                "track": "historical",
-                "controller": "v2-full",
-                "group_type": "all",
-                "mean_normalized_fixed_budget_conflict_auc": 0.40,
-            },
-            {
-                "track": "historical",
-                "controller": "v3-full",
-                "group_type": "all",
-                "mean_normalized_fixed_budget_conflict_auc": 0.405,
-            },
-        ]
-        pairwise = []
-        for map_index in range(6):
-            for reference, reference_auc, reference_ttf in (
-                ("v2-full", 0.45, 10.5),
-                ("official_adaptive", 0.50, 10.0),
-            ):
-                pairwise.append(
-                    {
-                        "track": "wall-clock-300",
-                        "candidate": "v3-full",
-                        "reference": reference,
-                        "map_id": f"map-{map_index}",
-                        "common_success": True,
-                        "reference_normalized_wall_clock_conflict_auc": reference_auc,
-                        "candidate_normalized_wall_clock_conflict_auc": 0.44,
-                        "reference_restricted_time_to_feasible": reference_ttf,
-                        "candidate_restricted_time_to_feasible": 10.4,
-                    }
-                )
-        gate = _v3_promotion_gate(
-            summaries,
-            pairwise,
-            primary_track="wall-clock-300",
-            validation_passed=True,
-        )
-        self.assertTrue(gate["passed"], gate)
-        self.assertLessEqual(
-            gate["auc_map_bootstrap"]["v2-full"]["one_sided_95_upper"],
-            0.02,
-        )
-        self.assertLessEqual(gate["adaptive_fallback_fraction"], 0.05)
-
-        h3_summaries = [
-            {
-                **row,
-                "controller": (
-                    "v3-h3" if row["controller"] == "v3-full" else row["controller"]
-                ),
-            }
-            for row in summaries
-        ]
-        h3_pairwise = [
-            {
-                **row,
-                "candidate": (
-                    "v3-h3" if row["candidate"] == "v3-full" else row["candidate"]
-                ),
-            }
-            for row in pairwise
-        ]
-        h3_gate = _v3_promotion_gate(
-            h3_summaries,
-            h3_pairwise,
-            primary_track="wall-clock-300",
-            validation_passed=True,
-            candidate_controller="v3-h3",
-        )
-        self.assertTrue(h3_gate["passed"], h3_gate)
-        self.assertEqual(h3_gate["candidate_controller"], "v3-h3")
-
-    def test_stall_guard_attempt_limit_and_target_recovery(self) -> None:
-        guarded = [
-            {
-                "track": "wall-clock-600",
-                "controller": "v2-stall-safe",
-                "task_id": "maze-128-128-1__random_04__agents_0600",
-                "solver_seed": 2,
-                "decision_index": index,
-                "route": "model",
-                "stall_guard_state_anchor_fingerprint": "same-state",
-                "stall_guard_active_size_cap": 16,
-                "elapsed_wall_seconds": 100.0 + index,
-                "replan_success": False,
-                "conflict_delta": 0 if index < 2 else 3,
-            }
-            for index in range(3)
-        ]
-        violations = stall_guard_attempt_limit_violations(guarded)
-        self.assertEqual(len(violations), 1)
-        self.assertEqual(violations[0]["attempt_count"], 3)
-
-        full = [
-            {
-                **guarded[0],
-                "controller": "v2-full",
-                "decision_index": index,
-                "elapsed_wall_seconds": 90.0 + index,
-                "conflict_delta": 0,
-            }
-            for index in range(3)
-        ]
-        episodes = [
-            {
-                "track": "wall-clock-600",
-                "controller": "v2-full",
-                "task_id": "maze-128-128-1__random_04__agents_0600",
-                "solver_seed": 2,
-                "budget_final_conflicts": 8821,
-            },
-            {
-                "track": "wall-clock-600",
-                "controller": "v2-stall-safe",
-                "task_id": "maze-128-128-1__random_04__agents_0600",
-                "solver_seed": 2,
-                "budget_final_conflicts": 8818,
-            },
-        ]
-        diagnostic = targeted_stall_recovery_diagnostic(
-            episodes,
-            full + guarded,
-            primary_track="wall-clock-600",
-        )
-        self.assertTrue(diagnostic["passed"], diagnostic)
-
-    def test_stall_prefix_equivalence_stops_at_first_override(self) -> None:
-        rows = []
-        for controller in ("v2-full", "v2-stall-safe"):
-            for decision in range(3):
-                rows.append(
-                    {
-                        "track": "wall-clock-600",
-                        "controller": controller,
-                        "task_id": "maze600",
-                        "solver_seed": 2,
-                        "decision_index": decision,
-                        "before_fingerprint": f"state-{decision}",
-                        "candidate_score_fingerprint": f"scores-{decision}",
-                        "candidate_ranking_fingerprint": f"ranking-{decision}",
-                        "selected_candidate_id": f"candidate-{decision}",
-                        "actual_neighborhood_fingerprint": f"action-{decision}",
-                        "route": "model",
-                        "stall_guard_base_selection_preserved": (
-                            decision < 2 if controller == "v2-stall-safe" else None
-                        ),
-                    }
-                )
-        result = stall_prefix_equivalence(rows)
-        self.assertTrue(result["passed"], result)
-        self.assertEqual(result["comparison_count"], 2)
-        self.assertEqual(result["trigger_count"], 1)
-
-        rows[-5]["candidate_score_fingerprint"] = "different"
-        mismatch = stall_prefix_equivalence(rows)
-        self.assertFalse(mismatch["passed"])
-        self.assertEqual(mismatch["mismatch_count"], 1)
-
-    def test_stall_promotion_requires_repeated_failure_reduction(self) -> None:
-        summaries = []
-        wall_values = {
-            "official_adaptive": (2, 0.9, 0.2, 2.0, 0.0, 2.0),
-            "v2-full": (2, 0.8, 0.3, 5.0, 1.0, 0.0),
-            "v2-stall-safe": (3, 0.7, 0.1, 1.0, 1.01, 0.01),
-        }
-        for controller, (
-            successes,
-            wall_auc,
-            failure_fraction,
-            longest_streak,
-            selection_seconds,
-            guard_seconds,
-        ) in wall_values.items():
-            summaries.append(
-                {
-                    "track": "wall-clock-300",
-                    "controller": controller,
-                    "group_type": "all",
-                    "success_count": successes,
-                    "mean_normalized_wall_clock_conflict_auc": wall_auc,
-                    "failed_replan_fraction": failure_fraction,
-                    "mean_longest_failed_replan_streak": longest_streak,
-                    "mean_total_neighborhood_selection_seconds": selection_seconds,
-                    "mean_iteration_selection_seconds": selection_seconds,
-                    "mean_total_stall_guard_seconds": guard_seconds,
-                }
-            )
-        for controller, fixed_auc in {
-            "official_adaptive": 1.0,
-            "v2-full": 0.8,
-            "v2-stall-safe": 0.81,
-        }.items():
-            summaries.append(
-                {
-                    "track": "historical",
-                    "controller": controller,
-                    "group_type": "all",
-                    "mean_normalized_fixed_budget_conflict_auc": fixed_auc,
-                }
-            )
-        pairwise = [
-            {
-                "track": "wall-clock-300",
-                "pair": "v2-stall-safe_vs_v2-full",
-                "common_success": True,
-                "delta_restricted_time_to_feasible_candidate_minus_reference": 0.4,
-                "reference_restricted_time_to_feasible": 10.0,
-            }
-        ]
-        passed = _stall_promotion_gate(
-            summaries,
-            pairwise,
-            primary_track="wall-clock-300",
-            validation_passed=True,
-        )
-        self.assertTrue(passed["passed"], passed)
-
-        summaries[2]["failed_replan_fraction"] = 0.3
-        failed = _stall_promotion_gate(
-            summaries,
-            pairwise,
-            primary_track="wall-clock-300",
-            validation_passed=True,
-        )
-        self.assertFalse(failed["passed"])
-        self.assertFalse(failed["gates"]["pp_failure_fraction_reduced"])
-
-    def test_long_horizon_marks_progress_for_extension_and_failure_plateau(self) -> None:
-        episode = {
-            "track": "wall-clock-1800",
-            "controller": "v2-stall-safe",
-            "task_id": "maze",
-            "solver_seed": 1,
-            "status": "ok",
-            "stopping_rule": "wall-clock",
-            "wall_time_budget_seconds": 1800.0,
-            "initial_conflicts": 100,
-            "success": False,
-        }
-        iterations = [
-            {
-                "track": "wall-clock-1800",
-                "controller": "v2-stall-safe",
-                "task_id": "maze",
-                "solver_seed": 1,
-                "elapsed_wall_seconds": 1200.0,
-                "conflicts_after": 90,
-                "replan_success": True,
-            },
-            {
-                "track": "wall-clock-1800",
-                "controller": "v2-stall-safe",
-                "task_id": "maze",
-                "solver_seed": 1,
-                "elapsed_wall_seconds": 1700.0,
-                "conflicts_after": 80,
-                "replan_success": False,
-            },
-        ]
-        checkpoints, diagnostics, extension = long_horizon_diagnostics(
-            [episode], iterations
-        )
-        self.assertEqual([row["checkpoint_seconds"] for row in checkpoints], [300.0, 600.0, 1200.0, 1800.0])
-        self.assertTrue(diagnostics[0]["extension_to_3600_recommended"])
-        self.assertFalse(diagnostics[0]["plateau"])
-        self.assertEqual(extension, [["maze", 1]])
-
-    def test_three_controller_pairwise_summary_covers_all_pairs(self) -> None:
-        episodes = []
-        for controller, auc, success in (
-            ("official_adaptive", 0.30, False),
-            ("v2-full", 0.25, True),
-            ("v2-stall-safe", 0.20, True),
-        ):
-            episodes.append(
-                {
-                    "track": "wall-clock-300",
-                    "controller": controller,
-                    "task_id": "task",
-                    "solver_seed": 1,
-                    "status": "ok",
-                    "initial_fingerprint": "same",
-                    "success": success,
-                    "normalized_wall_clock_conflict_auc": auc,
-                    "restricted_time_to_feasible": 300.0,
-                    "budget_final_conflicts": 5,
-                    "budget_final_sum_of_costs": 10,
-                    "repair_iterations": 2,
-                    "neighborhood_selection_seconds": 1.0,
-                    "pp_replan_seconds": 2.0,
-                    "iteration_wall_seconds": 3.0,
-                    "failed_replan_count": 1,
-                }
-            )
-        rows = controller_pairwise_rows(
-            episodes, ("official_adaptive", "v2-full", "v2-stall-safe")
-        )
-        summaries = controller_pairwise_summary(rows)
-        self.assertEqual(len(rows), 3)
-        self.assertEqual(len(summaries), 3)
-        self.assertEqual(
-            {row["pair"] for row in summaries},
-            {
-                "v2-full_vs_official_adaptive",
-                "v2-stall-safe_vs_official_adaptive",
-                "v2-stall-safe_vs_v2-full",
-            },
-        )
-
     def test_dual_preflight_rejects_a_stale_native_module(self) -> None:
         stale = types.ModuleType("lns2_env")
         stale.repair_timing_schema = "old"
@@ -1708,27 +1350,6 @@ class Lns2BottleneckTests(unittest.TestCase):
         with patch.dict(sys.modules, {"lns2_env": current}):
             with self.assertRaisesRegex(RuntimeError, "upstream-compatible"):
                 _require_native_timing_interface()
-
-    def test_unpromoted_v3_requires_explicit_diagnostic_and_native_integrity(self) -> None:
-        report = {
-            "decision": "v3_pilot_failed",
-            "pilot_passed": False,
-            "native_available": True,
-            "native_audit_completed": True,
-            "pilot_checks": {
-                "portable_parity": True,
-                "worst_cell": False,
-            },
-        }
-        with self.assertRaisesRegex(ValueError, "v3_pilot_passed"):
-            _v3_evaluation_approval(
-                report, allow_unpromoted_diagnostic=False
-            )
-        approval = _v3_evaluation_approval(
-            report, allow_unpromoted_diagnostic=True
-        )
-        self.assertTrue(approval["unpromoted_diagnostic"])
-        self.assertEqual(approval["failed_pilot_checks"], ["worst_cell"])
 
     def test_sensitivity_selects_a_pair_when_either_controller_is_unsolved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2037,13 +1658,6 @@ class Lns2BottleneckTests(unittest.TestCase):
                 "iteration_timings.csv",
                 "episode_timing_breakdown.csv",
                 "paired_bottleneck_decomposition.csv",
-                "controller_pairwise_episodes.csv",
-                "controller_pairwise_summary.csv",
-                "stall_guard_usage.csv",
-                "stall_prefix_mismatches.csv",
-                "stall_prefix_equivalence.json",
-                "stall_guard_attempt_limit_violations.csv",
-                "targeted_stall_recovery.json",
                 "long_horizon_checkpoints.csv",
                 "long_horizon_diagnostics.csv",
                 "timing_summary.csv",
@@ -2054,7 +1668,6 @@ class Lns2BottleneckTests(unittest.TestCase):
                 "neighborhood_size_vs_pp.svg",
                 "conflicts_over_wall_time.svg",
                 "v2_bottleneck_report.md",
-                "stall_recovery_report.md",
             ):
                 self.assertTrue((root / "report" / name).is_file(), name)
             with (root / "report" / "timing_summary.csv").open(

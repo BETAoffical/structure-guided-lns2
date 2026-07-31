@@ -13,7 +13,7 @@ from unittest import mock
 
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import configured_policies
-from experiments.repair_aware import load_portable_scalar_model
+from lns2_selector.runtime.portable_scalar import load_portable_scalar_model
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -806,7 +806,7 @@ class V3S3PipelineTest(unittest.TestCase):
             producer.assert_called_once()
             producer_arguments = producer.call_args.kwargs
             self.assertTrue(producer_arguments["native_required"])
-            self.assertNotIn(
+            self.assertIn(
                 "experiments/v3_s3_training.py",
                 producer_arguments["source_files"],
             )
