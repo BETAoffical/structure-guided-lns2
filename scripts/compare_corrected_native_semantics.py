@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from experiments._common import sha256_file  # noqa: E402
+
+
 SCHEMA = "lns2.corrected_native_semantics_comparison.v1"
 SOURCE_SCHEMA = "lns2.corrected_native_semantics_audit.v1"
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -164,9 +162,9 @@ def main() -> int:
     report = compare(_read(baseline_path), _read(corrected_path))
     report["input"] = {
         "baseline": str(baseline_path),
-        "baseline_sha256": _sha256(baseline_path),
+        "baseline_sha256": sha256_file(baseline_path),
         "corrected": str(corrected_path),
-        "corrected_sha256": _sha256(corrected_path),
+        "corrected_sha256": sha256_file(corrected_path),
     }
     output = Path(arguments.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

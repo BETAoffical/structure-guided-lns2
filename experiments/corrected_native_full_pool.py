@@ -28,6 +28,10 @@ from experiments._common import (
     sha256_file,
     validate_producer_identity,
 )
+from experiments.balanced_wall_clock import (
+    _agent_band,
+    _fingerprint,
+)
 from experiments.repair_collection import _dataset_fingerprint
 
 
@@ -115,11 +119,6 @@ def _write_json(path: Path, value: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     partial.replace(path)
-
-
-def _fingerprint(value: Any) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _selector_identity() -> dict[str, Any]:
@@ -369,10 +368,6 @@ def load_stratum(generated: int) -> str:
     if generated <= 1_000_000:
         return "medium"
     return "high"
-
-
-def _agent_band(count: int) -> str:
-    return "small" if count <= 200 else "medium" if count <= 400 else "large"
 
 
 def _validate_config(

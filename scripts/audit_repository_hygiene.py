@@ -9,12 +9,18 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Iterable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from experiments._common import sha256_file  # noqa: E402
+
+
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "repository_hygiene.json"
 SCHEMA = "lns2.repository_hygiene_report.v1"
 
@@ -78,7 +84,7 @@ def duplicate_blob_groups(root: Path, files: Iterable[str]) -> list[list[str]]:
     for relative in files:
         path = root / relative
         if path.is_file():
-            groups[_sha256(path)].append(relative)
+            groups[sha256_file(path)].append(relative)
     return sorted(
         (sorted(paths) for paths in groups.values() if len(paths) > 1),
         key=lambda paths: paths[0],
@@ -202,14 +208,6 @@ def _module_references(root: Path, files: list[str]) -> dict[str, int]:
     return references
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def evidence_status(root: Path, config: dict[str, Any]) -> dict[str, Any]:
     evidence_config = _repository_path(
         root, str(config["result_consolidation_config"])
@@ -223,7 +221,7 @@ def evidence_status(root: Path, config: dict[str, Any]) -> dict[str, Any]:
         path = _repository_path(root, relative)
         expected = str(source.get("sha256", ""))
         exists = path.is_file()
-        actual = _sha256(path) if exists else None
+        actual = sha256_file(path) if exists else None
         rows.append(
             {
                 "id": str(entry.get("id")),

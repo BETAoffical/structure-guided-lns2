@@ -283,7 +283,7 @@ def main() -> int:
         choices=("wall-clock-fixed-metric",),
         default="wall-clock-fixed-metric",
         help=(
-            "Formal reruns have no 100-repair execution cap while retaining "
+            "Formal reruns have no repair-count execution cap while retaining "
             "the frozen 100-step AUC metric."
         ),
     )
