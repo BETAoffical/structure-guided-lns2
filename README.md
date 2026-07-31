@@ -12,6 +12,13 @@ narrow:
 Static map, OD, and density context has not shown reliable incremental value. RL is
 not part of the active runtime.
 
+This corrected-native revision intentionally fixes defects in the pinned
+native implementation and identifies itself as
+`lns2.corrected_native.v1`. Results from this branch are not byte-for-byte
+official parity and must use new output directories. See
+[`docs/CORRECTED_NATIVE_V1.md`](docs/CORRECTED_NATIVE_V1.md) for the semantic
+changes, legacy comparison audit, and uncapped formal-rerun contract.
+
 ## Active Layout
 
 | Path | Purpose |
@@ -41,15 +48,18 @@ from Git tag `pre-minimal-runtime-2026-07-20`.
   v2 decision on every repair-relevant state, then reuses the unchanged-state
   candidate pool and consults policy-train-only repairability/cost models after
   PP makes no structural progress.
-- Official baselines: `Adaptive`, `Target`, `Collision`, and `Random`.
+- Baseline policies: `Adaptive`, `Target`, `Collision`, and `Random`. On the
+  corrected-native branch these policies run on the corrected native solver;
+  they are not an untouched official executable.
 
 The removed `v2-balanced`, `v2-cascade`, and proposal-pruner variants did not earn
 promotion and are not supported by active CLIs.
 
 ## Build
 
-The normal build includes the official solver, repair wrapper, GPBS runner, Python
-environment, and native feature extension:
+The normal build includes the pinned solver sources, repair wrapper, GPBS runner,
+Python environment, and native feature extension. The corrected-native branch
+changes solver semantics as documented above:
 
 ```bash
 cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release

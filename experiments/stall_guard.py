@@ -39,7 +39,6 @@ class StallGuardConfig:
     size_caps: tuple[int, ...]
     terminal_fallback: str
     reset_on_state_fingerprint_change: bool
-    source: dict[str, Any]
 
     @property
     def fingerprint(self) -> str:
@@ -57,16 +56,32 @@ class StallGuardConfig:
 
 
 def load_stall_guard_config(value: str | Path | dict[str, Any]) -> StallGuardConfig:
-    raw = _read_json(Path(value).resolve()) if isinstance(value, (str, Path)) else dict(value)
+    if isinstance(value, (str, Path)):
+        raw = _read_json(Path(value).resolve())
+    elif isinstance(value, dict):
+        raw = dict(value)
+    else:
+        raise ValueError("stall guard config must be an object")
     if str(raw.get("schema")) != STALL_GUARD_SCHEMA:
         raise ValueError("stall guard config has an invalid schema")
-    version = int(raw.get("schema_version", STALL_GUARD_VERSION))
+    version = raw.get("schema_version", STALL_GUARD_VERSION)
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise ValueError("stall guard schema version must be an integer")
     if version != STALL_GUARD_VERSION:
         raise ValueError("stall guard config has an unsupported schema version")
-    attempts = int(raw.get("unchanged_state_attempts_per_level", 0))
-    caps = tuple(map(int, raw.get("size_caps", ())))
+    attempts = raw.get("unchanged_state_attempts_per_level", 0)
+    if isinstance(attempts, bool) or not isinstance(attempts, int):
+        raise ValueError("stall guard attempt threshold must be an integer")
+    caps_raw = raw.get("size_caps", ())
+    if not isinstance(caps_raw, (list, tuple)) or any(
+        isinstance(cap, bool) or not isinstance(cap, int) for cap in caps_raw
+    ):
+        raise ValueError("stall guard size caps must contain integers")
+    caps = tuple(caps_raw)
     fallback = str(raw.get("terminal_fallback", ""))
-    reset = bool(raw.get("reset_on_state_fingerprint_change"))
+    reset = raw.get("reset_on_state_fingerprint_change")
+    if not isinstance(reset, bool):
+        raise ValueError("stall guard reset flag must be a boolean")
     if attempts <= 0:
         raise ValueError("stall guard attempt threshold must be positive")
     if not caps or any(cap <= 0 for cap in caps):
@@ -82,7 +97,6 @@ def load_stall_guard_config(value: str | Path | dict[str, Any]) -> StallGuardCon
         size_caps=caps,
         terminal_fallback=fallback,
         reset_on_state_fingerprint_change=reset,
-        source=raw,
     )
 
 

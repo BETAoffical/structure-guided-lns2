@@ -29,15 +29,15 @@ public:
     {
         bool operator()(const GCBSNode* n1, const GCBSNode* n2) const
         {
-            if (n1->colliding_pairs == n2->colliding_pairs)
-            {
-                if (n1->sum_of_costs == n2->sum_of_costs)
-                {
-                    return rand() % 2;
-                }
-                return n1->sum_of_costs >= n2->sum_of_costs;
-            }
-            return n1->colliding_pairs >= n2->colliding_pairs;
+            return std::make_tuple(
+                n1->colliding_pairs,
+                n1->sum_of_costs,
+                n1->time_generated
+            ) > std::make_tuple(
+                n2->colliding_pairs,
+                n2->sum_of_costs,
+                n2->time_generated
+            );
         }
     };  // used by FOCAL to compare nodes by distance_to_go (top of the heap has min distance_to_go)
     pairing_heap< GCBSNode*, compare<GCBSNode::compare_node_by_d> >::handle_type focal_handle;

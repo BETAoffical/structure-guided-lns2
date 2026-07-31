@@ -312,7 +312,7 @@ def summarize_policy_rows(
     }
 
 
-def _policy_training_key(row: dict[str, Any]) -> tuple[Any, ...]:
+def policy_training_key(row: dict[str, Any]) -> tuple[Any, ...]:
     eligible = (
         float(row["feasible_rate_delta"]) >= 0.0
         and float(row["mean_normalized_step_auc_delta"]) <= 0.02
@@ -349,7 +349,7 @@ def map_group_policy_selection(
                 and str(row["map_id"]) != heldout_map
             ]
             training_summaries.append(summarize_policy_rows(subset))
-        selected = min(training_summaries, key=_policy_training_key)
+        selected = min(training_summaries, key=policy_training_key)
         test_rows = [
             dict(row)
             for row in loo_rows
@@ -430,7 +430,7 @@ def audit_receding_q_risk(
         )
         for policy in policies
     ]
-    globally_selected = min(policy_summaries, key=_policy_training_key)
+    globally_selected = min(policy_summaries, key=policy_training_key)
     oof_rows, map_selections = map_group_policy_selection(loo_rows)
     oof_summary = summarize_policy_rows(
         [{**row, "policy_id": "map_group_oof"} for row in oof_rows]
@@ -629,6 +629,7 @@ __all__ = [
     "audit_receding_q_risk",
     "build_risk_loo_rows",
     "map_group_policy_selection",
+    "policy_training_key",
     "resolve_persisted_source_path",
     "risk_candidate_summary",
     "risk_policy_grid",

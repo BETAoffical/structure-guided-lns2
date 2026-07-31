@@ -20,8 +20,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
     contained_file,
     episode_id as _episode_id,
+    producer_identity as _structured_producer_identity,
     read_jsonl as _read_jsonl,
 )
 from experiments.state_analysis import summarize_initial_state_complexity
@@ -94,31 +96,11 @@ def _repair_time_semantics() -> dict[str, Any]:
 
 
 def _producer_identity() -> dict[str, Any]:
-    files = {
-        relative: hashlib.sha256(
-            (PROJECT_ROOT / relative).read_bytes()
-        ).hexdigest()
-        for relative in REPAIR_COLLECTION_IMPLEMENTATION_FILES
-    }
-    native_module = None
-    try:
-        import lns2_env as module
-    except ImportError:
-        pass
-    else:
-        native_path = Path(str(module.__file__)).resolve()
-        native_module = {
-            "path": native_path.name,
-            "sha256": hashlib.sha256(native_path.read_bytes()).hexdigest(),
-            "repair_timing_schema": str(
-                getattr(module, "repair_timing_schema", "")
-            ),
-        }
-    return {
-        "name": "experiments.repair_collection",
-        "files": files,
-        "native_module": native_module,
-    }
+    return _structured_producer_identity(
+        project_root=PROJECT_ROOT,
+        source_files=REPAIR_COLLECTION_IMPLEMENTATION_FILES,
+        native_required=True,
+    )
 
 
 def _collection_identity() -> dict[str, Any]:
@@ -524,6 +506,15 @@ def _make_environment(
             f"{NATIVE_REPAIR_TIMING_SCHEMA}; got "
             f"{native_timing_schema or 'missing'}"
         )
+    native_semantics_schema = str(
+        getattr(module, "native_semantics_schema", "")
+    )
+    if native_semantics_schema != NATIVE_SEMANTICS_SCHEMA:
+        raise RuntimeError(
+            "repair collection requires native semantics schema "
+            f"{NATIVE_SEMANTICS_SCHEMA}; got "
+            f"{native_semantics_schema or 'missing'}"
+        )
     split_root = Path(dataset_root) / str(row["split"])
     return module.LNS2RepairEnv(
         str(split_root / str(row["map_file"])),
@@ -661,6 +652,290 @@ def _qualification_worker(job: dict[str, Any]) -> dict[str, Any]:
             "status": "error",
             "error": f"{type(error).__name__}: {error}",
         }
+
+
+_QUALIFICATION_MAPPING_FIELDS = frozenset(
+    {
+        "split",
+        "map_id",
+        "task_id",
+        "layout_mode",
+        "task_variant",
+        "agent_count",
+        "solver_seed",
+    }
+)
+_QUALIFICATION_BASE_FIELDS = frozenset(
+    {
+        "schema",
+        "schema_version",
+        "repair_time_label",
+        *_QUALIFICATION_MAPPING_FIELDS,
+        "status",
+        "error",
+    }
+)
+_QUALIFICATION_OK_FIELDS = frozenset(
+    {
+        *_QUALIFICATION_BASE_FIELDS,
+        "initial_conflicts",
+        "repairable",
+        "initial_feasible",
+        "initial_complete",
+        "state_fingerprint",
+        "initial_complexity",
+    }
+)
+
+
+def _qualification_resume_error(index: int, message: str) -> ValueError:
+    return ValueError(
+        "existing qualification_manifest.jsonl row "
+        f"{index} failed integrity validation; preserving the manifest "
+        f"unchanged: {message}"
+    )
+
+
+def _validate_resumable_qualification_rows(
+    existing_rows: list[dict[str, Any]],
+    *,
+    dataset_root: str | Path,
+    rows: list[dict[str, Any]],
+    solver_seeds: list[int],
+    environment: dict[str, Any],
+    replay_completed: bool = True,
+) -> tuple[
+    dict[tuple[str, int], dict[str, Any]],
+    set[tuple[str, int]],
+]:
+    """Validate qualification resume rows and replay every completed reset.
+
+    ``status=error`` and ``status=timeout`` are explicit incomplete attempts:
+    their current-schema identity and task mapping are retained until an atomic
+    same-key replacement succeeds. Missing keys are likewise returned as
+    pending. Any completed row that cannot be reproduced is rejected before
+    the caller writes the manifest. ``replay_completed=False`` is reserved for
+    rows returned by qualification workers in the current process invocation;
+    it still performs every structural and mapping check without repeating the
+    reset that produced those rows.
+    """
+
+    expected: dict[tuple[str, int], dict[str, Any]] = {}
+    for dataset_index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(
+                f"qualification dataset row {dataset_index} must be an object"
+            )
+        string_fields = ("split", "map_id", "task_id", "layout_mode")
+        if any(
+            type(row.get(field)) is not str or not row[field]
+            for field in string_fields
+        ):
+            raise ValueError(
+                f"qualification dataset row {dataset_index} has invalid "
+                "split/map/task/layout identity"
+            )
+        task_variant = row.get("task_variant")
+        if task_variant is not None and type(task_variant) is not str:
+            raise ValueError(
+                f"qualification dataset row {dataset_index} has an invalid "
+                "task_variant"
+            )
+        agent_count = _strict_int(row.get("agent_count"))
+        if agent_count is None or agent_count <= 0:
+            raise ValueError(
+                f"qualification dataset row {dataset_index} has an invalid "
+                "agent_count"
+            )
+        for solver_seed in solver_seeds:
+            seed = _strict_int(solver_seed)
+            if seed is None or seed < 0:
+                raise ValueError(
+                    "qualification solver seeds must be non-negative integers"
+                )
+            key = (row["task_id"], seed)
+            if key in expected:
+                raise ValueError(
+                    "qualification expected task/seed mapping is not unique: "
+                    f"{key}"
+                )
+            expected[key] = row
+
+    completed: dict[tuple[str, int], dict[str, Any]] = {}
+    seen: set[tuple[str, int]] = set()
+    for artifact_index, artifact in enumerate(existing_rows, start=1):
+        if not isinstance(artifact, dict):
+            raise _qualification_resume_error(
+                artifact_index, "row must be a JSON object"
+            )
+        if not _is_finite_json_tree(artifact):
+            raise _qualification_resume_error(
+                artifact_index, "row contains a non-finite or non-JSON value"
+            )
+        if (
+            type(artifact.get("schema")) is not str
+            or artifact.get("schema") != REPAIR_COLLECTION_SCHEMA
+            or _strict_int(artifact.get("schema_version"))
+            != REPAIR_COLLECTION_ARTIFACT_VERSION
+            or type(artifact.get("repair_time_label")) is not str
+            or artifact.get("repair_time_label") != REPAIR_TIME_LABEL
+        ):
+            raise _qualification_resume_error(
+                artifact_index,
+                "artifact schema, version, or repair-time label is incompatible",
+            )
+
+        task_id = artifact.get("task_id")
+        solver_seed = _strict_int(artifact.get("solver_seed"))
+        if type(task_id) is not str or not task_id or solver_seed is None:
+            raise _qualification_resume_error(
+                artifact_index, "task_id or solver_seed has an invalid type"
+            )
+        key = (task_id, solver_seed)
+        if key not in expected:
+            raise _qualification_resume_error(
+                artifact_index,
+                f"task/seed key {key} is outside the requested qualification set",
+            )
+        if key in seen:
+            raise _qualification_resume_error(
+                artifact_index, f"duplicate task/seed key {key}"
+            )
+        seen.add(key)
+
+        expected_row = expected[key]
+        expected_mapping = {
+            "split": expected_row["split"],
+            "map_id": expected_row["map_id"],
+            "task_id": expected_row["task_id"],
+            "layout_mode": expected_row["layout_mode"],
+            "task_variant": expected_row.get("task_variant"),
+            "agent_count": int(expected_row["agent_count"]),
+            "solver_seed": solver_seed,
+        }
+        for field, expected_value in expected_mapping.items():
+            actual_value = artifact.get(field)
+            if type(actual_value) is not type(expected_value) or (
+                actual_value != expected_value
+            ):
+                raise _qualification_resume_error(
+                    artifact_index,
+                    f"{field} does not match the requested dataset task",
+                )
+
+        status = artifact.get("status")
+        if status in {"error", "timeout"}:
+            if set(artifact) != set(_QUALIFICATION_BASE_FIELDS):
+                raise _qualification_resume_error(
+                    artifact_index,
+                    "incomplete error/timeout row has unexpected or missing fields",
+                )
+            if type(artifact.get("error")) is not str or not artifact["error"]:
+                raise _qualification_resume_error(
+                    artifact_index,
+                    "incomplete error/timeout row must contain an error message",
+                )
+            continue
+        if status != "ok":
+            raise _qualification_resume_error(
+                artifact_index, f"unsupported qualification status {status!r}"
+            )
+        if set(artifact) != set(_QUALIFICATION_OK_FIELDS):
+            raise _qualification_resume_error(
+                artifact_index,
+                "completed row has unexpected or missing fields",
+            )
+        if artifact.get("error") is not None:
+            raise _qualification_resume_error(
+                artifact_index, "completed row error must be null"
+            )
+        initial_conflicts = _strict_int(artifact.get("initial_conflicts"))
+        if initial_conflicts is None or initial_conflicts < 0:
+            raise _qualification_resume_error(
+                artifact_index,
+                "initial_conflicts must be a non-negative integer",
+            )
+        if any(
+            type(artifact.get(field)) is not bool
+            for field in ("repairable", "initial_feasible", "initial_complete")
+        ):
+            raise _qualification_resume_error(
+                artifact_index,
+                "repairable/feasible/complete fields must be booleans",
+            )
+        if not _valid_state_fingerprint(artifact.get("state_fingerprint")):
+            raise _qualification_resume_error(
+                artifact_index, "state_fingerprint is invalid"
+            )
+        if not isinstance(artifact.get("initial_complexity"), dict):
+            raise _qualification_resume_error(
+                artifact_index, "initial_complexity must be an object"
+            )
+        if not replay_completed:
+            completed[key] = artifact
+            continue
+
+        try:
+            replay_environment = _make_environment(
+                str(dataset_root),
+                expected_row,
+                environment,
+                "Adaptive",
+            )
+            replay_state = _plain(replay_environment.reset(seed=solver_seed))
+            if not isinstance(replay_state, dict) or not _is_finite_json_tree(
+                replay_state
+            ):
+                raise ValueError("reset did not return a finite state object")
+            replay_conflicts = _strict_int(
+                replay_state.get("num_of_colliding_pairs")
+            )
+            if replay_conflicts is None or replay_conflicts < 0:
+                raise ValueError(
+                    "reset num_of_colliding_pairs is not a non-negative integer"
+                )
+            for field in ("done", "feasible", "initial_solution_complete"):
+                if type(replay_state.get(field)) is not bool:
+                    raise ValueError(f"reset {field} is not boolean")
+            replay_fingerprint = state_fingerprint(replay_state)
+            replay_complexity = summarize_initial_state_complexity(replay_state)
+            if not isinstance(replay_complexity, dict) or not _is_finite_json_tree(
+                replay_complexity
+            ):
+                raise ValueError(
+                    "reset complexity summary is not a finite JSON object"
+                )
+        except Exception as error:
+            raise _qualification_resume_error(
+                artifact_index,
+                f"deterministic reset replay failed: "
+                f"{type(error).__name__}: {error}",
+            ) from error
+
+        replay_values = {
+            "initial_conflicts": replay_conflicts,
+            "repairable": not replay_state["done"],
+            "initial_feasible": replay_state["feasible"],
+            "initial_complete": replay_state["initial_solution_complete"],
+            "state_fingerprint": replay_fingerprint,
+        }
+        for field, replay_value in replay_values.items():
+            if artifact[field] != replay_value:
+                raise _qualification_resume_error(
+                    artifact_index,
+                    f"{field} disagrees with deterministic reset replay",
+                )
+        if _fingerprint(artifact["initial_complexity"]) != _fingerprint(
+            replay_complexity
+        ):
+            raise _qualification_resume_error(
+                artifact_index,
+                "initial_complexity disagrees with deterministic reset replay",
+            )
+        completed[key] = artifact
+
+    pending = set(expected).difference(completed)
+    return completed, pending
 
 
 def _valid_episode_trace(
@@ -3170,6 +3445,10 @@ def run_collection(
             metadata,
         )
 
+        qualification: list[dict[str, Any]] | None = None
+        qualification_index: (
+            dict[tuple[str, int], dict[str, Any]] | None
+        ) = None
         if phase in {"qualify", "all"}:
             qualification_path = output_root / "qualification_manifest.jsonl"
             existing_qualification = (
@@ -3177,11 +3456,15 @@ def run_collection(
                 if resume and qualification_path.is_file()
                 else []
             )
-            existing_index = {
-                (str(row["task_id"]), int(row["solver_seed"])): row
-                for row in existing_qualification
-                if row.get("status") == "ok"
-            }
+            existing_index, pending_qualification = (
+                _validate_resumable_qualification_rows(
+                    existing_qualification,
+                    dataset_root=dataset_root,
+                    rows=rows,
+                    solver_seeds=solver_seeds,
+                    environment=environment,
+                )
+            )
             jobs = [
                 {
                     "dataset_root": str(dataset_root),
@@ -3191,7 +3474,7 @@ def run_collection(
                 }
                 for row in rows
                 for seed in solver_seeds
-                if (str(row["task_id"]), seed) not in existing_index
+                if (str(row["task_id"]), seed) in pending_qualification
             ]
             record, qualification_rows = _manifest_accumulator(
                 qualification_path,
@@ -3207,17 +3490,36 @@ def run_collection(
                 run_fingerprint=run_fingerprint,
                 on_result=record,
             )
-            _write_jsonl(qualification_path, qualification_rows())
+            qualification = qualification_rows()
+            _write_jsonl(qualification_path, qualification)
+            qualification_index, _pending_qualification = (
+                _validate_resumable_qualification_rows(
+                    qualification,
+                    dataset_root=dataset_root,
+                    rows=rows,
+                    solver_seeds=solver_seeds,
+                    environment=environment,
+                    replay_completed=False,
+                )
+            )
 
         qualification_path = output_root / "qualification_manifest.jsonl"
-        qualification = (
-            _read_jsonl(qualification_path) if qualification_path.is_file() else []
-        )
-        qualification_index = {
-            (str(row["task_id"]), int(row["solver_seed"])): row
-            for row in qualification
-            if row["status"] == "ok"
-        }
+        if qualification is None:
+            qualification = (
+                _read_jsonl(qualification_path)
+                if qualification_path.is_file()
+                else []
+            )
+        if qualification_index is None:
+            qualification_index, _pending_qualification = (
+                _validate_resumable_qualification_rows(
+                    qualification,
+                    dataset_root=dataset_root,
+                    rows=rows,
+                    solver_seeds=solver_seeds,
+                    environment=environment,
+                )
+            )
         pairs = [(row, seed) for row in rows for seed in solver_seeds]
         if max_episodes is not None:
             pairs.sort(

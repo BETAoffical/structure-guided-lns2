@@ -24,7 +24,9 @@ void SingleAgentSolver::compute_heuristics()
 			// returns true if n1 > n2 (note -- this gives us *min*-heap).
 			bool operator()(const Node& n1, const Node& n2) const
 			{
-				return n1.value >= n2.value;
+				if (n1.value != n2.value)
+					return n1.value > n2.value;
+				return n1.location > n2.location;
 			}
 		};  // used by OPEN (heap) to compare nodes (top of the heap has min f-val, and then highest g-val)
 	};
@@ -76,15 +78,19 @@ void SingleAgentSolver::findMinimumSetofColldingTargets(vector<int>& goal_table,
             // returns true if n1 > n2(note -- this gives us *min*-heap).
             bool operator()(const Node* n1, const Node* n2) const
             {
-                if (n1->num_of_targets == n2->num_of_targets)
-                {
-                    if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-                    {
-                        return n1->h_val >= n2->h_val;
-                    }
-                    return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
-                }
-                return n1->num_of_targets >= n2->num_of_targets;
+                const auto n1_key = std::make_tuple(
+                    n1->num_of_targets,
+                    n1->g_val + n1->h_val,
+                    n1->h_val,
+                    n1->location
+                );
+                const auto n2_key = std::make_tuple(
+                    n2->num_of_targets,
+                    n2->g_val + n2->h_val,
+                    n2->h_val,
+                    n2->location
+                );
+                return n1_key > n2_key;
             }
         };  // used by OPEN (heap) to compare nodes (top of the heap has min f-val, and then highest g-val)
 
@@ -131,7 +137,9 @@ void SingleAgentSolver::findMinimumSetofColldingTargets(vector<int>& goal_table,
         for (int next_location : next_locations)
         {
             int next_g_val = curr->g_val + 1;
-            int num_of_visited_targets = curr->num_of_targets + goal_table[next_location] > -1? 1:0;
+            const int num_of_visited_targets =
+                curr->num_of_targets +
+                (goal_table[next_location] > -1 ? 1 : 0);
             if (visited[next_location] == nullptr)
             {
                 // generate (maybe temporary) node

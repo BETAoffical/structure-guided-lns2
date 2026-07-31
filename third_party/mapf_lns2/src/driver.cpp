@@ -4,6 +4,7 @@
 #include "AnytimeBCBS.h"
 #include "AnytimeEECBS.h"
 #include "PIBT/pibt.h"
+#include "structure_guided/instance_validation.hpp"
 
 
 /* Main function */
@@ -67,13 +68,37 @@ int main(int argc, char** argv)
 
     po::notify(vm);
 
-	srand((int)time(0));
+    const int random_seed = vm["seed"].as<int>();
+    if (random_seed < 0)
+    {
+        cerr << "lns_official: seed must be non-negative" << endl;
+        return 2;
+    }
+    int agent_count = 0;
+    try
+    {
+        agent_count = structure_guided::resolveInstanceAgentCount(
+            vm["map"].as<string>(),
+            vm["agents"].as<string>(),
+            vm["agentNum"].as<int>()
+        );
+        structure_guided::validateInstanceFiles(
+            vm["map"].as<string>(),
+            vm["agents"].as<string>(),
+            agent_count
+        );
+    }
+    catch (const std::exception& error)
+    {
+        cerr << "lns_official: " << error.what() << endl;
+        return 2;
+    }
 
 	Instance instance(vm["map"].as<string>(), vm["agents"].as<string>(),
-		vm["agentNum"].as<int>());
+		agent_count);
     double time_limit = vm["cutoffTime"].as<double>();
     int screen = vm["screen"].as<int>();
-	srand(vm["seed"].as<int>());
+	srand(random_seed);
 
 	if (vm["solver"].as<string>() == "LNS")
     {

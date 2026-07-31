@@ -265,6 +265,58 @@ void requireReplayNeighborhoodAllowsRecordedNoop(int solver_seed)
             "recorded no-op replay unexpectedly invoked PP");
 }
 
+void requireZeroRepairLimitAllowsMoreThanHundredSteps(int solver_seed)
+{
+    constexpr int AGENT_COUNT = 100;
+    constexpr int REQUIRED_STEPS = 101;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(solver_seed);
+    InitLNS solver(
+        instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 0);
+    require(solver.initialize(), "failed to initialize zero-limit source");
+    const RepairState initial = solver.getRepairState();
+    require(!initial.done && initial.num_of_colliding_pairs > 0,
+            "zero-limit source must begin unresolved");
+
+    RepairAction replay;
+    replay.mode = RepairActionMode::REPLAY_NEIGHBORHOOD;
+    for (const auto& agent : initial.agents)
+    {
+        if (agent.conflict_degree == 0)
+            replay.agents.push_back(agent.id);
+        if (replay.agents.size() == 2)
+            break;
+    }
+    require(!replay.agents.empty(),
+            "zero-limit source has no stable no-op replay neighborhood");
+
+    for (int iteration = 0; iteration < REQUIRED_STEPS; iteration++)
+    {
+        require(!solver.isDone(),
+                "zero max_repair_iterations stopped before step 101");
+        require(solver.step(replay),
+                "zero max_repair_iterations rejected a no-op replay step");
+        const RepairTransition& transition = solver.getLastTransition();
+        require(transition.action_valid,
+                "zero-limit no-op replay was unexpectedly rejected");
+        require(!transition.replan_success,
+                "zero-limit no-op replay unexpectedly invoked PP");
+        require(transition.iteration == iteration + 1,
+                "zero-limit repair iteration count is inconsistent");
+    }
+    const RepairState final = solver.getRepairState();
+    require(final.iteration == REQUIRED_STEPS,
+            "zero max_repair_iterations did not execute 101 repairs");
+    require(!final.done,
+            "zero max_repair_iterations became terminal at step 101");
+    require(final.num_of_colliding_pairs == initial.num_of_colliding_pairs,
+            "zero-limit no-op replay changed the unresolved state");
+}
+
 bool sameState(const RepairState& left, const RepairState& right)
 {
     if (left.initialized != right.initialized ||
@@ -321,6 +373,7 @@ int main()
             "explicit repair order paths are not deterministic");
     requireInvalidOrderFallback(0, 34567);
     requireReplayNeighborhoodAllowsRecordedNoop(0);
+    requireZeroRepairLimitAllowsMoreThanHundredSteps(0);
 
     Instance instance(TEST_MAP, TEST_SCEN, 80);
     vector<Agent> agents;

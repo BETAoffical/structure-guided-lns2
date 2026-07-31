@@ -10,6 +10,7 @@ from experiments._common import read_json, sha256_file, standard_error as _stand
 from experiments.receding_q_pilot import _atomic_write_csv, _winner_key
 from experiments.receding_q_risk_audit import (
     map_group_policy_selection,
+    policy_training_key,
     resolve_persisted_source_path,
     summarize_policy_rows,
 )
@@ -349,24 +350,6 @@ def build_paired_label_loo_rows(
     return result
 
 
-def _policy_key(row: dict[str, Any]) -> tuple[Any, ...]:
-    eligible = (
-        float(row["feasible_rate_delta"]) >= 0.0
-        and float(row["mean_normalized_step_auc_delta"]) <= 0.02
-        and int(row["net_wins"]) >= 0
-    )
-    return (
-        not eligible,
-        -float(row["feasible_rate_delta"]),
-        -int(row["net_wins"]),
-        float(row["mean_normalized_step_auc_delta"]),
-        float(row["mean_final_conflict_ratio_delta"]),
-        float(row["mean_total_seconds_delta"]),
-        int(row["policy_complexity"]),
-        str(row["policy_id"]),
-    )
-
-
 def _summaries_by_agent(
     rows: list[dict[str, Any]], *, policy_id: str
 ) -> list[dict[str, Any]]:
@@ -467,7 +450,7 @@ def audit_receding_q_paired_labels(
         )
         for policy in policies
     ]
-    selected_global = min(policy_summaries, key=_policy_key)
+    selected_global = min(policy_summaries, key=policy_training_key)
     oof_rows, map_selections = map_group_policy_selection(loo_rows)
     oof_summary = summarize_policy_rows(
         [{**row, "policy_id": "map_group_oof"} for row in oof_rows]

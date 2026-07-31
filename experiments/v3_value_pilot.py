@@ -31,6 +31,7 @@ from experiments.v3_s3_collection import (
     _paired_repair_action,
     _paired_seed,
     _source_replay_job,
+    validate_v3_s3_collection_source,
 )
 
 
@@ -75,34 +76,136 @@ ARM_PRIORITY = (
 )
 
 
+def _source_string(
+    value: Any,
+    *,
+    field: str,
+    allow_empty: bool = False,
+) -> str:
+    if not isinstance(value, str) or (not allow_empty and not value):
+        qualifier = "a string" if allow_empty else "a non-empty string"
+        raise ValueError(f"value-pilot source {field} must be {qualifier}")
+    return value
+
+
+def _source_object_list(value: Any, *, field: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError(f"value-pilot source {field} must be a list")
+    result = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"value-pilot source {field}[{index}] must be an object"
+            )
+        result.append(dict(item))
+    return result
+
+
+def _source_agent_ids(value: Any, *, field: str) -> list[int]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(
+            type(agent) is not int or agent < 0
+            for agent in value
+        )
+        or len(set(value)) != len(value)
+    ):
+        raise ValueError(
+            f"value-pilot source {field} must be a non-empty list of unique "
+            "non-negative integers"
+        )
+    return list(value)
+
+
+def _source_first_steps(
+    row: dict[str, Any],
+    *,
+    field: str,
+    require_executed: bool,
+) -> list[dict[str, Any]]:
+    result = []
+    for index, step in enumerate(
+        _source_object_list(row.get("steps"), field=f"{field}.steps")
+    ):
+        step_number = step.get("step")
+        if not _strict_nonnegative_int(step_number):
+            raise ValueError(
+                f"value-pilot source {field}.steps[{index}].step "
+                "must be a non-negative integer"
+            )
+        if require_executed:
+            executed = step.get("executed")
+            if type(executed) is not bool:
+                raise ValueError(
+                    f"value-pilot source {field}.steps[{index}].executed "
+                    "must be boolean"
+                )
+            if step_number == 1 and executed:
+                result.append(step)
+        elif step_number == 1:
+            result.append(step)
+    return result
+
+
 def _candidate_from_sequence(
     payload: dict[str, Any], sequence_id: str
 ) -> dict[str, Any]:
-    matches = [
-        row
-        for row in payload["trials"]
-        if str(row["sequence_id"]) == str(sequence_id)
-    ]
+    expected_sequence_id = _source_string(
+        sequence_id,
+        field="requested sequence_id",
+    )
+    matches = []
+    for index, row in enumerate(
+        _source_object_list(payload.get("trials"), field="trials")
+    ):
+        stored_sequence_id = _source_string(
+            row.get("sequence_id"),
+            field=f"trials[{index}].sequence_id",
+        )
+        if stored_sequence_id == expected_sequence_id:
+            matches.append(row)
     if not matches:
         raise ValueError(f"state lacks S3 sequence: {sequence_id}")
     identities = set()
     template_keys = set()
-    for row in matches:
-        steps = [
-            dict(step)
-            for step in row["steps"]
-            if int(step["step"]) == 1 and bool(step.get("executed"))
-        ]
+    for index, row in enumerate(matches):
+        steps = _source_first_steps(
+            row,
+            field=f"sequence {expected_sequence_id} trial {index}",
+            require_executed=True,
+        )
         if len(steps) != 1:
             raise ValueError(f"S3 sequence has invalid first-step coverage: {sequence_id}")
         step = steps[0]
+        candidate_id = _source_string(
+            step.get("candidate_id"),
+            field=f"sequence {expected_sequence_id} candidate_id",
+        )
+        agents = _source_agent_ids(
+            step.get("agents"),
+            field=f"sequence {expected_sequence_id} agents",
+        )
         identities.add(
             (
-                str(step["candidate_id"]),
-                tuple(sorted(map(int, step["agents"]))),
+                candidate_id,
+                tuple(sorted(agents)),
             )
         )
-        template_keys.add(str(dict(row["templates"][0])["template_key"]))
+        templates = _source_object_list(
+            row.get("templates"),
+            field=f"sequence {expected_sequence_id} templates",
+        )
+        if not templates:
+            raise ValueError(
+                f"S3 sequence has no templates: {expected_sequence_id}"
+            )
+        template_keys.add(
+            _source_string(
+                templates[0].get("template_key"),
+                field=f"sequence {expected_sequence_id} template_key",
+            )
+        )
     if len(identities) != 1 or len(template_keys) != 1:
         raise ValueError(f"S3 sequence first action is not deterministic: {sequence_id}")
     candidate_id, agents = identities.pop()
@@ -117,26 +220,50 @@ def _candidate_from_sequence(
 def _candidate_from_template(
     payload: dict[str, Any], template_key: str
 ) -> dict[str, Any]:
+    expected_template_key = _source_string(
+        template_key,
+        field="requested template_key",
+    )
     candidates = {}
-    for row in payload["trials"]:
-        if str(dict(row["templates"][0])["template_key"]) != str(template_key):
+    for index, row in enumerate(
+        _source_object_list(payload.get("trials"), field="trials")
+    ):
+        templates = _source_object_list(
+            row.get("templates"),
+            field=f"trials[{index}].templates",
+        )
+        if not templates:
+            raise ValueError("value-pilot source trial has no templates")
+        stored_template_key = _source_string(
+            templates[0].get("template_key"),
+            field=f"trials[{index}].template_key",
+        )
+        if stored_template_key != expected_template_key:
             continue
-        steps = [
-            dict(step)
-            for step in row["steps"]
-            if int(step["step"]) == 1 and bool(step.get("executed"))
-        ]
+        steps = _source_first_steps(
+            row,
+            field=f"template {expected_template_key} trial {index}",
+            require_executed=True,
+        )
         if len(steps) != 1:
             continue
         step = steps[0]
+        candidate_id = _source_string(
+            step.get("candidate_id"),
+            field=f"template {expected_template_key} candidate_id",
+        )
+        agents = _source_agent_ids(
+            step.get("agents"),
+            field=f"template {expected_template_key} agents",
+        )
         key = (
-            str(step["candidate_id"]),
-            tuple(sorted(map(int, step["agents"]))),
+            candidate_id,
+            tuple(sorted(agents)),
         )
         candidates[key] = {
             "candidate_id": key[0],
             "agents": list(key[1]),
-            "template_key": str(template_key),
+            "template_key": expected_template_key,
             "sequence_id": "",
         }
     if len(candidates) != 1:
@@ -147,22 +274,45 @@ def _candidate_from_template(
 
 
 def _v2_candidate(payload: dict[str, Any]) -> dict[str, Any]:
-    rows = [
-        row
-        for row in payload["external_baselines"]
-        if str(row["controller"]) == "v2-full"
-    ]
+    rows = []
+    for index, row in enumerate(
+        _source_object_list(
+            payload.get("external_baselines"),
+            field="external_baselines",
+        )
+    ):
+        controller = _source_string(
+            row.get("controller"),
+            field=f"external_baselines[{index}].controller",
+        )
+        if controller == "v2-full":
+            rows.append(row)
     identities = set()
-    for row in rows:
-        steps = [dict(step) for step in row["steps"] if int(step["step"]) == 1]
+    for index, row in enumerate(rows):
+        steps = _source_first_steps(
+            row,
+            field=f"v2 baseline {index}",
+            require_executed=False,
+        )
         if len(steps) != 1:
             raise ValueError("v2 baseline has invalid first-step coverage")
         step = steps[0]
-        action = dict(step["action"])
+        action_value = step.get("action")
+        if not isinstance(action_value, dict):
+            raise ValueError("v2 baseline first action is not an object")
+        action = dict(action_value)
+        candidate_id = _source_string(
+            step.get("candidate_id"),
+            field="v2 baseline candidate_id",
+        )
+        agents = _source_agent_ids(
+            action.get("agents"),
+            field="v2 baseline agents",
+        )
         identities.add(
             (
-                str(step["candidate_id"]),
-                tuple(sorted(map(int, action["agents"]))),
+                candidate_id,
+                tuple(sorted(agents)),
             )
         )
     if len(identities) != 1:
@@ -178,10 +328,26 @@ def _v2_candidate(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _shared_initial_selection_seconds(payload: dict[str, Any]) -> float:
     values = []
-    for row in payload["trials"]:
-        for step in row["steps"]:
-            if int(step["step"]) == 1 and bool(step.get("executed")):
-                values.append(float(step.get("selection_seconds", 0.0)))
+    for index, row in enumerate(
+        _source_object_list(payload.get("trials"), field="trials")
+    ):
+        steps = _source_first_steps(
+            row,
+            field=f"trials[{index}]",
+            require_executed=True,
+        )
+        for step in steps:
+            selection_seconds = step.get("selection_seconds")
+            if (
+                isinstance(selection_seconds, bool)
+                or not isinstance(selection_seconds, (int, float))
+                or not math.isfinite(float(selection_seconds))
+                or float(selection_seconds) < 0.0
+            ):
+                raise ValueError(
+                    "state has invalid initial candidate selection time"
+                )
+            values.append(float(selection_seconds))
     if not values:
         raise ValueError("state has no measured initial candidate selection time")
     return statistics.median(values)
@@ -278,6 +444,25 @@ def _balanced_state_sample(
     return selected
 
 
+def _unique_rows_by_state_id(
+    rows: Iterable[dict[str, Any]],
+    *,
+    label: str,
+) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for raw in rows:
+        if not isinstance(raw, dict):
+            raise ValueError(f"{label} contains a non-object row")
+        row = dict(raw)
+        state_id = row.get("state_id")
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError(f"{label} contains an invalid state_id")
+        if state_id in result:
+            raise ValueError(f"{label} contains duplicate state_id: {state_id}")
+        result[state_id] = row
+    return result
+
+
 def build_value_pilot_plan(
     *,
     source: str | Path,
@@ -285,49 +470,123 @@ def build_value_pilot_plan(
     state_count: int,
     split: str = "policy_train",
 ) -> dict[str, Any]:
+    if not _strict_nonnegative_int(state_count) or state_count <= 0:
+        raise ValueError("value-pilot state_count must be a positive integer")
+    if not isinstance(split, str) or not split:
+        raise ValueError("value-pilot split must be a non-empty string")
     source_root = Path(source).resolve()
+    source_validation = validate_v3_s3_collection_source(
+        source_root / "collection"
+    )
     oracle_path = Path(oracle_state_comparison).resolve()
-    oracle_rows = {
-        str(row["state_id"]): row
-        for row in csv.DictReader(oracle_path.open(encoding="utf-8", newline=""))
-        if str(row["split"]) == str(split)
-    }
-    decisions = {
-        str(row["state_id"]): row
-        for row in _read_jsonl(source_root / "collection" / "state_selection.jsonl")
-        if str(row["split"]) == str(split)
-    }
+    with oracle_path.open(encoding="utf-8", newline="") as stream:
+        all_oracle_rows = _unique_rows_by_state_id(
+            csv.DictReader(stream),
+            label="value-pilot oracle comparison",
+        )
+    oracle_rows = {}
+    for state_id, row in all_oracle_rows.items():
+        row_split = _source_string(
+            row.get("split"),
+            field=f"oracle row {state_id} split",
+        )
+        if row_split == split:
+            oracle_rows[state_id] = row
+    all_decisions = _unique_rows_by_state_id(
+        _read_jsonl(source_root / "collection" / "state_selection.jsonl"),
+        label="value-pilot state selection",
+    )
+    decisions = {}
+    for state_id, row in all_decisions.items():
+        row_split = _source_string(
+            row.get("split"),
+            field=f"state selection {state_id} split",
+        )
+        if row_split == split:
+            decisions[state_id] = row
     candidates = []
     state_files = sorted(
         (source_root / "collection" / "states" / split).glob("*.json")
     )
+    seen_state_files: dict[str, Path] = {}
     for path in state_files:
-        payload = dict(read_json(path))
-        state_id = str(payload["state_id"])
+        value = read_json(path)
+        if not isinstance(value, dict):
+            raise ValueError(f"value-pilot state file is not an object: {path}")
+        payload = dict(value)
+        state_id = payload.get("state_id")
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError(f"value-pilot state file has invalid state_id: {path}")
+        if state_id in seen_state_files:
+            raise ValueError(
+                "value-pilot state files contain duplicate state_id: "
+                f"{state_id}"
+            )
+        seen_state_files[state_id] = path
         if state_id not in oracle_rows or state_id not in decisions:
             continue
         arms = build_state_arms(payload, oracle_rows[state_id])
         if len(arms) < 2:
             continue
-        first_trial = dict(payload["trials"][0])
-        initial_conflicts = int(first_trial["conflict_trajectory"][0])
+        trials = _source_object_list(payload.get("trials"), field="trials")
+        if not trials:
+            raise ValueError("value-pilot state has no trials")
+        trajectory = trials[0].get("conflict_trajectory")
+        if (
+            not isinstance(trajectory, list)
+            or not trajectory
+            or any(not _strict_nonnegative_int(value) for value in trajectory)
+        ):
+            raise ValueError(
+                "value-pilot source conflict_trajectory must be a non-empty "
+                "list of non-negative integers"
+            )
+        initial_conflicts = trajectory[0]
         if initial_conflicts <= 0:
             continue
         decision = dict(decisions[state_id])
+        agent_count = decision.get("agent_count")
+        if (
+            not _strict_nonnegative_int(agent_count)
+            or agent_count <= 0
+        ):
+            raise ValueError(
+                f"value-pilot state selection {state_id} agent_count "
+                "must be a positive integer"
+            )
+        for field in (
+            "map_id",
+            "layout_mode",
+            "source_stratum",
+            "before_fingerprint",
+            "before_repair_fingerprint",
+        ):
+            _source_string(
+                decision.get(field),
+                field=f"state selection {state_id} {field}",
+            )
+        if any(
+            agent >= agent_count
+            for arm in arms
+            for agent in arm["agents"]
+        ):
+            raise ValueError(
+                f"value-pilot state {state_id} has an out-of-range agent"
+            )
         candidates.append(
             {
                 "state_id": state_id,
                 "state_file": str(path),
                 "split": split,
-                "map_id": str(decision["map_id"]),
-                "layout_mode": str(decision["layout_mode"]),
-                "agent_count": int(decision["agent_count"]),
-                "source_stratum": str(decision["source_stratum"]),
+                "map_id": decision["map_id"],
+                "layout_mode": decision["layout_mode"],
+                "agent_count": agent_count,
+                "source_stratum": decision["source_stratum"],
                 "initial_conflicts": initial_conflicts,
-                "before_fingerprint": str(decision["before_fingerprint"]),
-                "before_repair_fingerprint": str(
-                    decision["before_repair_fingerprint"]
-                ),
+                "before_fingerprint": decision["before_fingerprint"],
+                "before_repair_fingerprint": decision[
+                    "before_repair_fingerprint"
+                ],
                 "shared_initial_selection_seconds": (
                     _shared_initial_selection_seconds(payload)
                 ),
@@ -335,21 +594,27 @@ def build_value_pilot_plan(
                 "arms": arms,
             }
         )
-    selected = _balanced_state_sample(candidates, int(state_count))
-    if len(selected) != int(state_count):
+    selected = _balanced_state_sample(candidates, state_count)
+    if len(selected) != state_count:
         raise ValueError(
-            f"value pilot could select only {len(selected)}/{int(state_count)} states"
+            f"value pilot could select only {len(selected)}/{state_count} states"
         )
     return {
         "schema": V3_VALUE_PILOT_SCHEMA,
         "source": str(source_root),
+        "source_collection_run_fingerprint": source_validation[
+            "run_fingerprint"
+        ],
+        "source_collection_producer_identity_fingerprint": source_validation[
+            "producer_identity_fingerprint"
+        ],
         "source_sequence_trials_sha256": sha256_file(
             source_root / "collection" / "sequence_trials.jsonl"
         ),
         "oracle_state_comparison": str(oracle_path),
         "oracle_state_comparison_sha256": sha256_file(oracle_path),
         "split": split,
-        "requested_state_count": int(state_count),
+        "requested_state_count": state_count,
         "selected_state_count": len(selected),
         "states": selected,
     }
@@ -652,10 +917,9 @@ def run_value_rollout(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _finite_float(value: Any, *, field: str, nonnegative: bool = False) -> float:
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as error:
-        raise ValueError(f"value rollout {field} is not numeric") from error
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"value rollout {field} is not numeric")
+    result = float(value)
     if not math.isfinite(result) or (nonnegative and result < 0.0):
         qualifier = "finite and non-negative" if nonnegative else "finite"
         raise ValueError(f"value rollout {field} must be {qualifier}")
@@ -681,6 +945,38 @@ def _stored_fingerprint(value: Any, *, field: str) -> str:
     return value
 
 
+def _stored_string(
+    value: Any,
+    *,
+    field: str,
+    allow_empty: bool = False,
+) -> str:
+    if not isinstance(value, str) or (not allow_empty and not value):
+        qualifier = "a string" if allow_empty else "a non-empty string"
+        raise ValueError(f"value rollout {field} must be {qualifier}")
+    return value
+
+
+def _stored_string_list(
+    value: Any,
+    *,
+    field: str,
+    allow_empty: bool = False,
+) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or (not allow_empty and not value)
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        qualifier = (
+            "a list of strings"
+            if allow_empty
+            else "a non-empty list of non-empty strings"
+        )
+        raise ValueError(f"value rollout {field} must be {qualifier}")
+    return list(value)
+
+
 def validate_value_rollout(
     row: dict[str, Any],
     *,
@@ -693,7 +989,7 @@ def validate_value_rollout(
 ) -> None:
     """Validate a completed value rollout against its immutable job plan."""
 
-    if str(row.get("schema")) != V3_VALUE_PILOT_SCHEMA:
+    if _stored_string(row.get("schema"), field="schema") != V3_VALUE_PILOT_SCHEMA:
         raise ValueError("value rollout schema mismatch")
     if row.get("complete") is not True:
         raise ValueError("value rollout is incomplete")
@@ -702,43 +998,85 @@ def validate_value_rollout(
         field="wall_clock_seconds limit",
         nonnegative=True,
     )
-    if int(max_repairs) <= 0 or wall_limit <= 0.0:
+    if (
+        not _strict_nonnegative_int(max_repairs)
+        or max_repairs <= 0
+        or wall_limit <= 0.0
+    ):
         raise ValueError("value rollout limits must be positive")
     if expected_producer_fingerprint is not None:
-        if str(row.get("producer_identity_fingerprint")) != str(
-            expected_producer_fingerprint
+        if (
+            not isinstance(expected_producer_fingerprint, str)
+            or not expected_producer_fingerprint
         ):
+            raise ValueError(
+                "value rollout expected producer fingerprint is invalid"
+            )
+        producer_fingerprint = _stored_fingerprint(
+            row.get("producer_identity_fingerprint"),
+            field="producer identity fingerprint",
+        )
+        if producer_fingerprint != expected_producer_fingerprint:
             raise ValueError("value rollout producer identity mismatch")
 
-    state_id = str(state_plan["state_id"])
-    arm_id = str(arm_plan["arm_id"])
+    state_id = _stored_string(state_plan["state_id"], field="planned state_id")
+    arm_id = _stored_string(arm_plan["arm_id"], field="planned arm_id")
     trial_index = row.get("trial_index")
     if not _strict_nonnegative_int(trial_index):
         raise ValueError("value rollout trial index is invalid")
-    if str(row.get("state_id")) != state_id:
+    if _stored_string(row.get("state_id"), field="state_id") != state_id:
         raise ValueError("value rollout state mismatch")
-    if str(row.get("arm_id")) != arm_id:
+    if _stored_string(row.get("arm_id"), field="arm_id") != arm_id:
         raise ValueError("value rollout arm mismatch")
-    if expected_trial_index is not None and trial_index != int(
-        expected_trial_index
-    ):
-        raise ValueError("value rollout trial mismatch")
+    if expected_trial_index is not None:
+        if (
+            not _strict_nonnegative_int(expected_trial_index)
+            or trial_index != expected_trial_index
+        ):
+            raise ValueError("value rollout trial mismatch")
     for field in ("split", "map_id", "layout_mode", "source_stratum"):
-        if str(row.get(field)) != str(state_plan[field]):
+        expected_value = _stored_string(
+            state_plan[field],
+            field=f"planned {field}",
+        )
+        if _stored_string(row.get(field), field=field) != expected_value:
             raise ValueError(f"value rollout {field} mismatch")
+    expected_agent_count = state_plan.get("agent_count")
+    if (
+        not _strict_nonnegative_int(expected_agent_count)
+        or expected_agent_count <= 0
+    ):
+        raise ValueError("value rollout planned agent_count is invalid")
     if not _strict_nonnegative_int(row.get("agent_count")) or row.get(
         "agent_count"
-    ) != int(state_plan["agent_count"]):
+    ) != expected_agent_count:
         raise ValueError("value rollout agent_count mismatch")
-    if list(map(str, row.get("arm_aliases", ()))) != list(
-        map(str, arm_plan["aliases"])
+    expected_aliases = _stored_string_list(
+        arm_plan["aliases"],
+        field="planned arm aliases",
+    )
+    if (
+        _stored_string_list(row.get("arm_aliases"), field="arm aliases")
+        != expected_aliases
     ):
         raise ValueError("value rollout arm aliases mismatch")
-    if str(row.get("candidate_id")) != str(arm_plan["candidate_id"]):
+    expected_candidate_id = _stored_string(
+        arm_plan["candidate_id"],
+        field="planned candidate_id",
+    )
+    if (
+        _stored_string(row.get("candidate_id"), field="candidate_id")
+        != expected_candidate_id
+    ):
         raise ValueError("value rollout candidate mismatch")
-    expected_agents = list(map(int, arm_plan["agents"]))
+    expected_agents = _agent_ids(
+        arm_plan.get("agents"),
+        agent_count=expected_agent_count,
+    )
+    if expected_agents is None:
+        raise ValueError("value rollout planned neighborhood is invalid")
     stored_root_agents = _agent_ids(
-        row.get("agents"), agent_count=int(state_plan["agent_count"])
+        row.get("agents"), agent_count=expected_agent_count
     )
     if stored_root_agents != expected_agents:
         raise ValueError("value rollout neighborhood mismatch")
@@ -746,12 +1084,32 @@ def validate_value_rollout(
         "actual_size"
     ) != len(expected_agents):
         raise ValueError("value rollout actual size mismatch")
-    if str(row.get("template_key")) != str(arm_plan.get("template_key", "")):
+    expected_template_key = _stored_string(
+        arm_plan.get("template_key", ""),
+        field="planned template_key",
+        allow_empty=True,
+    )
+    if (
+        _stored_string(
+            row.get("template_key"),
+            field="template_key",
+            allow_empty=True,
+        )
+        != expected_template_key
+    ):
         raise ValueError("value rollout template mismatch")
 
-    initial_full = str(state_plan["before_fingerprint"])
-    initial_repair = str(state_plan["before_repair_fingerprint"])
-    initial_conflicts = int(state_plan["initial_conflicts"])
+    initial_full = _stored_fingerprint(
+        state_plan["before_fingerprint"],
+        field="planned initial fingerprint",
+    )
+    initial_repair = _stored_fingerprint(
+        state_plan["before_repair_fingerprint"],
+        field="planned initial repair fingerprint",
+    )
+    if not _strict_nonnegative_int(state_plan.get("initial_conflicts")):
+        raise ValueError("value rollout planned initial conflicts are invalid")
+    initial_conflicts = state_plan["initial_conflicts"]
     if _stored_fingerprint(
         row.get("initial_fingerprint"), field="initial fingerprint"
     ) != initial_full:
@@ -769,7 +1127,7 @@ def validate_value_rollout(
     raw_steps = row.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
         raise ValueError("value rollout has no repair steps")
-    if len(raw_steps) > int(max_repairs):
+    if len(raw_steps) > max_repairs:
         raise ValueError("value rollout exceeds its repair limit")
     steps = []
     for value in raw_steps:
@@ -854,11 +1212,11 @@ def validate_value_rollout(
         if step_index < len(steps) and after_done:
             raise ValueError("value rollout continues after a terminal step")
         step_agents = _agent_ids(
-            step.get("agents"), agent_count=int(state_plan["agent_count"])
+            step.get("agents"), agent_count=expected_agent_count
         )
         repair_order = _agent_ids(
             step.get("repair_order"),
-            agent_count=int(state_plan["agent_count"]),
+            agent_count=expected_agent_count,
             allow_empty=True,
         )
         if step_agents is None or repair_order is None:
@@ -866,7 +1224,10 @@ def validate_value_rollout(
         replan_success = step.get("replan_success")
         if not isinstance(replan_success, bool):
             raise ValueError("value rollout step lacks replan-success evidence")
-        outcome = str(step.get("repair_outcome", ""))
+        outcome = _stored_string(
+            step.get("repair_outcome"),
+            field=f"steps[{step_index}].repair_outcome",
+        )
         if outcome not in REPAIR_OUTCOMES:
             raise ValueError("value rollout repair outcome is invalid")
         expected_outcome = classify_repair_outcome(
@@ -901,27 +1262,47 @@ def validate_value_rollout(
             or action.get("pp_random_seed") != expected_seed
         ):
             raise ValueError("value rollout PP seed mismatch")
-        if step.get("requested_pp_seed") != expected_seed:
+        if (
+            not _strict_nonnegative_int(step.get("requested_pp_seed"))
+            or step.get("requested_pp_seed") != expected_seed
+        ):
             raise ValueError("value rollout requested PP seed mismatch")
-        if step.get("applied_pp_seed") != (
+        applied_pp_seed = step.get("applied_pp_seed")
+        if type(applied_pp_seed) is not int or applied_pp_seed != (
             expected_seed if repair_order else -1
         ):
             raise ValueError("value rollout applied PP seed mismatch")
         if step_index == 1:
             if (
-                str(step.get("route")) != "explicit_first_action"
-                or str(action.get("mode")) != "explicit_neighborhood"
+                _stored_string(
+                    step.get("route"),
+                    field=f"steps[{step_index}].route",
+                )
+                != "explicit_first_action"
+                or _stored_string(
+                    action.get("mode"),
+                    field=f"steps[{step_index}].action.mode",
+                )
+                != "explicit_neighborhood"
                 or _agent_ids(
                     action.get("agents"),
-                    agent_count=int(state_plan["agent_count"]),
+                    agent_count=expected_agent_count,
                 )
                 != expected_agents
                 or step_agents != expected_agents
             ):
                 raise ValueError("value rollout first action mismatch")
         elif (
-            str(step.get("route")) != "official_adaptive_continuation"
-            or str(action.get("mode")) != "official"
+            _stored_string(
+                step.get("route"),
+                field=f"steps[{step_index}].route",
+            )
+            != "official_adaptive_continuation"
+            or _stored_string(
+                action.get("mode"),
+                field=f"steps[{step_index}].action.mode",
+            )
+            != "official"
         ):
             raise ValueError("value rollout continuation action mismatch")
 
@@ -992,16 +1373,16 @@ def validate_value_rollout(
         raise ValueError("value rollout final feasibility mismatch")
     if bool(row.get("censored")) == feasible:
         raise ValueError("value rollout censoring mismatch")
-    stop_reason = str(row.get("stop_reason"))
+    stop_reason = _stored_string(row.get("stop_reason"), field="stop_reason")
     terminal = bool(steps[-1]["after_done"])
     if stop_reason == "feasible":
         valid_stop = feasible and terminal
     elif stop_reason == "environment_terminal":
         valid_stop = terminal and not feasible
     elif stop_reason == "wall_clock_limit":
-        valid_stop = not terminal and len(steps) < int(max_repairs)
+        valid_stop = not terminal and len(steps) < max_repairs
     elif stop_reason == "repair_limit":
-        valid_stop = not terminal and len(steps) == int(max_repairs)
+        valid_stop = not terminal and len(steps) == max_repairs
     else:
         valid_stop = False
     if not valid_stop:
@@ -1081,9 +1462,9 @@ def load_resumable_value_rollout(
             row,
             state_plan=state_plan,
             arm_plan=arm_plan,
-            max_repairs=int(max_repairs),
-            wall_clock_seconds=float(wall_clock_seconds),
-            expected_trial_index=int(expected_trial_index),
+            max_repairs=max_repairs,
+            wall_clock_seconds=wall_clock_seconds,
+            expected_trial_index=expected_trial_index,
             expected_producer_fingerprint=expected_producer_fingerprint,
         )
         return row
@@ -1336,12 +1717,25 @@ def run_value_label_pilot(
     smoke_only: bool = False,
     resume: bool = False,
 ) -> dict[str, Any]:
-    if int(trials) <= 0 or int(max_repairs) <= 0:
-        raise ValueError("trials and max_repairs must be positive")
-    if not math.isfinite(float(wall_clock_seconds)) or float(
-        wall_clock_seconds
-    ) <= 0.0:
-        raise ValueError("wall_clock_seconds must be positive")
+    if not _strict_nonnegative_int(state_count) or state_count <= 0:
+        raise ValueError("state_count must be a positive integer")
+    if not _strict_nonnegative_int(trials) or trials <= 0:
+        raise ValueError("trials must be a positive integer")
+    if not _strict_nonnegative_int(max_repairs) or max_repairs <= 0:
+        raise ValueError("max_repairs must be a positive integer")
+    if (
+        isinstance(wall_clock_seconds, bool)
+        or not isinstance(wall_clock_seconds, (int, float))
+        or not math.isfinite(float(wall_clock_seconds))
+        or float(wall_clock_seconds) <= 0.0
+    ):
+        raise ValueError("wall_clock_seconds must be a positive finite number")
+    if not isinstance(split, str) or not split:
+        raise ValueError("split must be a non-empty string")
+    if type(smoke_only) is not bool:
+        raise ValueError("smoke_only must be boolean")
+    if type(resume) is not bool:
+        raise ValueError("resume must be boolean")
     output_root = Path(output).resolve()
     output_has_files = output_root.exists() and any(output_root.iterdir())
     if output_has_files and not bool(resume):
@@ -1378,11 +1772,17 @@ def run_value_label_pilot(
         "plan_fingerprint": _fingerprint(requested_plan),
     }
     if output_has_files:
-        existing_plan = dict(read_json(plan_path))
-        existing_config = dict(read_json(config_path))
+        existing_plan_value = read_json(plan_path)
+        existing_config_value = read_json(config_path)
+        if not isinstance(existing_plan_value, dict):
+            raise ValueError("value pilot resume plan is not an object")
+        if not isinstance(existing_config_value, dict):
+            raise ValueError("value pilot resume configuration is not an object")
+        existing_plan = dict(existing_plan_value)
+        existing_config = dict(existing_config_value)
         if _fingerprint(existing_plan) != _fingerprint(requested_plan):
             raise ValueError("value pilot resume plan fingerprint mismatch")
-        if existing_config != config:
+        if _fingerprint(existing_config) != _fingerprint(config):
             raise ValueError("value pilot resume configuration mismatch")
     else:
         output_root.mkdir(parents=True, exist_ok=True)

@@ -11,6 +11,27 @@ def test_persisted_rollout_schema_is_v2() -> None:
     assert module.RECEDING_Q_PILOT_SCHEMA == "lns2.receding_q_label_pilot.v2"
 
 
+def test_plan_requires_strict_read_only_source_validation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def reject(path):
+        calls.append(path)
+        raise ValueError("tampered v3-S3 source")
+
+    monkeypatch.setattr(module, "validate_v3_s3_collection_source", reject)
+    with pytest.raises(ValueError, match="tampered"):
+        module.build_receding_q_plan(
+            source=tmp_path / "source",
+            state_count=1,
+            split="policy_train",
+            smoke_only=True,
+        )
+    assert calls == [(tmp_path / "source" / "collection").resolve()]
+
+
 def test_old_schema_resume_fails_before_writing_artifacts(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -32,7 +53,7 @@ def test_old_schema_resume_fails_before_writing_artifacts(
         module,
         "producer_identity",
         lambda **_kwargs: {
-            "schema": "lns2.producer_identity.v1",
+            "schema": "lns2.producer_identity.v2",
             "test": "identity",
         },
     )
@@ -365,6 +386,7 @@ def _analysis_row(candidate: str, trial: int, auc: float) -> dict:
                 "action": {
                     "mode": "explicit_neighborhood",
                     "agents": agents,
+                    "random_seed": seed,
                     "pp_random_seed": seed,
                 },
                 "before_fingerprint": "before",
@@ -485,6 +507,105 @@ def test_empty_repair_order_is_valid_only_for_a_hard_failure() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("path", "value"),
+    (
+        (("trial_index",), False),
+        (("agent_count",), "100"),
+        (("agents", 0), "1"),
+        (("actual_size",), "4"),
+        (("initial_conflicts",), "10"),
+        (("executed_steps",), "1"),
+        (("steps", 0, "step"), True),
+        (("steps", 0, "conflicts_before"), "10"),
+        (("steps", 0, "conflict_reduction"), "5"),
+        (("steps", 0, "requested_pp_seed"), "1472054375"),
+        (("steps", 0, "applied_pp_seed"), "1472054375"),
+        (("steps", 0, "action", "random_seed"), "1472054375"),
+        (("steps", 0, "action", "random_seed"), True),
+        (("steps", 0, "action", "pp_random_seed"), "1472054375"),
+        (("steps", 0, "shadow_candidate_count"), "2"),
+        (("conflict_trajectory", 0), "10"),
+        (("horizon",), "3"),
+        (("padded_steps",), False),
+        (("final_conflicts",), "5"),
+    ),
+)
+def test_rollout_validator_rejects_coerced_integer_evidence(
+    path: tuple[object, ...],
+    value: object,
+) -> None:
+    plan = _analysis_plan()
+    state = dict(plan["states"][0])
+    arm = dict(state["arms"][0])
+    row = _analysis_row("a", 0, 0.5)
+    target: object = row
+    for key in path[:-1]:
+        target = target[key]  # type: ignore[index]
+    target[path[-1]] = value  # type: ignore[index]
+
+    with pytest.raises(
+        ValueError,
+        match=r"must (?:be an integer|contain integers)",
+    ):
+        module.validate_receding_q_rollout(
+            row,
+            state_plan=state,
+            arm_plan=arm,
+            feature_names=["x"],
+            horizon=3,
+            continuation_teacher="official_adaptive",
+            expected_trial_index=0,
+            expected_producer_fingerprint="producer",
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda action: action.pop("random_seed"),
+            r"action\.random_seed must be an integer",
+        ),
+        (
+            lambda action: action.__setitem__("random_seed", "1472054375"),
+            r"action\.random_seed must be an integer",
+        ),
+        (
+            lambda action: action.__setitem__("random_seed", True),
+            r"action\.random_seed must be an integer",
+        ),
+        (
+            lambda action: action.__setitem__(
+                "random_seed", action["random_seed"] + 1
+            ),
+            "action random seed mismatch",
+        ),
+    ),
+)
+def test_rollout_validator_rejects_invalid_action_random_seed(
+    mutate,
+    message: str,
+) -> None:
+    plan = _analysis_plan()
+    state = dict(plan["states"][0])
+    arm = dict(state["arms"][0])
+    row = _analysis_row("a", 0, 0.5)
+    mutate(row["steps"][0]["action"])
+
+    with pytest.raises(ValueError, match=message):
+        module.validate_receding_q_rollout(
+            row,
+            state_plan=state,
+            arm_plan=arm,
+            feature_names=["x"],
+            horizon=3,
+            continuation_teacher="official_adaptive",
+            expected_trial_index=0,
+            expected_producer_fingerprint="producer",
+        )
+
+
 def test_resume_loader_binds_producer_and_preserves_invalid_complete(
     tmp_path,
 ) -> None:
@@ -526,6 +647,30 @@ def test_resume_loader_binds_producer_and_preserves_invalid_complete(
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
+        (
+            lambda row: row.__setitem__("complete", "true"),
+            "incomplete",
+        ),
+        (
+            lambda row: row.__setitem__("is_v2_candidate", "true"),
+            "v2-candidate marker",
+        ),
+        (
+            lambda row: row.__setitem__("feasible", 0),
+            "feasible label",
+        ),
+        (
+            lambda row: row["steps"][0].__setitem__(
+                "selection_seconds", "0.02"
+            ),
+            "selection_seconds is not numeric",
+        ),
+        (
+            lambda row: row["steps"][0].__setitem__(
+                "selection_seconds", True
+            ),
+            "selection_seconds is not numeric",
+        ),
         (
             lambda row: row["steps"][0].__setitem__(
                 "applied_pp_seed",

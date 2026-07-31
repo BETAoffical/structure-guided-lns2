@@ -12,16 +12,28 @@ import random
 import shutil
 import statistics
 import zipfile
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import sha256_file
+from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
+    PRODUCER_IDENTITY_SCHEMA,
+    config_producer_fingerprint,
+    sha256_file,
+    validate_producer_identity,
+)
 from experiments.closed_loop_confirmation import (
+    CONTROLLER_OPTIONAL_PACKAGES,
+    CONTROLLER_REQUIRED_PACKAGES,
+    WALL_CLOCK_SAFETY_MAX_DECISIONS,
+    _controller_producer_identity,
     run_closed_loop_collection,
     validate_closed_loop_trace,
 )
 from experiments.closed_loop_trace_storage import read_state_blob, trace_file_metadata
 from experiments.repair_collection import (
+    _dataset_fingerprint,
     _read_json,
     _read_jsonl,
     _write_json,
@@ -32,6 +44,30 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 SPLIT = "balanced_wall_clock"
 CONTROLLERS = ("official_adaptive", "v2-full", "mixed-full-v2")
+CORRECTED_SCHEDULE_SCHEMA = "lns2.controller_execution_schedule.corrected_native_v1"
+CORRECTED_REBIND_SCHEMA = "lns2.corrected_native_schedule_rebind.v1"
+CORRECTED_SEED_SCHEDULE_SCHEMA = (
+    "lns2.controller_execution_schedule.corrected_native_seed_reselected_v1"
+)
+CORRECTED_SEED_SELECTION_SCHEMA = (
+    "lns2.corrected_native_seed_schedule_selection.v1"
+)
+CORRECTED_FULL_POOL_SCHEDULE_SCHEMA = (
+    "lns2.controller_execution_schedule.corrected_native_full_pool.v3"
+)
+CORRECTED_FULL_POOL_REPORT_SCHEMA = (
+    "lns2.corrected_native_full_pool_selection.v3"
+)
+LEGACY_CORRECTED_FULL_POOL_SCHEDULE_SCHEMAS = {
+    "lns2.controller_execution_schedule.corrected_native_full_pool.v1",
+    "lns2.controller_execution_schedule.corrected_native_full_pool.v2",
+}
+CORRECTED_SEED_SELECTION_SALT = "corrected-native-seed-reselection-v1"
+CORRECTED_SCHEDULE_SCHEMAS = {
+    CORRECTED_SCHEDULE_SCHEMA: CORRECTED_REBIND_SCHEMA,
+    CORRECTED_SEED_SCHEDULE_SCHEMA: CORRECTED_SEED_SELECTION_SCHEMA,
+    CORRECTED_FULL_POOL_SCHEDULE_SCHEMA: CORRECTED_FULL_POOL_REPORT_SCHEMA,
+}
 STRATA = (("low", 1, 10), ("medium", 11, 100), ("high", 101, 500))
 INITIAL_PP_LOAD_STRATA = (
     ("low", 0, 100_000),
@@ -48,6 +84,405 @@ DEFAULT_DIFFICULTY_CONFIG = (
 def _fingerprint(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _analysis_producer_identity() -> dict[str, Any]:
+    project_root = Path(__file__).resolve().parents[1]
+    files = {
+        relative: sha256_file(project_root / relative)
+        for relative in (
+            "experiments/balanced_wall_clock.py",
+            "experiments/closed_loop_confirmation.py",
+            "experiments/closed_loop_trace_storage.py",
+            "experiments/repair_collection.py",
+        )
+    }
+    return {
+        "schema": "lns2.balanced_wall_clock_analysis_producer.v1",
+        "files": files,
+        "fingerprint": _fingerprint(files),
+    }
+
+
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and set(value) <= set("0123456789abcdef")
+    )
+
+
+def _is_exact_number(value: Any, expected: float) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(float(value))
+        and float(value) == expected
+    )
+
+
+def _native_identity_from_producer(
+    producer: Any,
+) -> dict[str, Any] | None:
+    if not isinstance(producer, dict):
+        return None
+    native = producer.get("native")
+    if isinstance(native, dict):
+        return native
+    native = producer.get("native_module")
+    return native if isinstance(native, dict) else None
+
+
+def _validate_corrected_producer_identity(
+    producer: Any, *, label: str, allow_legacy: bool = True
+) -> dict[str, Any]:
+    if not isinstance(producer, dict):
+        raise ValueError(f"{label} producer identity is missing")
+    if producer.get("schema") == PRODUCER_IDENTITY_SCHEMA:
+        try:
+            return validate_producer_identity(
+                producer,
+                native_required=True,
+                package_names=CONTROLLER_REQUIRED_PACKAGES,
+                optional_package_names=CONTROLLER_OPTIONAL_PACKAGES,
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"{label} structured producer identity is invalid"
+            ) from error
+    if not allow_legacy:
+        raise ValueError(
+            f"{label} must use structured producer identity "
+            f"{PRODUCER_IDENTITY_SCHEMA}"
+        )
+    native = _native_identity_from_producer(producer)
+    if (
+        native is None
+        or native.get("native_semantics_schema") != NATIVE_SEMANTICS_SCHEMA
+        or not _is_sha256(native.get("sha256"))
+        or not isinstance(native.get("repair_timing_schema"), str)
+        or not native["repair_timing_schema"]
+    ):
+        raise ValueError(f"{label} corrected-native identity is incomplete")
+    if "source_sha256" in producer:
+        sources = producer.get("source_sha256")
+        if (
+            not isinstance(sources, dict)
+            or not sources
+            or any(
+                not isinstance(name, str)
+                or not name
+                or not _is_sha256(digest)
+                for name, digest in sources.items()
+            )
+        ):
+            raise ValueError(f"{label} producer source identity is incomplete")
+    else:
+        files = producer.get("files")
+        implementation_sha = producer.get("sha256")
+        if (
+            not isinstance(files, dict)
+            or not files
+            or any(
+                not isinstance(name, str)
+                or not name
+                or not _is_sha256(digest)
+                for name, digest in files.items()
+            )
+            or not _is_sha256(implementation_sha)
+            or implementation_sha
+            != _fingerprint({"files": files, "native_module": native})
+        ):
+            raise ValueError(f"{label} implementation identity is incomplete")
+    return producer
+
+
+def _validated_structured_producer_config(
+    config: dict[str, Any], *, label: str
+) -> tuple[dict[str, Any], str]:
+    if "controller_implementation" in config:
+        raise ValueError(
+            f"{label} uses legacy controller_implementation; "
+            f"{PRODUCER_IDENTITY_SCHEMA} is required"
+        )
+    producer = _validate_corrected_producer_identity(
+        config.get("producer_identity"),
+        label=label,
+        allow_legacy=False,
+    )
+    try:
+        fingerprint = config_producer_fingerprint(
+            config,
+            label=label,
+            native_required=True,
+            package_names=CONTROLLER_REQUIRED_PACKAGES,
+            optional_package_names=CONTROLLER_OPTIONAL_PACKAGES,
+        )
+    except ValueError as error:
+        raise ValueError(f"{label} producer fingerprint is invalid") from error
+    return producer, fingerprint
+
+
+def _validate_corrected_full_pool_collection_preflight(
+    config_path: str | Path,
+    provenance: dict[str, Any],
+) -> None:
+    """Reject an invalid formal lane before any reset or repair job starts."""
+
+    contract = provenance.get("stopping_contract")
+    expected_contract = {
+        "stopping_rule": "wall-clock-fixed-metric",
+        "max_decisions": 0,
+        "max_repair_iterations": 0,
+        "metric_iteration_budget": 100,
+        "wall_time_budget_seconds": 600.0,
+        "environment_time_limit_seconds": 600.0,
+        "episode_process_timeout_seconds": 660.0,
+        "safety_max_decisions": WALL_CLOCK_SAFETY_MAX_DECISIONS,
+        "safety_limit_is_not_metric_cap": True,
+    }
+    if contract != expected_contract:
+        raise ValueError("corrected full-pool stopping contract is invalid")
+    config = _read_json(Path(config_path).resolve())
+    environment = config.get("environment")
+    if (
+        config.get("stopping_rule") != contract.get("stopping_rule")
+        or type(config.get("max_decisions")) is not int
+        or config["max_decisions"] != contract.get("max_decisions")
+        or type(config.get("metric_iteration_budget")) is not int
+        or config["metric_iteration_budget"]
+        != contract.get("metric_iteration_budget")
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"]
+        != contract.get("max_repair_iterations")
+        or not _is_exact_number(
+            config.get("wall_time_budget_seconds"),
+            600.0,
+        )
+        or not _is_exact_number(
+            environment.get("time_limit"),
+            600.0,
+        )
+        or not _is_exact_number(
+            config.get("episode_process_timeout_seconds"),
+            660.0,
+        )
+        or contract.get("safety_max_decisions")
+        != WALL_CLOCK_SAFETY_MAX_DECISIONS
+        or contract.get("safety_limit_is_not_metric_cap") is not True
+    ):
+        raise ValueError(
+            "corrected full-pool config differs from the frozen "
+            "0/0/100/600/600/660 stopping contract"
+        )
+
+    scheduled_producer = _validate_corrected_producer_identity(
+        provenance.get("qualification_producer_identity"),
+        label="corrected full-pool schedule",
+        allow_legacy=False,
+    )
+    scheduled_fingerprint = provenance.get(
+        "qualification_producer_identity_fingerprint"
+    )
+    if (
+        not _is_sha256(scheduled_fingerprint)
+        or scheduled_fingerprint != _fingerprint(scheduled_producer)
+    ):
+        raise ValueError(
+            "corrected full-pool schedule producer fingerprint is invalid"
+        )
+    current_producer = _controller_producer_identity(
+        Path(__file__).resolve().parents[1]
+    )
+    validated_current = _validate_corrected_producer_identity(
+        current_producer,
+        label="current corrected full-pool producer",
+        allow_legacy=False,
+    )
+    if (
+        validated_current != scheduled_producer
+        or _fingerprint(validated_current) != scheduled_fingerprint
+    ):
+        raise ValueError(
+            "current package/source/native producer identity differs from "
+            "the corrected full-pool qualification"
+        )
+
+
+def _corrected_schedule_report(
+    schedule_root: Path,
+    schedule_path: Path,
+    schedule: dict[str, Any],
+    *,
+    dataset: str | Path | None = None,
+) -> dict[str, Any] | None:
+    expected_report_schema = CORRECTED_SCHEDULE_SCHEMAS.get(schedule.get("schema"))
+    if expected_report_schema is None:
+        return None
+    if schedule.get("schema") == CORRECTED_FULL_POOL_SCHEDULE_SCHEMA:
+        from experiments.corrected_native_full_pool import (
+            validate_corrected_native_full_pool_schedule,
+        )
+
+        validated = validate_corrected_native_full_pool_schedule(
+            schedule_root,
+            dataset=dataset,
+        )
+        return dict(validated["report"])
+    report_path = schedule_root / "cohort_report.json"
+    if not report_path.is_file():
+        raise ValueError("corrected-native schedule cohort report is missing")
+    report = _read_json(report_path)
+    if (
+        report.get("schema") != expected_report_schema
+        or report.get("passed") is not True
+        or report.get("formal_collection_allowed") is not True
+        or report.get("execution_schedule_sha256") != sha256_file(schedule_path)
+        or report.get("provenance") != schedule.get("provenance")
+    ):
+        raise ValueError(
+            "corrected-native cohort report does not bind its execution schedule"
+        )
+    gates = report.get("gates")
+    if (
+        not isinstance(gates, dict)
+        or not gates
+        or any(type(value) is not bool or value is not True for value in gates.values())
+    ):
+        raise ValueError("corrected-native cohort report has invalid formal gates")
+    return report
+
+
+def _validate_corrected_seed_schedule_semantics(
+    schedule: dict[str, Any],
+    qualification_rows: list[dict[str, Any]],
+) -> None:
+    if schedule.get("schema") != CORRECTED_SEED_SCHEDULE_SCHEMA:
+        return
+    entries = schedule.get("entries")
+    provenance = schedule.get("provenance")
+    if (
+        not isinstance(entries, list)
+        or len(entries) != 36
+        or not isinstance(provenance, dict)
+    ):
+        raise ValueError("corrected seed schedule structure is invalid")
+    selector = provenance.get("selector_identity")
+    if (
+        not isinstance(selector, dict)
+        or selector.get("algorithm_schema")
+        != "lns2.corrected_native_seed_assignment.v1"
+        or selector.get("tie_break_salt") != CORRECTED_SEED_SELECTION_SALT
+        or selector.get("implementation_sha256")
+        != sha256_file(Path(__file__).resolve())
+    ):
+        raise ValueError("corrected seed schedule selector identity differs")
+    selection = provenance.get("selection")
+    constraints = (
+        selection.get("constraints")
+        if isinstance(selection, dict)
+        else None
+    )
+    quotas = (
+        constraints.get("registered_cell_source_quotas")
+        if isinstance(constraints, dict)
+        else None
+    )
+    if not isinstance(quotas, dict):
+        raise ValueError("corrected seed schedule lacks registered cell quotas")
+    qualification_index = {
+        _episode_key(row): row for row in qualification_rows
+    }
+    if len(qualification_index) != len(qualification_rows):
+        raise ValueError("corrected seed qualification contains duplicate keys")
+    keys: set[tuple[str, int]] = set()
+    maps: set[str] = set()
+    cell_source_counts: collections.Counter[
+        tuple[str, str, str]
+    ] = collections.Counter()
+    group_counts: collections.Counter[int] = collections.Counter()
+    group_orders: dict[int, set[tuple[str, ...]]] = collections.defaultdict(set)
+    for value in entries:
+        if not isinstance(value, dict):
+            raise ValueError("corrected seed schedule entry is not an object")
+        key = _episode_key(value)
+        if key in keys:
+            raise ValueError("corrected seed schedule repeats a task/seed key")
+        if any(existing[0] == key[0] for existing in keys):
+            raise ValueError("corrected seed schedule repeats a task")
+        keys.add(key)
+        qualified = qualification_index.get(key)
+        if qualified is None:
+            raise ValueError("corrected seed schedule key lacks qualification")
+        for field in (
+            "map_id",
+            "agent_count",
+            "layout_mode",
+            "initial_conflicts",
+            "state_fingerprint",
+        ):
+            if value.get(field) != qualified.get(field):
+                raise ValueError(
+                    f"corrected seed schedule {field} differs from qualification"
+                )
+        complexity = qualified.get("initial_complexity")
+        if (
+            not isinstance(complexity, dict)
+            or value.get("initial_low_level_generated")
+            != complexity.get("initial_low_level_generated")
+        ):
+            raise ValueError(
+                "corrected seed schedule PP load differs from qualification"
+            )
+        conflict_name = value.get("conflict_stratum")
+        load_name = value.get("initial_pp_load_stratum")
+        source = value.get("source_group")
+        if (
+            conflict_stratum(int(value["initial_conflicts"]))
+            != conflict_name
+            or initial_pp_load_stratum(
+                int(value["initial_low_level_generated"])
+            )
+            != load_name
+            or source not in {"generated", "movingai"}
+        ):
+            raise ValueError("corrected seed schedule strata are inconsistent")
+        maps.add(str(value.get("map_id")))
+        cell_source_counts[
+            (str(conflict_name), str(load_name), str(source))
+        ] += 1
+        group = value.get("schedule_group")
+        order = value.get("controller_order")
+        if (
+            type(group) is not int
+            or group not in range(6)
+            or not isinstance(order, list)
+            or set(order) != set(CONTROLLERS)
+            or len(order) != len(CONTROLLERS)
+        ):
+            raise ValueError("corrected seed schedule order is invalid")
+        group_counts[group] += 1
+        group_orders[group].add(tuple(map(str, order)))
+    observed_quotas = {
+        f"{conflict_name}__{load_name}": {
+            source: cell_source_counts[
+                (conflict_name, load_name, source)
+            ]
+            for source in ("generated", "movingai")
+        }
+        for conflict_name, _lower, _upper in STRATA
+        for load_name, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+    }
+    if (
+        observed_quotas != quotas
+        or any(sum(counts.values()) != 4 for counts in observed_quotas.values())
+        or len(maps) != 36
+        or group_counts != collections.Counter({group: 6 for group in range(6)})
+        or any(len(group_orders[group]) != 1 for group in range(6))
+        or len({next(iter(group_orders[group])) for group in range(6)}) != 6
+    ):
+        raise ValueError("corrected seed schedule formal invariants differ")
 
 
 def _write_jsonl_atomic(path: Path, rows: Iterable[dict[str, Any]]) -> None:
@@ -1795,11 +2230,2137 @@ def materialize_registered_compute_load_cohort(
     return summary
 
 
+def qualify_corrected_native_schedule(
+    *,
+    dataset: str | Path,
+    config: str | Path,
+    source_schedule_root: str | Path,
+    output: str | Path,
+    original_bundle: str | Path,
+    workers: int = 1,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reset the frozen 36 task/seed keys under corrected native semantics."""
+
+    if type(workers) is not int or workers <= 0:
+        raise ValueError("corrected qualification workers must be positive")
+    output_root = Path(output).resolve()
+    if output_root.exists():
+        raise ValueError(
+            "corrected qualification output already exists; use a new directory"
+        )
+    schedule_path = (
+        Path(source_schedule_root).resolve() / "execution_schedule.json"
+    )
+    schedule = _read_json(schedule_path)
+    entries = schedule.get("entries")
+    if not isinstance(entries, list) or len(entries) != 36:
+        raise ValueError("corrected qualification requires the frozen 36-entry schedule")
+    keys: set[tuple[str, int]] = set()
+    for row in entries:
+        if not isinstance(row, dict):
+            raise ValueError("corrected qualification schedule row is not an object")
+        key = _episode_key(row)
+        if key in keys:
+            raise ValueError("corrected qualification schedule has duplicate keys")
+        keys.add(key)
+
+    config_path = Path(config).resolve()
+    payload = _read_json(config_path)
+    if not isinstance(payload, dict):
+        raise ValueError("corrected qualification config is not an object")
+    environment = payload.get("environment")
+    if (
+        payload.get("formal") is not True
+        or WALL_CLOCK_SAFETY_MAX_DECISIONS != 100_000
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"] != 0
+        or not _is_exact_number(environment.get("time_limit"), 600.0)
+        or type(payload.get("max_decisions")) is not int
+        or payload["max_decisions"] != 0
+        or type(payload.get("metric_iteration_budget")) is not int
+        or payload["metric_iteration_budget"] != 100
+        or not _is_exact_number(
+            payload.get("wall_time_budget_seconds"), 600.0
+        )
+        or not _is_exact_number(
+            payload.get("episode_process_timeout_seconds"), 660.0
+        )
+    ):
+        raise ValueError(
+            "corrected qualification config must remove both 100-step "
+            "execution limits while retaining metric_iteration_budget=100"
+        )
+    result = run_closed_loop_collection(
+        dataset=dataset,
+        config_path=config_path,
+        output=output_root,
+        phase="qualify",
+        workers=workers,
+        resume=False,
+        dry_run=dry_run,
+        task_ids=None,
+        controller="v2-full",
+        feature_backend="auto",
+        controller_bundle=original_bundle,
+        controller_runtime="optimized",
+        verification_profile="deployment",
+        job_keys=keys,
+        cohort_job_keys=keys,
+        stopping_rule="wall-clock-fixed-metric",
+        use_global_collection_lock=False,
+    )
+    if not dry_run:
+        qualification_report_path = output_root / "qualification_report.json"
+        qualification_manifest_path = output_root / "qualification_manifest.jsonl"
+        run_config_path = output_root / "run_config.json"
+        if (
+            not qualification_report_path.is_file()
+            or not qualification_manifest_path.is_file()
+            or not run_config_path.is_file()
+        ):
+            raise ValueError(
+                "corrected qualification did not publish its complete artifact set"
+            )
+        qualification_report = _read_json(qualification_report_path)
+        result_report = result.get("qualification")
+        if (
+            not isinstance(result_report, dict)
+            or result_report != qualification_report
+            or qualification_report.get("passed") is not True
+            or type(qualification_report.get("valid_count")) is not int
+            or qualification_report["valid_count"] != len(keys)
+            or type(qualification_report.get("expected_reset_count")) is not int
+            or qualification_report["expected_reset_count"] != len(keys)
+            or qualification_report.get("errors") != []
+            or qualification_report.get("incomplete_reset_count") != 0
+            or qualification_report.get("inconsistent_initial_state_count") != 0
+        ):
+            raise ValueError(
+                "corrected qualification report failed or is inconsistent"
+            )
+    return {
+        "schema": "lns2.corrected_native_qualification_entry.v1",
+        "schedule_sha256": sha256_file(schedule_path),
+        "job_count": len(keys),
+        "stopping_rule": "wall-clock-fixed-metric",
+        "max_decisions": 0,
+        "max_repair_iterations": 0,
+        "metric_iteration_budget": 100,
+        "output": str(output_root),
+        "collector": result,
+        "qualification_report_sha256": (
+            sha256_file(output_root / "qualification_report.json")
+            if not dry_run
+            else None
+        ),
+    }
+
+
+def qualify_corrected_native_seed_pool(
+    *,
+    dataset: str | Path,
+    config: str | Path,
+    source_schedule_root: str | Path,
+    output: str | Path,
+    original_bundle: str | Path,
+    workers: int = 1,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reset every configured seed for each task in the frozen formal cohort."""
+
+    if type(workers) is not int or workers <= 0:
+        raise ValueError("corrected seed-pool qualification workers must be positive")
+    output_root = Path(output).resolve()
+    if output_root.exists():
+        raise ValueError(
+            "corrected seed-pool qualification output already exists; "
+            "use a new directory"
+        )
+    source_schedule_path = (
+        Path(source_schedule_root).resolve() / "execution_schedule.json"
+    )
+    source_schedule = _read_json(source_schedule_path)
+    entries = source_schedule.get("entries")
+    if not isinstance(entries, list) or len(entries) != 36:
+        raise ValueError(
+            "corrected seed-pool qualification requires the frozen "
+            "36-entry schedule"
+        )
+    task_ids: list[str] = []
+    for value in entries:
+        if not isinstance(value, dict):
+            raise ValueError(
+                "corrected seed-pool source schedule row is not an object"
+            )
+        task_id, _solver_seed = _episode_key(value)
+        task_ids.append(task_id)
+    if len(set(task_ids)) != 36:
+        raise ValueError(
+            "corrected seed-pool source schedule must contain 36 distinct tasks"
+        )
+
+    config_path = Path(config).resolve()
+    payload = _read_json(config_path)
+    if not isinstance(payload, dict):
+        raise ValueError("corrected seed-pool config is not an object")
+    environment = payload.get("environment")
+    raw_seeds = payload.get("solver_seeds")
+    if (
+        not isinstance(raw_seeds, list)
+        or len(raw_seeds) != 3
+        or any(type(seed) is not int or seed < 0 for seed in raw_seeds)
+        or len(set(raw_seeds)) != len(raw_seeds)
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification requires exactly three "
+            "unique non-negative integer solver seeds"
+        )
+    solver_seeds = tuple(raw_seeds)
+    if (
+        payload.get("formal") is not True
+        or WALL_CLOCK_SAFETY_MAX_DECISIONS != 100_000
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"] != 0
+        or not _is_exact_number(environment.get("time_limit"), 600.0)
+        or type(payload.get("max_decisions")) is not int
+        or payload["max_decisions"] != 0
+        or type(payload.get("metric_iteration_budget")) is not int
+        or payload["metric_iteration_budget"] != 100
+        or not _is_exact_number(
+            payload.get("wall_time_budget_seconds"), 600.0
+        )
+        or not _is_exact_number(
+            payload.get("episode_process_timeout_seconds"), 660.0
+        )
+    ):
+        raise ValueError(
+            "corrected seed-pool config must remove both 100-step "
+            "execution limits while retaining metric_iteration_budget=100"
+        )
+    keys = {
+        (task_id, solver_seed)
+        for task_id in task_ids
+        for solver_seed in solver_seeds
+    }
+    if len(keys) != 108:
+        raise AssertionError("corrected seed-pool qualification must contain 108 jobs")
+    result = run_closed_loop_collection(
+        dataset=dataset,
+        config_path=config_path,
+        output=output_root,
+        phase="qualify",
+        workers=workers,
+        resume=False,
+        dry_run=dry_run,
+        task_ids=None,
+        controller="v2-full",
+        feature_backend="auto",
+        controller_bundle=original_bundle,
+        controller_runtime="optimized",
+        verification_profile="deployment",
+        job_keys=keys,
+        cohort_job_keys=keys,
+        stopping_rule="wall-clock-fixed-metric",
+        use_global_collection_lock=False,
+    )
+    if not dry_run:
+        report_path = output_root / "qualification_report.json"
+        manifest_path = output_root / "qualification_manifest.jsonl"
+        run_config_path = output_root / "run_config.json"
+        if (
+            not report_path.is_file()
+            or not manifest_path.is_file()
+            or not run_config_path.is_file()
+        ):
+            raise ValueError(
+                "corrected seed-pool qualification did not publish its "
+                "complete artifact set"
+            )
+        report = _read_json(report_path)
+        result_report = result.get("qualification")
+        rows = _read_jsonl(manifest_path)
+        observed_keys = {_episode_key(row) for row in rows}
+        if (
+            not isinstance(result_report, dict)
+            or result_report != report
+            or report.get("schema") != "lns2.closed_loop_confirmation.v1"
+            or report.get("passed") is not True
+            or type(report.get("valid_count")) is not int
+            or report["valid_count"] != len(keys)
+            or type(report.get("expected_reset_count")) is not int
+            or report["expected_reset_count"] != len(keys)
+            or report.get("errors") != []
+            or report.get("incomplete_reset_count") != 0
+            or report.get("inconsistent_initial_state_count") != 0
+            or len(rows) != len(keys)
+            or observed_keys != keys
+        ):
+            raise ValueError(
+                "corrected seed-pool qualification report or coverage "
+                "is inconsistent"
+            )
+    return {
+        "schema": "lns2.corrected_native_seed_pool_qualification_entry.v1",
+        "source_schedule_sha256": sha256_file(source_schedule_path),
+        "task_count": len(task_ids),
+        "solver_seeds": list(solver_seeds),
+        "job_count": len(keys),
+        "stopping_rule": "wall-clock-fixed-metric",
+        "max_decisions": 0,
+        "max_repair_iterations": 0,
+        "metric_iteration_budget": 100,
+        "output": str(output_root),
+        "collector": result,
+        "qualification_report_sha256": (
+            sha256_file(output_root / "qualification_report.json")
+            if not dry_run
+            else None
+        ),
+    }
+
+
+def _corrected_seed_candidate(
+    qualified: dict[str, Any],
+    source: dict[str, Any],
+) -> dict[str, Any]:
+    key = _episode_key(qualified)
+    if (
+        qualified.get("schema") != "lns2.repair_collection.v2"
+        or qualified.get("schema_version") != 2
+        or qualified.get("status") != "ok"
+        or qualified.get("error") is not None
+    ):
+        raise ValueError(f"corrected seed-pool reset failed for {key}")
+    if qualified.get("initial_complete") is not True:
+        raise ValueError(f"corrected seed-pool reset is incomplete for {key}")
+    for field in ("map_id", "agent_count", "layout_mode"):
+        if qualified.get(field) != source.get(field):
+            raise ValueError(
+                f"corrected seed-pool {field} differs from frozen task for {key}"
+            )
+    initial_feasible = qualified.get("initial_feasible")
+    if type(initial_feasible) is not bool:
+        raise ValueError(
+            f"corrected seed-pool initial_feasible is invalid for {key}"
+        )
+    if qualified.get("repairable") is not (not initial_feasible):
+        raise ValueError(
+            f"corrected seed-pool repairable flag is inconsistent for {key}"
+        )
+    complexity = qualified.get("initial_complexity")
+    if not isinstance(complexity, dict):
+        raise ValueError(
+            f"corrected seed-pool lacks initial complexity for {key}"
+        )
+    conflicts = qualified.get("initial_conflicts")
+    if type(conflicts) is not int or conflicts < 0:
+        raise ValueError(
+            f"corrected seed-pool initial conflicts are invalid for {key}"
+        )
+    if initial_feasible is not (conflicts == 0):
+        raise ValueError(
+            f"corrected seed-pool feasibility conflicts with reset metrics for {key}"
+        )
+    if complexity.get("conflict_pair_count") != conflicts:
+        raise ValueError(
+            f"corrected seed-pool complexity conflicts mismatch for {key}"
+        )
+    generated = complexity.get("initial_low_level_generated")
+    if type(generated) is not int or generated < 0:
+        raise ValueError(
+            f"corrected seed-pool initial PP load is invalid for {key}"
+        )
+    state_digest = qualified.get("state_fingerprint")
+    if not _is_sha256(state_digest):
+        raise ValueError(
+            f"corrected seed-pool state fingerprint is invalid for {key}"
+        )
+    active_ratio = _strict_summary_number(
+        complexity, "active_conflict_agent_ratio"
+    )
+    largest_ratio = _strict_summary_number(
+        complexity, "largest_conflict_component_ratio"
+    )
+    if active_ratio > 1.0 or largest_ratio > 1.0:
+        raise ValueError(
+            f"corrected seed-pool complexity ratio exceeds one for {key}"
+        )
+    old_conflicts = source.get("initial_conflicts")
+    old_generated = source.get("initial_low_level_generated")
+    if (
+        type(old_conflicts) is not int
+        or old_conflicts < 0
+        or type(old_generated) is not int
+        or old_generated < 0
+    ):
+        raise ValueError(
+            f"corrected seed source covariates are invalid for {key[0]}"
+        )
+    covariate_drift = (
+        Fraction(abs(conflicts - old_conflicts), max(old_conflicts, 1))
+        + Fraction(abs(generated - old_generated), max(old_generated, 1))
+    )
+    return {
+        **source,
+        "solver_seed": key[1],
+        "initial_conflicts": conflicts,
+        "state_fingerprint": state_digest,
+        "conflict_stratum": conflict_stratum(conflicts),
+        "initial_pp_load_stratum": initial_pp_load_stratum(generated),
+        "active_conflict_agent_ratio": active_ratio,
+        "conflict_event_count": _strict_summary_int(
+            complexity, "conflict_event_count"
+        ),
+        "initial_low_level_expanded": _strict_summary_int(
+            complexity, "initial_low_level_expanded"
+        ),
+        "initial_low_level_generated": generated,
+        "largest_conflict_component_ratio": largest_ratio,
+        "total_path_cost": _strict_summary_int(
+            complexity, "total_path_cost"
+        ),
+        "_initial_feasible": initial_feasible,
+        "_covariate_drift": covariate_drift,
+        "_tie_break": _fingerprint(
+            [
+                CORRECTED_SEED_SELECTION_SALT,
+                key[0],
+                key[1],
+                state_digest,
+            ]
+        ),
+    }
+
+
+def _best_seed_assignments_by_cell(
+    tasks: list[dict[str, Any]],
+    candidates_by_task: dict[str, list[dict[str, Any]]],
+    original_seed_by_task: dict[str, int],
+    solver_seed_rank: dict[int, int],
+) -> dict[
+    tuple[int, ...],
+    tuple[
+        int,
+        Fraction,
+        tuple[str, ...],
+        dict[str, dict[str, Any]],
+    ],
+]:
+    """Return the best deterministic assignment for every feasible cell-count state."""
+
+    cells = [
+        (conflict_name, load_name)
+        for conflict_name, _lower, _upper in STRATA
+        for load_name, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+    ]
+    cell_index = {cell: index for index, cell in enumerate(cells)}
+    states: dict[
+        tuple[int, ...],
+        tuple[
+            int,
+            Fraction,
+            tuple[str, ...],
+            dict[str, dict[str, Any]],
+        ],
+    ] = {(0,) * len(cells): (0, Fraction(0), (), {})}
+    for source in tasks:
+        task_id = str(source["task_id"])
+        choices_by_cell: dict[tuple[str, str], dict[str, Any]] = {}
+        for candidate in candidates_by_task.get(task_id, []):
+            conflict_name = candidate.get("conflict_stratum")
+            load_name = candidate.get("initial_pp_load_stratum")
+            if (
+                candidate.get("_initial_feasible") is True
+                or conflict_name is None
+                or (conflict_name, load_name) not in cell_index
+            ):
+                continue
+            cell = (str(conflict_name), str(load_name))
+            previous = choices_by_cell.get(cell)
+            candidate_preference = (
+                int(candidate["solver_seed"])
+                != original_seed_by_task[task_id],
+                candidate["_covariate_drift"],
+                candidate["_tie_break"],
+                solver_seed_rank[int(candidate["solver_seed"])],
+            )
+            previous_preference = (
+                (
+                    int(previous["solver_seed"])
+                    != original_seed_by_task[task_id],
+                    previous["_covariate_drift"],
+                    previous["_tie_break"],
+                    solver_seed_rank[int(previous["solver_seed"])],
+                )
+                if previous is not None
+                else None
+            )
+            if previous_preference is None or candidate_preference < previous_preference:
+                choices_by_cell[cell] = candidate
+        if not choices_by_cell:
+            return {}
+        next_states: dict[
+            tuple[int, ...],
+            tuple[
+                int,
+                Fraction,
+                tuple[str, ...],
+                dict[str, dict[str, Any]],
+            ],
+        ] = {}
+        for counts, (retained, drift, tie_break, assignment) in states.items():
+            for cell, candidate in sorted(choices_by_cell.items()):
+                position = cell_index[cell]
+                if counts[position] >= 4:
+                    continue
+                conflict_offset = (position // 3) * 3
+                if sum(counts[conflict_offset : conflict_offset + 3]) >= 6:
+                    continue
+                updated = list(counts)
+                updated[position] += 1
+                updated_counts = tuple(updated)
+                seed = int(candidate["solver_seed"])
+                updated_value = (
+                    retained + int(seed == original_seed_by_task[task_id]),
+                    drift + candidate["_covariate_drift"],
+                    tie_break + (str(candidate["_tie_break"]),),
+                    {**assignment, task_id: candidate},
+                )
+                existing = next_states.get(updated_counts)
+                if (
+                    existing is None
+                    or updated_value[0] > existing[0]
+                    or (
+                        updated_value[0] == existing[0]
+                        and updated_value[1] < existing[1]
+                    )
+                    or (
+                        updated_value[0] == existing[0]
+                        and updated_value[1] == existing[1]
+                        and updated_value[2] < existing[2]
+                    )
+                ):
+                    next_states[updated_counts] = updated_value
+        states = next_states
+        if not states:
+            return {}
+    return {
+        counts: value
+        for counts, value in states.items()
+        if all(
+            sum(counts[offset : offset + 3]) == 6
+            for offset in range(0, len(cells), 3)
+        )
+    }
+
+
+def _corrected_amendment_evidence_identity(
+    root: str | Path,
+    *,
+    label: str,
+    expected_count: int,
+    dataset_fingerprint: str,
+) -> dict[str, Any]:
+    evidence_root = Path(root).resolve()
+    manifest_path = evidence_root / "qualification_manifest.jsonl"
+    report_path = evidence_root / "qualification_report.json"
+    run_config_path = evidence_root / "run_config.json"
+    if (
+        not manifest_path.is_file()
+        or not report_path.is_file()
+        or not run_config_path.is_file()
+    ):
+        raise ValueError(f"{label} amendment evidence is incomplete")
+    rows = _read_jsonl(manifest_path)
+    report = _read_json(report_path)
+    run_config = _read_json(run_config_path)
+    if (
+        len(rows) != expected_count
+        or len({_episode_key(row) for row in rows}) != expected_count
+        or any(
+            row.get("schema") != "lns2.repair_collection.v2"
+            or row.get("schema_version") != 2
+            or row.get("status") != "ok"
+            or row.get("error") is not None
+            for row in rows
+        )
+        or report.get("schema") != "lns2.closed_loop_confirmation.v1"
+        or report.get("passed") is not True
+        or type(report.get("valid_count")) is not int
+        or report["valid_count"] != expected_count
+        or type(report.get("expected_reset_count")) is not int
+        or report["expected_reset_count"] != expected_count
+        or report.get("errors") != []
+        or not isinstance(run_config, dict)
+        or run_config.get("dataset_fingerprint") != dataset_fingerprint
+        or not _is_sha256(run_config.get("run_fingerprint"))
+    ):
+        raise ValueError(f"{label} amendment evidence is inconsistent")
+    producer = run_config.get("producer_identity")
+    if not isinstance(producer, dict):
+        producer = run_config.get("controller_implementation")
+    validated_producer = _validate_corrected_producer_identity(
+        producer, label=label
+    )
+    native = _native_identity_from_producer(validated_producer)
+    assert native is not None
+    return {
+        "label": label,
+        "qualification_manifest_sha256": sha256_file(manifest_path),
+        "qualification_report_sha256": sha256_file(report_path),
+        "run_config_sha256": sha256_file(run_config_path),
+        "run_fingerprint": run_config["run_fingerprint"],
+        "job_count": expected_count,
+        "native": {
+            "sha256": native["sha256"],
+            "native_semantics_schema": native["native_semantics_schema"],
+            "repair_timing_schema": native["repair_timing_schema"],
+        },
+    }
+
+
+def select_corrected_native_seed_schedule(
+    *,
+    dataset: str | Path,
+    source_schedule_root: str | Path,
+    qualification: str | Path,
+    observed_qualification: str | Path,
+    seed_probe_qualification: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    """Choose one corrected-native reset seed per frozen formal task.
+
+    Selection is an exact deterministic assignment over reset-only conflict and
+    initial-PP-load metrics.  No controller repair outcome is read.
+    """
+
+    source_root = Path(source_schedule_root).resolve()
+    qualification_root = Path(qualification).resolve()
+    dataset_root = Path(dataset).resolve()
+    output_root = Path(output).resolve()
+    if output_root in {source_root, qualification_root, dataset_root}:
+        raise ValueError(
+            "corrected seed schedule output must be a new directory"
+        )
+    if output_root.exists():
+        raise ValueError(
+            "corrected seed schedule output already exists; use a new directory"
+        )
+    source_schedule_path = source_root / "execution_schedule.json"
+    qualification_path = qualification_root / "qualification_manifest.jsonl"
+    run_config_path = qualification_root / "run_config.json"
+    qualification_report_path = qualification_root / "qualification_report.json"
+    if not source_schedule_path.is_file():
+        raise ValueError("corrected seed schedule source is missing")
+    if (
+        not qualification_path.is_file()
+        or not run_config_path.is_file()
+        or not qualification_report_path.is_file()
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification artifact set is missing"
+        )
+
+    source_schedule = _read_json(source_schedule_path)
+    raw_entries = source_schedule.get("entries")
+    if not isinstance(raw_entries, list) or len(raw_entries) != 36:
+        raise ValueError(
+            "corrected seed selection requires exactly 36 frozen episodes"
+        )
+    source_entries: list[dict[str, Any]] = []
+    source_by_task: dict[str, dict[str, Any]] = {}
+    original_seed_by_task: dict[str, int] = {}
+    for raw_row in raw_entries:
+        if not isinstance(raw_row, dict):
+            raise ValueError("corrected seed source schedule row is not an object")
+        row = dict(raw_row)
+        task_id, solver_seed = _episode_key(row)
+        if task_id in source_by_task:
+            raise ValueError(
+                "corrected seed source schedule contains duplicate tasks"
+            )
+        group = row.get("schedule_group")
+        order = row.get("controller_order")
+        if type(group) is not int or group not in range(6):
+            raise ValueError(
+                "corrected seed source schedule has an invalid order group"
+            )
+        if (
+            not isinstance(order, list)
+            or len(order) != len(CONTROLLERS)
+            or set(order) != set(CONTROLLERS)
+        ):
+            raise ValueError(
+                "corrected seed source schedule controller order is invalid"
+            )
+        for field in ("task_id", "map_id", "layout_mode", "source_group"):
+            if not isinstance(row.get(field), str) or not row[field]:
+                raise ValueError(
+                    f"corrected seed source schedule {field} is invalid"
+                )
+        if row["source_group"] not in {"generated", "movingai"}:
+            raise ValueError(
+                "corrected seed source schedule source_group is invalid"
+            )
+        if type(row.get("agent_count")) is not int or row["agent_count"] <= 0:
+            raise ValueError(
+                "corrected seed source schedule agent_count is invalid"
+            )
+        source_entries.append(row)
+        source_by_task[task_id] = row
+        original_seed_by_task[task_id] = solver_seed
+    group_counts = collections.Counter(
+        int(row["schedule_group"]) for row in source_entries
+    )
+    group_orders = {
+        group: {
+            tuple(map(str, row["controller_order"]))
+            for row in source_entries
+            if row["schedule_group"] == group
+        }
+        for group in range(6)
+    }
+    if group_counts != collections.Counter({group: 6 for group in range(6)}) or any(
+        len(orders) != 1 for orders in group_orders.values()
+    ):
+        raise ValueError(
+            "corrected seed source schedule does not preserve balanced groups"
+        )
+    if len({next(iter(orders)) for orders in group_orders.values()}) != 6:
+        raise ValueError(
+            "corrected seed source schedule lacks all controller permutations"
+        )
+    if collections.Counter(
+        str(row["source_group"]) for row in source_entries
+    ) != {"generated": 18, "movingai": 18}:
+        raise ValueError(
+            "corrected seed source schedule lacks the frozen source balance"
+        )
+    if len({str(row["map_id"]) for row in source_entries}) != 36:
+        raise ValueError(
+            "corrected seed source schedule lacks 36 distinct maps"
+        )
+    dataset_manifest_path = dataset_root / SPLIT / "manifest.jsonl"
+    if not dataset_manifest_path.is_file():
+        raise ValueError("corrected seed formal dataset manifest is missing")
+    dataset_rows = _read_jsonl(dataset_manifest_path)
+    if len(dataset_rows) != 36:
+        raise ValueError(
+            "corrected seed formal dataset must contain exactly 36 tasks"
+        )
+    dataset_by_task: dict[str, dict[str, Any]] = {}
+    for value in dataset_rows:
+        if not isinstance(value, dict):
+            raise ValueError(
+                "corrected seed formal dataset row is not an object"
+            )
+        task_id = value.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise ValueError(
+                "corrected seed formal dataset task_id is invalid"
+            )
+        if task_id in dataset_by_task:
+            raise ValueError(
+                "corrected seed formal dataset contains duplicate tasks"
+            )
+        dataset_by_task[task_id] = value
+    if set(dataset_by_task) != set(source_by_task):
+        raise ValueError(
+            "corrected seed formal dataset tasks differ from source schedule"
+        )
+    for task_id, source in source_by_task.items():
+        dataset_row = dataset_by_task[task_id]
+        for field in (
+            "map_id",
+            "agent_count",
+            "layout_mode",
+            "source_group",
+        ):
+            if dataset_row.get(field) != source.get(field):
+                raise ValueError(
+                    "corrected seed formal dataset differs from source "
+                    f"schedule for {task_id}/{field}"
+                )
+
+    run_config = _read_json(run_config_path)
+    if not isinstance(run_config, dict):
+        raise ValueError(
+            "corrected seed-pool qualification run_config is not an object"
+        )
+    configuration = run_config.get("configuration")
+    if (
+        not isinstance(configuration, dict)
+        or _fingerprint(configuration)
+        != run_config.get("configuration_fingerprint")
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification configuration identity mismatch"
+        )
+    environment = configuration.get("environment")
+    dataset_design = configuration.get("dataset_design")
+    raw_solver_seeds = configuration.get("solver_seeds")
+    if (
+        not isinstance(raw_solver_seeds, list)
+        or len(raw_solver_seeds) != 3
+        or any(
+            type(seed) is not int or seed < 0 for seed in raw_solver_seeds
+        )
+        or len(set(raw_solver_seeds)) != len(raw_solver_seeds)
+    ):
+        raise ValueError(
+            "corrected seed-pool run requires exactly three solver seeds"
+        )
+    solver_seeds = tuple(raw_solver_seeds)
+    if (
+        configuration.get("stopping_rule") != "wall-clock-fixed-metric"
+        or WALL_CLOCK_SAFETY_MAX_DECISIONS != 100_000
+        or configuration.get("formal") is not True
+        or type(configuration.get("max_decisions")) is not int
+        or configuration["max_decisions"] != 0
+        or type(configuration.get("metric_iteration_budget")) is not int
+        or configuration["metric_iteration_budget"] != 100
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"] != 0
+        or not _is_exact_number(environment.get("time_limit"), 600.0)
+        or not _is_exact_number(
+            configuration.get("wall_time_budget_seconds"), 600.0
+        )
+        or not _is_exact_number(
+            configuration.get("episode_process_timeout_seconds"), 660.0
+        )
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification does not use the uncapped "
+            "fixed-metric contract"
+        )
+    if (
+        not isinstance(dataset_design, dict)
+        or dataset_design.get("mode") != "balanced_wall_clock"
+        or dataset_design.get("dataset_revision")
+        != "balanced-wall-clock-formal-cohort-v6"
+        or type(dataset_design.get("map_count")) is not int
+        or dataset_design["map_count"] != 36
+        or type(dataset_design.get("instance_count")) is not int
+        or dataset_design["instance_count"] != 36
+        or dataset_design.get("source_counts")
+        != {"generated": 18, "movingai": 18}
+        or dataset_design.get("formal_dataset_manifest_sha256")
+        != sha256_file(dataset_manifest_path)
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification does not bind the frozen "
+            "formal dataset manifest"
+        )
+    registration_reference = dataset_design.get("source_task_registration")
+    registration_sha = dataset_design.get(
+        "source_task_registration_sha256"
+    )
+    if (
+        not isinstance(registration_reference, str)
+        or not registration_reference
+        or not _is_sha256(registration_sha)
+    ):
+        raise ValueError(
+            "corrected seed-pool config lacks its source registration identity"
+        )
+    registration_path = Path(registration_reference)
+    if not registration_path.is_absolute():
+        registration_path = (
+            Path(__file__).resolve().parents[1] / registration_path
+        )
+    registration_path = registration_path.resolve()
+    if (
+        not registration_path.is_file()
+        or sha256_file(registration_path) != registration_sha
+    ):
+        raise ValueError(
+            "corrected seed-pool source registration SHA differs"
+        )
+    registration = _read_json(registration_path)
+    if (
+        registration.get("schema")
+        != "lns2.compute_load_balanced_wall_clock_registration.v1"
+        or registration.get("selection_blind_to_controller_outcomes")
+        is not True
+        or registration.get("execution_schedule_sha256")
+        != sha256_file(source_schedule_path)
+        or registration.get("formal_dataset_manifest_sha256")
+        != sha256_file(dataset_manifest_path)
+    ):
+        raise ValueError(
+            "corrected seed-pool source registration does not bind "
+            "the schedule and formal dataset"
+        )
+    run_fingerprint = run_config.get("run_fingerprint")
+    dataset_fingerprint = run_config.get("dataset_fingerprint")
+    if not _is_sha256(run_fingerprint) or not _is_sha256(dataset_fingerprint):
+        raise ValueError(
+            "corrected seed-pool run or dataset identity is invalid"
+        )
+    configured_keys = configuration.get("cohort_job_keys_override")
+    expected_keys = {
+        (task_id, seed)
+        for task_id in source_by_task
+        for seed in solver_seeds
+    }
+    if not isinstance(configured_keys, list):
+        raise ValueError(
+            "corrected seed-pool qualification lacks cohort job keys"
+        )
+    normalized_configured_keys: set[tuple[str, int]] = set()
+    for value in configured_keys:
+        if (
+            not isinstance(value, list)
+            or len(value) != 2
+            or not isinstance(value[0], str)
+            or type(value[1]) is not int
+        ):
+            raise ValueError(
+                "corrected seed-pool qualification has invalid cohort job keys"
+            )
+        normalized_configured_keys.add((value[0], value[1]))
+    if (
+        len(configured_keys) != len(normalized_configured_keys)
+        or normalized_configured_keys != expected_keys
+        or len(expected_keys) != 108
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification does not cover the "
+            "36-task by 3-seed Cartesian product"
+        )
+    producer_identity_value = run_config.get("producer_identity")
+    if isinstance(producer_identity_value, dict):
+        producer_evidence = producer_identity_value
+    else:
+        implementation = run_config.get("controller_implementation")
+        producer_evidence = (
+            implementation if isinstance(implementation, dict) else None
+        )
+    _validate_corrected_producer_identity(
+        producer_evidence, label="corrected seed-pool qualification"
+    )
+    amendment_evidence = {
+        "observed_frozen_schedule_qualification": (
+            _corrected_amendment_evidence_identity(
+                observed_qualification,
+                label="observed 36-job qualification",
+                expected_count=36,
+                dataset_fingerprint=str(dataset_fingerprint),
+            )
+        ),
+        "seed_sensitivity_probe": _corrected_amendment_evidence_identity(
+            seed_probe_qualification,
+            label="two-job seed probe",
+            expected_count=2,
+            dataset_fingerprint=str(dataset_fingerprint),
+        ),
+    }
+    pool_native = _native_identity_from_producer(producer_evidence)
+    assert pool_native is not None
+    expected_native = {
+        "sha256": pool_native["sha256"],
+        "native_semantics_schema": pool_native["native_semantics_schema"],
+        "repair_timing_schema": pool_native["repair_timing_schema"],
+    }
+    if any(
+        value["native"] != expected_native
+        for value in amendment_evidence.values()
+    ):
+        raise ValueError(
+            "corrected qualification amendment evidence uses a different "
+            "native binary or semantics"
+        )
+
+    report = _read_json(qualification_report_path)
+    report_gates = report.get("gates")
+    report_initial_feasible_count = report.get("initial_feasible_count")
+    report_nonzero_state_count = report.get("nonzero_state_count")
+    if (
+        report.get("schema") != "lns2.closed_loop_confirmation.v1"
+        or report.get("passed") is not True
+        or type(report.get("valid_count")) is not int
+        or report["valid_count"] != len(expected_keys)
+        or type(report.get("expected_reset_count")) is not int
+        or report["expected_reset_count"] != len(expected_keys)
+        or report.get("errors") != []
+        or report.get("incomplete_reset_count") != 0
+        or report.get("inconsistent_initial_state_count") != 0
+        or type(report.get("formal")) is not bool
+        or type(report_initial_feasible_count) is not int
+        or report_initial_feasible_count < 0
+        or type(report_nonzero_state_count) is not int
+        or report_nonzero_state_count < 0
+        or report_initial_feasible_count + report_nonzero_state_count
+        != len(expected_keys)
+        or not isinstance(report_gates, dict)
+        or not report_gates
+        or any(
+            type(value) is not bool or value is not True
+            for value in report_gates.values()
+        )
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification report failed or is inconsistent"
+        )
+    report_solver_seeds = report.get("registered_solver_seeds")
+    if (
+        not isinstance(report_solver_seeds, list)
+        or report_solver_seeds != list(solver_seeds)
+    ):
+        raise ValueError(
+            "corrected seed-pool qualification report solver seeds differ"
+        )
+
+    qualification_rows = _read_jsonl(qualification_path)
+    qualification_index: dict[tuple[str, int], dict[str, Any]] = {}
+    candidates_by_task: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for raw_row in qualification_rows:
+        if not isinstance(raw_row, dict):
+            raise ValueError(
+                "corrected seed-pool qualification row is not an object"
+            )
+        key = _episode_key(raw_row)
+        if key in qualification_index:
+            raise ValueError(
+                "corrected seed-pool qualification contains duplicate keys"
+            )
+        qualification_index[key] = dict(raw_row)
+        source = source_by_task.get(key[0])
+        if source is None or key[1] not in solver_seeds:
+            raise ValueError(
+                "corrected seed-pool qualification contains an unknown key"
+            )
+        candidates_by_task[key[0]].append(
+            _corrected_seed_candidate(dict(raw_row), source)
+        )
+    if set(qualification_index) != expected_keys:
+        raise ValueError(
+            "corrected seed-pool qualification coverage differs from "
+            "the registered Cartesian product"
+        )
+    actual_repairable_keys = {
+        key
+        for key, row in qualification_index.items()
+        if row.get("initial_complete") is True
+        and row.get("initial_feasible") is False
+        and type(row.get("initial_conflicts")) is int
+        and row["initial_conflicts"] > 0
+    }
+    actual_initial_feasible_count = sum(
+        row.get("initial_feasible") is True
+        for row in qualification_index.values()
+    )
+    if (
+        actual_initial_feasible_count != report_initial_feasible_count
+        or len(actual_repairable_keys) != report_nonzero_state_count
+    ):
+        raise ValueError(
+            "corrected seed-pool report aggregates differ from reset rows"
+        )
+    report_repairable_keys = report.get("repairable_episode_keys")
+    if (
+        not isinstance(report_repairable_keys, list)
+        or any(
+            not isinstance(value, list)
+            or len(value) != 2
+            or not isinstance(value[0], str)
+            or type(value[1]) is not int
+            for value in report_repairable_keys
+        )
+        or {
+            (value[0], value[1]) for value in report_repairable_keys
+        }
+        != actual_repairable_keys
+        or len(report_repairable_keys) != len(actual_repairable_keys)
+    ):
+        raise ValueError(
+            "corrected seed-pool report repairable coverage is inconsistent"
+        )
+
+    solver_seed_rank = {
+        seed: index for index, seed in enumerate(solver_seeds)
+    }
+    source_tasks = {
+        source: [
+            row
+            for row in source_entries
+            if row["source_group"] == source
+        ]
+        for source in ("generated", "movingai")
+    }
+    selection_cells = [
+        (conflict_name, load_name)
+        for conflict_name, _lower, _upper in STRATA
+        for load_name, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+    ]
+    registered_cell_source_counts = collections.Counter(
+        (
+            str(row["conflict_stratum"]),
+            str(row["initial_pp_load_stratum"]),
+            str(row["source_group"]),
+        )
+        for row in source_entries
+    )
+    if any(
+        sum(
+            registered_cell_source_counts[
+                (conflict_name, load_name, source)
+            ]
+            for source in ("generated", "movingai")
+        )
+        != 4
+        for conflict_name, load_name in selection_cells
+    ):
+        raise ValueError(
+            "corrected seed source schedule lacks the registered "
+            "four-per-cell design"
+        )
+    required_generated_counts = tuple(
+        registered_cell_source_counts[
+            (conflict_name, load_name, "generated")
+        ]
+        for conflict_name, load_name in selection_cells
+    )
+    generated_states = _best_seed_assignments_by_cell(
+        source_tasks["generated"],
+        candidates_by_task,
+        original_seed_by_task,
+        solver_seed_rank,
+    )
+    movingai_states = _best_seed_assignments_by_cell(
+        source_tasks["movingai"],
+        candidates_by_task,
+        original_seed_by_task,
+        solver_seed_rank,
+    )
+    best: tuple[
+        int,
+        Fraction,
+        tuple[str, ...],
+        dict[str, dict[str, Any]],
+    ] | None = None
+    for generated_counts, generated_value in generated_states.items():
+        if generated_counts != required_generated_counts:
+            continue
+        required_movingai = tuple(4 - count for count in generated_counts)
+        if any(count < 0 for count in required_movingai):
+            continue
+        movingai_value = movingai_states.get(required_movingai)
+        if movingai_value is None:
+            continue
+        assignment = {
+            **generated_value[3],
+            **movingai_value[3],
+        }
+        load_overlap = all(
+            any(
+                row["source_group"] == source
+                and row["initial_pp_load_stratum"] == load_name
+                for row in assignment.values()
+            )
+            for source in ("generated", "movingai")
+            for load_name, _lower, _upper in INITIAL_PP_LOAD_STRATA
+        )
+        if not load_overlap:
+            continue
+        retained = generated_value[0] + movingai_value[0]
+        drift = generated_value[1] + movingai_value[1]
+        tie_break = tuple(
+            str(assignment[str(row["task_id"])]["_tie_break"])
+            for row in source_entries
+        )
+        candidate_value = (retained, drift, tie_break, assignment)
+        if (
+            best is None
+            or candidate_value[0] > best[0]
+            or (
+                candidate_value[0] == best[0]
+                and candidate_value[1] < best[1]
+            )
+            or (
+                candidate_value[0] == best[0]
+                and candidate_value[1] == best[1]
+                and candidate_value[2] < best[2]
+            )
+        ):
+            best = candidate_value
+    selector_identity = {
+        "algorithm_schema": "lns2.corrected_native_seed_assignment.v1",
+        "implementation_sha256": sha256_file(Path(__file__).resolve()),
+        "tie_break_salt": CORRECTED_SEED_SELECTION_SALT,
+    }
+    base_provenance = {
+        "source_schedule_sha256": sha256_file(source_schedule_path),
+        "source_registration_sha256": sha256_file(registration_path),
+        "source_registration_execution_schedule_sha256": registration[
+            "execution_schedule_sha256"
+        ],
+        "formal_dataset_manifest_sha256": sha256_file(
+            dataset_manifest_path
+        ),
+        "qualification_manifest_sha256": sha256_file(qualification_path),
+        "qualification_run_config_sha256": sha256_file(run_config_path),
+        "qualification_report_sha256": sha256_file(
+            qualification_report_path
+        ),
+        "qualification_run_fingerprint": run_fingerprint,
+        "qualification_dataset_fingerprint": dataset_fingerprint,
+        "qualification_configuration_fingerprint": str(
+            run_config["configuration_fingerprint"]
+        ),
+        "qualification_producer_identity_fingerprint": _fingerprint(
+            producer_evidence
+        ),
+        "native": expected_native,
+        "native_semantics_schema": NATIVE_SEMANTICS_SCHEMA,
+        "registered_solver_seeds": list(solver_seeds),
+        "qualification_job_count": len(expected_keys),
+        "selector_identity": selector_identity,
+        "protocol_amendment": {
+            "schema": "lns2.corrected_native_seed_protocol_amendment.v1",
+            "reason": (
+                "corrected-native resets changed the registered seed-specific "
+                "difficulty cells"
+            ),
+            "pre_registered_before_observation": False,
+            "controller_outcomes_used": False,
+            "evidence": amendment_evidence,
+        },
+        "stopping_contract": {
+            "stopping_rule": "wall-clock-fixed-metric",
+            "max_decisions": 0,
+            "max_repair_iterations": 0,
+            "metric_iteration_budget": 100,
+            "wall_time_budget_seconds": 600.0,
+            "environment_time_limit_seconds": 600.0,
+            "episode_process_timeout_seconds": 660.0,
+            "safety_max_decisions": 100_000,
+            "safety_limit_is_not_metric_cap": True,
+        },
+    }
+    if best is None:
+        candidate_task_counts = {
+            f"{conflict_name}__{load_name}": len(
+                {
+                    str(row["task_id"])
+                    for values in candidates_by_task.values()
+                    for row in values
+                    if row["_initial_feasible"] is False
+                    and row["conflict_stratum"] == conflict_name
+                    and row["initial_pp_load_stratum"] == load_name
+                }
+            )
+            for conflict_name, load_name in selection_cells
+        }
+        failed_gates = {
+            "qualification_cartesian_product_complete": True,
+            "registered_cell_source_quotas_satisfiable": False,
+            "one_seed_per_frozen_task": False,
+            "formal_collection_allowed": False,
+        }
+        failed_report = {
+            "schema": CORRECTED_SEED_SELECTION_SCHEMA,
+            "selection_blind_to_controller_outcomes": True,
+            "selection_uses_initial_reset_metrics_only": True,
+            "qualification_count": len(expected_keys),
+            "selected_count": 0,
+            "candidate_distinct_task_counts_by_cell": (
+                candidate_task_counts
+            ),
+            "registered_cell_source_quotas": {
+                f"{conflict_name}__{load_name}": {
+                    source: registered_cell_source_counts[
+                        (conflict_name, load_name, source)
+                    ]
+                    for source in ("generated", "movingai")
+                }
+                for conflict_name, load_name in selection_cells
+            },
+            "gates": failed_gates,
+            "passed": False,
+            "formal_collection_allowed": False,
+            "decision": (
+                "corrected_native_seed_pool_insufficient_"
+                "qualify_broader_task_pool"
+            ),
+            "execution_schedule_sha256": None,
+            "provenance": base_provenance,
+        }
+        output_root.mkdir(parents=True)
+        _write_json(
+            output_root / "qualification_rebind_report.json",
+            failed_report,
+        )
+        _write_json(output_root / "cohort_report.json", failed_report)
+        return failed_report
+    retained_count, total_covariate_drift, _tie_break, selected_by_task = best
+    selected_entries: list[dict[str, Any]] = []
+    for source in source_entries:
+        task_id = str(source["task_id"])
+        selected = dict(selected_by_task[task_id])
+        selected.pop("_initial_feasible", None)
+        selected.pop("_covariate_drift", None)
+        selected.pop("_tie_break", None)
+        selected_entries.append(selected)
+    cell_counts = collections.Counter(
+        (
+            row["conflict_stratum"],
+            row["initial_pp_load_stratum"],
+        )
+        for row in selected_entries
+    )
+    source_by_conflict = {
+        conflict_name: collections.Counter(
+            str(row["source_group"])
+            for row in selected_entries
+            if row["conflict_stratum"] == conflict_name
+        )
+        for conflict_name, _lower, _upper in STRATA
+    }
+    source_by_load = {
+        load_name: collections.Counter(
+            str(row["source_group"])
+            for row in selected_entries
+            if row["initial_pp_load_stratum"] == load_name
+        )
+        for load_name, _lower, _upper in INITIAL_PP_LOAD_STRATA
+    }
+    gates = {
+        "one_seed_per_frozen_task": (
+            len(selected_entries) == 36
+            and len({str(row["task_id"]) for row in selected_entries}) == 36
+        ),
+        "all_resets_nonzero_nonextreme": all(
+            row["conflict_stratum"] is not None for row in selected_entries
+        ),
+        "nine_cells_have_four_episodes": all(
+            cell_counts[(conflict_name, load_name)] == 4
+            for conflict_name, _lower, _upper in STRATA
+            for load_name, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+        ),
+        "source_balance_per_conflict_tier": all(
+            source_by_conflict[name] == {"generated": 6, "movingai": 6}
+            for name, _lower, _upper in STRATA
+        ),
+        "registered_cell_source_quotas_preserved": all(
+            sum(
+                row["conflict_stratum"] == conflict_name
+                and row["initial_pp_load_stratum"] == load_name
+                and row["source_group"] == source
+                for row in selected_entries
+            )
+            == registered_cell_source_counts[
+                (conflict_name, load_name, source)
+            ]
+            for conflict_name, load_name in selection_cells
+            for source in ("generated", "movingai")
+        ),
+        "source_overlap_per_load_tier": all(
+            counts["generated"] > 0 and counts["movingai"] > 0
+            for counts in source_by_load.values()
+        ),
+        "distinct_maps": (
+            len({str(row["map_id"]) for row in selected_entries}) == 36
+        ),
+        "schedule_groups_preserved": all(
+            row["schedule_group"]
+            == source_by_task[str(row["task_id"])]["schedule_group"]
+            for row in selected_entries
+        ),
+        "controller_orders_preserved": all(
+            row["controller_order"]
+            == source_by_task[str(row["task_id"])]["controller_order"]
+            for row in selected_entries
+        ),
+    }
+    if not all(gates.values()):
+        raise AssertionError(
+            "corrected seed assignment violated its exact selection constraints"
+        )
+    provenance = {
+        **base_provenance,
+        "selection": {
+            "schema": "lns2.corrected_native_seed_assignment.v1",
+            "controller_outcomes_used": False,
+            "input_fields": [
+                "source_schedule.solver_seed",
+                "source_schedule.initial_conflicts",
+                "source_schedule.initial_low_level_generated",
+                "source_schedule.conflict_stratum",
+                "source_schedule.initial_pp_load_stratum",
+                "source_schedule.source_group",
+                "initial_complete",
+                "initial_feasible",
+                "initial_conflicts",
+                "initial_complexity.initial_low_level_generated",
+                "state_fingerprint",
+            ],
+            "constraints": {
+                "jobs_per_conflict_load_cell": 4,
+                "registered_cell_source_quotas": {
+                    f"{conflict_name}__{load_name}": {
+                        source: registered_cell_source_counts[
+                            (conflict_name, load_name, source)
+                        ]
+                        for source in ("generated", "movingai")
+                    }
+                    for conflict_name, load_name in selection_cells
+                },
+                "source_overlap_per_load_tier": True,
+                "distinct_maps": 36,
+                "one_seed_per_task": True,
+            },
+            "objective": [
+                "maximize_original_solver_seed_retention",
+                "minimize_total_relative_conflict_and_pp_load_drift",
+                f"fixed_salt_sha256_tiebreak:{CORRECTED_SEED_SELECTION_SALT}",
+            ],
+        },
+    }
+    schedule = {
+        "schema": CORRECTED_SEED_SCHEDULE_SCHEMA,
+        "selection_blind_to_controller_outcomes": True,
+        "selection_uses_initial_reset_metrics_only": True,
+        "frozen_design": {
+            "task_ids": True,
+            "maps": True,
+            "schedule_groups": True,
+            "controller_orders": True,
+            "solver_seed_reselected_from_registered_pool": True,
+        },
+        "provenance": provenance,
+        "entries": selected_entries,
+    }
+    output_root.mkdir(parents=True)
+    schedule_path = output_root / "execution_schedule.json"
+    _write_json(schedule_path, schedule)
+    changed = [
+        {
+            "task_id": str(row["task_id"]),
+            "old_solver_seed": original_seed_by_task[str(row["task_id"])],
+            "new_solver_seed": int(row["solver_seed"]),
+        }
+        for row in selected_entries
+        if int(row["solver_seed"])
+        != original_seed_by_task[str(row["task_id"])]
+    ]
+    report_value = {
+        "schema": CORRECTED_SEED_SELECTION_SCHEMA,
+        "selection_blind_to_controller_outcomes": True,
+        "selection_uses_initial_reset_metrics_only": True,
+        "qualification_count": len(expected_keys),
+        "selected_count": len(selected_entries),
+        "original_seed_retained_count": retained_count,
+        "total_relative_covariate_drift": float(total_covariate_drift),
+        "total_relative_covariate_drift_exact": {
+            "numerator": total_covariate_drift.numerator,
+            "denominator": total_covariate_drift.denominator,
+        },
+        "solver_seed_changed_count": len(changed),
+        "solver_seed_changes": changed,
+        "counts": {
+            "cells": {
+                f"{left}__{right}": cell_counts[(left, right)]
+                for left, _lower, _upper in STRATA
+                for right, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+            },
+            "source_per_conflict_tier": {
+                name: dict(source_by_conflict[name])
+                for name, _lower, _upper in STRATA
+            },
+            "source_per_load_tier": {
+                name: dict(source_by_load[name])
+                for name, _lower, _upper in INITIAL_PP_LOAD_STRATA
+            },
+        },
+        "gates": gates,
+        "passed": True,
+        "formal_collection_allowed": True,
+        "decision": "eligible_for_corrected_native_formal_collection",
+        "execution_schedule_sha256": sha256_file(schedule_path),
+        "provenance": provenance,
+    }
+    _write_json(output_root / "qualification_rebind_report.json", report_value)
+    _write_json(output_root / "cohort_report.json", report_value)
+    return report_value
+
+
+def rebind_corrected_native_schedule(
+    *,
+    source_schedule_root: str | Path,
+    qualification: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    """Bind the frozen task/order design to a fresh corrected-native reset.
+
+    Task keys, seeds, order groups, and controller orders remain frozen.  Every
+    reset-dependent field is replaced from the new qualification.  A changed
+    difficulty cell is reported and can fail the formal balance gate; old
+    schedule files are never modified or accepted as the output directory.
+    """
+
+    source_root = Path(source_schedule_root).resolve()
+    qualification_root = Path(qualification).resolve()
+    output_root = Path(output).resolve()
+    if output_root == source_root or output_root == qualification_root:
+        raise ValueError("corrected schedule output must be a new directory")
+    if output_root.exists():
+        raise ValueError(
+            "corrected schedule output already exists; use a new directory"
+        )
+
+    source_schedule_path = source_root / "execution_schedule.json"
+    qualification_path = qualification_root / "qualification_manifest.jsonl"
+    run_config_path = qualification_root / "run_config.json"
+    qualification_report_path = qualification_root / "qualification_report.json"
+    if not source_schedule_path.is_file():
+        raise ValueError("source execution schedule is missing")
+    if (
+        not qualification_path.is_file()
+        or not run_config_path.is_file()
+        or not qualification_report_path.is_file()
+    ):
+        raise ValueError(
+            "fresh corrected-native qualification artifact set is missing"
+        )
+    source_schedule = _read_json(source_schedule_path)
+    source_entries = source_schedule.get("entries")
+    if not isinstance(source_entries, list) or len(source_entries) != 36:
+        raise ValueError("frozen corrected-native rebind requires exactly 36 episodes")
+    source_index: dict[tuple[str, int], dict[str, Any]] = {}
+    for raw_row in source_entries:
+        if not isinstance(raw_row, dict):
+            raise ValueError("source schedule entry is not an object")
+        row = dict(raw_row)
+        key = _episode_key(row)
+        if key in source_index:
+            raise ValueError("source schedule contains duplicate episode keys")
+        group = row.get("schedule_group")
+        if type(group) is not int or group not in range(6):
+            raise ValueError("source schedule contains an invalid order group")
+        order = row.get("controller_order")
+        if (
+            not isinstance(order, list)
+            or len(order) != len(CONTROLLERS)
+            or set(order) != set(CONTROLLERS)
+        ):
+            raise ValueError("source schedule controller order is invalid")
+        source_index[key] = row
+    group_counts = collections.Counter(
+        int(row["schedule_group"]) for row in source_index.values()
+    )
+    group_orders = {
+        group: {
+            tuple(map(str, row["controller_order"]))
+            for row in source_index.values()
+            if row["schedule_group"] == group
+        }
+        for group in range(6)
+    }
+    if group_counts != collections.Counter({group: 6 for group in range(6)}) or any(
+        len(orders) != 1 for orders in group_orders.values()
+    ):
+        raise ValueError("source schedule does not preserve six balanced order groups")
+    if len({next(iter(orders)) for orders in group_orders.values()}) != 6:
+        raise ValueError("source schedule does not cover all controller permutations")
+
+    run_config = _read_json(run_config_path)
+    if not isinstance(run_config, dict):
+        raise ValueError("corrected qualification run_config is not an object")
+    configuration = run_config.get("configuration")
+    if (
+        not isinstance(configuration, dict)
+        or _fingerprint(configuration)
+        != run_config.get("configuration_fingerprint")
+    ):
+        raise ValueError("corrected qualification configuration identity mismatch")
+    run_fingerprint = run_config.get("run_fingerprint")
+    dataset_fingerprint = run_config.get("dataset_fingerprint")
+    environment = configuration.get("environment")
+    if not _is_sha256(run_fingerprint) or not _is_sha256(dataset_fingerprint):
+        raise ValueError("corrected qualification run or dataset identity is invalid")
+    if (
+        configuration.get("stopping_rule") != "wall-clock-fixed-metric"
+        or type(configuration.get("max_decisions")) is not int
+        or configuration["max_decisions"] != 0
+        or type(configuration.get("metric_iteration_budget")) is not int
+        or configuration["metric_iteration_budget"] != 100
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"] != 0
+    ):
+        raise ValueError(
+            "corrected qualification does not use the uncapped fixed-metric contract"
+        )
+    configured_keys = configuration.get("cohort_job_keys_override")
+    if not isinstance(configured_keys, list):
+        raise ValueError("corrected qualification lacks frozen cohort job keys")
+    configured_key_set = set()
+    for value in configured_keys:
+        if (
+            not isinstance(value, list)
+            or len(value) != 2
+            or not isinstance(value[0], str)
+            or type(value[1]) is not int
+        ):
+            raise ValueError("corrected qualification has invalid cohort job keys")
+        configured_key_set.add((value[0], value[1]))
+    if (
+        len(configured_key_set) != len(configured_keys)
+        or configured_key_set != set(source_index)
+    ):
+        raise ValueError(
+            "corrected qualification job keys differ from the frozen schedule"
+        )
+    producer_identity_value = run_config.get("producer_identity")
+    if isinstance(producer_identity_value, dict):
+        producer_evidence = producer_identity_value
+        native_identity = producer_identity_value.get("native")
+    else:
+        implementation = run_config.get("controller_implementation")
+        producer_evidence = implementation if isinstance(implementation, dict) else None
+        native_identity = (
+            implementation.get("native_module")
+            if isinstance(implementation, dict)
+            else None
+        )
+    _validate_corrected_producer_identity(
+        producer_evidence, label="qualification"
+    )
+    if native_identity is None:
+        raise ValueError("qualification corrected-native identity is missing")
+
+    qualification_report = _read_json(qualification_report_path)
+    gates = qualification_report.get("gates")
+    report_initial_feasible_count = qualification_report.get(
+        "initial_feasible_count"
+    )
+    report_nonzero_state_count = qualification_report.get(
+        "nonzero_state_count"
+    )
+    if (
+        qualification_report.get("schema") != "lns2.closed_loop_confirmation.v1"
+        or qualification_report.get("passed") is not True
+        or type(qualification_report.get("valid_count")) is not int
+        or qualification_report["valid_count"] != len(source_index)
+        or type(qualification_report.get("expected_reset_count")) is not int
+        or qualification_report["expected_reset_count"] != len(source_index)
+        or qualification_report.get("errors") != []
+        or qualification_report.get("incomplete_reset_count") != 0
+        or qualification_report.get("inconsistent_initial_state_count") != 0
+        or type(report_initial_feasible_count) is not int
+        or report_initial_feasible_count < 0
+        or report_initial_feasible_count > len(source_index)
+        or type(report_nonzero_state_count) is not int
+        or report_nonzero_state_count < 0
+        or report_nonzero_state_count > len(source_index)
+        or report_initial_feasible_count + report_nonzero_state_count
+        != len(source_index)
+        or not isinstance(gates, dict)
+        or not gates
+        or any(type(value) is not bool or value is not True for value in gates.values())
+    ):
+        raise ValueError(
+            "corrected qualification report failed or is inconsistent"
+        )
+    report_keys = qualification_report.get("repairable_episode_keys")
+    if (
+        not isinstance(report_keys, list)
+        or any(
+            not isinstance(value, list)
+            or len(value) != 2
+            or not isinstance(value[0], str)
+            or type(value[1]) is not int
+            for value in report_keys
+        )
+        or not {(value[0], value[1]) for value in report_keys}
+        <= set(source_index)
+        or len(report_keys)
+        != len({(value[0], value[1]) for value in report_keys})
+        or len(report_keys) != report_nonzero_state_count
+    ):
+        raise ValueError(
+            "corrected qualification report coverage differs from the frozen schedule"
+        )
+
+    qualification_rows = _read_jsonl(qualification_path)
+    qualification_index: dict[tuple[str, int], dict[str, Any]] = {}
+    for raw_row in qualification_rows:
+        if not isinstance(raw_row, dict):
+            raise ValueError("corrected qualification row is not an object")
+        row = dict(raw_row)
+        key = _episode_key(row)
+        if key in qualification_index:
+            raise ValueError("corrected qualification contains duplicate episode keys")
+        qualification_index[key] = row
+    if set(qualification_index) != set(source_index):
+        raise ValueError(
+            "corrected qualification coverage differs from the frozen schedule"
+        )
+    actual_repairable_keys: set[tuple[str, int]] = set()
+    actual_initial_feasible_count = 0
+
+    rebound_entries: list[dict[str, Any]] = []
+    changed_cells: list[dict[str, Any]] = []
+    for key, source in source_index.items():
+        qualified = qualification_index[key]
+        if (
+            qualified.get("status") != "ok"
+            or qualified.get("initial_complete") is not True
+        ):
+            raise ValueError(f"corrected qualification reset is incomplete for {key}")
+        for field in ("map_id", "agent_count", "layout_mode"):
+            if qualified.get(field) != source.get(field):
+                raise ValueError(
+                    f"corrected qualification {field} differs from frozen task for {key}"
+                )
+        complexity = qualified.get("initial_complexity")
+        if not isinstance(complexity, dict):
+            raise ValueError(
+                f"corrected qualification lacks initial complexity for {key}"
+            )
+        conflicts = qualified.get("initial_conflicts")
+        if type(conflicts) is not int or conflicts < 0:
+            raise ValueError(
+                f"corrected qualification initial conflicts are invalid for {key}"
+            )
+        initial_feasible = qualified.get("initial_feasible")
+        if (
+            type(initial_feasible) is not bool
+            or initial_feasible is not (conflicts == 0)
+        ):
+            raise ValueError(
+                f"corrected qualification feasibility is inconsistent for {key}"
+            )
+        if initial_feasible:
+            actual_initial_feasible_count += 1
+        else:
+            actual_repairable_keys.add(key)
+        generated = complexity.get("initial_low_level_generated")
+        if type(generated) is not int or generated < 0:
+            raise ValueError(
+                f"corrected qualification initial PP load is invalid for {key}"
+            )
+        if complexity.get("conflict_pair_count") != conflicts:
+            raise ValueError(
+                f"corrected qualification complexity conflicts mismatch for {key}"
+            )
+        state_digest = qualified.get("state_fingerprint")
+        if (
+            not isinstance(state_digest, str)
+            or len(state_digest) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in state_digest
+            )
+        ):
+            raise ValueError(
+                f"corrected qualification state fingerprint is invalid for {key}"
+            )
+        active_ratio = _strict_summary_number(
+            complexity, "active_conflict_agent_ratio"
+        )
+        largest_ratio = _strict_summary_number(
+            complexity, "largest_conflict_component_ratio"
+        )
+        if active_ratio > 1.0 or largest_ratio > 1.0:
+            raise ValueError(
+                f"corrected qualification complexity ratio exceeds one for {key}"
+            )
+        conflict_events = _strict_summary_int(
+            complexity, "conflict_event_count"
+        )
+        expanded = _strict_summary_int(
+            complexity, "initial_low_level_expanded"
+        )
+        total_path_cost = _strict_summary_int(complexity, "total_path_cost")
+        new_conflict_stratum = conflict_stratum(conflicts)
+        new_load_stratum = initial_pp_load_stratum(generated)
+        old_cell = (
+            source.get("conflict_stratum"),
+            source.get("initial_pp_load_stratum"),
+        )
+        new_cell = (new_conflict_stratum, new_load_stratum)
+        if old_cell != new_cell:
+            changed_cells.append(
+                {
+                    "task_id": key[0],
+                    "solver_seed": key[1],
+                    "old_cell": list(old_cell),
+                    "new_cell": list(new_cell),
+                }
+            )
+        rebound_entries.append(
+            {
+                **source,
+                "initial_conflicts": conflicts,
+                "state_fingerprint": state_digest,
+                "conflict_stratum": new_conflict_stratum,
+                "initial_pp_load_stratum": new_load_stratum,
+                "active_conflict_agent_ratio": active_ratio,
+                "conflict_event_count": conflict_events,
+                "initial_low_level_expanded": expanded,
+                "initial_low_level_generated": generated,
+                "largest_conflict_component_ratio": largest_ratio,
+                "total_path_cost": total_path_cost,
+            }
+        )
+    if (
+        actual_initial_feasible_count != report_initial_feasible_count
+        or len(actual_repairable_keys) != report_nonzero_state_count
+        or actual_repairable_keys
+        != {(value[0], value[1]) for value in report_keys}
+    ):
+        raise ValueError(
+            "corrected qualification report repairability differs from rows"
+        )
+    rebound_entries.sort(
+        key=lambda row: (
+            int(row["schedule_group"]),
+            str(row["task_id"]),
+            int(row["solver_seed"]),
+        )
+    )
+
+    cell_counts = collections.Counter(
+        (
+            row["conflict_stratum"],
+            row["initial_pp_load_stratum"],
+        )
+        for row in rebound_entries
+    )
+    conflict_counts = collections.Counter(
+        row["conflict_stratum"] for row in rebound_entries
+    )
+    load_counts = collections.Counter(
+        row["initial_pp_load_stratum"] for row in rebound_entries
+    )
+    source_counts = collections.Counter(
+        str(row["source_group"]) for row in rebound_entries
+    )
+    source_by_conflict = {
+        stratum: collections.Counter(
+            str(row["source_group"])
+            for row in rebound_entries
+            if row["conflict_stratum"] == stratum
+        )
+        for stratum, _lower, _upper in STRATA
+    }
+    source_by_load = {
+        stratum: collections.Counter(
+            str(row["source_group"])
+            for row in rebound_entries
+            if row["initial_pp_load_stratum"] == stratum
+        )
+        for stratum, _lower, _upper in INITIAL_PP_LOAD_STRATA
+    }
+    gates = {
+        "all_resets_nonzero_nonextreme": all(
+            row["conflict_stratum"] is not None for row in rebound_entries
+        ),
+        "nine_cells_have_four_episodes": all(
+            cell_counts[(conflict_name, load_name)] == 4
+            for conflict_name, _lower, _upper in STRATA
+            for load_name, _load_lower, _load_upper in INITIAL_PP_LOAD_STRATA
+        ),
+        "twelve_per_conflict_tier": all(
+            conflict_counts[name] == 12 for name, _lower, _upper in STRATA
+        ),
+        "twelve_per_load_tier": all(
+            load_counts[name] == 12
+            for name, _lower, _upper in INITIAL_PP_LOAD_STRATA
+        ),
+        "source_balance": source_counts == {"generated": 18, "movingai": 18},
+        "source_balance_per_conflict_tier": all(
+            source_by_conflict[name] == {"generated": 6, "movingai": 6}
+            for name, _lower, _upper in STRATA
+        ),
+        "source_overlap_per_load_tier": all(
+            counts["generated"] > 0 and counts["movingai"] > 0
+            for counts in source_by_load.values()
+        ),
+        "distinct_maps": len({str(row["map_id"]) for row in rebound_entries}) == 36,
+    }
+    formal_allowed = all(gates.values())
+    provenance = {
+        "source_schedule_sha256": sha256_file(source_schedule_path),
+        "qualification_manifest_sha256": sha256_file(qualification_path),
+        "qualification_run_config_sha256": sha256_file(run_config_path),
+        "qualification_report_sha256": sha256_file(qualification_report_path),
+        "qualification_run_fingerprint": str(run_config.get("run_fingerprint", "")),
+        "qualification_dataset_fingerprint": dataset_fingerprint,
+        "qualification_configuration_fingerprint": str(
+            run_config["configuration_fingerprint"]
+        ),
+        "qualification_producer_identity_fingerprint": (
+            _fingerprint(producer_evidence)
+            if isinstance(producer_evidence, dict)
+            else None
+        ),
+        "native_semantics_schema": NATIVE_SEMANTICS_SCHEMA,
+        "stopping_contract": {
+            "stopping_rule": "wall-clock-fixed-metric",
+            "max_decisions": 0,
+            "max_repair_iterations": 0,
+            "metric_iteration_budget": 100,
+            "wall_time_budget_seconds": configuration.get(
+                "wall_time_budget_seconds"
+            ),
+            "environment_time_limit_seconds": environment.get("time_limit"),
+        },
+    }
+    rebound_schedule = {
+        "schema": "lns2.controller_execution_schedule.corrected_native_v1",
+        "selection_blind_to_controller_outcomes": True,
+        "frozen_design": {
+            "task_keys": True,
+            "solver_seeds": True,
+            "schedule_groups": True,
+            "controller_orders": True,
+            "reset_dependent_metadata_rebound": True,
+        },
+        "provenance": provenance,
+        "entries": rebound_entries,
+    }
+    output_root.mkdir(parents=True)
+    schedule_path = output_root / "execution_schedule.json"
+    _write_json(schedule_path, rebound_schedule)
+    report = {
+        "schema": "lns2.corrected_native_schedule_rebind.v1",
+        "selection_blind_to_controller_outcomes": True,
+        "selected_count": len(rebound_entries),
+        "changed_cell_count": len(changed_cells),
+        "changed_cells": changed_cells,
+        "counts": {
+            "cells": {
+                f"{left}__{right}": count
+                for (left, right), count in sorted(
+                    cell_counts.items(), key=lambda item: str(item[0])
+                )
+            },
+            "conflict_tiers": {
+                (
+                    "zero_or_over_500"
+                    if name is None
+                    else str(name)
+                ): count
+                for name, count in sorted(
+                    conflict_counts.items(), key=lambda item: str(item[0])
+                )
+            },
+            "load_tiers": dict(sorted(load_counts.items(), key=lambda item: str(item[0]))),
+            "sources": dict(sorted(source_counts.items())),
+        },
+        "gates": gates,
+        "passed": formal_allowed,
+        "formal_collection_allowed": formal_allowed,
+        "decision": (
+            "eligible_for_corrected_native_formal_collection"
+            if formal_allowed
+            else "corrected_native_reset_changed_balance_reselect_required"
+        ),
+        "execution_schedule_sha256": sha256_file(schedule_path),
+        "provenance": provenance,
+    }
+    _write_json(output_root / "qualification_rebind_report.json", report)
+    _write_json(output_root / "cohort_report.json", report)
+    return report
+
+
+def prepare_corrected_native_formal_config(
+    *,
+    base_config: str | Path,
+    schedule_root: str | Path,
+    dataset: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    """Bind an uncapped corrected-native config to a materialized 36-task set."""
+
+    from experiments.corrected_native_full_pool import (
+        validate_corrected_native_full_pool_schedule,
+    )
+
+    base_path = Path(base_config).resolve()
+    schedule_root_path = Path(schedule_root).resolve()
+    dataset_root = Path(dataset).resolve()
+    output_path = Path(output).resolve()
+    if output_path.exists():
+        raise ValueError(
+            "corrected-native formal config output must be a new file"
+        )
+    base = _read_json(base_path)
+    try:
+        serialized = json.dumps(base, allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise ValueError("corrected-native base config is not finite JSON") from error
+    base = json.loads(serialized)
+    environment = base.get("environment")
+    if (
+        type(base.get("schema_version")) is not int
+        or base["schema_version"] != 1
+        or base.get("formal") is not True
+        or base.get("split") != SPLIT
+        or base.get("solver_seeds") != [1, 2, 3]
+        or base.get("policies") != ["official_adaptive", "realized_dynamic"]
+        or not isinstance(environment, dict)
+        or type(environment.get("max_repair_iterations")) is not int
+        or environment["max_repair_iterations"] != 0
+        or not _is_exact_number(environment.get("time_limit"), 600.0)
+        or type(base.get("max_decisions")) is not int
+        or base["max_decisions"] != 0
+        or type(base.get("metric_iteration_budget")) is not int
+        or base["metric_iteration_budget"] != 100
+        or not _is_exact_number(
+            base.get("wall_time_budget_seconds"), 600.0
+        )
+        or not _is_exact_number(
+            base.get("episode_process_timeout_seconds"), 660.0
+        )
+        or base.get("stopping_rule", "wall-clock-fixed-metric")
+        != "wall-clock-fixed-metric"
+    ):
+        raise ValueError(
+            "corrected-native base config must use the uncapped "
+            "0/0/100/600/660 contract"
+        )
+    validated = validate_corrected_native_full_pool_schedule(
+        schedule_root_path,
+        dataset=dataset_root,
+    )
+    provenance = validated["provenance"]
+    expected_dataset_fingerprint = provenance.get(
+        "formal_dataset_fingerprint"
+    )
+    if (
+        not _is_sha256(expected_dataset_fingerprint)
+        or validated.get("formal_dataset_fingerprint")
+        != expected_dataset_fingerprint
+        or _dataset_fingerprint(dataset_root)
+        != expected_dataset_fingerprint
+    ):
+        raise ValueError(
+            "derived schedule is not bound to the supplied formal dataset"
+        )
+    manifest_path = dataset_root / SPLIT / "manifest.jsonl"
+    summary_path = dataset_root / "dataset_summary.json"
+    materialization_path = schedule_root_path / "materialization_report.json"
+    if (
+        not manifest_path.is_file()
+        or not summary_path.is_file()
+        or not materialization_path.is_file()
+    ):
+        raise ValueError("derived corrected-native dataset artifacts are incomplete")
+    manifest_rows = _read_jsonl(manifest_path)
+    if any(not isinstance(row, dict) for row in manifest_rows):
+        raise ValueError("derived corrected-native manifest row is not an object")
+    task_ids = [str(row.get("task_id", "")) for row in manifest_rows]
+    map_ids = [str(row.get("map_id", "")) for row in manifest_rows]
+    sources = collections.Counter(
+        str(row.get("source_group", "")) for row in manifest_rows
+    )
+    layouts = collections.Counter(
+        str(row.get("layout_mode", "")) for row in manifest_rows
+    )
+    if (
+        len(manifest_rows) != 36
+        or not all(task_ids)
+        or not all(map_ids)
+        or len(set(task_ids)) != 36
+        or len(set(map_ids)) != 36
+        or sources != {"generated": 18, "movingai": 18}
+        or not layouts
+        or "" in layouts
+    ):
+        raise ValueError(
+            "derived corrected-native dataset is not the registered "
+            "36-task, 36-map, 18/18 design"
+        )
+    summary = _read_json(summary_path)
+    split_summary = summary.get("splits", {}).get(SPLIT)
+    if (
+        not isinstance(split_summary, dict)
+        or split_summary.get("map_count") != 36
+        or split_summary.get("instance_count") != 36
+        or dict(split_summary.get("source_counts", {}))
+        != dict(sorted(sources.items()))
+        or dict(split_summary.get("layout_counts", {}))
+        != dict(sorted(layouts.items()))
+    ):
+        raise ValueError(
+            "derived corrected-native dataset summary differs from its manifest"
+        )
+    historical_map_ids = list(
+        dict(base.get("dataset_design", {})).get(
+            "historical_map_ids", []
+        )
+    )
+    base["formal"] = True
+    base["experiment_revision"] = "corrected-native-selected-v3"
+    base["stopping_rule"] = "wall-clock-fixed-metric"
+    base["max_decisions"] = 0
+    base["metric_iteration_budget"] = 100
+    base["wall_time_budget_seconds"] = 600.0
+    base["episode_process_timeout_seconds"] = 660.0
+    base["environment"] = {
+        **environment,
+        "max_repair_iterations": 0,
+        "time_limit": 600.0,
+    }
+    base["dataset_design"] = {
+        "mode": SPLIT,
+        "dataset_revision": str(
+            summary.get(
+                "dataset_revision",
+                "balanced-wall-clock-corrected-native-selected-v3",
+            )
+        ),
+        "formal_dataset_manifest": str(manifest_path),
+        "formal_dataset_manifest_sha256": sha256_file(manifest_path),
+        "formal_dataset_fingerprint": expected_dataset_fingerprint,
+        "formal_dataset_summary_sha256": sha256_file(summary_path),
+        "formal_materialization_report_sha256": sha256_file(
+            materialization_path
+        ),
+        "formal_execution_schedule_sha256": validated[
+            "execution_schedule_sha256"
+        ],
+        "formal_cohort_report_sha256": validated["cohort_report_sha256"],
+        "map_count": 36,
+        "instance_count": 36,
+        "source_counts": {"generated": 18, "movingai": 18},
+        "layout_counts": dict(sorted(layouts.items())),
+        "historical_map_ids": historical_map_ids,
+    }
+    _write_json(output_path, base)
+    return {
+        "schema": "lns2.corrected_native_formal_config_preparation.v3",
+        "passed": True,
+        "config": str(output_path),
+        "config_sha256": sha256_file(output_path),
+        "base_config_sha256": sha256_file(base_path),
+        "execution_schedule_sha256": validated[
+            "execution_schedule_sha256"
+        ],
+        "cohort_report_sha256": validated["cohort_report_sha256"],
+        "formal_dataset_fingerprint": expected_dataset_fingerprint,
+        "max_decisions": 0,
+        "max_repair_iterations": 0,
+        "metric_iteration_budget": 100,
+        "metric_iteration_budget_is_execution_cap": False,
+        "wall_time_budget_seconds": 600.0,
+        "episode_process_timeout_seconds": 660.0,
+    }
+
+
 def collect_scheduled(
     *,
     dataset: str | Path,
     config: str | Path,
-    qualification: str | Path,
+    qualification: str | Path | None,
     schedule_root: str | Path,
     output: str | Path,
     original_bundle: str | Path,
@@ -1807,20 +4368,124 @@ def collect_scheduled(
     resume: bool,
     dry_run: bool = False,
     registration: str | Path | None = None,
+    stopping_rule: str = "wall-clock-fixed-metric",
 ) -> dict[str, Any]:
+    if stopping_rule != "wall-clock-fixed-metric":
+        raise ValueError(
+            "formal balanced wall-clock collection requires "
+            "wall-clock-fixed-metric: repair execution is unbounded while "
+            "the frozen 100-step AUC remains diagnostic"
+        )
+    schedule_root_path = Path(schedule_root).resolve()
+    cohort_report_path = schedule_root_path / "cohort_report.json"
+    cohort_report = _read_json(cohort_report_path)
+    if cohort_report.get("formal_collection_allowed") is not True:
+        raise ValueError("balanced wall-clock cohort did not pass the preregistered data gate")
+    schedule_path = schedule_root_path / "execution_schedule.json"
+    schedule = _read_json(schedule_path)
+    if schedule.get("schema") in LEGACY_CORRECTED_FULL_POOL_SCHEDULE_SCHEMAS:
+        raise ValueError(
+            "corrected-native full-pool v1/v2 artifacts are read-only; "
+            "create a fresh v3 schedule for formal collection"
+        )
+    corrected_schedule = schedule.get("schema") in CORRECTED_SCHEDULE_SCHEMAS
+    corrected_full_pool_schedule = (
+        schedule.get("schema") == CORRECTED_FULL_POOL_SCHEDULE_SCHEMA
+    )
+    qualification_root = (
+        Path(qualification).resolve() if qualification is not None else None
+    )
+    if corrected_schedule:
+        if registration is not None:
+            raise ValueError(
+                "corrected-native schedule must use its rebind provenance, "
+                "not the legacy cohort registration"
+            )
+        _corrected_schedule_report(
+            schedule_root_path,
+            schedule_path,
+            schedule,
+            dataset=dataset if corrected_full_pool_schedule else None,
+        )
+        provenance = schedule.get("provenance")
+        if (
+            not isinstance(provenance, dict)
+            or provenance.get("native_semantics_schema")
+            != NATIVE_SEMANTICS_SCHEMA
+            or not provenance.get(
+                "qualification_producer_identity_fingerprint"
+            )
+        ):
+            raise ValueError(
+                "corrected-native schedule lacks producer/native provenance"
+            )
+        if corrected_full_pool_schedule:
+            if (
+                not _is_sha256(
+                    provenance.get("formal_dataset_fingerprint")
+                )
+                or _dataset_fingerprint(Path(dataset).resolve())
+                != provenance["formal_dataset_fingerprint"]
+            ):
+                raise ValueError(
+                    "full-pool schedule is not bound to the supplied derived dataset"
+                )
+            _validate_corrected_full_pool_collection_preflight(
+                config,
+                provenance,
+            )
+        else:
+            if qualification_root is None:
+                raise ValueError(
+                    "legacy corrected-native schedule requires its "
+                    "qualification artifact root"
+                )
+            qualification_manifest = (
+                qualification_root / "qualification_manifest.jsonl"
+            )
+            qualification_run_config = qualification_root / "run_config.json"
+            qualification_report = (
+                qualification_root / "qualification_report.json"
+            )
+            if (
+                not qualification_manifest.is_file()
+                or not qualification_run_config.is_file()
+                or not qualification_report.is_file()
+                or sha256_file(qualification_manifest)
+                != provenance.get("qualification_manifest_sha256")
+                or sha256_file(qualification_run_config)
+                != provenance.get("qualification_run_config_sha256")
+                or sha256_file(qualification_report)
+                != provenance.get("qualification_report_sha256")
+            ):
+                raise ValueError(
+                    "corrected-native qualification differs from schedule provenance"
+                )
+            _validate_corrected_seed_schedule_semantics(
+                schedule, _read_jsonl(qualification_manifest)
+            )
+    elif qualification_root is None:
+        raise ValueError("balanced collection requires a qualification artifact root")
     registration_report = (
         verify_compute_load_cohort_registration(registration)
         if registration is not None
         else None
     )
-    schedule_root_path = Path(schedule_root).resolve()
-    cohort_report = _read_json(schedule_root_path / "cohort_report.json")
-    if not bool(cohort_report.get("formal_collection_allowed", False)):
-        raise ValueError("balanced wall-clock cohort did not pass the preregistered data gate")
-    schedule_path = schedule_root_path / "execution_schedule.json"
-    schedule = _read_json(schedule_path)
     entries = list(schedule["entries"])
     output_root = Path(output).resolve()
+    protected_roots = {
+        Path(dataset).resolve(),
+        Path(config).resolve(),
+        schedule_root_path,
+        Path(original_bundle).resolve(),
+        Path(mixed_bundle).resolve(),
+    }
+    if qualification_root is not None:
+        protected_roots.add(qualification_root)
+    if output_root in protected_roots:
+        raise ValueError(
+            "formal collection output must differ from every input artifact"
+        )
     progress = []
     bundles = {
         "official_adaptive": original_bundle,
@@ -1856,7 +4521,7 @@ def collect_scheduled(
                 verification_profile="deployment",
                 job_keys=keys,
                 cohort_job_keys=keys,
-                stopping_rule="historical",
+                stopping_rule=stopping_rule,
                 use_global_collection_lock=False,
             )
             if dry_run:
@@ -1864,17 +4529,30 @@ def collect_scheduled(
                     **common, phase=phases[controller_id], dry_run=True
                 )
             else:
-                if not (lane / "qualification_manifest.jsonl").is_file():
+                qualification_manifest_exists = (
+                    lane / "qualification_manifest.jsonl"
+                ).is_file()
+                run_config_exists = (lane / "run_config.json").is_file()
+                if qualification_manifest_exists and not run_config_exists:
+                    raise ValueError(
+                        "formal lane has a qualification manifest without its "
+                        f"run identity; preserve the lane and use a new output: {lane}"
+                    )
+                if not qualification_manifest_exists:
                     reusable_qualification = (
-                        qualification
-                        if (Path(qualification).resolve() / "run_config.json").is_file()
+                        qualification_root
+                        if (
+                            not corrected_full_pool_schedule
+                            and qualification_root is not None
+                            and (qualification_root / "run_config.json").is_file()
+                        )
                         else None
                     )
                     run_closed_loop_collection(
                         **common,
                         phase="qualify",
                         qualification_source=reusable_qualification,
-                        resume=False,
+                        resume=run_config_exists,
                     )
                 result = run_closed_loop_collection(
                     **common,
@@ -1903,7 +4581,10 @@ def recover_scheduled_partial_traces(
     collection: str | Path, schedule_root: str | Path
 ) -> dict[str, Any]:
     collection_root = Path(collection).resolve()
-    schedule = _read_json(Path(schedule_root).resolve() / "execution_schedule.json")
+    schedule_root_path = Path(schedule_root).resolve()
+    schedule_path = schedule_root_path / "execution_schedule.json"
+    schedule = _read_json(schedule_path)
+    _corrected_schedule_report(schedule_root_path, schedule_path, schedule)
     expected = {_episode_key(row) for row in schedule["entries"]}
     recovered: list[dict[str, Any]] = []
     remaining_errors: list[dict[str, Any]] = []
@@ -2053,35 +4734,108 @@ def _relative_improvement(baseline: float, candidate: float) -> float:
 
 
 def _episode_key(row: dict[str, Any]) -> tuple[str, int]:
-    return str(row["task_id"]), int(row["solver_seed"])
+    task_id = row.get("task_id")
+    solver_seed = row.get("solver_seed")
+    if not isinstance(task_id, str) or not task_id:
+        raise ValueError("episode task_id must be a non-empty string")
+    if type(solver_seed) is not int or solver_seed < 0:
+        raise ValueError("episode solver_seed must be a non-negative integer")
+    return task_id, solver_seed
+
+
+def _strict_summary_bool(
+    summary: dict[str, Any], field: str
+) -> bool:
+    value = summary.get(field)
+    if type(value) is not bool:
+        raise ValueError(f"episode summary {field} must be a boolean")
+    return value
+
+
+def _strict_summary_int(
+    summary: dict[str, Any], field: str, *, minimum: int = 0
+) -> int:
+    value = summary.get(field)
+    if type(value) is not int or value < minimum:
+        raise ValueError(
+            f"episode summary {field} must be an integer >= {minimum}"
+        )
+    return value
+
+
+def _strict_summary_number(
+    summary: dict[str, Any],
+    field: str,
+    *,
+    default: float | None = None,
+    minimum: float = 0.0,
+) -> float:
+    value = summary.get(field, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"episode summary {field} must be numeric")
+    result = float(value)
+    if not math.isfinite(result) or result < minimum:
+        raise ValueError(
+            f"episode summary {field} must be finite and >= {minimum}"
+        )
+    return result
 
 
 def _scientific_summary(row: dict[str, Any]) -> dict[str, Any]:
-    summary = dict(row["summary"])
-    totals = dict(summary.get("controller_totals", {}))
+    raw_summary = row.get("summary")
+    if not isinstance(raw_summary, dict):
+        raise ValueError("formal episode lacks a summary object")
+    summary = dict(raw_summary)
+    raw_totals = summary.get("controller_totals", {})
+    if not isinstance(raw_totals, dict):
+        raise ValueError("episode summary controller_totals must be an object")
+    totals = dict(raw_totals)
+    final_low_level = summary.get("final_low_level")
+    if not isinstance(final_low_level, dict):
+        raise ValueError("episode summary final_low_level must be an object")
     return {
-        "success": bool(summary["success"]),
-        "capped_wall_ttf": float(summary["capped_wall_time_to_feasible"]),
-        "fixed_auc": float(summary["fixed_budget_conflict_auc"]),
-        "normalized_fixed_auc": float(summary["normalized_fixed_budget_conflict_auc"]),
-        "repair_iterations": int(summary["repair_iterations"]),
-        "generated_nodes": int(summary["final_low_level"]["generated"]),
-        "expanded_nodes": int(summary["final_low_level"]["expanded"]),
-        "repair_wall_seconds": float(summary.get("repair_wall_seconds", 0.0)),
-        "environment_construct_seconds": float(
-            summary.get("environment_construct_seconds", 0.0)
+        "success": _strict_summary_bool(summary, "success"),
+        "capped_wall_ttf": _strict_summary_number(
+            summary, "capped_wall_time_to_feasible"
         ),
-        "reset_wall_seconds": float(summary.get("reset_wall_seconds", 0.0)),
-        "episode_observed_wall_seconds": float(
-            summary.get("episode_observed_wall_seconds", 0.0)
+        "fixed_auc": _strict_summary_number(
+            summary, "fixed_budget_conflict_auc"
         ),
-        "proposal_seconds": float(totals.get("proposal_seconds", 0.0)),
-        "feature_seconds": float(totals.get("feature_seconds", 0.0)),
-        "inference_seconds": float(totals.get("inference_seconds", 0.0)),
-        "fingerprint_seconds": float(totals.get("state_fingerprint_seconds", 0.0)),
-        "pp_replan_seconds": float(totals.get("pp_replan_seconds", 0.0)),
-        "controller_before_repair_seconds": float(
-            totals.get("controller_seconds_before_repair", 0.0)
+        "normalized_fixed_auc": _strict_summary_number(
+            summary, "normalized_fixed_budget_conflict_auc"
+        ),
+        "repair_iterations": _strict_summary_int(summary, "repair_iterations"),
+        "generated_nodes": _strict_summary_int(final_low_level, "generated"),
+        "expanded_nodes": _strict_summary_int(final_low_level, "expanded"),
+        "repair_wall_seconds": _strict_summary_number(
+            summary, "repair_wall_seconds", default=0.0
+        ),
+        "environment_construct_seconds": _strict_summary_number(
+            summary, "environment_construct_seconds", default=0.0
+        ),
+        "reset_wall_seconds": _strict_summary_number(
+            summary, "reset_wall_seconds", default=0.0
+        ),
+        "episode_observed_wall_seconds": _strict_summary_number(
+            summary, "episode_observed_wall_seconds", default=0.0
+        ),
+        "proposal_seconds": _strict_summary_number(
+            totals, "proposal_seconds", default=0.0
+        ),
+        "feature_seconds": _strict_summary_number(
+            totals, "feature_seconds", default=0.0
+        ),
+        "inference_seconds": _strict_summary_number(
+            totals, "inference_seconds", default=0.0
+        ),
+        "fingerprint_seconds": _strict_summary_number(
+            totals, "state_fingerprint_seconds", default=0.0
+        ),
+        "pp_replan_seconds": _strict_summary_number(
+            totals, "pp_replan_seconds", default=0.0
+        ),
+        "controller_before_repair_seconds": _strict_summary_number(
+            totals, "controller_seconds_before_repair", default=0.0
         ),
     }
 
@@ -2111,10 +4865,12 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "success_count": sum(value["success"] for value in values),
         **{f"mean_{field}": _mean(value[field] for value in values) for field in numeric_fields},
         "invalid_action_count": sum(
-            int(row["summary"].get("invalid_action_count", 0)) for row in rows
+            _strict_summary_int(row["summary"], "invalid_action_count")
+            for row in rows
         ),
         "fingerprint_mismatch_count": sum(
-            int(row["summary"].get("fingerprint_mismatch_count", 0)) for row in rows
+            _strict_summary_int(row["summary"], "fingerprint_mismatch_count")
+            for row in rows
         ),
         "error_count": sum(str(row.get("status")) not in {"ok", "resumed"} for row in rows),
     }
@@ -2194,9 +4950,16 @@ def _paired_group_comparison(
 
 def _successful_ttf(row: dict[str, Any]) -> float | None:
     summary = row.get("summary")
-    if not isinstance(summary, dict) or not bool(summary.get("success")):
-        return None
+    if not isinstance(summary, dict):
+        raise ValueError("formal episode lacks a summary object")
+    success = _strict_summary_bool(summary, "success")
     value = summary.get("wall_time_to_feasible")
+    if not success:
+        if value is not None:
+            raise ValueError(
+                "failed episode must use null wall_time_to_feasible"
+            )
+        return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("successful episode lacks numeric wall_time_to_feasible")
     result = float(value)
@@ -2326,6 +5089,33 @@ def _paired_success_ttf(
 
 
 def _success_ttf_markdown(report: dict[str, Any]) -> str:
+    def seconds(value: Any) -> str:
+        return (
+            "NA"
+            if value is None
+            else f"{float(value):.3f}"
+        )
+
+    def percentage(value: Any) -> str:
+        return (
+            "NA"
+            if value is None
+            else f"{float(value) * 100:.2f}%"
+        )
+
+    def interval_text(values: Any) -> str:
+        if (
+            not isinstance(values, list)
+            or len(values) != 2
+            or values[0] is None
+            or values[1] is None
+        ):
+            return "NA"
+        return (
+            f"[{float(values[0]) * 100:.2f}%, "
+            f"{float(values[1]) * 100:.2f}%]"
+        )
+
     lines = [
         "# 去除失败惩罚后的 TTF 对比",
         "",
@@ -2341,8 +5131,9 @@ def _success_ttf_markdown(report: dict[str, Any]) -> str:
         row = report["success_only"][controller]
         lines.append(
             f"| {controller} | {row['success_count']}/{report['episode_count']} | "
-            f"{row['mean_seconds']:.3f} | {row['median_seconds']:.3f} | "
-            f"{row['p95_seconds']:.3f} |"
+            f"{seconds(row['mean_seconds'])} | "
+            f"{seconds(row['median_seconds'])} | "
+            f"{seconds(row['p95_seconds'])} |"
         )
     lines.extend(
         [
@@ -2357,10 +5148,10 @@ def _success_ttf_markdown(report: dict[str, Any]) -> str:
         interval = pair["map_bootstrap"]["improvement_95_ci"]
         lines.append(
             f"| {name} | {pair['common_success_count']} | "
-            f"{pair['baseline']['mean_seconds']:.3f} | "
-            f"{pair['candidate']['mean_seconds']:.3f} | "
-            f"{pair['mean_improvement'] * 100:.2f}% | "
-            f"[{interval[0] * 100:.2f}%, {interval[1] * 100:.2f}%] | "
+            f"{seconds(pair['baseline']['mean_seconds'])} | "
+            f"{seconds(pair['candidate']['mean_seconds'])} | "
+            f"{percentage(pair['mean_improvement'])} | "
+            f"{interval_text(interval)} | "
             f"{pair['candidate_faster_count']}/{pair['common_success_count']} |"
         )
     lines.extend(
@@ -2428,11 +5219,16 @@ def analyze_success_only_ttf(
     collection: str | Path, schedule_root: str | Path, output: str | Path
 ) -> dict[str, Any]:
     collection_root = Path(collection).resolve()
-    schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
+    schedule_root_path = Path(schedule_root).resolve()
+    schedule_path = schedule_root_path / "execution_schedule.json"
     schedule = _read_json(schedule_path)
-    schedule_index, by_controller, indexed = _load_scheduled_controller_rows(
-        collection_root, schedule
-    )
+    _corrected_schedule_report(schedule_root_path, schedule_path, schedule)
+    (
+        schedule_index,
+        by_controller,
+        indexed,
+        collection_identity,
+    ) = _load_scheduled_controller_rows(collection_root, schedule)
     incomplete = [
         row
         for controller in CONTROLLERS
@@ -2524,7 +5320,7 @@ def analyze_success_only_ttf(
         )
 
     report = {
-        "schema": "lns2.success_only_ttf_report.v1",
+        "schema": "lns2.success_only_ttf_report.v2",
         "definition": {
             "failure_ttf": None,
             "failure_penalty_included": False,
@@ -2533,6 +5329,8 @@ def analyze_success_only_ttf(
         },
         "input": {
             "schedule_sha256": sha256_file(schedule_path),
+            "collection": collection_identity,
+            "analysis_producer": _analysis_producer_identity(),
             "episode_count": len(keys),
             "controller_episode_count": len(keys) * len(CONTROLLERS),
         },
@@ -2556,24 +5354,515 @@ def _load_scheduled_controller_rows(
     dict[tuple[str, int], dict[str, Any]],
     dict[str, list[dict[str, Any]]],
     dict[str, dict[tuple[str, int], dict[str, Any]]],
+    dict[str, Any],
 ]:
-    schedule_index = {_episode_key(row): dict(row) for row in schedule["entries"]}
+    entries = schedule.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("execution schedule entries must be a non-empty list")
+    corrected_schedule = schedule.get("schema") in CORRECTED_SCHEDULE_SCHEMAS
+    corrected_full_pool_schedule = (
+        schedule.get("schema") == CORRECTED_FULL_POOL_SCHEDULE_SCHEMA
+    )
+    provenance = schedule.get("provenance") if corrected_schedule else None
+    corrected_dataset_fingerprint = (
+        provenance.get("formal_dataset_fingerprint")
+        if corrected_full_pool_schedule and isinstance(provenance, dict)
+        else (
+            provenance.get("qualification_dataset_fingerprint")
+            if isinstance(provenance, dict)
+            else None
+        )
+    )
+    if corrected_schedule and (
+        not isinstance(provenance, dict)
+        or provenance.get("native_semantics_schema")
+        != NATIVE_SEMANTICS_SCHEMA
+        or not _is_sha256(
+            provenance.get("qualification_producer_identity_fingerprint")
+        )
+        or not _is_sha256(corrected_dataset_fingerprint)
+        or not isinstance(provenance.get("stopping_contract"), dict)
+    ):
+        raise ValueError("corrected-native schedule provenance is incomplete")
+    if corrected_full_pool_schedule:
+        assert isinstance(provenance, dict)
+        if provenance.get("stopping_contract") != {
+            "stopping_rule": "wall-clock-fixed-metric",
+            "max_decisions": 0,
+            "max_repair_iterations": 0,
+            "metric_iteration_budget": 100,
+            "wall_time_budget_seconds": 600.0,
+            "environment_time_limit_seconds": 600.0,
+            "episode_process_timeout_seconds": 660.0,
+            "safety_max_decisions": WALL_CLOCK_SAFETY_MAX_DECISIONS,
+            "safety_limit_is_not_metric_cap": True,
+        }:
+            raise ValueError(
+                "corrected full-pool schedule stopping contract is invalid"
+            )
+    schedule_index: dict[tuple[str, int], dict[str, Any]] = {}
+    group_orders: dict[int, tuple[str, ...]] = {}
+    for raw_row in entries:
+        if not isinstance(raw_row, dict):
+            raise ValueError("execution schedule entry must be an object")
+        row = dict(raw_row)
+        key = _episode_key(row)
+        if key in schedule_index:
+            raise ValueError(f"execution schedule contains duplicate episode: {key}")
+        group = row.get("schedule_group")
+        if type(group) is not int or group not in range(6):
+            raise ValueError("execution schedule group must be an integer from 0 to 5")
+        raw_order = row.get("controller_order")
+        if not isinstance(raw_order, list) or any(
+            not isinstance(name, str) for name in raw_order
+        ):
+            raise ValueError("execution schedule controller_order must be a string list")
+        order = tuple(raw_order)
+        if len(order) != len(CONTROLLERS) or set(order) != set(CONTROLLERS):
+            raise ValueError(
+                "execution schedule controller_order must contain each controller once"
+            )
+        previous_order = group_orders.setdefault(group, order)
+        if previous_order != order:
+            raise ValueError(
+                f"execution schedule group {group} has inconsistent controller order"
+            )
+        if corrected_schedule:
+            conflicts = row.get("initial_conflicts")
+            generated = row.get("initial_low_level_generated")
+            state_digest = row.get("state_fingerprint")
+            if (
+                type(conflicts) is not int
+                or conflicts < 0
+                or type(generated) is not int
+                or generated < 0
+                or not _is_sha256(state_digest)
+                or row.get("conflict_stratum") != conflict_stratum(conflicts)
+                or row.get("initial_pp_load_stratum")
+                != initial_pp_load_stratum(generated)
+            ):
+                raise ValueError(
+                    f"corrected-native schedule reset metadata is invalid for {key}"
+                )
+        schedule_index[key] = row
+    if set(group_orders) != set(range(6)):
+        raise ValueError("execution schedule must cover all six order groups")
+    if corrected_schedule:
+        group_counts = collections.Counter(
+            row["schedule_group"] for row in schedule_index.values()
+        )
+        if len(schedule_index) != 36 or group_counts != collections.Counter(
+            {group: 6 for group in range(6)}
+        ):
+            raise ValueError(
+                "corrected-native schedule must preserve the frozen 36-episode design"
+            )
+
     expected = set(schedule_index)
+    strict_run_configs = [
+        (
+            collection_root
+            / f"order_{group}"
+            / controller
+            / "run_config.json"
+        ).is_file()
+        for group in range(6)
+        for controller in CONTROLLERS
+    ]
+    if any(strict_run_configs) and not all(strict_run_configs):
+        raise ValueError(
+            "formal collection has only a partial set of lane run_config files"
+        )
+    strict_artifacts = all(strict_run_configs)
+    if corrected_schedule and not strict_artifacts:
+        raise ValueError(
+            "corrected-native formal analysis requires every lane run_config"
+        )
+    collection_progress_sha256: str | None = None
+    if strict_artifacts:
+        progress_path = collection_root / "collection_progress.json"
+        if not progress_path.is_file():
+            raise ValueError("formal collection progress record is missing")
+        progress = _read_json(progress_path)
+        progress_entries = (
+            progress.get("entries") if isinstance(progress, dict) else None
+        )
+        expected_order = [
+            (group, controller)
+            for group in range(6)
+            for controller in group_orders[group]
+        ]
+        if not isinstance(progress_entries, list) or len(
+            progress_entries
+        ) != len(expected_order):
+            raise ValueError("formal collection progress coverage is incomplete")
+        observed_order = []
+        for row in progress_entries:
+            if not isinstance(row, dict):
+                raise ValueError("formal collection progress entry is not an object")
+            if (
+                type(row.get("group")) is not int
+                or not isinstance(row.get("controller"), str)
+                or type(row.get("job_count")) is not int
+                or row.get("dry_run") is not False
+            ):
+                raise ValueError("formal collection progress entry has invalid types")
+            observed_order.append((row["group"], row["controller"]))
+            expected_group_count = sum(
+                scheduled["schedule_group"] == row["group"]
+                for scheduled in schedule_index.values()
+            )
+            if row["job_count"] != expected_group_count:
+                raise ValueError(
+                    "formal collection progress job count differs from schedule"
+                )
+        if observed_order != expected_order:
+            raise ValueError(
+                "formal collection controller execution order differs from schedule"
+            )
+        collection_progress_sha256 = sha256_file(progress_path)
     rows = []
+    lane_identities: list[dict[str, Any]] = []
     for group in range(6):
+        group_expected = {
+            key
+            for key, row in schedule_index.items()
+            if row["schedule_group"] == group
+        }
+        if not group_expected:
+            raise ValueError(f"execution schedule group is empty: {group}")
         for controller in CONTROLLERS:
             phase = "official_adaptive" if controller == "official_adaptive" else "realized_dynamic"
             lane = collection_root / f"order_{group}" / controller
-            path = lane / f"{phase}_manifest.jsonl"
+            manifest_path = lane / f"{phase}_manifest.jsonl"
+            if not manifest_path.is_file():
+                raise ValueError(f"formal lane manifest is missing: {manifest_path}")
+            lane_rows = _read_jsonl(manifest_path)
+            lane_index: dict[tuple[str, int], dict[str, Any]] = {}
+            for raw_row in lane_rows:
+                if not isinstance(raw_row, dict):
+                    raise ValueError(
+                        f"formal lane manifest row must be an object: {manifest_path}"
+                    )
+                row = dict(raw_row)
+                key = _episode_key(row)
+                if key in lane_index:
+                    raise ValueError(
+                        f"formal lane contains duplicate episode {key}: {manifest_path}"
+                    )
+                if key not in group_expected:
+                    raise ValueError(
+                        f"formal lane episode belongs to another schedule group: {key}"
+                    )
+                scheduled = schedule_index[key]
+                schedule_fields = (
+                    ("map_id", "agent_count", "layout_mode")
+                    if corrected_schedule
+                    else ("map_id", "agent_count")
+                )
+                for field in schedule_fields:
+                    if row.get(field) != scheduled.get(field):
+                        raise ValueError(
+                            f"formal lane {field} differs from schedule for {key}"
+                        )
+                if row.get("policy") is not None and row.get("policy") != phase:
+                    raise ValueError(
+                        f"formal lane policy differs from controller for {key}"
+                    )
+                if strict_artifacts and row.get("policy") != phase:
+                    raise ValueError(
+                        f"formal lane lacks its expected policy for {key}"
+                    )
+                expected_episode_id = (
+                    f"{key[0]}__seed_{key[1]:04d}__{phase}"
+                )
+                if row.get("episode_id") not in {None, expected_episode_id}:
+                    raise ValueError(
+                        f"formal lane episode_id differs from schedule for {key}"
+                    )
+                lane_index[key] = row
+            if set(lane_index) != group_expected:
+                missing = sorted(group_expected - set(lane_index))
+                extra = sorted(set(lane_index) - group_expected)
+                raise ValueError(
+                    "formal lane coverage differs from its schedule group: "
+                    f"{manifest_path}; missing={missing}; extra={extra}"
+                )
+
+            lane_identity: dict[str, Any] = {
+                "schedule_group": group,
+                "controller_id": controller,
+                "policy": phase,
+                "manifest_sha256": sha256_file(manifest_path),
+                "episode_count": len(lane_rows),
+            }
+            if strict_artifacts:
+                run_config_path = lane / "run_config.json"
+                run_config = _read_json(run_config_path)
+                if not isinstance(run_config, dict):
+                    raise ValueError(
+                        f"formal lane run_config is not an object: {run_config_path}"
+                    )
+                configuration = run_config.get("configuration")
+                if not isinstance(configuration, dict):
+                    raise ValueError(
+                        f"formal lane run_config lacks configuration: {run_config_path}"
+                    )
+                if (
+                    _fingerprint(configuration)
+                    != run_config.get("configuration_fingerprint")
+                ):
+                    raise ValueError(
+                        f"formal lane configuration fingerprint mismatch: {run_config_path}"
+                    )
+                run_fingerprint = run_config.get("run_fingerprint")
+                if (
+                    not isinstance(run_fingerprint, str)
+                    or len(run_fingerprint) != 64
+                    or any(character not in "0123456789abcdef" for character in run_fingerprint)
+                ):
+                    raise ValueError(
+                        f"formal lane run fingerprint is invalid: {run_config_path}"
+                    )
+                configured_keys = configuration.get("cohort_job_keys_override")
+                if not isinstance(configured_keys, list):
+                    raise ValueError(
+                        f"formal lane lacks frozen cohort job keys: {run_config_path}"
+                    )
+                if any(
+                    not isinstance(value, list)
+                    or len(value) != 2
+                    or not isinstance(value[0], str)
+                    or not value[0]
+                    or type(value[1]) is not int
+                    or value[1] < 0
+                    for value in configured_keys
+                ):
+                    raise ValueError(
+                        f"formal lane has invalid cohort job keys: {run_config_path}"
+                    )
+                configured_key_set = {
+                    (value[0], value[1]) for value in configured_keys
+                }
+                if (
+                    len(configured_key_set) != len(configured_keys)
+                    or configured_key_set != group_expected
+                ):
+                    raise ValueError(
+                        f"formal lane configured cohort differs from schedule group: "
+                        f"{run_config_path}"
+                    )
+                if configuration.get("formal") is not True:
+                    raise ValueError(
+                        f"formal lane run_config is not marked formal: {run_config_path}"
+                    )
+                if run_config.get("verification_profile") != "deployment":
+                    raise ValueError(
+                        f"formal lane has unexpected verification profile: "
+                        f"{run_config_path}"
+                    )
+                if run_config.get("storage_fingerprint") is None:
+                    raise ValueError(
+                        f"formal lane lacks storage identity: {run_config_path}"
+                    )
+                producer: dict[str, Any] | None = None
+                lane_producer_fingerprint: str | None = None
+                if corrected_schedule:
+                    assert isinstance(provenance, dict)
+                    if corrected_full_pool_schedule:
+                        producer, lane_producer_fingerprint = (
+                            _validated_structured_producer_config(
+                                run_config,
+                                label=f"formal lane {group}/{controller}",
+                            )
+                        )
+                    else:
+                        producer = run_config.get("producer_identity")
+                        if not isinstance(producer, dict):
+                            producer = run_config.get(
+                                "controller_implementation"
+                            )
+                        producer = _validate_corrected_producer_identity(
+                            producer,
+                            label=f"formal lane {group}/{controller}",
+                        )
+                        lane_producer_fingerprint = _fingerprint(producer)
+                    if (
+                        lane_producer_fingerprint
+                        != provenance[
+                            "qualification_producer_identity_fingerprint"
+                        ]
+                        or (
+                            corrected_full_pool_schedule
+                            and producer
+                            != provenance.get(
+                                "qualification_producer_identity"
+                            )
+                        )
+                        or run_config.get("dataset_fingerprint")
+                        != corrected_dataset_fingerprint
+                    ):
+                        raise ValueError(
+                            "formal lane producer or dataset identity differs "
+                            f"from corrected schedule provenance: {run_config_path}"
+                        )
+                    contract = provenance["stopping_contract"]
+                    environment = configuration.get("environment")
+                    if (
+                        configuration.get("stopping_rule")
+                        != contract.get("stopping_rule")
+                        or type(configuration.get("max_decisions")) is not int
+                        or configuration["max_decisions"]
+                        != contract.get("max_decisions")
+                        or type(configuration.get("metric_iteration_budget"))
+                        is not int
+                        or configuration["metric_iteration_budget"]
+                        != contract.get("metric_iteration_budget")
+                        or not isinstance(environment, dict)
+                        or type(environment.get("max_repair_iterations"))
+                        is not int
+                        or environment["max_repair_iterations"]
+                        != contract.get("max_repair_iterations")
+                        or configuration.get("wall_time_budget_seconds")
+                        != contract.get("wall_time_budget_seconds")
+                        or environment.get("time_limit")
+                        != contract.get("environment_time_limit_seconds")
+                        or (
+                            "episode_process_timeout_seconds" in contract
+                            and configuration.get(
+                                "episode_process_timeout_seconds"
+                            )
+                            != contract.get(
+                                "episode_process_timeout_seconds"
+                            )
+                        )
+                    ):
+                        raise ValueError(
+                            "formal lane stopping contract differs from corrected "
+                            f"qualification: {run_config_path}"
+                        )
+                metric_budget = configuration.get("metric_iteration_budget")
+                for key, row in lane_index.items():
+                    if str(row.get("status")) not in {"ok", "resumed"}:
+                        continue
+                    trace_reference = row.get("trace_file")
+                    if not isinstance(trace_reference, str) or not trace_reference:
+                        raise ValueError(
+                            f"complete formal row lacks trace_file for {key}"
+                        )
+                    trace_path = (lane / trace_reference).resolve()
+                    try:
+                        trace_path.relative_to(lane.resolve())
+                    except ValueError as error:
+                        raise ValueError(
+                            f"formal trace escapes its lane for {key}"
+                        ) from error
+                    if not trace_path.is_file():
+                        raise ValueError(f"formal trace is missing for {key}")
+                    if sha256_file(trace_path) != row.get("trace_sha256"):
+                        raise ValueError(f"formal trace SHA256 mismatch for {key}")
+                    validated = validate_closed_loop_trace(
+                        trace_path,
+                        run_fingerprint,
+                        expected_episode_id=(
+                            f"{key[0]}__seed_{key[1]:04d}__{phase}"
+                        ),
+                        expected_policy=phase,
+                        expected_solver_seed=key[1],
+                        metric_iteration_budget=(
+                            int(metric_budget)
+                            if metric_budget is not None
+                            else None
+                        ),
+                        collection_root=lane,
+                    )
+                    if _fingerprint(validated["summary"]) != _fingerprint(
+                        row.get("summary")
+                    ):
+                        raise ValueError(
+                            f"formal trace summary differs from manifest for {key}"
+                        )
+                    if corrected_schedule:
+                        summary = validated["summary"]
+                        scheduled = schedule_index[key]
+                        if (
+                            not isinstance(summary, dict)
+                            or summary.get("initial_fingerprint")
+                            != scheduled.get("state_fingerprint")
+                            or type(summary.get("initial_conflicts")) is not int
+                            or summary["initial_conflicts"]
+                            != scheduled.get("initial_conflicts")
+                        ):
+                            raise ValueError(
+                                "formal trace initial state differs from corrected "
+                                f"schedule for {key}"
+                            )
+                    if int(validated["event_count"]) != row.get(
+                        "trace_event_count"
+                    ):
+                        raise ValueError(
+                            f"formal trace event count differs from manifest for {key}"
+                        )
+                    if validated.get("initial_state_ref") != row.get(
+                        "initial_state_ref"
+                    ):
+                        raise ValueError(
+                            f"formal trace initial state differs from manifest for {key}"
+                        )
+                    metadata = trace_file_metadata(trace_path)
+                    for field in (
+                        "trace_sha256",
+                        "trace_bytes",
+                    ):
+                        if metadata.get(field) != row.get(field):
+                            raise ValueError(
+                                f"formal trace {field} differs from manifest for {key}"
+                            )
+                    if row.get("trace_format") != run_config.get("trace_format"):
+                        raise ValueError(
+                            f"formal trace format differs from run_config for {key}"
+                        )
+                    if row.get("storage_fingerprint") != run_config.get(
+                        "storage_fingerprint"
+                    ):
+                        raise ValueError(
+                            f"formal row storage identity differs from run_config for {key}"
+                        )
+
+                lane_identity.update(
+                    {
+                        "run_config_sha256": sha256_file(run_config_path),
+                        "run_fingerprint": run_fingerprint,
+                        "configuration_fingerprint": run_config[
+                            "configuration_fingerprint"
+                        ],
+                            "storage_fingerprint": run_config["storage_fingerprint"],
+                            "producer_identity_fingerprint": (
+                                lane_producer_fingerprint
+                            ),
+                        "controller_bundle_fingerprint": (
+                            _fingerprint(run_config["controller_bundle"])
+                            if isinstance(run_config.get("controller_bundle"), dict)
+                            else None
+                        ),
+                    }
+                )
+            lane_identities.append(lane_identity)
             rows.extend(
-                {**row, "controller_id": controller, "_lane_root": str(lane)}
-                for row in _read_jsonl(path)
+                {
+                    **row,
+                    "controller_id": controller,
+                    "_lane_root": str(lane),
+                    "_schedule_group": group,
+                }
+                for row in lane_rows
             )
     by_controller: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
     for row in rows:
         by_controller[str(row["controller_id"])].append(row)
     if any(
-        {_episode_key(row) for row in by_controller[name]} != expected
+        len(by_controller[name]) != len(expected)
+        or {_episode_key(row) for row in by_controller[name]} != expected
         for name in CONTROLLERS
     ):
         raise ValueError("formal controller coverage differs from the frozen cohort")
@@ -2581,7 +5870,15 @@ def _load_scheduled_controller_rows(
         controller: {_episode_key(row): row for row in by_controller[controller]}
         for controller in CONTROLLERS
     }
-    return schedule_index, by_controller, indexed
+    collection_identity = {
+        "validation_mode": (
+            "run_config_trace_semantic" if strict_artifacts else "synthetic_manifest_only"
+        ),
+        "collection_progress_sha256": collection_progress_sha256,
+        "lanes": lane_identities,
+    }
+    collection_identity["fingerprint"] = _fingerprint(collection_identity)
+    return schedule_index, by_controller, indexed, collection_identity
 
 
 def _average_ranks(values: list[float]) -> list[float]:
@@ -2616,7 +5913,11 @@ def _spearman(left: list[float], right: list[float]) -> float:
 def _controller_group_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     aggregate = _aggregate_rows(rows)
     summaries = [dict(row["summary"]) for row in rows]
-    successes = [row for row in summaries if bool(row["success"])]
+    successes = [
+        row
+        for row in summaries
+        if _strict_summary_bool(row, "success")
+    ]
     return {
         **aggregate,
         "mean_actual_observed_wall_seconds": _mean(
@@ -2636,7 +5937,7 @@ def _controller_group_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 - float(row["episode_observed_wall_seconds"]),
             )
             for row in summaries
-            if not bool(row["success"])
+            if not _strict_summary_bool(row, "success")
         ),
     }
 
@@ -2849,11 +6150,16 @@ def audit_balanced_cohort_difficulty(
 ) -> dict[str, Any]:
     config_path, audit_config = _load_difficulty_config(config)
     collection_root = Path(collection).resolve()
-    schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
+    schedule_root_path = Path(schedule_root).resolve()
+    schedule_path = schedule_root_path / "execution_schedule.json"
     schedule = _read_json(schedule_path)
-    schedule_index, _by_controller, indexed = _load_scheduled_controller_rows(
-        collection_root, schedule
-    )
+    _corrected_schedule_report(schedule_root_path, schedule_path, schedule)
+    (
+        schedule_index,
+        _by_controller,
+        indexed,
+        _collection_identity,
+    ) = _load_scheduled_controller_rows(collection_root, schedule)
     complexity_rows = []
     integrity_errors = []
     for key in sorted(schedule_index):
@@ -3116,10 +6422,16 @@ def analyze_scheduled(
     collection: str | Path, schedule_root: str | Path, output: str | Path
 ) -> dict[str, Any]:
     collection_root = Path(collection).resolve()
-    schedule = _read_json(Path(schedule_root).resolve() / "execution_schedule.json")
-    schedule_index, by_controller, indexed = _load_scheduled_controller_rows(
-        collection_root, schedule
-    )
+    schedule_root_path = Path(schedule_root).resolve()
+    schedule_path = schedule_root_path / "execution_schedule.json"
+    schedule = _read_json(schedule_path)
+    _corrected_schedule_report(schedule_root_path, schedule_path, schedule)
+    (
+        schedule_index,
+        by_controller,
+        indexed,
+        collection_identity,
+    ) = _load_scheduled_controller_rows(collection_root, schedule)
     incomplete = [
         {
             "controller": controller,
@@ -3223,8 +6535,15 @@ def analyze_scheduled(
         ),
     }
     report = {
-        "schema": "lns2.balanced_wall_clock_report.v1",
+        "schema": "lns2.balanced_wall_clock_report.v2",
         "evidence_level": "end_to_end_balanced_wall_clock",
+        "input": {
+            "schedule_sha256": sha256_file(
+                schedule_path
+            ),
+            "collection": collection_identity,
+            "analysis_producer": _analysis_producer_identity(),
+        },
         "summaries": summaries,
         "comparisons": {
             "mixed_vs_v2_ttf_improvement": mixed_ttf_improvement,
@@ -3265,6 +6584,8 @@ def analyze_scheduled(
 
 __all__ = [
     "CONTROLLERS",
+    "CORRECTED_FULL_POOL_REPORT_SCHEMA",
+    "CORRECTED_FULL_POOL_SCHEDULE_SCHEMA",
     "INITIAL_PP_LOAD_STRATA",
     "STRATA",
     "analyze_scheduled",
@@ -3280,6 +6601,11 @@ __all__ = [
     "merge_datasets",
     "prepare_movingai_map_derived_dataset",
     "prepare_movingai_dataset",
+    "prepare_corrected_native_formal_config",
+    "qualify_corrected_native_schedule",
+    "qualify_corrected_native_seed_pool",
+    "rebind_corrected_native_schedule",
+    "select_corrected_native_seed_schedule",
     "select_balanced_cohort",
     "select_compute_load_balanced_cohort",
     "recover_scheduled_partial_traces",

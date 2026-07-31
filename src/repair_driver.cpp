@@ -96,6 +96,7 @@ int main(int argc, char** argv)
         const int neighborhood_size = values["neighborSize"].as<int>();
         const int max_repair_iterations =
             values["maxRepairIterations"].as<int>();
+        const int random_seed = values["seed"].as<int>();
         const string replan_algorithm = values["replanAlgo"].as<string>();
         const string destroy_strategy =
             values["initDestroyStrategy"].as<string>();
@@ -111,6 +112,10 @@ int main(int argc, char** argv)
         if (max_repair_iterations < 0)
             throw std::invalid_argument(
                 "maxRepairIterations must be non-negative"
+            );
+        if (random_seed < 0)
+            throw std::invalid_argument(
+                "seed must be non-negative"
             );
         if (replan_algorithm != "PP" && replan_algorithm != "GCBS" &&
             replan_algorithm != "PBS")
@@ -128,7 +133,7 @@ int main(int argc, char** argv)
             map_path, scenario_path, agent_count
         );
 
-        srand(values["seed"].as<int>());
+        srand(random_seed);
         Instance instance(map_path, scenario_path, agent_count);
         std::unique_ptr<JsonlRepairObserver> observer;
         if (values.count("trace"))

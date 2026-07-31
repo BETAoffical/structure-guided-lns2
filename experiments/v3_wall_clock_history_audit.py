@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import json
 import statistics
 from pathlib import Path
@@ -8,15 +7,11 @@ from typing import Any, Iterable
 
 from experiments._common import atomic_write_csv, sha256_file
 from experiments.repair_collection import _write_json
+from experiments.wall_clock_report_utils import read_csv_rows
 
 
 V3_WALL_CLOCK_HISTORY_AUDIT_SCHEMA = "lns2.v3_wall_clock_history_audit.v1"
 PAIRWISE_RELATIVE_TOLERANCE = 1e-12
-
-
-def _read_csv(path: Path) -> list[dict[str, str]]:
-    with Path(path).open("r", encoding="utf-8", newline="") as stream:
-        return list(csv.DictReader(stream))
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -35,7 +30,7 @@ def validate_pairwise_run(
         raise ValueError("historical wall-clock run contains errors")
     if not bool(status.get("bottleneck_validation", {}).get("coverage_passed")):
         raise ValueError("historical wall-clock run lacks paired coverage")
-    rows = _read_csv(episode_path)
+    rows = read_csv_rows(episode_path)
     expected = int(status["bottleneck_validation"]["expected_task_seed_count"])
     pairs = {str(row["pair"]) for row in rows}
     if len(rows) != expected * len(pairs):
@@ -168,7 +163,7 @@ def pairwise_summary_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def validate_s3_runtime(path: Path) -> dict[str, Any]:
-    rows = _read_csv(path)
+    rows = read_csv_rows(path)
     grouped: dict[tuple[str, int], list[dict[str, str]]] = {}
     for row in rows:
         if str(row.get("status")) != "ok":
@@ -300,7 +295,7 @@ def audit_v3_wall_clock_history(
         verification = validate_pairwise_run(
             status_path=status_path, episode_path=episode_path
         )
-        rows = _read_csv(episode_path)
+        rows = read_csv_rows(episode_path)
         for row in rows:
             row["historical_run"] = name
         pairwise_rows.extend(rows)
@@ -331,7 +326,7 @@ def audit_v3_wall_clock_history(
     s3_sources = []
     for name, path in s3_runs:
         verification = validate_s3_runtime(path)
-        summary, rows = summarize_s3_runtime(_read_csv(path), run=name)
+        summary, rows = summarize_s3_runtime(read_csv_rows(path), run=name)
         s3_summaries.append(summary)
         s3_pairs.extend(rows)
         s3_sources.append({"run": name, "path": str(path), **verification})

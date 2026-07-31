@@ -16,6 +16,7 @@ from experiments.repair_collection import (
     EPISODE_SCHEMA,
     NATIVE_REPAIR_TIMING_SCHEMA,
     REPAIR_COLLECTION_ARTIFACT_VERSION,
+    REPAIR_COLLECTION_IMPLEMENTATION_FILES,
     REPAIR_COLLECTION_SCHEMA,
     REPAIR_TIME_LABEL,
     SCHEMA_VERSION,
@@ -32,20 +33,44 @@ from experiments.repair_collection import (
     _make_environment,
     _native_step_seconds,
     _prepare_run,
+    _producer_identity as _actual_producer_identity,
     _run_metadata,
     _run_jobs,
     _select_task_rows,
     _trial_seed,
     _valid_episode_trace,
+    _validate_resumable_qualification_rows,
     _validate_config,
     candidate_actions,
     select_seed_agents,
     state_fingerprint,
     recover_counterfactual_manifest,
 )
+from experiments.state_analysis import summarize_initial_state_complexity
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _structured_producer(
+    *,
+    source_sha256: str = "a" * 64,
+    native_sha256: str = "b" * 64,
+    python_version: str = "3.10.0",
+) -> dict:
+    return {
+        "schema": "lns2.producer_identity.v2",
+        "source_sha256": {"experiments/repair_collection.py": source_sha256},
+        "python": {"implementation": "CPython", "version": python_version},
+        "packages": {},
+        "native_required": True,
+        "native": {
+            "path": "/build/lns2_env.so",
+            "sha256": native_sha256,
+            "repair_timing_schema": "lns2.repair_timing.v2",
+            "native_semantics_schema": "lns2.corrected_native.v1",
+        },
+    }
 
 
 def _scheduler_worker(job: dict) -> dict:
@@ -123,6 +148,26 @@ def sample_state() -> dict:
             },
         ],
     }
+
+
+def _qualification_state() -> dict:
+    state = sample_state()
+    state["sum_of_costs"] = 0
+    state["num_of_colliding_pairs"] = 0
+    state["conflict_edges"] = []
+    for agent, cell in zip(state["agents"], (0, 1, 3, 4)):
+        agent.update(
+            {
+                "start": cell,
+                "goal": cell,
+                "path_cost": 0,
+                "shortest_path_cost": 0,
+                "delay": 0,
+                "conflict_degree": 0,
+                "path": [cell],
+            }
+        )
+    return state
 
 
 def _minimal_dataset(root: Path) -> Path:
@@ -383,6 +428,14 @@ def _episode_events(run_fingerprint: str) -> list[dict]:
 
 
 class RepairCollectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        producer_patch = mock.patch(
+            "experiments.repair_collection._producer_identity",
+            return_value=_structured_producer(),
+        )
+        producer_patch.start()
+        self.addCleanup(producer_patch.stop)
+
     def test_native_step_seconds_requires_strict_v2_native_timing(self) -> None:
         self.assertEqual(
             _native_step_seconds(
@@ -433,6 +486,184 @@ class RepairCollectionTests(unittest.TestCase):
                 }
             )
 
+    def test_qualification_resume_replays_every_completed_reset(self) -> None:
+        state = _qualification_state()
+        dataset_row = {
+            "split": "train",
+            "map_id": "map",
+            "task_id": "task",
+            "layout_mode": "layout",
+            "task_variant": None,
+            "agent_count": 4,
+        }
+        artifact = {
+            "schema": REPAIR_COLLECTION_SCHEMA,
+            "schema_version": REPAIR_COLLECTION_ARTIFACT_VERSION,
+            "repair_time_label": REPAIR_TIME_LABEL,
+            **dataset_row,
+            "solver_seed": 29,
+            "initial_conflicts": 0,
+            "repairable": True,
+            "initial_feasible": False,
+            "initial_complete": True,
+            "state_fingerprint": state_fingerprint(state),
+            "initial_complexity": summarize_initial_state_complexity(state),
+            "status": "ok",
+            "error": None,
+        }
+        replay_environment = mock.Mock()
+        replay_environment.reset.return_value = state
+        with mock.patch(
+            "experiments.repair_collection._make_environment",
+            return_value=replay_environment,
+        ) as make_environment:
+            completed, pending = _validate_resumable_qualification_rows(
+                [artifact],
+                dataset_root=Path("dataset"),
+                rows=[dataset_row],
+                solver_seeds=[29, 31],
+                environment={"time_limit": 60.0},
+            )
+
+        self.assertEqual(completed, {("task", 29): artifact})
+        self.assertEqual(pending, {("task", 31)})
+        make_environment.assert_called_once_with(
+            str(Path("dataset")),
+            dataset_row,
+            {"time_limit": 60.0},
+            "Adaptive",
+        )
+        replay_environment.reset.assert_called_once_with(seed=29)
+        with mock.patch(
+            "experiments.repair_collection._make_environment"
+        ) as fresh_run_environment:
+            fresh_completed, fresh_pending = (
+                _validate_resumable_qualification_rows(
+                    [artifact],
+                    dataset_root=Path("dataset"),
+                    rows=[dataset_row],
+                    solver_seeds=[29],
+                    environment={"time_limit": 60.0},
+                    replay_completed=False,
+                )
+            )
+        self.assertEqual(fresh_completed, {("task", 29): artifact})
+        self.assertEqual(fresh_pending, set())
+        fresh_run_environment.assert_not_called()
+
+    def test_qualification_resume_rejects_tampering_and_preserves_input(
+        self,
+    ) -> None:
+        state = _qualification_state()
+        dataset_row = {
+            "split": "train",
+            "map_id": "map",
+            "task_id": "task",
+            "layout_mode": "layout",
+            "task_variant": None,
+            "agent_count": 4,
+        }
+        valid = {
+            "schema": REPAIR_COLLECTION_SCHEMA,
+            "schema_version": REPAIR_COLLECTION_ARTIFACT_VERSION,
+            "repair_time_label": REPAIR_TIME_LABEL,
+            **dataset_row,
+            "solver_seed": 29,
+            "initial_conflicts": 0,
+            "repairable": True,
+            "initial_feasible": False,
+            "initial_complete": True,
+            "state_fingerprint": state_fingerprint(state),
+            "initial_complexity": summarize_initial_state_complexity(state),
+            "status": "ok",
+            "error": None,
+        }
+        cases: dict[str, list[object]] = {}
+        legacy = json.loads(json.dumps(valid))
+        legacy["schema"] = "lns2.repair_collection.v1"
+        legacy["schema_version"] = 1
+        cases["legacy_schema"] = [legacy]
+        non_finite = json.loads(json.dumps(valid))
+        non_finite["initial_complexity"]["mean_path_cost"] = float("nan")
+        cases["nan"] = [non_finite]
+        wrong_task = json.loads(json.dumps(valid))
+        wrong_task["task_id"] = "other-task"
+        cases["task_mapping"] = [wrong_task]
+        wrong_seed = json.loads(json.dumps(valid))
+        wrong_seed["solver_seed"] = 31
+        cases["seed_mapping"] = [wrong_seed]
+        wrong_fingerprint = json.loads(json.dumps(valid))
+        wrong_fingerprint["state_fingerprint"] = "0" * 64
+        cases["state_fingerprint"] = [wrong_fingerprint]
+        wrong_semantics = json.loads(json.dumps(valid))
+        wrong_semantics["repairable"] = False
+        cases["reset_semantics"] = [wrong_semantics]
+        cases["duplicate_key"] = [valid, json.loads(json.dumps(valid))]
+        cases["non_object"] = [[]]
+
+        replay_environment = mock.Mock()
+        replay_environment.reset.return_value = state
+        with tempfile.TemporaryDirectory() as directory, mock.patch(
+            "experiments.repair_collection._make_environment",
+            return_value=replay_environment,
+        ):
+            path = Path(directory) / "qualification_manifest.jsonl"
+            for name, artifacts in cases.items():
+                with self.subTest(name=name):
+                    original = "".join(
+                        json.dumps(row, sort_keys=True) + "\n"
+                        for row in artifacts
+                    )
+                    path.write_text(original, encoding="utf-8")
+                    parsed = [
+                        json.loads(line)
+                        for line in path.read_text(encoding="utf-8").splitlines()
+                    ]
+                    with self.assertRaisesRegex(
+                        ValueError, "preserving the manifest unchanged"
+                    ):
+                        _validate_resumable_qualification_rows(
+                            parsed,
+                            dataset_root=Path("dataset"),
+                            rows=[dataset_row],
+                            solver_seeds=[29],
+                            environment={},
+                        )
+                    self.assertEqual(
+                        path.read_text(encoding="utf-8"),
+                        original,
+                    )
+
+    def test_qualification_resume_recomputes_only_incomplete_or_missing_rows(
+        self,
+    ) -> None:
+        dataset_row = {
+            "split": "train",
+            "map_id": "map",
+            "task_id": "task",
+            "layout_mode": "layout",
+            "task_variant": None,
+            "agent_count": 4,
+        }
+        incomplete = {
+            "schema": REPAIR_COLLECTION_SCHEMA,
+            "schema_version": REPAIR_COLLECTION_ARTIFACT_VERSION,
+            "repair_time_label": REPAIR_TIME_LABEL,
+            **dataset_row,
+            "solver_seed": 29,
+            "status": "error",
+            "error": "RuntimeError: reset failed",
+        }
+        completed, pending = _validate_resumable_qualification_rows(
+            [incomplete],
+            dataset_root=Path("dataset"),
+            rows=[dataset_row],
+            solver_seeds=[29, 31],
+            environment={},
+        )
+        self.assertEqual(completed, {})
+        self.assertEqual(pending, {("task", 29), ("task", 31)})
+
     def test_make_environment_rejects_legacy_native_timing_schema(self) -> None:
         legacy_module = mock.Mock()
         legacy_module.repair_timing_schema = "lns2.repair_timing.v1"
@@ -442,6 +673,27 @@ class RepairCollectionTests(unittest.TestCase):
                 return_value=legacy_module,
             ),
             self.assertRaisesRegex(RuntimeError, "requires native timing schema"),
+        ):
+            _make_environment(
+                ".",
+                {"split": "train"},
+                {},
+                "Adaptive",
+            )
+        legacy_module.LNS2RepairEnv.assert_not_called()
+
+    def test_make_environment_rejects_missing_native_semantics_schema(self) -> None:
+        legacy_module = mock.Mock()
+        legacy_module.repair_timing_schema = "lns2.repair_timing.v2"
+        legacy_module.native_semantics_schema = ""
+        with (
+            mock.patch(
+                "experiments.repair_collection._load_environment_module",
+                return_value=legacy_module,
+            ),
+            self.assertRaisesRegex(
+                RuntimeError, "requires native semantics schema"
+            ),
         ):
             _make_environment(
                 ".",
@@ -1021,6 +1273,19 @@ class RepairCollectionTests(unittest.TestCase):
             self.assertEqual(_counterfactual_worker(job)["status"], "error")
             self.assertEqual(metadata_path.read_text(encoding="utf-8"), "[]")
 
+    def test_producer_identity_uses_structured_common_identity(self) -> None:
+        identity = _structured_producer()
+        with mock.patch(
+            "experiments.repair_collection._structured_producer_identity",
+            return_value=identity,
+        ) as structured:
+            self.assertEqual(_actual_producer_identity(), identity)
+        structured.assert_called_once_with(
+            project_root=PROJECT_ROOT,
+            source_files=REPAIR_COLLECTION_IMPLEMENTATION_FILES,
+            native_required=True,
+        )
+
     def test_run_identity_binds_schema_timing_and_producer(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1054,10 +1319,7 @@ class RepairCollectionTests(unittest.TestCase):
                 )
             with mock.patch(
                 "experiments.repair_collection._producer_identity",
-                return_value={
-                    "name": "experiments.repair_collection",
-                    "implementation_sha256": "changed",
-                },
+                return_value=_structured_producer(source_sha256="c" * 64),
             ):
                 changed_producer, _ = _run_metadata(
                     dataset,
@@ -1066,6 +1328,49 @@ class RepairCollectionTests(unittest.TestCase):
                 )
             self.assertNotEqual(fingerprint, changed_timing)
             self.assertNotEqual(fingerprint, changed_producer)
+            self.assertEqual(
+                run_config["collection_identity"]["producer"]["schema"],
+                "lns2.producer_identity.v2",
+            )
+            changed_metadata: list[tuple[str, dict]] = []
+            for identity in (
+                _structured_producer(source_sha256="c" * 64),
+                _structured_producer(native_sha256="d" * 64),
+                _structured_producer(python_version="3.11.0"),
+            ):
+                with mock.patch(
+                    "experiments.repair_collection._producer_identity",
+                    return_value=identity,
+                ):
+                    changed_metadata.append(
+                        _run_metadata(dataset, config, ["train"])
+                    )
+            self.assertTrue(
+                all(
+                    changed_fingerprint != fingerprint
+                    for changed_fingerprint, _ in changed_metadata
+                )
+            )
+
+            structured_output = root / "structured-output"
+            _prepare_run(
+                dataset,
+                structured_output,
+                config,
+                ["train"],
+                resume=False,
+                metadata=(fingerprint, run_config),
+            )
+            for metadata in changed_metadata:
+                with self.assertRaisesRegex(ValueError, "incompatible"):
+                    _prepare_run(
+                        dataset,
+                        structured_output,
+                        config,
+                        ["train"],
+                        resume=True,
+                        metadata=metadata,
+                    )
 
             output = root / "legacy-output"
             output.mkdir()

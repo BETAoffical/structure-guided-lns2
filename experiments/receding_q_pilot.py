@@ -30,9 +30,11 @@ from experiments.trace_replay import replay_prefix
 from experiments.v3_s3 import S3_TEMPORAL_FEATURE_NAMES
 from experiments.v3_s3_collection import (
     _full_candidate_rows,
+    _qualification_artifact_errors,
     _paired_repair_action,
     _paired_seed,
     _source_replay_job,
+    validate_v3_s3_collection_source,
 )
 from experiments.v3_value_pilot import (
     V3_VALUE_PILOT_PRODUCER_FILES,
@@ -53,10 +55,24 @@ RECEDING_Q_PILOT_PRODUCER_FILES = (
 def _qualification_index(collection_root: Path) -> dict[str, Path]:
     result: dict[str, Path] = {}
     for path in sorted((collection_root / "qualification").glob("*.json")):
-        payload = dict(read_json(path))
-        if not bool(payload.get("complete")):
+        value = read_json(path)
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"source qualification is not an object: {path}"
+            )
+        payload = dict(value)
+        if payload.get("complete") is not True:
             continue
-        state_id = str(dict(payload["decision"])["state_id"])
+        decision = payload.get("decision")
+        if not isinstance(decision, dict):
+            raise ValueError(
+                f"source qualification decision is not an object: {path}"
+            )
+        state_id = decision.get("state_id")
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError(
+                f"source qualification has an invalid state_id: {path}"
+            )
         if state_id in result:
             raise ValueError(f"duplicate qualification state: {state_id}")
         result[state_id] = path
@@ -202,6 +218,7 @@ def build_receding_q_plan(
 ) -> dict[str, Any]:
     source_root = Path(source).resolve()
     collection_root = source_root / "collection"
+    source_validation = validate_v3_s3_collection_source(collection_root)
     selection_path = collection_root / "state_selection.jsonl"
     decisions = [
         dict(row)
@@ -216,7 +233,25 @@ def build_receding_q_plan(
         qualification_path = qualifications.get(state_id)
         if qualification_path is None:
             raise ValueError(f"selected state lacks qualification: {state_id}")
-        qualification = dict(read_json(qualification_path))
+        qualification_value = read_json(qualification_path)
+        if not isinstance(qualification_value, dict):
+            raise ValueError(
+                f"selected qualification is not an object: {state_id}"
+            )
+        qualification = dict(qualification_value)
+        qualification_errors = _qualification_artifact_errors(
+            qualification,
+            run_fingerprint=str(source_validation["run_fingerprint"]),
+        )
+        if qualification_errors:
+            raise ValueError(
+                f"selected qualification is invalid: {state_id}: "
+                + "; ".join(qualification_errors[:5])
+            )
+        if dict(qualification.get("decision") or {}).get("state_id") != state_id:
+            raise ValueError(
+                f"selected qualification state differs: {state_id}"
+            )
         arms = actual_candidate_arms(qualification)
         if len(arms) < 2:
             continue
@@ -260,6 +295,12 @@ def build_receding_q_plan(
     return {
         "schema": RECEDING_Q_PILOT_SCHEMA,
         "source": str(source_root),
+        "source_collection_run_fingerprint": source_validation[
+            "run_fingerprint"
+        ],
+        "source_collection_producer_identity_fingerprint": source_validation[
+            "producer_identity_fingerprint"
+        ],
         "source_state_selection_sha256": sha256_file(selection_path),
         "source_external_baselines_sha256": sha256_file(
             collection_root / "external_baselines.jsonl"
@@ -366,10 +407,9 @@ def _rollout_float(
     field: str,
     nonnegative: bool = False,
 ) -> float:
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as error:
-        raise ValueError(f"receding-Q rollout {field} is not numeric") from error
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"receding-Q rollout {field} is not numeric")
+    result = float(value)
     if not math.isfinite(result) or (nonnegative and result < 0.0):
         qualifier = "finite and non-negative" if nonnegative else "finite"
         raise ValueError(f"receding-Q rollout {field} must be {qualifier}")
@@ -392,6 +432,21 @@ def _rollout_float_matches(
         abs_tol=tolerance,
     ):
         raise ValueError(f"receding-Q rollout {field} mismatch")
+
+
+def _rollout_int(
+    value: Any,
+    *,
+    field: str,
+    minimum: int | None = 0,
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"receding-Q rollout {field} must be an integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(
+            f"receding-Q rollout {field} must be at least {minimum}"
+        )
+    return value
 
 
 def _stored_rollout_fingerprint(value: Any, *, field: str) -> str:
@@ -437,7 +492,7 @@ def validate_receding_q_rollout(
 
     if str(row.get("schema")) != RECEDING_Q_PILOT_SCHEMA:
         raise ValueError("receding-Q rollout schema mismatch")
-    if not bool(row.get("complete")):
+    if row.get("complete") is not True:
         raise ValueError("receding-Q rollout is incomplete")
     if int(horizon) <= 0:
         raise ValueError("receding-Q rollout horizon must be positive")
@@ -450,7 +505,10 @@ def validate_receding_q_rollout(
 
     state_id = str(state_plan["state_id"])
     candidate_id = str(arm_plan["candidate_id"])
-    trial_index = int(row.get("trial_index", -1))
+    trial_index = _rollout_int(
+        row.get("trial_index"),
+        field="trial_index",
+    )
     if str(row.get("state_id")) != state_id:
         raise ValueError("receding-Q rollout state mismatch")
     if str(row.get("candidate_id")) != candidate_id:
@@ -473,7 +531,11 @@ def validate_receding_q_rollout(
         if field not in state_plan:
             raise ValueError(f"receding-Q plan lacks {field}")
         if field == "agent_count":
-            matches = int(row.get(field, -1)) == int(state_plan[field])
+            matches = _rollout_int(
+                row.get(field),
+                field=field,
+                minimum=1,
+            ) == int(state_plan[field])
         else:
             matches = str(row.get(field)) == str(state_plan[field])
         if not matches:
@@ -494,11 +556,19 @@ def validate_receding_q_rollout(
             field=f"feature_values[{index}]",
         )
 
-    agents = list(map(int, row.get("agents", ())))
+    agents = _stored_agent_ids(
+        row.get("agents"),
+        field="agents",
+        agent_count=int(state_plan["agent_count"]),
+    )
     expected_agents = list(map(int, arm_plan["agents"]))
     if agents != expected_agents:
         raise ValueError("receding-Q rollout neighborhood mismatch")
-    if int(row.get("actual_size", -1)) != int(
+    if _rollout_int(
+        row.get("actual_size"),
+        field="actual_size",
+        minimum=1,
+    ) != int(
         arm_plan.get("actual_size", len(expected_agents))
     ):
         raise ValueError("receding-Q rollout actual size mismatch")
@@ -507,7 +577,10 @@ def validate_receding_q_rollout(
     ):
         raise ValueError("receding-Q rollout selection families mismatch")
     expected_is_v2 = candidate_id == str(state_plan["v2_candidate_id"])
-    if bool(row.get("is_v2_candidate")) != expected_is_v2:
+    if (
+        not isinstance(row.get("is_v2_candidate"), bool)
+        or row["is_v2_candidate"] != expected_is_v2
+    ):
         raise ValueError("receding-Q rollout v2-candidate marker mismatch")
 
     initial_full = str(state_plan["before_fingerprint"])
@@ -522,7 +595,11 @@ def validate_receding_q_rollout(
     ) != initial_repair:
         raise ValueError("receding-Q rollout initial repair fingerprint mismatch")
     initial_conflicts = int(state_plan["initial_conflicts"])
-    if initial_conflicts <= 0 or int(row.get("initial_conflicts", -1)) != (
+    if initial_conflicts <= 0 or _rollout_int(
+        row.get("initial_conflicts"),
+        field="initial_conflicts",
+        minimum=1,
+    ) != (
         initial_conflicts
     ):
         raise ValueError("receding-Q rollout initial conflicts mismatch")
@@ -530,9 +607,16 @@ def validate_receding_q_rollout(
     steps_value = row.get("steps")
     if not isinstance(steps_value, list) or not steps_value:
         raise ValueError("receding-Q rollout has no root repair")
+    if any(not isinstance(step, dict) for step in steps_value):
+        raise ValueError("receding-Q rollout step is not an object")
     steps = [dict(step) for step in steps_value]
     if (
-        int(row.get("executed_steps", -1)) != len(steps)
+        _rollout_int(
+            row.get("executed_steps"),
+            field="executed_steps",
+            minimum=1,
+        )
+        != len(steps)
         or len(steps) > int(horizon)
     ):
         raise ValueError("receding-Q rollout executed-step count mismatch")
@@ -546,7 +630,11 @@ def validate_receding_q_rollout(
     low_level_totals = collections.Counter()
     conflict_wall_auc = 0.0
     for step_index, step in enumerate(steps, start=1):
-        if int(step.get("step", -1)) != step_index:
+        if _rollout_int(
+            step.get("step"),
+            field=f"steps[{step_index}].step",
+            minimum=1,
+        ) != step_index:
             raise ValueError("receding-Q rollout step indexes are not contiguous")
         if _stored_rollout_fingerprint(
             step.get("before_fingerprint"),
@@ -567,11 +655,21 @@ def validate_receding_q_rollout(
             field=f"steps[{step_index}].after repair fingerprint",
         )
 
-        conflicts_before = int(step.get("conflicts_before", -1))
-        conflicts_after = int(step.get("conflicts_after", -1))
+        conflicts_before = _rollout_int(
+            step.get("conflicts_before"),
+            field=f"steps[{step_index}].conflicts_before",
+        )
+        conflicts_after = _rollout_int(
+            step.get("conflicts_after"),
+            field=f"steps[{step_index}].conflicts_after",
+        )
         if conflicts_before != trajectory[-1] or conflicts_after < 0:
             raise ValueError("receding-Q conflict trajectory is discontinuous")
-        if int(step.get("conflict_reduction", 0)) != (
+        if _rollout_int(
+            step.get("conflict_reduction"),
+            field=f"steps[{step_index}].conflict_reduction",
+            minimum=None,
+        ) != (
             conflicts_before - conflicts_after
         ):
             raise ValueError("receding-Q conflict reduction mismatch")
@@ -658,38 +756,74 @@ def validate_receding_q_rollout(
             trial_index,
             step_index,
         )
-        if int(step.get("requested_pp_seed", -1)) != expected_seed:
+        requested_seed = _rollout_int(
+            step.get("requested_pp_seed"),
+            field=f"steps[{step_index}].requested_pp_seed",
+        )
+        if requested_seed != expected_seed:
             raise ValueError("receding-Q paired PP seed mismatch")
-        applied_seed = int(step.get("applied_pp_seed", -2))
+        applied_seed = _rollout_int(
+            step.get("applied_pp_seed"),
+            field=f"steps[{step_index}].applied_pp_seed",
+            minimum=-1,
+        )
         expected_applied_seed = expected_seed if repair_order else -1
         if applied_seed != expected_applied_seed:
             raise ValueError("receding-Q applied PP seed mismatch")
         action = step.get("action")
         if not isinstance(action, dict):
             raise ValueError("receding-Q rollout step action is missing")
-        if int(action.get("pp_random_seed", -1)) != expected_seed:
+        action_random_seed = _rollout_int(
+            action.get("random_seed"),
+            field=f"steps[{step_index}].action.random_seed",
+        )
+        if action_random_seed != expected_seed:
+            raise ValueError("receding-Q action random seed mismatch")
+        action_pp_random_seed = _rollout_int(
+            action.get("pp_random_seed"),
+            field=f"steps[{step_index}].action.pp_random_seed",
+        )
+        if (
+            action_pp_random_seed != expected_seed
+            or action_pp_random_seed != action_random_seed
+            or requested_seed != action_random_seed
+        ):
             raise ValueError("receding-Q action PP seed mismatch")
 
         if step_index == 1:
+            action_agents = _stored_agent_ids(
+                action.get("agents"),
+                field=f"steps[{step_index}].action.agents",
+                agent_count=int(state_plan["agent_count"]),
+            )
             if (
                 str(step.get("route")) != "explicit_root_candidate"
                 or str(step.get("candidate_id")) != candidate_id
                 or set(step_agents) != set(expected_agents)
                 or str(action.get("mode")) != "explicit_neighborhood"
-                or list(map(int, action.get("agents", ()))) != expected_agents
+                or action_agents != expected_agents
             ):
                 raise ValueError("receding-Q root action mismatch")
-            if int(step.get("shadow_candidate_count", -1)) != len(
+            if _rollout_int(
+                step.get("shadow_candidate_count"),
+                field=f"steps[{step_index}].shadow_candidate_count",
+            ) != len(
                 state_plan["arms"]
             ):
                 raise ValueError("receding-Q root candidate count mismatch")
-        elif (
-            str(step.get("route")) != str(continuation_teacher)
-            or str(step.get("candidate_id")) != "official_adaptive"
-            or int(step.get("shadow_candidate_count", 0)) <= 0
-            or str(action.get("mode")) != "official"
-        ):
-            raise ValueError("receding-Q continuation replanning mismatch")
+        else:
+            shadow_candidate_count = _rollout_int(
+                step.get("shadow_candidate_count"),
+                field=f"steps[{step_index}].shadow_candidate_count",
+                minimum=1,
+            )
+            if (
+                str(step.get("route")) != str(continuation_teacher)
+                or str(step.get("candidate_id")) != "official_adaptive"
+                or shadow_candidate_count <= 0
+                or str(action.get("mode")) != "official"
+            ):
+                raise ValueError("receding-Q continuation replanning mismatch")
 
         selection_seconds = _rollout_float(
             step.get("selection_seconds"),
@@ -722,7 +856,17 @@ def validate_receding_q_rollout(
             selection_seconds + iteration_seconds
         )
 
-    if trajectory != list(map(int, row.get("conflict_trajectory", ()))):
+    stored_trajectory = row.get("conflict_trajectory")
+    if not isinstance(stored_trajectory, list):
+        raise ValueError("receding-Q stored conflict trajectory is not a list")
+    normalized_trajectory = [
+        _rollout_int(
+            value,
+            field=f"conflict_trajectory[{index}]",
+        )
+        for index, value in enumerate(stored_trajectory)
+    ]
+    if trajectory != normalized_trajectory:
         raise ValueError("receding-Q stored conflict trajectory mismatch")
     if _stored_rollout_fingerprint(
         row.get("final_fingerprint"), field="final fingerprint"
@@ -759,7 +903,7 @@ def validate_receding_q_rollout(
 
     final_done = bool(steps[-1]["after_done"])
     feasible = bool(steps[-1]["after_feasible"])
-    if bool(row.get("feasible")) != feasible:
+    if not isinstance(row.get("feasible"), bool) or row["feasible"] != feasible:
         raise ValueError("receding-Q rollout feasible label mismatch")
     stop_reason = str(row.get("stop_reason"))
     if feasible:
@@ -792,6 +936,16 @@ def validate_receding_q_rollout(
         "feasible",
         "no_progress",
     ):
+        if field in {"feasible", "no_progress"} and not isinstance(
+            row.get(field), bool
+        ):
+            raise ValueError(f"receding-Q rollout {field} label must be boolean")
+        if field in {"horizon", "padded_steps", "final_conflicts"}:
+            _rollout_int(
+                row.get(field),
+                field=f"{field} label",
+                minimum=1 if field == "horizon" else 0,
+            )
         if row.get(field) != expected_labels[field]:
             raise ValueError(f"receding-Q rollout {field} label mismatch")
     for field in (

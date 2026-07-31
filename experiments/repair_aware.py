@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import read_json, sha256_file
+from experiments._common import read_json, sha256_file, strict_bool, strict_int
 from experiments.feature_schema_v2 import FEATURE_SCHEMA_ID, FEATURE_SCHEMA_SHA256
 from experiments.repair_collection import _fingerprint
 
@@ -95,27 +95,49 @@ def load_repair_aware_config(
     if mode not in REPAIR_AWARE_MODES:
         raise ValueError(f"unsupported repair-aware mode: {mode}")
     maximum_raw = raw.get("max_model_rescues")
-    maximum = int(maximum_raw) if maximum_raw is not None else None
-    if maximum is not None and maximum <= 0:
-        raise ValueError("max_model_rescues must be positive")
-    attempt_limit = int(raw.get("same_candidate_attempt_limit", 1 if schema == LEGACY_REPAIR_AWARE_CONFIG_SCHEMA else 2))
-    if attempt_limit <= 0:
-        raise ValueError("same_candidate_attempt_limit must be positive")
-    lazy_sizes = tuple(map(int, raw.get("lazy_neighborhood_sizes", ())))
-    if len(lazy_sizes) != len(set(lazy_sizes)) or any(value <= 0 for value in lazy_sizes):
+    maximum = (
+        strict_int(maximum_raw, field="max_model_rescues", minimum=1)
+        if maximum_raw is not None
+        else None
+    )
+    attempt_limit = strict_int(
+        raw.get(
+            "same_candidate_attempt_limit",
+            1 if schema == LEGACY_REPAIR_AWARE_CONFIG_SCHEMA else 2,
+        ),
+        field="same_candidate_attempt_limit",
+        minimum=1,
+    )
+    lazy_raw = raw.get("lazy_neighborhood_sizes", ())
+    if not isinstance(lazy_raw, (list, tuple)):
+        raise ValueError("lazy_neighborhood_sizes must be a sequence")
+    lazy_sizes = tuple(
+        strict_int(value, field="lazy_neighborhood_sizes", minimum=1)
+        for value in lazy_raw
+    )
+    if len(lazy_sizes) != len(set(lazy_sizes)):
         raise ValueError("lazy_neighborhood_sizes must be unique positive integers")
     fallback = str(raw.get("terminal_fallback", "official_adaptive"))
     if fallback != "official_adaptive":
         raise ValueError("repair-aware fallback must be official_adaptive")
-    fallback_until_change = bool(
-        raw.get(
-            "fallback_until_state_change",
-            not bool(raw.get("refresh_after_fallback", False)),
+    if "fallback_until_state_change" in raw:
+        fallback_until_change = strict_bool(
+            raw["fallback_until_state_change"],
+            field="fallback_until_state_change",
         )
-    )
+    else:
+        refresh_after_fallback = strict_bool(
+            raw.get("refresh_after_fallback", False),
+            field="refresh_after_fallback",
+        )
+        fallback_until_change = not refresh_after_fallback
     if schema == REPAIR_AWARE_CONFIG_SCHEMA and not fallback_until_change:
         raise ValueError("repair-aware fallback must persist until the state changes")
-    if not bool(raw.get("reset_on_state_fingerprint_change", True)):
+    reset_on_change = strict_bool(
+        raw.get("reset_on_state_fingerprint_change", True),
+        field="reset_on_state_fingerprint_change",
+    )
+    if not reset_on_change:
         raise ValueError("repair-aware state must reset after a fingerprint change")
     return RepairAwareConfig(
         mode=mode,

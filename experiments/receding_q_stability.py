@@ -57,7 +57,7 @@ def load_receding_q_rollouts(root: str | Path) -> list[dict[str, Any]]:
     keys = [_rollout_key(row) for row in rows]
     if len(keys) != len(set(keys)):
         raise ValueError("receding-Q source contains duplicate rollout keys")
-    if not all(bool(row.get("complete")) for row in rows):
+    if not all(row.get("complete") is True for row in rows):
         raise ValueError("receding-Q source contains incomplete rollouts")
     return rows
 

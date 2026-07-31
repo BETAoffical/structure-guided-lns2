@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
+from experiments import v3_s3_collection as collection_module
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import configured_policies
 from experiments.repair_aware import load_portable_scalar_model
@@ -30,10 +31,12 @@ from experiments.v3_s3 import (
     sequence_id,
 )
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
+from experiments.neighborhood_candidates import _candidate_id
 from experiments.trace_replay import recorded_replay_action
 from experiments.v3_s3_collection import (
     V3_S3_COLLECTION_SCHEMA,
     V3_S3_COLLECTION_VERSION,
+    V3_S3_COLLECTION_PRODUCER_FILES,
     _ambiguous_additional_sequences,
     _audit_state_sample,
     _candidate_generation_record,
@@ -53,19 +56,26 @@ from experiments.v3_s3_collection import (
     _strict_retest,
     _stream_manifests,
     qualification_pool,
+    revalidate_v3_s3_collection,
     temporal_context,
+    validate_v3_s3_collection_source,
 )
 from tests.data.test_repair_collection import sample_state
 from experiments.v3_s3_pipeline import (
     S3_SOURCE_POLICIES,
+    V3_S3_PIPELINE_SCHEMA,
+    V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA,
     _pipeline_identity,
     _source_config,
     _source_task_partition,
+    _validate_reused_source_replay_audit,
+    _validate_reused_source_report,
     _verified_training_inputs,
     collect_v3_s3_sources,
     run_v3_s3_collection_stage,
     run_v3_s3_native_audit_stage,
     run_v3_s3_training_stage,
+    source_replay_input_identity,
 )
 from experiments.v3_s3_training import (
     EXTRA_TREES_PARAMETERS,
@@ -134,7 +144,7 @@ def _semantic_qualification(root: Path, *, ambiguous: bool = True):
     candidate_rows = []
     template_indices = {}
     for index, template in enumerate(S3_ACTION_TEMPLATES):
-        candidate_id = f"candidate-{index}"
+        candidate_id = _candidate_id([index])
         candidates.append(
             {
                 "candidate_id": candidate_id,
@@ -187,7 +197,7 @@ def _semantic_sequence_trial(decision, templates, trial_index):
         candidate_index = S3_ACTION_TEMPLATES.index(template)
         agents = [candidate_index]
         candidate = {
-            "candidate_id": f"candidate-{candidate_index}",
+            "candidate_id": _candidate_id([candidate_index]),
             "agents": agents,
             "selection_families": [template.family_key],
             "selection_rank_by_family": {
@@ -197,7 +207,7 @@ def _semantic_sequence_trial(decision, templates, trial_index):
         if index == 1:
             candidate_pool = [
                 {
-                    "candidate_id": f"candidate-{pool_index}",
+                    "candidate_id": _candidate_id([pool_index]),
                     "agents": [pool_index],
                     "selection_families": [pool_template.family_key],
                     "selection_rank_by_family": {
@@ -214,7 +224,7 @@ def _semantic_sequence_trial(decision, templates, trial_index):
                 "template": template.payload(),
                 "template_valid": True,
                 "executed": True,
-                "candidate_id": f"candidate-{candidate_index}",
+                "candidate_id": _candidate_id([candidate_index]),
                 "agents": agents,
                 "candidate_generation": _candidate_generation_record(
                     candidate_pool,
@@ -371,6 +381,200 @@ def _semantic_state_artifact(root: Path, *, ambiguous: bool = True):
     state_path = root / "state.json"
     _write_json(state_path, payload)
     return run_fingerprint, qualified, selected, state_path, payload
+
+
+def _write_strict_collection_source(root: Path):
+    _old_run, qualified, selected, original_state_path, state_payload = (
+        _semantic_state_artifact(root, ambiguous=False)
+    )
+    source_root = root / "source-run"
+    source_root.mkdir()
+    _write_json(source_root / "run_config.json", {"run_fingerprint": "source-run"})
+    qualified["decision"].update(
+        {
+            "source_root": str(source_root),
+            "source_run_fingerprint": "source-run",
+            "source_policy": "official_adaptive",
+            "task_id": "task",
+            "solver_seed": 7,
+            "prefix_actions": [],
+            "before_conflicts": 3,
+        }
+    )
+    pool = [copy.deepcopy(qualified["decision"])]
+
+    controller = root / "controller"
+    controller.mkdir()
+    (controller / "bundle.json").write_text("{}\n", encoding="utf-8")
+    producer = {
+        "schema": "lns2.producer_identity.v2",
+        "source_sha256": {
+            name: "a" * 64 for name in V3_S3_COLLECTION_PRODUCER_FILES
+        },
+        "python": {"implementation": "CPython", "version": "3.10.0"},
+        "packages": {
+            "joblib": "1.0",
+            "numpy": "1.0",
+            "scikit-learn": "1.0",
+        },
+        "native_required": True,
+        "native": {
+            "path": str(root / "lns2_env.so"),
+            "sha256": "b" * 64,
+            "repair_timing_schema": "lns2.repair_timing.v2",
+            "native_semantics_schema": "lns2.corrected_native.v1",
+        },
+    }
+    run_without_fingerprint = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "trace_replay_contract": collection_module.TRACE_REPLAY_CONTRACT,
+        "source_run_fingerprints": ["source-run"],
+        "qualification_pool_fingerprint": _fingerprint(pool),
+        "controller_bundle": str(controller),
+        "controller_bundle_fingerprint": (
+            collection_module._directory_content_fingerprint(controller)
+        ),
+        "producer_identity": producer,
+        "producer_identity_fingerprint": _fingerprint(producer),
+        "workers": 1,
+        "base_sequences_per_state": 36,
+        "paired_trials": 2,
+        "horizon": 3,
+        "runtime_fallback": None,
+    }
+    run_fingerprint = _fingerprint(run_without_fingerprint)
+    run = {**run_without_fingerprint, "run_fingerprint": run_fingerprint}
+
+    qualification_root = root / "qualification"
+    qualification_root.mkdir()
+    qualification_path = qualification_root / "qualification.json"
+    qualified["run_fingerprint"] = run_fingerprint
+    _write_json(qualification_path, qualified)
+    selected = {
+        **copy.deepcopy(qualified["decision"]),
+        "qualification_file": str(qualification_path),
+    }
+    selection = [selected]
+    state_payload["run_fingerprint"] = run_fingerprint
+    state_root = root / "states" / "policy_train"
+    state_root.mkdir(parents=True)
+    state_path = state_root / "state.json"
+    original_state_path.replace(state_path)
+    _write_json(state_path, state_payload)
+
+    pool_report = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "qualification_pool_count": 1,
+        "shortages": [],
+        "passed": True,
+    }
+    selection_report = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "selected_state_count": 1,
+        "passed": True,
+    }
+    _write_json(root / "run_config.json", run)
+    _write_jsonl(root / "qualification_pool.jsonl", pool)
+    _write_json(root / "qualification_pool_report.json", pool_report)
+    _write_jsonl(root / "state_selection.jsonl", selection)
+    _write_json(root / "state_selection_report.json", selection_report)
+    manifest_counts = collection_module._stream_manifests([state_path], root)
+    coverage = _coverage(
+        selection, [state_path], run_fingerprint=run_fingerprint
+    )
+    assert coverage["passed"], coverage
+    _write_json(root / "coverage_report.json", coverage)
+    strict_identity, _files = collection_module._strict_retest_inputs(
+        selected=selection,
+        state_files=[state_path],
+        controller_bundle=controller,
+        run_fingerprint=run_fingerprint,
+        fraction=0.15,
+    )
+    strict = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "run_fingerprint": run_fingerprint,
+        "input_sha256": _fingerprint(strict_identity),
+        "input_identity": strict_identity,
+        "fraction": 0.15,
+        "requested_state_count": 1,
+        "completed_state_count": 1,
+        "error_count": 0,
+        "mismatch_count": 0,
+        "errors": [],
+        "mismatches": [],
+        "passed": True,
+    }
+    _write_json(root / "strict_retest_report.json", strict)
+    report = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "run_fingerprint": run_fingerprint,
+        "qualification_pool": pool_report,
+        "qualification_completed_count": 1,
+        "qualification_error_count": 0,
+        "qualification_errors": [],
+        "qualification_rejected_count": 0,
+        "qualification_rejections": [],
+        "selection": selection_report,
+        "requested_state_count": 1,
+        "completed_state_count": 1,
+        "error_state_count": 0,
+        "errors": [],
+        "manifest_counts": manifest_counts,
+        "coverage": coverage,
+        "strict_retest": strict,
+        "qualification_pool_sha256": sha256_file(
+            root / "qualification_pool.jsonl"
+        ),
+        "qualification_pool_report_sha256": sha256_file(
+            root / "qualification_pool_report.json"
+        ),
+        "state_selection_sha256": sha256_file(
+            root / "state_selection.jsonl"
+        ),
+        "state_selection_report_sha256": sha256_file(
+            root / "state_selection_report.json"
+        ),
+        "coverage_report_sha256": sha256_file(root / "coverage_report.json"),
+        "strict_retest_report_sha256": sha256_file(
+            root / "strict_retest_report.json"
+        ),
+        "sequence_features_sha256": sha256_file(
+            root / "sequence_features.jsonl"
+        ),
+        "sequence_trials_sha256": sha256_file(
+            root / "sequence_trials.jsonl"
+        ),
+        "external_baselines_sha256": sha256_file(
+            root / "external_baselines.jsonl"
+        ),
+        "complete": True,
+    }
+    _write_json(root / "collection_report.json", report)
+    _write_json(
+        root / "status.json",
+        {
+            "schema": V3_S3_COLLECTION_SCHEMA,
+            "schema_version": V3_S3_COLLECTION_VERSION,
+            "phase": "complete",
+            "status": "complete",
+            "completed_states": 1,
+            "total_states": 1,
+            "error_states": 0,
+        },
+    )
+    return {
+        "producer": producer,
+        "pool": pool,
+        "qualification_path": qualification_path,
+        "state_path": state_path,
+        "report": report,
+    }
 
 
 class V3S3PipelineTest(unittest.TestCase):
@@ -776,17 +980,93 @@ class V3S3PipelineTest(unittest.TestCase):
             )
             source = root / "source"
             source.mkdir()
-            (source / "source_report.json").write_text(
-                '{"complete": true}\n', encoding="utf-8"
+            source_keys = {
+                f"{split}|{policy}"
+                for split in ("policy_train", "policy_validation")
+                for policy in S3_SOURCE_POLICIES
+            }
+            _write_json(
+                source / "source_report.json",
+                {
+                    "schema": V3_S3_PIPELINE_SCHEMA,
+                    "complete": True,
+                    "design": {
+                        "schema": V3_S3_PIPELINE_SCHEMA,
+                        "episode_count": len(source_keys),
+                        "by_source": {
+                            key: 1 for key in sorted(source_keys)
+                        },
+                    },
+                    "qualifications": {
+                        split: {
+                            "schema": "lns2.closed_loop_confirmation.v1",
+                            "schema_version": 1,
+                            "controller": "v2-full",
+                            "run_fingerprint": f"qualification-{split}",
+                            "qualification": {"passed": True, "errors": []},
+                        }
+                        for split in ("policy_train", "policy_validation")
+                    },
+                    "reports": {
+                        key: {
+                            "schema": "lns2.closed_loop_confirmation.v1",
+                            "schema_version": 1,
+                            "controller": "v2-full",
+                            "run_fingerprint": f"run-{key}",
+                            key.split("|", 1)[1]: {
+                                "episode_count": 1,
+                                "error_count": 0,
+                            },
+                        }
+                        for key in sorted(source_keys)
+                    },
+                },
             )
-            (source / "source_replay_audit.json").write_text(
-                '{"passed": true}\n', encoding="utf-8"
+            replay_rows = [
+                {
+                    "split": split,
+                    "source_run_fingerprint": f"run-{split}-{policy}",
+                    "source_policy": policy,
+                    "episode_id": f"episode-{split}-{policy}",
+                    "decision_index": 0,
+                    "before_fingerprint": f"before-{split}-{policy}",
+                    "after_fingerprint": f"after-{split}-{policy}",
+                    "prefix_actions": [],
+                    "replay_action": {"mode": "official"},
+                }
+                for split in ("policy_train", "policy_validation")
+                for policy in S3_SOURCE_POLICIES
+            ]
+            replay_identity = source_replay_input_identity(replay_rows)
+            _write_json(
+                source / "source_replay_audit.json",
+                {
+                    "schema": V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA,
+                    "passed": True,
+                    "input_identity": replay_identity,
+                    "input_sha256": _fingerprint(replay_identity),
+                    "source_state_count": len(replay_rows),
+                    "episode_count": len(replay_rows),
+                    "matched_decision_state_count": len(replay_rows),
+                    "matched_by_source_policy": {
+                        policy: 2 for policy in S3_SOURCE_POLICIES
+                    },
+                    "rejected_episode_count": 0,
+                    "rejections": [],
+                    "prefix_mismatch_count": 0,
+                    "prefix_mismatches": [],
+                    "terminal_after_mismatch_count": 0,
+                    "terminal_after_mismatches": [],
+                },
             )
 
             with mock.patch(
                 "experiments.v3_s3_pipeline.producer_identity",
                 return_value={"schema": "test-producer"},
-            ) as producer:
+            ) as producer, mock.patch(
+                "experiments.v3_s3_pipeline.source_decisions",
+                return_value=replay_rows,
+            ):
                 identity = _pipeline_identity(
                     project_root=Path(__file__).resolve().parents[2],
                     dataset_config=config,
@@ -810,6 +1090,29 @@ class V3S3PipelineTest(unittest.TestCase):
                 "experiments/v3_s3_training.py",
                 producer_arguments["source_files"],
             )
+            tampered_report = _read_json(source / "source_report.json")
+            tampered_report["complete"] = "true"
+            with self.assertRaisesRegex(ValueError, "incomplete or invalid"):
+                _validate_reused_source_report(tampered_report)
+
+            tampered_audit = _read_json(source / "source_replay_audit.json")
+            tampered_audit["passed"] = "true"
+            with self.assertRaisesRegex(ValueError, "audit is invalid"):
+                _validate_reused_source_replay_audit(
+                    tampered_audit,
+                    source_root=source,
+                )
+
+            changed_rows = copy.deepcopy(replay_rows)
+            changed_rows[0]["before_fingerprint"] = "changed"
+            with mock.patch(
+                "experiments.v3_s3_pipeline.source_decisions",
+                return_value=changed_rows,
+            ), self.assertRaisesRegex(ValueError, "input identity mismatch"):
+                _validate_reused_source_replay_audit(
+                    _read_json(source / "source_replay_audit.json"),
+                    source_root=source,
+                )
 
     def test_collection_stage_records_incomplete_source_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1205,6 +1508,29 @@ class V3S3PipelineTest(unittest.TestCase):
                 ),
                 [],
             )
+            selected_context_tamper = copy.deepcopy(selected)
+            selected_context_tamper["temporal_context"][
+                "history.available_steps"
+            ] += 1.0
+            selection_errors = _state_artifact_errors(
+                payload,
+                run_fingerprint=run,
+                selected_row=selected_context_tamper,
+                qualified=qualified,
+            )
+            self.assertTrue(
+                any(
+                    "complete qualification decision" in error
+                    for error in selection_errors
+                ),
+                selection_errors,
+            )
+            coverage = _coverage(
+                [selected_context_tamper],
+                [_path],
+                run_fingerprint=run,
+            )
+            self.assertFalse(coverage["passed"])
 
             template_tamper = copy.deepcopy(qualified)
             first_key = next(iter(template_tamper["template_indices"]))
@@ -1218,6 +1544,25 @@ class V3S3PipelineTest(unittest.TestCase):
                 _qualification_artifact_errors([], run_fingerprint=run)
             )
 
+            candidate_identity_tamper = copy.deepcopy(qualified)
+            candidate_identity_tamper["candidates"][0][
+                "candidate_id"
+            ] = "neighborhood-0000000000000000"
+            candidate_identity_tamper["candidate_rows"][0][
+                "candidate_id"
+            ] = "neighborhood-0000000000000000"
+            candidate_identity_tamper["candidate_rows"][0][
+                "candidate_key"
+            ] = "neighborhood-0000000000000000"
+            errors = _qualification_artifact_errors(
+                candidate_identity_tamper,
+                run_fingerprint=run,
+            )
+            self.assertTrue(
+                any("candidate agents" in error for error in errors),
+                errors,
+            )
+
             feature_tamper = copy.deepcopy(payload)
             feature_tamper["features"][0]["feature_names"].reverse()
             self.assertTrue(
@@ -1228,6 +1573,233 @@ class V3S3PipelineTest(unittest.TestCase):
                     qualified=qualified,
                 )
             )
+
+    def test_qualification_replay_binds_generated_features(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _run, qualified, _selected, _path, _payload = (
+                _semantic_state_artifact(root, ambiguous=False)
+            )
+            source = root / "source"
+            source.mkdir()
+            _write_json(
+                source / "run_config.json",
+                {"run_fingerprint": "source-run"},
+            )
+            decision = qualified["decision"]
+            decision.update(
+                {
+                    "source_root": str(source),
+                    "source_run_fingerprint": "source-run",
+                    "prefix_actions": [],
+                }
+            )
+            replay_state = {"state": "replayed"}
+            expected_candidates = copy.deepcopy(qualified["candidates"])
+            expected_rows = copy.deepcopy(qualified["candidate_rows"])
+            with mock.patch.object(
+                collection_module,
+                "_source_replay_job",
+                return_value=({}, {"proposal": {}}),
+            ), mock.patch.object(
+                collection_module,
+                "replay_prefix",
+                return_value=(object(), replay_state),
+            ), mock.patch.object(
+                collection_module,
+                "state_fingerprint",
+                return_value=decision["before_fingerprint"],
+            ), mock.patch.object(
+                collection_module,
+                "repair_structure_fingerprint",
+                return_value=decision["before_repair_fingerprint"],
+            ), mock.patch.object(
+                collection_module,
+                "_full_candidate_rows",
+                return_value=(expected_candidates, expected_rows, {}),
+            ):
+                self.assertEqual(
+                    collection_module._qualification_replay_errors(qualified),
+                    [],
+                )
+                tampered = copy.deepcopy(qualified)
+                feature_name = next(
+                    iter(
+                        tampered["candidate_rows"][0]["features"][
+                            "realized_dynamic"
+                        ]
+                    )
+                )
+                tampered["candidate_rows"][0]["features"]["realized_dynamic"][
+                    feature_name
+                ] += 1.0
+                errors = collection_module._qualification_replay_errors(
+                    tampered
+                )
+            self.assertTrue(
+                any("features differ" in error for error in errors),
+                errors,
+            )
+
+    def test_read_only_source_validator_rejects_pool_and_json_tampering(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = _write_strict_collection_source(root)
+            before = {
+                path.relative_to(root): path.read_bytes()
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+            with mock.patch.object(
+                collection_module,
+                "producer_identity",
+                return_value=fixture["producer"],
+            ), mock.patch.object(
+                collection_module,
+                "_qualification_replay_errors",
+                return_value=[],
+            ):
+                validation = validate_v3_s3_collection_source(root)
+            after = {
+                path.relative_to(root): path.read_bytes()
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+            self.assertTrue(validation["passed"])
+            self.assertEqual(after, before)
+
+            tampered_pool = copy.deepcopy(fixture["pool"])
+            tampered_pool[0]["source_root"] = str(root / "other-source")
+            tampered_pool[0]["prefix_actions"] = [{"agents": [1]}]
+            _write_jsonl(root / "qualification_pool.jsonl", tampered_pool)
+            with mock.patch.object(
+                collection_module,
+                "producer_identity",
+                return_value=fixture["producer"],
+            ), self.assertRaisesRegex(ValueError, "qualification_pool_sha256"):
+                validate_v3_s3_collection_source(root)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = _write_strict_collection_source(root)
+            (root / "status.json").write_text(
+                "[]\n", encoding="utf-8"
+            )
+            with mock.patch.object(
+                collection_module,
+                "producer_identity",
+                return_value=fixture["producer"],
+            ), self.assertRaisesRegex(ValueError, "not a JSON object"):
+                validate_v3_s3_collection_source(root)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = _write_strict_collection_source(root)
+            (root / "qualification_pool.jsonl").write_text(
+                '{"state_id":NaN}\n',
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                collection_module,
+                "producer_identity",
+                return_value=fixture["producer"],
+            ), self.assertRaisesRegex(ValueError, "non-finite"):
+                validate_v3_s3_collection_source(root)
+
+    def test_selection_rows_bind_every_qualification_decision_field(
+        self,
+    ) -> None:
+        mutations = (
+            ("source_stratum", "tampered_stratum"),
+            (
+                "temporal_context",
+                {"history.available_steps": 999.0},
+            ),
+            ("decision_index", 1),
+            ("before_conflicts", 4),
+            ("source_root", "tampered-source-root"),
+            ("task_id", "tampered-task"),
+            (
+                "prefix_actions",
+                [
+                    {
+                        "mode": "replay_neighborhood",
+                        "agents": [0],
+                        "repair_order": [0],
+                    }
+                ],
+            ),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = _write_strict_collection_source(root)
+                selection_path = root / "state_selection.jsonl"
+                selected = collection_module._require_collection_rows(
+                    selection_path,
+                    label="test selection",
+                )
+                selected[0][field] = copy.deepcopy(value)
+                _write_jsonl(selection_path, selected)
+
+                report_path = root / "collection_report.json"
+                report = _read_json(report_path)
+                report["state_selection_sha256"] = sha256_file(
+                    selection_path
+                )
+                _write_json(report_path, report)
+                with mock.patch.object(
+                    collection_module,
+                    "producer_identity",
+                    return_value=fixture["producer"],
+                ), mock.patch.object(
+                    collection_module,
+                    "_qualification_replay_errors",
+                    return_value=[],
+                ), self.assertRaisesRegex(
+                    ValueError,
+                    "complete qualification decision",
+                ):
+                    validate_v3_s3_collection_source(root)
+
+    def test_collection_requires_numpy_and_sklearn_versions(self) -> None:
+        with mock.patch.object(
+            collection_module,
+            "source_decisions",
+            return_value=[],
+        ), mock.patch.object(
+            collection_module,
+            "qualification_pool",
+            return_value=(
+                [],
+                {
+                    "schema": V3_S3_COLLECTION_SCHEMA,
+                    "schema_version": V3_S3_COLLECTION_VERSION,
+                },
+            ),
+        ), mock.patch.object(
+            collection_module,
+            "producer_identity",
+            side_effect=ValueError("missing required numpy version"),
+        ) as identity:
+            with self.assertRaisesRegex(ValueError, "numpy"):
+                collection_module.collect_v3_s3_data(
+                    source_roots={},
+                    output="unused",
+                    controller_bundle="unused",
+                    workers=1,
+                    resume=False,
+                )
+        self.assertEqual(
+            identity.call_args.kwargs["package_names"],
+            ("numpy", "scikit-learn"),
+        )
+        self.assertEqual(
+            identity.call_args.kwargs["optional_package_names"],
+            ("joblib",),
+        )
 
     def test_state_validator_rejects_dynamic_candidate_and_strict_type_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1412,7 +1984,7 @@ class V3S3PipelineTest(unittest.TestCase):
             "decision": decision,
             "candidates": [
                 {
-                    "candidate_id": "first",
+                    "candidate_id": _candidate_id([0]),
                     "agents": [0],
                     "selection_families": [templates[0].family_key],
                     "selection_rank_by_family": {
@@ -1521,6 +2093,85 @@ class V3S3PipelineTest(unittest.TestCase):
             self.assertEqual(first["input_sha256"], second["input_sha256"])
             self.assertNotEqual(second["input_sha256"], third["input_sha256"])
             self.assertEqual(run_jobs.call_count, 2)
+
+    def test_revalidation_rejects_stale_strict_retest_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, qualified, selected, original_state_path, payload = (
+                _semantic_state_artifact(root, ambiguous=False)
+            )
+            state_path = root / "states" / "policy_train" / "state.json"
+            state_path.parent.mkdir(parents=True)
+            original_state_path.replace(state_path)
+            controller = root / "controller"
+            controller.mkdir()
+            (controller / "bundle.json").write_text("{}\n", encoding="utf-8")
+            completed = [
+                {
+                    "state_id": selected["state_id"],
+                    "sequence_id": payload["trials"][0]["sequence_id"],
+                    "trial_index": 0,
+                    "passed": True,
+                }
+            ]
+            with mock.patch(
+                "experiments.v3_s3_collection._run_jobs",
+                return_value=(completed, []),
+            ):
+                strict = _strict_retest(
+                    selected=[selected],
+                    state_files=[state_path],
+                    output_root=root,
+                    controller_bundle=controller,
+                    run_fingerprint=run,
+                )
+            _write_jsonl(root / "state_selection.jsonl", [selected])
+            _write_json(
+                root / "run_config.json",
+                {
+                    "schema": V3_S3_COLLECTION_SCHEMA,
+                    "schema_version": V3_S3_COLLECTION_VERSION,
+                    "run_fingerprint": run,
+                    "controller_bundle": str(controller),
+                    "controller_bundle_fingerprint": strict["input_identity"][
+                        "controller_bundle_fingerprint"
+                    ],
+                },
+            )
+            _write_json(
+                root / "collection_report.json",
+                {
+                    "schema": V3_S3_COLLECTION_SCHEMA,
+                    "schema_version": V3_S3_COLLECTION_VERSION,
+                    "run_fingerprint": run,
+                    "qualification_errors": [],
+                    "errors": [],
+                    "complete": True,
+                },
+            )
+            report = revalidate_v3_s3_collection(
+                root,
+                controller_bundle=controller,
+            )
+            self.assertTrue(report["complete"])
+
+            qualification_path = Path(selected["qualification_file"])
+            original_qualification = qualification_path.read_bytes()
+            qualified["cache_nonce"] = 1
+            _write_json(qualification_path, qualified)
+            with self.assertRaisesRegex(ValueError, "changed inputs"):
+                revalidate_v3_s3_collection(
+                    root,
+                    controller_bundle=controller,
+                )
+
+            qualification_path.write_bytes(original_qualification)
+            (controller / "changed.json").write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "fingerprint changed"):
+                revalidate_v3_s3_collection(
+                    root,
+                    controller_bundle=controller,
+                )
 
     def test_resume_progress_excludes_reused_states_from_throughput(self) -> None:
         completed = [{"status": "resumed"} for _ in range(47)]
@@ -1902,6 +2553,9 @@ class V3S3PipelineTest(unittest.TestCase):
             native_module = types.ModuleType("lns2_env")
             native_module.PortableTreeEnsemble = _PythonPortableTreeEnsemble
             native_module.repair_timing_schema = "lns2.repair_timing.v2"
+            native_module.native_semantics_schema = (
+                "lns2.corrected_native.v1"
+            )
             native_binary = root / "lns2_env.pyd"
             native_binary.write_bytes(b"native-audit-one")
             native_module.__file__ = str(native_binary)

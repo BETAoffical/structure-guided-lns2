@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import (
+    config_producer_fingerprint,
     producer_identity,
     sha256_file,
     strict_nonnegative_int as _strict_nonnegative_int,
@@ -21,6 +22,7 @@ from experiments.closed_loop_confirmation import (
 )
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
+from experiments.neighborhood_candidates import _candidate_id
 from experiments.online_feature_engine import OnlineFeatureEngine
 from experiments.parallel_runtime import (
     candidate_lane_counts,
@@ -82,6 +84,8 @@ V3_S3_COLLECTION_PRODUCER_FILES = (
     "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
     "experiments/feature_schema_v3.py",
+    "experiments/neighborhood_candidates.py",
+    "experiments/neighborhood_features.py",
     "experiments/online_feature_engine.py",
     "experiments/parallel_runtime.py",
     "experiments/repair_aware.py",
@@ -690,6 +694,8 @@ def _candidate_semantics(candidate: Any) -> dict[str, Any]:
         raise ValueError("candidate agents are invalid")
     if len(set(agents)) != len(agents) or not agents:
         raise ValueError("candidate agents are empty or duplicated")
+    if candidate_id != _candidate_id(agents):
+        raise ValueError("candidate_id differs from the candidate agents")
     if not isinstance(families, list) or any(
         not isinstance(name, str) or not name for name in families
     ):
@@ -867,21 +873,42 @@ def _qualification_artifact_errors(
         errors.append("qualification template_indices differs from candidate mapping")
 
     required_features = set(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    decision_agent_count = decision.get("agent_count")
+    if (
+        not _strict_nonnegative_int(decision_agent_count)
+        or decision_agent_count <= 0
+    ):
+        errors.append("qualification decision agent_count is invalid")
+        decision_agent_count = 0
+    seen_candidate_ids: set[str] = set()
+    seen_agent_sets: set[tuple[int, ...]] = set()
     for index, (candidate, row) in enumerate(zip(candidates, rows)):
         if not isinstance(candidate, dict) or not isinstance(row, dict):
             errors.append(f"qualification candidate {index} is not an object pair")
             continue
-        candidate_id = str(candidate.get("candidate_id", ""))
+        try:
+            semantic_candidate = _candidate_semantics(candidate)
+        except (TypeError, ValueError) as error:
+            errors.append(
+                f"qualification candidate {index} semantics are invalid: {error}"
+            )
+            continue
+        candidate_id = semantic_candidate["candidate_id"]
+        agent_key = tuple(sorted(semantic_candidate["agents"]))
+        if any(agent >= decision_agent_count for agent in agent_key):
+            errors.append(
+                f"qualification candidate {index} has an out-of-range agent"
+            )
+        if candidate_id in seen_candidate_ids:
+            errors.append(f"qualification candidate {index} identity is duplicated")
+        if agent_key in seen_agent_sets:
+            errors.append(
+                f"qualification candidate {index} neighborhood is duplicated"
+            )
+        seen_candidate_ids.add(candidate_id)
+        seen_agent_sets.add(agent_key)
         if not candidate_id or str(row.get("candidate_id", "")) != candidate_id:
             errors.append(f"qualification candidate {index} identity differs")
-        agents = candidate.get("agents")
-        if (
-            not isinstance(agents, list)
-            or not agents
-            or any(isinstance(agent, bool) or not isinstance(agent, int) for agent in agents)
-            or len(agents) != len(set(agents))
-        ):
-            errors.append(f"qualification candidate {index} agents are invalid")
         if str(row.get("candidate_key", "")) != candidate_id:
             errors.append(f"qualification candidate {index} key differs")
         if str(row.get("state_id", "")) != before_fingerprint:
@@ -963,6 +990,13 @@ def _qualification_job(job: dict[str, Any]) -> dict[str, Any]:
             expected_decision=decision,
         )
         if existing is not None:
+            replay_errors = _qualification_replay_errors(existing)
+            if replay_errors:
+                raise ValueError(
+                    "v3-S3 qualification completed artifact is invalid and "
+                    "was preserved: "
+                    + "; ".join(replay_errors[:5])
+                )
             return {
                 "state_id": str(decision["state_id"]),
                 "state_file": str(output),
@@ -1232,7 +1266,8 @@ def audit_v3_s3_parallelism(
         project_root=Path(__file__).resolve().parents[1],
         source_files=V3_S3_COLLECTION_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("joblib", "numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
     )
     audit_identity = {
         "schema": "lns2.v3_s3_parallelism_audit_run.v2",
@@ -2690,6 +2725,16 @@ def _state_artifact_errors(
     )
     errors.extend(f"qualification: {error}" for error in qualification_errors)
     state_id = str(decision.get("state_id", ""))
+    qualification_file = selected_row.get("qualification_file")
+    if not isinstance(qualification_file, str) or not qualification_file:
+        errors.append("state selection qualification_file is invalid")
+    elif selected_row != {
+        **decision,
+        "qualification_file": qualification_file,
+    }:
+        errors.append(
+            "state selection is not the complete qualification decision"
+        )
     for name in (
         "state_id",
         "before_fingerprint",
@@ -3007,6 +3052,66 @@ def _strict_retest_job(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _strict_retest_inputs(
+    *,
+    selected: list[dict[str, Any]],
+    state_files: list[Path],
+    controller_bundle: Path,
+    run_fingerprint: str,
+    fraction: float,
+) -> tuple[dict[str, Any], dict[str, tuple[Path, dict[str, Any]]]]:
+    file_by_state: dict[str, tuple[Path, dict[str, Any]]] = {}
+    input_files = []
+    for path in sorted(map(Path, state_files)):
+        payload = _read_json(path)
+        if not isinstance(payload, dict):
+            raise ValueError(f"strict retest state is not an object: {path}")
+        state_id = str(payload.get("state_id", ""))
+        if not state_id:
+            raise ValueError(f"strict retest state lacks state_id: {path}")
+        if state_id in file_by_state:
+            raise ValueError(f"strict retest has duplicate state_id: {state_id}")
+        file_by_state[state_id] = (path, payload)
+        input_files.append(
+            {
+                "kind": "state",
+                "state_id": state_id,
+                "path": str(path.resolve()),
+                "sha256": sha256_file(path),
+            }
+        )
+    selected_ids: set[str] = set()
+    for row in sorted(selected, key=lambda value: str(value["state_id"])):
+        state_id = str(row.get("state_id", ""))
+        if not state_id or state_id in selected_ids:
+            raise ValueError(
+                f"strict retest selected states contain duplicate/empty state_id: {state_id}"
+            )
+        selected_ids.add(state_id)
+        qualification_path = Path(str(row["qualification_file"])).resolve()
+        input_files.append(
+            {
+                "kind": "qualification",
+                "state_id": state_id,
+                "path": str(qualification_path),
+                "sha256": sha256_file(qualification_path),
+            }
+        )
+    if set(file_by_state) != selected_ids:
+        raise ValueError(
+            "strict retest state files do not exactly cover selected states"
+        )
+    identity = {
+        "run_fingerprint": str(run_fingerprint),
+        "fraction": float(fraction),
+        "input_files": input_files,
+        "controller_bundle_fingerprint": _directory_content_fingerprint(
+            Path(controller_bundle)
+        ),
+    }
+    return identity, file_by_state
+
+
 def _strict_retest(
     *,
     selected: list[dict[str, Any]],
@@ -3017,38 +3122,13 @@ def _strict_retest(
     fraction: float = 0.15,
 ) -> dict[str, Any]:
     report_path = output_root / "strict_retest_report.json"
-    file_by_state = {}
-    input_files = []
-    for path in sorted(map(Path, state_files)):
-        payload = _read_json(path)
-        state_id = str(payload["state_id"])
-        file_by_state[state_id] = (path, payload)
-        input_files.append(
-            {
-                "kind": "state",
-                "state_id": state_id,
-                "path": str(path.resolve()),
-                "sha256": sha256_file(path),
-            }
-        )
-    for row in sorted(selected, key=lambda value: str(value["state_id"])):
-        qualification_path = Path(str(row["qualification_file"])).resolve()
-        input_files.append(
-            {
-                "kind": "qualification",
-                "state_id": str(row["state_id"]),
-                "path": str(qualification_path),
-                "sha256": sha256_file(qualification_path),
-            }
-        )
-    strict_input_identity = {
-        "run_fingerprint": str(run_fingerprint),
-        "fraction": float(fraction),
-        "input_files": input_files,
-        "controller_bundle_fingerprint": _directory_content_fingerprint(
-            Path(controller_bundle)
-        ),
-    }
+    strict_input_identity, file_by_state = _strict_retest_inputs(
+        selected=selected,
+        state_files=state_files,
+        controller_bundle=controller_bundle,
+        run_fingerprint=run_fingerprint,
+        fraction=fraction,
+    )
     strict_input_sha256 = _fingerprint(strict_input_identity)
     if report_path.is_file():
         try:
@@ -3420,7 +3500,8 @@ def collect_v3_s3_data(
         project_root=Path(__file__).resolve().parents[1],
         source_files=V3_S3_COLLECTION_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("joblib", "numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
     )
     identity = {
         "schema": V3_S3_COLLECTION_SCHEMA,
@@ -3432,12 +3513,7 @@ def collect_v3_s3_data(
                 for row in pool
             }
         ),
-        "qualification_pool_fingerprint": _fingerprint(
-            [
-                (row["state_id"], row["before_repair_fingerprint"])
-                for row in pool
-            ]
-        ),
+        "qualification_pool_fingerprint": _fingerprint(pool),
         "controller_bundle": str(controller_path),
         "controller_bundle_fingerprint": _directory_content_fingerprint(
             controller_path
@@ -3560,6 +3636,26 @@ def collect_v3_s3_data(
         "manifest_counts": manifest_counts,
         "coverage": coverage,
         "strict_retest": strict_retest,
+        "qualification_pool_sha256": sha256_file(
+            output_root / "qualification_pool.jsonl"
+        ),
+        "qualification_pool_report_sha256": sha256_file(
+            output_root / "qualification_pool_report.json"
+        ),
+        "state_selection_sha256": sha256_file(
+            output_root / "state_selection.jsonl"
+        ),
+        "state_selection_report_sha256": sha256_file(
+            output_root / "state_selection_report.json"
+        ),
+        "coverage_report_sha256": sha256_file(
+            output_root / "coverage_report.json"
+        ),
+        "strict_retest_report_sha256": (
+            sha256_file(output_root / "strict_retest_report.json")
+            if state_collection_complete
+            else None
+        ),
         "sequence_features_sha256": (
             sha256_file(output_root / "sequence_features.jsonl")
             if state_collection_complete
@@ -3598,21 +3694,622 @@ def collect_v3_s3_data(
     return report
 
 
-def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
+def _qualification_replay_errors(payload: Any) -> list[str]:
+    """Recreate one qualification without changing any persisted artifact."""
+
+    if not isinstance(payload, dict):
+        return ["qualification replay payload is not an object"]
+    decision = payload.get("decision")
+    if not isinstance(decision, dict):
+        return ["qualification replay decision is not an object"]
+    errors: list[str] = []
+    try:
+        source_root = Path(str(decision["source_root"])).resolve()
+        source_run = _require_collection_object(
+            source_root / "run_config.json",
+            label="qualification source run_config",
+        )
+        if str(source_run.get("run_fingerprint", "")) != str(
+            decision.get("source_run_fingerprint", "")
+        ):
+            errors.append("qualification source run fingerprint differs")
+        replay, configuration = _source_replay_job(decision)
+        environment, state = replay_prefix(replay, decision["prefix_actions"])
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        UnicodeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
+        return [
+            "qualification deterministic replay failed: "
+            f"{type(error).__name__}: {error}"
+        ]
+
+    before_fingerprint = state_fingerprint(state)
+    if before_fingerprint != str(decision.get("before_fingerprint", "")):
+        errors.append("qualification replay state fingerprint differs")
+    before_repair_fingerprint = repair_structure_fingerprint(state)
+    if before_repair_fingerprint != str(
+        decision.get("before_repair_fingerprint", "")
+    ):
+        errors.append("qualification replay repair fingerprint differs")
+    try:
+        replayed_candidates, replayed_rows, _timing = _full_candidate_rows(
+            environment,
+            state,
+            decision,
+            dict(configuration["proposal"]),
+        )
+        replayed_indices = candidate_template_indices(replayed_candidates)
+    except (
+        KeyError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as error:
+        errors.append(
+            "qualification candidate replay failed: "
+            f"{type(error).__name__}: {error}"
+        )
+        return errors
+    if payload.get("candidates") != replayed_candidates:
+        errors.append(
+            "qualification candidates differ from deterministic generation"
+        )
+    if payload.get("candidate_rows") != replayed_rows:
+        errors.append(
+            "qualification candidate features differ from deterministic generation"
+        )
+    if payload.get("template_indices") != replayed_indices:
+        errors.append(
+            "qualification template mapping differs from deterministic generation"
+        )
+    return errors
+
+
+def _require_collection_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    try:
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"non-finite JSON constant: {token}")
+            ),
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is unreadable: {error}") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} is not a JSON object")
+    _require_finite_json(value, label=label)
+    return value
+
+
+def _require_finite_json(value: Any, *, label: str) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{label} contains a non-finite number")
+    if isinstance(value, dict):
+        for nested in value.values():
+            _require_finite_json(nested, label=label)
+    elif isinstance(value, list):
+        for nested in value:
+            _require_finite_json(nested, label=label)
+
+
+def _require_collection_rows(path: Path, *, label: str) -> list[dict[str, Any]]:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    try:
+        values = [
+            json.loads(
+                line,
+                parse_constant=lambda token: (_ for _ in ()).throw(
+                    ValueError(f"non-finite JSON constant: {token}")
+                ),
+            )
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is unreadable: {error}") from error
+    if any(not isinstance(value, dict) for value in values):
+        raise ValueError(f"{label} contains a non-object row")
+    for value in values:
+        _require_finite_json(value, label=label)
+    return [dict(value) for value in values]
+
+
+def _collection_path_within(path: Path, root: Path, *, label: str) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError(f"{label} escapes the v3-S3 collection") from error
+    return resolved
+
+
+def _qualification_pool_row_errors(row: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    required_strings = (
+        "state_id",
+        "source_root",
+        "source_run_fingerprint",
+        "task_id",
+        "split",
+        "map_id",
+        "layout_mode",
+        "source_policy",
+        "source_stratum",
+        "before_fingerprint",
+        "before_repair_fingerprint",
+    )
+    for field in required_strings:
+        if not isinstance(row.get(field), str) or not row[field]:
+            errors.append(f"qualification-pool {field} is invalid")
+    for field in ("solver_seed", "decision_index", "agent_count"):
+        if not _strict_nonnegative_int(row.get(field)):
+            errors.append(f"qualification-pool {field} is invalid")
+    if _strict_nonnegative_int(row.get("agent_count")) and row["agent_count"] <= 0:
+        errors.append("qualification-pool agent_count is not positive")
+    prefix = row.get("prefix_actions")
+    if not isinstance(prefix, list) or any(
+        not isinstance(action, dict) for action in prefix
+    ):
+        errors.append("qualification-pool prefix_actions are invalid")
+    temporal = row.get("temporal_context")
+    if not isinstance(temporal, dict) or any(
+        not isinstance(name, str) or not _finite_number(value)
+        for name, value in (temporal.items() if isinstance(temporal, dict) else ())
+    ):
+        errors.append("qualification-pool temporal_context is invalid")
+    return errors
+
+
+def validate_v3_s3_collection_source(
+    output: str | Path,
+    *,
+    controller_bundle: str | Path | None = None,
+) -> dict[str, Any]:
+    """Strictly validate a completed v3-S3 collection without writing to it.
+
+    Unlike the historical revalidation command, this function is safe to call
+    from downstream plan builders: it never rewrites reports or JSONL streams.
+    Every qualification is deterministically replayed, so the persisted agents
+    and realized features cannot be changed coherently by editing JSON files.
+    """
+
+    output_root = Path(output).resolve()
+    run_path = output_root / "run_config.json"
+    report_path = output_root / "collection_report.json"
+    status_path = output_root / "status.json"
+    selection_path = output_root / "state_selection.jsonl"
+    pool_path = output_root / "qualification_pool.jsonl"
+    pool_report_path = output_root / "qualification_pool_report.json"
+    selection_report_path = output_root / "state_selection_report.json"
+    coverage_path = output_root / "coverage_report.json"
+    strict_retest_path = output_root / "strict_retest_report.json"
+
+    run = _require_collection_object(run_path, label="v3-S3 run_config")
+    report = _require_collection_object(
+        report_path, label="v3-S3 collection report"
+    )
+    status = _require_collection_object(status_path, label="v3-S3 status")
+    pool_report = _require_collection_object(
+        pool_report_path, label="v3-S3 qualification-pool report"
+    )
+    selection_report = _require_collection_object(
+        selection_report_path, label="v3-S3 state-selection report"
+    )
+    stored_coverage = _require_collection_object(
+        coverage_path, label="v3-S3 coverage report"
+    )
+    strict_retest = _require_collection_object(
+        strict_retest_path, label="v3-S3 strict-retest report"
+    )
+
+    for label, payload in (
+        ("run_config", run),
+        ("collection report", report),
+        ("status", status),
+        ("qualification-pool report", pool_report),
+        ("state-selection report", selection_report),
+        ("coverage report", stored_coverage),
+        ("strict-retest report", strict_retest),
+    ):
+        if (
+            str(payload.get("schema")) != V3_S3_COLLECTION_SCHEMA
+            or payload.get("schema_version") != V3_S3_COLLECTION_VERSION
+        ):
+            raise ValueError(
+                f"legacy or malformed v3-S3 {label} is not a current source"
+            )
+
+    run_fingerprint = str(run.get("run_fingerprint", ""))
+    if not run_fingerprint or run_fingerprint != _fingerprint(
+        {key: value for key, value in run.items() if key != "run_fingerprint"}
+    ):
+        raise ValueError("v3-S3 run fingerprint mismatch")
+    if str(report.get("run_fingerprint", "")) != run_fingerprint:
+        raise ValueError("v3-S3 collection report run fingerprint mismatch")
+    if report.get("complete") is not True:
+        raise ValueError("v3-S3 source collection is incomplete")
+    if (
+        run.get("trace_replay_contract") != TRACE_REPLAY_CONTRACT
+        or run.get("base_sequences_per_state") != 36
+        or run.get("paired_trials") != 2
+        or run.get("horizon") != S3_HORIZON
+        or run.get("runtime_fallback") is not None
+        or not _strict_nonnegative_int(run.get("workers"))
+        or run["workers"] <= 0
+    ):
+        raise ValueError("v3-S3 run configuration semantics differ")
+
+    producer_fingerprint = config_producer_fingerprint(
+        run,
+        label="v3-S3 collection",
+        native_required=True,
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
+    )
+    producer_sources = dict(run["producer_identity"]["source_sha256"])
+    if set(producer_sources) != set(V3_S3_COLLECTION_PRODUCER_FILES):
+        raise ValueError("v3-S3 producer source dependency set differs")
+    current_producer = producer_identity(
+        project_root=Path(__file__).resolve().parents[1],
+        source_files=V3_S3_COLLECTION_PRODUCER_FILES,
+        native_required=True,
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
+    )
+    if run.get("producer_identity") != current_producer:
+        raise ValueError(
+            "v3-S3 producer or loaded native identity changed; "
+            "collect into a new output directory"
+        )
+    if producer_fingerprint != _fingerprint(current_producer):
+        raise ValueError("v3-S3 producer identity fingerprint differs")
+
+    controller_path = (
+        Path(controller_bundle).resolve()
+        if controller_bundle is not None
+        else Path(str(run.get("controller_bundle", ""))).resolve()
+    )
+    if not controller_path.is_dir():
+        raise ValueError(
+            "v3-S3 source validation requires the original controller bundle"
+        )
+    if _directory_content_fingerprint(controller_path) != str(
+        run.get("controller_bundle_fingerprint", "")
+    ):
+        raise ValueError("v3-S3 controller bundle fingerprint changed")
+
+    pool = _require_collection_rows(
+        pool_path, label="v3-S3 qualification pool"
+    )
+    selected = _require_collection_rows(
+        selection_path, label="v3-S3 state selection"
+    )
+    related_file_hashes = {
+        "qualification_pool_sha256": pool_path,
+        "qualification_pool_report_sha256": pool_report_path,
+        "state_selection_sha256": selection_path,
+        "state_selection_report_sha256": selection_report_path,
+        "coverage_report_sha256": coverage_path,
+        "strict_retest_report_sha256": strict_retest_path,
+    }
+    for field, path in related_file_hashes.items():
+        if str(report.get(field, "")) != sha256_file(path):
+            raise ValueError(f"v3-S3 {field} differs")
+    pool_by_id: dict[str, dict[str, Any]] = {}
+    for row in pool:
+        state_id = row.get("state_id")
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError("v3-S3 qualification pool has an invalid state_id")
+        if state_id in pool_by_id:
+            raise ValueError(
+                f"v3-S3 qualification pool has duplicate state_id: {state_id}"
+            )
+        row_errors = _qualification_pool_row_errors(row)
+        if row_errors:
+            raise ValueError(
+                f"v3-S3 qualification-pool row {state_id} is invalid: "
+                + "; ".join(row_errors[:5])
+            )
+        pool_by_id[state_id] = row
+    if run.get("qualification_pool_fingerprint") != _fingerprint(pool):
+        raise ValueError("v3-S3 qualification pool fingerprint differs")
+    if sorted(
+        {str(row.get("source_run_fingerprint", "")) for row in pool}
+    ) != run.get("source_run_fingerprints"):
+        raise ValueError("v3-S3 source run fingerprint coverage differs")
+    if (
+        pool_report.get("passed") is not True
+        or pool_report.get("qualification_pool_count") != len(pool)
+        or pool_report.get("shortages") != []
+        or report.get("qualification_pool") != pool_report
+    ):
+        raise ValueError("v3-S3 qualification-pool report differs")
+
+    qualification_root = (output_root / "qualification").resolve()
+    qualification_files = sorted(qualification_root.glob("*.json"))
+    qualification_by_id: dict[str, Path] = {}
+    qualification_payload_by_id: dict[str, dict[str, Any]] = {}
+    qualification_replay_errors: list[str] = []
+    for path in qualification_files:
+        payload = _require_collection_object(
+            path, label=f"v3-S3 qualification {path}"
+        )
+        decision = payload.get("decision")
+        state_id = (
+            decision.get("state_id") if isinstance(decision, dict) else None
+        )
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError(f"v3-S3 qualification has invalid state_id: {path}")
+        if state_id in qualification_by_id:
+            raise ValueError(
+                f"v3-S3 qualifications have duplicate state_id: {state_id}"
+            )
+        scheduled = pool_by_id.get(state_id)
+        if scheduled is None:
+            raise ValueError(
+                f"v3-S3 qualification is outside its pool: {state_id}"
+            )
+        errors = _qualification_artifact_errors(
+            payload,
+            run_fingerprint=run_fingerprint,
+            expected_decision=scheduled,
+        )
+        errors.extend(_qualification_replay_errors(payload))
+        if errors:
+            qualification_replay_errors.extend(
+                f"{state_id}: {error}" for error in errors
+            )
+        qualification_by_id[state_id] = path.resolve()
+        qualification_payload_by_id[state_id] = payload
+    if qualification_replay_errors:
+        raise ValueError(
+            "v3-S3 qualification semantic validation failed: "
+            + "; ".join(qualification_replay_errors[:5])
+        )
+
+    rejections = report.get("qualification_rejections")
+    if not isinstance(rejections, list) or any(
+        not isinstance(row, dict) for row in rejections
+    ):
+        raise ValueError("v3-S3 qualification rejections are malformed")
+    rejected_ids = [str(row.get("state_id", "")) for row in rejections]
+    if (
+        any(not state_id for state_id in rejected_ids)
+        or any(
+            row.get("status") != "rejected"
+            or row.get("rejection_reason")
+            != "prefix terminated before target state"
+            for row in rejections
+        )
+        or len(rejected_ids) != len(set(rejected_ids))
+        or not set(rejected_ids) <= set(pool_by_id)
+        or set(rejected_ids) & set(qualification_by_id)
+    ):
+        raise ValueError("v3-S3 qualification rejection identities differ")
+    if set(qualification_by_id) | set(rejected_ids) != set(pool_by_id):
+        raise ValueError("v3-S3 qualification files do not cover the pool")
+    for state_id in rejected_ids:
+        decision = pool_by_id[state_id]
+        try:
+            replay, _configuration = _source_replay_job(decision)
+            replay_prefix(replay, decision["prefix_actions"])
+        except RuntimeError as error:
+            if str(error) != "prefix terminated before target state":
+                raise ValueError(
+                    f"v3-S3 rejected qualification replay differs: {state_id}: "
+                    f"{error}"
+                ) from error
+        except (
+            KeyError,
+            OSError,
+            TypeError,
+            UnicodeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as error:
+            raise ValueError(
+                f"v3-S3 rejected qualification replay failed: {state_id}: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        else:
+            raise ValueError(
+                f"v3-S3 rejected qualification now reaches its target: {state_id}"
+            )
+    if (
+        report.get("qualification_error_count") != 0
+        or report.get("qualification_errors") != []
+        or report.get("qualification_rejected_count") != len(rejections)
+        or report.get("qualification_completed_count") != len(pool)
+    ):
+        raise ValueError("v3-S3 qualification summary differs")
+
+    selected_by_id: dict[str, dict[str, Any]] = {}
+    for row in selected:
+        state_id = row.get("state_id")
+        if not isinstance(state_id, str) or not state_id:
+            raise ValueError("v3-S3 state selection has an invalid state_id")
+        if state_id in selected_by_id:
+            raise ValueError(
+                f"v3-S3 state selection has duplicate state_id: {state_id}"
+            )
+        qualification_path = _collection_path_within(
+            Path(str(row.get("qualification_file", ""))),
+            qualification_root,
+            label=f"v3-S3 selected qualification {state_id}",
+        )
+        if qualification_path != qualification_by_id.get(state_id):
+            raise ValueError(
+                f"v3-S3 selected qualification path differs: {state_id}"
+            )
+        qualified = qualification_payload_by_id.get(state_id)
+        decision = (
+            qualified.get("decision") if isinstance(qualified, dict) else None
+        )
+        if not isinstance(decision, dict) or row != {
+            **decision,
+            "qualification_file": str(qualification_path),
+        }:
+            raise ValueError(
+                "v3-S3 state selection is not the complete qualification "
+                f"decision: {state_id}"
+            )
+        selected_by_id[state_id] = row
+    if (
+        selection_report.get("passed") is not True
+        or selection_report.get("selected_state_count") != len(selected)
+        or report.get("selection") != selection_report
+        or report.get("requested_state_count") != len(selected)
+    ):
+        raise ValueError("v3-S3 state-selection report differs")
+
+    state_files = sorted((output_root / "states").rglob("*.json"))
+    state_payload_by_path = {
+        path: _require_collection_object(
+            path, label=f"v3-S3 state {path}"
+        )
+        for path in state_files
+    }
+    coverage = _coverage(
+        selected,
+        state_files,
+        run_fingerprint=run_fingerprint,
+    )
+    if coverage.get("passed") is not True:
+        raise ValueError(
+            "v3-S3 state coverage validation failed: "
+            + "; ".join(
+                str(error) for error in list(coverage.get("errors", ()))[:5]
+            )
+        )
+    if report.get("coverage") != coverage or stored_coverage != coverage:
+        raise ValueError("v3-S3 stored coverage report differs")
+    if (
+        report.get("completed_state_count") != len(state_files)
+        or report.get("error_state_count") != 0
+        or report.get("errors") != []
+    ):
+        raise ValueError("v3-S3 state completion summary differs")
+
+    stream_specs = (
+        ("features", "features", "sequence_features.jsonl", "sequence_features_sha256"),
+        ("trials", "trials", "sequence_trials.jsonl", "sequence_trials_sha256"),
+        (
+            "baselines",
+            "external_baselines",
+            "external_baselines.jsonl",
+            "external_baselines_sha256",
+        ),
+    )
+    expected_manifest_counts: dict[str, int] = {}
+    for manifest_name, state_key, filename, sha_field in stream_specs:
+        stream_path = output_root / filename
+        observed_rows = _require_collection_rows(
+            stream_path, label=f"v3-S3 {manifest_name} stream"
+        )
+        expected_rows: list[dict[str, Any]] = []
+        for state_path in state_files:
+            state_payload = state_payload_by_path[state_path]
+            rows = state_payload.get(state_key)
+            if not isinstance(rows, list) or any(
+                not isinstance(row, dict) for row in rows
+            ):
+                raise ValueError(
+                    f"v3-S3 state {state_path} has malformed {state_key}"
+                )
+            expected_rows.extend(dict(row) for row in rows)
+        if observed_rows != expected_rows:
+            raise ValueError(f"v3-S3 {manifest_name} stream differs from states")
+        if str(report.get(sha_field, "")) != sha256_file(stream_path):
+            raise ValueError(f"v3-S3 {manifest_name} stream SHA-256 differs")
+        expected_manifest_counts[manifest_name] = len(expected_rows)
+    if report.get("manifest_counts") != expected_manifest_counts:
+        raise ValueError("v3-S3 manifest counts differ")
+
+    strict_input_identity, _file_by_state = _strict_retest_inputs(
+        selected=selected,
+        state_files=state_files,
+        controller_bundle=controller_path,
+        run_fingerprint=run_fingerprint,
+        fraction=0.15,
+    )
+    expected_retest_count = max(1, math.ceil(0.15 * len(selected)))
+    if (
+        strict_retest.get("run_fingerprint") != run_fingerprint
+        or strict_retest.get("input_identity") != strict_input_identity
+        or strict_retest.get("input_sha256")
+        != _fingerprint(strict_input_identity)
+        or strict_retest.get("fraction") != 0.15
+        or strict_retest.get("requested_state_count") != expected_retest_count
+        or strict_retest.get("completed_state_count") != expected_retest_count
+        or strict_retest.get("error_count") != 0
+        or strict_retest.get("mismatch_count") != 0
+        or strict_retest.get("errors") != []
+        or strict_retest.get("mismatches") != []
+        or strict_retest.get("passed") is not True
+        or report.get("strict_retest") != strict_retest
+    ):
+        raise ValueError(
+            "v3-S3 strict-retest report is invalid or belongs to changed inputs"
+        )
+
+    expected_status = {
+        "schema": V3_S3_COLLECTION_SCHEMA,
+        "schema_version": V3_S3_COLLECTION_VERSION,
+        "phase": "complete",
+        "status": "complete",
+        "completed_states": len(state_files),
+        "total_states": len(selected),
+        "error_states": 0,
+    }
+    if status != expected_status:
+        raise ValueError("v3-S3 status does not describe a complete collection")
+    return {
+        "schema": "lns2.v3_s3_collection_source_validation.v1",
+        "collection_root": str(output_root),
+        "run_fingerprint": run_fingerprint,
+        "producer_identity_fingerprint": producer_fingerprint,
+        "qualification_count": len(qualification_by_id),
+        "selected_state_count": len(selected),
+        "state_count": len(state_files),
+        "passed": True,
+    }
+
+
+def revalidate_v3_s3_collection(
+    output: str | Path,
+    *,
+    controller_bundle: str | Path | None = None,
+) -> dict[str, Any]:
     output_root = Path(output).resolve()
     report_path = output_root / "collection_report.json"
+    run_path = output_root / "run_config.json"
     selection_path = output_root / "state_selection.jsonl"
     strict_retest_path = output_root / "strict_retest_report.json"
-    for required in (report_path, selection_path, strict_retest_path):
+    for required in (report_path, run_path, selection_path, strict_retest_path):
         if not required.is_file():
             raise FileNotFoundError(required)
 
     previous = _read_json(report_path)
+    run = _read_json(run_path)
     if (
         not isinstance(previous, dict)
         or str(previous.get("schema")) != V3_S3_COLLECTION_SCHEMA
         or previous.get("schema_version") != V3_S3_COLLECTION_VERSION
         or not str(previous.get("run_fingerprint", ""))
+        or not isinstance(run, dict)
+        or run.get("schema") != V3_S3_COLLECTION_SCHEMA
+        or run.get("schema_version") != V3_S3_COLLECTION_VERSION
+        or str(run.get("run_fingerprint", ""))
+        != str(previous.get("run_fingerprint", ""))
     ):
         raise ValueError(
             "legacy or malformed v3-S3 collection is read-only; "
@@ -3620,17 +4317,50 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
         )
     selected = _read_jsonl(selection_path)
     state_files = sorted((output_root / "states").rglob("*.json"))
+    controller_path = (
+        Path(controller_bundle).resolve()
+        if controller_bundle is not None
+        else Path(str(run.get("controller_bundle", ""))).resolve()
+    )
+    if not controller_path.is_dir():
+        raise ValueError(
+            "v3-S3 revalidation requires the original controller bundle"
+        )
+    controller_fingerprint = _directory_content_fingerprint(controller_path)
+    if controller_fingerprint != str(
+        run.get("controller_bundle_fingerprint", "")
+    ):
+        raise ValueError("v3-S3 controller bundle fingerprint changed")
+    strict_input_identity, _file_by_state = _strict_retest_inputs(
+        selected=selected,
+        state_files=state_files,
+        controller_bundle=controller_path,
+        run_fingerprint=str(previous["run_fingerprint"]),
+        fraction=0.15,
+    )
+    strict_input_sha256 = _fingerprint(strict_input_identity)
     strict_retest = _read_json(strict_retest_path)
+    expected_retest_count = max(1, math.ceil(0.15 * len(selected)))
     if (
         not isinstance(strict_retest, dict)
         or str(strict_retest.get("schema")) != V3_S3_COLLECTION_SCHEMA
         or strict_retest.get("schema_version") != V3_S3_COLLECTION_VERSION
         or str(strict_retest.get("run_fingerprint"))
         != str(previous["run_fingerprint"])
-        or not str(strict_retest.get("input_sha256", ""))
-        or not isinstance(strict_retest.get("passed"), bool)
+        or strict_retest.get("input_identity") != strict_input_identity
+        or str(strict_retest.get("input_sha256")) != strict_input_sha256
+        or strict_retest.get("fraction") != 0.15
+        or strict_retest.get("requested_state_count") != expected_retest_count
+        or strict_retest.get("completed_state_count") != expected_retest_count
+        or strict_retest.get("error_count") != 0
+        or strict_retest.get("mismatch_count") != 0
+        or strict_retest.get("errors") != []
+        or strict_retest.get("mismatches") != []
+        or strict_retest.get("passed") is not True
     ):
-        raise ValueError("v3-S3 strict-retest report is invalid")
+        raise ValueError(
+            "v3-S3 strict-retest report is invalid or belongs to changed inputs"
+        )
     coverage = _coverage(
         selected,
         state_files,
@@ -3651,8 +4381,8 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
         not qualification_errors
         and not collection_errors
         and state_collection_complete
-        and bool(coverage["passed"])
-        and bool(strict_retest.get("passed"))
+        and coverage["passed"] is True
+        and strict_retest.get("passed") is True
     )
     report = {
         **previous,
@@ -3682,7 +4412,7 @@ def revalidate_v3_s3_collection(output: str | Path) -> dict[str, Any]:
             "schema_version": V3_S3_COLLECTION_VERSION,
             "coverage_contract": "ambiguous-additional-sequences-v2",
             "validator_sha256": sha256_file(Path(__file__).resolve()),
-            "previous_complete": bool(previous.get("complete")),
+            "previous_complete": previous.get("complete") is True,
         },
         "complete": complete,
     }
@@ -3719,4 +4449,5 @@ __all__ = [
     "revalidate_v3_s3_collection",
     "source_decisions",
     "temporal_context",
+    "validate_v3_s3_collection_source",
 ]

@@ -27,7 +27,7 @@ struct PBSNode
                 if (n1->conflicts.size() == n2->conflicts.size())
                 {
                     if (n1->sum_of_costs == n2->sum_of_costs)
-                        return rand() % 2;
+                        return n1->time_generated > n2->time_generated;
                     return n1->sum_of_costs > n2->sum_of_costs;
                 }
                 return n1->conflicts.size() < n2->conflicts.size();

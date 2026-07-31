@@ -23,10 +23,6 @@ def _jaccard(left: Iterable[Any], right: Iterable[Any]) -> float:
     return _ratio(len(left_set & right_set), len(union)) if union else 1.0
 
 
-def _distance(left: tuple[int, ...], right: tuple[int, ...]) -> float:
-    return 1.0 - _jaccard(left, right)
-
-
 def select_representative_neighborhoods(
     proposals: list[dict[str, Any]], candidates_per_family: int
 ) -> list[dict[str, Any]]:

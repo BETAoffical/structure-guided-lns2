@@ -32,7 +32,14 @@ bool MDD::buildMDD(ConstraintTable& constraint_table, const SingleAgentSolver* _
 			// returns true if n1 > n2 (note -- this gives us *min*-heap).
 			bool operator()(const Node* n1, const Node* n2) const
 			{
-				return n1->timestep + n1->h_val >= n2->timestep + n2->h_val;
+				if (n1->timestep + n1->h_val != n2->timestep + n2->h_val)
+					return n1->timestep + n1->h_val >
+						n2->timestep + n2->h_val;
+				if (n1->h_val != n2->h_val)
+					return n1->h_val > n2->h_val;
+				if (n1->location != n2->location)
+					return n1->location > n2->location;
+				return n1->timestep > n2->timestep;
 			}
 		};
 		struct eqnode

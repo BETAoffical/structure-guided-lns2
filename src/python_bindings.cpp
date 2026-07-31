@@ -4,6 +4,7 @@
 #include "InitLNS.h"
 #include "online_features.h"
 #include "structure_guided/instance_validation.hpp"
+#include "structure_guided/native_semantics.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -451,9 +452,9 @@ public:
         if (seed < 0)
             throw py::value_error("reset seed must be non-negative");
         const auto reset_started = DiagnosticClock::now();
-        const auto setup_started = DiagnosticClock::now();
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
+        const auto setup_started = DiagnosticClock::now();
         double setup_seconds = 0.0;
         double initial_solution_seconds = 0.0;
         double state_snapshot_seconds = 0.0;
@@ -509,9 +510,9 @@ public:
         // Reject malformed input before replacing a valid live episode.  The
         // native restore repeats this check as the C++ API's own contract.
         InitLNS::validateRestoredPaths(*instance, paths);
-        const auto setup_started = DiagnosticClock::now();
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
+        const auto setup_started = DiagnosticClock::now();
         double setup_seconds = 0.0;
         double restore_seconds = 0.0;
         double state_snapshot_seconds = 0.0;
@@ -1003,6 +1004,8 @@ private:
 PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
+    module.attr("native_semantics_schema") =
+        structure_guided::kNativeSemanticsSchema;
     module.attr("repair_timing_schema") = "lns2.repair_timing.v2";
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))

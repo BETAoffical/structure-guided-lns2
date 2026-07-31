@@ -20,15 +20,17 @@ public:
 		// returns true if n1 > n2 (note -- this gives us *min*-heap).
 		bool operator()(const LLNode* n1, const LLNode* n2) const
 		{
-            if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-            {
-                if (n1->h_val == n2->h_val)
-                {
-                    return rand() % 2 == 0;   // break ties randomly
-                }
-                return n1->h_val >= n2->h_val;  // break ties towards smaller h_vals (closer to goal location)
-            }
-			return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
+            return std::make_tuple(
+                n1->g_val + n1->h_val,
+                n1->h_val,
+                n1->location,
+                n1->timestep
+            ) > std::make_tuple(
+                n2->g_val + n2->h_val,
+                n2->h_val,
+                n2->location,
+                n2->timestep
+            );
 		}
 	};  // used by OPEN (heap) to compare nodes (top of the heap has min f-val, and then highest g-val)
 
@@ -37,19 +39,19 @@ public:
 	{
 		bool operator()(const LLNode* n1, const LLNode* n2) const // returns true if n1 > n2
 		{
-			if (n1->num_of_conflicts == n2->num_of_conflicts)
-			{
-                if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-                {
-                    if (n1->h_val == n2->h_val)
-                    {
-                        return rand() % 2 == 0;   // break ties randomly
-                    }
-                    return n1->h_val >= n2->h_val;  // break ties towards smaller h_vals (closer to goal location)
-                }
-                return n1->g_val+n1->h_val >= n2->g_val+n2->h_val;  // break ties towards smaller f_vals (prefer shorter solutions)
-			}
-			return n1->num_of_conflicts >= n2->num_of_conflicts;  // n1 > n2 if it has more conflicts
+            return std::make_tuple(
+                n1->num_of_conflicts,
+                n1->g_val + n1->h_val,
+                n1->h_val,
+                n1->location,
+                n1->timestep
+            ) > std::make_tuple(
+                n2->num_of_conflicts,
+                n2->g_val + n2->h_val,
+                n2->h_val,
+                n2->location,
+                n2->timestep
+            );
 		}
 	};  // used by FOCAL (heap) to compare nodes (top of the heap has min number-of-conflicts)
 

@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
+    config_producer_fingerprint as _config_producer_fingerprint,
     episode_id as _episode_id,
+    producer_identity as _structured_producer_identity,
     select_rows_by_task_id as _selected_rows,
     sha256_file as _sha256,
 )
@@ -162,7 +165,11 @@ CONTROLLER_MODES = (
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
-STOPPING_RULES = ("historical", "wall-clock")
+STOPPING_RULES = (
+    "historical",
+    "wall-clock",
+    "wall-clock-fixed-metric",
+)
 WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
 REPAIR_TIMING_SCHEMA_V1 = "lns2.repair_timing.v1"
 REPAIR_TIMING_SCHEMA_V2 = "lns2.repair_timing.v2"
@@ -197,6 +204,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
     "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_trace_storage.py",
     "experiments/compact_controller_model.py",
     "experiments/critical_conflicts.py",
     "experiments/context_audit.py",
@@ -211,6 +219,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/repair_aware.py",
     "experiments/v2_cost_top3_runtime.py",
     "experiments/v3_controller.py",
+    "experiments/feature_schema_v3.py",
     "experiments/v3_s3.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
@@ -219,6 +228,8 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "third_party/mapf_lns2/inc/RepairPolicy.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
 )
+CONTROLLER_REQUIRED_PACKAGES = ("numpy",)
+CONTROLLER_OPTIONAL_PACKAGES = ("joblib", "scikit-learn")
 
 
 class ClosedLoopTraceError(ValueError):
@@ -257,6 +268,8 @@ def _native_repair_timing_schema(metrics: dict[str, Any]) -> str | None:
 
 
 def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
+    """Return the legacy controller identity for read-only compatibility."""
+
     files = {
         relative: _sha256(project_root / relative)
         for relative in CONTROLLER_IMPLEMENTATION_FILES
@@ -266,7 +279,23 @@ def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
         import lns2_env
 
         native_path = Path(str(lns2_env.__file__)).resolve()
-        native_module = {"path": native_path.name, "sha256": _sha256(native_path)}
+        semantics_schema = str(
+            getattr(lns2_env, "native_semantics_schema", "")
+        )
+        if semantics_schema != NATIVE_SEMANTICS_SCHEMA:
+            raise RuntimeError(
+                "closed-loop controller identity requires native semantics "
+                f"schema {NATIVE_SEMANTICS_SCHEMA}; got "
+                f"{semantics_schema or 'missing'}"
+            )
+        native_module = {
+            "path": native_path.name,
+            "sha256": _sha256(native_path),
+            "repair_timing_schema": str(
+                getattr(lns2_env, "repair_timing_schema", "")
+            ),
+            "native_semantics_schema": semantics_schema,
+        }
     except ImportError:
         pass
     return {
@@ -274,6 +303,71 @@ def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
         "files": files,
         "native_module": native_module,
     }
+
+
+def _controller_producer_identity(project_root: Path) -> dict[str, Any]:
+    return _structured_producer_identity(
+        project_root=project_root,
+        source_files=CONTROLLER_IMPLEMENTATION_FILES,
+        native_required=True,
+        package_names=CONTROLLER_REQUIRED_PACKAGES,
+        optional_package_names=CONTROLLER_OPTIONAL_PACKAGES,
+    )
+
+
+def _validated_producer_fields(
+    config: dict[str, Any], *, label: str
+) -> tuple[dict[str, Any], str]:
+    identity = config.get("producer_identity")
+    fingerprint = config.get("producer_identity_fingerprint")
+    if not isinstance(identity, dict):
+        raise ValueError(f"{label} producer identity is not an object")
+    if type(fingerprint) is not str:
+        raise ValueError(f"{label} producer identity fingerprint is not a string")
+    validated_fingerprint = _config_producer_fingerprint(
+        config,
+        label=label,
+        native_required=True,
+        package_names=CONTROLLER_REQUIRED_PACKAGES,
+        optional_package_names=CONTROLLER_OPTIONAL_PACKAGES,
+    )
+    return dict(identity), validated_fingerprint
+
+
+def _validate_closed_loop_resume(
+    existing: dict[str, Any],
+    *,
+    run_fingerprint: str,
+    trace_format: str,
+    storage_fingerprint_value: str,
+    producer_identity_value: dict[str, Any],
+    producer_identity_fingerprint: str,
+    resume: bool,
+) -> None:
+    existing_identity, existing_fingerprint = _validated_producer_fields(
+        existing, label="existing closed-loop run"
+    )
+    if (
+        existing_identity != producer_identity_value
+        or existing_fingerprint != producer_identity_fingerprint
+    ):
+        raise ValueError("output contains a different closed-loop producer identity")
+    if str(existing.get("run_fingerprint")) != run_fingerprint:
+        raise ValueError("output contains a different closed-loop run")
+    existing_format = str(existing.get("trace_format", TRACE_FORMAT_FULL_V1))
+    existing_storage = str(
+        existing.get(
+            "storage_fingerprint",
+            storage_fingerprint(existing_format),
+        )
+    )
+    if (
+        existing_format != trace_format
+        or existing_storage != storage_fingerprint_value
+    ):
+        raise ValueError("output contains a different closed-loop trace format")
+    if not resume:
+        raise ValueError("output already exists; pass resume to continue")
 
 
 def _controller_bundle_path(
@@ -500,6 +594,9 @@ def _qualification_reuse_fingerprint(run_config: dict[str, Any]) -> str:
     """Fingerprint the state-reset inputs that qualification depends on."""
 
     configuration = dict(run_config.get("configuration") or {})
+    producer, producer_fingerprint = _validated_producer_fields(
+        run_config, label="qualification run"
+    )
     return _fingerprint(
         {
             "dataset_fingerprint": str(run_config.get("dataset_fingerprint", "")),
@@ -507,9 +604,8 @@ def _qualification_reuse_fingerprint(run_config: dict[str, Any]) -> str:
             "solver_seeds": list(configured_solver_seeds(configuration)),
             "environment": dict(configuration.get("environment") or {}),
             "seed_isolation": dict(run_config.get("seed_isolation") or {}),
-            "controller_implementation": dict(
-                run_config.get("controller_implementation") or {}
-            ),
+            "producer_identity": producer,
+            "producer_identity_fingerprint": producer_fingerprint,
         }
     )
 
@@ -1792,9 +1888,11 @@ def generate_online_candidates(
 def fixed_budget_conflict_auc(
     trajectory: list[int], budget: int, *, success: bool
 ) -> float:
-    if budget <= 0 or not trajectory or len(trajectory) > budget + 1:
+    """Score the first ``budget`` repairs without limiting episode execution."""
+
+    if budget <= 0 or not trajectory:
         raise ValueError("invalid fixed-budget conflict trajectory")
-    values = list(map(int, trajectory))
+    values = list(map(int, trajectory[: budget + 1]))
     pad = 0 if success else values[-1]
     values.extend([pad] * (budget + 1 - len(values)))
     return sum((values[index] + values[index + 1]) / 2.0 for index in range(budget))
@@ -4992,10 +5090,11 @@ def _with_stopping_rule(
         raise ValueError(f"unsupported stopping rule: {stopping_rule}")
     result = {**config, "environment": dict(config["environment"])}
     result["stopping_rule"] = stopping_rule
-    if stopping_rule == "wall-clock":
+    if stopping_rule in {"wall-clock", "wall-clock-fixed-metric"}:
         result["max_decisions"] = 0
-        result["metric_iteration_budget"] = None
         result["environment"]["max_repair_iterations"] = 0
+    if stopping_rule == "wall-clock":
+        result["metric_iteration_budget"] = None
     return result
 
 
@@ -5338,7 +5437,15 @@ def run_closed_loop_collection(
             raise ValueError("controller-v2 was built from a different v1 deployment bundle")
     effective_workers = int(workers or config["workers"])
     dataset_fp = _dataset_fingerprint(dataset_root)
-    implementation = controller_implementation_fingerprint(project_root)
+    producer = _controller_producer_identity(project_root)
+    producer_fingerprint = _fingerprint(producer)
+    _validated_producer_fields(
+        {
+            "producer_identity": producer,
+            "producer_identity_fingerprint": producer_fingerprint,
+        },
+        label="current closed-loop run",
+    )
     effective = {
         **config,
         "task_ids_override": task_ids,
@@ -5386,7 +5493,8 @@ def run_closed_loop_collection(
             "cost_top3_config": cost_top3_payload,
             "v3_bundle_manifest": v3_manifest,
             "v3_s3_bundle_manifest": v3_s3_manifest,
-            "controller_implementation": implementation,
+            "producer_identity": producer,
+            "producer_identity_fingerprint": producer_fingerprint,
         }
     )
     registered_job_keys = normalized_cohort_job_keys or available_job_keys
@@ -5460,7 +5568,8 @@ def run_closed_loop_collection(
             "cost_top3_config": cost_top3_payload,
             "v3_bundle": v3_manifest,
             "v3_s3_bundle": v3_s3_manifest,
-            "controller_implementation": implementation,
+            "producer_identity": producer,
+            "producer_identity_fingerprint": producer_fingerprint,
             "estimate": estimate,
         }
     run_config = {
@@ -5502,21 +5611,21 @@ def run_closed_loop_collection(
         "cost_top3_config": cost_top3_payload,
         "v3_bundle": v3_manifest,
         "v3_s3_bundle": v3_s3_manifest,
-        "controller_implementation": implementation,
+        "producer_identity": producer,
+        "producer_identity_fingerprint": producer_fingerprint,
     }
     run_path = output_root / "run_config.json"
     if run_path.is_file():
         existing = _read_json(run_path)
-        if str(existing.get("run_fingerprint")) != run_fp:
-            raise ValueError("output contains a different closed-loop run")
-        existing_format = str(existing.get("trace_format", TRACE_FORMAT_FULL_V1))
-        existing_storage = str(
-            existing.get("storage_fingerprint", storage_fingerprint(existing_format))
+        _validate_closed_loop_resume(
+            existing,
+            run_fingerprint=run_fp,
+            trace_format=trace_format,
+            storage_fingerprint_value=storage_fp,
+            producer_identity_value=producer,
+            producer_identity_fingerprint=producer_fingerprint,
+            resume=resume,
         )
-        if existing_format != trace_format or existing_storage != storage_fp:
-            raise ValueError("output contains a different closed-loop trace format")
-        if not resume:
-            raise ValueError("output already exists; pass resume to continue")
     output_root.mkdir(parents=True, exist_ok=True)
     _write_json(run_path, run_config)
     sequence = policies if phase == "all" else (phase,)
@@ -5760,6 +5869,7 @@ __all__ = [
     "closed_loop_dataset_design",
     "movingai_ood_dataset_design",
     "closed_loop_qualification_report",
+    "controller_implementation_fingerprint",
     "configured_policies",
     "configured_solver_seeds",
     "feature_range_diagnostic",

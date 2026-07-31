@@ -73,32 +73,19 @@ public:
 	{
 		bool operator()(const CBSNode* n1, const CBSNode* n2) const 
 		{
-			if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-			{
-				if (n1->distance_to_go == n2->distance_to_go)
-				{
-					if (n1->g_val + n1->cost_to_go == n2->g_val + n2->cost_to_go)
-					{
-						return n1->h_val >= n2->h_val;
-					}
-					return n1->g_val + n1->cost_to_go >= n2->g_val + n2->cost_to_go;
-				}
-				return n1->distance_to_go >= n2->distance_to_go;
-			}
-			return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
-			/*if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-			{
-				if (n1->h_val == n2->h_val)
-				{
-					if (n1->g_val + n1->cost_to_go == n2->g_val + n2->cost_to_go)
-					{
-						return n1->distance_to_go >= n2->distance_to_go;
-					}
-					return n1->g_val + n1->cost_to_go >= n2->g_val + n2->cost_to_go;	
-				}
-				return n1->h_val >= n2->h_val;
-			}
-			return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;*/
+			return std::make_tuple(
+				n1->g_val + n1->h_val,
+				n1->distance_to_go,
+				n1->g_val + n1->cost_to_go,
+				n1->h_val,
+				n1->time_generated
+			) > std::make_tuple(
+				n2->g_val + n2->h_val,
+				n2->distance_to_go,
+				n2->g_val + n2->cost_to_go,
+				n2->h_val,
+				n2->time_generated
+			);
 		}
 	};  // used by CLEANUP to compare nodes by f_val (top of the heap has min f_val)
 
@@ -107,32 +94,19 @@ public:
 	{
 		bool operator()(const CBSNode* n1, const CBSNode* n2) const 
 		{
-			if (n1->distance_to_go == n2->distance_to_go)
-			{
-				if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-				{
-					if (n1->g_val + n1->cost_to_go == n2->g_val + n2->cost_to_go)
-					{
-						return n1->h_val >= n2->h_val;
-					}
-					return n1->g_val + n1->cost_to_go >= n2->g_val + n2->cost_to_go;
-				}
-				return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
-			}
-			return n1->distance_to_go >= n2->distance_to_go;
-			/*if (n1->distance_to_go == n2->distance_to_go)
-			{
-				if (n1->g_val + n1->cost_to_go == n2->g_val + n2->cost_to_go)
-				{
-					if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-					{
-						return n1->h_val >= n2->h_val;
-					}
-					return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
-				}
-				return n1->g_val + n1->cost_to_go >= n2->g_val + n2->cost_to_go;
-			}
-			return n1->distance_to_go >= n2->distance_to_go;*/
+			return std::make_tuple(
+				n1->distance_to_go,
+				n1->g_val + n1->h_val,
+				n1->g_val + n1->cost_to_go,
+				n1->h_val,
+				n1->time_generated
+			) > std::make_tuple(
+				n2->distance_to_go,
+				n2->g_val + n2->h_val,
+				n2->g_val + n2->cost_to_go,
+				n2->h_val,
+				n2->time_generated
+			);
 		}
 	};  // used by FOCAL to compare nodes by distance_to_go (top of the heap has min distance_to_go)
 
@@ -141,19 +115,19 @@ public:
 	{
 		bool operator()(const CBSNode* n1, const CBSNode* n2) const
 		{
-			if (n1->g_val + n1->cost_to_go == n2->g_val + n2->cost_to_go)
-			{
-				if (n1->g_val + n1->h_val == n2->g_val + n2->h_val)
-				{
-					if (n1->distance_to_go == n2->distance_to_go)
-					{
-						return n1->h_val >= n2->h_val;
-					}
-					return n1->distance_to_go >= n2->distance_to_go;
-				}
-				return n1->g_val + n1->h_val >= n2->g_val + n2->h_val;
-			}
-			return n1->g_val + n1->cost_to_go >= n2->g_val + n2->cost_to_go;
+			return std::make_tuple(
+				n1->g_val + n1->cost_to_go,
+				n1->g_val + n1->h_val,
+				n1->distance_to_go,
+				n1->h_val,
+				n1->time_generated
+			) > std::make_tuple(
+				n2->g_val + n2->cost_to_go,
+				n2->g_val + n2->h_val,
+				n2->distance_to_go,
+				n2->h_val,
+				n2->time_generated
+			);
 		}
 	};  // used by FOCAL to compare nodes by num_of_collisions (top of the heap has min h-val)
 

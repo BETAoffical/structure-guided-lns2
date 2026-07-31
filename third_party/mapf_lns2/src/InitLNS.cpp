@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "GCBS.h"
 #include "PBS.h"
+#include "WeightedSampling.h"
 
 namespace
 {
@@ -1014,54 +1015,6 @@ void InitLNS::chooseDestroyHeuristicbyALNS()
 
 bool InitLNS::generateNeighborByCollisionGraph(int forced_seed, int requested_size)
 {
-    /*unordered_map<int, list<int>> G;
-    for (int i = 0; i < (int)collision_graph.size(); i++)
-    {
-        if (!collision_graph[i].empty())
-            G[i].assign(collision_graph[i].begin(), collision_graph[i].end());
-    }
-    assert(!G.empty());
-    assert(neighbor_size <= (int)agents.size());
-    set<int> neighbors_set;
-    if ((int)G.size() < neighbor_size)
-    {
-        for (const auto& node : G)
-            neighbors_set.insert(node.first);
-        int count = 0;
-        while ((int)neighbors_set.size() < neighbor_size && count < 10)
-        {
-            int a1 = *std::next(neighbors_set.begin(), rand() % neighbors_set.size());
-            int a2 = randomWalk(a1);
-            if (a2 != NO_AGENT)
-                neighbors_set.insert(a2);
-            else
-                count++;
-        }
-    }
-    else
-    {
-        int a = -1;
-        while ((int)neighbors_set.size() < neighbor_size)
-        {
-            if (a == -1)
-            {
-                a = std::next(G.begin(), rand() % G.size())->first;
-                neighbors_set.insert(a);
-            }
-            else
-            {
-                a = *std::next(G[a].begin(), rand() % G[a].size());
-                auto ret = neighbors_set.insert(a);
-                if (!ret.second) // no new element inserted
-                    a = -1;
-            }
-        }
-    }
-    neighbor.agents.assign(neighbors_set.begin(), neighbors_set.end());
-    if (screen >= 2)
-        cout << "Generate " << neighbor.agents.size() << " neighbors by collision graph" << endl;
-    return true;*/
-
     int target_size = requested_size > 0 ? requested_size : neighbor_size;
     target_size = min((int)agents.size(), max(2, target_size));
     vector<int> all_vertices;
@@ -1132,17 +1085,11 @@ bool InitLNS::generateNeighborByTarget(int forced_seed, int requested_size)
     int a = forced_seed;
     if (a < 0)
     {
-        auto r = rand() % (num_of_colliding_pairs * 2);
-        int sum = 0;
-        for (int i = 0 ; i < (int)collision_graph.size(); i++)
-        {
-            sum += (int)collision_graph[i].size();
-            if (r <= sum and !collision_graph[i].empty())
-            {
-                a = i;
-                break;
-            }
-        }
+        vector<int> collision_weights;
+        collision_weights.reserve(collision_graph.size());
+        for (const auto& collisions : collision_graph)
+            collision_weights.push_back(static_cast<int>(collisions.size()));
+        a = corrected_native::sampleWeightedIndex(collision_weights);
     }
     assert(a != -1 and !collision_graph[a].empty());
     ProposalTargetData local_target;
@@ -1266,24 +1213,15 @@ bool InitLNS::generateNeighborRandomly(int forced_seed, int requested_size)
     set<int> neighbors_set;
     if (forced_seed >= 0)
         neighbors_set.insert(forced_seed);
-    auto total = num_of_colliding_pairs * 2 + agents.size();
+    vector<int> agent_weights;
+    agent_weights.reserve(agents.size());
+    for (const auto& collisions : collision_graph)
+        agent_weights.push_back(static_cast<int>(collisions.size()) + 1);
     while(neighbors_set.size() < target_size)
     {
-        vector<int> r(target_size - neighbors_set.size());
-        for (auto i = 0; i < target_size - neighbors_set.size(); i++)
-            r[i] = rand() % total;
-        std::sort(r.begin(), r.end());
-        int sum = 0;
-        for (int i = 0, j = 0; i < agents.size() and j < r.size(); i++)
-        {
-            sum += (int)collision_graph[i].size() + 1;
-            if (sum >= r[j])
-            {
-                neighbors_set.insert(i);
-                while (j < r.size() and sum >= r[j])
-                    j++;
-            }
-        }
+        const int selected =
+            corrected_native::sampleWeightedIndex(agent_weights);
+        neighbors_set.insert(selected);
     }
     neighbor.agents.assign(neighbors_set.begin(), neighbors_set.end());
     if (screen >= 2)
@@ -1303,8 +1241,10 @@ int InitLNS::randomWalk(int agent_id)
     {
         auto next_locs = instance.getNeighbors(loc);
         next_locs.push_back(loc);
+        // Keep this legacy draw so corrected-native does not silently shift
+        // the RandomWalk RNG stream while removing the unused iterator.
         int step = rand() % next_locs.size();
-        auto it = next_locs.begin();
+        (void)step;
         loc = *std::next(next_locs.begin(), rand() % next_locs.size());
         t = t + 1;
     }

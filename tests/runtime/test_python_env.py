@@ -49,6 +49,10 @@ class NativeModuleDiscoveryTests(unittest.TestCase):
 class RepairEnvironmentTests(unittest.TestCase):
     def test_native_timing_schema_is_current(self) -> None:
         self.assertEqual(
+            lns2_env.native_semantics_schema,
+            "lns2.corrected_native.v1",
+        )
+        self.assertEqual(
             lns2_env.repair_timing_schema,
             "lns2.repair_timing.v2",
         )
@@ -248,6 +252,70 @@ class RepairEnvironmentTests(unittest.TestCase):
                     scenario_path,
                     agent_count=1,
                 )
+
+    def test_constructor_rejects_duplicate_start_and_goal_locations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            moving_map = root / "small.map"
+            moving_map.write_text(
+                "type octile\n"
+                "height 3\n"
+                "width 3\n"
+                "map\n"
+                "...\n"
+                "...\n"
+                "...\n",
+                encoding="utf-8",
+            )
+            custom_map = root / "small-custom.map"
+            custom_map.write_text(
+                "3,3\n"
+                "...\n"
+                "...\n"
+                "...\n",
+                encoding="utf-8",
+            )
+            cases = (
+                (
+                    moving_map,
+                    "version 1\n"
+                    "0\tsmall.map\t3\t3\t0\t0\t2\t2\t4\n"
+                    "0\tsmall.map\t3\t3\t0\t0\t1\t2\t3\n",
+                    "duplicate start location",
+                ),
+                (
+                    moving_map,
+                    "version 1\n"
+                    "0\tsmall.map\t3\t3\t0\t0\t2\t2\t4\n"
+                    "0\tsmall.map\t3\t3\t1\t0\t2\t2\t3\n",
+                    "duplicate goal location",
+                ),
+                (
+                    custom_map,
+                    "2\n"
+                    "0,0,2,2\n"
+                    "0,0,2,1\n",
+                    "duplicate start location",
+                ),
+                (
+                    custom_map,
+                    "2\n"
+                    "0,0,2,2\n"
+                    "0,1,2,2\n",
+                    "duplicate goal location",
+                ),
+            )
+            for index, (map_path, scenario, expected) in enumerate(cases):
+                scenario_path = root / f"duplicate-{index}.scen"
+                scenario_path.write_text(scenario, encoding="utf-8")
+                with self.subTest(index=index), self.assertRaisesRegex(
+                    ValueError, expected
+                ):
+                    lns2_env.LNS2RepairEnv(
+                        str(map_path),
+                        str(scenario_path),
+                        agent_count=2,
+                    )
 
     def test_constructor_accepts_crlf_instances(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

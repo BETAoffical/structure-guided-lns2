@@ -81,7 +81,10 @@ target_include_directories(
 )
 
 add_executable(lns_official "${MAPF_LNS2_ROOT}/src/driver.cpp")
-target_link_libraries(lns_official PRIVATE mapf_lns2_core)
+target_link_libraries(
+    lns_official
+    PRIVATE mapf_lns2_core structure_guided_instance_validation
+)
 
 add_executable(lns2_repair
     src/repair_driver.cpp
@@ -127,12 +130,28 @@ target_compile_definitions(lns2_interface_tests PRIVATE
     PROPOSAL_TEST_SCEN="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/proposal_required.scen"
 )
 add_test(NAME lns2_interface_tests COMMAND lns2_interface_tests)
+add_executable(corrected_native_tests tests/test_corrected_native.cpp)
+target_link_libraries(corrected_native_tests PRIVATE mapf_lns2_core)
+target_compile_definitions(corrected_native_tests PRIVATE
+    TARGET_COUNT_TEST_MAP="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/corrected_native_target.map"
+    TARGET_COUNT_TEST_SCEN="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/corrected_native_target.scen"
+)
+add_test(NAME corrected_native_tests COMMAND corrected_native_tests)
 add_test(NAME lns2_repair_smoke COMMAND lns2_repair
     --map "${MAPF_LNS2_ROOT}/random-32-32-20.map"
     --agents "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
     --agentNum 24
     --cutoffTime 10
     --seed 0
+)
+add_test(
+    NAME lns2_cli_input_validation
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_lns2_cli_validation.py"
+            "$<TARGET_FILE:lns2_repair>"
+            "$<TARGET_FILE:lns_official>"
+            "${MAPF_LNS2_ROOT}/random-32-32-20.map"
+            "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
 )
 add_test(
     NAME lns2_failed_trace_state
@@ -194,19 +213,33 @@ add_test(NAME lns2_trace_schema COMMAND
 )
 set_tests_properties(lns2_trace_schema PROPERTIES FIXTURES_REQUIRED repair_trace)
 
-set(PARITY_PATH "${CMAKE_CURRENT_BINARY_DIR}/official-parity-paths.txt")
-add_test(NAME lns2_official_parity_run COMMAND lns_official
+set(
+    CORRECTED_NATIVE_DETERMINISM_PATH
+    "${CMAKE_CURRENT_BINARY_DIR}/corrected-native-v1-paths.txt"
+)
+add_test(NAME lns2_corrected_native_determinism_run COMMAND lns_official
     --map "${MAPF_LNS2_ROOT}/random-32-32-20.map"
     --agents "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
     --agentNum 200
     --cutoffTime 20
     --maxIterations 0
     --seed 29
-    --outputPaths "${PARITY_PATH}"
+    --outputPaths "${CORRECTED_NATIVE_DETERMINISM_PATH}"
 )
-set_tests_properties(lns2_official_parity_run PROPERTIES FIXTURES_SETUP official_paths)
-add_test(NAME lns2_official_parity_hash COMMAND
+set_tests_properties(
+    lns2_corrected_native_determinism_run
+    PROPERTIES FIXTURES_SETUP corrected_native_paths
+)
+# The legacy frozen-official hash was
+# 915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf.
+# corrected-native.v1 intentionally changes solver semantics, so this is a
+# determinism fixture for the corrected implementation, not official parity.
+add_test(NAME lns2_corrected_native_determinism_hash COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_path_hash.py"
-    "${PARITY_PATH}" "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf"
+    "${CORRECTED_NATIVE_DETERMINISM_PATH}"
+    "50a1e2f757778cf2b59b59a22172e1381304c271d17bef53d2ad73b128639d65"
 )
-set_tests_properties(lns2_official_parity_hash PROPERTIES FIXTURES_REQUIRED official_paths)
+set_tests_properties(
+    lns2_corrected_native_determinism_hash
+    PROPERTIES FIXTURES_REQUIRED corrected_native_paths
+)

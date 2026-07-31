@@ -109,6 +109,27 @@ class StallGuardTests(unittest.TestCase):
         invalid["size_caps"] = [8, 16, 4]
         with self.assertRaises(ValueError):
             load_stall_guard_config(invalid)
+        for invalid_object in (None, [], [("schema", "lns2.stall_guard.v1")]):
+            with self.subTest(invalid_object=invalid_object):
+                with self.assertRaises(ValueError):
+                    load_stall_guard_config(invalid_object)  # type: ignore[arg-type]
+
+    def test_config_rejects_coerced_integer_and_boolean_types(self) -> None:
+        mutations = (
+            ("schema_version", True),
+            ("schema_version", "1"),
+            ("unchanged_state_attempts_per_level", True),
+            ("unchanged_state_attempts_per_level", "2"),
+            ("size_caps", [16, True, 4]),
+            ("size_caps", ["16", 8, 4]),
+            ("reset_on_state_fingerprint_change", "true"),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field, value=value):
+                invalid = dict(CONFIG)
+                invalid[field] = value
+                with self.assertRaises(ValueError):
+                    load_stall_guard_config(invalid)
 
 
 if __name__ == "__main__":

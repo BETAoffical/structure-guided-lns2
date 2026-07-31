@@ -63,7 +63,7 @@ def _load_rollouts(root: Path) -> list[dict[str, Any]]:
     keys = [_rollout_key(row) for row in rows]
     if len(keys) != len(set(keys)):
         raise ValueError("source value pilot contains duplicate rollout keys")
-    if not all(bool(row.get("complete")) for row in rows):
+    if not all(row.get("complete") is True for row in rows):
         raise ValueError("source value pilot contains incomplete rollouts")
     return rows
 

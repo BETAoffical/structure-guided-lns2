@@ -19,7 +19,12 @@ PRIMARY_THRESHOLD = 0.05
 
 
 def _as_bool(value: Any) -> bool:
-    return str(value).strip().lower() in {"1", "true", "yes"}
+    text = str(value).strip().lower()
+    if text == "true":
+        return True
+    if text == "false":
+        return False
+    raise ValueError(f"uncertainty audit boolean value is invalid: {value!r}")
 
 
 def load_merged_rollouts(source: str | Path) -> list[dict[str, Any]]:

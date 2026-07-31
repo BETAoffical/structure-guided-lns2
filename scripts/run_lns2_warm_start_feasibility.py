@@ -46,7 +46,7 @@ from experiments.repair_collection import (  # noqa: E402
 )
 
 
-SCHEMA = "lns2.warm_start_feasibility.v2"
+SCHEMA = "lns2.warm_start_feasibility.v3"
 
 WARM_START_PRODUCER_FILES = (
     "CMakeLists.txt",
@@ -54,14 +54,36 @@ WARM_START_PRODUCER_FILES = (
     "experiments/closed_loop_trace_storage.py",
     "experiments/repair_collection.py",
     "scripts/run_lns2_warm_start_feasibility.py",
+    "include/structure_guided/instance_validation.hpp",
+    "include/structure_guided/native_semantics.hpp",
+    "src/instance_validation.cpp",
+    "src/online_features.cpp",
+    "src/online_features.h",
     "src/python_bindings.cpp",
+    "third_party/mapf_lns2/inc/ConstraintTable.h",
     "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/CBS/CBSNode.h",
+    "third_party/mapf_lns2/inc/CBS/ECBSNode.h",
+    "third_party/mapf_lns2/inc/CBS/GCBSNode.h",
+    "third_party/mapf_lns2/inc/CBS/PBS.h",
     "third_party/mapf_lns2/inc/InitLNS.h",
     "third_party/mapf_lns2/inc/PathTable.h",
     "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/inc/ReservationTable.h",
+    "third_party/mapf_lns2/inc/SIPP.h",
     "third_party/mapf_lns2/inc/SingleAgentSolver.h",
+    "third_party/mapf_lns2/inc/SpaceTimeAStar.h",
+    "third_party/mapf_lns2/inc/WeightedSampling.h",
+    "third_party/mapf_lns2/src/BasicLNS.cpp",
+    "third_party/mapf_lns2/src/CBS/Conflict.cpp",
+    "third_party/mapf_lns2/src/CBS/MDD.cpp",
+    "third_party/mapf_lns2/src/ConstraintTable.cpp",
     "third_party/mapf_lns2/src/InitLNS.cpp",
     "third_party/mapf_lns2/src/PathTable.cpp",
+    "third_party/mapf_lns2/src/ReservationTable.cpp",
+    "third_party/mapf_lns2/src/SIPP.cpp",
+    "third_party/mapf_lns2/src/SingleAgentSolver.cpp",
+    "third_party/mapf_lns2/src/SpaceTimeAStar.cpp",
 )
 
 
@@ -108,6 +130,15 @@ def _strict_bool(value: Any, *, field: str) -> bool:
     return value
 
 
+def _strict_nonnegative_float(value: Any, *, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be numeric")
+    result = float(value)
+    if not math.isfinite(result) or result < 0.0:
+        raise ValueError(f"{field} must be finite and non-negative")
+    return result
+
+
 def _state_paths(state: dict[str, Any], *, field: str) -> list[list[int]]:
     agents = state.get("agents")
     if not isinstance(agents, list):
@@ -117,9 +148,9 @@ def _state_paths(state: dict[str, Any], *, field: str) -> list[list[int]]:
         if not isinstance(agent, dict) or not isinstance(agent.get("path"), list):
             raise ValueError(f"{field}.agents[{agent_index}].path must be a list")
         path = agent["path"]
-        if any(type(location) is not int for location in path):
+        if not path or any(type(location) is not int for location in path):
             raise ValueError(
-                f"{field}.agents[{agent_index}].path must contain integers"
+                f"{field}.agents[{agent_index}].path must contain at least one integer"
             )
         paths.append(list(path))
     return paths
@@ -296,6 +327,10 @@ def _restart_sources(
         or set(result_by_id) != set(config_by_id)
     ):
         raise ValueError("restart result and configuration job coverage differs")
+    base_by_seed = {int(source["source_seed"]): source for source in base_sources}
+    if len(base_by_seed) != len(base_sources):
+        raise ValueError("restart base sources contain duplicate source seeds")
+    validated_complete_rows: list[dict[str, Any]] = []
     for job_id, row in result_by_id.items():
         configured = config_by_id[job_id]
         job_identity = configured.get("job_identity")
@@ -329,11 +364,45 @@ def _restart_sources(
             _strict_bool(
                 row.get("success"), field=f"restart job {job_id} success"
             )
-    rows = [
-        dict(row)
-        for row in payload_jobs
-        if str(row.get("status")) == "complete"
-    ]
+            source_seed = int(row["source_seed"])
+            if source_seed not in base_by_seed:
+                raise ValueError(
+                    f"restart source seed {source_seed} has no base source"
+                )
+            template_job = {
+                "run_fingerprint": previous_run_fingerprint,
+                "portfolio_key": configured["portfolio_key"],
+                "source": dict(base_by_seed[source_seed]),
+                "output_root": str(previous_root),
+            }
+            try:
+                previous_job = _configured_job(
+                    previous_root, job_id, template_job
+                )
+                canonical_result_path = (
+                    previous_root / "jobs" / job_id / "result.json"
+                )
+                canonical_status_path = (
+                    previous_root / "jobs" / job_id / "status.json"
+                )
+                if not canonical_result_path.is_file():
+                    raise RuntimeError("canonical result file is missing")
+                canonical_result = _read_json(canonical_result_path)
+                if canonical_result != row:
+                    raise RuntimeError(
+                        "aggregate results row differs from canonical result"
+                    )
+                validated = _validate_completed_result(
+                    canonical_result_path,
+                    canonical_status_path,
+                    previous_job,
+                )
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                raise ValueError(
+                    f"restart job {job_id} completed artifact is invalid"
+                ) from error
+            validated_complete_rows.append(validated)
+    rows = validated_complete_rows
     if not rows:
         raise ValueError("restart results contain no complete jobs")
     if best_per_source:
@@ -350,7 +419,6 @@ def _restart_sources(
                 )
             )
         rows = selected
-    base_by_seed = {int(source["source_seed"]): source for source in base_sources}
     restarted = []
     for row in rows:
         source_seed = int(row["source_seed"])
@@ -493,6 +561,143 @@ def _job_id(
     )
 
 
+def _parse_source_seeds(value: str) -> list[int]:
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if not parts:
+        raise ValueError("at least one source seed is required")
+    try:
+        seeds = [int(part) for part in parts]
+    except ValueError as error:
+        raise ValueError("source seeds must be integers") from error
+    if any(seed < 0 for seed in seeds):
+        raise ValueError("source seeds must be non-negative")
+    if len(set(seeds)) != len(seeds):
+        raise ValueError("source seeds must be unique")
+    return seeds
+
+
+def _source_matching_identity(
+    template: dict[str, Any], expected_identity: dict[str, Any]
+) -> dict[str, Any]:
+    candidate = dict(template)
+    try:
+        if _source_identity(candidate) == expected_identity:
+            return candidate
+    except (KeyError, TypeError, ValueError):
+        pass
+    evidence = expected_identity.get("evidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("configured source identity cannot be reconstructed")
+    checkpoint_reference = evidence.get("checkpoint_file")
+    checkpoint_sha256 = evidence.get("checkpoint_sha256")
+    if (
+        not isinstance(checkpoint_reference, str)
+        or not checkpoint_reference
+        or not isinstance(checkpoint_sha256, str)
+        or len(checkpoint_sha256) != 64
+    ):
+        raise ValueError("configured source identity lacks checkpoint evidence")
+    checkpoint_path = Path(checkpoint_reference).resolve()
+    if not checkpoint_path.is_file() or _sha256(checkpoint_path) != checkpoint_sha256:
+        raise ValueError("configured source checkpoint evidence changed")
+    candidate["state"] = _read_gzip_json(checkpoint_path)
+    candidate["evidence"] = dict(evidence)
+    candidate["source_label"] = expected_identity.get("source_label")
+    if _source_identity(candidate) != expected_identity:
+        raise ValueError("configured source checkpoint identity mismatch")
+    return candidate
+
+
+def _configured_job(
+    output_root: Path,
+    job_id: str,
+    template_job: dict[str, Any],
+) -> dict[str, Any]:
+    config_path = output_root / "run_config.json"
+    if not config_path.is_file():
+        raise RuntimeError("warm-start run_config is missing")
+    run_config = _read_json(config_path)
+    if not isinstance(run_config, dict):
+        raise RuntimeError("warm-start run_config is not an object")
+    run_fingerprint = str(template_job["run_fingerprint"])
+    if (
+        run_config.get("schema") != SCHEMA
+        or run_config.get("run_fingerprint") != run_fingerprint
+        or not isinstance(run_config.get("run_identity"), dict)
+        or _fingerprint(run_config["run_identity"]) != run_fingerprint
+    ):
+        raise RuntimeError("warm-start run_config identity mismatch")
+    configured_jobs = run_config.get("jobs")
+    if not isinstance(configured_jobs, list) or any(
+        not isinstance(row, dict) for row in configured_jobs
+    ):
+        raise RuntimeError("warm-start run_config job manifest is invalid")
+    matches = [
+        dict(row)
+        for row in configured_jobs
+        if row.get("job_id") == job_id
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("portfolio winner is not unique in run_config")
+    configured = matches[0]
+    identity = configured.get("job_identity")
+    if (
+        not isinstance(identity, dict)
+        or _fingerprint(identity) != configured.get("job_fingerprint")
+        or identity.get("run_fingerprint") != run_fingerprint
+        or configured.get("portfolio_key") != template_job.get("portfolio_key")
+        or identity.get("portfolio_key") != template_job.get("portfolio_key")
+    ):
+        raise RuntimeError("portfolio winner job identity is invalid")
+    source_identity = identity.get("source_identity")
+    task_identity = identity.get("task_identity")
+    if not isinstance(source_identity, dict) or not isinstance(task_identity, dict):
+        raise RuntimeError("portfolio winner lacks source/task identity")
+    try:
+        source = _source_matching_identity(
+            dict(template_job["source"]), source_identity
+        )
+    except (KeyError, OSError, TypeError, ValueError) as error:
+        raise RuntimeError("portfolio winner source identity is invalid") from error
+    if _task_identity(source) != task_identity:
+        raise RuntimeError("portfolio winner task identity mismatch")
+    source_seed = source.get("source_seed")
+    continuation_seed = configured.get("continuation_seed")
+    if (
+        type(source_seed) is not int
+        or configured.get("source_seed") != source_seed
+        or type(continuation_seed) is not int
+        or identity.get("continuation_seed") != continuation_seed
+        or _job_id(
+            source_seed,
+            continuation_seed,
+            str(configured["job_fingerprint"]),
+        )
+        != job_id
+    ):
+        raise RuntimeError("portfolio winner seed/job id mismatch")
+    time_limit = identity.get("time_limit")
+    if (
+        isinstance(time_limit, bool)
+        or not isinstance(time_limit, (int, float))
+        or not math.isfinite(float(time_limit))
+        or float(time_limit) <= 0.0
+    ):
+        raise RuntimeError("portfolio winner time limit is invalid")
+    return {
+        **template_job,
+        "job_id": job_id,
+        "job_fingerprint": str(configured["job_fingerprint"]),
+        "job_identity": identity,
+        "source_identity": source_identity,
+        "task_identity": task_identity,
+        "source": source,
+        "continuation_seed": continuation_seed,
+        "time_limit": float(time_limit),
+        "output_root": str(output_root),
+    }
+
+
 def _portfolio_marker_path(output_root: Path, portfolio_key: str) -> Path:
     return output_root / "portfolio" / portfolio_key / "solved.json"
 
@@ -501,21 +706,106 @@ def _portfolio_is_solved(path: Path, job: dict[str, Any]) -> bool:
     if not path.is_file():
         return False
     marker = _read_json(path)
+    if not isinstance(marker, dict) or not _is_finite_json(marker):
+        raise RuntimeError(f"portfolio marker is not a finite JSON object: {path}")
     expected = {
         "schema": SCHEMA,
         "run_fingerprint": str(job["run_fingerprint"]),
         "portfolio_key": str(job["portfolio_key"]),
-        "success": True,
     }
     for key, value in expected.items():
         if marker.get(key) != value:
             raise RuntimeError(
                 f"incompatible portfolio marker field {key}: {path}"
             )
-    if not str(marker.get("winning_job_id", "")) or not str(
-        marker.get("final_state_fingerprint", "")
+    if marker.get("success") is not True:
+        raise RuntimeError(f"portfolio marker success is not true: {path}")
+    winning_job_id = marker.get("winning_job_id")
+    if not isinstance(winning_job_id, str) or not winning_job_id:
+        raise RuntimeError(f"portfolio marker winning_job_id is invalid: {path}")
+
+    output_root = Path(job["output_root"]).resolve()
+    expected_marker_path = _portfolio_marker_path(
+        output_root, str(job["portfolio_key"])
+    ).resolve()
+    if path.resolve() != expected_marker_path:
+        raise RuntimeError(f"portfolio marker path is not task scoped: {path}")
+    winner_job = _configured_job(output_root, winning_job_id, job)
+    if marker.get("winning_job_fingerprint") != winner_job["job_fingerprint"]:
+        raise RuntimeError(f"portfolio marker winner fingerprint mismatch: {path}")
+    winner_root = (output_root / "jobs" / winning_job_id).resolve()
+    canonical_result_path = winner_root / "result.json"
+    canonical_status_path = winner_root / "status.json"
+    canonical_final_state_path = winner_root / "final_state.json.gz"
+    try:
+        result_path = _contained_output_file(
+            output_root,
+            marker.get("winning_result_file"),
+            field="winning_result_file",
+        )
+        status_path = _contained_output_file(
+            output_root,
+            marker.get("winning_status_file"),
+            field="winning_status_file",
+        )
+        final_state_path = _contained_output_file(
+            output_root,
+            marker.get("final_state_file"),
+            field="final_state_file",
+        )
+    except (OSError, TypeError, ValueError) as error:
+        raise RuntimeError(f"portfolio marker file reference is invalid: {path}") from error
+    if (
+        result_path.resolve() != canonical_result_path
+        or status_path.resolve() != canonical_status_path
+        or final_state_path.resolve() != canonical_final_state_path
     ):
-        raise RuntimeError(f"portfolio marker is incomplete: {path}")
+        raise RuntimeError(f"portfolio marker does not use canonical winner files: {path}")
+    for artifact_path, field in (
+        (result_path, "winning_result_sha256"),
+        (status_path, "winning_status_sha256"),
+        (final_state_path, "final_state_sha256"),
+    ):
+        expected_sha = marker.get(field)
+        if (
+            not isinstance(expected_sha, str)
+            or len(expected_sha) != 64
+            or _sha256(artifact_path) != expected_sha
+        ):
+            raise RuntimeError(
+                f"portfolio marker {field} does not match its artifact: {path}"
+            )
+    try:
+        result = _validate_completed_result(
+            result_path, status_path, winner_job
+        )
+    except RuntimeError as error:
+        raise RuntimeError(
+            f"portfolio winner failed completed-result validation: {path}"
+        ) from error
+    if (
+        result.get("success") is not True
+        or result.get("stop_reason") != "feasible"
+        or result.get("final_conflicts") != 0
+    ):
+        raise RuntimeError(f"portfolio winner is not a feasible completion: {path}")
+    if (
+        result.get("final_state_file") != marker.get("final_state_file")
+        or result.get("final_state_sha256") != marker.get("final_state_sha256")
+    ):
+        raise RuntimeError(f"portfolio winner final state binding mismatch: {path}")
+    final_state = _read_gzip_json(final_state_path)
+    if _strict_bool(
+        final_state.get("feasible"), field="portfolio final state feasible"
+    ) is not True:
+        raise RuntimeError(f"portfolio winner final state is not feasible: {path}")
+    fingerprint = marker.get("final_state_fingerprint")
+    if (
+        not isinstance(fingerprint, str)
+        or len(fingerprint) != 64
+        or state_fingerprint(final_state) != fingerprint
+    ):
+        raise RuntimeError(f"portfolio marker final state fingerprint mismatch: {path}")
     return True
 
 
@@ -524,8 +814,36 @@ def _mark_portfolio_solved(
     job: dict[str, Any],
     *,
     job_id: str,
+    result_path: Path,
+    status_path: Path,
+    result: dict[str, Any],
     state: dict[str, Any],
 ) -> None:
+    output_root = Path(job["output_root"]).resolve()
+    if result.get("success") is not True or result.get("status") != "complete":
+        raise RuntimeError("portfolio marker requires a complete successful result")
+    if not result_path.is_file() or not status_path.is_file():
+        raise RuntimeError("portfolio marker requires durable result and status files")
+    validated = _validate_completed_result(result_path, status_path, job)
+    if (
+        validated.get("success") is not True
+        or validated.get("stop_reason") != "feasible"
+        or validated.get("final_conflicts") != 0
+    ):
+        raise RuntimeError("portfolio marker requires a feasible completed result")
+    final_state_path = _contained_output_file(
+        output_root,
+        result.get("final_state_file"),
+        field="final_state_file",
+    )
+    if _sha256(final_state_path) != result.get("final_state_sha256"):
+        raise RuntimeError("portfolio marker final state SHA256 mismatch")
+    if state_fingerprint(_read_gzip_json(final_state_path)) != state_fingerprint(
+        state
+    ):
+        raise RuntimeError("portfolio marker in-memory final state mismatch")
+    relative_result = result_path.resolve().relative_to(output_root).as_posix()
+    relative_status = status_path.resolve().relative_to(output_root).as_posix()
     _write_json(
         path,
         {
@@ -534,6 +852,13 @@ def _mark_portfolio_solved(
             "portfolio_key": str(job["portfolio_key"]),
             "success": True,
             "winning_job_id": job_id,
+            "winning_job_fingerprint": str(result["job_fingerprint"]),
+            "winning_result_file": relative_result,
+            "winning_result_sha256": _sha256(result_path),
+            "winning_status_file": relative_status,
+            "winning_status_sha256": _sha256(status_path),
+            "final_state_file": str(result["final_state_file"]),
+            "final_state_sha256": str(result["final_state_sha256"]),
             "final_state_fingerprint": state_fingerprint(state),
             "solved_at": _utc_now(),
         },
@@ -544,7 +869,18 @@ def _validate_completed_result(
     result_path: Path, status_path: Path, job: dict[str, Any]
 ) -> dict[str, Any]:
     result = _read_json(result_path)
+    if not isinstance(result, dict):
+        raise RuntimeError(
+            f"completed warm-start artifact is invalid and was preserved: "
+            f"{result_path}: result is not a JSON object"
+        )
     errors: list[str] = []
+    output_root = Path(job["output_root"]).resolve()
+    job_root = (output_root / "jobs" / str(job["job_id"])).resolve()
+    if result_path.resolve() != job_root / "result.json":
+        errors.append("result path is not canonical for its job")
+    if status_path.resolve() != job_root / "status.json":
+        errors.append("status path is not canonical for its job")
     expected = {
         "schema": SCHEMA,
         "status": "complete",
@@ -573,8 +909,9 @@ def _validate_completed_result(
         "repair_iterations",
         "nonreducing_repairs",
     ):
-        if type(result.get(key)) is not int:
-            errors.append(f"{key} is not an integer")
+        value = result.get(key)
+        if type(value) is not int or value < 0:
+            errors.append(f"{key} is not a non-negative integer")
     if type(result.get("success")) is not bool:
         errors.append("success is not a boolean")
     if type(result.get("time_limit")) not in {int, float} or isinstance(
@@ -588,19 +925,173 @@ def _validate_completed_result(
         "time_limit",
     }:
         errors.append("invalid stop_reason")
+    if (
+        result.get("warm_start_semantics")
+        != "paths-and-derived-repair-state; ALNS-and-RNG-reset"
+    ):
+        errors.append("warm-start semantics marker mismatch")
+    if not isinstance(result.get("completed_at"), str) or not result.get(
+        "completed_at"
+    ):
+        errors.append("completed_at is not a non-empty string")
+    if not isinstance(result.get("diagnostics"), list):
+        errors.append("diagnostics is not a list")
+
+    raw_source_state = dict(job.get("source") or {}).get("state")
+    if not isinstance(raw_source_state, dict):
+        source_state: dict[str, Any] = {}
+        errors.append("job source state is missing")
+    else:
+        source_state = dict(raw_source_state)
+        if result.get("initial_conflicts") != source_state.get(
+            "num_of_colliding_pairs"
+        ):
+            errors.append("initial conflict count differs from source state")
+        if result.get("initial_sum_of_costs") != source_state.get("sum_of_costs"):
+            errors.append("initial SOC differs from source state")
+
+    for field in (
+        "selection_seconds",
+        "pp_seconds",
+        "repair_wall_seconds",
+        "observed_wall_seconds",
+        "native_runtime",
+        "nonreducing_fraction",
+    ):
+        try:
+            _strict_nonnegative_float(result.get(field), field=field)
+        except ValueError as error:
+            errors.append(str(error))
+    try:
+        nonreducing_fraction = _strict_nonnegative_float(
+            result.get("nonreducing_fraction"), field="nonreducing_fraction"
+        )
+        repair_iterations = _strict_int(
+            result.get("repair_iterations"), field="repair_iterations"
+        )
+        nonreducing_repairs = _strict_int(
+            result.get("nonreducing_repairs"), field="nonreducing_repairs"
+        )
+        if nonreducing_repairs > repair_iterations:
+            errors.append("nonreducing repairs exceed repair iterations")
+        expected_fraction = (
+            nonreducing_repairs / repair_iterations
+            if repair_iterations
+            else 0.0
+        )
+        if not math.isclose(
+            nonreducing_fraction, expected_fraction, rel_tol=1e-12, abs_tol=1e-12
+        ):
+            errors.append("nonreducing fraction mismatch")
+    except ValueError as error:
+        errors.append(str(error))
+
+    try:
+        trajectory = result.get("conflict_trajectory")
+        elapsed = result.get("elapsed_seconds")
+        step_applied = result.get("step_applied_trajectory")
+        if not isinstance(trajectory, list) or not trajectory:
+            raise ValueError("conflict_trajectory must be a non-empty list")
+        if any(type(value) is not int or value < 0 for value in trajectory):
+            raise ValueError(
+                "conflict_trajectory must contain non-negative integers"
+            )
+        if not isinstance(elapsed, list) or len(elapsed) != len(trajectory):
+            raise ValueError(
+                "elapsed_seconds length must match conflict_trajectory"
+            )
+        elapsed_values = [
+            _strict_nonnegative_float(value, field="elapsed_seconds")
+            for value in elapsed
+        ]
+        if elapsed_values[0] != 0.0 or any(
+            right < left
+            for left, right in zip(elapsed_values, elapsed_values[1:])
+        ):
+            raise ValueError("elapsed_seconds must start at zero and be ordered")
+        if (
+            not isinstance(step_applied, list)
+            or len(step_applied) + 1 != len(trajectory)
+            or any(type(value) is not bool for value in step_applied)
+        ):
+            raise ValueError(
+                "step_applied_trajectory must bind every trajectory transition"
+            )
+        if trajectory[0] != result.get("initial_conflicts"):
+            errors.append("conflict trajectory initial endpoint mismatch")
+        if trajectory[-1] != result.get("final_conflicts"):
+            errors.append("conflict trajectory final endpoint mismatch")
+        applied_count = sum(step_applied)
+        if applied_count != result.get("repair_iterations"):
+            errors.append("repair iteration count differs from applied transitions")
+        derived_nonreducing = sum(
+            applied and after >= before
+            for before, after, applied in zip(
+                trajectory, trajectory[1:], step_applied
+            )
+        )
+        if derived_nonreducing != result.get("nonreducing_repairs"):
+            errors.append(
+                "nonreducing repair count differs from conflict trajectory"
+            )
+        observed = _strict_nonnegative_float(
+            result.get("observed_wall_seconds"), field="observed_wall_seconds"
+        )
+        if elapsed_values[-1] > observed + 1e-9:
+            errors.append("trajectory elapsed time exceeds observed wall time")
+    except ValueError as error:
+        errors.append(str(error))
+
+    try:
+        selection = _strict_nonnegative_float(
+            result.get("selection_seconds"), field="selection_seconds"
+        )
+        pp = _strict_nonnegative_float(
+            result.get("pp_seconds"), field="pp_seconds"
+        )
+        repair = _strict_nonnegative_float(
+            result.get("repair_wall_seconds"), field="repair_wall_seconds"
+        )
+        observed = _strict_nonnegative_float(
+            result.get("observed_wall_seconds"), field="observed_wall_seconds"
+        )
+        if selection + pp > repair + 1e-6:
+            errors.append("native repair timing components exceed repair wall time")
+        if repair > observed + 1e-6:
+            errors.append("repair wall time exceeds observed wall time")
+        restore_timings = result.get("restore_timings")
+        if not isinstance(restore_timings, dict):
+            errors.append("restore_timings is not an object")
+        else:
+            for name, value in restore_timings.items():
+                _strict_nonnegative_float(value, field=f"restore_timings.{name}")
+    except ValueError as error:
+        errors.append(str(error))
 
     try:
         final_state_path = _contained_output_file(
-            Path(job["output_root"]),
+            output_root,
             result.get("final_state_file"),
             field="final_state_file",
         )
+        if final_state_path.resolve() != job_root / "final_state.json.gz":
+            errors.append("final state path is not canonical for its job")
         if _sha256(final_state_path) != str(result.get("final_state_sha256", "")):
             errors.append("final state SHA256 mismatch")
         final_state = _read_gzip_json(final_state_path)
         if not _is_finite_json(final_state):
             errors.append("final state is not finite JSON")
         final_paths = _state_paths(final_state, field="final state")
+        if source_state:
+            source_paths = _state_paths(source_state, field="source state")
+            if len(final_paths) != len(source_paths):
+                errors.append("final path count differs from source state")
+            elif any(
+                final_path[0] != source_path[0]
+                or final_path[-1] != source_path[-1]
+                for source_path, final_path in zip(source_paths, final_paths)
+            ):
+                errors.append("final path endpoints differ from source state")
         if _paths_sha256(final_paths) != str(
             result.get("final_paths_sha256", "")
         ):
@@ -618,6 +1109,40 @@ def _validate_completed_result(
             final_state.get("feasible"), field="final state feasible"
         ) is not _strict_bool(result.get("success"), field="result success"):
             errors.append("final feasibility mismatch")
+        final_done = _strict_bool(
+            final_state.get("done"), field="final state done"
+        )
+        final_iteration = _strict_int(
+            final_state.get("iteration"), field="final state iteration"
+        )
+        if final_iteration != result.get("repair_iterations"):
+            errors.append("final state iteration differs from repair iterations")
+        native_runtime = _strict_nonnegative_float(
+            final_state.get("runtime"), field="final state runtime"
+        )
+        if not math.isclose(
+            native_runtime,
+            _strict_nonnegative_float(
+                result.get("native_runtime"), field="result native_runtime"
+            ),
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            errors.append("final state runtime differs from result native runtime")
+        stop_reason = result.get("stop_reason")
+        success = result.get("success")
+        if success is True and (
+            stop_reason != "feasible"
+            or final_done is not True
+            or result.get("final_conflicts") != 0
+        ):
+            errors.append("successful result has inconsistent terminal semantics")
+        if success is False and stop_reason == "feasible":
+            errors.append("failed result uses feasible stop_reason")
+        if stop_reason == "time_limit" and final_done is not True:
+            errors.append("time-limit result does not end in a terminal state")
+        if stop_reason in {"plateau", "portfolio_solved"} and final_done is not False:
+            errors.append("early-stop result unexpectedly ends in a terminal state")
     except (KeyError, TypeError, ValueError, OSError) as error:
         errors.append(f"final state validation failed: {error}")
 
@@ -625,6 +1150,9 @@ def _validate_completed_result(
         errors.append("complete status file is missing")
     else:
         status = _read_json(status_path)
+        if not isinstance(status, dict) or not _is_finite_json(status):
+            errors.append("complete status is not a finite JSON object")
+            status = {}
         for key in (
             "schema",
             "status",
@@ -635,6 +1163,39 @@ def _validate_completed_result(
         ):
             if status.get(key) != expected.get(key):
                 errors.append(f"status {key} mismatch")
+        status_expected = {
+            "source_seed": result.get("source_seed"),
+            "continuation_seed": result.get("continuation_seed"),
+            "initial_conflicts": result.get("initial_conflicts"),
+            "current_conflicts": result.get("final_conflicts"),
+            "repair_iterations": result.get("repair_iterations"),
+            "success": result.get("success"),
+            "stop_reason": result.get("stop_reason"),
+            "elapsed_seconds": result.get("observed_wall_seconds"),
+            "completed_at": result.get("completed_at"),
+            "latest_diagnostic": (
+                result["diagnostics"][-1]
+                if isinstance(result.get("diagnostics"), list)
+                and result["diagnostics"]
+                else None
+            ),
+        }
+        for key, value in status_expected.items():
+            if status.get(key) != value:
+                errors.append(f"status {key} differs from result")
+        if status.get("errors") != 0:
+            errors.append("complete status has nonzero errors")
+    if (
+        result.get("stop_reason") == "portfolio_solved"
+        and not errors
+        and not _portfolio_is_solved(
+            _portfolio_marker_path(
+                Path(job["output_root"]), str(job["portfolio_key"])
+            ),
+            job,
+        )
+    ):
+        errors.append("portfolio_solved result lacks a valid winner marker")
     if errors:
         raise RuntimeError(
             f"completed warm-start artifact is invalid and was preserved: "
@@ -657,7 +1218,27 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
     result_path = job_root / "result.json"
     status_path = job_root / "status.json"
     if result_path.is_file():
-        return _validate_completed_result(result_path, status_path, job)
+        completed = _validate_completed_result(result_path, status_path, job)
+        if completed["success"] is True:
+            portfolio_path = _portfolio_marker_path(
+                output_root, str(job["portfolio_key"])
+            )
+            if not _portfolio_is_solved(portfolio_path, job):
+                final_state_path = _contained_output_file(
+                    output_root,
+                    completed["final_state_file"],
+                    field="final_state_file",
+                )
+                _mark_portfolio_solved(
+                    portfolio_path,
+                    job,
+                    job_id=job_id,
+                    result_path=result_path,
+                    status_path=status_path,
+                    result=completed,
+                    state=_read_gzip_json(final_state_path),
+                )
+        return completed
 
     source = dict(job["source"])
     source_state = dict(source["state"])
@@ -697,6 +1278,7 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
         state = restored
         trajectory = [int(state["num_of_colliding_pairs"])]
         elapsed = [0.0]
+        step_applied_trajectory: list[bool] = []
         repair_iterations = 0
         nonreducing_repairs = 0
         selection_seconds = 0.0
@@ -711,12 +1293,6 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
             output_root, str(job["portfolio_key"])
         )
         next_status = time.perf_counter() + 30.0
-        if stop_reason == "feasible" and not _portfolio_is_solved(
-            portfolio_stop_path, job
-        ):
-            _mark_portfolio_solved(
-                portfolio_stop_path, job, job_id=job_id, state=state
-            )
         while _terminal_stop_reason(state) is None:
             if _portfolio_is_solved(portfolio_stop_path, job):
                 stop_reason = "portfolio_solved"
@@ -727,11 +1303,15 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
             repair_seconds += time.perf_counter() - step_started
             state = dict(step["observation"])
             metrics = dict(step["metrics"])
-            repair_iterations += int(bool(metrics.get("step_applied")))
+            step_applied = _strict_bool(
+                metrics.get("step_applied"), field="metrics step_applied"
+            )
+            step_applied_trajectory.append(step_applied)
+            repair_iterations += int(step_applied)
             after_conflicts = int(state["num_of_colliding_pairs"])
-            if after_conflicts >= before_conflicts:
+            if step_applied and after_conflicts >= before_conflicts:
                 nonreducing_repairs += 1
-            else:
+            elif step_applied:
                 last_drop_elapsed = time.perf_counter() - started
             selection_seconds += float(
                 metrics.get("native_neighborhood_generation_seconds", 0.0)
@@ -743,14 +1323,6 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
             terminal_reason = _terminal_stop_reason(state)
             if terminal_reason is not None:
                 stop_reason = terminal_reason
-            if terminal_reason == "feasible":
-                if not _portfolio_is_solved(portfolio_stop_path, job):
-                    _mark_portfolio_solved(
-                        portfolio_stop_path,
-                        job,
-                        job_id=job_id,
-                        state=state,
-                    )
             if terminal_reason is not None:
                 break
             if diagnostic_interval > 0 and current_elapsed >= next_diagnostic:
@@ -845,6 +1417,7 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
             "restore_timings": restore_timings,
             "conflict_trajectory": trajectory,
             "elapsed_seconds": elapsed,
+            "step_applied_trajectory": step_applied_trajectory,
             "diagnostics": diagnostics,
             "final_paths_sha256": _paths_sha256(final_paths),
             "final_state_file": str(final_state_path.relative_to(output_root)),
@@ -852,20 +1425,30 @@ def _run_job(job: dict[str, Any]) -> dict[str, Any]:
             "completed_at": _utc_now(),
         }
         _write_json(result_path, result)
-        _write_json(
-            status_path,
-            {
-                **status,
-                "status": "complete",
-                "current_conflicts": result["final_conflicts"],
-                "repair_iterations": repair_iterations,
-                "elapsed_seconds": result["observed_wall_seconds"],
-                "success": result["success"],
-                "stop_reason": stop_reason,
-                "latest_diagnostic": diagnostics[-1] if diagnostics else None,
-                "completed_at": result["completed_at"],
-            },
-        )
+        complete_status = {
+            **status,
+            "status": "complete",
+            "current_conflicts": result["final_conflicts"],
+            "repair_iterations": repair_iterations,
+            "elapsed_seconds": result["observed_wall_seconds"],
+            "success": result["success"],
+            "stop_reason": stop_reason,
+            "latest_diagnostic": diagnostics[-1] if diagnostics else None,
+            "completed_at": result["completed_at"],
+        }
+        _write_json(status_path, complete_status)
+        if result["success"] is True and not _portfolio_is_solved(
+            portfolio_stop_path, job
+        ):
+            _mark_portfolio_solved(
+                portfolio_stop_path,
+                job,
+                job_id=job_id,
+                result_path=result_path,
+                status_path=status_path,
+                result=result,
+                state=state,
+            )
         return result
     except BaseException as error:
         failure = {
@@ -1053,9 +1636,12 @@ def main() -> int:
 
     output_root = Path(args.output).resolve()
     roots = [Path(value).resolve() for value in args.source]
-    source_seeds = [int(value) for value in args.source_seeds.split(",") if value]
-    if not source_seeds:
-        parser.error("at least one source seed is required")
+    try:
+        source_seeds = _parse_source_seeds(args.source_seeds)
+    except ValueError as error:
+        parser.error(str(error))
+    if args.seed_base < 0:
+        parser.error("--seed-base must be non-negative")
     base_sources = [_source(roots, source_seed) for source_seed in source_seeds]
     sources = (
         _restart_sources(

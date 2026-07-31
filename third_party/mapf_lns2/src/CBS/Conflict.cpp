@@ -95,7 +95,17 @@ bool operator < (const Conflict& conflict1, const Conflict& conflict2) // return
 		{
 			if (conflict1.secondary_priority == conflict2.secondary_priority)
 			{
-				return rand() % 2;
+				return std::make_tuple(
+					conflict1.a1,
+					conflict1.a2,
+					conflict1.constraint1,
+					conflict1.constraint2
+				) > std::make_tuple(
+					conflict2.a1,
+					conflict2.a2,
+					conflict2.constraint1,
+					conflict2.constraint2
+				);
 			}
 			return conflict1.secondary_priority > conflict2.secondary_priority;
 		}

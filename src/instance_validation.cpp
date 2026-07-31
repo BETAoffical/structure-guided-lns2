@@ -5,6 +5,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -147,6 +148,22 @@ void validateScenarioCell(const ValidatedMap& map, int row, int col,
         throw std::invalid_argument(label + " is an obstacle");
 }
 
+void validateUniqueScenarioEndpoint(
+    const ValidatedMap& map,
+    int row,
+    int col,
+    int agent,
+    const std::string& endpoint,
+    std::unordered_set<int>& used)
+{
+    const int location = row * map.cols + col;
+    if (!used.insert(location).second)
+        throw std::invalid_argument(
+            "scenario row " + std::to_string(agent) +
+            " has a duplicate " + endpoint + " location"
+        );
+}
+
 void validateScenarioFile(const std::string& path, int agent_count,
                           const ValidatedMap& map)
 {
@@ -159,6 +176,10 @@ void validateScenarioFile(const std::string& path, int agent_count,
     if (!std::getline(input, line))
         throw std::invalid_argument("scenario file is empty: " + path);
     stripTrailingCarriageReturn(line);
+    std::unordered_set<int> starts;
+    std::unordered_set<int> goals;
+    starts.reserve(static_cast<std::size_t>(agent_count));
+    goals.reserve(static_cast<std::size_t>(agent_count));
 
     if (map.moving_ai)
     {
@@ -196,17 +217,22 @@ void validateScenarioFile(const std::string& path, int agent_count,
                 map, goal_row, goal_col,
                 "scenario row " + std::to_string(agent) + " goal"
             );
+            validateUniqueScenarioEndpoint(
+                map, start_row, start_col, agent, "start", starts
+            );
+            validateUniqueScenarioEndpoint(
+                map, goal_row, goal_col, agent, "goal", goals
+            );
         }
         return;
     }
 
-    const auto header = splitOn(line, ',', false);
-    if (header.empty())
-        throw std::invalid_argument(
-            "custom scenario header is malformed: " + path
-        );
     const int declared_agents =
-        parseStrictInt(header.front(), "custom scenario agent count");
+        parseStrictInt(line, "custom scenario agent count");
+    if (declared_agents <= 0)
+        throw std::invalid_argument(
+            "custom scenario agent count must be greater than zero"
+        );
     if (declared_agents != agent_count)
         throw std::invalid_argument(
             "custom scenario agent count does not match agent_count"
@@ -237,8 +263,50 @@ void validateScenarioFile(const std::string& path, int agent_count,
             map, goal_row, goal_col,
             "scenario row " + std::to_string(agent) + " goal"
         );
+        validateUniqueScenarioEndpoint(
+            map, start_row, start_col, agent, "start", starts
+        );
+        validateUniqueScenarioEndpoint(
+            map, goal_row, goal_col, agent, "goal", goals
+        );
     }
 }
+}
+
+int structure_guided::resolveInstanceAgentCount(
+    const std::string& map_path,
+    const std::string& scenario_path,
+    int requested_agent_count)
+{
+    if (requested_agent_count < 0)
+        throw std::invalid_argument("agent_count must be non-negative");
+    if (requested_agent_count > 0)
+        return requested_agent_count;
+
+    const ValidatedMap map = validateMapFile(map_path);
+    if (map.moving_ai)
+        throw std::invalid_argument(
+            "agent_count must be greater than zero for MovingAI scenarios"
+        );
+
+    std::ifstream input(scenario_path);
+    if (!input)
+        throw std::invalid_argument(
+            "scenario_path does not exist or is not readable: " + scenario_path
+        );
+    std::string line;
+    if (!std::getline(input, line))
+        throw std::invalid_argument(
+            "scenario file is empty: " + scenario_path
+        );
+    stripTrailingCarriageReturn(line);
+    const int declared_agents =
+        parseStrictInt(line, "custom scenario agent count");
+    if (declared_agents <= 0)
+        throw std::invalid_argument(
+            "custom scenario agent count must be greater than zero"
+        );
+    return declared_agents;
 }
 
 void structure_guided::validateInstanceFiles(

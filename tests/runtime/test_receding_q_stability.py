@@ -85,6 +85,7 @@ def _row(
                 "action": {
                     "mode": "explicit_neighborhood",
                     "agents": agents,
+                    "random_seed": seed,
                     "pp_random_seed": seed,
                 },
                 "requested_pp_seed": seed,
@@ -177,6 +178,7 @@ def _producer_identity(name: str) -> dict:
             "path": f"{name}.so",
             "sha256": "1" * 64,
             "repair_timing_schema": "lns2.repair_timing.v2",
+            "native_semantics_schema": "lns2.corrected_native.v1",
         },
     }
 

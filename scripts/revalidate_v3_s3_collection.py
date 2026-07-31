@@ -22,10 +22,25 @@ def main() -> int:
         )
     )
     parser.add_argument("--collection", required=True)
+    parser.add_argument(
+        "--controller-bundle",
+        help=(
+            "Original controller bundle. Defaults to the path recorded in "
+            "the collection run_config.json."
+        ),
+    )
     arguments = parser.parse_args()
 
     collection = resolve_cli_path(PROJECT_ROOT, arguments.collection)
-    report = revalidate_v3_s3_collection(collection)
+    controller_bundle = (
+        resolve_cli_path(PROJECT_ROOT, arguments.controller_bundle)
+        if arguments.controller_bundle
+        else None
+    )
+    report = revalidate_v3_s3_collection(
+        collection,
+        controller_bundle=controller_bundle,
+    )
     pipeline_root = collection.parent
     summary = {
         "schema": "lns2.v3_s3_revalidation_summary.v1",

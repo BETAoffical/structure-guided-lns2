@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v1"
+PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v2"
+NATIVE_SEMANTICS_SCHEMA = "lns2.corrected_native.v1"
 
 
 def _native_filesystem_path(path: Path) -> Path:
@@ -223,10 +224,23 @@ def producer_identity(
         timing_schema = str(getattr(module, "repair_timing_schema", ""))
         if not timing_schema:
             raise RuntimeError("loaded lns2_env has no repair_timing_schema")
+        semantics_schema = str(
+            getattr(module, "native_semantics_schema", "")
+        )
+        if not semantics_schema:
+            raise RuntimeError(
+                "loaded lns2_env has no native_semantics_schema"
+            )
+        if semantics_schema != NATIVE_SEMANTICS_SCHEMA:
+            raise RuntimeError(
+                "loaded lns2_env has unsupported native semantics schema: "
+                f"{semantics_schema}"
+            )
         native = {
             "path": str(native_path),
             "sha256": sha256_file(native_path),
             "repair_timing_schema": timing_schema,
+            "native_semantics_schema": semantics_schema,
         }
 
     result = {
@@ -266,16 +280,34 @@ def validate_producer_identity(
         raise ValueError("producer identity has no source hashes")
     hexadecimal = set("0123456789abcdef")
     for name, digest in sources.items():
-        if not str(name) or len(str(digest)) != 64 or not set(str(digest)) <= hexadecimal:
+        if (
+            not isinstance(name, str)
+            or not name
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or not set(digest) <= hexadecimal
+        ):
             raise ValueError("producer identity contains an invalid source hash")
     python = identity.get("python")
-    if not isinstance(python, dict) or not str(
-        python.get("implementation", "")
-    ) or not str(python.get("version", "")):
+    if (
+        not isinstance(python, dict)
+        or not isinstance(python.get("implementation"), str)
+        or not python["implementation"]
+        or not isinstance(python.get("version"), str)
+        or not python["version"]
+    ):
         raise ValueError("producer identity has invalid Python runtime evidence")
     packages = identity.get("packages")
     if not isinstance(packages, dict):
         raise ValueError("producer identity package versions are missing")
+    if any(
+        not isinstance(name, str)
+        or not name
+        or (version is not None and not isinstance(version, str))
+        or version == ""
+        for name, version in packages.items()
+    ):
+        raise ValueError("producer identity contains invalid package evidence")
     required_packages = set(map(str, package_names))
     optional_packages = set(map(str, optional_package_names))
     if required_packages & optional_packages:
@@ -296,13 +328,27 @@ def validate_producer_identity(
     if native is not None:
         if not isinstance(native, dict):
             raise ValueError("producer identity native evidence is not an object")
-        if not str(native.get("path", "")):
+        if not isinstance(native.get("path"), str) or not native["path"]:
             raise ValueError("producer identity native path is missing")
-        digest = str(native.get("sha256", ""))
-        if len(digest) != 64 or not set(digest) <= hexadecimal:
+        digest = native.get("sha256")
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or not set(digest) <= hexadecimal
+        ):
             raise ValueError("producer identity native hash is invalid")
-        if not str(native.get("repair_timing_schema", "")):
+        if (
+            not isinstance(native.get("repair_timing_schema"), str)
+            or not native["repair_timing_schema"]
+        ):
             raise ValueError("producer identity native timing schema is missing")
+        if (
+            str(native.get("native_semantics_schema", ""))
+            != NATIVE_SEMANTICS_SCHEMA
+        ):
+            raise ValueError(
+                "producer identity native semantics schema is missing or unsupported"
+            )
     return identity
 
 
@@ -466,6 +512,7 @@ def select_rows_by_task_id(
 
 
 __all__ = [
+    "NATIVE_SEMANTICS_SCHEMA",
     "PRODUCER_IDENTITY_SCHEMA",
     "add_categorical_feature",
     "atomic_write_csv",

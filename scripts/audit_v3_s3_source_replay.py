@@ -13,13 +13,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 if NATIVE_BUILD.is_dir():
     sys.path.insert(0, str(NATIVE_BUILD))
 
-from experiments.repair_collection import _plain, state_fingerprint  # noqa: E402
+from experiments.repair_collection import (  # noqa: E402
+    _fingerprint,
+    _plain,
+    state_fingerprint,
+)
 from experiments.trace_replay import replay_prefix  # noqa: E402
 from experiments.v3_s3_collection import (  # noqa: E402
     _source_replay_job,
     source_decisions,
 )
-from experiments.v3_s3_pipeline import source_roots  # noqa: E402
+from experiments.v3_s3_pipeline import (  # noqa: E402
+    V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA,
+    source_replay_input_identity,
+    source_roots,
+)
 
 
 def audit_source_replay(
@@ -28,9 +36,15 @@ def audit_source_replay(
     roots: dict[str, list[Path]] | None = None,
 ) -> dict[str, object]:
     rows = source_decisions(roots if roots is not None else source_roots(source_output))
+    input_identity = source_replay_input_identity(rows)
     grouped: dict[tuple[str, str], list[dict[str, object]]] = collections.defaultdict(list)
     for row in rows:
-        grouped[(str(row["source_root"]), str(row["episode_id"]))].append(row)
+        grouped[
+            (
+                str(row.get("source_run_fingerprint", row.get("source_root", ""))),
+                str(row["episode_id"]),
+            )
+        ].append(row)
 
     matched = 0
     rejected = []
@@ -109,8 +123,10 @@ def audit_source_replay(
             )
 
     return {
-        "schema": "lns2.v3_s3_source_replay_audit.v2",
+        "schema": V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA,
         "source_output": str(source_output),
+        "input_identity": input_identity,
+        "input_sha256": _fingerprint(input_identity),
         "source_state_count": len(rows),
         "episode_count": len(grouped),
         "matched_decision_state_count": matched,

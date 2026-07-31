@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import types
@@ -15,6 +16,7 @@ from experiments.v3_value_pilot import (
     _extend_replay_repair_budget,
     _winner_key,
     analyze_value_rollouts,
+    build_value_pilot_plan,
     build_state_arms,
     load_resumable_value_rollout,
     run_value_label_pilot,
@@ -258,6 +260,68 @@ class V3ValueArmTests(unittest.TestCase):
             ["oracle_s3_quality_time", "oracle_h1_efficiency"],
         )
 
+    def test_arm_sources_reject_implicit_type_coercion(self) -> None:
+        payload = {
+            "trials": [
+                _sequence_trial(
+                    "model",
+                    "collision:size4:rep0",
+                    "same",
+                    [1, 2, 3, 4],
+                ),
+                _sequence_trial(
+                    "oracle",
+                    "collision:size4:rep0",
+                    "same",
+                    [1, 2, 3, 4],
+                ),
+                _sequence_trial(
+                    "quality",
+                    "target:size8:rep0",
+                    "quality",
+                    list(range(8)),
+                ),
+            ],
+            "external_baselines": [
+                {
+                    "controller": "v2-full",
+                    "steps": [
+                        {
+                            "step": 1,
+                            "candidate_id": "same",
+                            "action": {"agents": [1, 2, 3, 4]},
+                        }
+                    ],
+                }
+            ],
+        }
+        oracle = {
+            "model_sequence_id": "model",
+            "oracle_s3_efficiency_sequence_id": "oracle",
+            "oracle_s3_quality_time_sequence_id": "quality",
+            "oracle_h1_efficiency_first_template": "target:size8:rep0",
+        }
+        mutations = (
+            ("step-string", "step", "1"),
+            ("step-bool", "step", True),
+            ("executed-string", "executed", "false"),
+            ("agent-strings", "agents", ["1", "2", "3", "4"]),
+            ("agent-floats", "agents", [1.9, 2.1, 3.8, 4.2]),
+        )
+        for label, field, value in mutations:
+            corrupt = copy.deepcopy(payload)
+            corrupt["trials"][0]["steps"][0][field] = value
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                build_state_arms(corrupt, oracle)
+
+        for value in ("0.1", True, -1.0, float("nan"), float("inf")):
+            corrupt = copy.deepcopy(payload)
+            corrupt["trials"][0]["steps"][0]["selection_seconds"] = value
+            with self.subTest(selection_seconds=value), self.assertRaises(
+                ValueError
+            ):
+                module._shared_initial_selection_seconds(corrupt)
+
     def test_winner_prefers_feasible_before_censored(self) -> None:
         feasible = _rollout(
             "state",
@@ -321,6 +385,20 @@ class V3ValueAnalysisTests(unittest.TestCase):
 
 
 class V3ValueIntegrityTests(unittest.TestCase):
+    def test_plan_requires_strict_read_only_source_validation(self) -> None:
+        with mock.patch.object(
+            module,
+            "validate_v3_s3_collection_source",
+            side_effect=ValueError("tampered v3-S3 source"),
+        ) as validate:
+            with self.assertRaisesRegex(ValueError, "tampered"):
+                build_value_pilot_plan(
+                    source="source",
+                    oracle_state_comparison="oracle.csv",
+                    state_count=1,
+                )
+        validate.assert_called_once_with(Path("source").resolve() / "collection")
+
     def test_producer_identity_covers_local_import_dependencies(self) -> None:
         self.assertTrue(
             {
@@ -336,7 +414,7 @@ class V3ValueIntegrityTests(unittest.TestCase):
             "states": [],
         }
         identity = {
-            "schema": "lns2.producer_identity.v1",
+            "schema": "lns2.producer_identity.v2",
             "test": "identity",
         }
         with tempfile.TemporaryDirectory() as temporary:
@@ -369,6 +447,125 @@ class V3ValueIntegrityTests(unittest.TestCase):
             after = {path.name: path.read_bytes() for path in output.iterdir()}
             self.assertEqual(after, before)
 
+    def test_resume_requires_object_metadata_and_type_exact_config(self) -> None:
+        requested_plan = {
+            "schema": V3_VALUE_PILOT_SCHEMA,
+            "states": [],
+        }
+        identity = {
+            "schema": "lns2.producer_identity.v2",
+            "test": "identity",
+        }
+        identity_fingerprint = module._fingerprint(identity)
+        config = {
+            "schema": V3_VALUE_PILOT_SCHEMA,
+            "producer_identity": identity,
+            "producer_identity_fingerprint": identity_fingerprint,
+            "state_count": 1,
+            "trials": 1,
+            "max_repairs": 1,
+            "wall_clock_seconds": 1.0,
+            "split": "policy_train",
+            "smoke_only": True,
+            "plan_fingerprint": module._fingerprint(requested_plan),
+        }
+        cases = [
+            (
+                "plan-list-of-pairs",
+                list(requested_plan.items()),
+                config,
+                "plan is not an object",
+            ),
+            (
+                "config-list-of-pairs",
+                requested_plan,
+                list(config.items()),
+                "configuration is not an object",
+            ),
+        ]
+        for field, value in (
+            ("state_count", True),
+            ("trials", True),
+            ("max_repairs", True),
+            ("wall_clock_seconds", True),
+            ("smoke_only", 1),
+        ):
+            corrupt_config = dict(config)
+            corrupt_config[field] = value
+            cases.append(
+                (
+                    f"config-{field}",
+                    requested_plan,
+                    corrupt_config,
+                    "configuration mismatch",
+                )
+            )
+
+        for label, stored_plan, stored_config, message in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary)
+                (output / "plan.json").write_text(
+                    json.dumps(stored_plan),
+                    encoding="utf-8",
+                )
+                (output / "run_config.json").write_text(
+                    json.dumps(stored_config),
+                    encoding="utf-8",
+                )
+                before = {
+                    path.name: path.read_bytes() for path in output.iterdir()
+                }
+                with mock.patch.object(
+                    module,
+                    "producer_identity",
+                    return_value=identity,
+                ), mock.patch.object(
+                    module,
+                    "build_value_pilot_plan",
+                    return_value=requested_plan,
+                ):
+                    with self.assertRaisesRegex(ValueError, message):
+                        run_value_label_pilot(
+                            source="unused",
+                            oracle_state_comparison="unused",
+                            output=output,
+                            state_count=1,
+                            trials=1,
+                            max_repairs=1,
+                            wall_clock_seconds=1.0,
+                            smoke_only=True,
+                            resume=True,
+                        )
+                after = {
+                    path.name: path.read_bytes() for path in output.iterdir()
+                }
+                self.assertEqual(after, before)
+
+    def test_run_configuration_arguments_reject_implicit_coercion(self) -> None:
+        cases = (
+            ("state_count", True),
+            ("state_count", "1"),
+            ("trials", True),
+            ("trials", "1"),
+            ("max_repairs", True),
+            ("max_repairs", "1"),
+            ("wall_clock_seconds", True),
+            ("wall_clock_seconds", "1.0"),
+            ("smoke_only", 1),
+            ("resume", 1),
+        )
+        for field, value in cases:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as temporary:
+                arguments = {
+                    "source": "unused",
+                    "oracle_state_comparison": "unused",
+                    "output": Path(temporary) / "output",
+                    "state_count": 1,
+                }
+                arguments[field] = value
+                with self.assertRaises(ValueError):
+                    run_value_label_pilot(**arguments)
+
     def test_schema_and_full_rollout_validation(self) -> None:
         self.assertEqual(V3_VALUE_PILOT_SCHEMA, "lns2.v3_value_label_pilot.v3")
         state, arm, row = _semantic_rollout()
@@ -382,7 +579,10 @@ class V3ValueIntegrityTests(unittest.TestCase):
             expected_producer_fingerprint="producer",
         )
         for field, value, message in (
+            ("complete", "true", "incomplete"),
             ("observed_total_seconds", float("nan"), "finite"),
+            ("observed_total_seconds", "0.15", "not numeric"),
+            ("observed_total_seconds", True, "not numeric"),
             ("producer_identity_fingerprint", "wrong", "producer"),
             ("final_fingerprint", "corrupt", "final fingerprint"),
         ):
@@ -398,6 +598,257 @@ class V3ValueIntegrityTests(unittest.TestCase):
                     expected_trial_index=0,
                     expected_producer_fingerprint="producer",
                 )
+
+    def test_rollout_rejects_coerced_identifiers_aliases_and_seeds(self) -> None:
+        identifier_cases = (
+            ("state_id", "state"),
+            ("split", "state"),
+            ("map_id", "state"),
+            ("layout_mode", "state"),
+            ("source_stratum", "state"),
+            ("arm_id", "arm"),
+            ("candidate_id", "arm"),
+            ("template_key", "arm"),
+        )
+        for field, owner in identifier_cases:
+            state, arm, row = _semantic_rollout()
+            expected = state if owner == "state" else arm
+            expected[field] = "1"
+            row[field] = 1
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError,
+                "must be",
+            ):
+                validate_value_rollout(
+                    row,
+                    state_plan=state,
+                    arm_plan=arm,
+                    max_repairs=30,
+                    wall_clock_seconds=60.0,
+                    expected_trial_index=0,
+                    expected_producer_fingerprint="producer",
+                )
+
+        state, arm, row = _semantic_rollout()
+        row["producer_identity_fingerprint"] = 1
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            validate_value_rollout(
+                row,
+                state_plan=state,
+                arm_plan=arm,
+                max_repairs=30,
+                wall_clock_seconds=60.0,
+                expected_trial_index=0,
+                expected_producer_fingerprint="1",
+            )
+
+        state, arm, row = _semantic_rollout()
+        arm["aliases"] = ["x"]
+        row["arm_aliases"] = "x"
+        with self.assertRaisesRegex(ValueError, "list"):
+            validate_value_rollout(
+                row,
+                state_plan=state,
+                arm_plan=arm,
+                max_repairs=30,
+                wall_clock_seconds=60.0,
+                expected_trial_index=0,
+                expected_producer_fingerprint="producer",
+            )
+
+        for field in ("requested_pp_seed", "applied_pp_seed"):
+            state, arm, row = _semantic_rollout()
+            row["steps"][0][field] = float(row["steps"][0][field])
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError,
+                "seed",
+            ):
+                validate_value_rollout(
+                    row,
+                    state_plan=state,
+                    arm_plan=arm,
+                    max_repairs=30,
+                    wall_clock_seconds=60.0,
+                    expected_trial_index=0,
+                    expected_producer_fingerprint="producer",
+                )
+
+    @mock.patch.object(
+        module,
+        "validate_v3_s3_collection_source",
+        return_value={
+            "run_fingerprint": "source-run",
+            "producer_identity_fingerprint": "source-producer",
+        },
+    )
+    def test_plan_rejects_duplicate_state_ids_in_every_input(
+        self, _validate_source
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            collection = root / "source" / "collection"
+            states = collection / "states" / "policy_train"
+            states.mkdir(parents=True)
+            oracle = root / "oracle.csv"
+            selection = collection / "state_selection.jsonl"
+
+            oracle.write_text(
+                "state_id,split\nsame,policy_train\nsame,policy_train\n",
+                encoding="utf-8",
+            )
+            selection.write_text("", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "oracle.*duplicate"):
+                build_value_pilot_plan(
+                    source=root / "source",
+                    oracle_state_comparison=oracle,
+                    state_count=1,
+                )
+
+            oracle.write_text(
+                "state_id,split\nselected,policy_train\n",
+                encoding="utf-8",
+            )
+            duplicate_decision = {
+                "state_id": "selected",
+                "split": "policy_train",
+            }
+            selection.write_text(
+                "\n".join(
+                    json.dumps(duplicate_decision) for _ in range(2)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "selection.*duplicate"):
+                build_value_pilot_plan(
+                    source=root / "source",
+                    oracle_state_comparison=oracle,
+                    state_count=1,
+                )
+
+            selection.write_text(
+                json.dumps(duplicate_decision) + "\n",
+                encoding="utf-8",
+            )
+            for name in ("one.json", "two.json"):
+                (states / name).write_text(
+                    json.dumps({"state_id": "unselected"}),
+                    encoding="utf-8",
+                )
+            with self.assertRaisesRegex(ValueError, "state files.*duplicate"):
+                build_value_pilot_plan(
+                    source=root / "source",
+                    oracle_state_comparison=oracle,
+                    state_count=1,
+                )
+
+    @mock.patch.object(
+        module,
+        "validate_v3_s3_collection_source",
+        return_value={
+            "run_fingerprint": "source-run",
+            "producer_identity_fingerprint": "source-producer",
+        },
+    )
+    def test_plan_rejects_coerced_trajectory_and_agent_count(
+        self, _validate_source
+    ) -> None:
+        payload = {
+            "state_id": "selected",
+            "trials": [
+                _sequence_trial(
+                    "model",
+                    "collision:size4:rep0",
+                    "same",
+                    [1, 2, 3, 4],
+                ),
+                _sequence_trial(
+                    "oracle",
+                    "collision:size4:rep0",
+                    "same",
+                    [1, 2, 3, 4],
+                ),
+                _sequence_trial(
+                    "quality",
+                    "target:size8:rep0",
+                    "quality",
+                    list(range(8)),
+                ),
+            ],
+            "external_baselines": [
+                {
+                    "controller": "v2-full",
+                    "steps": [
+                        {
+                            "step": 1,
+                            "candidate_id": "same",
+                            "action": {"agents": [1, 2, 3, 4]},
+                        }
+                    ],
+                }
+            ],
+        }
+        for trial in payload["trials"]:
+            trial["conflict_trajectory"] = [10, 9]
+        decision = {
+            "state_id": "selected",
+            "split": "policy_train",
+            "map_id": "map",
+            "layout_mode": "random",
+            "agent_count": 100,
+            "source_stratum": "ordinary",
+            "before_fingerprint": "before",
+            "before_repair_fingerprint": "repair-before",
+        }
+        cases = (
+            ("trajectory-string", "10", 100, "conflict_trajectory"),
+            ("trajectory-bool", [True], 100, "conflict_trajectory"),
+            ("trajectory-float", [10.5], 100, "conflict_trajectory"),
+            ("trajectory-number-string", ["10"], 100, "conflict_trajectory"),
+            ("agent-count-string", [10, 9], "100", "agent_count"),
+            ("agent-count-bool", [10, 9], True, "agent_count"),
+            ("agent-count-float", [10, 9], 100.0, "agent_count"),
+        )
+        for label, trajectory, agent_count, message in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                collection = root / "source" / "collection"
+                states = collection / "states" / "policy_train"
+                states.mkdir(parents=True)
+                corrupt_payload = copy.deepcopy(payload)
+                corrupt_payload["trials"][0][
+                    "conflict_trajectory"
+                ] = trajectory
+                corrupt_decision = dict(decision)
+                corrupt_decision["agent_count"] = agent_count
+                (states / "selected.json").write_text(
+                    json.dumps(corrupt_payload),
+                    encoding="utf-8",
+                )
+                (collection / "state_selection.jsonl").write_text(
+                    json.dumps(corrupt_decision) + "\n",
+                    encoding="utf-8",
+                )
+                (collection / "sequence_trials.jsonl").write_text(
+                    "{}\n",
+                    encoding="utf-8",
+                )
+                oracle = root / "oracle.csv"
+                oracle.write_text(
+                    "state_id,split,model_sequence_id,"
+                    "oracle_s3_efficiency_sequence_id,"
+                    "oracle_s3_quality_time_sequence_id,"
+                    "oracle_h1_efficiency_first_template\n"
+                    "selected,policy_train,model,oracle,quality,"
+                    "target:size8:rep0\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    build_value_pilot_plan(
+                        source=root / "source",
+                        oracle_state_comparison=oracle,
+                        state_count=1,
+                    )
 
     def test_resume_rejects_and_preserves_invalid_complete_artifact(self) -> None:
         state, arm, row = _semantic_rollout()
@@ -570,6 +1021,7 @@ class V3ValueIntegrityTests(unittest.TestCase):
             fake_module = types.SimpleNamespace(
                 __file__=str(native),
                 repair_timing_schema="lns2.repair_timing.v2",
+                native_semantics_schema="lns2.corrected_native.v1",
             )
             with mock.patch(
                 "experiments._common.importlib.metadata.version",

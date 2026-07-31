@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterable
 
-from experiments._common import atomic_write_csv, sha256_file
+from experiments._common import atomic_write_csv, sha256_file, strict_int
 from experiments.lns2_bottleneck import validate_manifest_trace
 from experiments.repair_collection import (
     _fingerprint,
@@ -41,12 +41,6 @@ TRAINABLE_OBSERVATIONAL_CLASSES = {
 }
 
 
-def _strict_positive_int(value: Any, *, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ValueError(f"{field} must be a positive integer")
-    return value
-
-
 def _stable_key(namespace: str, seed: int, *values: Any) -> str:
     payload = ":".join([namespace, str(seed), *(str(value) for value in values)])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -65,11 +59,13 @@ def classify_preaction_decisions(
     paired same-state counterfactual trials of rank 1 and its alternatives.
     """
 
-    threshold = _strict_positive_int(
-        long_stall_threshold, field="long stall threshold"
+    threshold = strict_int(
+        long_stall_threshold, field="long stall threshold", minimum=1
     )
-    future = _strict_positive_int(
-        future_observation_decisions, field="future observation decisions"
+    future = strict_int(
+        future_observation_decisions,
+        field="future observation decisions",
+        minimum=1,
     )
     rows: list[dict[str, Any]] = []
     index = 0
@@ -147,7 +143,7 @@ def classify_preaction_decisions(
 def assign_map_folds(
     map_ids: Iterable[str], *, master_seed: int, fold_count: int = 4
 ) -> dict[str, int]:
-    folds = _strict_positive_int(fold_count, field="map fold count")
+    folds = strict_int(fold_count, field="map fold count", minimum=1)
     unique = sorted({str(value) for value in map_ids if str(value)})
     if len(unique) < folds:
         raise ValueError("pre-action cohort has fewer maps than requested folds")
@@ -167,7 +163,9 @@ def outcome_blind_map_sample(
 ) -> list[dict[str, Any]]:
     """Select a map-balanced control without inspecting future outcome class."""
 
-    target = _strict_positive_int(count, field="outcome-blind control count")
+    target = strict_int(
+        count, field="outcome-blind control count", minimum=1
+    )
     excluded = set(excluded_keys or ())
     grouped: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
     for row in rows:
@@ -215,8 +213,10 @@ def _enriched_sample(
             raise ValueError(
                 f"unsupported enriched observational class: {observational_class}"
             )
-        count = _strict_positive_int(
-            raw_count, field=f"enriched target {observational_class}"
+        count = strict_int(
+            raw_count,
+            field=f"enriched target {observational_class}",
+            minimum=1,
         )
         candidates = [
             row
@@ -386,20 +386,28 @@ def prepare_stall_preaction_cohort(
     raw = _read_json(config_path)
     if str(raw.get("schema")) != STALL_PREACTION_COHORT_SCHEMA:
         raise ValueError("pre-action cohort config schema mismatch")
-    master_seed = _strict_positive_int(raw.get("master_seed"), field="master seed")
-    long_threshold = _strict_positive_int(
-        raw.get("long_stall_threshold"), field="long stall threshold"
+    master_seed = strict_int(
+        raw.get("master_seed"), field="master seed", minimum=1
     )
-    future = _strict_positive_int(
+    long_threshold = strict_int(
+        raw.get("long_stall_threshold"),
+        field="long stall threshold",
+        minimum=1,
+    )
+    future = strict_int(
         raw.get("future_observation_decisions"),
         field="future observation decisions",
+        minimum=1,
     )
-    rank_limit = _strict_positive_int(
-        raw.get("candidate_rank_limit"), field="candidate rank limit"
+    rank_limit = strict_int(
+        raw.get("candidate_rank_limit"),
+        field="candidate rank limit",
+        minimum=1,
     )
-    trials = _strict_positive_int(
+    trials = strict_int(
         raw.get("paired_trials_per_candidate"),
         field="paired trials per candidate",
+        minimum=1,
     )
     if trials < 4 or rank_limit < 2:
         raise ValueError("pre-action cohort requires >=4 trials and >=2 ranks")
@@ -471,9 +479,10 @@ def prepare_stall_preaction_cohort(
     ]
     control = outcome_blind_map_sample(
         inventory,
-        _strict_positive_int(
+        strict_int(
             raw.get("outcome_blind_control_count"),
             field="outcome-blind control count",
+            minimum=1,
         ),
         master_seed=master_seed,
     )

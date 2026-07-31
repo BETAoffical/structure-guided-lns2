@@ -7,10 +7,20 @@ import os
 from pathlib import Path
 from typing import Any
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import (
+    producer_identity,
+    sha256_file,
+    strict_nonnegative_int as _strict_nonnegative_int,
+)
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.parallel_runtime import candidate_lane_counts
-from experiments.repair_collection import _read_json, _read_jsonl, _utc_now, _write_json
+from experiments.repair_collection import (
+    _fingerprint,
+    _read_json,
+    _read_jsonl,
+    _utc_now,
+    _write_json,
+)
 from experiments.run_output_guard import prepare_run_output
 from experiments.v3_s3_collection import (
     S3_AGENT_COUNTS,
@@ -19,6 +29,7 @@ from experiments.v3_s3_collection import (
     S3_TARGET_STATE_CAP,
     audit_v3_s3_parallelism,
     collect_v3_s3_data,
+    source_decisions,
 )
 from experiments.v3_s3_training import (
     EXTRA_TREES_PARAMETERS,
@@ -69,6 +80,7 @@ V3_S3_PIPELINE_PRODUCER_FILES = (
     "generators/visualization.py",
     "generators/warehouse.py",
     "scripts/run_v3_training_pipeline.py",
+    "scripts/audit_v3_s3_source_replay.py",
     "src/jsonl_observer.cpp",
     "src/python_bindings.cpp",
     "src/repair_driver.cpp",
@@ -78,6 +90,7 @@ V3_S3_PIPELINE_PRODUCER_FILES = (
     "third_party/mapf_lns2/inc/SIPP.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
 )
+V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA = "lns2.v3_s3_source_replay_audit.v3"
 
 
 def _write_status(root: Path, *, started_at: str, **values: Any) -> None:
@@ -258,6 +271,170 @@ def source_roots(output: Path) -> dict[str, list[Path]]:
     }
 
 
+def source_replay_input_identity(
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Bind a replay audit to the exact cross-platform source decision stream."""
+
+    decisions = [
+        {
+            "split": str(row.get("split", "")),
+            "source_run_fingerprint": str(
+                row.get("source_run_fingerprint", "")
+            ),
+            "source_policy": str(row["source_policy"]),
+            "episode_id": str(row["episode_id"]),
+            "decision_index": int(row["decision_index"]),
+            "before_fingerprint": str(row["before_fingerprint"]),
+            "after_fingerprint": str(row["after_fingerprint"]),
+            "prefix_actions": list(row["prefix_actions"]),
+            "replay_action": dict(row["replay_action"]),
+        }
+        for row in rows
+    ]
+    decisions.sort(
+        key=lambda row: (
+            row["split"],
+            row["source_run_fingerprint"],
+            row["source_policy"],
+            row["episode_id"],
+            row["decision_index"],
+            _fingerprint((row["prefix_actions"], row["replay_action"])),
+        )
+    )
+    return {
+        "source_state_count": len(rows),
+        "source_decision_fingerprint": _fingerprint(decisions),
+    }
+
+
+def _validate_reused_source_report(
+    report: Any,
+) -> dict[str, Any]:
+    if not isinstance(report, dict):
+        raise ValueError("reused v3-S3 source report is not an object")
+    value = dict(report)
+    if (
+        value.get("schema") != V3_S3_PIPELINE_SCHEMA
+        or value.get("complete") is not True
+    ):
+        raise ValueError("reused v3-S3 source report is incomplete or invalid")
+    design = value.get("design")
+    reports = value.get("reports")
+    qualifications = value.get("qualifications")
+    if not all(
+        isinstance(item, dict)
+        for item in (design, reports, qualifications)
+    ):
+        raise ValueError("reused v3-S3 source report lacks structured evidence")
+    expected_keys = {
+        f"{split}|{policy}"
+        for split in ("policy_train", "policy_validation")
+        for policy in S3_SOURCE_POLICIES
+    }
+    by_source = design.get("by_source")
+    if (
+        design.get("schema") != V3_S3_PIPELINE_SCHEMA
+        or not isinstance(by_source, dict)
+        or set(by_source) != expected_keys
+        or set(reports) != expected_keys
+        or set(qualifications) != {"policy_train", "policy_validation"}
+    ):
+        raise ValueError("reused v3-S3 source coverage is invalid")
+    expected_total = 0
+    for source_key in sorted(expected_keys):
+        expected_count = by_source.get(source_key)
+        if not _strict_nonnegative_int(expected_count) or expected_count <= 0:
+            raise ValueError("reused v3-S3 source count is invalid")
+        expected_total += expected_count
+        policy = source_key.split("|", 1)[1]
+        source_report = reports.get(source_key)
+        if not isinstance(source_report, dict):
+            raise ValueError("reused v3-S3 policy report is not an object")
+        policy_report = source_report.get(policy)
+        if (
+            source_report.get("schema") != "lns2.closed_loop_confirmation.v1"
+            or source_report.get("schema_version") != 1
+            or source_report.get("controller") != "v2-full"
+            or not isinstance(source_report.get("run_fingerprint"), str)
+            or not source_report["run_fingerprint"]
+            or not isinstance(policy_report, dict)
+            or policy_report.get("episode_count") != expected_count
+            or policy_report.get("error_count") != 0
+        ):
+            raise ValueError("reused v3-S3 policy report failed validation")
+    if (
+        design.get("episode_count") != expected_total
+        or not _strict_nonnegative_int(design.get("episode_count"))
+    ):
+        raise ValueError("reused v3-S3 source design count mismatch")
+    for qualification in qualifications.values():
+        if not isinstance(qualification, dict):
+            raise ValueError("reused v3-S3 qualification is not an object")
+        evidence = qualification.get("qualification")
+        if (
+            qualification.get("schema") != "lns2.closed_loop_confirmation.v1"
+            or qualification.get("schema_version") != 1
+            or qualification.get("controller") != "v2-full"
+            or not isinstance(qualification.get("run_fingerprint"), str)
+            or not qualification["run_fingerprint"]
+            or not isinstance(evidence, dict)
+            or evidence.get("passed") is not True
+            or evidence.get("errors") != []
+        ):
+            raise ValueError("reused v3-S3 qualification failed validation")
+    return value
+
+
+def _validate_reused_source_replay_audit(
+    audit: Any,
+    *,
+    source_root: Path,
+) -> dict[str, Any]:
+    if not isinstance(audit, dict):
+        raise ValueError("reused v3-S3 replay audit is not an object")
+    value = dict(audit)
+    if (
+        value.get("schema") != V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA
+        or value.get("passed") is not True
+    ):
+        raise ValueError("reused v3-S3 replay audit is invalid")
+    rows = source_decisions(source_roots(source_root))
+    input_identity = source_replay_input_identity(rows)
+    if (
+        value.get("input_identity") != input_identity
+        or value.get("input_sha256") != _fingerprint(input_identity)
+        or value.get("source_state_count") != len(rows)
+        or value.get("matched_decision_state_count") != len(rows)
+    ):
+        raise ValueError("reused v3-S3 replay audit input identity mismatch")
+    episode_count = len(
+        {
+            (str(row["source_run_fingerprint"]), str(row["episode_id"]))
+            for row in rows
+        }
+    )
+    policy_counts = dict(
+        sorted(
+            collections.Counter(
+                str(row["source_policy"]) for row in rows
+            ).items()
+        )
+    )
+    if (
+        value.get("episode_count") != episode_count
+        or value.get("matched_by_source_policy") != policy_counts
+        or value.get("rejected_episode_count") != 0
+        or value.get("rejections") != []
+        or value.get("prefix_mismatch_count") != 0
+        or value.get("prefix_mismatches") != []
+        or value.get("terminal_after_mismatch_count") != 0
+        or value.get("terminal_after_mismatches") != []
+    ):
+        raise ValueError("reused v3-S3 replay audit evidence is inconsistent")
+    return value
+
+
 def collect_v3_s3_sources(
     *,
     project_root: Path,
@@ -375,7 +552,7 @@ def collect_v3_s3_sources(
         )
         and set(reports) == set(design["by_source"])
         and all(
-            bool(dict(value.get("qualification", {})).get("passed", False))
+            dict(value.get("qualification", {})).get("passed") is True
             for value in qualification_reports.values()
         ),
         "design": design,
@@ -424,13 +601,16 @@ def _pipeline_identity(
             raise FileNotFoundError(
                 f"reused v3-S3 source report does not exist: {source_report}"
             )
-        if not bool(_read_json(source_report).get("complete")):
-            raise ValueError("reused v3-S3 source report is incomplete")
+        _validate_reused_source_report(_read_json(source_report))
         replay_audit = source_root / "source_replay_audit.json"
-        if not replay_audit.is_file() or not bool(_read_json(replay_audit).get("passed")):
+        if not replay_audit.is_file():
             raise ValueError(
                 "reused v3-S3 sources require a passed source_replay_audit.json"
             )
+        _validate_reused_source_replay_audit(
+            _read_json(replay_audit),
+            source_root=source_root,
+        )
         identity.update(
             {
                 "reuse_source_output": str(source_root),
@@ -530,14 +710,14 @@ def run_v3_s3_collection_stage(
                 "source_replay_audit_sha256": sha256_file(
                     reused_source_root / "source_replay_audit.json"
                 ),
-                "complete": bool(sources.get("complete")),
+                "complete": sources.get("complete") is True,
             },
         )
     else:
         source_report_path = output / "source_report.json"
     if reused_source_root is None and (
         not source_report_path.is_file()
-        or not bool(_read_json(source_report_path).get("complete"))
+        or _read_json(source_report_path).get("complete") is not True
     ):
         try:
             sources = collect_v3_s3_sources(
@@ -564,7 +744,7 @@ def run_v3_s3_collection_stage(
                 total_sources=6,
             )
             raise
-        if not bool(sources["complete"]):
+        if sources.get("complete") is not True:
             error = RuntimeError("v3-S3 source collection completed with errors")
             _write_stage_error(
                 output,
@@ -668,7 +848,7 @@ def run_v3_s3_collection_stage(
             selected_lanes=collection_workers,
         )
         raise
-    if not bool(collection["complete"]):
+    if collection.get("complete") is not True:
         error = RuntimeError("v3-S3 sequence collection did not complete")
         _write_stage_error(
             output,
@@ -822,7 +1002,7 @@ def _training_identity(
 def _completed_collection_state_count(collection: dict[str, Any]) -> int:
     requested = int(collection.get("requested_state_count", 0))
     completed = int(collection.get("completed_state_count", 0))
-    if not bool(collection.get("complete")) or requested <= 0 or completed != requested:
+    if collection.get("complete") is not True or requested <= 0 or completed != requested:
         raise ValueError("v3-S3 requires a complete adaptive state collection")
     selected_by_split = dict(
         dict(collection.get("selection") or {}).get("selected_by_split") or {}
@@ -852,7 +1032,7 @@ def _json_sha256(value: Any) -> str:
 def _pre_native_training_stage_report(
     *, report: dict[str, Any], manifest: dict[str, Any]
 ) -> dict[str, Any]:
-    if not bool(report.get("native_audit_completed")):
+    if report.get("native_audit_completed") is not True:
         return {**report, "manifest": manifest}
     provisional = str(report["provisional_model_family"])
     diagnostic = dict(dict(report["model_family_diagnostics"])[provisional])
@@ -1013,7 +1193,7 @@ def run_v3_s3_training_stage(
                 "completed v3-S3 training artifact belongs to a legacy or "
                 "different producer"
             )
-        if not bool(training.get("native_audit_completed")):
+        if training.get("native_audit_completed") is not True:
             _write_status(
                 output,
                 started_at=started_at,
@@ -1129,7 +1309,7 @@ def _completed_native_stage_is_valid(
     if not report_path.is_file():
         return False
     existing = _read_json(report_path)
-    if not bool(existing.get("complete")):
+    if existing.get("complete") is not True:
         return False
     if existing != expected:
         raise ValueError(
@@ -1200,8 +1380,8 @@ def run_v3_s3_native_audit_stage(
         },
     )
     controller_report = _read_json(output / "controller" / "training_report.json")
-    native_audit_already_completed = bool(
-        controller_report.get("native_audit_completed")
+    native_audit_already_completed = (
+        controller_report.get("native_audit_completed") is True
     )
     status = _read_json(output / "status.json")
     started_at = str(status.get("started_at") or _utc_now())
@@ -1271,9 +1451,11 @@ def run_v3_s3_native_audit_stage(
 
 __all__ = [
     "V3_S3_PIPELINE_SCHEMA",
+    "V3_S3_SOURCE_REPLAY_AUDIT_SCHEMA",
     "collect_v3_s3_sources",
     "run_v3_s3_collection_stage",
     "run_v3_s3_native_audit_stage",
     "run_v3_s3_training_stage",
+    "source_replay_input_identity",
     "source_roots",
 ]

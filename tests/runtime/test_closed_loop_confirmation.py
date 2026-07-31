@@ -5,6 +5,7 @@ import unittest
 import json
 import pickle
 import hashlib
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -12,10 +13,15 @@ from unittest.mock import patch
 import numpy as np
 
 from experiments.closed_loop_confirmation import (
+    CONTROLLER_IMPLEMENTATION_FILES,
+    CONTROLLER_OPTIONAL_PACKAGES,
+    CONTROLLER_REQUIRED_PACKAGES,
     _collection_policy_summary,
     _closed_loop_episode_worker,
+    _controller_producer_identity,
     _native_repair_timing_schema,
     _qualification_reuse_fingerprint,
+    _validate_closed_loop_resume,
     _valid_episode_trace,
     _with_stopping_rule,
     _with_time_budget_overrides,
@@ -23,6 +29,7 @@ from experiments.closed_loop_confirmation import (
     ClosedLoopTraceError,
     closed_loop_dataset_design,
     closed_loop_qualification_report,
+    controller_implementation_fingerprint,
     configured_policies,
     configured_solver_seeds,
     feature_range_diagnostic,
@@ -46,10 +53,57 @@ from experiments.closed_loop_confirmation_analysis import (
     compare_solver_seeds,
     summarize_policy,
 )
-from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
+from experiments.closed_loop_trace_storage import (
+    TRACE_FORMAT_FULL_V1,
+    storage_fingerprint,
+)
 from experiments.neighborhood_features import _feature_profiles
 from experiments.state_analysis import analyze_state
 from experiments.repair_collection import state_fingerprint
+
+
+def _structured_producer(
+    *,
+    source_sha256: str = "a" * 64,
+    native_sha256: str = "b" * 64,
+    python_version: str = "3.10.0",
+    numpy_version: str | None = "1.26.0",
+    sklearn_version: str | None = "1.4.0",
+    joblib_version: str | None = "1.3.0",
+) -> dict:
+    return {
+        "schema": "lns2.producer_identity.v2",
+        "source_sha256": {"experiments/closed_loop_confirmation.py": source_sha256},
+        "python": {"implementation": "CPython", "version": python_version},
+        "packages": {
+            "joblib": joblib_version,
+            "numpy": numpy_version,
+            "scikit-learn": sklearn_version,
+        },
+        "native_required": True,
+        "native": {
+            "path": "/build/lns2_env.so",
+            "sha256": native_sha256,
+            "repair_timing_schema": "lns2.repair_timing.v2",
+            "native_semantics_schema": "lns2.corrected_native.v1",
+        },
+    }
+
+
+def _producer_config(identity: dict | None = None) -> dict:
+    value = identity or _structured_producer()
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            value,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return {
+        "producer_identity": value,
+        "producer_identity_fingerprint": fingerprint,
+    }
 
 
 def _agent(identifier: int, path: list[int], conflicts: int = 0) -> dict:
@@ -250,6 +304,57 @@ class UnlimitedRepairEnvironment:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_controller_identity_requires_current_native_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            native = Path(directory) / "lns2_env.so"
+            native.write_bytes(b"native")
+            module = SimpleNamespace(
+                __file__=str(native),
+                repair_timing_schema="lns2.repair_timing.v2",
+                native_semantics_schema="",
+            )
+            with patch.dict(sys.modules, {"lns2_env": module}):
+                with self.assertRaisesRegex(
+                    RuntimeError, "native semantics schema"
+                ):
+                    controller_implementation_fingerprint(
+                        Path(__file__).resolve().parents[2]
+                    )
+
+    def test_controller_producer_identity_uses_all_structured_dependencies(
+        self,
+    ) -> None:
+        identity = _structured_producer()
+        project_root = Path(__file__).resolve().parents[2]
+        with patch(
+            "experiments.closed_loop_confirmation._structured_producer_identity",
+            return_value=identity,
+        ) as structured:
+            self.assertEqual(
+                _controller_producer_identity(project_root),
+                identity,
+            )
+        structured.assert_called_once_with(
+            project_root=project_root,
+            source_files=CONTROLLER_IMPLEMENTATION_FILES,
+            native_required=True,
+            package_names=CONTROLLER_REQUIRED_PACKAGES,
+            optional_package_names=CONTROLLER_OPTIONAL_PACKAGES,
+        )
+        self.assertIn(
+            "experiments/closed_loop_trace_storage.py",
+            CONTROLLER_IMPLEMENTATION_FILES,
+        )
+        self.assertIn(
+            "experiments/feature_schema_v3.py",
+            CONTROLLER_IMPLEMENTATION_FILES,
+        )
+        self.assertEqual(CONTROLLER_REQUIRED_PACKAGES, ("numpy",))
+        self.assertEqual(
+            CONTROLLER_OPTIONAL_PACKAGES,
+            ("joblib", "scikit-learn"),
+        )
+
     def test_qualification_reuse_ignores_controller_but_not_reset_inputs(self) -> None:
         base = {
             "dataset_fingerprint": "dataset",
@@ -259,8 +364,8 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 "environment": {"replan_algorithm": "PP", "time_limit": 45.0},
             },
             "seed_isolation": {"passed": True},
-            "controller_implementation": {"native": "sha"},
             "controller": "v2-full",
+            **_producer_config(),
         }
         another_controller = {**base, "controller": "v3-full"}
         self.assertEqual(
@@ -273,6 +378,101 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             _qualification_reuse_fingerprint(base),
             _qualification_reuse_fingerprint(changed),
         )
+        changed_producers = (
+            _structured_producer(source_sha256="c" * 64),
+            _structured_producer(native_sha256="d" * 64),
+            _structured_producer(python_version="3.11.0"),
+            _structured_producer(sklearn_version="1.5.0"),
+        )
+        for changed_producer in changed_producers:
+            changed = {**base, **_producer_config(changed_producer)}
+            self.assertNotEqual(
+                _qualification_reuse_fingerprint(base),
+                _qualification_reuse_fingerprint(changed),
+            )
+
+        legacy = dict(base)
+        legacy.pop("producer_identity")
+        legacy.pop("producer_identity_fingerprint")
+        legacy["controller_implementation"] = {"native": "sha"}
+        with self.assertRaisesRegex(ValueError, "producer identity"):
+            _qualification_reuse_fingerprint(legacy)
+
+        mismatched = json.loads(json.dumps(base))
+        mismatched["producer_identity"]["native"]["sha256"] = "e" * 64
+        with self.assertRaisesRegex(ValueError, "fingerprint mismatch"):
+            _qualification_reuse_fingerprint(mismatched)
+
+        wrong_type = {**base, "producer_identity_fingerprint": 7}
+        with self.assertRaisesRegex(ValueError, "not a string"):
+            _qualification_reuse_fingerprint(wrong_type)
+
+    def test_resume_rejects_legacy_and_changed_structured_producers(self) -> None:
+        producer_fields = _producer_config()
+        existing = {
+            "run_fingerprint": "run",
+            "trace_format": TRACE_FORMAT_FULL_V1,
+            "storage_fingerprint": storage_fingerprint(TRACE_FORMAT_FULL_V1),
+            **producer_fields,
+        }
+        _validate_closed_loop_resume(
+            existing,
+            run_fingerprint="run",
+            trace_format=TRACE_FORMAT_FULL_V1,
+            storage_fingerprint_value=storage_fingerprint(
+                TRACE_FORMAT_FULL_V1
+            ),
+            producer_identity_value=producer_fields["producer_identity"],
+            producer_identity_fingerprint=producer_fields[
+                "producer_identity_fingerprint"
+            ],
+            resume=True,
+        )
+
+        legacy = {
+            key: value
+            for key, value in existing.items()
+            if not key.startswith("producer_identity")
+        }
+        legacy["controller_implementation"] = {"sha256": "a" * 64}
+        with self.assertRaisesRegex(ValueError, "producer identity"):
+            _validate_closed_loop_resume(
+                legacy,
+                run_fingerprint="run",
+                trace_format=TRACE_FORMAT_FULL_V1,
+                storage_fingerprint_value=storage_fingerprint(
+                    TRACE_FORMAT_FULL_V1
+                ),
+                producer_identity_value=producer_fields["producer_identity"],
+                producer_identity_fingerprint=producer_fields[
+                    "producer_identity_fingerprint"
+                ],
+                resume=True,
+            )
+
+        for changed_identity in (
+            _structured_producer(source_sha256="c" * 64),
+            _structured_producer(native_sha256="d" * 64),
+            _structured_producer(python_version="3.11.0"),
+            _structured_producer(numpy_version="2.0.0"),
+        ):
+            changed = {**existing, **_producer_config(changed_identity)}
+            with self.assertRaisesRegex(ValueError, "producer identity"):
+                _validate_closed_loop_resume(
+                    changed,
+                    run_fingerprint="run",
+                    trace_format=TRACE_FORMAT_FULL_V1,
+                    storage_fingerprint_value=storage_fingerprint(
+                        TRACE_FORMAT_FULL_V1
+                    ),
+                    producer_identity_value=producer_fields[
+                        "producer_identity"
+                    ],
+                    producer_identity_fingerprint=producer_fields[
+                        "producer_identity_fingerprint"
+                    ],
+                    resume=True,
+                )
 
     def test_historical_pairwise_model_symbol_remains_pickle_compatible(self) -> None:
         from experiments.context_audit import PairwiseModel as compatibility_model
@@ -506,6 +706,20 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(updated["max_decisions"], 0)
         self.assertIsNone(updated["metric_iteration_budget"])
         self.assertEqual(source["environment"]["max_repair_iterations"], 100)
+
+    def test_wall_clock_fixed_metric_removes_execution_limits_but_keeps_auc_budget(
+        self,
+    ) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "max_decisions": 100,
+            "metric_iteration_budget": 100,
+        }
+        updated = _with_stopping_rule(source, "wall-clock-fixed-metric")
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 0)
+        self.assertEqual(updated["max_decisions"], 0)
+        self.assertEqual(updated["metric_iteration_budget"], 100)
+        self.assertEqual(source["max_decisions"], 100)
 
     def test_wall_clock_auc_ignores_an_after_state_beyond_the_deadline(self) -> None:
         # 10 conflicts for two seconds, 6 conflicts until the five-second
@@ -1024,6 +1238,10 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
     def test_fixed_budget_auc_penalizes_failure(self) -> None:
         self.assertEqual(fixed_budget_conflict_auc([4, 2, 0], 4, success=True), 4.0)
         self.assertEqual(fixed_budget_conflict_auc([4, 2], 4, success=False), 9.0)
+        self.assertEqual(
+            fixed_budget_conflict_auc([4, 3, 2, 1, 0, 999], 4, success=True),
+            8.0,
+        )
         with self.assertRaises(ValueError):
             fixed_budget_conflict_auc([], 4, success=False)
 
@@ -1402,6 +1620,44 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         # next iteration boundary.  The previous implementation made 407
         # calls for this fixture; the exact action-preserving cache makes 306.
         self.assertEqual(fingerprint_calls, 3 * (101 + 1))
+
+    def test_fixed_metric_scores_prefix_without_limiting_repairs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 0,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 10.0,
+                "stopping_rule": "wall-clock-fixed-metric",
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(),
+            ):
+                result = _closed_loop_episode_worker(job)
+
+        summary = result["summary"]
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(summary["success"])
+        self.assertEqual(summary["repair_iterations"], 101)
+        self.assertEqual(len(summary["conflict_trajectory"]), 102)
+        self.assertEqual(summary["fixed_budget_conflict_auc"], 100.0)
+        self.assertEqual(summary["normalized_fixed_budget_conflict_auc"], 1.0)
 
     def test_controller_stage_deadline_is_a_clean_wall_timeout(self) -> None:
         class DeadlineEnvironment:

@@ -104,6 +104,24 @@ class RepairAwareStateTests(unittest.TestCase):
     def state(self) -> RepairAwareState:
         return RepairAwareState(load_repair_aware_config(CONFIG), bundle())
 
+    def test_config_rejects_coerced_integer_and_boolean_types(self) -> None:
+        mutations = (
+            ("max_model_rescues", True),
+            ("max_model_rescues", "2"),
+            ("same_candidate_attempt_limit", True),
+            ("same_candidate_attempt_limit", "2"),
+            ("lazy_neighborhood_sizes", [True]),
+            ("lazy_neighborhood_sizes", ["12"]),
+            ("fallback_until_state_change", "true"),
+            ("reset_on_state_fingerprint_change", 1),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field, value=value):
+                invalid = dict(CONFIG)
+                invalid[field] = value
+                with self.assertRaises(ValueError):
+                    load_repair_aware_config(invalid)
+
     def observe_noop(self, state: RepairAwareState, *, hard: bool = False) -> None:
         state.observe(
             before_fingerprint="state",
