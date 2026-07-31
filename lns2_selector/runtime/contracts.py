@@ -33,7 +33,11 @@ class SelectionDecision:
 
     @property
     def uses_native_adaptive(self) -> bool:
-        return self.candidate_index is None
+        route = str(self.diagnostics.get("route", ""))
+        return self.candidate_index is None and route in {
+            "native-official-adaptive",
+            "official_adaptive",
+        }
 
 
 @runtime_checkable

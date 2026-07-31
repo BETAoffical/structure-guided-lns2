@@ -25,6 +25,8 @@ def load_selector(
     """Load one of the four active selectors by its canonical identifier."""
 
     resolved = str(controller_id)
+    if resolved not in CONTROLLER_IDS:
+        raise ValueError(f"unsupported controller: {resolved}")
     if resolved == "official_adaptive":
         if bundle is not None:
             raise ValueError("official_adaptive does not use a model bundle")
@@ -41,7 +43,7 @@ def load_selector(
         return PairwiseV2Selector(resolved, loaded)
     if resolved == "v3-s3":
         return V3S3Selector(load_v3_s3_bundle(bundle))
-    raise ValueError(f"unsupported controller: {resolved}")
+    raise AssertionError(f"unhandled active controller: {resolved}")
 
 
 __all__ = ["CONTROLLER_IDS", "load_selector"]

@@ -316,6 +316,15 @@ def _write_manifest(
                 "final_low_level": after["low_level"],
             }
         )
+        if policy == "realized_dynamic":
+            source["summary"].update(
+                {
+                    "model_decision_count": 0,
+                    "official_decision_count": 1,
+                    "model_route_fraction": 0.0,
+                    "route_switch_count": 0,
+                }
+            )
         transition = _event(
             controller_seconds
             if controller_seconds is not None
@@ -459,6 +468,15 @@ def _write_compact_manifest(
             "final_low_level": state["low_level"],
         }
     )
+    if policy == "realized_dynamic":
+        summary.update(
+            {
+                "model_decision_count": 0,
+                "official_decision_count": 0,
+                "model_route_fraction": 0.0,
+                "route_switch_count": 0,
+            }
+        )
     initial, state_reference = encode_initial_event(
         {
             "event": "initial",

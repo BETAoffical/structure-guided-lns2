@@ -1,6 +1,7 @@
 {
   "schema": "lns2.repository_hygiene.v1",
   "schema_version": 1,
+  "retention_manifest": "configs/retention_manifest.json",
   "result_consolidation_config": "configs/result_consolidation.json",
   "production_python_roots": [
     "experiments",

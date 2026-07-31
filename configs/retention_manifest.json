@@ -1,0 +1,672 @@
+{
+  "schema": "lns2.retention_manifest.v1",
+  "schema_version": 1,
+  "checkpoint": "backup/selector-cleanup-05-before-cli-config",
+  "allowed_executable_roles": [
+    "active",
+    "shared",
+    "reproducibility",
+    "compatibility"
+  ],
+  "coverage": {
+    "production_roots": [
+      "experiments",
+      "generators",
+      "lns2_selector",
+      "scripts"
+    ],
+    "pytest_pattern": "tests/**/test_*.py"
+  },
+  "entries": [
+    {
+      "path": "experiments/__init__.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows:   init  ."
+    },
+    {
+      "path": "experiments/_common.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows:  common."
+    },
+    {
+      "path": "experiments/balanced_wall_clock.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: balanced wall clock."
+    },
+    {
+      "path": "experiments/closed_loop_confirmation_analysis.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: closed loop confirmation analysis."
+    },
+    {
+      "path": "experiments/closed_loop_confirmation.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: closed loop confirmation."
+    },
+    {
+      "path": "experiments/closed_loop_trace_conversion.py",
+      "role": "compatibility",
+      "purpose": "Read-only compatibility support for frozen artifacts: closed loop trace conversion."
+    },
+    {
+      "path": "experiments/closed_loop_trace_storage.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows: closed loop trace storage."
+    },
+    {
+      "path": "experiments/compact_controller_model.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: compact controller model."
+    },
+    {
+      "path": "experiments/context_audit.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: context audit."
+    },
+    {
+      "path": "experiments/controller_performance_benchmark.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: controller performance benchmark."
+    },
+    {
+      "path": "experiments/feasibility_benchmark.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: feasibility benchmark."
+    },
+    {
+      "path": "experiments/feature_schema_v2.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: feature schema v2."
+    },
+    {
+      "path": "experiments/lns2_bottleneck.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: lns2 bottleneck."
+    },
+    {
+      "path": "experiments/mixed_full_v2.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: mixed full v2."
+    },
+    {
+      "path": "experiments/movingai_devset.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: movingai devset."
+    },
+    {
+      "path": "experiments/movingai_ood_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: movingai ood confirmation."
+    },
+    {
+      "path": "experiments/neighborhood_candidates.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: neighborhood candidates."
+    },
+    {
+      "path": "experiments/neighborhood_features.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: neighborhood features."
+    },
+    {
+      "path": "experiments/online_feature_engine.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: online feature engine."
+    },
+    {
+      "path": "experiments/parallel_runtime.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows: parallel runtime."
+    },
+    {
+      "path": "experiments/repair_collection.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: repair collection."
+    },
+    {
+      "path": "experiments/repair_quality.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: repair quality."
+    },
+    {
+      "path": "experiments/result_consolidation.py",
+      "role": "compatibility",
+      "purpose": "Read-only compatibility support for frozen artifacts: result consolidation."
+    },
+    {
+      "path": "experiments/run_output_guard.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows: run output guard."
+    },
+    {
+      "path": "experiments/state_analysis.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: state analysis."
+    },
+    {
+      "path": "experiments/trace_replay.py",
+      "role": "shared",
+      "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."
+    },
+    {
+      "path": "experiments/tradeoff_evaluation.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: tradeoff evaluation."
+    },
+    {
+      "path": "experiments/v2_factorial_audit.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v2 factorial audit."
+    },
+    {
+      "path": "experiments/v2_wall_clock_cohorts.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v2 wall clock cohorts."
+    },
+    {
+      "path": "experiments/v3_s3_collection.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v3 s3 collection."
+    },
+    {
+      "path": "experiments/v3_s3_oracle_audit.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v3 s3 oracle audit."
+    },
+    {
+      "path": "experiments/v3_s3_pipeline.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v3 s3 pipeline."
+    },
+    {
+      "path": "experiments/v3_s3_training.py",
+      "role": "reproducibility",
+      "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: v3 s3 training."
+    },
+    {
+      "path": "experiments/v3_s3.py",
+      "role": "active",
+      "purpose": "Current selector execution dependency: v3 s3."
+    },
+    {
+      "path": "generators/__init__.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets:   init  ."
+    },
+    {
+      "path": "generators/config.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: config."
+    },
+    {
+      "path": "generators/dataset.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: dataset."
+    },
+    {
+      "path": "generators/io.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: io."
+    },
+    {
+      "path": "generators/models.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: models."
+    },
+    {
+      "path": "generators/task_flows.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: task flows."
+    },
+    {
+      "path": "generators/validation.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: validation."
+    },
+    {
+      "path": "generators/visualization.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: visualization."
+    },
+    {
+      "path": "generators/warehouse.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce registered maps and static OD datasets: warehouse."
+    },
+    {
+      "path": "lns2_selector/__init__.py",
+      "role": "active",
+      "purpose": "Canonical selector package and command-line surface."
+    },
+    {
+      "path": "lns2_selector/__main__.py",
+      "role": "active",
+      "purpose": "Canonical selector package and command-line surface."
+    },
+    {
+      "path": "lns2_selector/cli.py",
+      "role": "active",
+      "purpose": "Canonical selector package and command-line surface."
+    },
+    {
+      "path": "lns2_selector/compatibility/__init__.py",
+      "role": "compatibility",
+      "purpose": "Read-only interpretation of registered historical metrics."
+    },
+    {
+      "path": "lns2_selector/compatibility/controller_diagnostics.py",
+      "role": "compatibility",
+      "purpose": "Read-only validation of retired controller diagnostics without retaining their execution code."
+    },
+    {
+      "path": "lns2_selector/compatibility/metrics.py",
+      "role": "compatibility",
+      "purpose": "Read-only interpretation of registered historical metrics."
+    },
+    {
+      "path": "lns2_selector/controllers/__init__.py",
+      "role": "active",
+      "purpose": "Canonical active selector adapter:   init  ."
+    },
+    {
+      "path": "lns2_selector/controllers/official.py",
+      "role": "active",
+      "purpose": "Canonical active selector adapter: official."
+    },
+    {
+      "path": "lns2_selector/controllers/v2.py",
+      "role": "active",
+      "purpose": "Canonical active selector adapter: v2."
+    },
+    {
+      "path": "lns2_selector/controllers/v3_s3.py",
+      "role": "active",
+      "purpose": "Canonical active selector adapter: v3 s3."
+    },
+    {
+      "path": "lns2_selector/evaluation/__init__.py",
+      "role": "shared",
+      "purpose": "Shared wall-clock evaluation namespace."
+    },
+    {
+      "path": "lns2_selector/runtime/__init__.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract:   init  ."
+    },
+    {
+      "path": "lns2_selector/runtime/contracts.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract: contracts."
+    },
+    {
+      "path": "lns2_selector/runtime/fingerprints.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract: fingerprints."
+    },
+    {
+      "path": "lns2_selector/runtime/metrics.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract: metrics."
+    },
+    {
+      "path": "lns2_selector/runtime/portable_scalar.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract: portable scalar."
+    },
+    {
+      "path": "lns2_selector/runtime/repair_outcomes.py",
+      "role": "shared",
+      "purpose": "Shared selector runtime contract: repair outcomes."
+    },
+    {
+      "path": "lns2_selector/solver/__init__.py",
+      "role": "active",
+      "purpose": "Official-behavior native solver boundary and identity checks."
+    },
+    {
+      "path": "lns2_selector/solver/native.py",
+      "role": "active",
+      "purpose": "Official-behavior native solver boundary and identity checks."
+    },
+    {
+      "path": "lns2_selector/training/__init__.py",
+      "role": "reproducibility",
+      "purpose": "Rebuild support for retained controller bundles:   init  ."
+    },
+    {
+      "path": "lns2_selector/training/tree_utils.py",
+      "role": "reproducibility",
+      "purpose": "Rebuild support for retained controller bundles: tree utils."
+    },
+    {
+      "path": "scripts/analyze_closed_loop_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: analyze closed loop confirmation."
+    },
+    {
+      "path": "scripts/analyze_movingai_ood_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: analyze movingai ood confirmation."
+    },
+    {
+      "path": "scripts/analyze_repair_experience.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: analyze repair experience."
+    },
+    {
+      "path": "scripts/audit_repository_hygiene.py",
+      "role": "shared",
+      "purpose": "Shared maintenance or verification entry point: audit repository hygiene."
+    },
+    {
+      "path": "scripts/audit_v2_factorial.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: audit v2 factorial."
+    },
+    {
+      "path": "scripts/audit_v3_s3_oracle.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: audit v3 s3 oracle."
+    },
+    {
+      "path": "scripts/audit_v3_s3_source_replay.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: audit v3 s3 source replay."
+    },
+    {
+      "path": "scripts/benchmark_controller_v2.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: benchmark controller v2."
+    },
+    {
+      "path": "scripts/benchmark_exact_runtime.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: benchmark exact runtime."
+    },
+    {
+      "path": "scripts/benchmark_portable_tree_inference.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: benchmark portable tree inference."
+    },
+    {
+      "path": "scripts/check_environment.py",
+      "role": "shared",
+      "purpose": "Shared maintenance or verification entry point: check environment."
+    },
+    {
+      "path": "scripts/collect_closed_loop_confirmation.py",
+      "role": "active",
+      "purpose": "CLI entry point for a current selector workflow: collect closed loop confirmation."
+    },
+    {
+      "path": "scripts/collect_repair_experience.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: collect repair experience."
+    },
+    {
+      "path": "scripts/consolidate_research_results.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: consolidate research results."
+    },
+    {
+      "path": "scripts/convert_closed_loop_traces.py",
+      "role": "shared",
+      "purpose": "Shared maintenance or verification entry point: convert closed loop traces."
+    },
+    {
+      "path": "scripts/export_closed_loop_models.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: export closed loop models."
+    },
+    {
+      "path": "scripts/export_mixed_full_v2.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: export mixed full v2."
+    },
+    {
+      "path": "scripts/fetch_movingai_devset.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: fetch movingai devset."
+    },
+    {
+      "path": "scripts/generate_dataset.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: generate dataset."
+    },
+    {
+      "path": "scripts/generate_gallery.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: generate gallery."
+    },
+    {
+      "path": "scripts/generate_instance.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: generate instance."
+    },
+    {
+      "path": "scripts/inspect_dataset.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: inspect dataset."
+    },
+    {
+      "path": "scripts/manage_build_storage.py",
+      "role": "shared",
+      "purpose": "Shared maintenance or verification entry point: manage build storage."
+    },
+    {
+      "path": "scripts/manage_repair_collection.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: manage repair collection."
+    },
+    {
+      "path": "scripts/recover_counterfactual_manifest.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: recover counterfactual manifest."
+    },
+    {
+      "path": "scripts/report_v2_wall_clock_cohorts.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: report v2 wall clock cohorts."
+    },
+    {
+      "path": "scripts/revalidate_v3_s3_collection.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: revalidate v3 s3 collection."
+    },
+    {
+      "path": "scripts/run_balanced_wall_clock.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: run balanced wall clock."
+    },
+    {
+      "path": "scripts/run_feasibility_benchmark.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: run feasibility benchmark."
+    },
+    {
+      "path": "scripts/run_lns2_tradeoff_evaluation.py",
+      "role": "active",
+      "purpose": "CLI entry point for a current selector workflow: run lns2 tradeoff evaluation."
+    },
+    {
+      "path": "scripts/run_lns2_warm_start_feasibility.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point required to reproduce retained evidence: run lns2 warm start feasibility."
+    },
+    {
+      "path": "scripts/run_v3_s3_runtime_comparison.py",
+      "role": "active",
+      "purpose": "CLI entry point for a current selector workflow: run v3 s3 runtime comparison."
+    },
+    {
+      "path": "scripts/run_v3_training_pipeline.py",
+      "role": "active",
+      "purpose": "CLI entry point for a current selector workflow: run v3 training pipeline."
+    },
+    {
+      "path": "scripts/smoke_v3_s3_runtime.py",
+      "role": "active",
+      "purpose": "CLI entry point for a current selector workflow: smoke v3 s3 runtime."
+    },
+    {
+      "path": "scripts/verify_closed_loop_equivalence.py",
+      "role": "shared",
+      "purpose": "Shared maintenance or verification entry point: verify closed loop equivalence."
+    },
+    {
+      "path": "tests/controllers/test_selector_contract.py",
+      "role": "active",
+      "contract": "Four canonical controller IDs, selection decisions, fallback routing, and rejection of historical aliases."
+    },
+    {
+      "path": "tests/data/test_movingai_benchmark.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained movingai benchmark behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/data/test_repair_collection_native.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained repair collection native behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/data/test_repair_collection.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained repair collection behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/data/test_repair_quality.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained repair quality behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/data/test_stage1_generators.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained stage1 generators behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_balanced_wall_clock.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained balanced wall clock behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_lns2_bottleneck.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained lns2 bottleneck behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_movingai_ood_confirmation.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained movingai ood confirmation behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_selector_metrics.py",
+      "role": "shared",
+      "contract": "Complete-deadline wall-clock AUC and read-only fixed-window compatibility semantics."
+    },
+    {
+      "path": "tests/evaluation/test_v2_factorial_audit.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained v2 factorial audit behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_v2_wall_clock_cohorts.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained v2 wall clock cohorts behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/maintenance/test_environment_check.py",
+      "role": "shared",
+      "contract": "Regression contract for retained environment check behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/maintenance/test_manage_build_storage.py",
+      "role": "shared",
+      "contract": "Regression contract for retained manage build storage behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/maintenance/test_repository_hygiene.py",
+      "role": "shared",
+      "contract": "Regression contract for retained repository hygiene behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/maintenance/test_result_consolidation.py",
+      "role": "compatibility",
+      "contract": "Regression contract for retained result consolidation behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/maintenance/test_retention_manifest.py",
+      "role": "shared",
+      "contract": "Every retained production module and pytest file has one executable retention role and an explicit purpose or contract."
+    },
+    {
+      "path": "tests/runtime/test_closed_loop_confirmation.py",
+      "role": "active",
+      "contract": "Regression contract for retained closed loop confirmation behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_closed_loop_equivalence.py",
+      "role": "shared",
+      "contract": "Regression contract for retained closed loop equivalence behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_closed_loop_trace_storage.py",
+      "role": "shared",
+      "contract": "Regression contract for retained closed loop trace storage behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_legacy_compatibility.py",
+      "role": "compatibility",
+      "contract": "Historical controller diagnostics remain readable and reject schema or semantic tampering without executable retired strategies."
+    },
+    {
+      "path": "tests/runtime/test_controller_v2.py",
+      "role": "active",
+      "contract": "Regression contract for retained controller v2 behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_mixed_full_v2.py",
+      "role": "active",
+      "contract": "Regression contract for retained mixed full v2 behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_portable_runtime.py",
+      "role": "shared",
+      "contract": "Regression contract for retained portable runtime behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_producer_identity.py",
+      "role": "shared",
+      "contract": "Regression contract for retained producer identity behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_python_env.py",
+      "role": "active",
+      "contract": "Official native boundary, RNG ownership, proposal generation, terminal behavior, timing schema, and portable inference."
+    },
+    {
+      "path": "tests/runtime/test_run_output_guard.py",
+      "role": "shared",
+      "contract": "Regression contract for retained run output guard behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_v3_s3_oracle_audit.py",
+      "role": "active",
+      "contract": "Regression contract for retained v3 s3 oracle audit behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_v3_s3_pipeline.py",
+      "role": "active",
+      "contract": "V3-S3 collection, training, producer identity, resume integrity, terminal handling, and native audit contracts."
+    },
+    {
+      "path": "tests/runtime/test_v3_s3.py",
+      "role": "active",
+      "contract": "Regression contract for retained v3 s3 behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/runtime/test_warm_start_feasibility.py",
+      "role": "reproducibility",
+      "contract": "Regression contract for retained warm start feasibility behavior, artifact integrity, or reproducibility."
+    }
+  ]
+}

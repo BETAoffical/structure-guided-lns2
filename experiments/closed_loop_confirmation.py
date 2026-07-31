@@ -104,6 +104,10 @@ from experiments.v3_s3 import (
     s3_temporal_context,
 )
 from lns2_selector.compatibility.metrics import fixed_budget_conflict_auc
+from lns2_selector.compatibility.controller_diagnostics import (
+    LegacyControllerDiagnosticError,
+    validate_legacy_controller_diagnostics,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -2185,132 +2189,12 @@ def validate_closed_loop_trace(
             if route not in {"model", "official_adaptive"}:
                 raise ClosedLoopTraceError("learned transition has an invalid route")
             route_counts[route] += 1
-            if str(controller.get("controller_mode")) == "v2-stall-safe":
-                guard = controller.get("stall_guard")
-                if not isinstance(guard, dict):
-                    raise ClosedLoopTraceError(
-                        "stall-safe transition is missing guard diagnostics"
-                    )
-                if str(guard.get("route")) != route:
-                    raise ClosedLoopTraceError("stall guard route mismatch")
-            if str(controller.get("controller_mode")) == "v2-stall-shadow":
-                shadow = controller.get("stall_shadow")
-                if not isinstance(shadow, dict):
-                    raise ClosedLoopTraceError(
-                        "stall-shadow transition is missing diagnostics"
-                    )
-                if route != "model" or str(shadow.get("route")) != "model":
-                    raise ClosedLoopTraceError("stall shadow changed the v2 route")
-                if str(shadow.get("schema")) != STALL_SHADOW_TRANSITION_SCHEMA:
-                    raise ClosedLoopTraceError("stall shadow transition schema mismatch")
-                if shadow.get("base_selection_preserved") is not True or shadow.get(
-                    "action_preserved"
-                ) is not True:
-                    raise ClosedLoopTraceError("stall shadow changed the v2 action")
-                if str(shadow.get("effective_selected_candidate_id")) != str(
-                    controller.get("selected_candidate_id")
-                ):
-                    raise ClosedLoopTraceError(
-                        "stall shadow selected candidate does not match v2"
-                    )
-                state_unchanged = shadow.get("state_unchanged")
-                replan_success = metrics.get("replan_success")
-                if not isinstance(state_unchanged, bool) or not isinstance(
-                    replan_success, bool
-                ):
-                    raise ClosedLoopTraceError(
-                        "stall shadow transition has non-boolean outcome evidence"
-                    )
-                try:
-                    expected_shadow_outcome = classify_repair_outcome(
-                        before_fingerprint="state",
-                        after_fingerprint=("state" if state_unchanged else "changed"),
-                        replan_success=replan_success,
-                        conflicts_before=int(metrics["conflicts_before"]),
-                        conflicts_after=int(metrics["conflicts_after"]),
-                        feasible=bool(after.get("feasible")),
-                    )
-                except (KeyError, TypeError, ValueError) as error:
-                    raise ClosedLoopTraceError(
-                        "stall shadow transition outcome evidence is inconsistent"
-                    ) from error
-                if str(shadow.get("repair_outcome")) != expected_shadow_outcome:
-                    raise ClosedLoopTraceError(
-                        "stall shadow transition outcome mismatch"
-                    )
-            if str(controller.get("controller_mode")) == "v2-repair-aware":
-                repair = controller.get("repair_aware")
-                if not isinstance(repair, dict):
-                    raise ClosedLoopTraceError(
-                        "repair-aware transition is missing diagnostics"
-                    )
-                if str(repair.get("route")) != route:
-                    raise ClosedLoopTraceError("repair-aware route mismatch")
-                if str(repair.get("repair_outcome")) not in {
-                    "hard_failure",
-                    "accepted_noop",
-                    "state_changed_no_reduction",
-                    "conflict_reduced",
-                    "feasible",
-                }:
-                    raise ClosedLoopTraceError(
-                        "repair-aware transition has an invalid outcome"
-                    )
-            if str(controller.get("controller_mode")) == "v2-critical":
-                critical = controller.get("critical_seed")
-                if not isinstance(critical, dict):
-                    raise ClosedLoopTraceError(
-                        "v2-critical transition is missing seed diagnostics"
-                    )
-                selected_seeds = list(
-                    map(int, critical.get("selected_seed_agents", []))
+            try:
+                validate_legacy_controller_diagnostics(
+                    controller, metrics, after, route
                 )
-                if route != "model" or not 1 <= len(selected_seeds) <= 4:
-                    raise ClosedLoopTraceError(
-                        "v2-critical transition has invalid seed routing"
-                    )
-                for candidate in controller.get("candidate_pool", []):
-                    if not set(map(int, candidate.get("seed_agents", []))) <= set(
-                        selected_seeds
-                    ):
-                        raise ClosedLoopTraceError(
-                            "v2-critical candidate escaped the retained seed set"
-                        )
-            if str(controller.get("controller_mode")) == "v2-cost-top3-frozen":
-                cost_top3 = controller.get("cost_top3")
-                if not isinstance(cost_top3, dict):
-                    raise ClosedLoopTraceError(
-                        "cost Top-3 transition is missing diagnostics"
-                    )
-                if str(cost_top3.get("route")) != route or route != "model":
-                    raise ClosedLoopTraceError("cost Top-3 route mismatch")
-                if str(cost_top3.get("selected_candidate_id")) != str(
-                    controller.get("selected_candidate_id")
-                ):
-                    raise ClosedLoopTraceError(
-                        "cost Top-3 selected candidate mismatch"
-                    )
-                rank = int(cost_top3.get("selected_v2_rank", 0))
-                if rank < 1 or rank > 3:
-                    raise ClosedLoopTraceError(
-                        "cost Top-3 selected rank is outside the frozen Top-3"
-                    )
-            if str(controller.get("controller_mode")) in {"v3-full", "v3-h3"}:
-                v3 = controller.get("v3")
-                if not isinstance(v3, dict):
-                    raise ClosedLoopTraceError(
-                        "v3 transition is missing controller diagnostics"
-                    )
-                if str(v3.get("route")) != route:
-                    raise ClosedLoopTraceError("v3 route mismatch")
-                if str(v3.get("repair_outcome")) not in {
-                    "hard_failure",
-                    "accepted_noop",
-                    "state_changed_no_reduction",
-                    "conflict_reduced",
-                    "feasible",
-                }:
-                    raise ClosedLoopTraceError("v3 transition has an invalid outcome")
+            except LegacyControllerDiagnosticError as error:
+                raise ClosedLoopTraceError(str(error)) from error
             if str(controller.get("controller_mode")) == "v3-s3":
                 v3_s3 = controller.get("v3_s3")
                 if not isinstance(v3_s3, dict):
@@ -2382,12 +2266,7 @@ def validate_closed_loop_trace(
         "transition_elapsed_seconds"
     ) != transition_elapsed_seconds:
         raise ClosedLoopTraceError("summary transition_elapsed_seconds mismatch")
-    if (
-        summary.get("balanced_controller") is not None
-        or summary.get("stall_guard") is not None
-        or summary.get("repair_aware") is not None
-        or summary.get("v3") is not None
-    ):
+    if learned_policy:
         expected_routes = {
             "model_decision_count": int(route_counts["model"]),
             "official_decision_count": int(route_counts["official_adaptive"]),

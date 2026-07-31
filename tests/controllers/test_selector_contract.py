@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from types import SimpleNamespace
 
-from lns2_selector.controllers import CONTROLLER_IDS
+from lns2_selector.controllers import CONTROLLER_IDS, load_selector
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
+from lns2_selector.cli import main as selector_cli
 from lns2_selector.runtime.contracts import SelectionRequest, Selector
 
 
@@ -50,6 +53,27 @@ class SelectorContractTests(unittest.TestCase):
             CONTROLLER_IDS,
             ("official_adaptive", "v2-full", "mixed-full-v2", "v3-s3"),
         )
+
+    def test_historical_controller_aliases_are_not_executable(self) -> None:
+        for alias in (
+            "Adaptive",
+            "proposal_dynamic",
+            "realized_dynamic",
+            "v2-stall-safe",
+            "v3-full",
+            "v3-h3",
+        ):
+            with self.subTest(alias=alias), self.assertRaisesRegex(
+                ValueError, "unsupported controller"
+            ):
+                load_selector(alias)
+
+    def test_cli_lists_only_canonical_controller_ids(self) -> None:
+        output = StringIO()
+        with redirect_stdout(output):
+            status = selector_cli(["list-controllers"])
+        self.assertEqual(status, 0)
+        self.assertEqual(tuple(output.getvalue().splitlines()), CONTROLLER_IDS)
 
     def test_request_rejects_mismatched_candidate_rows(self) -> None:
         with self.assertRaisesRegex(ValueError, "differ in length"):
@@ -116,3 +140,4 @@ class SelectorContractTests(unittest.TestCase):
         self.assertIsNone(decision.candidate_index)
         self.assertIsNone(decision.candidate)
         self.assertEqual(decision.fallback_reason, "v3_stalled_no_candidate")
+        self.assertFalse(decision.uses_native_adaptive)

@@ -35,11 +35,14 @@ The retention rules and per-file classification are recorded in
 
 ## Environment
 
-The verified Linux environment is Ubuntu 22.04 under WSL2. From Windows, target
-the existing distribution and checkout explicitly:
+The verified Linux environment is Ubuntu 22.04 under WSL2. Test the current
+working tree through its mounted Windows path; `/home/beta/LNS2-RL` is a
+separate user checkout and must not be overwritten for validation:
 
 ```powershell
-wsl.exe -d Ubuntu-22.04 --cd /home/beta/LNS2-RL -- /usr/bin/python3 scripts/check_environment.py --profile runtime-wsl
+$repo = (Get-Location).Path
+$wslRepo = (wsl.exe -d Ubuntu-22.04 -- wslpath -a $repo).Trim()
+wsl.exe -d Ubuntu-22.04 --cd $wslRepo -- /usr/bin/python3 scripts/check_environment.py --profile runtime-wsl
 ```
 
 An empty WSL distribution list observed from a restricted sandbox is a known
@@ -47,7 +50,7 @@ false negative. Do not reinstall or register another distribution in response.
 
 ## Build and test
 
-Run native build and tests in the existing WSL checkout:
+Run native build and tests against that same mounted working tree:
 
 ```bash
 cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release
