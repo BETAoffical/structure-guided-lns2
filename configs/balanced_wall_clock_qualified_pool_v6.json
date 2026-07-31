@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "role": "qualification_only_merged_compute_load_candidate_pool",
+  "dataset_revision": "balanced-wall-clock-qualified-compute-load-pool-v6",
+  "selection_blind_to_controller_outcomes": true,
+  "sources": [
+    {
+      "id": "generated-main-v3",
+      "source_group": "generated",
+      "dataset": "build/initlns-v2-mixed-compute-load-pool-v3",
+      "qualification": "build/initlns-v2-mixed-compute-load-qualification-v3",
+      "dataset_manifest_sha256": "6c8a0ec684b97746cf0606b2138a606c00e9233d439376a4dca694f0b876645c",
+      "qualification_manifest_sha256": "20886319f776d878b488606b6ddcd6250e4116f598af70c25087aa81b3f014da",
+      "task_count": 228,
+      "qualification_count": 684
+    },
+    {
+      "id": "generated-targeted-v3",
+      "source_group": "generated",
+      "dataset": "build/initlns-v2-mixed-compute-load-targeted-pool-v3",
+      "qualification": "build/initlns-v2-mixed-compute-load-targeted-qualification-v3",
+      "dataset_manifest_sha256": "12b252073527f49931229ca08c728ce96f0d5500a26bd3007b91b983e41f6c8e",
+      "qualification_manifest_sha256": "30e121c654bd2b68fb3c1a7e9e78fea62f55b0959381fbef7ae0ac311487fc5c",
+      "task_count": 132,
+      "qualification_count": 396
+    },
+    {
+      "id": "movingai-game-random-v3",
+      "source_group": "movingai",
+      "dataset": "build/initlns-v2-mixed-movingai-compute-load-candidates-v3",
+      "qualification": "build/initlns-v2-mixed-movingai-compute-load-qualification-v3",
+      "dataset_manifest_sha256": "951a4d57fe257cfa9d2867ea7e730f322db032a69141027fb9b2ec68c7e1cb9f",
+      "qualification_manifest_sha256": "4c2dfc6d26bc8229994370ec82f206c8ddef6793bb95333ae813cd2a72a06900",
+      "task_count": 40,
+      "qualification_count": 120
+    },
+    {
+      "id": "movingai-compact-derived-v4",
+      "source_group": "movingai",
+      "dataset": "build/initlns-v2-mixed-movingai-map-derived-candidates-v4",
+      "qualification": "build/initlns-v2-mixed-movingai-map-derived-qualification-v4",
+      "dataset_manifest_sha256": "521063b3f300f696ea6c077a6ce593db58c651088fb880199e00a806a81acf68",
+      "qualification_manifest_sha256": "3bf8ad62a1c1a9307b3d98c140241a68f33f43513ab4156f481a60f2c27ea164",
+      "task_count": 144,
+      "qualification_count": 432
+    },
+    {
+      "id": "movingai-targeted-derived-v5",
+      "source_group": "movingai",
+      "dataset": "build/initlns-v2-mixed-movingai-targeted-load-candidates-v5",
+      "qualification": "build/initlns-v2-mixed-movingai-targeted-load-qualification-v5",
+      "dataset_manifest_sha256": "95dd9c2e090760c21961c94ffe6425dedf685696c87f542c0b0fdf30315fbe8e",
+      "qualification_manifest_sha256": "7164936e880f1849dbcd1fae6300ccc4530a20a4cf0d0d96f01d29cdb4e8c6cc",
+      "task_count": 144,
+      "qualification_count": 432
+    }
+  ],
+  "expected": {
+    "map_count": 52,
+    "task_count": 688,
+    "qualification_count": 2064,
+    "source_task_counts": {"generated": 360, "movingai": 328},
+    "source_qualification_counts": {"generated": 1080, "movingai": 984}
+  }
+}

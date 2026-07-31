@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import tempfile
 import unittest
@@ -16,10 +17,13 @@ from experiments.balanced_wall_clock import (
     conflict_stratum,
     initial_pp_load_stratum,
     materialize_compute_load_candidate_pool,
+    materialize_qualified_compute_load_pool,
+    materialize_registered_compute_load_cohort,
     prepare_movingai_map_derived_dataset,
     prepare_movingai_dataset,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
+    verify_compute_load_cohort_registration,
 )
 from experiments.closed_loop_trace_storage import write_state_blob
 from experiments.repair_collection import state_fingerprint
@@ -181,6 +185,130 @@ class BalancedWallClockTests(unittest.TestCase):
                 prepare_movingai_map_derived_dataset(
                     root / "fetched", config, root / "output"
                 )
+
+    def test_qualified_compute_load_pool_pins_and_merges_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = []
+            for index, source_group in enumerate(("generated", "movingai")):
+                dataset = root / f"dataset-{index}"
+                split = dataset / "balanced_wall_clock"
+                qualification = root / f"qualification-{index}"
+                task_id = f"task-{index}"
+                map_id = f"map-{index}"
+                files = {
+                    "map_file": Path("maps") / f"{map_id}.map",
+                    "scenario_file": Path("scenarios") / f"{task_id}.scen",
+                    "task_file": Path("tasks") / f"{task_id}.json",
+                }
+                for field, relative in files.items():
+                    path = split / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(f"{field}:{index}\n", encoding="utf-8")
+                manifest_path = split / "manifest.jsonl"
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "split": "balanced_wall_clock",
+                            "task_id": task_id,
+                            "map_id": map_id,
+                            "layout_mode": f"layout-{index}",
+                            "source_group": "stale-value",
+                            "agent_count": 10,
+                            **{name: value.as_posix() for name, value in files.items()},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                qualification.mkdir()
+                qualification_path = qualification / "qualification_manifest.jsonl"
+                qualification_path.write_text(
+                    "".join(
+                        json.dumps(
+                            {
+                                "status": "ok",
+                                "initial_complete": True,
+                                "task_id": task_id,
+                                "map_id": map_id,
+                                "solver_seed": seed,
+                            }
+                        )
+                        + "\n"
+                        for seed in (1, 2)
+                    ),
+                    encoding="utf-8",
+                )
+                sources.append(
+                    {
+                        "id": f"source-{index}",
+                        "source_group": source_group,
+                        "dataset": dataset.relative_to(root).as_posix(),
+                        "qualification": qualification.relative_to(root).as_posix(),
+                        "dataset_manifest_sha256": hashlib.sha256(
+                            manifest_path.read_bytes()
+                        ).hexdigest(),
+                        "qualification_manifest_sha256": hashlib.sha256(
+                            qualification_path.read_bytes()
+                        ).hexdigest(),
+                        "task_count": 1,
+                        "qualification_count": 2,
+                    }
+                )
+            config = root / "configs" / "pool.json"
+            config.parent.mkdir()
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "dataset_revision": "test-qualified-pool-v1",
+                        "sources": sources,
+                        "expected": {
+                            "map_count": 2,
+                            "task_count": 2,
+                            "qualification_count": 4,
+                            "source_task_counts": {"generated": 1, "movingai": 1},
+                            "source_qualification_counts": {
+                                "generated": 2,
+                                "movingai": 2,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = materialize_qualified_compute_load_pool(
+                config, root / "output-dataset", root / "output-qualification"
+            )
+
+            self.assertEqual(
+                report["dataset"]["splits"]["balanced_wall_clock"]["task_count"],
+                2,
+            )
+            merged = [
+                json.loads(line)
+                for line in (
+                    root
+                    / "output-dataset"
+                    / "balanced_wall_clock"
+                    / "manifest.jsonl"
+                ).read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(
+                {row["source_group"] for row in merged}, {"generated", "movingai"}
+            )
+            qualified = [
+                json.loads(line)
+                for line in (
+                    root / "output-qualification" / "qualification_manifest.jsonl"
+                ).read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(len(qualified), 4)
+            self.assertEqual(
+                {row["qualification_source_id"] for row in qualified},
+                {"source-0", "source-1"},
+            )
 
     def test_movingai_preparation_can_select_a_registered_source_subset(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -642,12 +770,282 @@ class BalancedWallClockTests(unittest.TestCase):
                     root / "dataset", qualification, root / "invalid"
                 )
 
+    def test_compute_load_selector_supports_preregistered_asymmetric_cell_quotas(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dataset = root / "dataset" / "balanced_wall_clock"
+            qualification = root / "qualification"
+            dataset.mkdir(parents=True)
+            qualification.mkdir()
+            movingai_quotas = {
+                "low__low": 2,
+                "low__medium": 2,
+                "low__high": 2,
+                "medium__low": 3,
+                "medium__medium": 3,
+                "medium__high": 0,
+                "high__low": 3,
+                "high__medium": 3,
+                "high__high": 0,
+            }
+            conflicts = {"low": 5, "medium": 50, "high": 200}
+            loads = {"low": 50_000, "medium": 500_000, "high": 2_000_000}
+            tasks = []
+            results = []
+            for conflict_level in ("low", "medium", "high"):
+                for load_level in ("low", "medium", "high"):
+                    cell = f"{conflict_level}__{load_level}"
+                    movingai_count = movingai_quotas[cell]
+                    for index in range(4):
+                        source = "movingai" if index < movingai_count else "generated"
+                        task_id = f"{cell}-{source}-{index}"
+                        map_id = f"map-{task_id}"
+                        tasks.append(
+                            {
+                                "split": "balanced_wall_clock",
+                                "task_id": task_id,
+                                "map_id": map_id,
+                                "layout_mode": source,
+                                "source_group": source,
+                                "agent_count": 200,
+                            }
+                        )
+                        results.append(
+                            {
+                                "status": "ok",
+                                "initial_complete": True,
+                                "task_id": task_id,
+                                "map_id": map_id,
+                                "layout_mode": source,
+                                "agent_count": 200,
+                                "solver_seed": 1,
+                                "initial_conflicts": conflicts[conflict_level],
+                                "state_fingerprint": task_id,
+                                "initial_complexity": {
+                                    "conflict_pair_count": conflicts[conflict_level],
+                                    "initial_low_level_generated": loads[load_level],
+                                    "initial_low_level_expanded": loads[load_level] // 2,
+                                    "total_path_cost": 100,
+                                    "conflict_event_count": conflicts[conflict_level],
+                                    "active_conflict_agent_ratio": 0.5,
+                                    "largest_conflict_component_ratio": 0.5,
+                                },
+                            }
+                        )
+            (dataset / "manifest.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in tasks), encoding="utf-8"
+            )
+            (qualification / "qualification_manifest.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in results),
+                encoding="utf-8",
+            )
+            config = root / "difficulty.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "conflict_strata": {
+                            "low": [1, 10],
+                            "medium": [11, 100],
+                            "high": [101, 500],
+                        },
+                        "initial_pp_load_strata": {
+                            "low": [0, 100000],
+                            "medium": [100001, 1000000],
+                            "high": [1000001, None],
+                        },
+                        "future_cohort_selection": {
+                            "jobs_per_conflict_load_cell": 4,
+                            "movingai_jobs_by_cell": movingai_quotas,
+                            "global_jobs_per_map_cap": 2,
+                            "minimum_distinct_maps": 18,
+                            "exact_total_source_counts": {
+                                "generated": 18,
+                                "movingai": 18,
+                            },
+                            "source_counts_per_conflict_tier": {
+                                level: {"generated": 6, "movingai": 6}
+                                for level in ("low", "medium", "high")
+                            },
+                            "minimum_source_count_per_load_tier": {
+                                "generated": 2,
+                                "movingai": 2,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = select_compute_load_balanced_cohort(
+                root / "dataset",
+                qualification,
+                root / "selected",
+                config,
+            )
+
+            self.assertTrue(report["passed"])
+            self.assertEqual(
+                report["selected_source_counts"],
+                {"generated": 18, "movingai": 18},
+            )
+            self.assertTrue(report["overall_checks"]["unique_tasks"])
+            self.assertTrue(
+                report["overall_checks"]["source_balance_per_conflict_tier"]
+            )
+            self.assertTrue(
+                report["overall_checks"]["source_overlap_per_load_tier"]
+            )
+
+    def test_compute_load_registration_pins_cohort_and_balanced_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            configs = root / "configs"
+            build = root / "build"
+            configs.mkdir()
+            build.mkdir()
+            registered_paths = {
+                "pool_registry": configs / "pool.json",
+                "selection_config": configs / "selection.json",
+                "merged_dataset_manifest": build / "dataset.jsonl",
+                "merged_qualification_manifest": build / "qualification.jsonl",
+                "cohort": build / "cohort.jsonl",
+                "execution_schedule": build / "schedule.json",
+                "cohort_report": build / "report.json",
+            }
+            for name in (
+                "pool_registry",
+                "selection_config",
+                "merged_qualification_manifest",
+            ):
+                registered_paths[name].write_text(f"{name}\n", encoding="utf-8")
+            movingai_quotas = {
+                ("low", "low"): 2,
+                ("low", "medium"): 2,
+                ("low", "high"): 2,
+                ("medium", "low"): 3,
+                ("medium", "medium"): 3,
+                ("medium", "high"): 0,
+                ("high", "low"): 3,
+                ("high", "medium"): 3,
+                ("high", "high"): 0,
+            }
+            cohort = []
+            source_rows = []
+            for conflict in ("low", "medium", "high"):
+                for load in ("low", "medium", "high"):
+                    movingai_count = movingai_quotas[(conflict, load)]
+                    for index in range(4):
+                        task_id = f"{conflict}-{load}-{index}"
+                        cohort.append(
+                            {
+                                "task_id": task_id,
+                                "solver_seed": 1,
+                                "map_id": f"map-{task_id}",
+                                "conflict_stratum": conflict,
+                                "initial_pp_load_stratum": load,
+                                "source_group": (
+                                    "movingai"
+                                    if index < movingai_count
+                                    else "generated"
+                                ),
+                            }
+                        )
+                        map_file = Path("maps") / f"map-{task_id}.map"
+                        scenario_file = Path("scenarios") / f"{task_id}.scen"
+                        (build / map_file).parent.mkdir(parents=True, exist_ok=True)
+                        (build / scenario_file).parent.mkdir(parents=True, exist_ok=True)
+                        (build / map_file).write_text("type octile\nheight 1\nwidth 1\nmap\n.\n")
+                        (build / scenario_file).write_text("version 1\n")
+                        source_rows.append(
+                            {
+                                "task_id": task_id,
+                                "map_id": f"map-{task_id}",
+                                "source_group": cohort[-1]["source_group"],
+                                "map_file": map_file.as_posix(),
+                                "scenario_file": scenario_file.as_posix(),
+                            }
+                        )
+            registered_paths["merged_dataset_manifest"].write_text(
+                "".join(json.dumps(row) + "\n" for row in source_rows),
+                encoding="utf-8",
+            )
+            registered_paths["cohort"].write_text(
+                "".join(json.dumps(row) + "\n" for row in cohort),
+                encoding="utf-8",
+            )
+            orders = list(itertools.permutations((
+                "official_adaptive",
+                "v2-full",
+                "mixed-full-v2",
+            )))
+            entries = [
+                {
+                    **row,
+                    "schedule_group": index % 6,
+                    "controller_order": list(orders[index % 6]),
+                }
+                for index, row in enumerate(cohort)
+            ]
+            registered_paths["execution_schedule"].write_text(
+                json.dumps({"entries": entries}), encoding="utf-8"
+            )
+            registered_paths["cohort_report"].write_text(
+                json.dumps({"formal_collection_allowed": True}), encoding="utf-8"
+            )
+            counts = {
+                "jobs": 36,
+                "tasks": 36,
+                "maps": 36,
+                "jobs_per_conflict_load_cell": 4,
+                "source": {"generated": 18, "movingai": 18},
+                "source_per_conflict_tier": {
+                    level: {"generated": 6, "movingai": 6}
+                    for level in ("low", "medium", "high")
+                },
+                "source_per_initial_pp_load_tier": {
+                    "low": {"generated": 4, "movingai": 8},
+                    "medium": {"generated": 4, "movingai": 8},
+                    "high": {"generated": 10, "movingai": 2},
+                },
+            }
+            registration = {
+                "schema": "test.registration.v1",
+                "status": "preregistered_before_controller_collection",
+                "counts": counts,
+            }
+            for path_key, path in registered_paths.items():
+                registration[path_key] = path.relative_to(root).as_posix()
+                registration[f"{path_key}_sha256"] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+            registration_path = configs / "registration.json"
+            registration_path.write_text(json.dumps(registration), encoding="utf-8")
+
+            report = verify_compute_load_cohort_registration(registration_path)
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["counts"], counts)
+
+            dataset = materialize_registered_compute_load_cohort(
+                registration_path, root / "formal-dataset"
+            )
+            self.assertEqual(dataset["splits"]["balanced_wall_clock"]["map_count"], 36)
+            self.assertEqual(
+                dataset["splits"]["balanced_wall_clock"]["instance_count"], 36
+            )
+
+            registered_paths["cohort"].write_text("changed\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "registration mismatch: cohort"):
+                verify_compute_load_cohort_registration(registration_path)
+
     def test_analysis_uses_paired_map_and_stratum_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             schedule_rows = []
             for index in range(12):
                 stratum = ("low", "medium", "high")[index % 3]
+                load_stratum = ("low", "medium", "high")[index % 3]
                 initial_conflicts = {"low": 1, "medium": 11, "high": 101}[stratum]
                 agent_count = initial_conflicts * 2
                 source_group = "movingai" if stratum == "high" else "generated"
@@ -662,6 +1060,7 @@ class BalancedWallClockTests(unittest.TestCase):
                         "agent_band": "small" if agent_count <= 200 else "medium",
                         "initial_conflicts": initial_conflicts,
                         "conflict_stratum": stratum,
+                        "initial_pp_load_stratum": load_stratum,
                         "schedule_group": index % 6,
                         "controller_order": [
                             "official_adaptive",
@@ -766,6 +1165,13 @@ class BalancedWallClockTests(unittest.TestCase):
             self.assertTrue(all(report["promotion_gate"].values()))
             self.assertEqual(
                 report["comparisons"]["mixed_vs_v2_map_bootstrap"]["map_count"], 12
+            )
+            self.assertEqual(
+                set(report["comparisons"]["mixed_vs_v2_by_initial_pp_load"]),
+                {"low", "medium", "high"},
+            )
+            self.assertEqual(
+                report["promotion_gate_counts"]["map_not_worse_requirement"], 8
             )
             audit = audit_balanced_cohort_difficulty(
                 collection, cohort, root / "difficulty-report"

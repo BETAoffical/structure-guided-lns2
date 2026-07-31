@@ -1,0 +1,42 @@
+{
+  "schema": "lns2.balanced_wall_clock_difficulty_audit_config.v2",
+  "evidence_level": "qualification_only_precontroller_design",
+  "conflict_metric": "unique_unordered_colliding_agent_pairs",
+  "conflict_strata": {
+    "low": [1, 10],
+    "medium": [11, 100],
+    "high": [101, 500]
+  },
+  "initial_pp_load_metric": "initial_low_level_generated",
+  "initial_pp_load_strata": {
+    "low": [0, 100000],
+    "medium": [100001, 1000000],
+    "high": [1000001, null]
+  },
+  "future_cohort_selection": {
+    "jobs_per_conflict_load_cell": 4,
+    "movingai_jobs_by_cell": {
+      "low__low": 2,
+      "low__medium": 2,
+      "low__high": 2,
+      "medium__low": 3,
+      "medium__medium": 3,
+      "medium__high": 0,
+      "high__low": 3,
+      "high__medium": 3,
+      "high__high": 0
+    },
+    "global_jobs_per_map_cap": 2,
+    "minimum_distinct_maps": 18,
+    "exact_total_source_counts": {"generated": 18, "movingai": 18},
+    "source_counts_per_conflict_tier": {
+      "low": {"generated": 6, "movingai": 6},
+      "medium": {"generated": 6, "movingai": 6},
+      "high": {"generated": 6, "movingai": 6}
+    },
+    "minimum_source_count_per_load_tier": {"generated": 2, "movingai": 2},
+    "global_jobs_per_task_cap": 1
+  },
+  "design_rationale": "Two controller-blind qualification rounds found no MovingAI candidates in medium/high or high/high, while generated maps cover both cells. The frozen asymmetric cell quotas retain exact 18/18 source balance overall and 6/6 within every conflict tier, require source overlap in every PP-load tier, and avoid further outcome-guided map search.",
+  "boundary": "Only initial PP qualification metrics informed this cohort design. No Adaptive, V2, or Mixed Full repair outcome was consulted. Formal controller collection remains prohibited until this configuration and the selected cohort are committed."
+}

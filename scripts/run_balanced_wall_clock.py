@@ -18,11 +18,14 @@ from experiments.balanced_wall_clock import (  # noqa: E402
     build_replacement_dataset,
     collect_scheduled,
     materialize_compute_load_candidate_pool,
+    materialize_qualified_compute_load_pool,
+    materialize_registered_compute_load_cohort,
     merge_datasets,
     prepare_movingai_map_derived_dataset,
     prepare_movingai_dataset,
     select_balanced_cohort,
     select_compute_load_balanced_cohort,
+    verify_compute_load_cohort_registration,
 )
 
 
@@ -47,8 +50,11 @@ def main() -> int:
             "merge",
             "replace",
             "materialize-load-pool",
+            "materialize-qualified-load-pool",
             "select",
             "select-load-balanced",
+            "verify-load-cohort",
+            "materialize-registered-cohort",
             "dry-run",
             "collect",
             "analyze",
@@ -92,6 +98,18 @@ def main() -> int:
         "--load-pool-dataset",
         default="build/initlns-v2-mixed-compute-load-pool-v3",
     )
+    parser.add_argument(
+        "--qualified-load-pool-config",
+        default="configs/balanced_wall_clock_qualified_pool_v6.json",
+    )
+    parser.add_argument(
+        "--qualified-load-pool-dataset",
+        default="build/initlns-v2-mixed-qualified-compute-load-pool-v6",
+    )
+    parser.add_argument(
+        "--qualified-load-pool-qualification",
+        default="build/initlns-v2-mixed-qualified-compute-load-qualification-v6",
+    )
     parser.add_argument("--config", default="configs/balanced_wall_clock_collection.json")
     parser.add_argument("--qualification", default="build/initlns-v2-mixed-balanced-qualification-v1")
     parser.add_argument("--cohort", default="build/initlns-v2-mixed-balanced-cohort-v1")
@@ -100,6 +118,15 @@ def main() -> int:
     parser.add_argument(
         "--difficulty-config",
         default="configs/balanced_wall_clock_difficulty_audit.json",
+    )
+    parser.add_argument(
+        "--cohort-registration",
+        default=None,
+        help="Optional checksum-pinned cohort registration required by formal runs.",
+    )
+    parser.add_argument(
+        "--formal-cohort-dataset",
+        default="build/initlns-v2-mixed-qualified-compute-load-formal-dataset-v6",
     )
     parser.add_argument(
         "--original-bundle", default="artifacts/initlns-closed-loop-controller-v2"
@@ -143,6 +170,12 @@ def main() -> int:
             _resolve(arguments.load_pool_config),
             _resolve(arguments.load_pool_dataset),
         )
+    elif arguments.phase == "materialize-qualified-load-pool":
+        result = materialize_qualified_compute_load_pool(
+            _resolve(arguments.qualified_load_pool_config),
+            _resolve(arguments.qualified_load_pool_dataset),
+            _resolve(arguments.qualified_load_pool_qualification),
+        )
     elif arguments.phase == "select":
         result = select_balanced_cohort(
             _resolve(arguments.dataset),
@@ -156,6 +189,19 @@ def main() -> int:
             _resolve(arguments.cohort),
             _resolve(arguments.difficulty_config),
         )
+    elif arguments.phase == "verify-load-cohort":
+        if arguments.cohort_registration is None:
+            parser.error("verify-load-cohort requires --cohort-registration")
+        result = verify_compute_load_cohort_registration(
+            _resolve(arguments.cohort_registration)
+        )
+    elif arguments.phase == "materialize-registered-cohort":
+        if arguments.cohort_registration is None:
+            parser.error("materialize-registered-cohort requires --cohort-registration")
+        result = materialize_registered_compute_load_cohort(
+            _resolve(arguments.cohort_registration),
+            _resolve(arguments.formal_cohort_dataset),
+        )
     elif arguments.phase in {"dry-run", "collect"}:
         result = collect_scheduled(
             dataset=_resolve(arguments.dataset),
@@ -167,6 +213,11 @@ def main() -> int:
             mixed_bundle=_resolve(arguments.mixed_bundle),
             resume=arguments.resume,
             dry_run=arguments.phase == "dry-run",
+            registration=(
+                _resolve(arguments.cohort_registration)
+                if arguments.cohort_registration is not None
+                else None
+            ),
         )
     elif arguments.phase == "analyze":
         result = analyze_scheduled(

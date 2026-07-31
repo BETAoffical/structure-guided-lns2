@@ -922,6 +922,207 @@ def materialize_compute_load_candidate_pool(
     return summary
 
 
+def materialize_qualified_compute_load_pool(
+    registry: str | Path,
+    dataset_output: str | Path,
+    qualification_output: str | Path,
+) -> dict[str, Any]:
+    """Merge checksum-pinned qualification pools without controller outcomes."""
+
+    registry_path = Path(registry).resolve()
+    config = _read_json(registry_path)
+    project_root = registry_path.parent.parent
+    dataset_root = Path(dataset_output).resolve()
+    qualification_root = Path(qualification_output).resolve()
+    if dataset_root == qualification_root:
+        raise ValueError("qualified pool dataset and qualification outputs must differ")
+    configuration_fingerprint = _fingerprint(config)
+    for root, marker in (
+        (dataset_root, "dataset_summary.json"),
+        (qualification_root, "qualification_pool_info.json"),
+    ):
+        marker_path = root / marker
+        if marker_path.is_file():
+            existing = _read_json(marker_path)
+            if existing.get("configuration_fingerprint") != configuration_fingerprint:
+                raise ValueError("qualified pool output belongs to another registry")
+        elif root.is_dir() and any(root.iterdir()):
+            raise ValueError("qualified pool output is non-empty but unregistered")
+
+    manifest: list[dict[str, Any]] = []
+    qualification_rows: list[dict[str, Any]] = []
+    task_ids: set[str] = set()
+    qualification_keys: set[tuple[str, int]] = set()
+    map_hashes: dict[str, str] = {}
+    source_registration = []
+    for raw_source in config["sources"]:
+        source = dict(raw_source)
+        source_id = str(source["id"])
+        source_group = str(source["source_group"])
+        if source_group not in {"generated", "movingai"}:
+            raise ValueError(f"unsupported qualified-pool source group: {source_group}")
+        source_dataset = (project_root / str(source["dataset"])).resolve()
+        source_qualification = (
+            project_root / str(source["qualification"])
+        ).resolve()
+        source_manifest_path = source_dataset / SPLIT / "manifest.jsonl"
+        source_qualification_path = (
+            source_qualification / "qualification_manifest.jsonl"
+        )
+        if sha256_file(source_manifest_path) != str(source["dataset_manifest_sha256"]):
+            raise ValueError(f"qualified-pool dataset SHA mismatch: {source_id}")
+        if sha256_file(source_qualification_path) != str(
+            source["qualification_manifest_sha256"]
+        ):
+            raise ValueError(f"qualified-pool qualification SHA mismatch: {source_id}")
+        source_rows = _read_jsonl(source_manifest_path)
+        source_tasks = {str(row["task_id"]): dict(row) for row in source_rows}
+        if len(source_tasks) != len(source_rows):
+            raise ValueError(f"qualified-pool source repeats task ids: {source_id}")
+        if len(source_rows) != int(source["task_count"]):
+            raise ValueError(f"qualified-pool source task count differs: {source_id}")
+
+        source_split = source_dataset / SPLIT
+        for task_id, raw_row in source_tasks.items():
+            if task_id in task_ids:
+                raise ValueError(f"qualified pool repeats task id: {task_id}")
+            task_ids.add(task_id)
+            row = dict(raw_row)
+            row["source_group"] = source_group
+            for field in (
+                "map_file",
+                "scenario_file",
+                "map_metadata_file",
+                "task_file",
+                "legacy_instance_file",
+            ):
+                if not row.get(field):
+                    continue
+                relative = Path(str(row[field]))
+                source_path = source_split / relative
+                if not source_path.is_file():
+                    raise ValueError(f"qualified-pool source file is missing: {source_path}")
+                destination = dataset_root / SPLIT / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                source_sha = sha256_file(source_path)
+                if destination.is_file() and sha256_file(destination) != source_sha:
+                    raise ValueError(f"qualified-pool file collision: {relative}")
+                if not destination.is_file():
+                    shutil.copy2(source_path, destination)
+            map_id = str(row["map_id"])
+            map_sha = sha256_file(source_split / str(row["map_file"]))
+            if map_id in map_hashes and map_hashes[map_id] != map_sha:
+                raise ValueError(f"qualified pool map id has multiple grids: {map_id}")
+            map_hashes[map_id] = map_sha
+            manifest.append(row)
+
+        source_qualified = _read_jsonl(source_qualification_path)
+        if len(source_qualified) != int(source["qualification_count"]):
+            raise ValueError(
+                f"qualified-pool source qualification count differs: {source_id}"
+            )
+        for raw_result in source_qualified:
+            result = dict(raw_result)
+            task_id = str(result["task_id"])
+            if task_id not in source_tasks:
+                raise ValueError(
+                    f"qualified-pool qualification has unknown task: {source_id}/{task_id}"
+                )
+            if str(result["map_id"]) != str(source_tasks[task_id]["map_id"]):
+                raise ValueError("qualified-pool task and qualification maps differ")
+            key = (task_id, int(result["solver_seed"]))
+            if key in qualification_keys:
+                raise ValueError(f"qualified pool repeats reset key: {key}")
+            qualification_keys.add(key)
+            result["source_group"] = source_group
+            result["qualification_source_id"] = source_id
+            qualification_rows.append(result)
+
+        source_registration.append(
+            {
+                "id": source_id,
+                "source_group": source_group,
+                "dataset": str(source["dataset"]),
+                "qualification": str(source["qualification"]),
+                "dataset_manifest_sha256": str(source["dataset_manifest_sha256"]),
+                "qualification_manifest_sha256": str(
+                    source["qualification_manifest_sha256"]
+                ),
+                "task_count": len(source_rows),
+                "qualification_count": len(source_qualified),
+            }
+        )
+
+    if len(set(map_hashes.values())) != len(map_hashes):
+        raise ValueError("qualified pool contains duplicate map grids")
+    expected = dict(config["expected"])
+    source_task_counts = dict(
+        sorted(collections.Counter(row["source_group"] for row in manifest).items())
+    )
+    source_qualification_counts = dict(
+        sorted(
+            collections.Counter(row["source_group"] for row in qualification_rows).items()
+        )
+    )
+    observed = {
+        "map_count": len(map_hashes),
+        "task_count": len(manifest),
+        "qualification_count": len(qualification_rows),
+        "source_task_counts": source_task_counts,
+        "source_qualification_counts": source_qualification_counts,
+    }
+    normalized_expected = {
+        "map_count": int(expected["map_count"]),
+        "task_count": int(expected["task_count"]),
+        "qualification_count": int(expected["qualification_count"]),
+        "source_task_counts": {
+            str(name): int(value)
+            for name, value in dict(expected["source_task_counts"]).items()
+        },
+        "source_qualification_counts": {
+            str(name): int(value)
+            for name, value in dict(expected["source_qualification_counts"]).items()
+        },
+    }
+    if observed != normalized_expected:
+        raise ValueError("qualified pool dimensions differ from registration")
+
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    qualification_rows.sort(
+        key=lambda row: (str(row["task_id"]), int(row["solver_seed"]))
+    )
+    _write_jsonl_atomic(dataset_root / SPLIT / "manifest.jsonl", manifest)
+    _write_jsonl_atomic(
+        qualification_root / "qualification_manifest.jsonl", qualification_rows
+    )
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": str(config["dataset_revision"]),
+        "configuration_fingerprint": configuration_fingerprint,
+        "selection_blind_to_controller_outcomes": True,
+        "source_registration": source_registration,
+        "splits": {SPLIT: observed},
+    }
+    _write_json(dataset_root / "dataset_summary.json", summary)
+    qualification_info = {
+        "schema_version": 1,
+        "configuration_fingerprint": configuration_fingerprint,
+        "selection_blind_to_controller_outcomes": True,
+        "source_registration": source_registration,
+        **observed,
+        "dataset_manifest_sha256": sha256_file(
+            dataset_root / SPLIT / "manifest.jsonl"
+        ),
+        "qualification_manifest_sha256": sha256_file(
+            qualification_root / "qualification_manifest.jsonl"
+        ),
+    }
+    _write_json(
+        qualification_root / "qualification_pool_info.json", qualification_info
+    )
+    return {"dataset": summary, "qualification": qualification_info}
+
+
 def conflict_stratum(conflicts: int) -> str | None:
     for name, lower, upper in STRATA:
         if lower <= conflicts <= upper:
@@ -1103,11 +1304,35 @@ def select_compute_load_balanced_cohort(
     config_path, audit_config = _load_difficulty_config(config)
     selection = dict(audit_config["future_cohort_selection"])
     jobs_per_cell = int(selection["jobs_per_conflict_load_cell"])
-    jobs_per_source = int(selection["jobs_per_source_per_cell"])
     map_cap = int(selection["global_jobs_per_map_cap"])
     minimum_maps = int(selection["minimum_distinct_maps"])
-    if jobs_per_cell != jobs_per_source * 2:
-        raise ValueError("future cohort cell quota must equal two source quotas")
+    if int(selection.get("global_jobs_per_task_cap", 1)) != 1:
+        raise ValueError("compute-load cohort requires one job per task")
+    configured_movingai = selection.get("movingai_jobs_by_cell")
+    if configured_movingai is None:
+        jobs_per_source = int(selection["jobs_per_source_per_cell"])
+        if jobs_per_cell != jobs_per_source * 2:
+            raise ValueError("future cohort cell quota must equal two source quotas")
+        movingai_jobs_by_cell = {
+            f"{conflict}__{load}": jobs_per_source
+            for conflict in ("low", "medium", "high")
+            for load in ("low", "medium", "high")
+        }
+    else:
+        movingai_jobs_by_cell = {
+            str(name): int(value)
+            for name, value in dict(configured_movingai).items()
+        }
+        expected_cells = {
+            f"{conflict}__{load}"
+            for conflict in ("low", "medium", "high")
+            for load in ("low", "medium", "high")
+        }
+        if set(movingai_jobs_by_cell) != expected_cells or any(
+            value < 0 or value > jobs_per_cell
+            for value in movingai_jobs_by_cell.values()
+        ):
+            raise ValueError("movingai cell quotas do not cover the 3x3 cohort")
 
     dataset_root = Path(dataset).resolve()
     qualification_root = Path(qualification).resolve()
@@ -1181,6 +1406,7 @@ def select_compute_load_balanced_cohort(
         )
     )
     selected: list[dict[str, Any]] = []
+    selected_task_ids: set[str] = set()
     map_counts: collections.Counter[str] = collections.Counter()
     cell_reports: dict[str, dict[str, Any]] = {}
     for conflict_level, load_level in cell_specs:
@@ -1193,6 +1419,10 @@ def select_compute_load_balanced_cohort(
         ]
         chosen: list[dict[str, Any]] = []
         chosen_maps: set[str] = set()
+        source_quotas = {
+            "movingai": movingai_jobs_by_cell[cell_name],
+            "generated": jobs_per_cell - movingai_jobs_by_cell[cell_name],
+        }
         for source in ("generated", "movingai"):
             source_pool = sorted(
                 (row for row in pool if row["source_group"] == source),
@@ -1211,21 +1441,28 @@ def select_compute_load_balanced_cohort(
                 ),
             )
             for row in source_pool:
-                if sum(item["source_group"] == source for item in chosen) >= jobs_per_source:
+                if (
+                    sum(item["source_group"] == source for item in chosen)
+                    >= source_quotas[source]
+                ):
                     break
                 if (
                     row["map_id"] in chosen_maps
+                    or row["task_id"] in selected_task_ids
                     or map_counts[row["map_id"]] >= map_cap
                 ):
                     continue
                 chosen.append(row)
                 chosen_maps.add(row["map_id"])
+                selected_task_ids.add(row["task_id"])
                 map_counts[row["map_id"]] += 1
         source_counts = collections.Counter(row["source_group"] for row in chosen)
         checks = {
             "cell_count": len(chosen) == jobs_per_cell,
-            "generated_count": source_counts.get("generated", 0) == jobs_per_source,
-            "movingai_count": source_counts.get("movingai", 0) == jobs_per_source,
+            "generated_count": source_counts.get("generated", 0)
+            == source_quotas["generated"],
+            "movingai_count": source_counts.get("movingai", 0)
+            == source_quotas["movingai"],
             "distinct_maps": len(chosen_maps) == jobs_per_cell,
         }
         cell_reports[cell_name] = {
@@ -1233,22 +1470,82 @@ def select_compute_load_balanced_cohort(
             "eligible_by_source": dict(
                 sorted(collections.Counter(row["source_group"] for row in pool).items())
             ),
+            "source_quotas": source_quotas,
             "selected_count": len(chosen),
             "checks": checks,
             "passed": all(checks.values()),
         }
         selected.extend(chosen)
 
+    selected_source_counts = collections.Counter(
+        row["source_group"] for row in selected
+    )
+    expected_source_counts = {
+        "movingai": sum(movingai_jobs_by_cell.values()),
+        "generated": jobs_per_cell * len(cell_specs)
+        - sum(movingai_jobs_by_cell.values()),
+    }
+    configured_source_counts = selection.get("exact_total_source_counts")
+    if configured_source_counts is not None:
+        registered_source_counts = {
+            str(name): int(value)
+            for name, value in dict(configured_source_counts).items()
+        }
+        if registered_source_counts != expected_source_counts:
+            raise ValueError("cell quotas and total source quotas disagree")
+    conflict_source_counts = {
+        conflict: {
+            source: sum(
+                row["conflict_stratum"] == conflict
+                and row["source_group"] == source
+                for row in selected
+            )
+            for source in ("generated", "movingai")
+        }
+        for conflict in ("low", "medium", "high")
+    }
+    configured_conflict_counts = selection.get("source_counts_per_conflict_tier")
+    conflict_balance_passed = True
+    if configured_conflict_counts is not None:
+        normalized_conflict_counts = {
+            str(conflict): {
+                str(source): int(value)
+                for source, value in dict(counts).items()
+            }
+            for conflict, counts in dict(configured_conflict_counts).items()
+        }
+        conflict_balance_passed = conflict_source_counts == normalized_conflict_counts
+    minimum_per_load = {
+        str(source): int(value)
+        for source, value in dict(
+            selection.get("minimum_source_count_per_load_tier", {})
+        ).items()
+    }
+    load_source_counts = {
+        load: {
+            source: sum(
+                row["initial_pp_load_stratum"] == load
+                and row["source_group"] == source
+                for row in selected
+            )
+            for source in ("generated", "movingai")
+        }
+        for load in ("low", "medium", "high")
+    }
+    load_overlap_passed = all(
+        counts.get(source, 0) >= minimum
+        for counts in load_source_counts.values()
+        for source, minimum in minimum_per_load.items()
+    )
     overall_checks = {
         "all_nine_cells_pass": all(row["passed"] for row in cell_reports.values()),
         "selected_count": len(selected) == jobs_per_cell * len(cell_specs),
         "minimum_distinct_maps": len({row["map_id"] for row in selected}) >= minimum_maps,
         "global_map_cap": max(map_counts.values(), default=0) <= map_cap,
-        "exact_source_balance": all(
-            sum(row["source_group"] == source for row in selected)
-            == jobs_per_source * len(cell_specs)
-            for source in ("generated", "movingai")
-        ),
+        "unique_tasks": len(selected_task_ids) == len(selected),
+        "exact_source_balance": dict(selected_source_counts) == expected_source_counts,
+        "source_balance_per_conflict_tier": conflict_balance_passed,
+        "source_overlap_per_load_tier": load_overlap_passed,
     }
     passed = all(overall_checks.values())
     if passed:
@@ -1287,6 +1584,9 @@ def select_compute_load_balanced_cohort(
         "selected_count": len(selected),
         "selection_blind_to_controller_outcomes": True,
         "cell_reports": dict(sorted(cell_reports.items())),
+        "selected_source_counts": dict(sorted(selected_source_counts.items())),
+        "source_counts_by_conflict_tier": conflict_source_counts,
+        "source_counts_by_load_tier": load_source_counts,
         "overall_checks": overall_checks,
         "passed": passed,
         "decision": "eligible_for_formal" if passed else "compute_load_data_gate_failed",
@@ -1294,6 +1594,201 @@ def select_compute_load_balanced_cohort(
     }
     _write_json(output_root / "cohort_report.json", report)
     return report
+
+
+def verify_compute_load_cohort_registration(
+    registration: str | Path,
+) -> dict[str, Any]:
+    registration_path = Path(registration).resolve()
+    project_root = registration_path.parent.parent
+    payload = _read_json(registration_path)
+    registered_files = (
+        ("pool_registry", "pool_registry_sha256"),
+        ("selection_config", "selection_config_sha256"),
+        ("merged_dataset_manifest", "merged_dataset_manifest_sha256"),
+        ("merged_qualification_manifest", "merged_qualification_manifest_sha256"),
+        ("cohort", "cohort_sha256"),
+        ("execution_schedule", "execution_schedule_sha256"),
+        ("cohort_report", "cohort_report_sha256"),
+    )
+    if "formal_dataset_manifest" in payload:
+        registered_files += (
+            ("formal_dataset_manifest", "formal_dataset_manifest_sha256"),
+        )
+    resolved: dict[str, Path] = {}
+    for path_key, sha_key in registered_files:
+        path = (project_root / str(payload[path_key])).resolve()
+        if not path.is_file() or sha256_file(path) != str(payload[sha_key]):
+            raise ValueError(f"compute-load cohort registration mismatch: {path_key}")
+        resolved[path_key] = path
+
+    cohort = _read_jsonl(resolved["cohort"])
+    schedule = _read_json(resolved["execution_schedule"])
+    entries = list(schedule["entries"])
+    cohort_keys = {(str(row["task_id"]), int(row["solver_seed"])) for row in cohort}
+    schedule_keys = {
+        (str(row["task_id"]), int(row["solver_seed"])) for row in entries
+    }
+    if len(cohort_keys) != len(cohort) or cohort_keys != schedule_keys:
+        raise ValueError("registered cohort and execution schedule differ")
+    orders = [tuple(map(str, row["controller_order"])) for row in entries]
+    expected_orders = set(itertools.permutations(CONTROLLERS))
+    if set(orders) != expected_orders or any(
+        orders.count(order) != 6 for order in expected_orders
+    ):
+        raise ValueError("registered execution schedule is not order-balanced")
+
+    cell_counts = collections.Counter(
+        (row["conflict_stratum"], row["initial_pp_load_stratum"])
+        for row in cohort
+    )
+    if len(cell_counts) != 9 or len(set(cell_counts.values())) != 1:
+        raise ValueError("registered cohort does not balance all nine cells")
+    observed_counts = {
+        "jobs": len(cohort),
+        "tasks": len({str(row["task_id"]) for row in cohort}),
+        "maps": len({str(row["map_id"]) for row in cohort}),
+        "jobs_per_conflict_load_cell": next(iter(cell_counts.values())),
+        "source": dict(
+            sorted(collections.Counter(row["source_group"] for row in cohort).items())
+        ),
+        "source_per_conflict_tier": {
+            conflict: {
+                source: sum(
+                    row["conflict_stratum"] == conflict
+                    and row["source_group"] == source
+                    for row in cohort
+                )
+                for source in ("generated", "movingai")
+            }
+            for conflict in ("low", "medium", "high")
+        },
+        "source_per_initial_pp_load_tier": {
+            load: {
+                source: sum(
+                    row["initial_pp_load_stratum"] == load
+                    and row["source_group"] == source
+                    for row in cohort
+                )
+                for source in ("generated", "movingai")
+            }
+            for load in ("low", "medium", "high")
+        },
+    }
+    if observed_counts != dict(payload["counts"]):
+        raise ValueError("registered cohort counts differ from its manifest")
+    report = _read_json(resolved["cohort_report"])
+    if not bool(report.get("formal_collection_allowed", False)):
+        raise ValueError("registered cohort is not eligible for formal collection")
+    return {
+        "schema": str(payload["schema"]),
+        "status": str(payload["status"]),
+        "registration_sha256": sha256_file(registration_path),
+        "cohort_sha256": str(payload["cohort_sha256"]),
+        "execution_schedule_sha256": str(payload["execution_schedule_sha256"]),
+        "counts": observed_counts,
+        "passed": True,
+    }
+
+
+def materialize_registered_compute_load_cohort(
+    registration: str | Path, output: str | Path
+) -> dict[str, Any]:
+    verification = verify_compute_load_cohort_registration(registration)
+    registration_path = Path(registration).resolve()
+    project_root = registration_path.parent.parent
+    payload = _read_json(registration_path)
+    source_manifest_path = (
+        project_root / str(payload["merged_dataset_manifest"])
+    ).resolve()
+    cohort_path = (project_root / str(payload["cohort"])).resolve()
+    source_split = source_manifest_path.parent
+    output_root = Path(output).resolve()
+    split_root = output_root / SPLIT
+    configuration_fingerprint = _fingerprint(
+        {
+            "merged_dataset_manifest_sha256": str(
+                payload["merged_dataset_manifest_sha256"]
+            ),
+            "cohort_sha256": str(payload["cohort_sha256"]),
+        }
+    )
+    summary_path = output_root / "dataset_summary.json"
+    if summary_path.is_file():
+        existing = _read_json(summary_path)
+        if existing.get("configuration_fingerprint") != configuration_fingerprint:
+            raise ValueError("registered cohort dataset belongs to another selection")
+    elif output_root.is_dir() and any(output_root.iterdir()):
+        raise ValueError("registered cohort dataset output is non-empty and unregistered")
+
+    source_rows = {
+        str(row["task_id"]): dict(row)
+        for row in _read_jsonl(source_manifest_path)
+    }
+    cohort = _read_jsonl(cohort_path)
+    manifest = []
+    for selection in cohort:
+        task_id = str(selection["task_id"])
+        if task_id not in source_rows:
+            raise ValueError(f"registered cohort task is absent from dataset: {task_id}")
+        row = dict(source_rows[task_id])
+        if (
+            str(row["map_id"]) != str(selection["map_id"])
+            or str(row["source_group"]) != str(selection["source_group"])
+        ):
+            raise ValueError("registered cohort metadata differs from source dataset")
+        for field in (
+            "map_file",
+            "scenario_file",
+            "map_metadata_file",
+            "task_file",
+            "legacy_instance_file",
+        ):
+            if not row.get(field):
+                continue
+            relative = Path(str(row[field]))
+            source = source_split / relative
+            if not source.is_file():
+                raise ValueError(f"registered cohort source file is missing: {source}")
+            destination = split_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source_sha = sha256_file(source)
+            if destination.is_file() and sha256_file(destination) != source_sha:
+                raise ValueError(f"registered cohort file collision: {relative}")
+            if not destination.is_file():
+                shutil.copy2(source, destination)
+        manifest.append(row)
+
+    expected = dict(payload["counts"])
+    observed = {
+        "map_count": len({str(row["map_id"]) for row in manifest}),
+        "instance_count": len(manifest),
+        "source_counts": dict(
+            sorted(collections.Counter(row["source_group"] for row in manifest).items())
+        ),
+    }
+    expected_dimensions = {
+        "map_count": int(expected["maps"]),
+        "instance_count": int(expected["tasks"]),
+        "source_counts": {
+            str(name): int(value) for name, value in dict(expected["source"]).items()
+        },
+    }
+    if observed != expected_dimensions:
+        raise ValueError("registered cohort dataset dimensions differ from registration")
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    _write_jsonl_atomic(split_root / "manifest.jsonl", manifest)
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": "balanced-wall-clock-formal-cohort-v6",
+        "configuration_fingerprint": configuration_fingerprint,
+        "selection_blind_to_controller_outcomes": True,
+        "cohort_sha256": str(payload["cohort_sha256"]),
+        "registration_verification": verification,
+        "splits": {SPLIT: observed},
+    }
+    _write_json(summary_path, summary)
+    return summary
 
 
 def collect_scheduled(
@@ -1307,7 +1802,13 @@ def collect_scheduled(
     mixed_bundle: str | Path,
     resume: bool,
     dry_run: bool = False,
+    registration: str | Path | None = None,
 ) -> dict[str, Any]:
+    registration_report = (
+        verify_compute_load_cohort_registration(registration)
+        if registration is not None
+        else None
+    )
     schedule_root_path = Path(schedule_root).resolve()
     cohort_report = _read_json(schedule_root_path / "cohort_report.json")
     if not bool(cohort_report.get("formal_collection_allowed", False)):
@@ -1360,10 +1861,15 @@ def collect_scheduled(
                 )
             else:
                 if not (lane / "qualification_manifest.jsonl").is_file():
+                    reusable_qualification = (
+                        qualification
+                        if (Path(qualification).resolve() / "run_config.json").is_file()
+                        else None
+                    )
                     run_closed_loop_collection(
                         **common,
                         phase="qualify",
-                        qualification_source=qualification,
+                        qualification_source=reusable_qualification,
                         resume=False,
                     )
                 result = run_closed_loop_collection(
@@ -1381,7 +1887,12 @@ def collect_scheduled(
                 }
             )
             _write_json(output_root / "collection_progress.json", {"entries": progress})
-    return {"group_count": 6, "lane_count": len(progress), "entries": progress}
+    return {
+        "group_count": 6,
+        "lane_count": len(progress),
+        "registration": registration_report,
+        "entries": progress,
+    }
 
 
 def _mean(values: Iterable[float]) -> float:
@@ -2048,6 +2559,34 @@ def analyze_scheduled(
     comparisons_by_stratum = _paired_group_comparison(
         indexed["v2-full"], indexed["mixed-full-v2"], schedule_index, "conflict_stratum"
     )
+    has_compute_load = all(
+        "initial_pp_load_stratum" in row for row in schedule_index.values()
+    )
+    if has_compute_load:
+        comparisons_by_initial_pp_load = _paired_group_comparison(
+            indexed["v2-full"],
+            indexed["mixed-full-v2"],
+            schedule_index,
+            "initial_pp_load_stratum",
+        )
+        cell_schedule_index = {
+            key: {
+                **row,
+                "conflict_load_cell": (
+                    f"{row['conflict_stratum']}__{row['initial_pp_load_stratum']}"
+                ),
+            }
+            for key, row in schedule_index.items()
+        }
+        comparisons_by_difficulty_cell = _paired_group_comparison(
+            indexed["v2-full"],
+            indexed["mixed-full-v2"],
+            cell_schedule_index,
+            "conflict_load_cell",
+        )
+    else:
+        comparisons_by_initial_pp_load = {}
+        comparisons_by_difficulty_cell = {}
     comparisons_by_map = _paired_group_comparison(
         indexed["v2-full"], indexed["mixed-full-v2"], schedule_index, "map_id"
     )
@@ -2058,6 +2597,7 @@ def analyze_scheduled(
         indexed["v2-full"], indexed["mixed-full-v2"], schedule_index, "agent_band"
     )
     maps_not_worse = sum(row["candidate_not_worse"] for row in comparisons_by_map.values())
+    map_not_worse_requirement = math.ceil(2 * len(comparisons_by_map) / 3)
     strata_not_worse = sum(
         row["candidate_not_worse"] for row in comparisons_by_stratum.values()
     )
@@ -2065,7 +2605,9 @@ def analyze_scheduled(
         "success_not_lower_than_v2": mixed["success_count"] >= original["success_count"],
         "ttf_improvement_at_least_5_percent": mixed_ttf_improvement >= 0.05,
         "auc_not_worse_than_2_percent": mixed_auc_change <= 0.02,
-        "at_least_8_of_12_maps_not_worse": maps_not_worse >= 8,
+        "at_least_two_thirds_maps_not_worse": (
+            maps_not_worse >= map_not_worse_requirement
+        ),
         "at_least_2_of_3_strata_not_worse": strata_not_worse >= 2,
         "map_bootstrap_no_significant_degradation": mixed_bootstrap[
             "improvement_95_ci"
@@ -2090,6 +2632,8 @@ def analyze_scheduled(
             ),
             "mixed_vs_v2_map_bootstrap": mixed_bootstrap,
             "mixed_vs_v2_by_stratum": comparisons_by_stratum,
+            "mixed_vs_v2_by_initial_pp_load": comparisons_by_initial_pp_load,
+            "mixed_vs_v2_by_difficulty_cell": comparisons_by_difficulty_cell,
             "mixed_vs_v2_by_map": comparisons_by_map,
             "mixed_vs_v2_by_source": comparisons_by_source,
             "mixed_vs_v2_by_agent_band": comparisons_by_agent_band,
@@ -2100,6 +2644,12 @@ def analyze_scheduled(
             "mismatches": integrity_errors,
         },
         "promotion_gate": gate,
+        "promotion_gate_counts": {
+            "maps_not_worse": maps_not_worse,
+            "map_not_worse_requirement": map_not_worse_requirement,
+            "map_count": len(comparisons_by_map),
+            "conflict_strata_not_worse": strata_not_worse,
+        },
         "decision": "mixed_full_candidate" if all(gate.values()) else "keep_v2_full",
         "note": (
             "Wall TTF includes reset, online control, and repair. Runtime and generated-node "
@@ -2121,9 +2671,13 @@ __all__ = [
     "collect_scheduled",
     "conflict_stratum",
     "initial_pp_load_stratum",
+    "materialize_compute_load_candidate_pool",
+    "materialize_qualified_compute_load_pool",
+    "materialize_registered_compute_load_cohort",
     "merge_datasets",
     "prepare_movingai_map_derived_dataset",
     "prepare_movingai_dataset",
     "select_balanced_cohort",
     "select_compute_load_balanced_cohort",
+    "verify_compute_load_cohort_registration",
 ]

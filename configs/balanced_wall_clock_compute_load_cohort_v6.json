@@ -1,0 +1,39 @@
+{
+  "schema": "lns2.compute_load_balanced_wall_clock_registration.v1",
+  "status": "preregistered_before_controller_collection",
+  "selection_blind_to_controller_outcomes": true,
+  "pool_registry": "configs/balanced_wall_clock_qualified_pool_v6.json",
+  "pool_registry_sha256": "dd9640f95756a8bd2b1832a98774a3e9f633dbc8b2c242a8a711d860729badf6",
+  "selection_config": "configs/balanced_wall_clock_difficulty_audit_v2.json",
+  "selection_config_sha256": "1f9981e9f1a27ce08b8db58ca72b49c5ad881eda6244de738c79d24b29df2cf0",
+  "merged_dataset_manifest": "build/initlns-v2-mixed-qualified-compute-load-pool-v6/balanced_wall_clock/manifest.jsonl",
+  "merged_dataset_manifest_sha256": "1340d31627e83121c8bb3bd889cad6508d803cfcdc28c7cf889445e166b5dfad",
+  "merged_qualification_manifest": "build/initlns-v2-mixed-qualified-compute-load-qualification-v6/qualification_manifest.jsonl",
+  "merged_qualification_manifest_sha256": "146f6a7b773a78f0ad433987e213d10e724119b62ce479578163a6a0ac6d352a",
+  "cohort": "build/initlns-v2-mixed-qualified-compute-load-cohort-v6/cohort.jsonl",
+  "cohort_sha256": "13793e1ce1916924e800747247bf07a801093c41823ea986cd8015baa666c18e",
+  "execution_schedule": "build/initlns-v2-mixed-qualified-compute-load-cohort-v6/execution_schedule.json",
+  "execution_schedule_sha256": "4ec4e9f8e84e117808dc8a4598e2fd664cb5f47c1439050aea23300d4788dab2",
+  "cohort_report": "build/initlns-v2-mixed-qualified-compute-load-cohort-v6/cohort_report.json",
+  "cohort_report_sha256": "4a424b8b74ec7e9dcee933fbbe93c02336df89c177516c41b0b3e036234a669c",
+  "formal_dataset_manifest": "build/initlns-v2-mixed-qualified-compute-load-formal-dataset-v6/balanced_wall_clock/manifest.jsonl",
+  "formal_dataset_manifest_sha256": "a967940a291be6b80e95b47dedec4cbf0b7889e3bef482b96b28f46b34781dfb",
+  "counts": {
+    "jobs": 36,
+    "tasks": 36,
+    "maps": 36,
+    "jobs_per_conflict_load_cell": 4,
+    "source": {"generated": 18, "movingai": 18},
+    "source_per_conflict_tier": {
+      "low": {"generated": 6, "movingai": 6},
+      "medium": {"generated": 6, "movingai": 6},
+      "high": {"generated": 6, "movingai": 6}
+    },
+    "source_per_initial_pp_load_tier": {
+      "low": {"generated": 4, "movingai": 8},
+      "medium": {"generated": 4, "movingai": 8},
+      "high": {"generated": 10, "movingai": 2}
+    }
+  },
+  "boundary": "The cohort used only initial PP conflict and generated-node qualification. No Adaptive, V2, or Mixed Full repair outcome was available during selection."
+}
