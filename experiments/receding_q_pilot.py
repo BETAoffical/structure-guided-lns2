@@ -1455,7 +1455,7 @@ def run_receding_q_label_pilot(
         project_root=PROJECT_ROOT,
         source_files=RECEDING_Q_PILOT_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
     )
     identity_fingerprint = _fingerprint(identity)
 

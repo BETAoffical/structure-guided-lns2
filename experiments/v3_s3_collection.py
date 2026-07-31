@@ -82,6 +82,8 @@ V3_S3_COLLECTION_PRODUCER_FILES = (
     "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
     "experiments/feature_schema_v3.py",
+    "experiments/neighborhood_candidates.py",
+    "experiments/neighborhood_features.py",
     "experiments/online_feature_engine.py",
     "experiments/parallel_runtime.py",
     "experiments/repair_aware.py",
@@ -1232,7 +1234,8 @@ def audit_v3_s3_parallelism(
         project_root=Path(__file__).resolve().parents[1],
         source_files=V3_S3_COLLECTION_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("joblib", "numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
     )
     audit_identity = {
         "schema": "lns2.v3_s3_parallelism_audit_run.v2",
@@ -3420,7 +3423,8 @@ def collect_v3_s3_data(
         project_root=Path(__file__).resolve().parents[1],
         source_files=V3_S3_COLLECTION_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("joblib", "numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
+        optional_package_names=("joblib",),
     )
     identity = {
         "schema": V3_S3_COLLECTION_SCHEMA,

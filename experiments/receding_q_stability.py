@@ -890,7 +890,7 @@ def run_receding_q_stability_followup(
         project_root=PROJECT_ROOT,
         source_files=RECEDING_Q_STABILITY_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
     )
     identity_fingerprint = _fingerprint(identity)
     for job in jobs:

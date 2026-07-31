@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
     episode_id as _episode_id,
     select_rows_by_task_id as _selected_rows,
     sha256_file as _sha256,
@@ -162,7 +163,7 @@ CONTROLLER_MODES = (
 )
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
-STOPPING_RULES = ("historical", "wall-clock")
+STOPPING_RULES = ("historical", "wall-clock", "wall-clock-fixed-metric")
 WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
 REPAIR_TIMING_SCHEMA_V1 = "lns2.repair_timing.v1"
 REPAIR_TIMING_SCHEMA_V2 = "lns2.repair_timing.v2"
@@ -266,7 +267,22 @@ def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
         import lns2_env
 
         native_path = Path(str(lns2_env.__file__)).resolve()
-        native_module = {"path": native_path.name, "sha256": _sha256(native_path)}
+        semantics_schema = str(
+            getattr(lns2_env, "native_semantics_schema", "")
+        )
+        if semantics_schema != NATIVE_SEMANTICS_SCHEMA:
+            raise RuntimeError(
+                "loaded lns2_env has unsupported native semantics schema: "
+                f"{semantics_schema or 'missing'}"
+            )
+        native_module = {
+            "path": native_path.name,
+            "sha256": _sha256(native_path),
+            "repair_timing_schema": str(
+                getattr(lns2_env, "repair_timing_schema", "")
+            ),
+            "native_semantics_schema": semantics_schema,
+        }
     except ImportError:
         pass
     return {
@@ -1239,7 +1255,16 @@ def pp_replay_random_seed(
     decision_index: int,
     route: str,
 ) -> int:
-    """Return a PP-only seed for deterministic cross-process trace replay."""
+    """Return a controller-independent PP seed for paired trace replay.
+
+    ``route`` remains in the public signature for backward-compatible callers,
+    but deliberately does not enter the seed.  At the same task, solver state,
+    and decision index, official Adaptive and learned selectors must therefore
+    give PP the same random stream; only the selected neighborhood may differ.
+    """
+
+    if not isinstance(route, str) or not route:
+        raise ValueError("PP replay route must be a non-empty string")
 
     return int(
         _fingerprint(
@@ -1249,7 +1274,6 @@ def pp_replay_random_seed(
                 "solver_seed": int(solver_seed),
                 "state_fingerprint": str(state_hash),
                 "decision_index": int(decision_index),
-                "route": str(route),
             }
         )[:16],
         16,
@@ -3990,22 +4014,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     external_timeout = True
                     break
                 if bool(job.get("deterministic_pp_replay", False)):
-                    # Explicit learned actions already seed immediately before
-                    # PP because they do not run native neighborhood
-                    # generation.  Preserve that behavior.  Official actions
-                    # need an independent seed because their neighborhood
-                    # generator consumes the process-global RNG first.
-                    action["pp_random_seed"] = (
-                        int(action["random_seed"])
-                        if action.get("mode") == "explicit_neighborhood"
-                        and int(action.get("random_seed", -1)) >= 0
-                        else pp_replay_random_seed(
-                            str(row["task_id"]),
-                            solver_seed,
-                            before_hash,
-                            decision_index,
-                            route,
-                        )
+                    # Pair the low-level PP stream across controller routes.
+                    # Official neighborhood generation still consumes its
+                    # upstream RNG stream before PP is reseeded; explicit
+                    # learned actions differ only in the selected agent set.
+                    action["pp_random_seed"] = pp_replay_random_seed(
+                        str(row["task_id"]),
+                        solver_seed,
+                        before_hash,
+                        decision_index,
+                        route,
                     )
                 if time.perf_counter() - started_wall >= wall_budget:
                     if (
@@ -4992,10 +5010,19 @@ def _with_stopping_rule(
         raise ValueError(f"unsupported stopping rule: {stopping_rule}")
     result = {**config, "environment": dict(config["environment"])}
     result["stopping_rule"] = stopping_rule
-    if stopping_rule == "wall-clock":
+    if stopping_rule in {"wall-clock", "wall-clock-fixed-metric"}:
         result["max_decisions"] = 0
-        result["metric_iteration_budget"] = None
         result["environment"]["max_repair_iterations"] = 0
+    if stopping_rule == "wall-clock":
+        result["metric_iteration_budget"] = None
+    elif stopping_rule == "wall-clock-fixed-metric":
+        metric_budget = result.get("metric_iteration_budget")
+        if type(metric_budget) is not int or metric_budget <= 0:
+            raise ValueError(
+                "wall-clock-fixed-metric requires a positive integer "
+                "metric_iteration_budget"
+            )
+        result["deterministic_pp_replay"] = True
     return result
 
 

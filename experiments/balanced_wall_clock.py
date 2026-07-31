@@ -1856,7 +1856,7 @@ def collect_scheduled(
                 verification_profile="deployment",
                 job_keys=keys,
                 cohort_job_keys=keys,
-                stopping_rule="historical",
+                stopping_rule="wall-clock-fixed-metric",
                 use_global_collection_lock=False,
             )
             if dry_run:

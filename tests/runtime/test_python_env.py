@@ -52,6 +52,10 @@ class RepairEnvironmentTests(unittest.TestCase):
             lns2_env.repair_timing_schema,
             "lns2.repair_timing.v2",
         )
+        self.assertEqual(
+            lns2_env.native_semantics_schema,
+            "lns2.native_semantics.upstream_compatible.v1",
+        )
 
     def test_portable_tree_supports_raw_and_sigmoid_outputs(self) -> None:
         trees = [
@@ -247,6 +251,32 @@ class RepairEnvironmentTests(unittest.TestCase):
                     str(tab_header_map),
                     scenario_path,
                     agent_count=1,
+                )
+
+            duplicate_start = Path(directory) / "duplicate-start.scen"
+            duplicate_start.write_text(
+                "2\n0,0,2,2\n0,0,2,1\n",
+                encoding="utf-8",
+            )
+            custom_map = Path(directory) / "custom.map"
+            custom_map.write_text("3,3\n...\n...\n...\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate start"):
+                lns2_env.LNS2RepairEnv(
+                    str(custom_map),
+                    str(duplicate_start),
+                    agent_count=2,
+                )
+
+            duplicate_goal = Path(directory) / "duplicate-goal.scen"
+            duplicate_goal.write_text(
+                "2\n0,0,2,2\n0,1,2,2\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate goal"):
+                lns2_env.LNS2RepairEnv(
+                    str(custom_map),
+                    str(duplicate_goal),
+                    agent_count=2,
                 )
 
     def test_constructor_accepts_crlf_instances(self) -> None:

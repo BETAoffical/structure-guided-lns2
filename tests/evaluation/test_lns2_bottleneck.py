@@ -1678,6 +1678,9 @@ class Lns2BottleneckTests(unittest.TestCase):
 
         current = types.ModuleType("lns2_env")
         current.repair_timing_schema = "lns2.repair_timing.v2"
+        current.native_semantics_schema = (
+            "lns2.native_semantics.upstream_compatible.v1"
+        )
         current.__file__ = "/tmp/lns2_env.so"
 
         class Environment:
@@ -1700,6 +1703,11 @@ class Lns2BottleneckTests(unittest.TestCase):
                 _require_native_timing_interface(require_optimized=True),
                 "/tmp/lns2_env.so",
             )
+
+        current.native_semantics_schema = "lns2.corrected_native.v1"
+        with patch.dict(sys.modules, {"lns2_env": current}):
+            with self.assertRaisesRegex(RuntimeError, "upstream-compatible"):
+                _require_native_timing_interface()
 
     def test_unpromoted_v3_requires_explicit_diagnostic_and_native_integrity(self) -> None:
         report = {

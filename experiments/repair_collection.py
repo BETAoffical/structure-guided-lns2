@@ -20,8 +20,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
     contained_file,
     episode_id as _episode_id,
+    producer_identity as _structured_producer_identity,
     read_jsonl as _read_jsonl,
 )
 from experiments.state_analysis import summarize_initial_state_complexity
@@ -94,31 +96,11 @@ def _repair_time_semantics() -> dict[str, Any]:
 
 
 def _producer_identity() -> dict[str, Any]:
-    files = {
-        relative: hashlib.sha256(
-            (PROJECT_ROOT / relative).read_bytes()
-        ).hexdigest()
-        for relative in REPAIR_COLLECTION_IMPLEMENTATION_FILES
-    }
-    native_module = None
-    try:
-        import lns2_env as module
-    except ImportError:
-        pass
-    else:
-        native_path = Path(str(module.__file__)).resolve()
-        native_module = {
-            "path": native_path.name,
-            "sha256": hashlib.sha256(native_path.read_bytes()).hexdigest(),
-            "repair_timing_schema": str(
-                getattr(module, "repair_timing_schema", "")
-            ),
-        }
-    return {
-        "name": "experiments.repair_collection",
-        "files": files,
-        "native_module": native_module,
-    }
+    return _structured_producer_identity(
+        project_root=PROJECT_ROOT,
+        source_files=REPAIR_COLLECTION_IMPLEMENTATION_FILES,
+        native_required=True,
+    )
 
 
 def _collection_identity() -> dict[str, Any]:
@@ -523,6 +505,15 @@ def _make_environment(
             "repair collection requires native timing schema "
             f"{NATIVE_REPAIR_TIMING_SCHEMA}; got "
             f"{native_timing_schema or 'missing'}"
+        )
+    native_semantics_schema = str(
+        getattr(module, "native_semantics_schema", "")
+    )
+    if native_semantics_schema != NATIVE_SEMANTICS_SCHEMA:
+        raise RuntimeError(
+            "repair collection requires native semantics schema "
+            f"{NATIVE_SEMANTICS_SCHEMA}; got "
+            f"{native_semantics_schema or 'missing'}"
         )
     split_root = Path(dataset_root) / str(row["split"])
     return module.LNS2RepairEnv(

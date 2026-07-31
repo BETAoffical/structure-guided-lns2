@@ -5,6 +5,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -147,6 +148,22 @@ void validateScenarioCell(const ValidatedMap& map, int row, int col,
         throw std::invalid_argument(label + " is an obstacle");
 }
 
+void validateUniqueScenarioEndpoint(
+    const ValidatedMap& map,
+    int row,
+    int col,
+    int agent,
+    const std::string& endpoint,
+    std::unordered_set<int>& used)
+{
+    const int location = row * map.cols + col;
+    if (!used.insert(location).second)
+        throw std::invalid_argument(
+            "scenario row " + std::to_string(agent) +
+            " has a duplicate " + endpoint + " location"
+        );
+}
+
 void validateScenarioFile(const std::string& path, int agent_count,
                           const ValidatedMap& map)
 {
@@ -159,6 +176,10 @@ void validateScenarioFile(const std::string& path, int agent_count,
     if (!std::getline(input, line))
         throw std::invalid_argument("scenario file is empty: " + path);
     stripTrailingCarriageReturn(line);
+    std::unordered_set<int> starts;
+    std::unordered_set<int> goals;
+    starts.reserve(static_cast<std::size_t>(agent_count));
+    goals.reserve(static_cast<std::size_t>(agent_count));
 
     if (map.moving_ai)
     {
@@ -195,6 +216,12 @@ void validateScenarioFile(const std::string& path, int agent_count,
             validateScenarioCell(
                 map, goal_row, goal_col,
                 "scenario row " + std::to_string(agent) + " goal"
+            );
+            validateUniqueScenarioEndpoint(
+                map, start_row, start_col, agent, "start", starts
+            );
+            validateUniqueScenarioEndpoint(
+                map, goal_row, goal_col, agent, "goal", goals
             );
         }
         return;
@@ -236,6 +263,12 @@ void validateScenarioFile(const std::string& path, int agent_count,
         validateScenarioCell(
             map, goal_row, goal_col,
             "scenario row " + std::to_string(agent) + " goal"
+        );
+        validateUniqueScenarioEndpoint(
+            map, start_row, start_col, agent, "start", starts
+        );
+        validateUniqueScenarioEndpoint(
+            map, goal_row, goal_col, agent, "goal", goals
         );
     }
 }

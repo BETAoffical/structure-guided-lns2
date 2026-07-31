@@ -172,6 +172,25 @@ def main() -> int:
             invalid_cutoff.stderr
         ), invalid_cutoff
 
+        invalid_seed = subprocess.run(
+            [
+                executable,
+                "--map",
+                map_path,
+                "--agents",
+                scenario_path,
+                "--agentNum",
+                "1",
+                "--seed",
+                "-1",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert invalid_seed.returncode == 2, invalid_seed
+        assert "seed must be non-negative" in invalid_seed.stderr, invalid_seed
+
         invalid_algorithm = subprocess.run(
             [
                 executable,

@@ -569,7 +569,7 @@ def run_stability_followup(
         project_root=PROJECT_ROOT,
         source_files=V3_VALUE_STABILITY_PRODUCER_FILES,
         native_required=True,
-        optional_package_names=("numpy", "scikit-learn"),
+        package_names=("numpy", "scikit-learn"),
     )
     identity_fingerprint = _fingerprint(identity)
     for job in jobs:

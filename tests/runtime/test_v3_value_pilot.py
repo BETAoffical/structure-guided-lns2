@@ -570,6 +570,9 @@ class V3ValueIntegrityTests(unittest.TestCase):
             fake_module = types.SimpleNamespace(
                 __file__=str(native),
                 repair_timing_schema="lns2.repair_timing.v2",
+                native_semantics_schema=(
+                    "lns2.native_semantics.upstream_compatible.v1"
+                ),
             )
             with mock.patch(
                 "experiments._common.importlib.metadata.version",

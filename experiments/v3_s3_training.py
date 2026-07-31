@@ -240,7 +240,8 @@ def v3_s3_native_audit_identity(
             project_root=resolved_project_root,
             source_files=V3_S3_NATIVE_AUDIT_PRODUCER_FILES,
             native_required=True,
-            optional_package_names=("joblib", "numpy", "scikit-learn"),
+            package_names=("numpy", "scikit-learn"),
+            optional_package_names=("joblib",),
         ),
         "runtime_platform": _runtime_platform_identity(),
     }

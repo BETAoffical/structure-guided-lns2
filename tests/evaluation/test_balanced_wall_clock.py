@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from experiments.balanced_wall_clock import (
     _four_neighbor_distances,
@@ -34,6 +35,55 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_formal_collection_uses_uncapped_fixed_metric_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            schedule_root = root / "schedule"
+            schedule_root.mkdir()
+            (schedule_root / "cohort_report.json").write_text(
+                json.dumps({"formal_collection_allowed": True}),
+                encoding="utf-8",
+            )
+            controller_order = [
+                "official_adaptive",
+                "v2-full",
+                "mixed-full-v2",
+            ]
+            entries = [
+                {
+                    "schedule_group": group,
+                    "controller_order": controller_order,
+                    "task_id": f"task-{group}",
+                    "solver_seed": group,
+                }
+                for group in range(6)
+            ]
+            (schedule_root / "execution_schedule.json").write_text(
+                json.dumps({"entries": entries}),
+                encoding="utf-8",
+            )
+            with patch(
+                "experiments.balanced_wall_clock.run_closed_loop_collection",
+                return_value={"dry_run": True},
+            ) as run:
+                collect_scheduled(
+                    dataset=root / "dataset",
+                    config=root / "config.json",
+                    qualification=root / "qualification",
+                    schedule_root=schedule_root,
+                    output=root / "output",
+                    original_bundle=root / "v2",
+                    mixed_bundle=root / "mixed",
+                    resume=False,
+                    dry_run=True,
+                )
+            self.assertEqual(run.call_count, 18)
+            for call in run.call_args_list:
+                self.assertEqual(
+                    call.kwargs["stopping_rule"],
+                    "wall-clock-fixed-metric",
+                )
+
     def test_success_only_ttf_excludes_failures_from_pairs(self) -> None:
         def successful(value: float) -> dict[str, object]:
             return {

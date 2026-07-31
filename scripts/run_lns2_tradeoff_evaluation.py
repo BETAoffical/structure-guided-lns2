@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 if NATIVE_BUILD.is_dir():
     sys.path.insert(0, str(NATIVE_BUILD))
 
-from experiments._common import sha256_file  # noqa: E402
+from experiments._common import NATIVE_SEMANTICS_SCHEMA, sha256_file  # noqa: E402
 from experiments.closed_loop_confirmation import (  # noqa: E402
     REPAIR_TIMING_SCHEMA,
     run_closed_loop_collection,
@@ -460,6 +460,15 @@ def _require_native_timing_interface(*, require_optimized: bool = False) -> str:
         raise RuntimeError(
             "lns2_env is stale and lacks repair timing schema "
             f"{REPAIR_TIMING_SCHEMA}; rebuild build/linux/project"
+        )
+    if (
+        str(getattr(lns2_env, "native_semantics_schema", ""))
+        != NATIVE_SEMANTICS_SCHEMA
+    ):
+        raise RuntimeError(
+            "lns2_env does not provide the required upstream-compatible native "
+            f"semantics schema {NATIVE_SEMANTICS_SCHEMA}; rebuild "
+            "build/linux/project from the official-native selector branch"
         )
     if not callable(
         getattr(

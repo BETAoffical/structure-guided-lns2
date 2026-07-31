@@ -9,7 +9,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from experiments._common import contained_file, producer_identity
+from experiments._common import (
+    NATIVE_SEMANTICS_SCHEMA,
+    contained_file,
+    producer_identity,
+    validate_producer_identity,
+)
 from experiments.run_output_guard import prepare_run_output
 
 
@@ -79,6 +84,7 @@ class ProducerIdentityResumeTest(unittest.TestCase):
             module = types.SimpleNamespace(
                 __file__=str(native),
                 repair_timing_schema="lns2.repair_timing.v2",
+                native_semantics_schema=NATIVE_SEMANTICS_SCHEMA,
             )
 
             def identity(*, sklearn: str = "2") -> dict:
@@ -133,6 +139,38 @@ class ProducerIdentityResumeTest(unittest.TestCase):
                         },
                     )
                 self.assertEqual(config_path.read_bytes(), before)
+
+    def test_native_semantics_schema_is_required_and_strict(self) -> None:
+        identity = {
+            "schema": "lns2.producer_identity.v2",
+            "source_sha256": {"producer.py": "0" * 64},
+            "python": {"implementation": "CPython", "version": "3.10.0"},
+            "packages": {},
+            "native_required": True,
+            "native": {
+                "path": "lns2_env.so",
+                "sha256": "1" * 64,
+                "repair_timing_schema": "lns2.repair_timing.v2",
+                "native_semantics_schema": NATIVE_SEMANTICS_SCHEMA,
+            },
+        }
+        self.assertEqual(
+            validate_producer_identity(identity, native_required=True),
+            identity,
+        )
+        missing = {
+            **identity,
+            "native": {
+                key: value
+                for key, value in identity["native"].items()
+                if key != "native_semantics_schema"
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "semantics schema"):
+            validate_producer_identity(missing, native_required=True)
+        coerced = {**identity, "native_required": 1}
+        with self.assertRaisesRegex(ValueError, "native-required"):
+            validate_producer_identity(coerced, native_required=True)
 
 
 if __name__ == "__main__":

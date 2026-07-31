@@ -31,6 +31,9 @@ class EnvironmentCheckTests(unittest.TestCase):
     def test_runtime_profile_requires_native_timing_schema_v2(self) -> None:
         module = types.SimpleNamespace(
             repair_timing_schema="lns2.repair_timing.v2",
+            native_semantics_schema=(
+                "lns2.native_semantics.upstream_compatible.v1"
+            ),
             __file__="/tmp/lns2_env.so",
             LNS2RepairEnv=type(
                 "Environment",
@@ -60,6 +63,12 @@ class EnvironmentCheckTests(unittest.TestCase):
         )
         self.assertTrue(timing["passed"])
         self.assertEqual(timing["expected"], "lns2.repair_timing.v2")
+        semantics = next(
+            row
+            for row in report["checks"]
+            if row["name"] == "lns2_env:native-semantics-schema"
+        )
+        self.assertTrue(semantics["passed"])
 
 
 if __name__ == "__main__":

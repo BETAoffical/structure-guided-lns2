@@ -25,10 +25,12 @@ from experiments.closed_loop_confirmation import (
     closed_loop_qualification_report,
     configured_policies,
     configured_solver_seeds,
+    controller_implementation_fingerprint,
     feature_range_diagnostic,
     fixed_budget_conflict_auc,
     generate_online_candidates,
     online_candidate_rows,
+    pp_replay_random_seed,
     proposal_random_seed,
     proposal_random_seeds,
     repair_random_seed,
@@ -506,6 +508,44 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(updated["max_decisions"], 0)
         self.assertIsNone(updated["metric_iteration_budget"])
         self.assertEqual(source["environment"]["max_repair_iterations"], 100)
+
+    def test_wall_clock_fixed_metric_keeps_only_the_metric_window(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "max_decisions": 100,
+            "metric_iteration_budget": 100,
+            "deterministic_pp_replay": False,
+        }
+        updated = _with_stopping_rule(source, "wall-clock-fixed-metric")
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 0)
+        self.assertEqual(updated["max_decisions"], 0)
+        self.assertEqual(updated["metric_iteration_budget"], 100)
+        self.assertTrue(updated["deterministic_pp_replay"])
+        self.assertEqual(source["environment"]["max_repair_iterations"], 100)
+        self.assertFalse(source["deterministic_pp_replay"])
+
+    def test_paired_pp_replay_seed_is_controller_independent(self) -> None:
+        arguments = ("task", 17, "state", 3)
+        official = pp_replay_random_seed(*arguments, "official_adaptive")
+        learned = pp_replay_random_seed(*arguments, "model")
+        self.assertEqual(official, learned)
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            pp_replay_random_seed(*arguments, "")
+
+    def test_controller_identity_rejects_corrected_native_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            native = Path(temporary) / "lns2_env.so"
+            native.write_bytes(b"corrected-native")
+            module = SimpleNamespace(
+                __file__=str(native),
+                repair_timing_schema="lns2.repair_timing.v2",
+                native_semantics_schema="lns2.corrected_native.v1",
+            )
+            with patch.dict("sys.modules", {"lns2_env": module}):
+                with self.assertRaisesRegex(RuntimeError, "unsupported"):
+                    controller_implementation_fingerprint(
+                        Path(__file__).resolve().parents[2]
+                    )
 
     def test_wall_clock_auc_ignores_an_after_state_beyond_the_deadline(self) -> None:
         # 10 conflicts for two seconds, 6 conflicts until the five-second

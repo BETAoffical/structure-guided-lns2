@@ -20,6 +20,7 @@ TRAINING_VERSIONS = {
     "threadpoolctl": "3.5.0",
     "pytest": "6.2.5",
 }
+NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.upstream_compatible.v1"
 
 
 def _check(
@@ -118,6 +119,19 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
         expected="lns2.repair_timing.v2",
         observed=timing_schema,
         detail="Rebuild build/linux/project before running the bottleneck evaluation.",
+    )
+    semantics_schema = (
+        str(getattr(module, "native_semantics_schema", ""))
+        if module is not None
+        else None
+    )
+    _check(
+        rows,
+        "lns2_env:native-semantics-schema",
+        semantics_schema == NATIVE_SEMANTICS_SCHEMA,
+        expected=NATIVE_SEMANTICS_SCHEMA,
+        observed=semantics_schema,
+        detail="Rebuild the project native module before running experiments.",
     )
     reset_timing_method = (
         getattr(getattr(module, "LNS2RepairEnv", object), "get_last_reset_timings", None)
