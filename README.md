@@ -1,318 +1,126 @@
 # Structure-Guided LNS2
 
-This repository runs the official MAPF-LNS2 feasibility solver and two frozen
-high-level neighborhood controllers. The active research result is deliberately
-narrow:
+This repository evaluates neighborhood selectors around an official-behavior
+MAPF-LNS2 native solver boundary. The active branch deliberately contains only
+four controller identities:
 
-> A controller using the current conflict state and a realized agent neighborhood
-> generalizes on unseen maps from the same synthetic layout families. On standard
-> MovingAI layouts it showed a positive signal, but missed the preregistered 5%
-> conflict-AUC threshold.
+- `official_adaptive`: native LNS2 Adaptive neighborhood selection.
+- `v2-full`: the frozen full-load pairwise selector.
+- `mixed-full-v2`: the retained mixed-load v2 bundle.
+- `v3-s3`: the sequence-aware S3 controller; runnable, but not promoted as the
+  default quality controller.
 
-Static map, OD, and density context has not shown reliable incremental value. RL is
-not part of the active runtime.
+LNS2 is the solver. V2 and V3-S3 are selector policies inside that solver, so
+they are organized under one layered package instead of parallel version trees.
 
-## Active Layout
+## Layout
 
-| Path | Purpose |
-| --- | --- |
-| `src/`, `include/` | C++ wrapper, observer, native feature engine, and bindings. |
-| `experiments/` | Active collection, inference, trace, and evaluation runtime. |
-| `generators/` | Synthetic maps and static OD task generation. |
-| `scripts/` | Supported command-line entry points. |
-| `configs/` | Active datasets, collection protocols, and maintenance settings. |
-| `docs/` | Current operation guides and frozen research conclusions. |
-| `tests/` | Runtime, data, evaluation, and maintenance regression tests. |
-| `artifacts/` | Frozen v1/v2 controllers and compact evidence; hidden in Explorer. |
-| `third_party/` | Pinned MAPF-LNS2 and GPBS sources; hidden in Explorer. |
-| `build/` | Local datasets, traces, environments, and build products; ignored by Git and hidden. |
+```text
+lns2_selector/
+  solver/          native solver boundary
+  runtime/         contracts, metrics, fingerprints, portable inference
+  controllers/     official, v2, mixed-v2, v3-s3 adapters
+  training/        shared retained training utilities
+  evaluation/      wall-clock evaluation entry points
+  compatibility/   read-only historical metric support
+experiments/        retained collection, training, and audit implementations
+scripts/            thin command-line entry points
+tests/              solver, runtime, controller, evaluation, integration tests
+third_party/mapf_lns2/
+                    upstream native source boundary
+```
 
-Historical experiments were removed from the active branch. They remain available
-from Git tag `pre-minimal-runtime-2026-07-20`.
+The retention rules and per-file classification are recorded in
+`docs/RETENTION_POLICY.md` and `configs/retention_manifest.json`.
 
-## Controllers
+## Environment
 
-- `v1-full`: frozen portable pairwise GBDT using `realized_dynamic` features.
-- `v2-full`: exactly equivalent action selection with accelerated feature and tree inference.
-- `v2-stall-safe`: v2 plus the registered stall guard.
-- `v2-stall-shadow`: diagnostic-only conservative stall detection. It always
-  executes the frozen v2 action and cannot enable recovery.
-- `v2-repair-aware`: experimental v2 rescue controller. It preserves the first
-  v2 decision on every repair-relevant state, then reuses the unchanged-state
-  candidate pool and consults policy-train-only repairability/cost models after
-  PP makes no structural progress.
-- Official baselines: `Adaptive`, `Target`, `Collision`, and `Random`.
+The verified Linux environment is Ubuntu 22.04 under WSL2. From Windows, target
+the existing distribution and checkout explicitly:
 
-The removed `v2-balanced`, `v2-cascade`, and proposal-pruner variants did not earn
-promotion and are not supported by active CLIs.
+```powershell
+wsl.exe -d Ubuntu-22.04 --cd /home/beta/LNS2-RL -- /usr/bin/python3 scripts/check_environment.py --profile runtime-wsl
+```
 
-## Build
+An empty WSL distribution list observed from a restricted sandbox is a known
+false negative. Do not reinstall or register another distribution in response.
 
-The normal build includes the official solver, repair wrapper, GPBS runner, Python
-environment, and native feature extension:
+## Build and test
+
+Run native build and tests in the existing WSL checkout:
 
 ```bash
 cmake -S . -B build/linux/project -DCMAKE_BUILD_TYPE=Release
-cmake --build build/linux/project -j4
+cmake --build build/linux/project -j
 ctest --test-dir build/linux/project --output-on-failure
+/usr/bin/python3 -m pytest -q
 ```
 
-Build only the online feature module with:
+The repository hygiene audit is read-only:
 
 ```bash
-cmake -S . -B build/native-features -DLNS2_FEATURES_ONLY=ON
-cmake --build build/native-features -j4
-ctest --test-dir build/native-features --output-on-failure
+/usr/bin/python3 scripts/audit_repository_hygiene.py \
+  --config configs/repository_hygiene.json
 ```
 
-The WSL policy-training environment is pinned by
-`requirements-policy-training-wsl.lock`. Environment inspection is read-only:
+## Wall-clock evaluation
+
+New evaluations use the complete deadline window. They do not stop at 100
+repairs and do not use the historical 100-repair AUC for promotion.
 
 ```bash
-python scripts/check_environment.py --profile runtime-wsl
-```
-
-## Common Commands
-
-Generate or inspect data:
-
-```bash
-python scripts/generate_dataset.py --help
-python scripts/inspect_dataset.py --help
-```
-
-Collect or analyze closed-loop runs:
-
-```bash
-python scripts/collect_closed_loop_confirmation.py --help
-python scripts/analyze_closed_loop_confirmation.py --help
-python scripts/run_lns2_tradeoff_evaluation.py --help
-```
-
-Train and diagnose the experimental repair-aware controller without replacing
-the frozen v2 ranker:
-
-```bash
-python3 scripts/run_high_load_rescue_pipeline.py \
-  --mode pilot \
-  --output build/initlns-high-load-rescue-pilot-v1
-python scripts/run_lns2_tradeoff_evaluation.py \
+/usr/bin/python3 scripts/run_lns2_tradeoff_evaluation.py \
   --mode quick \
   --evaluation-tracks wall-clock \
-  --controllers official_adaptive,v2-full,v2-stall-safe,v2-repair-aware \
-  --repair-aware-bundle build/initlns-high-load-rescue-full-v1/controller \
-  --skip-wall-clock-sensitivity \
-  --output build/initlns-v2-repair-aware-quick-v1
+  --controllers official_adaptive,v2-full \
+  --wall-clock-seconds 300 \
+  --output build/selector-wall-clock-quick-v1
 ```
 
-Train the isolated Horizon-3 cost-aware pilot from the registered 180-state
-high-load source without starting quick or formal evaluation:
+Optional retained controllers can be included explicitly:
 
 ```bash
-python3 scripts/run_v3_training_pipeline.py \
-  --mode horizon-pilot \
-  --source build/initlns-v3-pilot-v1 \
-  --output build/initlns-v3-horizon-pilot-v1 \
-  --horizon 3 \
-  --workers 4
-```
-
-The independent mixed-load successor is `v3-S3`. It trains from fresh
-80/100/200/400/600-agent synthetic maps, plans three v3 actions jointly, and
-has no runtime call to v2 or Adaptive. Run it in three resumable stages because
-collection/native validation require WSL while tree training uses the Windows
-training environment:
-
-```bash
-# WSL: fresh sources, lane audit, 375-state paired S3 collection
-python3 scripts/run_v3_training_pipeline.py \
-  --mode sequence-pilot \
-  --stage collect \
-  --workers auto \
-  --parallelism-audit \
-  --output build/initlns-v3-s3-mixed-load-pilot-v1
-
-# Windows: nested map-group OOF, feature selection, HGB/ExtraTrees training
-python scripts/run_v3_training_pipeline.py `
-  --mode sequence-pilot `
-  --stage train `
-  --training-jobs auto `
-  --output build/initlns-v3-s3-mixed-load-pilot-v1
-
-# WSL: native/Python parity, native latency, and final pilot gate
-python3 scripts/run_v3_training_pipeline.py \
-  --mode sequence-pilot \
-  --stage native-audit \
-  --output build/initlns-v3-s3-mixed-load-pilot-v1
-```
-
-This pilot always stops after its final report. It never starts full data
-collection, quick, formal, or changes the default `v2-full` controller.
-
-Current V3 status is deliberately split into two meanings of "latest":
-
-- `v3-S3` is the latest runnable V3 controller, but its mixed-load pilot did
-  not pass promotion and it is not the default.
-- receding-Q is the newer V3 research chain. It currently produces and audits
-  labels only; it has not produced a deployable controller.
-- V2 and official Adaptive remain collection sources and external baselines in
-  these studies. Neither is called by the `v3-S3` online selector.
-
-New sequence/value/receding-Q runs bind their complete producer identity,
-including semantic source files, Python and training-library versions, and the
-actual loaded `lns2_env` binary/timing schema. Legacy-schema outputs and bundles
-remain readable historical evidence, but must not be resumed with the upgraded
-collectors. Use a new output directory after any schema, producer, native
-binary, controller-input, or platform identity change.
-
-If that pilot passes, a timing-qualified parallel quick can run different
-task/seed cohorts on isolated physical cores while keeping LNS2, v2, and v3-H3
-serial within each cohort. The audit automatically reduces 4 lanes to 3, 2, or
-strict single-worker execution when timing isolation is not adequate:
-
-```bash
-python3 scripts/run_lns2_tradeoff_evaluation.py \
+/usr/bin/python3 scripts/run_lns2_tradeoff_evaluation.py \
   --mode quick \
   --evaluation-tracks wall-clock \
-  --controllers official_adaptive,v2-full,v3-h3 \
-  --v3-bundle build/initlns-v3-horizon-pilot-v1/controller \
-  --paired-execution isolated-parallel \
-  --parallel-lanes auto \
-  --parallelism-audit \
-  --skip-wall-clock-sensitivity \
-  --output build/initlns-v3-h3-tradeoff-quick-v1
+  --controllers official_adaptive,v2-full,mixed-full-v2,v3-s3 \
+  --v3-bundle build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller \
+  --wall-clock-seconds 300 \
+  --output build/selector-four-controller-quick-v1
 ```
 
-The completed 60-state high-load pilot kept size 12 as exploratory evidence but
-did not promote it for runtime use. Its stronger OOF plus diagnostic result did
-not pass, so the active next step is an offline 4/8/16 rescue-order audit rather
-than the 800/200 full collection:
+Reports include success rate, time to feasible, final conflicts, repair rounds,
+full wall-clock conflict AUC, PP time, neighborhood-selection time, and timing
+closure checks.
+
+## V3-S3 collection and training
+
+The retained pipeline has four stages: source generation, collection, training,
+and native audit.
 
 ```bash
-python scripts/audit_rescue_policies.py \
-  --source build/initlns-high-load-rescue-pilot-dense-v2 \
-  --output build/initlns-rescue-policy-audit-v1
+/usr/bin/python3 scripts/run_v3_training_pipeline.py source \
+  --config <dataset-config> --output <pipeline-output>
+/usr/bin/python3 scripts/run_v3_training_pipeline.py collect \
+  --config <dataset-config> --output <pipeline-output> --resume
+/usr/bin/python3 scripts/run_v3_training_pipeline.py train \
+  --config <dataset-config> --output <pipeline-output> --resume
+/usr/bin/python3 scripts/run_v3_training_pipeline.py native-audit \
+  --config <dataset-config> --output <pipeline-output> --resume
 ```
 
-This command reuses paired pilot outcomes and never starts the solver. Because
-the v1 trial schema did not store after-state fingerprints, promotion must pass
-under both documented state-change bounds. The exposed 12-state validation
-split is diagnostic only and cannot be reused as a new locked validation set.
+Producer identity binds direct source dependencies, the loaded native binary,
+native timing schema, Python, and key training libraries. A changed identity
+cannot resume into an existing current-schema output.
 
-Confirm the frozen `4>8>Adaptive` rescue order on fresh synthetic maps with
-exact before/after repair fingerprints:
+## Historical results
 
-```bash
-python3 scripts/run_rescue_lite_confirmation.py \
-  --output build/initlns-rescue-lite-confirmation-v1 \
-  --workers 4
-```
+Retired value/receding-Q and old stall/rescue/V3 execution chains are not active
+code. Their decisions, configurations, and hashes are frozen under
+`artifacts/initlns-receding-q-frozen-v1` and documented in
+`docs/RETIRED_RESEARCH_EVIDENCE.md`.
 
-The confirmation targets 30 balanced 400/600-agent states and four paired PP
-seeds. If the two pre-registered task waves cannot supply every layout/agent
-cell, it reports `insufficient_confirmation_states` and stops before branch
-trials. It does not register a runtime controller or start quick/formal/v3 work.
-
-When ordinary random tasks are too easy to supply those states, qualify stress
-recipes on separate maps before opening a new locked confirmation set:
-
-```bash
-python3 scripts/qualify_rescue_confirmation_data.py \
-  --output build/initlns-rescue-confirmation-qualification-v2 --workers 4
-
-python3 scripts/run_locked_rescue_confirmation.py \
-  --output build/initlns-rescue-lite-locked-confirmation-v1 --workers 4
-```
-
-The first command may inspect only source no-progress yield and freezes one task
-recipe per layout/agent cell. The second command pins that report by SHA256 and
-uses disjoint maps. A source-coverage shortfall stops before candidate replay or
-paired PP trials; quotas must not be relaxed after seeing the locked set.
-
-If a locked set stops for a small coverage shortfall, a balanced same-state
-diagnostic may be run without relaxing the locked confirmation gate:
-
-```bash
-python3 scripts/run_rescue_lite_balanced_diagnostic.py \
-  --source build/initlns-rescue-lite-locked-confirmation-v1 \
-  --output build/initlns-rescue-lite-balanced-diagnostic-v1 \
-  --workers 4
-```
-
-This diagnostic uses four states from each layout/agent cell and four paired PP
-seeds. It is explicitly not promotion eligible, does not run complete episodes,
-and cannot change the default controller. Its repair-only result may decide
-whether rescue research is worth continuing, but cannot substitute for a new
-independent locked confirmation or quick evaluation.
-
-The pre-registered independent v2 confirmation uses eight new maps/tasks per
-cell while retaining the frozen recipes and five-state gate:
-
-```bash
-python3 scripts/run_locked_rescue_confirmation.py \
-  --output build/initlns-rescue-lite-locked-confirmation-v2 \
-  --dataset-config configs/rescue_lite_locked_confirmation_dataset_v2.json \
-  --expected-tasks-per-cell 8 \
-  --reference-dataset build/initlns-rescue-lite-locked-confirmation-v1/dataset \
-  --workers 4
-```
-
-Its master seed and task capacity are committed before execution. It must stop
-again if any cell cannot provide five valid states; no task may be appended
-after source outcomes are observed.
-
-The completed v2 run passed coverage and fingerprint checks but returned
-`inconclusive_collect_more`. The frozen `4>8>Adaptive` order improved aggregate
-escape and efficiency over Adaptive, yet only three of six cells were
-efficiency-noninferior and eight alternative fixed orders dominated it on the
-aggregate gate. No rescue controller was promoted and `v2-full` remains the
-default.
-
-Audit a deliberately shallow state-conditioned selector across both completed
-confirmation sets from the Windows training profile (no solver execution):
-
-```bash
-python scripts/audit_state_conditioned_rescue.py \
-  --output build/initlns-state-conditioned-rescue-audit-v1
-```
-
-The audit uses leave-one-confirmation-set-out transfer plus map-group OOF. It is
-design-only and cannot promote a controller; WSL runtime does not need the
-scikit-learn training dependency.
-
-The high-load auxiliary trainer uses synthetic 400/600-agent `policy_train` for
-fitting and four-fold map-group calibration. MovingAI OOD/formal results are
-never training inputs. The frozen v2 main ranker remains unchanged. See
-[`docs/V2_REPAIR_AWARE.md`](docs/V2_REPAIR_AWARE.md).
-
-Verify the frozen evidence chain:
-
-```bash
-python scripts/consolidate_research_results.py \
-  --config configs/result_consolidation.json --verify-build
-```
-
-Audit repository ownership without deleting anything:
-
-```bash
-python scripts/audit_repository_hygiene.py --check
-```
-
-## Results And Boundaries
-
-The canonical Chinese report is
-[`docs/INITLNS_RESEARCH_REPORT_ZH.md`](docs/INITLNS_RESEARCH_REPORT_ZH.md). The
-MovingAI protocol and current operational interface are documented in
-[`docs/MOVINGAI_OOD_CLOSED_LOOP.md`](docs/MOVINGAI_OOD_CLOSED_LOOP.md) and
-[`docs/TRACE_AND_POLICY_API.md`](docs/TRACE_AND_POLICY_API.md).
-
-The 24 frozen evidence entries preserve passed, failed, exploratory, and
-insufficient-evidence outcomes. Links to removed historical implementation notes
-point to the safety tag rather than to files in this branch.
-
-## Upstream And License
-
-`third_party/mapf_lns2` is pinned to official MAPF-LNS2 commit
-`1369823985a15944f9a339226d521f61605a6d17`. Upstream license and source notices are
-preserved in the third-party tree. The wrapper keeps official RNG behavior when no
-custom action seed is supplied; parity is guarded by the registered SHA256.
+Historical source remains recoverable from the remote cleanup checkpoints,
+starting with `backup/selector-cleanup-00-original`. Historical 100-repair AUC
+is retained only in `lns2_selector.compatibility` for reading registered old
+reports.

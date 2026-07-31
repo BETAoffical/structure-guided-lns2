@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import csv
 import html
-import itertools
 import json
 import math
-import random
 import statistics
 import tempfile
 from collections import Counter, defaultdict
@@ -33,25 +31,24 @@ from experiments.repair_collection import (
 )
 
 
-REPORT_SCHEMA = "lns2.v2_bottleneck_diagnostic.v2"
-CONTROLLERS = ("official_adaptive", "v2-full")
+REPORT_SCHEMA = "lns2.selector_bottleneck.v3"
+CONTROLLERS = (
+    "official_adaptive",
+    "v2-full",
+    "mixed-full-v2",
+    "v3-s3",
+)
 LABELS = {
     "official_adaptive": "Original LNS2 Adaptive",
     "v2-full": "Optimized model (v2)",
-    "v2-stall-shadow": "Optimized model (v2 stall shadow)",
-    "v2-stall-safe": "Optimized model (v2 stall-safe)",
-    "v2-repair-aware": "Optimized model (v2 repair-aware)",
-    "v3-full": "Cost-aware model (v3)",
-    "v3-h3": "Horizon-3 cost-aware model (v3-H3)",
+    "mixed-full-v2": "Mixed-load model (v2)",
+    "v3-s3": "Sequence-aware model (v3-S3)",
 }
 CONTROLLER_COLORS = {
     "official_adaptive": "#4c78a8",
     "v2-full": "#f58518",
-    "v2-stall-shadow": "#72b7b2",
-    "v2-stall-safe": "#54a24b",
-    "v2-repair-aware": "#b279a2",
-    "v3-full": "#e45756",
-    "v3-h3": "#e45756",
+    "mixed-full-v2": "#54a24b",
+    "v3-s3": "#e45756",
 }
 TIMING_FIELDS = (
     "native_step_seconds",
@@ -64,10 +61,7 @@ TIMING_FIELDS = (
     "proposal_feature_seconds",
     "realized_feature_seconds",
     "ranking_inference_seconds",
-    "stall_guard_seconds",
-    "stall_shadow_seconds",
-    "repair_aware_seconds",
-    "v3_seconds",
+    "v3_s3_seconds",
     "selection_residual_seconds",
     "pp_replan_seconds",
     "repair_bookkeeping_seconds",
@@ -430,11 +424,7 @@ def _iteration_row(
     timings = dict(event.get("timings") or {})
     low = dict(event.get("low_level_delta") or {})
     controller_data = dict(event.get("controller") or {})
-    proposal = dict(controller_data.get("proposal") or {})
-    guard = dict(controller_data.get("stall_guard") or {})
-    stall_shadow = dict(controller_data.get("stall_shadow") or {})
-    repair_aware = dict(controller_data.get("repair_aware") or {})
-    v3 = dict(controller_data.get("v3") or {})
+    v3_s3 = dict(controller_data.get("v3_s3") or {})
     neighborhood = list(metrics.get("neighborhood") or [])
     conflicts_before = int(metrics.get("conflicts_before", 0))
     conflicts_after = int(metrics.get("conflicts_after", conflicts_before))
@@ -485,80 +475,15 @@ def _iteration_row(
             _fingerprint(ranking) if ranking else None
         ),
         "actual_neighborhood_fingerprint": _fingerprint(sorted(map(int, neighborhood))),
-        "stall_guard_active_size_cap": guard.get("active_size_cap"),
-        "stall_guard_state_anchor_fingerprint": guard.get(
-            "state_anchor_fingerprint"
+        "repair_outcome": v3_s3.get("repair_outcome"),
+        "v3_s3_selection_kind": v3_s3.get("selection_kind"),
+        "v3_s3_template_id": v3_s3.get("template_id"),
+        "v3_s3_continuation_expected": v3_s3.get(
+            "continuation_expected"
         ),
-        "stall_guard_base_candidate_id": guard.get("base_selected_candidate_id"),
-        "stall_guard_effective_candidate_id": guard.get(
-            "effective_selected_candidate_id"
+        "v3_s3_cache_hit": bool(
+            controller_data.get("v3_s3_cache_hit", False)
         ),
-        "stall_guard_base_selection_preserved": guard.get(
-            "base_selection_preserved"
-        ),
-        "stall_guard_stagnant_attempt": guard.get("stagnant_attempt"),
-        "stall_guard_backoff_triggered": guard.get("backoff_triggered"),
-        "stall_guard_fallback_reason": guard.get("fallback_reason"),
-        "stall_shadow_repair_outcome": stall_shadow.get("repair_outcome"),
-        "stall_shadow_action_preserved": stall_shadow.get("action_preserved"),
-        "stall_shadow_unchanged_attempt_count": stall_shadow.get(
-            "unchanged_attempt_count_after"
-        ),
-        "stall_shadow_distinct_pp_attempt_count": stall_shadow.get(
-            "distinct_pp_attempt_count_after"
-        ),
-        "stall_shadow_triggered_thresholds": json.dumps(
-            stall_shadow.get("triggered_thresholds", []),
-            separators=(",", ":"),
-        ),
-        "repair_outcome": repair_aware.get(
-            "repair_outcome", v3.get("repair_outcome")
-        ),
-        "repair_aware_selection_kind": repair_aware.get("selection_kind"),
-        "repair_aware_state_anchor_fingerprint": repair_aware.get(
-            "state_anchor_fingerprint"
-        ),
-        "repair_aware_base_candidate_id": repair_aware.get(
-            "base_selected_candidate_id"
-        ),
-        "repair_aware_effective_candidate_id": repair_aware.get(
-            "effective_selected_candidate_id"
-        ),
-        "repair_aware_shadow_candidate_id": repair_aware.get(
-            "shadow_selected_candidate_id"
-        ),
-        "repair_aware_base_selection_preserved": repair_aware.get(
-            "base_selection_preserved"
-        ),
-        "repair_aware_cache_hit": bool(
-            controller_data.get("repair_aware_cache_hit", False)
-        ),
-        "repair_aware_no_progress": repair_aware.get("no_progress"),
-        "repair_aware_failed_candidate_count": repair_aware.get(
-            "failed_candidate_count_after"
-        ),
-        "repair_aware_rescue_attempts": repair_aware.get(
-            "rescue_attempts_after"
-        ),
-        "repair_aware_adaptive_fallback_active": repair_aware.get(
-            "adaptive_fallback_active"
-        ),
-        "repair_aware_lazy_candidate_count": int(
-            proposal.get("lazy_candidate_count", 0)
-        ),
-        "repair_aware_lazy_generation_seconds": float(
-            proposal.get("lazy_generation_seconds", 0.0)
-        ),
-        "v3_selection_kind": v3.get("selection_kind"),
-        "v3_state_anchor_fingerprint": v3.get("state_anchor_fingerprint"),
-        "v3_effective_candidate_id": v3.get("effective_selected_candidate_id"),
-        "v3_cache_hit": bool(controller_data.get("v3_cache_hit", False)),
-        "v3_no_progress": v3.get("no_progress"),
-        "v3_failed_candidate_count": v3.get("failed_candidate_count_after"),
-        "v3_blacklisted_neighborhood_count": v3.get(
-            "blacklisted_neighborhood_count_after"
-        ),
-        "v3_adaptive_fallback_active": v3.get("adaptive_fallback_active"),
         "low_level_expanded": int(low.get("expanded", 0)),
         "low_level_generated": int(low.get("generated", 0)),
         "low_level_reopened": int(low.get("reopened", 0)),
@@ -595,11 +520,7 @@ def _episode_row(
     reset = dict(summary.get("reset_timings") or {})
     finalization = dict(source.get("episode_finalization_timings") or {})
     budget_low_level = dict(summary.get("budget_final_low_level") or {})
-    stall_guard = dict(summary.get("stall_guard") or {})
-    stall_shadow = dict(summary.get("stall_shadow") or {})
-    repair_aware = dict(summary.get("repair_aware") or {})
-    v3 = dict(summary.get("v3") or {})
-    critical_seed = dict(summary.get("critical_seed") or {})
+    v3_s3 = dict(summary.get("v3_s3") or {})
     repairable = bool(summary.get("repairable"))
     initial_conflicts = int(summary.get("initial_conflicts", 0))
     fixed_auc = summary.get("fixed_budget_conflict_auc")
@@ -717,102 +638,9 @@ def _episode_row(
         "model_decision_count": int(summary.get("model_decision_count", 0)),
         "official_decision_count": int(summary.get("official_decision_count", 0)),
         "model_route_fraction": _number(summary.get("model_route_fraction")),
-        "critical_seed_mean_count": _number(critical_seed.get("mean_seed_count")),
-        "critical_seed_full_fraction": _number(
-            critical_seed.get("full_seed_fraction")
-        ),
-        "critical_seed_profile": critical_seed.get("profile"),
-        "critical_seed_diagnostic_only": bool(
-            critical_seed.get("diagnostic_only", False)
-        ),
-        "stall_guard_size_backoff_count": int(
-            stall_guard.get("size_backoff_count", 0)
-        ),
-        "stall_guard_fallback_activation_count": int(
-            stall_guard.get("fallback_activation_count", 0)
-        ),
-        "stall_guard_official_fallback_decision_count": int(
-            stall_guard.get("official_fallback_decision_count", 0)
-        ),
-        "stall_guard_blacklist_addition_count": int(
-            stall_guard.get("blacklist_addition_count", 0)
-        ),
-        "stall_guard_base_selection_preserved_count": int(
-            stall_guard.get("base_selection_preserved_count", 0)
-        ),
-        "stall_guard_model_override_count": int(
-            stall_guard.get("model_override_count", 0)
-        ),
-        "stall_guard_stagnant_attempt_count": int(
-            stall_guard.get("stagnant_attempt_count", 0)
-        ),
-        "stall_guard_longest_unchanged_state_streak": int(
-            stall_guard.get("longest_unchanged_state_streak", 0)
-        ),
-        "stall_guard_rescued_state_count": int(
-            stall_guard.get("rescued_state_count", 0)
-        ),
-        "stall_shadow_action_override_count": int(
-            stall_shadow.get("action_override_count", 0)
-        ),
-        "stall_shadow_longest_unchanged_streak": int(
-            stall_shadow.get("longest_unchanged_streak", 0)
-        ),
-        "stall_shadow_state_changed_no_reduction_reset_count": int(
-            stall_shadow.get("state_changed_no_reduction_reset_count", 0)
-        ),
-        "stall_shadow_most_conservative_passing_threshold": (
-            stall_shadow.get("most_conservative_passing_threshold")
-        ),
-        "repair_aware_no_progress_count": int(
-            repair_aware.get("no_progress_count", 0)
-        ),
-        "repair_aware_hard_failure_count": int(
-            repair_aware.get("hard_failure_count", 0)
-        ),
-        "repair_aware_accepted_noop_count": int(
-            repair_aware.get("accepted_noop_count", 0)
-        ),
-        "repair_aware_rescue_selection_count": int(
-            repair_aware.get("rescue_selection_count", 0)
-        ),
-        "repair_aware_fallback_count": int(
-            repair_aware.get("fallback_count", 0)
-        ),
-        "repair_aware_cache_hit_count": int(
-            repair_aware.get("cache_hit_count", 0)
-        ),
-        "repair_aware_cache_refresh_count": int(
-            repair_aware.get("cache_refresh_count", 0)
-        ),
-        "repair_aware_shadow_difference_count": int(
-            repair_aware.get("shadow_difference_count", 0)
-        ),
-        "repair_aware_tiebreak_override_count": int(
-            repair_aware.get("tiebreak_override_count", 0)
-        ),
-        "repair_aware_rescued_state_count": int(
-            repair_aware.get("rescued_state_count", 0)
-        ),
-        "repair_aware_longest_unchanged_streak": int(
-            repair_aware.get("longest_unchanged_streak", 0)
-        ),
-        "v3_no_progress_count": int(v3.get("no_progress_count", 0)),
-        "v3_hard_failure_count": int(v3.get("hard_failure_count", 0)),
-        "v3_accepted_noop_count": int(v3.get("accepted_noop_count", 0)),
-        "v3_adaptive_fallback_decision_count": int(
-            v3.get("adaptive_fallback_decision_count", 0)
-        ),
-        "v3_adaptive_fallback_fraction": _number(
-            v3.get("adaptive_fallback_fraction")
-        ),
-        "v3_blacklist_addition_count": int(
-            v3.get("blacklist_addition_count", 0)
-        ),
-        "v3_cache_hit_count": int(v3.get("cache_hit_count", 0)),
-        "v3_rescued_state_count": int(v3.get("rescued_state_count", 0)),
-        "v3_longest_unchanged_streak": int(
-            v3.get("longest_unchanged_streak", 0)
+        "v3_s3_history_length": int(v3_s3.get("history_length", 0)),
+        "v3_s3_template_unavailable_count": int(
+            v3_s3.get("template_unavailable_count", 0)
         ),
     }
     for name in TIMING_FIELDS:
@@ -1321,92 +1149,6 @@ PAIRWISE_METRICS = (
 )
 
 
-def controller_pairwise_rows(
-    episodes: list[dict[str, Any]], controllers: Iterable[str]
-) -> list[dict[str, Any]]:
-    names = tuple(map(str, controllers))
-    indexed = {
-        (
-            str(row["track"]),
-            str(row["controller"]),
-            str(row.get("task_id")),
-            int(row.get("solver_seed", -1)),
-        ): row
-        for row in episodes
-        if row.get("status") in {"ok", "resumed"}
-    }
-    keys = sorted({(key[0], key[2], key[3]) for key in indexed})
-    result: list[dict[str, Any]] = []
-    for reference, candidate in itertools.combinations(names, 2):
-        for track, task_id, seed in keys:
-            left = indexed.get((track, reference, task_id, seed))
-            right = indexed.get((track, candidate, task_id, seed))
-            if left is None or right is None:
-                continue
-            row: dict[str, Any] = {
-                "track": track,
-                "pair": f"{candidate}_vs_{reference}",
-                "reference": reference,
-                "candidate": candidate,
-                "task_id": task_id,
-                "map_id": left.get("map_id"),
-                "layout_family": left.get("layout_family"),
-                "agent_count": left.get("agent_count"),
-                "solver_seed": seed,
-                "initial_fingerprint_match": left.get("initial_fingerprint")
-                == right.get("initial_fingerprint"),
-                "reference_success": bool(left.get("success")),
-                "candidate_success": bool(right.get("success")),
-                "common_success": bool(left.get("success") and right.get("success")),
-            }
-            for metric in PAIRWISE_METRICS:
-                left_value = left.get(metric)
-                right_value = right.get(metric)
-                row[f"reference_{metric}"] = left_value
-                row[f"candidate_{metric}"] = right_value
-                row[f"delta_{metric}_candidate_minus_reference"] = (
-                    float(right_value) - float(left_value)
-                    if left_value is not None and right_value is not None
-                    else None
-                )
-            result.append(row)
-    return result
-
-
-def controller_pairwise_summary(
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        grouped[(str(row["track"]), str(row["pair"]))].append(row)
-    result: list[dict[str, Any]] = []
-    for (track, pair), values in sorted(grouped.items()):
-        first = values[0]
-        summary: dict[str, Any] = {
-            "track": track,
-            "pair": pair,
-            "reference": first["reference"],
-            "candidate": first["candidate"],
-            "paired_episode_count": len(values),
-            "initial_fingerprint_mismatch_count": sum(
-                not bool(row["initial_fingerprint_match"]) for row in values
-            ),
-            "reference_success_count": sum(
-                bool(row["reference_success"]) for row in values
-            ),
-            "candidate_success_count": sum(
-                bool(row["candidate_success"]) for row in values
-            ),
-            "common_success_count": sum(bool(row["common_success"]) for row in values),
-        }
-        for metric in PAIRWISE_METRICS:
-            field = f"delta_{metric}_candidate_minus_reference"
-            summary[f"mean_{field}"] = _mean(row.get(field) for row in values)
-            summary[f"median_{field}"] = _median(row.get(field) for row in values)
-        result.append(summary)
-    return result
-
-
 def _summary_rows(
     episodes: list[dict[str, Any]], iterations: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -1495,48 +1237,12 @@ def _summary_rows(
                 "mean_longest_failed_replan_streak": _mean(
                     row.get("longest_failed_replan_streak") for row in repairable
                 ),
-                "repair_aware_no_progress_count": sum(
-                    int(row.get("repair_aware_no_progress_count", 0))
+                "mean_v3_s3_history_length": _mean(
+                    row.get("v3_s3_history_length") for row in repairable
+                ),
+                "v3_s3_template_unavailable_count": sum(
+                    int(row.get("v3_s3_template_unavailable_count", 0))
                     for row in repairable
-                ),
-                "repair_aware_rescue_selection_count": sum(
-                    int(row.get("repair_aware_rescue_selection_count", 0))
-                    for row in repairable
-                ),
-                "repair_aware_fallback_count": sum(
-                    int(row.get("repair_aware_fallback_count", 0))
-                    for row in repairable
-                ),
-                "repair_aware_cache_hit_count": sum(
-                    int(row.get("repair_aware_cache_hit_count", 0))
-                    for row in repairable
-                ),
-                "repair_aware_rescued_state_count": sum(
-                    int(row.get("repair_aware_rescued_state_count", 0))
-                    for row in repairable
-                ),
-                "mean_repair_aware_longest_unchanged_streak": _mean(
-                    row.get("repair_aware_longest_unchanged_streak")
-                    for row in repairable
-                ),
-                "v3_no_progress_count": sum(
-                    int(row.get("v3_no_progress_count", 0)) for row in repairable
-                ),
-                "v3_adaptive_fallback_decision_count": sum(
-                    int(row.get("v3_adaptive_fallback_decision_count", 0))
-                    for row in repairable
-                ),
-                "v3_cache_hit_count": sum(
-                    int(row.get("v3_cache_hit_count", 0)) for row in repairable
-                ),
-                "v3_rescued_state_count": sum(
-                    int(row.get("v3_rescued_state_count", 0)) for row in repairable
-                ),
-                "mean_v3_adaptive_fallback_fraction": _mean(
-                    row.get("v3_adaptive_fallback_fraction") for row in repairable
-                ),
-                "mean_v3_longest_unchanged_streak": _mean(
-                    row.get("v3_longest_unchanged_streak") for row in repairable
                 ),
                 "conflict_reducing_repair_count": sum(int(row.get("conflict_reducing_repair_count", 0)) for row in repairable),
                 "no_improvement_repair_count": sum(int(row.get("no_improvement_repair_count", 0)) for row in repairable),
@@ -1725,198 +1431,6 @@ def long_horizon_diagnostics(
             }
         )
     return checkpoints, diagnostics, [list(value) for value in sorted(extension_keys)]
-
-
-def stall_prefix_equivalence(iterations: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compare stall-safe with v2-full until the guard first changes an action."""
-
-    safe_rows = [
-        row for row in iterations if str(row.get("controller")) == "v2-stall-safe"
-    ]
-    if not safe_rows or not any(row.get("candidate_score_fingerprint") for row in safe_rows):
-        return {
-            "applicable": False,
-            "passed": False,
-            "reason": "stall_safe_candidate_diagnostics_absent",
-            "comparison_count": 0,
-            "mismatch_count": 0,
-            "trigger_count": 0,
-        }
-    grouped: dict[tuple[str, str, int], dict[str, list[dict[str, Any]]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
-    for row in iterations:
-        controller = str(row.get("controller"))
-        if controller not in {"v2-full", "v2-stall-safe"}:
-            continue
-        grouped[
-            (
-                str(row.get("track")),
-                str(row.get("task_id")),
-                int(row.get("solver_seed", -1)),
-            )
-        ][controller].append(row)
-    mismatch_rows: list[dict[str, Any]] = []
-    comparisons = 0
-    triggers = 0
-    for key, controllers in sorted(grouped.items()):
-        full_by_index = {
-            int(row["decision_index"]): row
-            for row in controllers.get("v2-full", [])
-        }
-        for safe in sorted(
-            controllers.get("v2-stall-safe", []),
-            key=lambda value: int(value["decision_index"]),
-        ):
-            triggered = bool(
-                safe.get("route") == "official_adaptive"
-                or safe.get("stall_guard_base_selection_preserved") is False
-            )
-            if triggered:
-                triggers += 1
-                break
-            decision_index = int(safe["decision_index"])
-            full = full_by_index.get(decision_index)
-            comparisons += 1
-            fields = (
-                "before_fingerprint",
-                "candidate_score_fingerprint",
-                "candidate_ranking_fingerprint",
-                "selected_candidate_id",
-                "actual_neighborhood_fingerprint",
-            )
-            differences = [
-                field
-                for field in fields
-                if full is None or safe.get(field) != full.get(field)
-            ]
-            if differences:
-                mismatch_rows.append(
-                    {
-                        "track": key[0],
-                        "task_id": key[1],
-                        "solver_seed": key[2],
-                        "decision_index": decision_index,
-                        "different_fields": differences,
-                    }
-                )
-                break
-    return {
-        "applicable": True,
-        "passed": not mismatch_rows,
-        "comparison_count": comparisons,
-        "mismatch_count": len(mismatch_rows),
-        "trigger_count": triggers,
-        "mismatches": mismatch_rows,
-    }
-
-
-def stall_guard_attempt_limit_violations(
-    iterations: list[dict[str, Any]], *, maximum_attempts: int = 2
-) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str, int, str, int], list[dict[str, Any]]] = defaultdict(
-        list
-    )
-    for row in iterations:
-        if (
-            str(row.get("controller")) != "v2-stall-safe"
-            or str(row.get("route")) != "model"
-            or not row.get("stall_guard_state_anchor_fingerprint")
-            or row.get("stall_guard_active_size_cap") is None
-        ):
-            continue
-        grouped[
-            (
-                str(row.get("track")),
-                str(row.get("task_id")),
-                int(row.get("solver_seed", -1)),
-                str(row["stall_guard_state_anchor_fingerprint"]),
-                int(row["stall_guard_active_size_cap"]),
-            )
-        ].append(row)
-    return [
-        {
-            "track": key[0],
-            "task_id": key[1],
-            "solver_seed": key[2],
-            "state_anchor_fingerprint": key[3],
-            "size_cap": key[4],
-            "attempt_count": len(rows),
-        }
-        for key, rows in sorted(grouped.items())
-        if len(rows) > maximum_attempts
-    ]
-
-
-def targeted_stall_recovery_diagnostic(
-    episodes: list[dict[str, Any]],
-    iterations: list[dict[str, Any]],
-    *,
-    primary_track: str,
-    task_id: str = "maze-128-128-1__random_04__agents_0600",
-    solver_seed: int = 2,
-    historical_final_conflicts: int = 8821,
-) -> dict[str, Any]:
-    selected_episodes = {
-        str(row.get("controller")): row
-        for row in episodes
-        if str(row.get("track")) == primary_track
-        and str(row.get("task_id")) == task_id
-        and int(row.get("solver_seed", -1)) == solver_seed
-        and str(row.get("controller")) in {"v2-full", "v2-stall-safe"}
-    }
-    if set(selected_episodes) != {"v2-full", "v2-stall-safe"}:
-        return {"applicable": False, "passed": False, "reason": "target_pair_absent"}
-    selected_iterations = {
-        controller: sorted(
-            (
-                row
-                for row in iterations
-                if str(row.get("track")) == primary_track
-                and str(row.get("task_id")) == task_id
-                and int(row.get("solver_seed", -1)) == solver_seed
-                and str(row.get("controller")) == controller
-            ),
-            key=lambda value: int(value["decision_index"]),
-        )
-        for controller in ("v2-full", "v2-stall-safe")
-    }
-    terminal_stall = []
-    for row in reversed(selected_iterations["v2-full"]):
-        if bool(row.get("replan_success")) or int(row.get("conflict_delta", 0)) > 0:
-            break
-        terminal_stall.append(row)
-    terminal_stall.reverse()
-    stall_start_seconds = (
-        float(terminal_stall[0]["elapsed_wall_seconds"]) if terminal_stall else None
-    )
-    safe_progress_after_stall = bool(
-        stall_start_seconds is not None
-        and any(
-            float(row.get("elapsed_wall_seconds", 0.0)) >= stall_start_seconds
-            and int(row.get("conflict_delta", 0)) > 0
-            for row in selected_iterations["v2-stall-safe"]
-        )
-    )
-    safe_final = int(selected_episodes["v2-stall-safe"]["budget_final_conflicts"])
-    return {
-        "applicable": True,
-        "passed": bool(
-            terminal_stall
-            and safe_progress_after_stall
-            and safe_final < historical_final_conflicts
-        ),
-        "task_id": task_id,
-        "solver_seed": solver_seed,
-        "historical_final_conflicts": historical_final_conflicts,
-        "v2_full_final_conflicts": int(
-            selected_episodes["v2-full"]["budget_final_conflicts"]
-        ),
-        "v2_stall_safe_final_conflicts": safe_final,
-        "v2_full_terminal_stall_start_seconds": stall_start_seconds,
-        "v2_full_terminal_stall_iteration_count": len(terminal_stall),
-        "stall_safe_progress_after_stall": safe_progress_after_stall,
-    }
 
 
 def _sensitivity_rows(
@@ -2278,557 +1792,11 @@ def _report_markdown(
     return "\n".join(lines)
 
 
-def _stall_promotion_gate(
-    summaries: list[dict[str, Any]],
-    pairwise: list[dict[str, Any]],
-    *,
-    primary_track: str,
-    validation_passed: bool,
-) -> dict[str, Any]:
-    controllers = {str(row["controller"]) for row in summaries}
-    if "v2-stall-safe" not in controllers:
-        return {"applicable": False, "passed": False, "reason": "stall_safe_absent"}
-    all_rows = {
-        (str(row["track"]), str(row["controller"])): row
-        for row in summaries
-        if row.get("group_type") == "all"
-    }
-    wall_safe = all_rows.get((primary_track, "v2-stall-safe"), {})
-    wall_v2 = all_rows.get((primary_track, "v2-full"), {})
-    wall_lns2 = all_rows.get((primary_track, "official_adaptive"), {})
-    historical_tracks = sorted(
-        {str(row["track"]) for row in summaries if str(row["track"]) == "historical"}
-    )
-    fixed_available = bool(historical_tracks)
-    fixed_safe = all_rows.get(("historical", "v2-stall-safe"), {})
-    fixed_v2 = all_rows.get(("historical", "v2-full"), {})
-    fixed_lns2 = all_rows.get(("historical", "official_adaptive"), {})
-
-    def no_higher(left: Any, right: Any) -> bool:
-        return left is not None and right is not None and float(left) <= float(right)
-
-    success_gate = int(wall_safe.get("success_count", -1)) >= max(
-        int(wall_v2.get("success_count", 0)), int(wall_lns2.get("success_count", 0))
-    )
-    wall_v2_gate = no_higher(
-        wall_safe.get("mean_normalized_wall_clock_conflict_auc"),
-        wall_v2.get("mean_normalized_wall_clock_conflict_auc"),
-    )
-    wall_lns2_gate = no_higher(
-        wall_safe.get("mean_normalized_wall_clock_conflict_auc"),
-        wall_lns2.get("mean_normalized_wall_clock_conflict_auc"),
-    )
-    safe_fixed = fixed_safe.get("mean_normalized_fixed_budget_conflict_auc")
-    v2_fixed = fixed_v2.get("mean_normalized_fixed_budget_conflict_auc")
-    lns2_fixed = fixed_lns2.get("mean_normalized_fixed_budget_conflict_auc")
-    fixed_degradation_gate = bool(
-        fixed_available
-        and safe_fixed is not None
-        and v2_fixed is not None
-        and float(safe_fixed) <= float(v2_fixed) * 1.02
-    )
-    fixed_retention_gate = bool(
-        fixed_available
-        and safe_fixed is not None
-        and v2_fixed is not None
-        and lns2_fixed is not None
-        and (
-            float(lns2_fixed) - float(safe_fixed)
-            >= 0.9 * (float(lns2_fixed) - float(v2_fixed))
-        )
-    )
-    selection_safe = wall_safe.get("mean_iteration_selection_seconds")
-    selection_v2 = wall_v2.get("mean_iteration_selection_seconds")
-    selection_gate = bool(
-        selection_safe is not None
-        and selection_v2 is not None
-        and float(selection_safe) <= float(selection_v2) * 1.02
-    )
-    guard_seconds = wall_safe.get("mean_total_stall_guard_seconds")
-    total_selection_seconds = wall_safe.get(
-        "mean_total_neighborhood_selection_seconds"
-    )
-    guard_overhead_gate = bool(
-        guard_seconds is not None
-        and total_selection_seconds is not None
-        and (
-            float(guard_seconds) == 0.0
-            or float(total_selection_seconds) > 0.0
-            and float(guard_seconds) / float(total_selection_seconds) <= 0.02
-        )
-    )
-    repeated_failure_gate = bool(
-        wall_safe.get("mean_longest_failed_replan_streak") is not None
-        and wall_v2.get("mean_longest_failed_replan_streak") is not None
-        and float(wall_safe["mean_longest_failed_replan_streak"])
-        < float(wall_v2["mean_longest_failed_replan_streak"])
-    )
-    pp_failure_gate = bool(
-        wall_safe.get("failed_replan_fraction") is not None
-        and wall_v2.get("failed_replan_fraction") is not None
-        and float(wall_safe["failed_replan_fraction"])
-        < float(wall_v2["failed_replan_fraction"])
-    )
-    common_ttf_deltas = [
-        row.get("delta_restricted_time_to_feasible_candidate_minus_reference")
-        for row in pairwise
-        if row["track"] == primary_track
-        and row["pair"] == "v2-stall-safe_vs_v2-full"
-        and row["common_success"]
-    ]
-    common_ttf_delta = _mean(common_ttf_deltas)
-    common_v2_ttf = _mean(
-        row.get("reference_restricted_time_to_feasible")
-        for row in pairwise
-        if row["track"] == primary_track
-        and row["pair"] == "v2-stall-safe_vs_v2-full"
-        and row["common_success"]
-    )
-    ttf_gate = bool(
-        common_ttf_delta is not None
-        and common_v2_ttf is not None
-        and float(common_ttf_delta) <= 0.05 * float(common_v2_ttf)
-    )
-    gates = {
-        "validation": bool(validation_passed),
-        "success_not_lower": success_gate,
-        "wall_auc_not_worse_than_v2_full": wall_v2_gate,
-        "wall_auc_not_worse_than_lns2": wall_lns2_gate,
-        "fixed_auc_degradation_at_most_2pct": fixed_degradation_gate,
-        "fixed_auc_benefit_retention_at_least_90pct": fixed_retention_gate,
-        "selection_overhead_at_most_2pct": selection_gate,
-        "guard_logic_fraction_at_most_2pct": guard_overhead_gate,
-        "longest_failed_replan_streak_reduced": repeated_failure_gate,
-        "pp_failure_fraction_reduced": pp_failure_gate,
-        "common_success_ttf_degradation_at_most_5pct": ttf_gate,
-    }
-    return {
-        "applicable": True,
-        "passed": fixed_available and all(gates.values()),
-        "fixed_track_available": fixed_available,
-        "gates": gates,
-        "common_success_mean_ttf_delta_seconds": common_ttf_delta,
-    }
-
-
-def _stall_recovery_markdown(
-    promotion: dict[str, Any],
-    pairwise_summary: list[dict[str, Any]],
-    guard_usage: list[dict[str, Any]],
-    prefix_equivalence: dict[str, Any],
-    targeted_diagnostic: dict[str, Any],
-) -> str:
-    lines = [
-        "# v2 stall-recovery report",
-        "",
-        f"Promotion gate applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
-        "",
-        (
-            "Pre-trigger v2 equivalence: "
-            f"applicable=`{prefix_equivalence.get('applicable')}`, "
-            f"passed=`{prefix_equivalence.get('passed')}`, "
-            f"comparisons={prefix_equivalence.get('comparison_count', 0)}, "
-            f"mismatches={prefix_equivalence.get('mismatch_count', 0)}, "
-            f"guard triggers={prefix_equivalence.get('trigger_count', 0)}."
-        ),
-        "",
-        (
-            "Target maze600/seed=2 diagnostic: "
-            f"applicable=`{targeted_diagnostic.get('applicable')}`, "
-            f"passed=`{targeted_diagnostic.get('passed')}`, "
-            f"v2-full final={targeted_diagnostic.get('v2_full_final_conflicts')}, "
-            f"stall-safe final={targeted_diagnostic.get('v2_stall_safe_final_conflicts')}, "
-            f"post-stall progress=`{targeted_diagnostic.get('stall_safe_progress_after_stall')}`."
-        ),
-        "",
-        "## Pairwise controller results",
-        "",
-        "| track | pair | episodes | successes reference/candidate | normalized wall AUC delta | normalized fixed AUC delta | TTF delta |",
-        "|---|---|---:|---:|---:|---:|---:|",
-    ]
-    for row in pairwise_summary:
-        lines.append(
-            f"| {row['track']} | {row['pair']} | {row['paired_episode_count']} | "
-            f"{row['reference_success_count']}/{row['candidate_success_count']} | "
-            f"{_fmt(row.get('mean_delta_normalized_wall_clock_conflict_auc_candidate_minus_reference'), 6)} | "
-            f"{_fmt(row.get('mean_delta_normalized_fixed_budget_conflict_auc_candidate_minus_reference'), 6)} | "
-            f"{_fmt(row.get('mean_delta_restricted_time_to_feasible_candidate_minus_reference'), 6)} |"
-        )
-    lines.extend(
-        [
-            "",
-            "## Stall guard usage",
-            "",
-            "| track | task | seed | backoffs | fallback decisions | longest stagnant run | rescued states |",
-            "|---|---|---:|---:|---:|---:|---:|",
-        ]
-    )
-    for row in guard_usage:
-        lines.append(
-            f"| {row['track']} | {row['task_id']} | {row['solver_seed']} | "
-            f"{row['stall_guard_size_backoff_count']} | "
-            f"{row['stall_guard_official_fallback_decision_count']} | "
-            f"{row['stall_guard_longest_unchanged_state_streak']} | "
-            f"{row['stall_guard_rescued_state_count']} |"
-        )
-    if promotion.get("gates"):
-        lines.extend(["", "## Promotion gates", ""])
-        for name, passed in dict(promotion["gates"]).items():
-            lines.append(f"- `{name}`: `{bool(passed)}`")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def _repair_aware_promotion_gate(
-    summaries: list[dict[str, Any]],
-    *,
-    primary_track: str,
-    validation_passed: bool,
-) -> dict[str, Any]:
-    controllers = {str(row["controller"]) for row in summaries}
-    if "v2-repair-aware" not in controllers:
-        return {
-            "applicable": False,
-            "passed": False,
-            "reason": "repair_aware_absent",
-        }
-    all_rows = {
-        (str(row["track"]), str(row["controller"])): row
-        for row in summaries
-        if row.get("group_type") == "all"
-    }
-    aware = all_rows.get((primary_track, "v2-repair-aware"), {})
-    v2 = all_rows.get((primary_track, "v2-full"), {})
-    lns2 = all_rows.get((primary_track, "official_adaptive"), {})
-    fixed_aware = all_rows.get(("historical", "v2-repair-aware"), {})
-    fixed_v2 = all_rows.get(("historical", "v2-full"), {})
-    fixed_available = bool(fixed_aware and fixed_v2)
-
-    def no_higher(left: Any, right: Any) -> bool:
-        return left is not None and right is not None and float(left) <= float(right)
-
-    aware_loops = max(1, int(aware.get("total_repair_iterations", 0)))
-    v2_loops = max(1, int(v2.get("total_repair_iterations", 0)))
-    aware_no_progress = int(aware.get("no_improvement_repair_count", 0)) / aware_loops
-    v2_no_progress = int(v2.get("no_improvement_repair_count", 0)) / v2_loops
-    selection_aware = aware.get("mean_iteration_selection_seconds")
-    selection_v2 = v2.get("mean_iteration_selection_seconds")
-    gates = {
-        "validation": bool(validation_passed),
-        "success_not_lower_than_v2_and_lns2": int(
-            aware.get("success_count", -1)
-        )
-        >= max(int(v2.get("success_count", 0)), int(lns2.get("success_count", 0))),
-        "wall_auc_not_worse_than_v2": no_higher(
-            aware.get("mean_normalized_wall_clock_conflict_auc"),
-            v2.get("mean_normalized_wall_clock_conflict_auc"),
-        ),
-        "wall_auc_not_worse_than_lns2": no_higher(
-            aware.get("mean_normalized_wall_clock_conflict_auc"),
-            lns2.get("mean_normalized_wall_clock_conflict_auc"),
-        ),
-        "fixed_auc_degradation_at_most_2pct": bool(
-            fixed_available
-            and fixed_aware.get("mean_normalized_fixed_budget_conflict_auc")
-            is not None
-            and fixed_v2.get("mean_normalized_fixed_budget_conflict_auc") is not None
-            and float(fixed_aware["mean_normalized_fixed_budget_conflict_auc"])
-            <= 1.02 * float(fixed_v2["mean_normalized_fixed_budget_conflict_auc"])
-        ),
-        "selection_overhead_at_most_5pct": bool(
-            selection_aware is not None
-            and selection_v2 is not None
-            and float(selection_aware) <= 1.05 * float(selection_v2)
-        ),
-        "no_progress_fraction_reduced": aware_no_progress < v2_no_progress,
-        "unchanged_streak_reduced": bool(
-            aware.get("mean_repair_aware_longest_unchanged_streak") is not None
-            and v2.get("mean_longest_failed_replan_streak") is not None
-            and float(aware["mean_repair_aware_longest_unchanged_streak"])
-            < float(v2["mean_longest_failed_replan_streak"])
-        ),
-    }
-    return {
-        "applicable": True,
-        "passed": fixed_available and all(gates.values()),
-        "fixed_track_available": fixed_available,
-        "gates": gates,
-        "repair_aware_no_progress_fraction": aware_no_progress,
-        "v2_no_improvement_fraction": v2_no_progress,
-        "cache_hit_count": int(aware.get("repair_aware_cache_hit_count", 0)),
-        "rescue_selection_count": int(
-            aware.get("repair_aware_rescue_selection_count", 0)
-        ),
-        "rescued_state_count": int(
-            aware.get("repair_aware_rescued_state_count", 0)
-        ),
-    }
-
-
-def _repair_aware_markdown(
-    promotion: dict[str, Any], pairwise_summary: list[dict[str, Any]]
-) -> str:
-    lines = [
-        "# v2 repair-aware report",
-        "",
-        f"Promotion applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
-        "",
-        f"Cache hits: `{promotion.get('cache_hit_count', 0)}`; rescue selections: `{promotion.get('rescue_selection_count', 0)}`; rescued states: `{promotion.get('rescued_state_count', 0)}`.",
-        "",
-        "## Promotion gates",
-        "",
-    ]
-    for name, passed in dict(promotion.get("gates") or {}).items():
-        lines.append(f"- `{name}`: `{bool(passed)}`")
-    lines.extend(["", "## Paired summaries", ""])
-    for row in pairwise_summary:
-        if "v2-repair-aware" not in str(row.get("pair")):
-            continue
-        lines.append(
-            f"- `{row['track']}` `{row['pair']}`: successes "
-            f"{row['candidate_success_count']} vs {row['reference_success_count']}; "
-            "mean normalized wall-AUC delta "
-            f"{_fmt(row.get('mean_delta_normalized_wall_clock_conflict_auc_candidate_minus_reference'), 6)}."
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def _paired_metric_values(
-    rows: list[dict[str, Any]],
-    *,
-    candidate: str,
-    reference: str,
-    metric: str,
-    common_success_only: bool = False,
-) -> list[tuple[str, float, float]]:
-    result: list[tuple[str, float, float]] = []
-    for row in rows:
-        if common_success_only and not bool(row.get("common_success")):
-            continue
-        if row.get("candidate") == candidate and row.get("reference") == reference:
-            reference_value = row.get(f"reference_{metric}")
-            candidate_value = row.get(f"candidate_{metric}")
-        elif row.get("candidate") == reference and row.get("reference") == candidate:
-            reference_value = row.get(f"candidate_{metric}")
-            candidate_value = row.get(f"reference_{metric}")
-        else:
-            continue
-        if reference_value is None or candidate_value is None:
-            continue
-        result.append(
-            (str(row.get("map_id")), float(reference_value), float(candidate_value))
-        )
-    return result
-
-
-def _map_bootstrap_relative_degradation(
-    values: list[tuple[str, float, float]],
-    *,
-    samples: int = 5000,
-    seed: int = 20260722,
-) -> dict[str, Any]:
-    grouped: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for map_id, reference, candidate in values:
-        grouped[map_id].append((reference, candidate))
-    map_ids = sorted(grouped)
-    if not map_ids:
-        return {
-            "map_count": 0,
-            "pair_count": 0,
-            "observed_relative_degradation": None,
-            "one_sided_95_upper": None,
-        }
-
-    def degradation(selected_maps: list[str]) -> float:
-        selected = [value for map_id in selected_maps for value in grouped[map_id]]
-        reference_mean = statistics.fmean(value[0] for value in selected)
-        candidate_mean = statistics.fmean(value[1] for value in selected)
-        return (candidate_mean - reference_mean) / max(1e-12, reference_mean)
-
-    rng = random.Random(seed)
-    bootstrap = sorted(
-        degradation([rng.choice(map_ids) for _map_id in map_ids])
-        for _ in range(samples)
-    )
-    upper_index = min(len(bootstrap) - 1, math.ceil(0.95 * len(bootstrap)) - 1)
-    return {
-        "map_count": len(map_ids),
-        "pair_count": len(values),
-        "samples": samples,
-        "observed_relative_degradation": degradation(map_ids),
-        "one_sided_95_upper": bootstrap[upper_index],
-    }
-
-
-def _v3_promotion_gate(
-    summaries: list[dict[str, Any]],
-    pairwise: list[dict[str, Any]],
-    *,
-    primary_track: str,
-    validation_passed: bool,
-    candidate_controller: str | None = None,
-) -> dict[str, Any]:
-    controllers = {str(row["controller"]) for row in summaries}
-    candidate = candidate_controller or (
-        "v3-h3" if "v3-h3" in controllers else "v3-full"
-    )
-    if candidate not in controllers:
-        return {"applicable": False, "passed": False, "reason": "v3_absent"}
-    all_rows = {
-        (str(row["track"]), str(row["controller"])): row
-        for row in summaries
-        if row.get("group_type") == "all"
-    }
-    v3 = all_rows.get((primary_track, candidate), {})
-    v2 = all_rows.get((primary_track, "v2-full"), {})
-    lns2 = all_rows.get((primary_track, "official_adaptive"), {})
-    fixed_v3 = all_rows.get(("historical", candidate), {})
-    fixed_v2 = all_rows.get(("historical", "v2-full"), {})
-    fixed_available = bool(fixed_v3 and fixed_v2)
-
-    primary_pairs = [row for row in pairwise if row.get("track") == primary_track]
-    auc_bootstrap = {
-        baseline: _map_bootstrap_relative_degradation(
-            _paired_metric_values(
-                primary_pairs,
-                candidate=candidate,
-                reference=baseline,
-                metric="normalized_wall_clock_conflict_auc",
-            ),
-            seed=20260722 + offset,
-        )
-        for offset, baseline in enumerate(("v2-full", "official_adaptive"))
-    }
-    ttf = {}
-    for baseline in ("v2-full", "official_adaptive"):
-        values = _paired_metric_values(
-            primary_pairs,
-            candidate=candidate,
-            reference=baseline,
-            metric="restricted_time_to_feasible",
-            common_success_only=True,
-        )
-        ttf[baseline] = {
-            "pair_count": len(values),
-            "reference_mean": _mean(value[1] for value in values),
-            "v3_mean": _mean(value[2] for value in values),
-        }
-
-    def no_higher(left: Any, right: Any, factor: float = 1.0) -> bool:
-        return (
-            left is not None
-            and right is not None
-            and float(left) <= factor * float(right) + 1e-12
-        )
-
-    v3_loops = max(1, int(v3.get("total_repair_iterations", 0)))
-    v2_loops = max(1, int(v2.get("total_repair_iterations", 0)))
-    v3_no_progress = int(v3.get("v3_no_progress_count", 0)) / v3_loops
-    v2_no_improvement = int(v2.get("no_improvement_repair_count", 0)) / v2_loops
-    fallback_fraction = int(
-        v3.get("v3_adaptive_fallback_decision_count", 0)
-    ) / v3_loops
-    v2_ttf = ttf["v2-full"]
-    lns2_ttf = ttf["official_adaptive"]
-    checks = {
-        "validation": bool(validation_passed),
-        "success_not_lower_than_v2_and_lns2": int(v3.get("success_count", -1))
-        >= max(int(v2.get("success_count", 0)), int(lns2.get("success_count", 0))),
-        "mean_wall_auc_not_worse_than_v2": no_higher(
-            v3.get("mean_normalized_wall_clock_conflict_auc"),
-            v2.get("mean_normalized_wall_clock_conflict_auc"),
-        ),
-        "mean_wall_auc_not_worse_than_lns2": no_higher(
-            v3.get("mean_normalized_wall_clock_conflict_auc"),
-            lns2.get("mean_normalized_wall_clock_conflict_auc"),
-        ),
-        "paired_auc_upper_degradation_vs_v2_at_most_2pct": bool(
-            auc_bootstrap["v2-full"]["one_sided_95_upper"] is not None
-            and float(auc_bootstrap["v2-full"]["one_sided_95_upper"]) <= 0.02
-        ),
-        "paired_auc_upper_degradation_vs_lns2_at_most_2pct": bool(
-            auc_bootstrap["official_adaptive"]["one_sided_95_upper"] is not None
-            and float(
-                auc_bootstrap["official_adaptive"]["one_sided_95_upper"]
-            )
-            <= 0.02
-        ),
-        "common_success_ttf_not_slower_than_v2": no_higher(
-            v2_ttf["v3_mean"], v2_ttf["reference_mean"]
-        ),
-        "common_success_ttf_not_over_5pct_slower_than_lns2": no_higher(
-            lns2_ttf["v3_mean"], lns2_ttf["reference_mean"], 1.05
-        ),
-        "fixed_auc_degradation_at_most_2pct": bool(
-            fixed_available
-            and no_higher(
-                fixed_v3.get("mean_normalized_fixed_budget_conflict_auc"),
-                fixed_v2.get("mean_normalized_fixed_budget_conflict_auc"),
-                1.02,
-            )
-        ),
-        "pp_no_progress_rate_reduced": v3_no_progress < v2_no_improvement,
-        "longest_repeated_failure_reduced": bool(
-            v3.get("mean_v3_longest_unchanged_streak") is not None
-            and v2.get("mean_longest_failed_replan_streak") is not None
-            and float(v3["mean_v3_longest_unchanged_streak"])
-            < float(v2["mean_longest_failed_replan_streak"])
-        ),
-        "controller_time_increase_at_most_5pct": no_higher(
-            v3.get("mean_iteration_selection_seconds"),
-            v2.get("mean_iteration_selection_seconds"),
-            1.05,
-        ),
-        "adaptive_fallback_fraction_at_most_5pct": fallback_fraction <= 0.05,
-    }
-    return {
-        "applicable": True,
-        "candidate_controller": candidate,
-        "passed": fixed_available and all(checks.values()),
-        "fixed_track_available": fixed_available,
-        "gates": checks,
-        "auc_map_bootstrap": auc_bootstrap,
-        "common_success_time_to_feasible": ttf,
-        "v3_no_progress_fraction": v3_no_progress,
-        "v2_no_improvement_fraction": v2_no_improvement,
-        "adaptive_fallback_fraction": fallback_fraction,
-        "cache_hit_count": int(v3.get("v3_cache_hit_count", 0)),
-        "rescued_state_count": int(v3.get("v3_rescued_state_count", 0)),
-    }
-
-
-def _v3_markdown(
-    promotion: dict[str, Any], pairwise_summary: list[dict[str, Any]]
-) -> str:
-    candidate = str(promotion.get("candidate_controller") or "v3-full")
-    lines = [
-        f"# {candidate} cost-aware controller report",
-        "",
-        f"Promotion applicable: `{promotion.get('applicable')}`; passed: `{promotion.get('passed')}`.",
-        "",
-        "## Promotion gates",
-        "",
-    ]
-    for name, passed in dict(promotion.get("gates") or {}).items():
-        lines.append(f"- `{name}`: `{bool(passed)}`")
-    lines.extend(["", "## Paired summaries", ""])
-    for row in pairwise_summary:
-        if candidate not in str(row.get("pair")):
-            continue
-        lines.append(
-            f"- `{row['track']}` `{row['pair']}`: successes "
-            f"{row['candidate_success_count']} vs {row['reference_success_count']}; "
-            "mean normalized wall-AUC delta "
-            f"{_fmt(row.get('mean_delta_normalized_wall_clock_conflict_auc_candidate_minus_reference'), 6)}."
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
 def generate_bottleneck_artifacts(
     track_roots: dict[str, dict[str, Path]], output: str | Path
 ) -> dict[str, Any]:
+    """Generate the retained paired wall-clock evaluation artifacts."""
+
     output_root = Path(output).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     episodes: list[dict[str, Any]] = []
@@ -2837,14 +1805,22 @@ def generate_bottleneck_artifacts(
     controllers_by_track = {
         str(track): tuple(map(str, roots)) for track, roots in track_roots.items()
     }
+    if not controllers_by_track:
+        raise ValueError("bottleneck report requires at least one track")
     if len({values for values in controllers_by_track.values()}) != 1:
         raise ValueError("all bottleneck tracks must contain the same controllers")
     report_controllers = next(iter(controllers_by_track.values()))
+    unknown_controllers = set(report_controllers) - set(CONTROLLERS)
+    if unknown_controllers:
+        raise ValueError(
+            f"unsupported active controllers: {sorted(unknown_controllers)}"
+        )
     for track, roots in track_roots.items():
         track_episodes, track_iterations, track_metadata = load_track(track, roots)
         episodes.extend(track_episodes)
         iterations.extend(track_iterations)
         metadata[track] = track_metadata
+
     track_coverage = {
         track: _track_coverage(
             track=track,
@@ -2858,29 +1834,9 @@ def generate_bottleneck_artifacts(
         track for track, coverage in track_coverage.items() if not coverage["passed"]
     ]
     paired = paired_decomposition(episodes)
-    pairwise = controller_pairwise_rows(episodes, report_controllers)
-    pairwise_summary = controller_pairwise_summary(pairwise)
-    guard_usage = [
-        row for row in episodes if str(row.get("controller")) == "v2-stall-safe"
-    ]
-    repair_aware_usage = [
-        row
-        for row in episodes
-        if str(row.get("controller")) == "v2-repair-aware"
-    ]
-    v3_candidates = tuple(
-        controller
-        for controller in report_controllers
-        if controller in {"v3-full", "v3-h3"}
-    )
-    v3_usage = [
-        row for row in episodes if str(row.get("controller")) in v3_candidates
-    ]
     long_checkpoints, long_diagnostics, extension_keys = long_horizon_diagnostics(
         episodes, iterations
     )
-    stall_prefix = stall_prefix_equivalence(iterations)
-    guard_attempt_violations = stall_guard_attempt_limit_violations(iterations)
     summaries = _summary_rows(episodes, iterations)
     primary_track = next(
         (
@@ -2891,13 +1847,16 @@ def generate_bottleneck_artifacts(
         next(iter(track_roots)),
     )
     sensitivity = _sensitivity_rows(paired, primary_track)
-    targeted_stall = targeted_stall_recovery_diagnostic(
-        episodes, iterations, primary_track=primary_track
-    )
 
-    valid_episodes = [row for row in episodes if row.get("status") in {"ok", "resumed"}]
-    errors = [row for row in episodes if row.get("status") not in {"ok", "resumed"}]
-    wall_rows = [row for row in valid_episodes if row.get("stopping_rule") == "wall-clock"]
+    valid_episodes = [
+        row for row in episodes if row.get("status") in {"ok", "resumed"}
+    ]
+    errors = [
+        row for row in episodes if row.get("status") not in {"ok", "resumed"}
+    ]
+    wall_rows = [
+        row for row in valid_episodes if row.get("stopping_rule") == "wall-clock"
+    ]
     paired_coverage: dict[tuple[str, str, int], set[str]] = defaultdict(set)
     for row in valid_episodes:
         paired_coverage[
@@ -2948,15 +1907,22 @@ def generate_bottleneck_artifacts(
         )
         != 1
     ]
-    paired_fingerprint_mismatches = [row for row in paired if not row["initial_fingerprint_match"]]
-    repair_limit_violations = [row for row in wall_rows if row.get("stop_reason") == "repair_limit"]
+    paired_fingerprint_mismatches = [
+        row for row in paired if not row["initial_fingerprint_match"]
+    ]
+    repair_limit_violations = [
+        row for row in wall_rows if row.get("stop_reason") == "repair_limit"
+    ]
     instrumentation_missing = [
         row
         for row in valid_episodes
-        if row.get("repair_iterations", 0) > 0 and not row.get("timing_instrumentation_complete")
+        if row.get("repair_iterations", 0) > 0
+        and not row.get("timing_instrumentation_complete")
     ]
     finalization_missing = [
-        row for row in valid_episodes if not row.get("finalization_timing_instrumented")
+        row
+        for row in valid_episodes
+        if not row.get("finalization_timing_instrumented")
     ]
     timing_closure_failures = [
         row
@@ -2980,11 +1946,7 @@ def generate_bottleneck_artifacts(
         and not finalization_missing
         and not timing_closure_failures
         and not sensitivity_integrity_failures
-        and not coverage_failure_tracks
-        and not guard_attempt_violations
-        and (
-            not stall_prefix["applicable"] or bool(stall_prefix["passed"])
-        ),
+        and not coverage_failure_tracks,
         "coverage_passed": not coverage_failure_tracks,
         "coverage_failure_track_count": len(coverage_failure_tracks),
         "track_coverage": track_coverage,
@@ -3013,10 +1975,6 @@ def generate_bottleneck_artifacts(
             for controller in dict(coverage["controllers"]).values()
         ),
         "sensitivity_integrity_passed": not sensitivity_integrity_failures,
-        "stall_prefix_equivalence": stall_prefix,
-        "stall_guard_attempt_limit_violation_count": len(
-            guard_attempt_violations
-        ),
         "episode_count": len(valid_episodes),
         "iteration_count": len(iterations),
         "error_episode_count": len(errors),
@@ -3052,56 +2010,10 @@ def generate_bottleneck_artifacts(
             int(row.get("repair_iterations", 0)) > 100 for row in wall_rows
         ),
     }
-    stall_promotion = _stall_promotion_gate(
-        summaries,
-        pairwise,
-        primary_track=primary_track,
-        validation_passed=bool(validation["passed"]),
-    )
-    repair_aware_promotion = _repair_aware_promotion_gate(
-        summaries,
-        primary_track=primary_track,
-        validation_passed=bool(validation["passed"]),
-    )
-    v3_promotion = _v3_promotion_gate(
-        summaries,
-        pairwise,
-        primary_track=primary_track,
-        validation_passed=bool(validation["passed"]),
-        candidate_controller=(
-            "v3-h3" if "v3-h3" in report_controllers else "v3-full"
-        ),
-    )
 
     _write_csv(output_root / "iteration_timings.csv", iterations)
     _write_csv(output_root / "episode_timing_breakdown.csv", episodes)
     _write_csv(output_root / "paired_bottleneck_decomposition.csv", paired)
-    _write_csv(output_root / "controller_pairwise_episodes.csv", pairwise)
-    _write_csv(output_root / "controller_pairwise_summary.csv", pairwise_summary)
-    _write_csv(output_root / "stall_guard_usage.csv", guard_usage)
-    _write_csv(output_root / "repair_aware_usage.csv", repair_aware_usage)
-    _write_csv(output_root / "v3_usage.csv", v3_usage)
-    _write_json(
-        output_root / "repair_aware_promotion.json", repair_aware_promotion
-    )
-    (output_root / "repair_aware_report.md").write_text(
-        _repair_aware_markdown(repair_aware_promotion, pairwise_summary),
-        encoding="utf-8",
-    )
-    _write_json(output_root / "v3_promotion.json", v3_promotion)
-    (output_root / "v3_report.md").write_text(
-        _v3_markdown(v3_promotion, pairwise_summary), encoding="utf-8"
-    )
-    _write_csv(
-        output_root / "stall_prefix_mismatches.csv",
-        list(stall_prefix.get("mismatches") or []),
-    )
-    _write_json(output_root / "stall_prefix_equivalence.json", stall_prefix)
-    _write_csv(
-        output_root / "stall_guard_attempt_limit_violations.csv",
-        guard_attempt_violations,
-    )
-    _write_json(output_root / "targeted_stall_recovery.json", targeted_stall)
     _write_csv(output_root / "long_horizon_checkpoints.csv", long_checkpoints)
     _write_csv(output_root / "long_horizon_diagnostics.csv", long_diagnostics)
     _write_csv(output_root / "timing_summary.csv", summaries)
@@ -3113,7 +2025,12 @@ def generate_bottleneck_artifacts(
     _stacked_timing_svg(output_root / "timing_breakdown.svg", summaries, primary_track)
     _loop_svg(output_root / "loop_count_and_time.svg", summaries, primary_track)
     _scatter_svg(output_root / "neighborhood_size_vs_pp.svg", iterations, primary_track)
-    _conflict_curve_svg(output_root / "conflicts_over_wall_time.svg", episodes, iterations, primary_track)
+    _conflict_curve_svg(
+        output_root / "conflicts_over_wall_time.svg",
+        episodes,
+        iterations,
+        primary_track,
+    )
     report = {
         "schema": REPORT_SCHEMA,
         "primary_track": primary_track,
@@ -3125,11 +2042,6 @@ def generate_bottleneck_artifacts(
         "iteration_count": len(iterations),
         "paired_episode_count": len(paired),
         "wall_clock_sensitivity": sensitivity,
-        "repair_aware_promotion": repair_aware_promotion,
-        "v3_promotion": v3_promotion,
-        "stall_promotion": stall_promotion,
-        "stall_prefix_equivalence": stall_prefix,
-        "targeted_stall_recovery": targeted_stall,
         "long_horizon_extension_job_keys": extension_keys,
         "long_horizon_plateau_count": sum(
             bool(row["plateau"]) for row in long_diagnostics
@@ -3146,16 +2058,6 @@ def generate_bottleneck_artifacts(
         ),
         encoding="utf-8",
     )
-    (output_root / "stall_recovery_report.md").write_text(
-        _stall_recovery_markdown(
-            stall_promotion,
-            pairwise_summary,
-            guard_usage,
-            stall_prefix,
-            targeted_stall,
-        ),
-        encoding="utf-8",
-    )
     return report
 
 
@@ -3166,12 +2068,7 @@ __all__ = [
     "SUPPORTED_NATIVE_TIMING_SCHEMAS",
     "TIMING_FIELDS",
     "generate_bottleneck_artifacts",
-    "controller_pairwise_rows",
-    "controller_pairwise_summary",
     "long_horizon_diagnostics",
-    "stall_guard_attempt_limit_violations",
-    "stall_prefix_equivalence",
-    "targeted_stall_recovery_diagnostic",
     "validate_manifest_trace",
     "load_track",
     "paired_decomposition",

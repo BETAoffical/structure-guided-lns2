@@ -34,7 +34,7 @@ as offline data sources or external comparisons for V3 studies.
 candidate/sequence model and makes no online V2 or Adaptive call, but it did not
 pass its promotion gate. The later receding-Q work is a label and stability
 research chain, not a controller. Legacy `v3-full`/`v3-h3` code is retained as
-historical evidence and is not in the S3 or receding-Q execution path.
+historical evidence in remote cleanup checkpoints, not as active execution code.
 
 All new V3 artifacts use producer/native identities and upgraded schemas.
 Completed artifacts are semantically revalidated before reuse; a completed but

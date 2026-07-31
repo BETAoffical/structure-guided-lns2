@@ -14,7 +14,6 @@ if NATIVE_BUILD.is_dir():
 from experiments.closed_loop_confirmation import (  # noqa: E402
     CONTROLLER_MODES,
     CONTROLLER_RUNTIMES,
-    STOPPING_RULES,
     VERIFICATION_PROFILES,
     CollectionLockError,
     run_closed_loop_collection,
@@ -105,8 +104,10 @@ def main() -> int:
         choices=VERIFICATION_PROFILES,
         default="audit",
     )
-    parser.add_argument("--stall-guard-config")
-    parser.add_argument("--stall-shadow-config")
+    parser.add_argument(
+        "--v3-s3-bundle",
+        help="Sequence-aware bundle; required only with --controller v3-s3.",
+    )
     parser.add_argument(
         "--qualification-source",
         help="Reuse a compatible qualification collection instead of resetting again.",
@@ -116,8 +117,8 @@ def main() -> int:
     parser.add_argument("--environment-time-limit-seconds", type=float)
     parser.add_argument(
         "--stopping-rule",
-        choices=STOPPING_RULES,
-        default="historical",
+        choices=("wall-clock",),
+        default="wall-clock",
     )
     arguments = parser.parse_args()
     try:
@@ -137,8 +138,7 @@ def main() -> int:
             controller_bundle=arguments.controller_bundle,
             controller_runtime=arguments.controller_runtime,
             verification_profile=arguments.verification_profile,
-            stall_guard_config=arguments.stall_guard_config,
-            stall_shadow_config=arguments.stall_shadow_config,
+            v3_s3_bundle=arguments.v3_s3_bundle,
             job_keys=job_keys,
             cohort_job_keys=job_keys,
             wall_time_budget_seconds=arguments.wall_time_budget_seconds,

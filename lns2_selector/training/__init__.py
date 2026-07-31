@@ -1,6 +1,9 @@
-"""Training entry points for retained controller bundles."""
+"""Shared training utilities for retained controller bundles.
 
-from experiments.mixed_full_v2 import export_mixed_full_v2
-from experiments.v3_s3_training import train_v3_s3_bundle
+Concrete experiment entry points stay in their owning modules so importing a
+utility cannot create a circular dependency during controller training.
+"""
 
-__all__ = ["export_mixed_full_v2", "train_v3_s3_bundle"]
+from lns2_selector.training.tree_utils import balanced_map_folds, histogram_trees
+
+__all__ = ["balanced_map_folds", "histogram_trees"]

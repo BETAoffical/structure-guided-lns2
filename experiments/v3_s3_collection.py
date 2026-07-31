@@ -29,7 +29,7 @@ from experiments.parallel_runtime import (
     parallel_runtime_metadata,
     select_parallel_lane_count,
 )
-from experiments.repair_aware import classify_repair_outcome
+from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 from experiments.repair_collection import (
     _fingerprint,
     _load_dataset_rows,
@@ -41,7 +41,7 @@ from experiments.repair_collection import (
     _write_jsonl,
     state_fingerprint,
 )
-from experiments.stall_guard import repair_structure_fingerprint
+from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from experiments.trace_replay import (
     TRACE_REPLAY_CONTRACT,
     decision_rows,
@@ -81,18 +81,17 @@ V3_S3_COLLECTION_PRODUCER_FILES = (
     "experiments/compact_controller_model.py",
     "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
-    "experiments/feature_schema_v3.py",
     "experiments/neighborhood_candidates.py",
     "experiments/neighborhood_features.py",
     "experiments/online_feature_engine.py",
     "experiments/parallel_runtime.py",
-    "experiments/repair_aware.py",
-    "experiments/repair_aware_training.py",
     "experiments/repair_collection.py",
-    "experiments/stall_guard.py",
     "experiments/trace_replay.py",
     "experiments/v3_s3.py",
     "experiments/v3_s3_collection.py",
+    "lns2_selector/runtime/fingerprints.py",
+    "lns2_selector/runtime/portable_scalar.py",
+    "lns2_selector/runtime/repair_outcomes.py",
     "src/python_bindings.cpp",
     "third_party/mapf_lns2/inc/BasicLNS.h",
     "third_party/mapf_lns2/inc/InitLNS.h",

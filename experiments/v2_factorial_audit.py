@@ -16,8 +16,8 @@ from experiments.feature_schema_v2 import (
     STATE_FEATURE_NAMES,
     canonicalize_features,
 )
-from experiments.repair_aware import classify_repair_outcome
-from experiments.repair_aware_training import _balanced_map_folds
+from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
+from lns2_selector.training.tree_utils import balanced_map_folds
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 
 
@@ -521,7 +521,7 @@ def _variant_report(
     input_specs: tuple[tuple[str, str], ...],
     include_legacy_anchor: bool,
 ) -> dict[str, Any]:
-    folds = _balanced_map_folds(high_train)
+    folds = balanced_map_folds(high_train)
     oof_by_state: dict[str, dict[str, Any]] = {}
     fold_reports = []
     total_training_seconds = 0.0

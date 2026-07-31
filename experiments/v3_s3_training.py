@@ -19,12 +19,12 @@ from experiments._common import (
     validate_producer_identity,
 )
 from experiments._common import state_groups as _state_groups
-from experiments.repair_aware import (
+from lns2_selector.runtime.portable_scalar import (
     PORTABLE_SCALAR_MODEL_SCHEMA,
     PortableScalarModel,
     load_portable_scalar_model,
 )
-from experiments.repair_aware_training import _balanced_map_folds, _hist_trees
+from lns2_selector.training.tree_utils import balanced_map_folds, histogram_trees
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -71,11 +71,12 @@ V3_S3_TRAINING_PRODUCER_FILES = (
     "experiments/compact_controller_model.py",
     "experiments/context_audit.py",
     "experiments/feature_schema_v2.py",
-    "experiments/repair_aware.py",
-    "experiments/repair_aware_training.py",
     "experiments/repair_collection.py",
     "experiments/v3_s3.py",
     "experiments/v3_s3_training.py",
+    "lns2_selector/runtime/fingerprints.py",
+    "lns2_selector/runtime/portable_scalar.py",
+    "lns2_selector/training/tree_utils.py",
 )
 V3_S3_NATIVE_AUDIT_PRODUCER_FILES = (
     *V3_S3_TRAINING_PRODUCER_FILES,
@@ -711,7 +712,7 @@ def _oof_predictions(
     index_by_id = {id(row): index for index, row in enumerate(rows)}
     fold_reports = []
     used = set()
-    for fold in _balanced_map_folds(rows):
+    for fold in balanced_map_folds(rows):
         held_maps = set(fold["validation_maps"])
         training = [row for row in rows if row["map_id"] not in held_maps]
         held = [row for row in rows if row["map_id"] in held_maps]
@@ -1230,7 +1231,7 @@ def _tree_payload(estimator: Any, *, probability: bool) -> tuple[float, list[lis
     if hasattr(estimator, "_predictors"):
         return (
             float(estimator._baseline_prediction[0, 0]),
-            _hist_trees(estimator),
+            histogram_trees(estimator),
             "identity",
         )
     estimators = list(estimator.estimators_)

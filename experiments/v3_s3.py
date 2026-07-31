@@ -10,7 +10,10 @@ from typing import Any, Iterable
 
 from experiments._common import read_json, sha256_file
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
-from experiments.repair_aware import PortableScalarModel, load_portable_scalar_model
+from lns2_selector.runtime.portable_scalar import (
+    PortableScalarModel,
+    load_portable_scalar_model,
+)
 from experiments.repair_collection import _fingerprint
 
 

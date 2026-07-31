@@ -13,7 +13,7 @@ from experiments.closed_loop_trace_storage import (
     resolve_state_blob,
 )
 from experiments.repair_collection import _make_environment, _plain, state_fingerprint
-from experiments.stall_guard import repair_structure_fingerprint
+from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
 TRACE_REPLAY_CONTRACT = "lns2.trace_replay.pp-seeded-neighborhood.v2"

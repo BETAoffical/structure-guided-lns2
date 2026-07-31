@@ -19,9 +19,9 @@ controller. Conditional policy metrics use only nonzero-conflict episodes.
 - Official fixed Target
 - Official fixed Collision
 - Official fixed Random
-- Frozen `v1-full`
 - Exact accelerated `v2-full`
-- Registered `v2-stall-safe` when explicitly requested
+- `mixed-full-v2`
+- `v3-s3` when its native-audited bundle is supplied
 
 The active runtime does not expose balanced, cascade, or proposal-pruned variants.
 
@@ -40,9 +40,11 @@ Run the current dual-track quick/formal evaluation interface:
 python scripts/run_lns2_tradeoff_evaluation.py --help
 ```
 
-All strategies on a task must share the initial fingerprint. Runs use at most 100
-repairs, a 300-second solver budget for the registered protocol, process-isolated
-RNG, atomic episode output, and resume at episode granularity.
+All strategies on a task must share the initial fingerprint. New runs use a
+wall-clock deadline with no 100-repair execution cap, process-isolated RNG,
+atomic episode output, and resume at episode granularity. The historical
+registered protocol used 100 repairs; that window is read-only compatibility
+evidence and is not a new promotion metric.
 
 ## Registered Result
 
@@ -69,5 +71,5 @@ time includes candidate proposal generation, feature extraction, inference, PP +
 SIPPS repair, process scheduling, and trace I/O; faster feature inference alone can
 therefore produce only a small end-to-end improvement.
 
-`v2-stall-safe` is a separately registered guard around v2. It does not retrain the
-ranker or alter official repair logic.
+Retired stall/rescue/value controllers are not part of the active evaluation
+interface. Their historical evidence remains recoverable from the cleanup tags.
