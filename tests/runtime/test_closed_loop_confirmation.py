@@ -1064,6 +1064,10 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
     def test_fixed_budget_auc_penalizes_failure(self) -> None:
         self.assertEqual(fixed_budget_conflict_auc([4, 2, 0], 4, success=True), 4.0)
         self.assertEqual(fixed_budget_conflict_auc([4, 2], 4, success=False), 9.0)
+        self.assertEqual(
+            fixed_budget_conflict_auc([4, 3, 2, 1, 0], 2, success=True),
+            6.0,
+        )
         with self.assertRaises(ValueError):
             fixed_budget_conflict_auc([], 4, success=False)
 
