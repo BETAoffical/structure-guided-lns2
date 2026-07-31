@@ -141,6 +141,8 @@ from experiments.v3_s3 import (
     load_v3_s3_bundle,
     s3_temporal_context,
 )
+from lns2_selector.compatibility.metrics import fixed_budget_conflict_auc
+from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
@@ -1811,54 +1813,6 @@ def generate_online_candidates(
         "shadow_validation": bool(shadow_validation),
         "shadow_validation_passed": bool(shadow_validation),
     }
-
-
-def fixed_budget_conflict_auc(
-    trajectory: list[int], budget: int, *, success: bool
-) -> float:
-    """Score the first ``budget`` repairs without limiting episode execution."""
-    if budget <= 0 or not trajectory:
-        raise ValueError("invalid fixed-budget conflict trajectory")
-    values = list(map(int, trajectory[: budget + 1]))
-    pad = 0 if success else values[-1]
-    values.extend([pad] * (budget + 1 - len(values)))
-    return sum((values[index] + values[index + 1]) / 2.0 for index in range(budget))
-
-
-def wall_clock_conflict_auc(
-    trajectory: list[int], transition_elapsed_seconds: list[float], budget_seconds: float
-) -> float:
-    """Integrate the observed conflict count up to a fixed wall-clock deadline.
-
-    A repair that finishes after the deadline does not contribute its after-state;
-    the before-state is carried to the deadline instead.  The initial conflict
-    count is charged from time zero so initialization is represented consistently.
-    """
-    if (
-        not trajectory
-        or len(transition_elapsed_seconds) != len(trajectory) - 1
-        or not math.isfinite(float(budget_seconds))
-        or float(budget_seconds) <= 0.0
-    ):
-        raise ValueError("invalid wall-clock conflict trajectory")
-    budget = float(budget_seconds)
-    previous_time = 0.0
-    current_conflicts = int(trajectory[0])
-    area = 0.0
-    for elapsed, after_conflicts in zip(
-        transition_elapsed_seconds, trajectory[1:]
-    ):
-        event_time = float(elapsed)
-        if not math.isfinite(event_time) or event_time < previous_time:
-            raise ValueError("wall-clock transition times must be finite and ordered")
-        clipped = min(event_time, budget)
-        area += current_conflicts * max(0.0, clipped - previous_time)
-        if event_time > budget:
-            return area
-        previous_time = event_time
-        current_conflicts = int(after_conflicts)
-    area += current_conflicts * max(0.0, budget - previous_time)
-    return area
 
 
 def validate_closed_loop_trace(

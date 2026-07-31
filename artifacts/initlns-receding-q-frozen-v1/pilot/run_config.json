@@ -4,7 +4,7 @@
   "plan_fingerprint": "a0ec2d3f3b2bff27a10a7eb0e0db950dfcbcc44c8c7bb13dfa806da7286e25e9",
   "producer_identity": {
     "native": {
-      "path": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/linux/project/lns2_env.cpython-310-x86_64-linux-gnu.so",
+      "path": "<repository>/build/linux/project/lns2_env.cpython-310-x86_64-linux-gnu.so",
       "repair_timing_schema": "lns2.repair_timing.v2",
       "sha256": "14cf46aa364181c146ed665f95816210ea4510904af633961b93a94ca5c2b765"
     },
@@ -52,7 +52,7 @@
   "producer_identity_fingerprint": "6672138aa09b88cc5f5fdfc079bc4dedbe9d681f74645debbab2280cb047ae88",
   "schema": "lns2.receding_q_label_pilot.v2",
   "smoke_only": false,
-  "source": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/initlns-v3-s3-stable-pilot-v2",
+  "source": "<repository>/build/initlns-v3-s3-stable-pilot-v2",
   "split": "policy_train",
   "state_count": 12,
   "trials": 2,

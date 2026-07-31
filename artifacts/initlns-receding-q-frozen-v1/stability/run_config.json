@@ -7,7 +7,7 @@
   "horizon": 3,
   "implementation_sha256": "e16fb2e9c941f814d0f90c756e0f1307a8f19ca35080408560d977f969a52d8a",
   "schema": "lns2.receding_q_label_stability.v1",
-  "source": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/initlns-receding-q-label-pilot-v1",
+  "source": "<repository>/build/initlns-receding-q-label-pilot-v1",
   "source_plan_fingerprint": "77e0ce4d833ffcdd6d24d7411253e614bfe86d0a011c9ecb9fdc8b423a99bb40",
   "source_rollout_fingerprint": "b0a580e789ba87488d8e349dcd24fdd7afe28d341ad9225f76dc14380a49ef49",
   "target_fingerprint": "f7406c6981188d131c097bafbcb924c428b6e475c92ffe65c7e70780089f5dba",

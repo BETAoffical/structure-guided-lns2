@@ -5,6 +5,7 @@
   "production_python_roots": [
     "experiments",
     "generators",
+    "lns2_selector",
     "scripts"
   ],
   "tracked_roles": {
@@ -15,6 +16,7 @@
     "experiments": "official-kernel experiment implementations",
     "generators": "map and static OD generation",
     "include": "C++ public interfaces",
+    "lns2_selector": "active solver boundary, selector runtime, controllers, training, and evaluation",
     "scripts": "stable command-line entry points",
     "src": "C++ implementation and bindings",
     "tests": "active regression coverage",

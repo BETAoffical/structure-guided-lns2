@@ -29,7 +29,7 @@
   "rollout_count": 430,
   "schema": "lns2.receding_q_gate_audit.v1",
   "source": {
-    "path": "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2/build/initlns-receding-q-label-pilot-v2-current-schema",
+    "path": "<repository>/build/initlns-receding-q-label-pilot-v2-current-schema",
     "plan_sha256": "cde15db68d4caa629ed0805f0dc95127c1b6cda095eb0e39b74f776a067c1c24",
     "run_config_sha256": "60493fe4f79116082b2952a80428274cf8a09d8aba8b5e3a3f4566c0a0475053",
     "schema": "lns2.receding_q_label_pilot.v2",
