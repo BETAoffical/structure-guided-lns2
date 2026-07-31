@@ -10,7 +10,10 @@ from pathlib import Path
 
 from experiments.balanced_wall_clock import (
     _four_neighbor_distances,
+    _paired_success_ttf,
+    _successful_ttf,
     analyze_scheduled,
+    analyze_success_only_ttf,
     audit_balanced_cohort_difficulty,
     build_replacement_dataset,
     collect_scheduled,
@@ -31,6 +34,45 @@ from experiments.state_analysis import summarize_initial_state_complexity
 
 
 class BalancedWallClockTests(unittest.TestCase):
+    def test_success_only_ttf_excludes_failures_from_pairs(self) -> None:
+        def successful(value: float) -> dict[str, object]:
+            return {
+                "summary": {"success": True, "wall_time_to_feasible": value}
+            }
+
+        failed = {
+            "summary": {
+                "success": False,
+                "wall_time_to_feasible": None,
+                "capped_wall_time_to_feasible": 600.0,
+            }
+        }
+        baseline = {
+            ("shared", 1): successful(10.0),
+            ("candidate-only", 1): failed,
+        }
+        candidate = {
+            ("shared", 1): successful(8.0),
+            ("candidate-only", 1): successful(1.0),
+        }
+        schedule = {
+            ("shared", 1): {"map_id": "shared-map"},
+            ("candidate-only", 1): {"map_id": "candidate-only-map"},
+        }
+
+        self.assertIsNone(_successful_ttf(failed))
+        comparison = _paired_success_ttf(
+            baseline,
+            candidate,
+            schedule,
+            schedule,
+            samples=100,
+            seed=7,
+        )
+        self.assertEqual(comparison["common_success_count"], 1)
+        self.assertAlmostEqual(comparison["mean_improvement"], 0.2)
+        self.assertEqual(comparison["candidate_faster_count"], 1)
+
     def test_map_derived_astar_distances_match_four_neighbor_paths(self) -> None:
         passable = {
             (row, col)
@@ -1172,6 +1214,30 @@ class BalancedWallClockTests(unittest.TestCase):
             )
             self.assertEqual(
                 report["promotion_gate_counts"]["map_not_worse_requirement"], 8
+            )
+            success_ttf = analyze_success_only_ttf(
+                collection, cohort, root / "success-ttf"
+            )
+            self.assertEqual(
+                success_ttf["definition"]["primary_comparison"],
+                "paired_common_success",
+            )
+            self.assertAlmostEqual(
+                success_ttf["success_only"]["official_adaptive"]["mean_seconds"],
+                120.0,
+            )
+            self.assertAlmostEqual(
+                success_ttf["paired"]["overall"]["mixed_vs_v2"][
+                    "mean_improvement"
+                ],
+                0.1,
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "success-ttf"
+                    / "success_only_ttf_instances.csv"
+                ).is_file()
             )
             audit = audit_balanced_cohort_difficulty(
                 collection, cohort, root / "difficulty-report"

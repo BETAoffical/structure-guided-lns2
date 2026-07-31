@@ -14,6 +14,7 @@ if NATIVE_BUILD.is_dir():
 
 from experiments.balanced_wall_clock import (  # noqa: E402
     analyze_scheduled,
+    analyze_success_only_ttf,
     audit_balanced_cohort_difficulty,
     build_replacement_dataset,
     collect_scheduled,
@@ -60,6 +61,7 @@ def main() -> int:
             "dry-run",
             "collect",
             "analyze",
+            "analyze-success-ttf",
             "audit-difficulty",
         ),
     )
@@ -228,6 +230,12 @@ def main() -> int:
         )
     elif arguments.phase == "analyze":
         result = analyze_scheduled(
+            _resolve(arguments.collection),
+            _resolve(arguments.cohort),
+            _resolve(arguments.report),
+        )
+    elif arguments.phase == "analyze-success-ttf":
+        result = analyze_success_only_ttf(
             _resolve(arguments.collection),
             _resolve(arguments.cohort),
             _resolve(arguments.report),

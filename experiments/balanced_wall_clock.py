@@ -2192,6 +2192,364 @@ def _paired_group_comparison(
     return result
 
 
+def _successful_ttf(row: dict[str, Any]) -> float | None:
+    summary = row.get("summary")
+    if not isinstance(summary, dict) or not bool(summary.get("success")):
+        return None
+    value = summary.get("wall_time_to_feasible")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("successful episode lacks numeric wall_time_to_feasible")
+    result = float(value)
+    if not math.isfinite(result) or result < 0.0:
+        raise ValueError("successful episode has invalid wall_time_to_feasible")
+    return result
+
+
+def _success_ttf_summary(values: Iterable[float]) -> dict[str, Any]:
+    rows = list(map(float, values))
+    if not rows:
+        return {
+            "success_count": 0,
+            "mean_seconds": None,
+            "median_seconds": None,
+            "p95_seconds": None,
+            "min_seconds": None,
+            "max_seconds": None,
+        }
+    return {
+        "success_count": len(rows),
+        "mean_seconds": _mean(rows),
+        "median_seconds": statistics.median(rows),
+        "p95_seconds": _quantile(rows, 0.95),
+        "min_seconds": min(rows),
+        "max_seconds": max(rows),
+    }
+
+
+def _paired_success_ttf(
+    baseline: dict[tuple[str, int], dict[str, Any]],
+    candidate: dict[tuple[str, int], dict[str, Any]],
+    schedule_index: dict[tuple[str, int], dict[str, Any]],
+    keys: Iterable[tuple[str, int]],
+    *,
+    samples: int = 5000,
+    seed: int = 20270831,
+) -> dict[str, Any]:
+    pairs = []
+    for key in sorted(keys):
+        baseline_ttf = _successful_ttf(baseline[key])
+        candidate_ttf = _successful_ttf(candidate[key])
+        if baseline_ttf is None or candidate_ttf is None:
+            continue
+        pairs.append(
+            {
+                "map_id": str(schedule_index[key]["map_id"]),
+                "baseline": baseline_ttf,
+                "candidate": candidate_ttf,
+            }
+        )
+    baseline_values = [float(row["baseline"]) for row in pairs]
+    candidate_values = [float(row["candidate"]) for row in pairs]
+    if not pairs:
+        return {
+            "common_success_count": 0,
+            "baseline": _success_ttf_summary([]),
+            "candidate": _success_ttf_summary([]),
+            "mean_improvement": None,
+            "median_improvement": None,
+            "mean_paired_delta_seconds": None,
+            "candidate_faster_count": 0,
+            "baseline_faster_count": 0,
+            "tie_count": 0,
+            "map_bootstrap": {
+                "map_count": 0,
+                "samples": samples,
+                "seed": seed,
+                "improvement_95_ci": [None, None],
+            },
+        }
+
+    by_map: dict[str, list[tuple[float, float]]] = collections.defaultdict(list)
+    for row in pairs:
+        by_map[str(row["map_id"])].append(
+            (float(row["baseline"]), float(row["candidate"]))
+        )
+    map_ids = sorted(by_map)
+    generator = random.Random(seed)
+    estimates = []
+    for _ in range(samples):
+        selected = [generator.choice(map_ids) for _ in map_ids]
+        left = [pair[0] for map_id in selected for pair in by_map[map_id]]
+        right = [pair[1] for map_id in selected for pair in by_map[map_id]]
+        estimates.append(_relative_improvement(_mean(left), _mean(right)))
+
+    baseline_mean = _mean(baseline_values)
+    candidate_mean = _mean(candidate_values)
+    baseline_median = statistics.median(baseline_values)
+    candidate_median = statistics.median(candidate_values)
+    return {
+        "common_success_count": len(pairs),
+        "baseline": _success_ttf_summary(baseline_values),
+        "candidate": _success_ttf_summary(candidate_values),
+        "mean_improvement": _relative_improvement(
+            baseline_mean, candidate_mean
+        ),
+        "median_improvement": _relative_improvement(
+            baseline_median, candidate_median
+        ),
+        "mean_paired_delta_seconds": _mean(
+            left - right
+            for left, right in zip(baseline_values, candidate_values)
+        ),
+        "candidate_faster_count": sum(
+            right < left
+            for left, right in zip(baseline_values, candidate_values)
+        ),
+        "baseline_faster_count": sum(
+            left < right
+            for left, right in zip(baseline_values, candidate_values)
+        ),
+        "tie_count": sum(
+            left == right
+            for left, right in zip(baseline_values, candidate_values)
+        ),
+        "map_bootstrap": {
+            "map_count": len(map_ids),
+            "samples": samples,
+            "seed": seed,
+            "improvement_95_ci": [
+                _quantile(estimates, 0.025),
+                _quantile(estimates, 0.975),
+            ],
+        },
+    }
+
+
+def _success_ttf_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "# 去除失败惩罚后的 TTF 对比",
+        "",
+        "失败 episode 的 TTF 记为 `FAIL/NA`，不使用 600 秒 cap，也不把未到达可行解的"
+        "实际停止时间当作 TTF。主要速度口径是同一实例上双方都成功的配对比较。",
+        "",
+        "## 各自成功样本",
+        "",
+        "| 控制器 | 成功 | 平均 TTF (s) | 中位数 | P95 |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for controller in CONTROLLERS:
+        row = report["success_only"][controller]
+        lines.append(
+            f"| {controller} | {row['success_count']}/{report['episode_count']} | "
+            f"{row['mean_seconds']:.3f} | {row['median_seconds']:.3f} | "
+            f"{row['p95_seconds']:.3f} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 共同成功配对",
+            "",
+            "| 对比 | N | 基线均值 | 候选均值 | 均值改善 | 95% CI | 候选更快 |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for name, pair in report["paired"]["overall"].items():
+        interval = pair["map_bootstrap"]["improvement_95_ci"]
+        lines.append(
+            f"| {name} | {pair['common_success_count']} | "
+            f"{pair['baseline']['mean_seconds']:.3f} | "
+            f"{pair['candidate']['mean_seconds']:.3f} | "
+            f"{pair['mean_improvement'] * 100:.2f}% | "
+            f"[{interval[0] * 100:.2f}%, {interval[1] * 100:.2f}%] | "
+            f"{pair['candidate_faster_count']}/{pair['common_success_count']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 分层配对结果",
+            "",
+            "| 分层 | 组 | 对比 | N | 均值改善 | 95% CI |",
+            "| --- | --- | --- | ---: | ---: | ---: |",
+        ]
+    )
+    for field in (
+        "conflict_stratum",
+        "initial_pp_load_stratum",
+        "source_group",
+        "conflict_load_cell",
+    ):
+        for group, comparisons in report["paired"][field].items():
+            for name, pair in comparisons.items():
+                interval = pair["map_bootstrap"]["improvement_95_ci"]
+                improvement = pair["mean_improvement"]
+                improvement_text = (
+                    "NA" if improvement is None else f"{improvement * 100:.2f}%"
+                )
+                interval_text = (
+                    "NA"
+                    if interval[0] is None
+                    else f"[{interval[0] * 100:.2f}%, {interval[1] * 100:.2f}%]"
+                )
+                lines.append(
+                    f"| {field} | {group} | {name} | "
+                    f"{pair['common_success_count']} | {improvement_text} | "
+                    f"{interval_text} |"
+                )
+    lines.extend(
+        [
+            "",
+            "## 逐地图",
+            "",
+            "| 地图 | 冲突×PP负载 | Adaptive | V2 | Mixed |",
+            "| --- | --- | ---: | ---: | ---: |",
+        ]
+    )
+    for row in report["instances"]:
+        def display(value: float | None) -> str:
+            return "FAIL" if value is None else f"{value:.3f}"
+
+        lines.append(
+            f"| {row['map_id']} | {row['conflict_load_cell']} | "
+            f"{display(row['official_adaptive_ttf'])} | "
+            f"{display(row['v2_full_ttf'])} | "
+            f"{display(row['mixed_full_v2_ttf'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "正改善表示候选控制器更快。分层样本很小时，bootstrap 区间仅作不确定性提示。",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def analyze_success_only_ttf(
+    collection: str | Path, schedule_root: str | Path, output: str | Path
+) -> dict[str, Any]:
+    collection_root = Path(collection).resolve()
+    schedule_path = Path(schedule_root).resolve() / "execution_schedule.json"
+    schedule = _read_json(schedule_path)
+    schedule_index, by_controller, indexed = _load_scheduled_controller_rows(
+        collection_root, schedule
+    )
+    incomplete = [
+        row
+        for controller in CONTROLLERS
+        for row in by_controller[controller]
+        if str(row.get("status")) not in {"ok", "resumed"}
+        or not isinstance(row.get("summary"), dict)
+    ]
+    if incomplete:
+        raise ValueError("success-only TTF analysis requires complete formal episodes")
+
+    keys = sorted(schedule_index)
+    success_only = {
+        controller: _success_ttf_summary(
+            value
+            for key in keys
+            if (value := _successful_ttf(indexed[controller][key])) is not None
+        )
+        for controller in CONTROLLERS
+    }
+    pairs = {
+        "v2_vs_adaptive": ("official_adaptive", "v2-full"),
+        "mixed_vs_adaptive": ("official_adaptive", "mixed-full-v2"),
+        "mixed_vs_v2": ("v2-full", "mixed-full-v2"),
+    }
+
+    def comparisons(group_keys: list[tuple[str, int]]) -> dict[str, Any]:
+        return {
+            name: _paired_success_ttf(
+                indexed[baseline],
+                indexed[candidate],
+                schedule_index,
+                group_keys,
+            )
+            for name, (baseline, candidate) in pairs.items()
+        }
+
+    paired: dict[str, Any] = {"overall": comparisons(keys)}
+    for field in (
+        "conflict_stratum",
+        "initial_pp_load_stratum",
+        "source_group",
+    ):
+        grouped: dict[str, list[tuple[str, int]]] = collections.defaultdict(list)
+        for key in keys:
+            grouped[str(schedule_index[key][field])].append(key)
+        paired[field] = {
+            name: comparisons(group_keys)
+            for name, group_keys in sorted(grouped.items())
+        }
+    grouped_cells: dict[str, list[tuple[str, int]]] = collections.defaultdict(list)
+    for key in keys:
+        row = schedule_index[key]
+        grouped_cells[
+            f"{row['conflict_stratum']}__{row['initial_pp_load_stratum']}"
+        ].append(key)
+    paired["conflict_load_cell"] = {
+        name: comparisons(group_keys)
+        for name, group_keys in sorted(grouped_cells.items())
+    }
+
+    instances = []
+    for key in keys:
+        row = schedule_index[key]
+        instances.append(
+            {
+                "task_id": key[0],
+                "solver_seed": key[1],
+                "map_id": str(row["map_id"]),
+                "source_group": str(row["source_group"]),
+                "conflict_stratum": str(row["conflict_stratum"]),
+                "initial_pp_load_stratum": str(row["initial_pp_load_stratum"]),
+                "conflict_load_cell": (
+                    f"{row['conflict_stratum']}__{row['initial_pp_load_stratum']}"
+                ),
+                "initial_conflicts": int(row["initial_conflicts"]),
+                "initial_low_level_generated": (
+                    int(row["initial_low_level_generated"])
+                    if row.get("initial_low_level_generated") is not None
+                    else None
+                ),
+                "official_adaptive_ttf": _successful_ttf(
+                    indexed["official_adaptive"][key]
+                ),
+                "v2_full_ttf": _successful_ttf(indexed["v2-full"][key]),
+                "mixed_full_v2_ttf": _successful_ttf(
+                    indexed["mixed-full-v2"][key]
+                ),
+            }
+        )
+
+    report = {
+        "schema": "lns2.success_only_ttf_report.v1",
+        "definition": {
+            "failure_ttf": None,
+            "failure_penalty_included": False,
+            "primary_comparison": "paired_common_success",
+            "ttf_field": "wall_time_to_feasible",
+        },
+        "input": {
+            "schedule_sha256": sha256_file(schedule_path),
+            "episode_count": len(keys),
+            "controller_episode_count": len(keys) * len(CONTROLLERS),
+        },
+        "episode_count": len(keys),
+        "success_only": success_only,
+        "paired": paired,
+        "instances": instances,
+    }
+    output_root = Path(output).resolve()
+    _write_json(output_root / "success_only_ttf_report.json", report)
+    _write_difficulty_csv(output_root / "success_only_ttf_instances.csv", instances)
+    (output_root / "success_only_ttf_report_zh.md").write_text(
+        _success_ttf_markdown(report), encoding="utf-8", newline="\n"
+    )
+    return report
+
+
 def _load_scheduled_controller_rows(
     collection_root: Path, schedule: dict[str, Any]
 ) -> tuple[
@@ -2910,6 +3268,7 @@ __all__ = [
     "INITIAL_PP_LOAD_STRATA",
     "STRATA",
     "analyze_scheduled",
+    "analyze_success_only_ttf",
     "audit_balanced_cohort_difficulty",
     "build_replacement_dataset",
     "collect_scheduled",
