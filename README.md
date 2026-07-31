@@ -25,7 +25,13 @@ lns2_selector/
   compatibility/   read-only historical metric support
 experiments/        retained collection, training, and audit implementations
 scripts/            thin command-line entry points
-tests/              solver, runtime, controller, evaluation, integration tests
+tests/
+  solver/           official native boundary tests
+  runtime/          shared selector runtime tests
+  controllers/      four-controller contract tests
+  evaluation/       metrics and paired-report tests
+  integration/      data, pipeline, resume, and maintenance tests
+  data/             native and generator fixtures only
 third_party/mapf_lns2/
                     upstream native source boundary
 ```

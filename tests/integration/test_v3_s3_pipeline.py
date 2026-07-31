@@ -55,7 +55,7 @@ from experiments.v3_s3_collection import (
     qualification_pool,
     temporal_context,
 )
-from tests.data.test_repair_collection import sample_state
+from tests.integration.test_repair_collection import sample_state
 from experiments.v3_s3_pipeline import (
     S3_SOURCE_POLICIES,
     _pipeline_identity,

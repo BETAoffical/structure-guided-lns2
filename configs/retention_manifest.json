@@ -289,6 +289,11 @@
       "purpose": "Shared wall-clock evaluation namespace."
     },
     {
+      "path": "lns2_selector/evaluation/trace_validation.py",
+      "role": "shared",
+      "purpose": "Full and compact trace integrity, timing closure, terminal semantics, and historical compatibility validation."
+    },
+    {
       "path": "lns2_selector/runtime/__init__.py",
       "role": "shared",
       "purpose": "Shared selector runtime contract:   init  ."
@@ -307,6 +312,11 @@
       "path": "lns2_selector/runtime/metrics.py",
       "role": "shared",
       "purpose": "Shared selector runtime contract: metrics."
+    },
+    {
+      "path": "lns2_selector/runtime/online_selection.py",
+      "role": "active",
+      "purpose": "Shared online proposal seeds, candidate generation, feature projection, and pairwise scoring for active selectors."
     },
     {
       "path": "lns2_selector/runtime/portable_scalar.py",
@@ -332,6 +342,11 @@
       "path": "lns2_selector/training/__init__.py",
       "role": "reproducibility",
       "purpose": "Rebuild support for retained controller bundles:   init  ."
+    },
+    {
+      "path": "lns2_selector/training/policy_bundle.py",
+      "role": "reproducibility",
+      "purpose": "Frozen and portable V2 bundle loading, export, provenance, and inference-equivalence validation."
     },
     {
       "path": "lns2_selector/training/tree_utils.py",
@@ -519,27 +534,27 @@
       "contract": "Four canonical controller IDs, selection decisions, fallback routing, and rejection of historical aliases."
     },
     {
-      "path": "tests/data/test_movingai_benchmark.py",
+      "path": "tests/integration/test_movingai_benchmark.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained movingai benchmark behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/data/test_repair_collection_native.py",
+      "path": "tests/solver/test_repair_collection_native.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained repair collection native behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/data/test_repair_collection.py",
+      "path": "tests/integration/test_repair_collection.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained repair collection behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/data/test_repair_quality.py",
+      "path": "tests/integration/test_repair_quality.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained repair quality behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/data/test_stage1_generators.py",
+      "path": "tests/integration/test_stage1_generators.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained stage1 generators behavior, artifact integrity, or reproducibility."
     },
@@ -574,27 +589,27 @@
       "contract": "Regression contract for retained v2 wall clock cohorts behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/maintenance/test_environment_check.py",
+      "path": "tests/integration/test_environment_check.py",
       "role": "shared",
       "contract": "Regression contract for retained environment check behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/maintenance/test_manage_build_storage.py",
+      "path": "tests/integration/test_manage_build_storage.py",
       "role": "shared",
       "contract": "Regression contract for retained manage build storage behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/maintenance/test_repository_hygiene.py",
+      "path": "tests/integration/test_repository_hygiene.py",
       "role": "shared",
       "contract": "Regression contract for retained repository hygiene behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/maintenance/test_result_consolidation.py",
+      "path": "tests/integration/test_result_consolidation.py",
       "role": "compatibility",
       "contract": "Regression contract for retained result consolidation behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/maintenance/test_retention_manifest.py",
+      "path": "tests/integration/test_retention_manifest.py",
       "role": "shared",
       "contract": "Every retained production module and pytest file has one executable retention role and an explicit purpose or contract."
     },
@@ -639,7 +654,7 @@
       "contract": "Regression contract for retained producer identity behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/runtime/test_python_env.py",
+      "path": "tests/solver/test_python_env.py",
       "role": "active",
       "contract": "Official native boundary, RNG ownership, proposal generation, terminal behavior, timing schema, and portable inference."
     },
@@ -654,7 +669,7 @@
       "contract": "Regression contract for retained v3 s3 oracle audit behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/runtime/test_v3_s3_pipeline.py",
+      "path": "tests/integration/test_v3_s3_pipeline.py",
       "role": "active",
       "contract": "V3-S3 collection, training, producer identity, resume integrity, terminal handling, and native audit contracts."
     },
@@ -664,7 +679,7 @@
       "contract": "Regression contract for retained v3 s3 behavior, artifact integrity, or reproducibility."
     },
     {
-      "path": "tests/runtime/test_warm_start_feasibility.py",
+      "path": "tests/integration/test_warm_start_feasibility.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained warm start feasibility behavior, artifact integrity, or reproducibility."
     }

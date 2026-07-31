@@ -21,20 +21,29 @@ cleanup report tree; generated `build/` content is excluded.
 
 | Area | Original | Final | Change |
 | --- | ---: | ---: | ---: |
-| tracked files | 578 | 461 | -117 (-20.2%) |
-| production Python files | 181 | 99 | -82 (-45.3%) |
-| production Python lines | 87,059 | 43,236 | -43,823 (-50.3%) |
+| tracked files | 578 | 464 | -114 (-19.7%) |
+| production Python files | 181 | 102 | -79 (-43.6%) |
+| production Python lines | 87,059 | 46,109 | -40,950 (-47.0%) |
 | `experiments/` Python files | 91 | 34 | -57 (-62.6%) |
-| `experiments/` Python lines | 70,705 | 31,195 | -39,510 (-55.9%) |
+| `experiments/` Python lines | 70,705 | 31,230 | -39,475 (-55.8%) |
 | `scripts/` Python files | 81 | 35 | -46 (-56.8%) |
-| `scripts/` Python lines | 12,649 | 7,718 | -4,931 (-39.0%) |
+| `scripts/` Python lines | 12,649 | 8,342 | -4,307 (-34.1%) |
 | `tests/` Python files | 87 | 42 | -45 (-51.7%) |
-| `tests/` Python lines | 25,346 | 14,346 | -11,000 (-43.4%) |
+| `tests/` Python lines | 25,346 | 15,300 | -10,046 (-39.6%) |
 | configuration JSON files | 67 | 52 | -15 (-22.4%) |
 
-The new `lns2_selector/` package contains 21 focused modules (830 lines) for
+The new `lns2_selector/` package contains 24 focused modules (2,832 lines) for
 the solver boundary, shared runtime contracts, four controller adapters,
 training utilities, evaluation boundaries, and read-only compatibility.
+
+The cleanup baseline's 5,807-line
+`experiments/closed_loop_confirmation.py` was reduced to 2,818 lines. Its size
+immediately before the final responsibility split was 4,511 lines.
+Policy-bundle serialization, online candidate scoring/selection, and trace
+validation now live in dedicated package modules, while the original module
+re-exports the public names needed by existing callers. Tests now follow the
+final `solver/`, `runtime/`, `controllers/`, `evaluation/`, and `integration/`
+layout; `tests/data/` contains fixtures only.
 
 ## Retention and compatibility
 
@@ -57,11 +66,12 @@ ignored `build/` directories.
 
 ## Behavior boundary
 
-There are no changes relative to the cleanup baseline under `CMakeLists.txt`,
-`include/`, `src/`, or `third_party/mapf_lns2/`. The cleanup therefore does not
-change native PP, low-level search, RNG, or neighborhood generation. It changes
-Python organization, active controller identity validation, trace integrity,
-and read-only compatibility only.
+There are no changes relative to the cleanup baseline under `include/`, `src/`,
+or `third_party/mapf_lns2/`. `CMakeLists.txt` only follows two relocated Python
+test files; no native source, target, compiler option, or test behavior changed.
+The cleanup therefore does not change native PP, low-level search, RNG, or
+neighborhood generation. It changes Python organization, active controller
+identity validation, trace integrity, and read-only compatibility only.
 
 ## Validation
 
@@ -88,6 +98,7 @@ The cleanup checkpoints are:
 4. `backup/selector-cleanup-03-before-code-pruning`
 5. `backup/selector-cleanup-04-before-test-pruning`
 6. `backup/selector-cleanup-05-before-cli-config`
+7. `backup/selector-cleanup-06-before-final-layout`
 
 To inspect a checkpoint without changing the active branch:
 

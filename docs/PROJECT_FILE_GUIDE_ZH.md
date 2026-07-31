@@ -18,7 +18,12 @@ cleanup 标签恢复。
 | `experiments` | 当前 collection、training、trace 和评估实现 |
 | `scripts` | 薄 CLI；算法逻辑不应复制进脚本 |
 | `configs` | 版本化实验注册；详见 `configs/README.md` |
-| `tests` | 当前行为、已知 bug、artifact 完整性和复现契约 |
+| `tests/solver` | official native、PP、RNG、邻域生成和低层搜索边界 |
+| `tests/runtime` | 选择、feature、trace 和 portable runtime 契约 |
+| `tests/controllers` | 四个现行控制器的统一接口与回退语义 |
+| `tests/evaluation` | 墙钟指标、配对统计和报告完整性 |
+| `tests/integration` | 数据、训练、resume、maintenance 和端到端流程 |
+| `tests/data` | CTest 与生成器使用的 fixture，不包含 Python 测试模块 |
 | `third_party/mapf_lns2` | 固定的官方 native 源码边界，保持原样 |
 | `artifacts` | 冻结模型、schema 和研究证据 |
 | `build` | 本机生成结果，不进入 Git，也不在本次重构中删除 |

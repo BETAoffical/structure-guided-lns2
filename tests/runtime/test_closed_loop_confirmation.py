@@ -1433,6 +1433,10 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                     "experiments.closed_loop_confirmation.state_fingerprint",
                     side_effect=counted_fingerprint,
                 ),
+                patch(
+                    "lns2_selector.evaluation.trace_validation.state_fingerprint",
+                    side_effect=counted_fingerprint,
+                ),
             ):
                 result = _closed_loop_episode_worker(job)
         self.assertEqual(result["status"], "ok")

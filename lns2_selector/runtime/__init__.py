@@ -6,6 +6,11 @@ from lns2_selector.runtime.contracts import (
     Selector,
 )
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
+from lns2_selector.runtime.online_selection import (
+    ClosedLoopExecutionError,
+    generate_online_candidates,
+    score_online_candidates,
+)
 from lns2_selector.runtime.fingerprints import (
     repair_structure_fingerprint,
     semantic_fingerprint,
@@ -16,6 +21,9 @@ __all__ = [
     "SelectionDecision",
     "SelectionRequest",
     "Selector",
+    "ClosedLoopExecutionError",
+    "generate_online_candidates",
+    "score_online_candidates",
     "repair_structure_fingerprint",
     "semantic_fingerprint",
     "classify_repair_outcome",
