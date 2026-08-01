@@ -19,6 +19,7 @@ from experiments.stride_collection import (
     STRIDE_COLLECTION_SCHEMA,
     STRIDE_SELECTION_SCHEMA,
     _state_artifact_valid,
+    _balanced_result_blind_selection,
     load_stride_selection,
     stride_pp_seed,
 )
@@ -345,6 +346,57 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 
 class StrideCollectionContractTest(unittest.TestCase):
+    def test_result_blind_selection_caps_episodes_and_balances_policies(self) -> None:
+        rows = []
+        for policy in ("official_adaptive", "v2-full"):
+            for episode in range(3):
+                for decision in range(3):
+                    conflicts = (2, 20, 200)[decision]
+                    rows.append(
+                        {
+                            "schema": STRIDE_SELECTION_SCHEMA,
+                            "state_id": f"{policy}-{episode}-{decision}",
+                            "map_id": f"map-{episode}",
+                            "task_id": f"task-{episode}",
+                            "split": "stride_pilot",
+                            "source_policy": policy,
+                            "decision_stage": ("early", "middle", "late")[decision],
+                            "conflict_band": (
+                                "low_1_10", "medium_11_100", "high_101_500"
+                            )[decision],
+                            "source_group": "generated" if episode < 2 else "movingai",
+                            "layout_mode": "test",
+                            "source_root": "source",
+                            "episode_id": f"{policy}-episode-{episode}",
+                            "before_fingerprint": f"before-{policy}-{episode}-{decision}",
+                            "before_conflicts": conflicts,
+                            "solver_seed": 1,
+                            "decision_index": decision * 4,
+                            "agent_count": 100 if episode < 2 else 400,
+                            "agent_band": "low_mid" if episode < 2 else "high",
+                            "prefix_actions": [],
+                        }
+                    )
+
+        selected, report = _balanced_result_blind_selection(
+            rows, target_per_policy=6, max_per_episode=2
+        )
+
+        self.assertEqual(len(selected), 12)
+        self.assertEqual(
+            {policy: data["selected_state_count"] for policy, data in report.items()},
+            {"official_adaptive": 6, "v2-full": 6},
+        )
+        self.assertTrue(all(data["max_states_in_episode"] == 2 for data in report.values()))
+
+    def test_result_blind_selection_rejects_outcome_fields(self) -> None:
+        with self.assertRaisesRegex(ValueError, "forbidden fields"):
+            _balanced_result_blind_selection(
+                [{"source_policy": "v2-full", "repair_seconds": 1.0}],
+                target_per_policy=1,
+                max_per_episode=1,
+            )
+
     def test_pp_seeds_are_state_paired_and_trial_distinct(self) -> None:
         first = [stride_pp_seed("repair-state", index) for index in range(4)]
         second = [stride_pp_seed("repair-state", index) for index in range(4)]

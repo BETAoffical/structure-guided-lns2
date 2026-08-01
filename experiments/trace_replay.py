@@ -193,6 +193,58 @@ def decision_rows(
     return rows, events
 
 
+def result_blind_decision_rows(
+    collection_root: Path, manifest: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return pre-action states whose recorded prefix is deterministic.
+
+    This deliberately omits the source action outcome and after-state metrics.
+    A decision itself remains eligible when its incoming prefix is replayable;
+    if that decision used an older unseeded PP action, later decisions are
+    excluded because their prefixes cannot be reproduced exactly.
+    """
+
+    trace_path = contained_file(
+        collection_root,
+        manifest.get("trace_file"),
+        field="trace_file",
+    )
+    events = read_trace_events(trace_path)
+    state = _initial_state(collection_root, trace_path, events[0])
+    prefix: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    for event in events[1:-1]:
+        before_fingerprint = state_fingerprint(state)
+        if before_fingerprint != str(event.get("before_fingerprint")):
+            raise ValueError("source before fingerprint mismatch")
+        controller = event.get("controller")
+        if not isinstance(controller, dict) or str(controller.get("route", "")) not in {
+            "model",
+            "official_adaptive",
+        }:
+            raise ValueError("source transition is missing a valid route")
+        rows.append(
+            {
+                "decision_index": int(event["decision_index"]),
+                "before_fingerprint": before_fingerprint,
+                "before_conflicts": int(state["num_of_colliding_pairs"]),
+                "prefix_actions": [dict(action) for action in prefix],
+            }
+        )
+        try:
+            replay_action = recorded_replay_action(event)
+        except ValueError:
+            break
+        if str(event.get("schema")) == EPISODE_SCHEMA_V2:
+            after = apply_state_delta(state, event["state_delta"])
+            after.update(apply_extras_delta(state, event["state_extras_delta"]))
+        else:
+            after = dict(event["after"])
+        prefix.append(replay_action)
+        state = after
+    return rows, events
+
+
 def replay_prefix(
     job: dict[str, Any], actions: Iterable[dict[str, Any]]
 ) -> tuple[Any, dict[str, Any]]:

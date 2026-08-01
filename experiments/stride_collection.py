@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import concurrent.futures
+import math
 import os
-from collections import Counter
+import shutil
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +28,7 @@ from experiments.stride_lns import (
     STRIDE_TRIAL_SCHEMA,
     post_structure_metrics,
 )
-from experiments.trace_replay import replay_prefix
+from experiments.trace_replay import replay_prefix, result_blind_decision_rows
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.online_selection import generate_online_candidates
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -54,6 +56,393 @@ FULL_POOL_PROPOSAL = {
     "candidates_per_family": 2,
 }
 PP_TRIAL_INDICES = (0, 1, 2, 3)
+STRIDE_PILOT_SPLIT = "stride_pilot"
+STRIDE_SOURCE_POLICIES = {
+    "official_adaptive": ("official_adaptive_manifest.jsonl", "official_adaptive"),
+    "v2-full": ("realized_dynamic_manifest.jsonl", "v2-full"),
+}
+
+
+def _conflict_band(conflicts: int) -> str:
+    if conflicts <= 10:
+        return "low_1_10"
+    if conflicts <= 100:
+        return "medium_11_100"
+    if conflicts <= 500:
+        return "high_101_500"
+    return "extreme_501_plus"
+
+
+def _decision_stage(decision_index: int) -> str:
+    if decision_index < 4:
+        return "early"
+    if decision_index < 8:
+        return "middle"
+    return "late"
+
+
+def _agent_band(agent_count: int) -> str:
+    return "low_mid" if agent_count <= 200 else "high"
+
+
+def _selection_identity(row: dict[str, Any]) -> dict[str, Any]:
+    """Return the only fields permitted to influence STRIDE state sampling."""
+
+    return {
+        "source_policy": str(row["source_policy"]),
+        "episode_id": str(row["episode_id"]),
+        "map_id": str(row["map_id"]),
+        "task_id": str(row["task_id"]),
+        "solver_seed": int(row["solver_seed"]),
+        "decision_index": int(row["decision_index"]),
+        "before_fingerprint": str(row["before_fingerprint"]),
+        "before_conflicts": int(row["before_conflicts"]),
+        "agent_count": int(row["agent_count"]),
+    }
+
+
+def _balanced_result_blind_selection(
+    pool: list[dict[str, Any]], *, target_per_policy: int, max_per_episode: int
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Greedily balance pre-action strata with a hash-only tie break.
+
+    No repair outcome, elapsed time, after-state field, or chosen source action is
+    accepted by this helper.  The four registered conflict bands keep states
+    above 500 rather than silently discarding them; they serve as a fallback for
+    the registered 101--500 high-conflict target.
+    """
+
+    allowed = {
+        "schema",
+        "state_id",
+        "map_id",
+        "task_id",
+        "split",
+        "source_policy",
+        "decision_stage",
+        "conflict_band",
+        "source_group",
+        "layout_mode",
+        "source_root",
+        "episode_id",
+        "before_fingerprint",
+        "before_conflicts",
+        "solver_seed",
+        "decision_index",
+        "agent_count",
+        "agent_band",
+        "prefix_actions",
+    }
+    forbidden = sorted({key for row in pool for key in row if key not in allowed})
+    if forbidden:
+        raise ValueError(f"result-blind STRIDE pool has forbidden fields: {forbidden}")
+    selected: list[dict[str, Any]] = []
+    by_policy: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in pool:
+        by_policy[str(row["source_policy"])].append(row)
+    policy_reports: dict[str, Any] = {}
+    for policy in STRIDE_SOURCE_POLICIES:
+        candidates = list(by_policy.get(policy, []))
+        episode_counts: Counter[str] = Counter()
+        dimension_counts: dict[str, Counter[str]] = {
+            name: Counter()
+            for name in ("conflict_band", "decision_stage", "map_id", "source_group", "agent_band")
+        }
+        chosen: list[dict[str, Any]] = []
+        while len(chosen) < target_per_policy:
+            eligible = [
+                row
+                for row in candidates
+                if episode_counts[str(row["episode_id"])] < max_per_episode
+            ]
+            if not eligible:
+                break
+
+            def score(row: dict[str, Any]) -> tuple[float, ...]:
+                # Lower occupancy wins.  The ordering makes conflict/stage
+                # coverage primary, followed by map/source/agent balance.
+                high_band = (
+                    "high_101_500"
+                    if row["conflict_band"] == "extreme_501_plus"
+                    else str(row["conflict_band"])
+                )
+                agent_target = math.ceil(0.30 * target_per_policy)
+                conflict_target = math.ceil(target_per_policy / 3)
+                stage_target = math.ceil(target_per_policy / 3)
+                return (
+                    float(
+                        dimension_counts["agent_band"][str(row["agent_band"])]
+                        >= agent_target
+                    ),
+                    float(dimension_counts["map_id"][str(row["map_id"])] > 0),
+                    float(dimension_counts["conflict_band"][high_band] >= conflict_target),
+                    float(
+                        dimension_counts["decision_stage"][str(row["decision_stage"])]
+                        >= stage_target
+                    ),
+                    float(dimension_counts["conflict_band"][high_band]),
+                    float(dimension_counts["decision_stage"][str(row["decision_stage"])]),
+                    float(dimension_counts["map_id"][str(row["map_id"])]),
+                    float(dimension_counts["source_group"][str(row["source_group"])]),
+                    float(dimension_counts["agent_band"][str(row["agent_band"])]),
+                    float(episode_counts[str(row["episode_id"])]),
+                    int(_fingerprint(_selection_identity(row))[:16], 16),
+                )
+
+            winner = min(eligible, key=score)
+            chosen.append(winner)
+            candidates.remove(winner)
+            episode_counts[str(winner["episode_id"])] += 1
+            for name, counter in dimension_counts.items():
+                value = str(winner[name])
+                if name == "conflict_band" and value == "extreme_501_plus":
+                    value = "high_101_500"
+                counter[value] += 1
+        selected.extend(chosen)
+        policy_reports[policy] = {
+            "available_state_count": len(by_policy.get(policy, [])),
+            "available_episode_count": len(
+                {str(row["episode_id"]) for row in by_policy.get(policy, [])}
+            ),
+            "selected_state_count": len(chosen),
+            "selected_episode_count": len(episode_counts),
+            "max_states_in_episode": max(episode_counts.values(), default=0),
+            "counts": {
+                name: dict(sorted(counter.items()))
+                for name, counter in dimension_counts.items()
+            },
+        }
+    return selected, policy_reports
+
+
+def build_stride_state_selection(
+    *, source_roots: list[Path], output: Path, target_per_policy: int = 120,
+    max_per_episode: int = 2,
+) -> dict[str, Any]:
+    """Build the preregistered Pilot cohort from pre-action trace state only."""
+
+    if not source_roots:
+        raise ValueError("STRIDE selection requires at least one source collection")
+    if target_per_policy <= 0 or max_per_episode <= 0:
+        raise ValueError("STRIDE selection limits must be positive")
+    pool: list[dict[str, Any]] = []
+    registered_maps: set[str] = set()
+    roots = [root.resolve() for root in source_roots]
+    for source_root in roots:
+        run = _read_json(source_root / "run_config.json")
+        dataset_root = Path(str(run["dataset"])).resolve()
+        dataset = {
+            str(row["task_id"]): row
+            for row in _load_dataset_rows(dataset_root, [STRIDE_PILOT_SPLIT])
+        }
+        registered_maps.update(str(row["map_id"]) for row in dataset.values())
+        for _, (manifest_name, source_policy) in STRIDE_SOURCE_POLICIES.items():
+            for manifest in _read_jsonl(source_root / manifest_name):
+                if manifest.get("status") != "ok":
+                    continue
+                task_id = str(manifest["task_id"])
+                dataset_row = dataset.get(task_id)
+                if dataset_row is None:
+                    raise ValueError(f"STRIDE source task is absent from dataset: {task_id}")
+                decisions, _ = result_blind_decision_rows(source_root, manifest)
+                for decision in decisions:
+                    before_conflicts = int(decision["before_conflicts"])
+                    if before_conflicts <= 0:
+                        continue
+                    decision_index = int(decision["decision_index"])
+                    identity = {
+                        "source_policy": source_policy,
+                        "episode_id": str(manifest["episode_id"]),
+                        "map_id": str(manifest["map_id"]),
+                        "task_id": task_id,
+                        "solver_seed": int(manifest["solver_seed"]),
+                        "decision_index": decision_index,
+                        "before_fingerprint": str(decision["before_fingerprint"]),
+                        "before_conflicts": before_conflicts,
+                        "agent_count": int(manifest["agent_count"]),
+                    }
+                    pool.append(
+                        {
+                            "schema": STRIDE_SELECTION_SCHEMA,
+                            "state_id": "stride-" + _fingerprint(identity)[:24],
+                            "map_id": identity["map_id"],
+                            "task_id": task_id,
+                            "split": str(manifest["split"]),
+                            "source_policy": source_policy,
+                            "decision_stage": _decision_stage(decision_index),
+                            "conflict_band": _conflict_band(before_conflicts),
+                            "source_group": str(dataset_row.get("source_group", "unknown")),
+                            "layout_mode": str(manifest.get("layout_mode", "unknown")),
+                            "source_root": str(source_root),
+                            "episode_id": str(manifest["episode_id"]),
+                            "before_fingerprint": identity["before_fingerprint"],
+                            "before_conflicts": before_conflicts,
+                            "solver_seed": identity["solver_seed"],
+                            "decision_index": decision_index,
+                            "agent_count": identity["agent_count"],
+                            "agent_band": _agent_band(identity["agent_count"]),
+                            "prefix_actions": list(decision["prefix_actions"]),
+                        }
+                    )
+    state_ids = [str(row["state_id"]) for row in pool]
+    if len(state_ids) != len(set(state_ids)):
+        raise ValueError("STRIDE source collections contain duplicate state identities")
+    selected, policy_reports = _balanced_result_blind_selection(
+        pool, target_per_policy=target_per_policy, max_per_episode=max_per_episode
+    )
+    selected.sort(key=lambda row: (str(row["source_policy"]), str(row["state_id"])))
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(output / "state_selection.jsonl", selected)
+    selected_maps = {str(row["map_id"]) for row in selected}
+    available_maps = {str(row["map_id"]) for row in pool}
+    agent_counts = Counter(str(row["agent_band"]) for row in selected)
+    total = len(selected)
+    gates = {
+        "target_per_policy": all(
+            report["selected_state_count"] == target_per_policy
+            for report in policy_reports.values()
+        ),
+        "episode_cap": all(
+            report["max_states_in_episode"] <= max_per_episode
+            for report in policy_reports.values()
+        ),
+        "all_available_maps": selected_maps == available_maps,
+        "low_mid_agent_coverage": total > 0 and agent_counts["low_mid"] / total >= 0.30,
+        "high_agent_coverage": total > 0 and agent_counts["high"] / total >= 0.30,
+    }
+    report = {
+        "schema": STRIDE_SELECTION_SCHEMA,
+        "schema_version": 1,
+        "result_blind": True,
+        "permitted_selection_inputs": sorted(_selection_identity(pool[0]).keys()) if pool else [],
+        "forbidden_selection_inputs": [
+            "actual_action", "actual_lns2", "after_fingerprint", "repair_seconds",
+            "repair_state_changed", "replay_action",
+        ],
+        "source_roots": [str(root) for root in roots],
+        "target_per_policy": target_per_policy,
+        "max_per_episode": max_per_episode,
+        "available_state_count": len(pool),
+        "selected_state_count": total,
+        "selected_map_count": len(selected_maps),
+        "available_map_count": len(available_maps),
+        "dataset_map_count": len(registered_maps),
+        "unavailable_map_ids": sorted(registered_maps - available_maps),
+        "selected_agent_band_counts": dict(sorted(agent_counts.items())),
+        "policies": policy_reports,
+        "gates": gates,
+        "passed": all(gates.values()),
+        "high_conflict_fallback": "states above 500 are retained and balance the 101-500 stratum",
+    }
+    _write_json(output / "state_selection_report.json", report)
+    return report
+
+
+def prepare_stride_pilot_dataset(
+    *, generated: Path, movingai: Path, output: Path
+) -> dict[str, Any]:
+    """Merge the preregistered nine synthetic and six MovingAI dev maps."""
+
+    sources = (
+        ("generated", generated.resolve(), STRIDE_PILOT_SPLIT),
+        ("movingai", movingai.resolve(), "balanced_wall_clock"),
+    )
+    manifest: list[dict[str, Any]] = []
+    source_hashes: dict[str, str] = {}
+    output = output.resolve()
+    for source_group, source_root, source_split in sources:
+        source_manifest = source_root / source_split / "manifest.jsonl"
+        source_hashes[source_group] = sha256_file(source_manifest)
+        for raw in _read_jsonl(source_manifest):
+            row = dict(raw)
+            row["split"] = STRIDE_PILOT_SPLIT
+            row["source_group"] = source_group
+            for field in (
+                "map_file",
+                "scenario_file",
+                "map_metadata_file",
+                "task_file",
+                "legacy_instance_file",
+            ):
+                if not row.get(field):
+                    continue
+                relative = Path(str(row[field]))
+                source = source_root / source_split / relative
+                if not source.is_file():
+                    raise ValueError(f"STRIDE dataset source is missing: {source}")
+                destination = output / STRIDE_PILOT_SPLIT / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if destination.is_file() and sha256_file(destination) != sha256_file(source):
+                    raise ValueError(f"STRIDE dataset merge collision: {relative}")
+                if not destination.is_file():
+                    shutil.copy2(source, destination)
+            manifest.append(row)
+
+    task_ids = [str(row["task_id"]) for row in manifest]
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError("STRIDE Pilot task IDs are duplicated")
+    by_source = Counter(str(row["source_group"]) for row in manifest)
+    maps_by_source = {
+        group: {str(row["map_id"]) for row in manifest if row["source_group"] == group}
+        for group in ("generated", "movingai")
+    }
+    tasks_by_map = Counter(str(row["map_id"]) for row in manifest)
+    if by_source != Counter({"generated": 72, "movingai": 24}):
+        raise ValueError(f"STRIDE Pilot source task counts differ: {dict(by_source)}")
+    if len(maps_by_source["generated"]) != 9 or len(maps_by_source["movingai"]) != 6:
+        raise ValueError("STRIDE Pilot requires nine generated and six MovingAI maps")
+    if any(
+        tasks_by_map[map_id] != expected
+        for group, expected in (("generated", 8), ("movingai", 4))
+        for map_id in maps_by_source[group]
+    ):
+        raise ValueError("STRIDE Pilot tasks per map differ from registration")
+    agent_counts = Counter(int(row["agent_count"]) for row in manifest)
+    low_mid = sum(count for agents, count in agent_counts.items() if 80 <= agents <= 200)
+    high = sum(count for agents, count in agent_counts.items() if 400 <= agents <= 600)
+    if low_mid / len(manifest) < 0.30 or high / len(manifest) < 0.30:
+        raise ValueError("STRIDE Pilot agent-band coverage is below 30 percent")
+    formal_ids = {
+        "den312d",
+        "lak303d",
+        "maze-128-128-1",
+        "maze-128-128-10",
+        "maze-32-32-4",
+        "random-32-32-10",
+        "random-64-64-10",
+        "random-64-64-20",
+        "room-64-64-16",
+        "room-64-64-8",
+        "warehouse-10-20-10-2-2",
+        "warehouse-20-40-10-2-2",
+    }
+    current_ids = {str(row["map_id"]) for row in manifest}
+    overlap = sorted(current_ids & formal_ids)
+    if overlap:
+        raise ValueError(f"STRIDE Pilot leaks formal MovingAI maps: {overlap}")
+
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    split_root = output / STRIDE_PILOT_SPLIT
+    split_root.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(split_root / "manifest.jsonl", manifest)
+    summary = {
+        "schema": "lns2.stride.pilot_dataset.v1",
+        "split": STRIDE_PILOT_SPLIT,
+        "map_count": 15,
+        "task_count": len(manifest),
+        "source_task_counts": dict(sorted(by_source.items())),
+        "source_map_counts": {
+            key: len(value) for key, value in sorted(maps_by_source.items())
+        },
+        "agent_counts": {str(key): value for key, value in sorted(agent_counts.items())},
+        "low_mid_agent_fraction": low_mid / len(manifest),
+        "high_agent_fraction": high / len(manifest),
+        "formal_map_overlap": overlap,
+        "source_manifest_sha256": source_hashes,
+    }
+    _write_json(output / "dataset_summary.json", summary)
+    return summary
 
 
 def stride_pp_seed(state_repair_fingerprint: str, trial_index: int) -> int:
