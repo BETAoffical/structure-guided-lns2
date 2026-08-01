@@ -20,6 +20,11 @@ from experiments.stride_selection_v2 import (  # noqa: E402
     preflight_stride_selection,
 )
 from experiments.stride_reuse import reuse_stride_collection  # noqa: E402
+from experiments.stride_stability import (  # noqa: E402
+    analyze_stride_stability,
+    collect_stride_stability_trials,
+    select_stride_stability_states,
+)
 
 
 def _resolve(value: str) -> Path:
@@ -85,6 +90,25 @@ def parse_arguments() -> argparse.Namespace:
     reuse.add_argument("--source", required=True)
     reuse.add_argument("--preflight-report", required=True)
     reuse.add_argument("--output", required=True)
+    stability_select = subparsers.add_parser(
+        "select-stability", help="Select the result-blind 20 percent stability cohort."
+    )
+    stability_select.add_argument("--selection", required=True)
+    stability_select.add_argument("--output", default="build/stride-stage2-stability-selection-v1")
+    stability_select.add_argument("--count-per-policy", type=int, default=24)
+    stability_collect = subparsers.add_parser(
+        "collect-stability", help="Collect PP trial indices 4 through 7."
+    )
+    stability_collect.add_argument("--selection", required=True)
+    stability_collect.add_argument("--collection", required=True)
+    stability_collect.add_argument("--output", default="build/stride-stage2-stability-v1")
+    stability_collect.add_argument("--workers", type=int, default=4)
+    stability_analyze = subparsers.add_parser(
+        "analyze-stability", help="Compare the first and second four-seed halves."
+    )
+    stability_analyze.add_argument("--base-trials", required=True)
+    stability_analyze.add_argument("--extra-trials", required=True)
+    stability_analyze.add_argument("--output", default="build/stride-stage2-stability-analysis-v1")
     return parser.parse_args()
 
 
@@ -168,6 +192,31 @@ def main() -> int:
             f"{report['pending_state_count']}"
         )
         return 0
+    if arguments.stage == "select-stability":
+        report = select_stride_stability_states(
+            selection_path=_resolve(arguments.selection),
+            output=_resolve(arguments.output),
+            count_per_policy=arguments.count_per_policy,
+        )
+        print("stride_stability_selection_passed" if report["passed"] else "stride_stability_selection_failed")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "collect-stability":
+        report = collect_stride_stability_trials(
+            selection_path=_resolve(arguments.selection),
+            collection=_resolve(arguments.collection),
+            output=_resolve(arguments.output),
+            workers=arguments.workers,
+        )
+        print("stride_stability_collection_complete" if report["complete"] else "stride_stability_collection_failed")
+        return 0 if report["complete"] else 2
+    if arguments.stage == "analyze-stability":
+        report = analyze_stride_stability(
+            base_trials=_resolve(arguments.base_trials),
+            extra_trials=_resolve(arguments.extra_trials),
+            output=_resolve(arguments.output),
+        )
+        print("stride_stability_passed" if report["passed"] else "stride_stability_failed")
+        return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")
 
 

@@ -154,6 +154,21 @@
       "purpose": "Resumable native full-pool paired repair collection for STRIDE-LNS."
     },
     {
+      "path": "experiments/stride_selection_v2.py",
+      "role": "active",
+      "purpose": "Result-blind decision-capped STRIDE cohort selection and repeated replay preflight."
+    },
+    {
+      "path": "experiments/stride_reuse.py",
+      "role": "reproducibility",
+      "purpose": "Audited reuse of complete cohort-independent STRIDE state artifacts."
+    },
+    {
+      "path": "experiments/stride_stability.py",
+      "role": "active",
+      "purpose": "Held-out PP-seed extension and preregistered STRIDE label-stability gate."
+    },
+    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."

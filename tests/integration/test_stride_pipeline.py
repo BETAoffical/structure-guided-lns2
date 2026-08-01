@@ -28,6 +28,7 @@ from experiments.stride_selection_v2 import (
     _excluded_ids,
     preflight_stride_selection,
 )
+from experiments.stride_stability import _extra_artifact_valid, stride_extended_pp_seed
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -351,6 +352,29 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 
 class StrideCollectionContractTest(unittest.TestCase):
+    def test_extended_stability_seeds_preserve_first_half_namespace(self) -> None:
+        first = [stride_extended_pp_seed("repair-state", index) for index in range(8)]
+        self.assertEqual(first[:4], [stride_pp_seed("repair-state", index) for index in range(4)])
+        self.assertEqual(len(set(first)), 8)
+
+    def test_stability_artifact_requires_all_extra_seed_pairs(self) -> None:
+        payload = {
+            "schema": "lns2.stride.stability_collection.v1",
+            "identity": "run",
+            "state_id": "state",
+            "complete": True,
+            "candidate_ids": ["a", "b"],
+            "trials": [
+                {"candidate_id": candidate, "trial_index": trial}
+                for candidate in ("a", "b")
+                for trial in range(4, 8)
+            ],
+        }
+        self.assertTrue(_extra_artifact_valid(payload, identity="run", state_id="state"))
+        payload["trials"].pop()
+        self.assertFalse(_extra_artifact_valid(payload, identity="run", state_id="state"))
+
+
     def test_selection_v2_loads_explicit_instability_exclusions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "exclusions.json"
