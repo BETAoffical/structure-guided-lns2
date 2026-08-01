@@ -15,6 +15,11 @@ from experiments.stride_collection import (  # noqa: E402
     collect_stride_repairs,
     prepare_stride_pilot_dataset,
 )
+from experiments.stride_selection_v2 import (  # noqa: E402
+    build_stride_state_selection_v2,
+    preflight_stride_selection,
+)
+from experiments.stride_reuse import reuse_stride_collection  # noqa: E402
 
 
 def _resolve(value: str) -> Path:
@@ -58,6 +63,28 @@ def parse_arguments() -> argparse.Namespace:
     selection.add_argument("--output", default="build/stride-stage2-pilot-selection-v1")
     selection.add_argument("--target-per-policy", type=int, default=120)
     selection.add_argument("--max-per-episode", type=int, default=2)
+    selection_v2 = subparsers.add_parser(
+        "select-states-v2", help="Build the decision-capped STRIDE Stage 2 cohort."
+    )
+    selection_v2.add_argument("--source", action="append", required=True)
+    selection_v2.add_argument("--output", default="build/stride-stage2-pilot-selection-v2")
+    selection_v2.add_argument("--exclude-report")
+    selection_v2.add_argument("--target-per-policy", type=int, default=120)
+    selection_v2.add_argument("--max-per-episode", type=int, default=2)
+    preflight = subparsers.add_parser(
+        "preflight-selection", help="Repeat replay and candidate generation before PP trials."
+    )
+    preflight.add_argument("--selection", required=True)
+    preflight.add_argument("--output", default="build/stride-stage2-pilot-preflight-v1")
+    preflight.add_argument("--workers", type=int, default=4)
+    preflight.add_argument("--repetitions", type=int, default=3)
+    reuse = subparsers.add_parser(
+        "reuse-collection", help="Audit and reuse complete state artifacts for a new cohort."
+    )
+    reuse.add_argument("--selection", required=True)
+    reuse.add_argument("--source", required=True)
+    reuse.add_argument("--preflight-report", required=True)
+    reuse.add_argument("--output", required=True)
     return parser.parse_args()
 
 
@@ -108,6 +135,39 @@ def main() -> int:
         )
         print("stride_selection_passed" if report["passed"] else "stride_selection_failed")
         return 0 if report["passed"] else 2
+    if arguments.stage == "select-states-v2":
+        report = build_stride_state_selection_v2(
+            source_roots=[_resolve(value) for value in arguments.source],
+            output=_resolve(arguments.output),
+            exclusion_report=(
+                _resolve(arguments.exclude_report) if arguments.exclude_report else None
+            ),
+            target_per_policy=arguments.target_per_policy,
+            max_per_episode=arguments.max_per_episode,
+        )
+        print("stride_selection_v2_passed" if report["passed"] else "stride_selection_v2_failed")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "preflight-selection":
+        report = preflight_stride_selection(
+            selection_path=_resolve(arguments.selection),
+            output=_resolve(arguments.output),
+            workers=arguments.workers,
+            repetitions=arguments.repetitions,
+        )
+        print("stride_preflight_passed" if report["passed"] else "stride_preflight_failed")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "reuse-collection":
+        report = reuse_stride_collection(
+            selection_path=_resolve(arguments.selection),
+            source=_resolve(arguments.source),
+            output=_resolve(arguments.output),
+            preflight_report=_resolve(arguments.preflight_report),
+        )
+        print(
+            f"stride_reuse_ready:{report['reused_state_count']}:"
+            f"{report['pending_state_count']}"
+        )
+        return 0
     raise AssertionError(f"unhandled stage: {arguments.stage}")
 
 

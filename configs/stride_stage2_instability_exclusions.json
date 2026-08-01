@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.stride.instability_history.v1",
+  "source_selection_sha256": "28afbb6997932833df9cbcbfad6cb4814c4c229421f20e6f19ebaaa990e47e10",
+  "rule": "exclude every state that failed strict replay or candidate collection in any observed run",
+  "excluded_state_ids": [
+    "stride-0017db5f565ce531917d1f7f",
+    "stride-003362987a999fb1cb02ba39",
+    "stride-007001b7234d161d108e4db2",
+    "stride-00fc8b1d3557fc1551d235f9",
+    "stride-0f3a9a24aeca2e869d2423a3",
+    "stride-1d4f571d261019599a1c9ed0",
+    "stride-23ac9e974d598ebc6618f7a0",
+    "stride-2581eb91a2361bbbb6191da2",
+    "stride-32ca283ab9142ef185d0b919",
+    "stride-440a17d9fc91d13a04c3cdc4",
+    "stride-7f6288d19e390dde06e9873c"
+  ]
+}

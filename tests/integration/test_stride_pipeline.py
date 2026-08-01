@@ -23,6 +23,11 @@ from experiments.stride_collection import (
     load_stride_selection,
     stride_pp_seed,
 )
+from experiments.stride_selection_v2 import (
+    MAX_SOURCE_DECISION_INDEX,
+    _excluded_ids,
+    preflight_stride_selection,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -346,6 +351,22 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 
 class StrideCollectionContractTest(unittest.TestCase):
+    def test_selection_v2_loads_explicit_instability_exclusions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "exclusions.json"
+            _write_json(path, {"excluded_state_ids": ["state-a", "state-b"]})
+            self.assertEqual(_excluded_ids(path), {"state-a", "state-b"})
+            self.assertEqual(MAX_SOURCE_DECISION_INDEX, 11)
+
+    def test_preflight_requires_repeated_replay(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least two repetitions"):
+            preflight_stride_selection(
+                selection_path=Path("unused"),
+                output=Path("unused"),
+                workers=1,
+                repetitions=1,
+            )
+
     def test_result_blind_selection_caps_episodes_and_balances_policies(self) -> None:
         rows = []
         for policy in ("official_adaptive", "v2-full"):
