@@ -169,6 +169,11 @@
       "purpose": "Held-out PP-seed extension and preregistered STRIDE label-stability gate."
     },
     {
+      "path": "experiments/stride_quality_v2.py",
+      "role": "active",
+      "purpose": "Eight-seed STRIDE quality V2 label, disjoint confirmation selection, and stability gate."
+    },
+    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."

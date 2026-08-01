@@ -43,8 +43,8 @@ EXTRA_TRIAL_INDICES = (4, 5, 6, 7)
 
 
 def stride_extended_pp_seed(state_repair_fingerprint: str, trial_index: int) -> int:
-    if trial_index < 0 or trial_index > 7:
-        raise ValueError("STRIDE extended trial index must be between 0 and 7")
+    if trial_index < 0 or trial_index > 15:
+        raise ValueError("STRIDE extended trial index must be between 0 and 15")
     return int(
         _fingerprint(
             {
@@ -108,9 +108,12 @@ def _source_state_files(collection: Path) -> dict[str, Path]:
     return result
 
 
-def _extra_artifact_valid(payload: dict[str, Any], *, identity: str, state_id: str) -> bool:
+def _extension_artifact_valid(
+    payload: dict[str, Any], *, identity: str, state_id: str,
+    schema: str, trial_indices: tuple[int, ...],
+) -> bool:
     if (
-        payload.get("schema") != STRIDE_STABILITY_COLLECTION_SCHEMA
+        payload.get("schema") != schema
         or payload.get("identity") != identity
         or payload.get("state_id") != state_id
         or payload.get("complete") is not True
@@ -123,7 +126,7 @@ def _extra_artifact_valid(payload: dict[str, Any], *, identity: str, state_id: s
     expected = {
         (str(candidate_id), trial_index)
         for candidate_id in candidates
-        for trial_index in EXTRA_TRIAL_INDICES
+        for trial_index in trial_indices
     }
     observed = {
         (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
@@ -133,15 +136,33 @@ def _extra_artifact_valid(payload: dict[str, Any], *, identity: str, state_id: s
     return observed == expected and len(trials) == len(expected)
 
 
-def _collect_extra_state(job: dict[str, Any]) -> dict[str, Any]:
+def _extra_artifact_valid(payload: dict[str, Any], *, identity: str, state_id: str) -> bool:
+    return _extension_artifact_valid(
+        payload,
+        identity=identity,
+        state_id=state_id,
+        schema=STRIDE_STABILITY_COLLECTION_SCHEMA,
+        trial_indices=EXTRA_TRIAL_INDICES,
+    )
+
+
+def _collect_extension_state(job: dict[str, Any]) -> dict[str, Any]:
     decision = dict(job["decision"])
     source_payload = _read_json(Path(str(job["source_file"])))
     output_path = Path(str(job["output_file"]))
     identity = str(job["identity"])
+    artifact_schema = str(job["artifact_schema"])
+    trial_indices = tuple(map(int, job["trial_indices"]))
     state_id = str(decision["state_id"])
     if output_path.is_file():
         existing = _read_json(output_path)
-        if _extra_artifact_valid(existing, identity=identity, state_id=state_id):
+        if _extension_artifact_valid(
+            existing,
+            identity=identity,
+            state_id=state_id,
+            schema=artifact_schema,
+            trial_indices=trial_indices,
+        ):
             return {
                 "state_id": state_id,
                 "status": "resumed",
@@ -166,7 +187,7 @@ def _collect_extra_state(job: dict[str, Any]) -> dict[str, Any]:
     for candidate in candidates:
         candidate_id = str(candidate["candidate_id"])
         agents = list(map(int, candidate["agents"]))
-        for trial_index in EXTRA_TRIAL_INDICES:
+        for trial_index in trial_indices:
             environment, branch = replay_prefix(replay, decision["prefix_actions"])
             if state_fingerprint(branch) != before_fingerprint:
                 raise RuntimeError("STRIDE stability paired replay changed")
@@ -213,7 +234,7 @@ def _collect_extra_state(job: dict[str, Any]) -> dict[str, Any]:
                 }
             )
     payload = {
-        "schema": STRIDE_STABILITY_COLLECTION_SCHEMA,
+        "schema": artifact_schema,
         "identity": identity,
         "complete": True,
         "state_id": state_id,
@@ -233,8 +254,9 @@ def _collect_extra_state(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_stride_stability_trials(
-    *, selection_path: Path, collection: Path, output: Path, workers: int = 4
+def collect_stride_extension_trials(
+    *, selection_path: Path, collection: Path, output: Path,
+    trial_indices: tuple[int, ...], artifact_schema: str, workers: int = 4,
 ) -> dict[str, Any]:
     if workers <= 0:
         raise ValueError("STRIDE stability workers must be positive")
@@ -243,12 +265,17 @@ def collect_stride_stability_trials(
     missing = sorted(str(row["state_id"]) for row in selected if str(row["state_id"]) not in source_files)
     if missing:
         raise ValueError(f"STRIDE stability source states are missing: {missing}")
+    normalized_indices = tuple(sorted(set(map(int, trial_indices))))
+    if not normalized_indices or normalized_indices != tuple(map(int, trial_indices)):
+        raise ValueError("STRIDE extension trial indices must be sorted and unique")
+    if normalized_indices[0] < 4 or normalized_indices[-1] > 15:
+        raise ValueError("STRIDE extension trial indices must be between 4 and 15")
     identity_payload = {
-        "schema": STRIDE_STABILITY_COLLECTION_SCHEMA,
+        "schema": artifact_schema,
         "selection": str(selection_path.resolve()),
         "selection_rows": selected,
         "source_run_fingerprint": _read_json(collection / "run_config.json")["run_fingerprint"],
-        "extra_trial_indices": list(EXTRA_TRIAL_INDICES),
+        "extra_trial_indices": list(normalized_indices),
     }
     identity = _fingerprint(identity_payload)
     output = output.resolve()
@@ -264,13 +291,15 @@ def collect_stride_stability_trials(
                 / f"{_fingerprint({'state_id': row['state_id']})[:20]}.json"
             ),
             "identity": identity,
+            "artifact_schema": artifact_schema,
+            "trial_indices": list(normalized_indices),
         }
         for row in selected
     ]
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_collect_extra_state, job): job for job in jobs}
+        futures = {executor.submit(_collect_extension_state, job): job for job in jobs}
         for future in concurrent.futures.as_completed(futures):
             job = futures[future]
             try:
@@ -285,7 +314,7 @@ def collect_stride_stability_trials(
             _write_json(
                 output / "collection_status.json",
                 {
-                    "schema": STRIDE_STABILITY_COLLECTION_SCHEMA,
+                    "schema": artifact_schema,
                     "requested_state_count": len(jobs),
                     "completed_state_count": len(results),
                     "error_state_count": len(errors),
@@ -296,7 +325,13 @@ def collect_stride_stability_trials(
     all_trials: list[dict[str, Any]] = []
     for result in sorted(results, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["output_file"])))
-        if not _extra_artifact_valid(payload, identity=identity, state_id=str(result["state_id"])):
+        if not _extension_artifact_valid(
+            payload,
+            identity=identity,
+            state_id=str(result["state_id"]),
+            schema=artifact_schema,
+            trial_indices=normalized_indices,
+        ):
             errors.append({"state_id": str(result["state_id"]), "error": "invalid artifact"})
         else:
             all_trials.extend(payload["trials"])
@@ -304,7 +339,7 @@ def collect_stride_stability_trials(
     if complete:
         _write_jsonl(output / "extra_trials.jsonl", all_trials)
     report = {
-        "schema": STRIDE_STABILITY_COLLECTION_SCHEMA,
+        "schema": artifact_schema,
         "identity": identity,
         "requested_state_count": len(jobs),
         "completed_state_count": len(results),
@@ -318,6 +353,19 @@ def collect_stride_stability_trials(
     _write_json(output / "collection_report.json", report)
     _write_json(output / "collection_status.json", {**report, "status": "complete" if complete else "error"})
     return report
+
+
+def collect_stride_stability_trials(
+    *, selection_path: Path, collection: Path, output: Path, workers: int = 4
+) -> dict[str, Any]:
+    return collect_stride_extension_trials(
+        selection_path=selection_path,
+        collection=collection,
+        output=output,
+        trial_indices=EXTRA_TRIAL_INDICES,
+        artifact_schema=STRIDE_STABILITY_COLLECTION_SCHEMA,
+        workers=workers,
+    )
 
 
 def _rank_candidates(aggregates: list[dict[str, Any]]) -> list[str]:

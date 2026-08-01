@@ -29,6 +29,11 @@ from experiments.stride_selection_v2 import (
     preflight_stride_selection,
 )
 from experiments.stride_stability import _extra_artifact_valid, stride_extended_pp_seed
+from experiments.stride_quality_v2 import (
+    STRIDE_QUALITY_V2_STRUCTURE_WEIGHT,
+    aggregate_stride_quality_v2_candidate,
+    assign_stride_quality_v2_scores,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -204,6 +209,38 @@ class StrideStage1AuditTest(unittest.TestCase):
 
 
 class StrideQualityLabelTest(unittest.TestCase):
+    def test_quality_v2_uses_eight_seed_mean_and_bounded_structure_weight(self) -> None:
+        metric_names = (
+            "post_largest_component_ratio",
+            "post_conflict_edge_density",
+            "post_event_density",
+            "post_degree_concentration",
+        )
+        outcomes = [
+            {
+                "pp_seed": 100 + index,
+                "feasible": False,
+                "conflicts_after": 10 - index,
+                "post_structure": {name: 0.1 for name in metric_names},
+            }
+            for index in range(8)
+        ]
+        first = aggregate_stride_quality_v2_candidate(
+            before_conflicts=10, outcomes=outcomes
+        )
+        second = {
+            **first,
+            "mean_reduction_ratio": first["mean_reduction_ratio"] - 0.01,
+            "mean_post_structure": {name: 0.2 for name in metric_names},
+        }
+
+        assign_stride_quality_v2_scores([first, second])
+
+        self.assertEqual(first["trial_count"], 8)
+        self.assertAlmostEqual(first["mean_conflict_reduction"], 3.5)
+        self.assertEqual(STRIDE_QUALITY_V2_STRUCTURE_WEIGHT, 0.02)
+        self.assertGreater(first["quality_score"], second["quality_score"])
+
     def test_single_conflict_pair_is_normalized_by_all_agents(self) -> None:
         agents = []
         for agent_id in range(10):
@@ -353,9 +390,9 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 class StrideCollectionContractTest(unittest.TestCase):
     def test_extended_stability_seeds_preserve_first_half_namespace(self) -> None:
-        first = [stride_extended_pp_seed("repair-state", index) for index in range(8)]
+        first = [stride_extended_pp_seed("repair-state", index) for index in range(16)]
         self.assertEqual(first[:4], [stride_pp_seed("repair-state", index) for index in range(4)])
-        self.assertEqual(len(set(first)), 8)
+        self.assertEqual(len(set(first)), 16)
 
     def test_stability_artifact_requires_all_extra_seed_pairs(self) -> None:
         payload = {

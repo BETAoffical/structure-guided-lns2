@@ -25,6 +25,13 @@ from experiments.stride_stability import (  # noqa: E402
     collect_stride_stability_trials,
     select_stride_stability_states,
 )
+from experiments.stride_quality_v2 import (  # noqa: E402
+    analyze_stride_quality_v2_stability,
+    build_stride_quality_v2_labels,
+    collect_stride_quality_v2_confirmation_trials,
+    collect_stride_quality_v2_design_trials,
+    select_stride_quality_v2_confirmation_states,
+)
 
 
 def _resolve(value: str) -> Path:
@@ -109,6 +116,50 @@ def parse_arguments() -> argparse.Namespace:
     stability_analyze.add_argument("--base-trials", required=True)
     stability_analyze.add_argument("--extra-trials", required=True)
     stability_analyze.add_argument("--output", default="build/stride-stage2-stability-analysis-v1")
+    quality_v2_design = subparsers.add_parser(
+        "collect-quality-v2-design",
+        help="Collect trial indices 8 through 15 on the consumed V2 design cohort.",
+    )
+    quality_v2_design.add_argument("--selection", required=True)
+    quality_v2_design.add_argument("--collection", required=True)
+    quality_v2_design.add_argument(
+        "--output", default="build/stride-quality-v2-design-extension-v1"
+    )
+    quality_v2_design.add_argument("--workers", type=int, default=4)
+    quality_v2_select = subparsers.add_parser(
+        "select-quality-v2-confirmation",
+        help="Select a result-blind V2 confirmation cohort disjoint from design episodes.",
+    )
+    quality_v2_select.add_argument("--selection", required=True)
+    quality_v2_select.add_argument("--design-selection", required=True)
+    quality_v2_select.add_argument(
+        "--output", default="build/stride-quality-v2-confirmation-selection-v1"
+    )
+    quality_v2_select.add_argument("--count-per-policy", type=int, default=24)
+    quality_v2_confirm = subparsers.add_parser(
+        "collect-quality-v2-confirmation",
+        help="Collect trial indices 4 through 15 on the untouched confirmation cohort.",
+    )
+    quality_v2_confirm.add_argument("--selection", required=True)
+    quality_v2_confirm.add_argument("--collection", required=True)
+    quality_v2_confirm.add_argument(
+        "--output", default="build/stride-quality-v2-confirmation-v1"
+    )
+    quality_v2_confirm.add_argument("--workers", type=int, default=4)
+    quality_v2_analyze = subparsers.add_parser(
+        "analyze-quality-v2",
+        help="Compare independent eight-seed halves under the V2 quality score.",
+    )
+    quality_v2_analyze.add_argument("--trials", action="append", required=True)
+    quality_v2_analyze.add_argument(
+        "--output", default="build/stride-quality-v2-stability-analysis-v1"
+    )
+    quality_v2_analyze.add_argument("--expected-state-count", type=int, default=48)
+    quality_v2_label = subparsers.add_parser(
+        "label-quality-v2", help="Build state-balanced eight-seed quality V2 labels."
+    )
+    quality_v2_label.add_argument("--trials", action="append", required=True)
+    quality_v2_label.add_argument("--output", default="build/stride-quality-v2-labels-v1")
     return parser.parse_args()
 
 
@@ -217,6 +268,48 @@ def main() -> int:
         )
         print("stride_stability_passed" if report["passed"] else "stride_stability_failed")
         return 0 if report["passed"] else 2
+    if arguments.stage == "collect-quality-v2-design":
+        report = collect_stride_quality_v2_design_trials(
+            selection_path=_resolve(arguments.selection),
+            collection=_resolve(arguments.collection),
+            output=_resolve(arguments.output),
+            workers=arguments.workers,
+        )
+        print("stride_quality_v2_design_complete" if report["complete"] else "stride_quality_v2_design_failed")
+        return 0 if report["complete"] else 2
+    if arguments.stage == "select-quality-v2-confirmation":
+        report = select_stride_quality_v2_confirmation_states(
+            selection_path=_resolve(arguments.selection),
+            design_selection_path=_resolve(arguments.design_selection),
+            output=_resolve(arguments.output),
+            count_per_policy=arguments.count_per_policy,
+        )
+        print("stride_quality_v2_selection_passed" if report["passed"] else "stride_quality_v2_selection_failed")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "collect-quality-v2-confirmation":
+        report = collect_stride_quality_v2_confirmation_trials(
+            selection_path=_resolve(arguments.selection),
+            collection=_resolve(arguments.collection),
+            output=_resolve(arguments.output),
+            workers=arguments.workers,
+        )
+        print("stride_quality_v2_confirmation_complete" if report["complete"] else "stride_quality_v2_confirmation_failed")
+        return 0 if report["complete"] else 2
+    if arguments.stage == "analyze-quality-v2":
+        report = analyze_stride_quality_v2_stability(
+            trial_paths=[_resolve(value) for value in arguments.trials],
+            output=_resolve(arguments.output),
+            expected_state_count=arguments.expected_state_count,
+        )
+        print("stride_quality_v2_stability_passed" if report["passed"] else "stride_quality_v2_stability_failed")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "label-quality-v2":
+        report = build_stride_quality_v2_labels(
+            trial_paths=[_resolve(value) for value in arguments.trials],
+            output=_resolve(arguments.output),
+        )
+        print(f"stride_quality_v2_labels_ready:{report['state_count']}")
+        return 0
     raise AssertionError(f"unhandled stage: {arguments.stage}")
 
 
