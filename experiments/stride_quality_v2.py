@@ -276,22 +276,32 @@ def analyze_stride_quality_v2_stability(
         pair_count = 0
         pair_agree = 0
         for left_id, right_id in combinations(sorted(first_by_id), 2):
-            first_winner = (
-                left_id
-                if stride_quality_v2_dominates(
-                    first_by_id[left_id], first_by_id[right_id]
-                )
-                else right_id
-            )
-            second_winner = (
-                left_id
-                if stride_quality_v2_dominates(
-                    second_by_id[left_id], second_by_id[right_id]
-                )
-                else right_id
-            )
+            first_winner = None
+            if stride_quality_v2_dominates(
+                first_by_id[left_id], first_by_id[right_id]
+            ):
+                first_winner = left_id
+            elif stride_quality_v2_dominates(
+                first_by_id[right_id], first_by_id[left_id]
+            ):
+                first_winner = right_id
+            second_winner = None
+            if stride_quality_v2_dominates(
+                second_by_id[left_id], second_by_id[right_id]
+            ):
+                second_winner = left_id
+            elif stride_quality_v2_dominates(
+                second_by_id[right_id], second_by_id[left_id]
+            ):
+                second_winner = right_id
+            if first_winner is None and second_winner is None:
+                continue
             pair_count += 1
-            pair_agree += int(first_winner == second_winner)
+            pair_agree += int(
+                first_winner is not None
+                and second_winner is not None
+                and first_winner == second_winner
+            )
         first_top3 = set(_quality_v2_rank(first[state_id])[:3])
         second_top3 = set(_quality_v2_rank(second[state_id])[:3])
         top3_overlap = len(first_top3 & second_top3) / 3.0
@@ -306,12 +316,27 @@ def analyze_stride_quality_v2_stability(
                 "candidate_count": len(first_by_id),
                 "pair_count": pair_count,
                 "agreed_pair_count": pair_agree,
-                "pairwise_consistency": pair_agree / pair_count,
+                "pairwise_consistency": pair_agree / pair_count if pair_count else 1.0,
                 "top3_overlap": top3_overlap,
             }
         )
     pairwise = agreed_pairs / total_pairs if total_pairs else 0.0
     top3_mean = statistics.fmean(top3_scores) if top3_scores else 0.0
+    policy_rows: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in state_reports:
+        policy_rows[str(row["source_policy"])].append(row)
+    by_source_policy = {
+        policy: {
+            "state_count": len(items),
+            "mean_pairwise_consistency": statistics.fmean(
+                float(item["pairwise_consistency"]) for item in items
+            ),
+            "mean_top3_overlap": statistics.fmean(
+                float(item["top3_overlap"]) for item in items
+            ),
+        }
+        for policy, items in sorted(policy_rows.items())
+    }
     gates = {
         "pairwise_consistency_at_least_70_percent": pairwise >= 0.70,
         "mean_top3_overlap_at_least_80_percent": top3_mean >= 0.80,
@@ -325,13 +350,17 @@ def analyze_stride_quality_v2_stability(
         "structure_weight": STRIDE_QUALITY_V2_STRUCTURE_WEIGHT,
         "runtime_used_in_label": False,
         "state_count": len(state_reports),
+        "map_count": len({str(row["map_id"]) for row in state_reports}),
         "candidate_count": sum(len(items) for items in first.values()),
-        "outcome_count": len(rows),
+        "outcome_count": sum(len(items) for items in first.values())
+        * STRIDE_QUALITY_V2_TRIALS_PER_HALF
+        * 2,
         "pair_count": total_pairs,
         "pairwise_agreement_count": agreed_pairs,
         "pairwise_consistency": pairwise,
         "mean_top3_overlap": top3_mean,
         "top3_overlap_distribution": dict(sorted(Counter(top3_scores).items())),
+        "by_source_policy": by_source_policy,
         "gates": gates,
         "passed": all(gates.values()),
         "states": state_reports,

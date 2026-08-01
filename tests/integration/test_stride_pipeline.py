@@ -32,7 +32,10 @@ from experiments.stride_stability import _extra_artifact_valid, stride_extended_
 from experiments.stride_quality_v2 import (
     STRIDE_QUALITY_V2_STRUCTURE_WEIGHT,
     aggregate_stride_quality_v2_candidate,
+    analyze_stride_quality_v2_stability,
     assign_stride_quality_v2_scores,
+    build_stride_quality_v2_labels,
+    select_stride_quality_v2_confirmation_states,
 )
 
 
@@ -209,6 +212,66 @@ class StrideStage1AuditTest(unittest.TestCase):
 
 
 class StrideQualityLabelTest(unittest.TestCase):
+    def test_quality_v2_stability_and_labels_use_independent_eight_seed_halves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metric_names = (
+                "post_largest_component_ratio",
+                "post_conflict_edge_density",
+                "post_event_density",
+                "post_degree_concentration",
+            )
+            rows = []
+            for candidate_index in range(4):
+                for trial_index in range(16):
+                    rows.append(
+                        {
+                            "schema": STRIDE_TRIAL_SCHEMA,
+                            "state_id": "state-1",
+                            "candidate_id": f"candidate-{candidate_index}",
+                            "map_id": "map-1",
+                            "split": "pilot",
+                            "source_policy": "v2-full",
+                            "decision_stage": "early",
+                            "before_conflicts": 20,
+                            "agent_count": 100,
+                            "trial_index": trial_index,
+                            "pp_seed": 1000 + trial_index,
+                            "feasible": False,
+                            "conflicts_after": 5 + candidate_index,
+                            "features": {
+                                f"feature-{index}": float(index)
+                                for index in range(124)
+                            },
+                            "post_structure": {
+                                name: 0.1 + 0.01 * candidate_index
+                                for name in metric_names
+                            },
+                        }
+                    )
+            _write_jsonl(root / "trials.jsonl", rows)
+
+            stability = analyze_stride_quality_v2_stability(
+                trial_paths=[root / "trials.jsonl"],
+                output=root / "stability",
+                expected_state_count=1,
+            )
+            labels = build_stride_quality_v2_labels(
+                trial_paths=[root / "trials.jsonl"], output=root / "labels"
+            )
+            pair_rows = [
+                json.loads(line)
+                for line in (root / "labels" / "dominance_pairs.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+            self.assertTrue(stability["passed"])
+            self.assertEqual(stability["pairwise_consistency"], 1.0)
+            self.assertEqual(stability["mean_top3_overlap"], 1.0)
+            self.assertEqual(labels["dominance_pair_count"], 6)
+            self.assertAlmostEqual(sum(row["sample_weight"] for row in pair_rows), 1.0)
+
     def test_quality_v2_uses_eight_seed_mean_and_bounded_structure_weight(self) -> None:
         metric_names = (
             "post_largest_component_ratio",
@@ -389,6 +452,51 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 
 class StrideCollectionContractTest(unittest.TestCase):
+    def test_quality_v2_confirmation_excludes_design_episodes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = []
+            for policy in ("official_adaptive", "v2-full"):
+                for episode in range(5):
+                    rows.append(
+                        {
+                            "schema": STRIDE_SELECTION_SCHEMA,
+                            "state_id": f"{policy}-state-{episode}",
+                            "map_id": f"map-{episode % 2}",
+                            "task_id": f"task-{policy}-{episode}",
+                            "split": "stride_pilot",
+                            "source_policy": policy,
+                            "decision_stage": "early",
+                            "conflict_band": "low_1_10",
+                            "source_group": "generated",
+                            "layout_mode": "test",
+                            "source_root": "source",
+                            "episode_id": f"{policy}-episode-{episode}",
+                            "before_fingerprint": f"before-{policy}-{episode}",
+                            "before_conflicts": 2,
+                            "solver_seed": 1,
+                            "decision_index": 0,
+                            "agent_count": 100,
+                            "agent_band": "low_mid",
+                            "prefix_actions": [],
+                        }
+                    )
+            design = [row for row in rows if row["episode_id"].endswith("-0")]
+            _write_jsonl(root / "selection.jsonl", rows)
+            _write_jsonl(root / "design.jsonl", design)
+
+            report = select_stride_quality_v2_confirmation_states(
+                selection_path=root / "selection.jsonl",
+                design_selection_path=root / "design.jsonl",
+                output=root / "confirmation",
+                count_per_policy=2,
+            )
+
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["selected_state_count"], 4)
+            self.assertEqual(report["state_overlap"], [])
+            self.assertEqual(report["episode_overlap"], [])
+
     def test_extended_stability_seeds_preserve_first_half_namespace(self) -> None:
         first = [stride_extended_pp_seed("repair-state", index) for index in range(16)]
         self.assertEqual(first[:4], [stride_pp_seed("repair-state", index) for index in range(4)])
