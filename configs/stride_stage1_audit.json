@@ -1,0 +1,34 @@
+{
+  "schema": "lns2.stride.stage1_config.v1",
+  "research_line": "stride-lns",
+  "frozen_bundles": [
+    {
+      "controller_id": "v2-full",
+      "path": "artifacts/initlns-closed-loop-controller-v2"
+    },
+    {
+      "controller_id": "mixed-full-v2",
+      "path": "artifacts/initlns-mixed-full-controller-v2"
+    }
+  ],
+  "historical_sources": [
+    {
+      "name": "v2-policy-visited-training",
+      "role": "historical",
+      "kind": "ranking_index",
+      "path": "build/initlns-policy-visited-natural-v2-training/aggregate_train_index.jsonl"
+    },
+    {
+      "name": "v2-policy-visited-validation",
+      "role": "historical",
+      "kind": "ranking_index",
+      "path": "build/initlns-policy-visited-natural-v2-training/validation_index.jsonl"
+    },
+    {
+      "name": "v3-s3-paired-sequence-trials",
+      "role": "historical",
+      "kind": "sequence_trials",
+      "path": "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/collection/sequence_trials.jsonl"
+    }
+  ]
+}
