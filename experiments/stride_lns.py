@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import json
+import statistics
 from collections import Counter, defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable
+
+from experiments._common import sha256_file
+from experiments.state_analysis import summarize_initial_state_complexity
 
 
 STRIDE_RESEARCH_LINE = "stride-lns"
@@ -14,6 +18,8 @@ STRIDE_QUALITY_CONTROLLER_ID = "stride-quality-v1"
 STRIDE_LABEL_SCHEMA = "lns2.stride.quality_label.v1"
 STRIDE_STAGE1_CONFIG_SCHEMA = "lns2.stride.stage1_config.v1"
 STRIDE_STAGE1_REPORT_SCHEMA = "lns2.stride.stage1_audit.v1"
+STRIDE_TRIAL_SCHEMA = "lns2.stride.repair_trial.v1"
+STRIDE_CANDIDATE_SCHEMA = "lns2.stride.candidate_aggregate.v1"
 FROZEN_FEATURE_SCHEMA_ID = "lns2.realized_features.v2"
 FROZEN_FEATURE_DIMENSION = 124
 
@@ -25,6 +31,285 @@ REQUIRED_POST_STRUCTURE_FIELDS = frozenset(
         "post_degree_concentration",
     }
 )
+
+
+def post_structure_metrics(state: dict[str, Any]) -> dict[str, float]:
+    """Compute STRIDE post-repair difficulty metrics normalized by all agents."""
+
+    summary = summarize_initial_state_complexity(state)
+    agent_count = int(summary["agent_count"])
+    edges = {
+        tuple(sorted((int(edge[0]), int(edge[1]))))
+        for edge in state.get("conflict_edges", [])
+    }
+    degree: Counter[int] = Counter()
+    for left, right in edges:
+        degree[left] += 1
+        degree[right] += 1
+    return {
+        "post_largest_component_ratio": float(
+            summary["largest_conflict_component_ratio"]
+        ),
+        "post_conflict_edge_density": len(edges) / agent_count,
+        "post_event_density": int(summary["conflict_event_count"]) / agent_count,
+        "post_degree_concentration": max(degree.values(), default=0) / agent_count,
+    }
+
+
+def aggregate_stride_candidate(
+    *, before_conflicts: int, outcomes: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Aggregate exactly four paired PP outcomes for one candidate."""
+
+    if len(outcomes) != 4:
+        raise ValueError("STRIDE Pilot requires exactly four paired PP outcomes")
+    seeds: set[int] = set()
+    reductions: list[float] = []
+    structures: list[dict[str, float]] = []
+    feasible_count = 0
+    progress_count = 0
+    for outcome in outcomes:
+        if type(outcome.get("pp_seed")) is not int:
+            raise ValueError("each STRIDE outcome requires an integer pp_seed")
+        seed = int(outcome["pp_seed"])
+        if seed in seeds:
+            raise ValueError("paired PP outcomes must use four distinct seeds")
+        seeds.add(seed)
+        if type(outcome.get("feasible")) is not bool:
+            raise ValueError("each STRIDE outcome requires a strict feasible boolean")
+        conflicts_after = int(outcome["conflicts_after"])
+        reduction = float(before_conflicts - conflicts_after)
+        reductions.append(reduction)
+        feasible_count += int(outcome["feasible"])
+        progress_count += int(conflicts_after < before_conflicts)
+        structure = outcome.get("post_structure")
+        if not isinstance(structure, dict) or not REQUIRED_POST_STRUCTURE_FIELDS.issubset(
+            structure
+        ):
+            raise ValueError("each STRIDE outcome requires all post-structure metrics")
+        values = {name: float(structure[name]) for name in REQUIRED_POST_STRUCTURE_FIELDS}
+        if any(value < 0.0 for value in values.values()):
+            raise ValueError("post-structure metrics must be nonnegative")
+        structures.append(values)
+
+    two_worst = sorted(reductions)[:2]
+    return {
+        "trial_count": 4,
+        "pp_seeds": sorted(seeds),
+        "feasible_rate": feasible_count / 4.0,
+        "progress_rate": progress_count / 4.0,
+        "mean_conflicts_after": statistics.fmean(
+            before_conflicts - reduction for reduction in reductions
+        ),
+        "mean_conflict_reduction": statistics.fmean(reductions),
+        "robust_reduction": statistics.fmean(two_worst),
+        "mean_post_structure": {
+            name: statistics.fmean(item[name] for item in structures)
+            for name in sorted(REQUIRED_POST_STRUCTURE_FIELDS)
+        },
+    }
+
+
+def assign_structure_scores(candidates: list[dict[str, Any]]) -> None:
+    """Attach the mean within-state percentile of the four post metrics."""
+
+    if not candidates:
+        raise ValueError("cannot score an empty candidate pool")
+    count = len(candidates)
+    for candidate in candidates:
+        structure = candidate.get("mean_post_structure")
+        if not isinstance(structure, dict) or not REQUIRED_POST_STRUCTURE_FIELDS.issubset(
+            structure
+        ):
+            raise ValueError("candidate is missing mean_post_structure")
+    for candidate in candidates:
+        percentiles: list[float] = []
+        for name in sorted(REQUIRED_POST_STRUCTURE_FIELDS):
+            current = float(candidate["mean_post_structure"][name])
+            if count == 1:
+                percentile = 0.0
+            else:
+                lower = sum(
+                    float(other["mean_post_structure"][name]) < current
+                    for other in candidates
+                )
+                equal_other = sum(
+                    float(other["mean_post_structure"][name]) == current
+                    for other in candidates
+                ) - 1
+                percentile = (lower + 0.5 * equal_other) / (count - 1)
+            percentiles.append(percentile)
+        candidate["structural_score"] = statistics.fmean(percentiles)
+
+
+def stride_dominates(
+    left: dict[str, Any], right: dict[str, Any], *, before_conflicts: int
+) -> bool:
+    """Return whether left quality-dominates right under the STRIDE V1 label."""
+
+    epsilon = 1e-12
+    reduction_tolerance = max(1.0, 0.02 * float(before_conflicts))
+    left_feasible = float(left["feasible_rate"])
+    right_feasible = float(right["feasible_rate"])
+    left_progress = float(left["progress_rate"])
+    right_progress = float(right["progress_rate"])
+    left_reduction = float(left["robust_reduction"])
+    right_reduction = float(right["robust_reduction"])
+    left_structure = float(left["structural_score"])
+    right_structure = float(right["structural_score"])
+    noninferior = (
+        left_feasible + epsilon >= right_feasible
+        and left_progress + epsilon >= right_progress
+        and left_reduction + reduction_tolerance + epsilon >= right_reduction
+        and left_structure <= right_structure + epsilon
+    )
+    strict = (
+        left_feasible > right_feasible + epsilon
+        or left_progress > right_progress + epsilon
+        or left_reduction > right_reduction + reduction_tolerance + epsilon
+        or left_structure + 0.05 <= right_structure + epsilon
+    )
+    return noninferior and strict
+
+
+def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        for row in rows:
+            stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def build_stride_labels(*, trials_path: Path, output: Path) -> dict[str, Any]:
+    """Build state-balanced STRIDE dominance pairs from paired repair trials."""
+
+    state_metadata: dict[str, dict[str, Any]] = {}
+    candidate_rows: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    candidate_features: dict[tuple[str, str], dict[str, float]] = {}
+    seen_trials: set[tuple[str, str, int]] = set()
+    for row in _read_jsonl(trials_path):
+        if row.get("schema") != STRIDE_TRIAL_SCHEMA:
+            raise ValueError(
+                f"expected trial schema {STRIDE_TRIAL_SCHEMA}, found {row.get('schema')}"
+            )
+        state_id = str(row["state_id"])
+        candidate_id = str(row["candidate_id"])
+        pp_seed = row.get("pp_seed")
+        if type(pp_seed) is not int:
+            raise ValueError("trial pp_seed must be an integer")
+        trial_key = (state_id, candidate_id, int(pp_seed))
+        if trial_key in seen_trials:
+            raise ValueError(f"duplicate STRIDE trial: {trial_key}")
+        seen_trials.add(trial_key)
+        metadata = {
+            "map_id": str(row["map_id"]),
+            "split": str(row["split"]),
+            "source_policy": str(row["source_policy"]),
+            "decision_stage": str(row["decision_stage"]),
+            "before_conflicts": int(row["before_conflicts"]),
+            "agent_count": int(row["agent_count"]),
+        }
+        if state_id in state_metadata and state_metadata[state_id] != metadata:
+            raise ValueError(f"inconsistent state metadata: {state_id}")
+        state_metadata[state_id] = metadata
+        features = row.get("features")
+        if not isinstance(features, dict) or len(features) != FROZEN_FEATURE_DIMENSION:
+            raise ValueError(
+                f"STRIDE trials require exactly {FROZEN_FEATURE_DIMENSION} features"
+            )
+        normalized_features = {str(name): float(value) for name, value in features.items()}
+        key = (state_id, candidate_id)
+        if key in candidate_features and candidate_features[key] != normalized_features:
+            raise ValueError(f"candidate features changed across PP seeds: {key}")
+        candidate_features[key] = normalized_features
+        candidate_rows[key].append(row)
+
+    candidates_by_state: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for (state_id, candidate_id), rows in sorted(candidate_rows.items()):
+        metadata = state_metadata[state_id]
+        aggregate = aggregate_stride_candidate(
+            before_conflicts=int(metadata["before_conflicts"]),
+            outcomes=rows,
+        )
+        aggregate.update(
+            {
+                "schema": STRIDE_CANDIDATE_SCHEMA,
+                "label_schema": STRIDE_LABEL_SCHEMA,
+                "state_id": state_id,
+                "candidate_id": candidate_id,
+                "features": candidate_features[(state_id, candidate_id)],
+                **metadata,
+            }
+        )
+        candidates_by_state[state_id].append(aggregate)
+
+    candidate_aggregates: list[dict[str, Any]] = []
+    pairs: list[dict[str, Any]] = []
+    pair_counts: dict[str, int] = {}
+    for state_id, candidates in sorted(candidates_by_state.items()):
+        candidates.sort(key=lambda item: str(item["candidate_id"]))
+        assign_structure_scores(candidates)
+        candidate_aggregates.extend(candidates)
+        winners: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        before_conflicts = int(state_metadata[state_id]["before_conflicts"])
+        for left, right in combinations(candidates, 2):
+            if stride_dominates(left, right, before_conflicts=before_conflicts):
+                winners.append((left, right))
+            elif stride_dominates(right, left, before_conflicts=before_conflicts):
+                winners.append((right, left))
+        pair_counts[state_id] = len(winners)
+        if not winners:
+            continue
+        weight = 1.0 / (2.0 * len(winners))
+        for winner, loser in winners:
+            shared = {
+                "schema": STRIDE_LABEL_SCHEMA,
+                "state_id": state_id,
+                "map_id": state_metadata[state_id]["map_id"],
+                "split": state_metadata[state_id]["split"],
+                "sample_weight": weight,
+            }
+            pairs.append(
+                {
+                    **shared,
+                    "left_candidate_id": winner["candidate_id"],
+                    "right_candidate_id": loser["candidate_id"],
+                    "label": 1,
+                }
+            )
+            pairs.append(
+                {
+                    **shared,
+                    "left_candidate_id": loser["candidate_id"],
+                    "right_candidate_id": winner["candidate_id"],
+                    "label": 0,
+                }
+            )
+
+    state_count = len(candidates_by_state)
+    covered_states = sum(count >= 5 for count in pair_counts.values())
+    coverage_rate = covered_states / state_count if state_count else 0.0
+    summary = {
+        "schema": "lns2.stride.label_build_summary.v1",
+        "label_schema": STRIDE_LABEL_SCHEMA,
+        "trial_sha256": sha256_file(trials_path),
+        "state_count": state_count,
+        "map_count": len({item["map_id"] for item in state_metadata.values()}),
+        "candidate_count": len(candidate_aggregates),
+        "dominance_pair_count": len(pairs) // 2,
+        "oriented_training_row_count": len(pairs),
+        "states_with_at_least_five_pairs": covered_states,
+        "coverage_rate": coverage_rate,
+        "coverage_gate": 0.8,
+        "coverage_gate_passed": state_count > 0 and coverage_rate >= 0.8,
+        "runtime_used_in_label": False,
+    }
+    output.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(output / "candidate_aggregates.jsonl", candidate_aggregates)
+    _write_jsonl(output / "dominance_pairs.jsonl", pairs)
+    (output / "label_build_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return summary
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -43,14 +328,6 @@ def _read_jsonl(path: Path) -> Iterable[dict[str, Any]]:
             if not isinstance(payload, dict):
                 raise ValueError(f"expected an object at {path}:{line_number}")
             yield payload
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _resolve(root: Path, value: str) -> Path:
@@ -100,7 +377,7 @@ def _audit_bundle(root: Path, specification: dict[str, Any]) -> dict[str, Any]:
         )
     result.update(
         {
-            "manifest_sha256": _sha256(manifest_path),
+            "manifest_sha256": sha256_file(manifest_path),
             "feature_schema_id": feature_schema_id,
             "feature_schema_sha256": manifest.get("feature_schema_sha256"),
             "realized_feature_dimension": realized_dimension,
@@ -261,7 +538,7 @@ def _audit_source(root: Path, specification: dict[str, Any]) -> dict[str, Any]:
         result["reusable_for_stride_labels"] = False
         return result
     result.update(details)
-    result["sha256"] = _sha256(path)
+    result["sha256"] = sha256_file(path)
     result["valid"] = True
     result["reusable_for_stride_labels"] = bool(
         details["has_individual_paired_trials"]

@@ -144,6 +144,11 @@
       "purpose": "Implementation required to reproduce retained data, bundles, or evaluation evidence: state analysis."
     },
     {
+      "path": "experiments/stride_lns.py",
+      "role": "active",
+      "purpose": "Current STRIDE-LNS six-stage audit and quality-label workflow."
+    },
+    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."
@@ -509,6 +514,11 @@
       "purpose": "CLI entry point required to reproduce retained evidence: run lns2 warm start feasibility."
     },
     {
+      "path": "scripts/run_stride_pipeline.py",
+      "role": "active",
+      "purpose": "CLI entry point for the STRIDE-LNS six-stage workflow."
+    },
+    {
       "path": "scripts/run_v3_s3_runtime_comparison.py",
       "role": "active",
       "purpose": "CLI entry point for a current selector workflow: run v3 s3 runtime comparison."
@@ -672,6 +682,11 @@
       "path": "tests/integration/test_v3_s3_pipeline.py",
       "role": "active",
       "contract": "V3-S3 collection, training, producer identity, resume integrity, terminal handling, and native audit contracts."
+    },
+    {
+      "path": "tests/integration/test_stride_pipeline.py",
+      "role": "active",
+      "contract": "STRIDE-LNS frozen baseline, post-structure metrics, paired outcome aggregation, and dominance-label contracts."
     },
     {
       "path": "tests/runtime/test_v3_s3.py",

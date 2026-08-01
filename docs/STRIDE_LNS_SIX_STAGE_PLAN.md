@@ -33,6 +33,16 @@ python scripts/run_stride_pipeline.py audit `
 
 报告写入 `stage1_audit_report.json`。`ready_for_stride_pilot` 表示冻结基线和历史数据审计有效；`requires_fresh_stride_collection=true` 表示旧数据缺少完整的逐候选配对 PP outcome 或修复后结构指标，Stage 2 必须重新采集。
 
+Stage 2 的逐次修复数据完成后，使用独立标签入口：
+
+```powershell
+python scripts/run_stride_pipeline.py label `
+  --trials build/stride-stage2-pilot-v1/repair_trials.jsonl `
+  --output build/stride-stage2-labels-v1
+```
+
+该入口严格要求每个候选四个不同 PP 种子、124维冻结特征和完整修复后结构指标。输出正反训练对，每个状态的总样本权重均为1；运行时间不参与标签。
+
 ## Git 审查规则
 
 在当前阶段分支实施。每个通过测试的阶段，以及标签、特征、数据分割、运行时接口或实验结论发生重大变化时，建立独立可审查提交并推送 GitHub。合并到 `main` 需要在正式评估完成后单独决定。

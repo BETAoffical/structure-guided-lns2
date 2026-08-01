@@ -7,7 +7,13 @@ from pathlib import Path
 
 from experiments.stride_lns import (
     STRIDE_STAGE1_CONFIG_SCHEMA,
+    STRIDE_TRIAL_SCHEMA,
+    aggregate_stride_candidate,
+    assign_structure_scores,
+    build_stride_labels,
+    post_structure_metrics,
     run_stage1_audit,
+    stride_dominates,
 )
 
 
@@ -181,6 +187,154 @@ class StrideStage1AuditTest(unittest.TestCase):
 
             self.assertFalse(report["stage1_passed"])
             self.assertEqual(report["map_leakage"][0]["maps"], ["leaked-map"])
+
+
+class StrideQualityLabelTest(unittest.TestCase):
+    def test_single_conflict_pair_is_normalized_by_all_agents(self) -> None:
+        agents = []
+        for agent_id in range(10):
+            cell = 0 if agent_id in {0, 1} else agent_id
+            agents.append({"id": agent_id, "path": [cell]})
+        state = {
+            "rows": 1,
+            "cols": 10,
+            "obstacles": [0] * 10,
+            "agents": agents,
+            "conflict_edges": [[0, 1]],
+            "num_of_colliding_pairs": 1,
+            "low_level": {},
+        }
+
+        metrics = post_structure_metrics(state)
+
+        self.assertAlmostEqual(metrics["post_largest_component_ratio"], 0.2)
+        self.assertAlmostEqual(metrics["post_conflict_edge_density"], 0.1)
+        self.assertAlmostEqual(metrics["post_event_density"], 0.1)
+        self.assertAlmostEqual(metrics["post_degree_concentration"], 0.1)
+
+    def test_four_seed_aggregate_uses_two_worst_reductions(self) -> None:
+        structures = {
+            "post_largest_component_ratio": 0.2,
+            "post_conflict_edge_density": 0.1,
+            "post_event_density": 0.3,
+            "post_degree_concentration": 0.1,
+        }
+        outcomes = [
+            {
+                "pp_seed": seed,
+                "feasible": feasible,
+                "conflicts_after": after,
+                "post_structure": structures,
+            }
+            for seed, feasible, after in (
+                (1, True, 5),
+                (2, True, 7),
+                (3, False, 10),
+                (4, True, 6),
+            )
+        ]
+
+        aggregate = aggregate_stride_candidate(before_conflicts=10, outcomes=outcomes)
+
+        self.assertEqual(aggregate["feasible_rate"], 0.75)
+        self.assertEqual(aggregate["progress_rate"], 0.75)
+        self.assertEqual(aggregate["mean_conflicts_after"], 7.0)
+        self.assertEqual(aggregate["robust_reduction"], 1.5)
+
+    def test_structure_score_uses_midranks_and_lower_is_better(self) -> None:
+        candidates = [
+            {
+                "mean_post_structure": {
+                    name: value
+                    for name in (
+                        "post_largest_component_ratio",
+                        "post_conflict_edge_density",
+                        "post_event_density",
+                        "post_degree_concentration",
+                    )
+                }
+            }
+            for value in (0.1, 0.1, 0.3)
+        ]
+
+        assign_structure_scores(candidates)
+
+        self.assertAlmostEqual(candidates[0]["structural_score"], 0.25)
+        self.assertAlmostEqual(candidates[1]["structural_score"], 0.25)
+        self.assertEqual(candidates[2]["structural_score"], 1.0)
+
+    def test_dominance_enforces_quality_floor_and_strict_structure_gain(self) -> None:
+        right = {
+            "feasible_rate": 0.75,
+            "progress_rate": 0.75,
+            "robust_reduction": 5.0,
+            "structural_score": 0.6,
+        }
+        left = {
+            "feasible_rate": 0.75,
+            "progress_rate": 0.75,
+            "robust_reduction": 4.0,
+            "structural_score": 0.55,
+        }
+
+        self.assertTrue(stride_dominates(left, right, before_conflicts=20))
+        left["structural_score"] = 0.551
+        self.assertFalse(stride_dominates(left, right, before_conflicts=20))
+        left["structural_score"] = 0.4
+        left["robust_reduction"] = 3.99
+        self.assertFalse(stride_dominates(left, right, before_conflicts=20))
+
+    def test_label_builder_emits_reverse_pairs_with_equal_state_weight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = []
+            metric_names = (
+                "post_largest_component_ratio",
+                "post_conflict_edge_density",
+                "post_event_density",
+                "post_degree_concentration",
+            )
+            for candidate_index in range(4):
+                for pp_seed in (101, 102, 103, 104):
+                    rows.append(
+                        {
+                            "schema": STRIDE_TRIAL_SCHEMA,
+                            "state_id": "state-1",
+                            "candidate_id": f"candidate-{candidate_index}",
+                            "map_id": "map-1",
+                            "split": "pilot_train",
+                            "source_policy": "v2-full",
+                            "decision_stage": "early",
+                            "before_conflicts": 10,
+                            "agent_count": 80,
+                            "pp_seed": pp_seed,
+                            "feasible": True,
+                            "conflicts_after": candidate_index,
+                            "features": {f"feature-{i}": float(i) for i in range(124)},
+                            "post_structure": {
+                                name: 0.1 * candidate_index for name in metric_names
+                            },
+                            "repair_seconds": 999.0,
+                        }
+                    )
+            _write_jsonl(root / "trials.jsonl", rows)
+
+            summary = build_stride_labels(
+                trials_path=root / "trials.jsonl", output=root / "labels"
+            )
+            pairs = [
+                json.loads(line)
+                for line in (root / "labels" / "dominance_pairs.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+            self.assertTrue(summary["coverage_gate_passed"])
+            self.assertEqual(summary["dominance_pair_count"], 6)
+            self.assertEqual(len(pairs), 12)
+            self.assertEqual({row["label"] for row in pairs}, {0, 1})
+            self.assertAlmostEqual(sum(row["sample_weight"] for row in pairs), 1.0)
+            self.assertTrue(all("repair_seconds" not in row for row in pairs))
 
 
 if __name__ == "__main__":
