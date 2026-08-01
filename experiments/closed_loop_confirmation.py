@@ -77,11 +77,12 @@ from experiments.v3_s3 import (
     V3_S3_FEATURE_SCHEMA_ID,
     V3_S3_FEATURE_SCHEMA_SHA256,
     V3S3Bundle,
-    V3S3ControllerState,
     load_v3_s3_bundle,
     s3_temporal_context,
 )
 from lns2_selector.compatibility.metrics import fixed_budget_conflict_auc
+from lns2_selector.controllers.v2 import PairwiseV2Selector
+from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.evaluation.trace_validation import (
     ClosedLoopTraceError,
     REPAIR_TIMING_SCHEMA,
@@ -94,6 +95,7 @@ from lns2_selector.evaluation.trace_validation import (
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
+from lns2_selector.runtime.contracts import CONTROLLER_IDS, SelectionRequest
 from lns2_selector.runtime.online_selection import (
     ClosedLoopExecutionError,
     feature_range_diagnostic,
@@ -106,6 +108,7 @@ from lns2_selector.runtime.online_selection import (
     score_online_candidates,
 )
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
+from lns2_selector.solver.native import load_native_module
 from lns2_selector.training.policy_bundle import (
     PortablePairwiseModel,
     export_portable_policy_bundle,
@@ -120,12 +123,7 @@ FIXED_POLICIES = ("fixed_target", "fixed_collision", "fixed_random")
 POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
-CONTROLLER_MODES = (
-    "official_adaptive",
-    "v2-full",
-    "mixed-full-v2",
-    "v3-s3",
-)
+CONTROLLER_MODES = CONTROLLER_IDS
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
 STOPPING_RULES = ("historical", "wall-clock", "wall-clock-fixed-metric")
@@ -147,13 +145,19 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/online_feature_engine.py",
     "experiments/repair_collection.py",
     "experiments/v3_s3.py",
+    "lns2_selector/compatibility/metrics.py",
+    "lns2_selector/controllers/v2.py",
+    "lns2_selector/controllers/v3_s3.py",
+    "lns2_selector/runtime/contracts.py",
     "lns2_selector/runtime/fingerprints.py",
+    "lns2_selector/runtime/metrics.py",
     "lns2_selector/runtime/online_selection.py",
     "lns2_selector/runtime/portable_scalar.py",
     "lns2_selector/runtime/repair_outcomes.py",
     "lns2_selector/compatibility/controller_diagnostics.py",
     "lns2_selector/evaluation/trace_validation.py",
     "lns2_selector/training/policy_bundle.py",
+    "lns2_selector/solver/native.py",
     "src/python_bindings.cpp",
     "src/jsonl_observer.cpp",
     "src/online_features.cpp",
@@ -170,7 +174,7 @@ def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
     }
     native_module = None
     try:
-        import lns2_env
+        lns2_env = load_native_module()
 
         native_path = Path(str(lns2_env.__file__)).resolve()
         semantics_schema = str(
@@ -750,6 +754,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             if not bool(job.get("require_finalization_timings", False)):
                 return result
     bundle = None
+    pairwise_selector: PairwiseV2Selector | None = None
     controller_mode = str(job.get("controller", "official_adaptive"))
     if controller_mode not in CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {controller_mode}")
@@ -798,6 +803,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     }
                     for name, model in runtime_models.items()
                 }
+        if controller_mode in {"v2-full", "mixed-full-v2"}:
+            pairwise_selector = PairwiseV2Selector(controller_mode, runtime_models)
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path.unlink(missing_ok=True)
     started_wall = time.perf_counter()
@@ -930,12 +937,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             )
             pending_changed_agents: set[int] = set()
             previous_route: str | None = None
-            v3_s3_state = (
-                V3S3ControllerState(v3_s3_bundle)
+            v3_s3_selector = (
+                V3S3Selector(v3_s3_bundle)
                 if v3_s3_bundle is not None
                 and controller_mode == "v3-s3"
                 and policy == "realized_dynamic"
                 else None
+            )
+            v3_s3_state = (
+                v3_s3_selector.state if v3_s3_selector is not None else None
             )
             v3_s3_history: list[dict[str, Any]] = []
             stateful_cache: dict[str, Any] | None = None
@@ -1149,6 +1159,30 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             scores = [0.0] * len(candidate_rows)
                             margin = 0.0
                             inference_seconds = 0.0
+                        elif pairwise_selector is not None:
+                            inference_started = time.perf_counter()
+                            selection = pairwise_selector.select(
+                                SelectionRequest(
+                                    candidates=candidates,
+                                    candidate_rows=candidate_rows,
+                                    before_fingerprint=before_repair_hash,
+                                    agent_count=int(row["agent_count"]),
+                                    profile=policy,
+                                )
+                            )
+                            if selection.candidate_index is None:
+                                raise ClosedLoopExecutionError(
+                                    "controller_no_candidate",
+                                    "pairwise controller did not select a candidate",
+                                )
+                            selected_local_index = int(selection.candidate_index)
+                            scores = list(
+                                map(float, selection.diagnostics.get("scores", []))
+                            )
+                            margin = float(selection.diagnostics.get("margin", 0.0))
+                            inference_seconds = (
+                                time.perf_counter() - inference_started
+                            )
                         else:
                             inference_started = time.perf_counter()
                             selected_local_index, scores, margin = (
@@ -1234,11 +1268,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                     v3_s3_seconds = 0.0
                     if v3_s3_state is not None:
+                        assert v3_s3_selector is not None
                         v3_s3_select_started = time.perf_counter()
-                        v3_s3_selected_index, v3_s3_diagnostic = (
-                            v3_s3_state.select(
-                                candidates,
-                                candidate_rows,
+                        v3_s3_selection = v3_s3_selector.select(
+                            SelectionRequest(
+                                candidates=candidates,
+                                candidate_rows=candidate_rows,
+                                profile=policy,
+                                before_fingerprint=before_repair_hash,
                                 temporal_context=s3_temporal_context(
                                     v3_s3_history,
                                     int(row["agent_count"]),
@@ -1246,10 +1283,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         v3_s3_bundle.wall_time_history_required
                                     ),
                                 ),
-                                before_fingerprint=before_repair_hash,
                                 agent_count=int(row["agent_count"]),
                             )
                         )
+                        v3_s3_selected_index = v3_s3_selection.candidate_index
+                        v3_s3_diagnostic = dict(v3_s3_selection.diagnostics)
                         v3_s3_seconds = (
                             time.perf_counter() - v3_s3_select_started
                         )

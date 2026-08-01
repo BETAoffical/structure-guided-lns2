@@ -38,6 +38,7 @@ from experiments.feature_schema_v2 import (
 from experiments.state_analysis import analyze_state, reconstruct_conflicts
 from experiments.online_feature_engine import OnlineFeatureEngine, _native_batch_function
 from experiments.repair_collection import state_fingerprint
+from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from tests.runtime.test_closed_loop_confirmation import make_candidate, make_state
 
@@ -598,6 +599,13 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertTrue(metrics["seed_agents_overridden"])
 
     def test_v2_full_worker_executes_one_learned_decision(self) -> None:
+        selected_profiles: list[str] = []
+        original_select = PairwiseV2Selector.select
+
+        def tracked_select(selector, request):
+            selected_profiles.append(str(request.profile))
+            return original_select(selector, request)
+
         initial = make_state()
         _refresh_conflicts(initial)
         final = copy.deepcopy(initial)
@@ -689,9 +697,12 @@ class ControllerV2Tests(unittest.TestCase):
                 "feature_shadow_validation": True,
                 "proposal_state_verification": "always",
             }
-            with patch(
-                "experiments.closed_loop_confirmation._make_environment",
-                return_value=Environment(),
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=Environment(),
+                ),
+                patch.object(PairwiseV2Selector, "select", new=tracked_select),
             ):
                 result = _closed_loop_episode_worker(job)
             events = read_trace_events(Path(directory) / result["trace_file"])
@@ -701,6 +712,7 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(result["status"], "ok", result.get("error"))
         self.assertEqual(result["summary"]["controller_mode"], "v2-full")
         self.assertEqual(result["summary"]["repair_iterations"], 1)
+        self.assertEqual(selected_profiles, ["realized_dynamic"])
         self.assertIn(
             transition["controller"]["inference_backend"],
             {"native-portable-tree", "python-portable-tree"},

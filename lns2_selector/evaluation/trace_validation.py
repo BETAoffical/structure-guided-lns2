@@ -640,7 +640,17 @@ def validate_closed_loop_trace(
         "transition_elapsed_seconds"
     ) != transition_elapsed_seconds:
         raise ClosedLoopTraceError("summary transition_elapsed_seconds mismatch")
-    if learned_policy:
+    route_summary_fields = (
+        "model_decision_count",
+        "official_decision_count",
+        "route_switch_count",
+        "model_route_fraction",
+    )
+    legacy_route_summary_omitted = (
+        event_schema == EPISODE_SCHEMA_V1
+        and not any(name in summary for name in route_summary_fields)
+    )
+    if learned_policy and not legacy_route_summary_omitted:
         expected_routes = {
             "model_decision_count": int(route_counts["model"]),
             "official_decision_count": int(route_counts["official_adaptive"]),

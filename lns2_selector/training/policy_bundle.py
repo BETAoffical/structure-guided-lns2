@@ -9,6 +9,10 @@ from typing import Any
 
 from experiments._common import sha256_file
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
+from lns2_selector.runtime.online_selection import (
+    online_candidate_rows,
+    score_online_candidates,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -252,11 +256,6 @@ def _load_deployment_policy_bundle(
 def verify_portable_policy_bundle(
     frozen_root: str | Path, registration: dict[str, Any]
 ) -> dict[str, Any]:
-    from experiments.closed_loop_confirmation import (
-        online_candidate_rows,
-        score_online_candidates,
-    )
-
     native_registration = {
         key: value
         for key, value in registration.items()

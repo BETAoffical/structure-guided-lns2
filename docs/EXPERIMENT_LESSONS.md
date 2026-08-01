@@ -84,11 +84,11 @@ passes paired wall-clock promotion gates.
     that a stall trigger is supposed to learn. Static-feature conclusions may
     remain valid, but temporal-history claims from such a cohort are invalid.
 
-These rules are enforced by `tests/runtime/test_stall_shadow.py`,
-`tests/runtime/test_stall_oracle.py`, and
-`tests/evaluation/test_stall_trigger_policy_audit.py`. Paired trigger
-counterfactual execution order is additionally guarded by
-`tests/evaluation/test_stall_trigger_counterfactual.py`.
+Before the selector cleanup, these rules were enforced by dedicated stall
+shadow, stall Oracle, trigger-policy, and trigger-counterfactual tests. Those
+retired-controller tests are not executable on the active branch. Their source
+remains available at `backup/selector-cleanup-00-original`; the frozen reports
+remain the active evidence boundary.
 
 ## Current shadow protocol
 
@@ -108,19 +108,10 @@ every episode summary from transition evidence, requires all triggers to be
 resolved, and applies a 95% Wilson upper confidence bound to the false-trigger
 rate. The runtime summary itself never passes a gate.
 
-Full-pool Oracle workflow:
-
-```bash
-python3 scripts/probe_stalled_state.py \
-  --source <v2-full-collection> \
-  --task-id <task> --solver-seed <seed> \
-  --auto-terminal-stall --all-candidates --trials 8 \
-  --output <probe-output>
-
-python3 scripts/audit_v2_stall_oracle.py \
-  --source <probe-output> \
-  --output <oracle-output>
-```
+The historical full-pool Oracle workflow used the retired
+`probe_stalled_state.py` and `audit_v2_stall_oracle.py` entry points. It is no
+longer executable on the active branch; recover both files from
+`backup/selector-cleanup-00-original` only when reproducing that retired study.
 
 The v2 probe binds the source trace, frozen controller manifest, complete
 candidate pool, producer/native identity, and deterministic
@@ -129,24 +120,11 @@ and rejected. Because this contract is intentionally incompatible with the
 historical v1 artifact, use a new output directory rather than `--resume` on
 `build/initlns-stalled-state-probe-v1`.
 
-Aggregate a completed shadow collection without enabling recovery:
+Historical shadow aggregation used the retired `audit_v2_stall_shadow.py` entry
+point, which is also available only from the cleanup checkpoint.
 
-```bash
-python3 scripts/audit_v2_stall_shadow.py \
-  --source <v2-stall-shadow-collection> \
-  --output <shadow-audit-output>
-```
-
-Audit a frozen v3 no-progress head against an exact full-pool Oracle without
-training or changing any action:
-
-```bash
-python3 scripts/audit_v3_stall_risk.py \
-  --probe <full-pool-probe> \
-  --oracle <stall-oracle-report.json> \
-  --v3-controller <frozen-v3-controller> \
-  --output <stall-risk-audit-output>
-```
+The frozen v3 no-progress audit used the retired `audit_v3_stall_risk.py` entry
+point. It is not a supported current CLI.
 
 The PP-only Oracle report distinguishes arm, neighborhood, selector, and
 candidate-pool failures. It explicitly leaves repairer failure unevaluated;

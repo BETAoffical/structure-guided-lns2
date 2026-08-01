@@ -3,17 +3,10 @@
 from pathlib import Path
 
 from lns2_selector.runtime.contracts import (
+    CONTROLLER_IDS,
     SelectionDecision,
     SelectionRequest,
     Selector,
-)
-
-
-CONTROLLER_IDS = (
-    "official_adaptive",
-    "v2-full",
-    "mixed-full-v2",
-    "v3-s3",
 )
 
 

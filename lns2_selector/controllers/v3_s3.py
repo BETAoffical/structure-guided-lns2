@@ -15,8 +15,8 @@ class V3S3Selector:
 
     def select(self, request: SelectionRequest) -> SelectionDecision:
         index, diagnostics = self.state.select(
-            list(map(dict, request.candidates)),
-            list(map(dict, request.candidate_rows)),
+            list(request.candidates),
+            list(request.candidate_rows),
             temporal_context=dict(request.temporal_context),
             before_fingerprint=request.before_fingerprint,
             agent_count=request.agent_count,

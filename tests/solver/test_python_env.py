@@ -7,10 +7,18 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine
+from experiments._common import NATIVE_SEMANTICS_SCHEMA as EXPERIMENT_NATIVE_SCHEMA
 from experiments.repair_collection import state_fingerprint
+from lns2_selector.solver.native import (
+    NATIVE_SEMANTICS_SCHEMA as SELECTOR_NATIVE_SCHEMA,
+    load_native_module,
+    native_identity,
+)
 
 try:
     import lns2_env
@@ -21,6 +29,27 @@ from scripts import collect_closed_loop_confirmation as collector_cli
 
 
 class NativeModuleDiscoveryTests(unittest.TestCase):
+    def test_native_semantics_schema_is_shared_across_boundaries(self) -> None:
+        self.assertEqual(EXPERIMENT_NATIVE_SCHEMA, SELECTOR_NATIVE_SCHEMA)
+
+    def test_canonical_loader_rejects_incompatible_native_semantics(self) -> None:
+        incompatible = SimpleNamespace(
+            LNS2RepairEnv=object,
+            native_semantics_schema="lns2.native_semantics.corrected.v1",
+            repair_timing_schema="lns2.repair_timing.v2",
+        )
+        with (
+            patch(
+                "lns2_selector.solver.native.importlib.import_module",
+                return_value=incompatible,
+            ),
+            self.assertRaisesRegex(RuntimeError, "unsupported native semantics"),
+        ):
+            load_native_module()
+
+        with self.assertRaisesRegex(RuntimeError, "unsupported native semantics"):
+            native_identity(incompatible)
+
     def test_collector_cli_registers_existing_native_build(self) -> None:
         if collector_cli.NATIVE_BUILD.is_dir():
             self.assertIn(str(collector_cli.NATIVE_BUILD), sys.path)

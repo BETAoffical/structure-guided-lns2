@@ -30,7 +30,9 @@ class DirectV3State:
         return self.index, {"selection_kind": selection_kind}
 
 
-def request(scores=(1.0, 2.0)) -> SelectionRequest:
+def request(
+    scores=(1.0, 2.0), *, profile: str = "realized_dynamic"
+) -> SelectionRequest:
     candidates = tuple(
         {"candidate_id": f"candidate-{index}", "agents": [index]}
         for index in range(len(scores))
@@ -44,6 +46,7 @@ def request(scores=(1.0, 2.0)) -> SelectionRequest:
         candidate_rows=rows,
         before_fingerprint="state",
         agent_count=10,
+        profile=profile,
     )
 
 
@@ -106,7 +109,7 @@ class SelectorContractTests(unittest.TestCase):
                 )
                 self.assertIsNone(decision.fallback_reason)
 
-    def test_v2_contract_falls_back_only_when_pool_is_empty(self) -> None:
+    def test_v2_contract_rejects_an_empty_pool(self) -> None:
         for controller_id in ("v2-full", "mixed-full-v2"):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(
@@ -115,9 +118,20 @@ class SelectorContractTests(unittest.TestCase):
                 empty = SelectionRequest(
                     candidates=(), candidate_rows=(), before_fingerprint="state"
                 )
-                decision = PairwiseV2Selector(controller_id, bundle).select(empty)
-                self.assertTrue(decision.uses_native_adaptive)
-                self.assertEqual(decision.fallback_reason, "no_candidates")
+                with self.assertRaisesRegex(ValueError, "empty candidate pool"):
+                    PairwiseV2Selector(controller_id, bundle).select(empty)
+
+    def test_v2_contract_selects_the_requested_profile(self) -> None:
+        selector = PairwiseV2Selector(
+            "v2-full",
+            {
+                "proposal_dynamic": DirectModel(),
+                "realized_dynamic": DirectModel(),
+            },
+        )
+        decision = selector.select(request(profile="proposal_dynamic"))
+        self.assertEqual(decision.candidate_index, 1)
+        self.assertEqual(decision.diagnostics["profile"], "proposal_dynamic")
 
     def test_v3_s3_contract_selects_the_state_decision(self) -> None:
         selector = V3S3Selector.__new__(V3S3Selector)

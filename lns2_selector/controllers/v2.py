@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from experiments.closed_loop_confirmation import score_online_candidates
 from lns2_selector.runtime.contracts import (
     SelectionDecision,
     SelectionRequest,
 )
+from lns2_selector.runtime.online_selection import score_online_candidates
 
 
 class PairwiseV2Selector:
@@ -15,21 +16,25 @@ class PairwiseV2Selector:
     def __init__(self, controller_id: str, bundle: Any):
         if controller_id not in {"v2-full", "mixed-full-v2"}:
             raise ValueError("unsupported pairwise V2 controller id")
+        models = getattr(bundle, "main_models", None)
+        if models is None:
+            models = getattr(bundle, "models", None)
+        if models is None and isinstance(bundle, Mapping):
+            models = bundle
+        if not isinstance(models, Mapping):
+            raise ValueError("pairwise V2 bundle does not expose model profiles")
         self.controller_id = controller_id
-        self.bundle = bundle
+        self.models = models
 
     def select(self, request: SelectionRequest) -> SelectionDecision:
         if not request.candidates:
-            return SelectionDecision(
-                controller_id=self.controller_id,
-                candidate_index=None,
-                candidate=None,
-                diagnostics={"route": "official_adaptive"},
-                fallback_reason="no_candidates",
-            )
-        model = self.bundle.main_models["realized_dynamic"]
+            raise ValueError("cannot select from an empty candidate pool")
+        profile = str(request.profile)
+        if profile not in self.models:
+            raise ValueError(f"pairwise V2 bundle lacks profile: {profile}")
+        model = self.models[profile]
         index, scores, margin = score_online_candidates(
-            list(map(dict, request.candidate_rows)), model
+            list(request.candidate_rows), model
         )
         return SelectionDecision(
             controller_id=self.controller_id,
@@ -37,7 +42,7 @@ class PairwiseV2Selector:
             candidate=request.candidates[index],
             diagnostics={
                 "route": "model",
-                "profile": "realized_dynamic",
+                "profile": profile,
                 "scores": scores,
                 "margin": margin,
             },

@@ -251,6 +251,36 @@ class UnlimitedRepairEnvironment:
         }
 
 
+class LearnedRepairEnvironment(UnlimitedRepairEnvironment):
+    def get_state(self) -> dict:
+        return self.state
+
+    def propose(self, action: dict) -> dict:
+        del action
+        return {
+            "action_valid": True,
+            "generated": True,
+            "neighborhood": [0, 1],
+        }
+
+    def propose_batch(self, actions: list[dict]) -> list[dict]:
+        return [self.propose(action) for action in actions]
+
+    def step(self, action: dict) -> dict:
+        result = super().step(action)
+        result["metrics"]["requested_random_seed"] = int(action["random_seed"])
+        return result
+
+
+class DirectCandidateModel:
+    profile = "realized_dynamic"
+    feature_names: tuple[str, ...] = ()
+    base_feature_names: tuple[str, ...] = ()
+
+    def score_candidates(self, rows: list[dict]) -> list[float]:
+        return [float(index) for index, _row in enumerate(rows)]
+
+
 class ClosedLoopConfirmationTests(unittest.TestCase):
     def test_qualification_reuse_ignores_controller_but_not_reset_inputs(self) -> None:
         base = {
@@ -1333,6 +1363,102 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 ClosedLoopTraceError, "instrumented transition is missing timings"
             ):
                 validate_closed_loop_trace(v2_trace, "run")
+
+    def test_full_v1_learned_trace_allows_omitted_legacy_route_summary(self) -> None:
+        model = DirectCandidateModel()
+        bundle = SimpleNamespace(
+            models={
+                "proposal_dynamic": model,
+                "realized_dynamic": model,
+            },
+            ranges={
+                "proposal_dynamic": {},
+                "realized_dynamic": {},
+            },
+            manifest={},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 1,
+                "metric_iteration_budget": 1,
+                "wall_time_budget_seconds": 300.0,
+                "proposal": {
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                },
+                "frozen_models": directory,
+                "model_registration": {},
+                "controller": "official_adaptive",
+                "trace_format": TRACE_FORMAT_FULL_V1,
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=LearnedRepairEnvironment(solve_after=1),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+                    return_value=bundle,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            trace = Path(directory) / result["trace_file"]
+            events = [
+                json.loads(line)
+                for line in trace.read_text(encoding="utf-8").splitlines()
+            ]
+            summary = events[-1]["summary"]
+            route_fields = (
+                "model_decision_count",
+                "official_decision_count",
+                "route_switch_count",
+                "model_route_fraction",
+            )
+            for name in route_fields:
+                summary.pop(name)
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            validate_closed_loop_trace(
+                trace,
+                "run",
+                expected_policy="realized_dynamic",
+                metric_iteration_budget=1,
+            )
+
+            summary["model_decision_count"] = 1
+            trace.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ClosedLoopTraceError, "official_decision_count mismatch"
+            ):
+                validate_closed_loop_trace(
+                    trace,
+                    "run",
+                    expected_policy="realized_dynamic",
+                    metric_iteration_budget=1,
+                )
 
     def test_trace_validation_rejects_inconsistent_pp_seed_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

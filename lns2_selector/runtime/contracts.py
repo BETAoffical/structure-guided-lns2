@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
 
+CONTROLLER_IDS = (
+    "official_adaptive",
+    "v2-full",
+    "mixed-full-v2",
+    "v3-s3",
+)
+
+
 @dataclass(frozen=True)
 class SelectionRequest:
     """State made available to a neighborhood selector before repair."""
@@ -13,12 +21,15 @@ class SelectionRequest:
     before_fingerprint: str
     temporal_context: Mapping[str, Any] = field(default_factory=dict)
     agent_count: int | None = None
+    profile: str = "realized_dynamic"
 
     def __post_init__(self) -> None:
         if len(self.candidates) != len(self.candidate_rows):
             raise ValueError("candidates and candidate_rows differ in length")
         if self.agent_count is not None and int(self.agent_count) <= 0:
             raise ValueError("agent_count must be positive")
+        if not str(self.profile):
+            raise ValueError("profile must be non-empty")
 
 
 @dataclass(frozen=True)

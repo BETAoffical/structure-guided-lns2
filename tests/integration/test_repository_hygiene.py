@@ -60,8 +60,18 @@ class RepositoryHygieneTests(unittest.TestCase):
             "state-0f4b9f34e988ff56__candidate__trial_0003",
         )
 
-    def test_common_module_is_covered_by_controller_fingerprint(self) -> None:
-        self.assertIn("experiments/_common.py", CONTROLLER_IMPLEMENTATION_FILES)
+    def test_runtime_modules_are_covered_by_controller_fingerprint(self) -> None:
+        for relative in (
+            "experiments/_common.py",
+            "lns2_selector/compatibility/metrics.py",
+            "lns2_selector/controllers/v2.py",
+            "lns2_selector/controllers/v3_s3.py",
+            "lns2_selector/runtime/contracts.py",
+            "lns2_selector/runtime/metrics.py",
+            "lns2_selector/solver/native.py",
+        ):
+            with self.subTest(relative=relative):
+                self.assertIn(relative, CONTROLLER_IMPLEMENTATION_FILES)
 
     def test_repository_paths_cannot_escape(self) -> None:
         with self.assertRaises(ValueError):

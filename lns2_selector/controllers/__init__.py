@@ -7,15 +7,7 @@ from experiments.v3_s3 import load_v3_s3_bundle
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
-from lns2_selector.runtime.contracts import Selector
-
-
-CONTROLLER_IDS = (
-    "official_adaptive",
-    "v2-full",
-    "mixed-full-v2",
-    "v3-s3",
-)
+from lns2_selector.runtime.contracts import CONTROLLER_IDS, Selector
 
 
 def load_selector(

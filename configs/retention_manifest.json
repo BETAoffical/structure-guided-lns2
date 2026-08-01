@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/selector-cleanup-05-before-cli-config",
+  "checkpoint": "backup/selector-hardening-00-pre-fix",
   "allowed_executable_roles": [
     "active",
     "shared",
