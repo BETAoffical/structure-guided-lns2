@@ -15,6 +15,13 @@ from experiments.stride_lns import (
     run_stage1_audit,
     stride_dominates,
 )
+from experiments.stride_collection import (
+    STRIDE_COLLECTION_SCHEMA,
+    STRIDE_SELECTION_SCHEMA,
+    _state_artifact_valid,
+    load_stride_selection,
+    stride_pp_seed,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -335,6 +342,77 @@ class StrideQualityLabelTest(unittest.TestCase):
             self.assertEqual({row["label"] for row in pairs}, {0, 1})
             self.assertAlmostEqual(sum(row["sample_weight"] for row in pairs), 1.0)
             self.assertTrue(all("repair_seconds" not in row for row in pairs))
+
+
+class StrideCollectionContractTest(unittest.TestCase):
+    def test_pp_seeds_are_state_paired_and_trial_distinct(self) -> None:
+        first = [stride_pp_seed("repair-state", index) for index in range(4)]
+        second = [stride_pp_seed("repair-state", index) for index in range(4)]
+        other = [stride_pp_seed("other-state", index) for index in range(4)]
+        self.assertEqual(first, second)
+        self.assertEqual(len(set(first)), 4)
+        self.assertNotEqual(first, other)
+
+    def test_selection_rejects_duplicate_states(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "selection.jsonl"
+            row = {
+                "schema": STRIDE_SELECTION_SCHEMA,
+                "state_id": "state-1",
+                "map_id": "map-1",
+                "task_id": "task-1",
+                "split": "train",
+                "source_policy": "v2-full",
+                "decision_stage": "early",
+                "source_root": "source",
+                "before_fingerprint": "fingerprint",
+                "solver_seed": 1,
+                "decision_index": 2,
+                "agent_count": 80,
+                "prefix_actions": [],
+            }
+            _write_jsonl(path, [row, row])
+            with self.assertRaisesRegex(ValueError, "duplicate selected state"):
+                load_stride_selection(path)
+
+    def test_state_artifact_requires_every_candidate_seed_pair(self) -> None:
+        payload = {
+            "schema": STRIDE_COLLECTION_SCHEMA,
+            "run_fingerprint": "run",
+            "state_id": "state",
+            "complete": True,
+            "candidates": [{"candidate_id": "a"}, {"candidate_id": "b"}],
+            "trials": [
+                {"candidate_id": candidate, "trial_index": trial}
+                for candidate in ("a", "b")
+                for trial in range(4)
+            ],
+        }
+        self.assertTrue(
+            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+        )
+        payload["trials"].pop()
+        self.assertFalse(
+            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+        )
+
+    def test_state_artifact_rejects_duplicate_trial_rows(self) -> None:
+        trials = [
+            {"candidate_id": "candidate", "trial_index": trial}
+            for trial in range(4)
+        ]
+        trials[-1] = dict(trials[0])
+        payload = {
+            "schema": STRIDE_COLLECTION_SCHEMA,
+            "run_fingerprint": "run",
+            "state_id": "state",
+            "complete": True,
+            "candidates": [{"candidate_id": "candidate"}],
+            "trials": trials,
+        }
+        self.assertFalse(
+            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+        )
 
 
 if __name__ == "__main__":

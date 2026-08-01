@@ -149,6 +149,11 @@
       "purpose": "Current STRIDE-LNS six-stage audit and quality-label workflow."
     },
     {
+      "path": "experiments/stride_collection.py",
+      "role": "active",
+      "purpose": "Resumable native full-pool paired repair collection for STRIDE-LNS."
+    },
+    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."

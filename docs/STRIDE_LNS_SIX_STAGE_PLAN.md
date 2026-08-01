@@ -35,6 +35,17 @@ python scripts/run_stride_pipeline.py audit `
 
 Stage 2 的逐次修复数据完成后，使用独立标签入口：
 
+Stage 2 原生采集必须在已通过 `runtime-wsl` 环境检查的 WSL 中运行：
+
+```bash
+PYTHONPATH=build/linux/project /usr/bin/python3 scripts/run_stride_pipeline.py collect \
+  --selection build/stride-stage2-pilot-selection-v1.jsonl \
+  --output build/stride-stage2-pilot-v1 \
+  --workers 4
+```
+
+采集器对每个状态生成冻结的18候选完整池，对每个候选执行四个配对 PP 种子。每个状态原子落盘；中断后使用相同命令加 `--resume`，完成状态不会重跑。`collection_report.json` 必须满足 `complete=true`、`error_state_count=0` 且实际 trial 数等于候选数乘4。
+
 ```powershell
 python scripts/run_stride_pipeline.py label `
   --trials build/stride-stage2-pilot-v1/repair_trials.jsonl `
