@@ -66,6 +66,9 @@ Stage 4 training is allowed only if all of the following hold:
 Generated artifacts remain ignored under `build/`; configs, code, hashes, gate
 reports, and research decisions are committed.
 
+The completed execution and final audit are recorded in
+`docs/STRIDE_STAGE3_RESULT.md`.
+
 ## Registered source-yield recovery
 
 The first source collection later completed without runtime errors but exposed

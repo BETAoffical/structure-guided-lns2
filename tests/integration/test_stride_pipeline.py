@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -39,6 +40,7 @@ from experiments.stride_quality_v2 import (
     select_stride_quality_v2_completion_states,
     select_stride_quality_v2_confirmation_states,
 )
+from experiments.stride_stage3 import run_stride_stage3_label_audit
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -756,6 +758,137 @@ class StrideCollectionContractTest(unittest.TestCase):
         self.assertFalse(
             _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
         )
+
+
+class StrideStage3LabelAuditTest(unittest.TestCase):
+    def test_audit_passes_registered_cohort_and_rejects_ood_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            labels = root / "labels"
+            trial_file = root / "trials.jsonl"
+            _write_jsonl(trial_file, [{"trial": 1}])
+            trial_hash = hashlib.sha256(trial_file.read_bytes()).hexdigest()
+            states = [
+                {
+                    "state_id": "state-a",
+                    "map_id": "map-a",
+                    "split": "extension",
+                    "source_policy": "official_adaptive",
+                    "decision_stage": "early",
+                    "agent_count": 100,
+                    "before_conflicts": 5,
+                    "episode_id": "episode-a",
+                },
+                {
+                    "state_id": "state-b",
+                    "map_id": "map-b",
+                    "split": "recovery",
+                    "source_policy": "v2-full",
+                    "decision_stage": "middle",
+                    "agent_count": 300,
+                    "before_conflicts": 7,
+                    "episode_id": "episode-b",
+                },
+            ]
+            _write_jsonl(root / "selection.jsonl", states)
+            aggregates = []
+            pairs = []
+            for state in states:
+                for candidate_id in ("candidate-a", "candidate-b"):
+                    aggregates.append(
+                        {
+                            "schema": "lns2.stride.candidate_aggregate.v2",
+                            "label_schema": "lns2.stride.quality_label.v2",
+                            "candidate_id": candidate_id,
+                            "features": {"f0": 0.0, "f1": 1.0},
+                            **{key: state[key] for key in (
+                                "state_id", "map_id", "split", "source_policy",
+                                "decision_stage", "agent_count", "before_conflicts",
+                            )},
+                        }
+                    )
+                shared = {
+                    "schema": "lns2.stride.quality_label.v2",
+                    "state_id": state["state_id"],
+                    "map_id": state["map_id"],
+                    "split": state["split"],
+                    "sample_weight": 0.5,
+                }
+                pairs.extend(
+                    [
+                        {
+                            **shared,
+                            "left_candidate_id": "candidate-a",
+                            "right_candidate_id": "candidate-b",
+                            "label": 1,
+                        },
+                        {
+                            **shared,
+                            "left_candidate_id": "candidate-b",
+                            "right_candidate_id": "candidate-a",
+                            "label": 0,
+                        },
+                    ]
+                )
+            _write_jsonl(labels / "candidate_aggregates.jsonl", aggregates)
+            _write_jsonl(labels / "dominance_pairs.jsonl", pairs)
+            _write_json(
+                labels / "label_build_summary.json",
+                {
+                    "controller_id": "stride-quality-v2",
+                    "label_schema": "lns2.stride.quality_label.v2",
+                    "state_count": 2,
+                    "states_with_pairs": 2,
+                    "candidate_count": 4,
+                    "dominance_pair_count": 2,
+                    "oriented_training_row_count": 4,
+                    "trials_per_candidate": 8,
+                    "runtime_used_in_label": False,
+                    "trial_files": [str(trial_file.resolve())],
+                    "trial_sha256": [trial_hash],
+                },
+            )
+            _write_json(
+                root / "ood.json",
+                {"cases": [{"benchmark_id": "formal-map"}]},
+            )
+            config = {
+                "schema": "lns2.stride.stage3_label_audit_config.v1",
+                "labels": "labels",
+                "selections": ["selection.jsonl"],
+                "formal_ood_config": "ood.json",
+                "trial_sources": ["trials.jsonl"],
+                "expected_state_count": 2,
+                "expected_state_count_per_policy": {
+                    "official_adaptive": 1,
+                    "v2-full": 1,
+                },
+                "expected_feature_dimension": 2,
+                "expected_trials_per_candidate": 8,
+                "min_map_count": 2,
+                "required_split_map_counts": {"extension": 1, "recovery": 1},
+                "one_state_per_episode_splits": ["extension", "recovery"],
+            }
+            _write_json(root / "config.json", config)
+            report = run_stride_stage3_label_audit(
+                config_path=root / "config.json",
+                output=root / "audit",
+                project_root=root,
+            )
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["source_policy_state_counts"], {
+                "official_adaptive": 1,
+                "v2-full": 1,
+            })
+
+            _write_json(root / "ood.json", {"cases": [{"benchmark_id": "map-a"}]})
+            failed = run_stride_stage3_label_audit(
+                config_path=root / "config.json",
+                output=root / "audit-failed",
+                project_root=root,
+            )
+            self.assertFalse(failed["passed"])
+            self.assertFalse(failed["gates"]["formal_ood_overlap_zero"])
 
 
 if __name__ == "__main__":

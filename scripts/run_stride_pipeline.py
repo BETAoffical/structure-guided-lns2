@@ -34,6 +34,7 @@ from experiments.stride_quality_v2 import (  # noqa: E402
     select_stride_quality_v2_completion_states,
     select_stride_quality_v2_confirmation_states,
 )
+from experiments.stride_stage3 import run_stride_stage3_label_audit  # noqa: E402
 
 
 def _resolve(value: str) -> Path:
@@ -192,6 +193,16 @@ def parse_arguments() -> argparse.Namespace:
     )
     quality_v2_label.add_argument("--trials", action="append", required=True)
     quality_v2_label.add_argument("--output", default="build/stride-quality-v2-labels-v1")
+    stage3_audit = subparsers.add_parser(
+        "audit-stage3-labels",
+        help="Audit the registered 600-state Stage 3 quality-label cohort.",
+    )
+    stage3_audit.add_argument(
+        "--config", default="configs/stride_stage3_label_audit.json"
+    )
+    stage3_audit.add_argument(
+        "--output", default="build/stride-stage3-label-audit-v1"
+    )
     return parser.parse_args()
 
 
@@ -363,6 +374,18 @@ def main() -> int:
         )
         print(f"stride_quality_v2_labels_ready:{report['state_count']}")
         return 0
+    if arguments.stage == "audit-stage3-labels":
+        report = run_stride_stage3_label_audit(
+            config_path=_resolve(arguments.config),
+            output=_resolve(arguments.output),
+            project_root=PROJECT_ROOT,
+        )
+        print(
+            "stride_stage3_label_audit_passed"
+            if report["passed"]
+            else "stride_stage3_label_audit_failed"
+        )
+        return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")
 
 

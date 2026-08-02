@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.stride.stage3_label_audit_config.v1",
+  "labels": "build/stride-stage3-quality-v2-labels-v1",
+  "selections": [
+    "build/stride-stage2-pilot-selection-v2/state_selection.jsonl",
+    "build/stride-stage3-extension-selection-v2/state_selection.jsonl"
+  ],
+  "formal_ood_config": "configs/movingai_ood_dataset.json",
+  "trial_sources": [
+    "build/stride-stage2-pilot-v2/repair_trials.jsonl",
+    "build/stride-stage2-stability-v1/extra_trials.jsonl",
+    "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl",
+    "build/stride-stage3-retained-quality-v2-completion-v1/extra_trials.jsonl",
+    "build/stride-stage3-extension-trials-v1/repair_trials.jsonl",
+    "build/stride-stage3-extension-quality-v2-completion-v1/extra_trials.jsonl"
+  ],
+  "expected_state_count": 600,
+  "expected_state_count_per_policy": {
+    "official_adaptive": 300,
+    "v2-full": 300
+  },
+  "expected_feature_dimension": 124,
+  "expected_trials_per_candidate": 8,
+  "min_map_count": 24,
+  "required_split_map_counts": {
+    "stride_stage3_extension": 10,
+    "stride_stage3_yield_recovery": 12
+  },
+  "one_state_per_episode_splits": [
+    "stride_stage3_extension",
+    "stride_stage3_yield_recovery"
+  ]
+}
