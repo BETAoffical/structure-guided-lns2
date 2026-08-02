@@ -68,6 +68,53 @@ will distinguish weak label change, model learnability, and PP-seed noise. Any
 runtime execution of the control or quality model before a new promotion gate
 passes is explicitly diagnostic-only.
 
+## Stage 4R diagnostic result
+
+Stage 4R confirmed that the main limitation is not the 124-feature input. The
+new quality label is almost the same decision target as the old control label,
+while the identity of the exact best candidate remains sensitive to the PP
+seed.
+
+- Quality/control exact-winner agreement: `0.980000`.
+- Quality/mean-reduction exact-winner agreement: `0.981667`.
+- Comparable-pair control/quality ordering disagreement: `0.005307`.
+- Control-to-quality OOF action changed on only `5.8333%` of the 600 states.
+- The quality model captured only `2.4134%` of the aggregate normalized Oracle
+  opportunity left by the same-data control.
+- Splitting the eight PP trials into two four-seed halves gave quality-winner
+  agreement `0.663333`, mean rank correlation `0.847430`, and Top-3 overlap
+  `0.759444`.
+
+These results reject another feature ablation or exact-winner target as the
+next primary change. A later label revision should learn robust good sets or
+rankings, but runtime TTF evidence is collected first.
+
+Both full-data diagnostic models were exported with the frozen V2 proposal
+model and a replaced realized-dynamic ranker. Portable/native selection parity
+was `600/600` with zero mismatches for each model. The bundles remain
+`diagnostic_only`, are not default replacements, and do not authorize formal
+OOD evaluation.
+
+The first action-preserving shadow collection (`shadow-v1`) produced 14/14
+interface errors because the optimized feature engine requested only the
+executed V2 model's compact features. It is retained as failed evidence and
+contains no model-quality result. After requesting the union of all shadow
+model features, the preregistered fresh `shadow-v2` run passed:
+
+- 14 registered tasks, 14 maps, solver seed 101, and a 20-second wall budget.
+- 14 valid episodes, 13 V2 successes, and zero episode errors.
+- 213 common shadow decisions.
+- Zero invalid actions, action overrides, semantic mismatches, and score-range
+  fallbacks.
+- Control/quality action disagreement: `9.3897%`.
+- Control/V2 and quality/V2 disagreement: `61.0329%` and `59.1549%`.
+- Mean model inference: `1.0732 ms` and `1.0682 ms` per decision; complete
+  two-model shadow accounting averaged `6.0291 ms` per decision.
+
+The shadow is strictly action-preserving: V2 alone selected and executed every
+neighborhood. Passing it permits a small paired in-distribution TTF Quick, not
+promotion and not formal Stage 5.
+
 ## TTF-first runtime objective
 
 The user-selected final objective is lower end-to-end wall-clock time to first
@@ -99,3 +146,11 @@ separately.
   `536ab28dd9560843c4556e19a35de8f73e3df23d294a8e377ae247308ba815d1`
 - OOF predictions SHA-256:
   `8584b33a4966a2712126a5fbeb9a1561b12b973e92cb6824dc9105c0a5e1a1d6`
+- Stage 4R diagnostic report SHA-256:
+  `8513f0c34e4d7082a892bd43fd741b5c2180365d0f5313609f51e72460e93f9c`
+- Stage 4R diagnostic state table SHA-256:
+  `6849189837cc9271f66eb5da85aa7285fba1bb0551196a64dc09f8172eeac0dd`
+- Stage 4R model-export report SHA-256:
+  `fcee4d17a386862a7665cfc7abdd49da6f2ad7ec5b901942c1070c6d2fc38b3b`
+- Stage 4R shadow-v2 audit SHA-256:
+  `643b3a28cb749a9e20a7ba408e06c38b0aea4d908ef57db59d3900cffabf254f`
