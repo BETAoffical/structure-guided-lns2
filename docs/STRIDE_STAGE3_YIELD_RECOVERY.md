@@ -113,6 +113,27 @@ generation. It does not establish label stability, selector quality, or
 end-to-end runtime improvement. It authorizes the registered eight-seed PP
 repair trials for the 360-state extension.
 
+## Executed base PP repair trials
+
+Trial indices 0 through 3 completed for all 360 extension states with zero
+collection errors. The collection contains 6,442 state-candidate pairs and
+25,768 trial rows: 334 states have 18 candidates, 14 have 17, and 12 have 16.
+Every state-candidate pair has exactly one row for each registered index, and
+each state uses one paired PP seed per index across all its candidates.
+
+All 25,768 rows retain the frozen 124-dimensional feature schema and complete
+post-repair structure. Native outcomes include 3,620 feasible repairs, 14,249
+conflict-reduced repairs, 4,685 state changes without conflict reduction, one
+accepted no-op, and 3,213 hard failures. Hard failures are valid candidate
+outcomes used by the label; they are not collection errors.
+
+The collection-report SHA-256 is
+`30f22e34f7e6fa28b0f0f57317ef46bd3d5b88edd5d34d69d412d7e2e6eb4f91`;
+the base repair-trial JSONL SHA-256 is
+`4e408c7246e493142110a177619193b24184c99ff33938e5403e8d64c1dec7fe`.
+This authorizes collection of trial indices 4 through 7; it is not yet a
+complete `stride-quality-v2` labelled extension.
+
 ## Decision boundary
 
 If qualification fails, policy episodes and PP label trials remain disabled and
