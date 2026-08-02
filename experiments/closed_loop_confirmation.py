@@ -918,9 +918,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         environment_construct_seconds = time.perf_counter() - environment_started
         initial_state_ref: str | None = None
         with open_trace_text(partial_path, "w") as stream:
+            # TTF and its live wall budget deliberately start immediately before
+            # reset. Environment construction remains separately reported and
+            # must not consume a controller's registered solve budget.
+            ttf_started_wall = time.perf_counter()
             reset_started = time.perf_counter()
             state = _plain(environment.reset(seed=solver_seed))
-            reset_wall_seconds = time.perf_counter() - reset_started
+            reset_completed_wall = time.perf_counter()
+            reset_wall_seconds = reset_completed_wall - reset_started
+            initial_state_elapsed_seconds = reset_completed_wall - ttf_started_wall
             reset_timing_getter = getattr(environment, "get_last_reset_timings", None)
             reset_timings = (
                 _plain(reset_timing_getter())
@@ -937,7 +943,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             initial_fingerprint_seconds = (
                 time.perf_counter() - initial_fingerprint_started
             )
-            initial_state_elapsed_seconds = time.perf_counter() - started_wall
             conflicts = [int(state["num_of_colliding_pairs"])]
             transition_elapsed_seconds: list[float] = []
             transition_trace_write_seconds: list[float] = []
@@ -1042,7 +1047,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "safety_iteration_limit",
                         "wall-clock execution reached its diagnostic safety limit",
                     )
-                if time.perf_counter() - started_wall >= wall_budget:
+                if time.perf_counter() - ttf_started_wall >= wall_budget:
                     external_timeout = True
                     break
                 iteration_started = time.perf_counter()
@@ -1794,7 +1799,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 # rejects that call, but an expected timeout must not turn the
                 # whole episode into an execution error.  Keep this before
                 # route counters so only executed repairs are counted.
-                if time.perf_counter() - started_wall >= wall_budget:
+                if time.perf_counter() - ttf_started_wall >= wall_budget:
                     external_timeout = True
                     break
                 if bool(job.get("deterministic_pp_replay", False)):
@@ -1809,14 +1814,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         decision_index,
                         route,
                     )
-                if time.perf_counter() - started_wall >= wall_budget:
+                if time.perf_counter() - ttf_started_wall >= wall_budget:
                     external_timeout = True
                     break
                 repair_started = time.perf_counter()
                 try:
                     result = _plain(environment.step(action))
                 except RuntimeError as error:
-                    elapsed_after_error = time.perf_counter() - started_wall
+                    elapsed_after_error = time.perf_counter() - ttf_started_wall
                     if (
                         "repair episode" in str(error)
                         and "finished" in str(error)
@@ -1825,7 +1830,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         external_timeout = True
                         break
                     raise
-                repair_wall_seconds = time.perf_counter() - repair_started
+                step_completed_wall = time.perf_counter()
+                repair_wall_seconds = step_completed_wall - repair_started
+                transition_ttf_elapsed_seconds = (
+                    step_completed_wall - ttf_started_wall
+                )
                 post_step_started = time.perf_counter()
                 total_repair_wall_seconds += repair_wall_seconds
                 state = result["observation"]
@@ -1903,7 +1912,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         route_controller_seconds + repair_wall_seconds
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
-                elapsed_wall = time.perf_counter() - started_wall
+                elapsed_wall = transition_ttf_elapsed_seconds
                 transition_elapsed_seconds.append(elapsed_wall)
                 within_wall_budget = elapsed_wall <= wall_budget
                 if within_wall_budget:
@@ -2140,7 +2149,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if elapsed_wall >= wall_budget and not bool(state["done"]):
                     external_timeout = True
                     break
-            elapsed_wall = time.perf_counter() - started_wall
+            elapsed_wall = time.perf_counter() - ttf_started_wall
+            episode_observed_wall = time.perf_counter() - started_wall
             episode_finalize_started = time.perf_counter()
             algorithm_elapsed = (
                 transition_elapsed_seconds[-1]
@@ -2236,6 +2246,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "native_time_to_feasible": float(state["runtime"]) if success else None,
                 "repair_wall_seconds": total_repair_wall_seconds,
                 "environment_construct_seconds": environment_construct_seconds,
+                "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
+                "ttf_observed_wall_seconds": elapsed_wall,
                 "reset_wall_seconds": reset_wall_seconds,
                 "reset_timings": reset_timings,
                 "initial_state_elapsed_seconds": initial_state_elapsed_seconds,
@@ -2244,10 +2256,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "transition_trace_write_seconds": transition_trace_write_seconds,
                 "trace_write_seconds": initial_trace_write_seconds
                 + sum(transition_trace_write_seconds),
-                "episode_observed_wall_seconds": elapsed_wall,
+                "episode_observed_wall_seconds": episode_observed_wall,
                 "timing_unaccounted_seconds": max(
                     0.0,
-                    elapsed_wall
+                    episode_observed_wall
                     - environment_construct_seconds
                     - reset_wall_seconds
                     - initial_trace_write_seconds

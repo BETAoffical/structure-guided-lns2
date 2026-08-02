@@ -1222,6 +1222,65 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             result["summary"]["episode_observed_wall_seconds"],
         )
 
+    def test_ttf_clock_excludes_environment_construction(self) -> None:
+        class ManualClock:
+            def __init__(self) -> None:
+                self.value = 0.0
+
+            def __call__(self) -> float:
+                return self.value
+
+        with tempfile.TemporaryDirectory() as directory:
+            clock = ManualClock()
+
+            def construct_environment(*_args, **_kwargs):
+                clock.value = 10.0
+                return ZeroConflictEnvironment()
+
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 100,
+                "metric_iteration_budget": 100,
+                "wall_time_budget_seconds": 1.0,
+                "proposal": {},
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    side_effect=construct_environment,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.time.perf_counter",
+                    side_effect=clock,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+
+        summary = result["summary"]
+        self.assertTrue(summary["success"])
+        self.assertEqual(summary["environment_construct_seconds"], 10.0)
+        self.assertEqual(summary["wall_time_to_feasible"], 0.0)
+        self.assertEqual(summary["capped_wall_time_to_feasible"], 0.0)
+        self.assertEqual(summary["ttf_observed_wall_seconds"], 0.0)
+        self.assertEqual(
+            summary["ttf_clock_schema"], "lns2.ttf.reset_inclusive_wall.v1"
+        )
+        self.assertEqual(summary["episode_observed_wall_seconds"], 10.0)
+
     def test_resume_preserves_manifest_only_finalization_timings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             job = {
