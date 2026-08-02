@@ -11,6 +11,11 @@ CONTROLLER_IDS = (
     "v3-s3",
 )
 
+DIAGNOSTIC_CONTROLLER_IDS = (
+    "stride-control-v1",
+    "stride-quality-v1",
+)
+
 
 @dataclass(frozen=True)
 class SelectionRequest:

@@ -12,8 +12,8 @@ if NATIVE_BUILD.is_dir():
     sys.path.insert(0, str(NATIVE_BUILD))
 
 from experiments.closed_loop_confirmation import (  # noqa: E402
-    CONTROLLER_MODES,
     CONTROLLER_RUNTIMES,
+    EXECUTABLE_CONTROLLER_MODES,
     VERIFICATION_PROFILES,
     CollectionLockError,
     run_closed_loop_collection,
@@ -40,6 +40,22 @@ def _selected_job_keys(
         for task_id in task_ids
         for seed in solver_seeds
     }
+
+
+def _diagnostic_shadow_bundles(values: list[str] | None) -> dict[str, str] | None:
+    if not values:
+        return None
+    result = {}
+    for value in values:
+        controller_id, separator, path = value.partition("=")
+        if not separator or not controller_id or not path:
+            raise ValueError(
+                "--diagnostic-shadow-bundle must use controller_id=path"
+            )
+        if controller_id in result:
+            raise ValueError(f"duplicate diagnostic shadow: {controller_id}")
+        result[controller_id] = path
+    return result
 
 
 def main() -> int:
@@ -84,7 +100,7 @@ def main() -> int:
         choices=TRACE_FORMATS,
         default=TRACE_FORMAT_DELTA_GZIP_V2,
     )
-    parser.add_argument("--controller", choices=CONTROLLER_MODES)
+    parser.add_argument("--controller", choices=EXECUTABLE_CONTROLLER_MODES)
     parser.add_argument(
         "--feature-backend",
         choices=tuple(value for value in FEATURE_BACKENDS if value != "reference"),
@@ -93,6 +109,15 @@ def main() -> int:
     parser.add_argument(
         "--controller-bundle",
         default="artifacts/initlns-closed-loop-controller-v2",
+    )
+    parser.add_argument(
+        "--diagnostic-shadow-bundle",
+        action="append",
+        dest="diagnostic_shadow_bundles",
+        help=(
+            "Action-preserving diagnostic shadow in controller_id=path form; "
+            "provide both STRIDE control and quality bundles."
+        ),
     )
     parser.add_argument(
         "--controller-runtime",
@@ -123,6 +148,9 @@ def main() -> int:
     arguments = parser.parse_args()
     try:
         job_keys = _selected_job_keys(arguments.task_ids, arguments.solver_seeds)
+        diagnostic_shadows = _diagnostic_shadow_bundles(
+            arguments.diagnostic_shadow_bundles
+        )
         report = run_closed_loop_collection(
             arguments.dataset,
             arguments.config,
@@ -136,6 +164,7 @@ def main() -> int:
             controller=arguments.controller,
             feature_backend=arguments.feature_backend,
             controller_bundle=arguments.controller_bundle,
+            diagnostic_shadow_bundles=diagnostic_shadows,
             controller_runtime=arguments.controller_runtime,
             verification_profile=arguments.verification_profile,
             v3_s3_bundle=arguments.v3_s3_bundle,

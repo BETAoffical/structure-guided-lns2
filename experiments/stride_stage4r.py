@@ -978,6 +978,228 @@ def run_stride_stage4r_export(
     return report
 
 
+def run_stride_stage4r_shadow_audit(
+    *, config_path: Path, collection: Path, output: Path, project_root: Path
+) -> dict[str, Any]:
+    config = _read_json(config_path)
+    protocol = dict(config.get("stride_stage4r_shadow") or {})
+    if protocol.get("schema") != "lns2.stride.stage4r_shadow_protocol.v1":
+        raise ValueError("unexpected STRIDE Stage 4R shadow protocol schema")
+    if (
+        protocol.get("scientific_status") != "diagnostic_only"
+        or protocol.get("executed_controller") != "v2-full"
+    ):
+        raise ValueError("Stage 4R shadow must remain action-preserving")
+    project_root = project_root.resolve()
+    expected_tasks = list(map(str, protocol["registered_task_ids"]))
+    if len(expected_tasks) != len(set(expected_tasks)) or not expected_tasks:
+        raise ValueError("Stage 4R shadow task registration is invalid")
+    expected_seed = int(protocol["solver_seed"])
+    bundle_integrity = {}
+    for controller_id, row_value in sorted(
+        dict(protocol["shadow_bundles"]).items()
+    ):
+        row = dict(row_value)
+        root = _project_path(project_root, str(row["path"]))
+        manifest_path = root / "controller_manifest.json"
+        actual_hash = sha256_file(manifest_path)
+        manifest = _read_json(manifest_path)
+        bundle_integrity[controller_id] = {
+            "path": str(root),
+            "expected_manifest_sha256": str(row["controller_manifest_sha256"]),
+            "actual_manifest_sha256": actual_hash,
+            "hash_matches": actual_hash
+            == str(row["controller_manifest_sha256"]),
+            "controller_id_matches": str(manifest.get("controller_id"))
+            == controller_id,
+            "diagnostic_only": manifest.get("scientific_status")
+            == "diagnostic_only",
+            "default_replacement_allowed": manifest.get(
+                "default_replacement_allowed"
+            ),
+        }
+    required_controllers = {"stride-control-v1", "stride-quality-v1"}
+    if set(bundle_integrity) != required_controllers:
+        raise ValueError("Stage 4R shadow requires both STRIDE controllers")
+
+    collection = collection.resolve()
+    run_config_path = collection / "run_config.json"
+    summary_path = collection / "collection_summary.json"
+    manifest_path = collection / "realized_dynamic_manifest.jsonl"
+    run_config = _read_json(run_config_path)
+    collection_summary = _read_json(summary_path)
+    rows = _read_jsonl(manifest_path)
+    effective = dict(run_config["configuration"])
+    registered_keys = {
+        (str(task_id), int(seed))
+        for task_id, seed in effective.get("cohort_job_keys_override") or []
+    }
+    expected_keys = {(task_id, expected_seed) for task_id in expected_tasks}
+    result_keys = {
+        (str(row["task_id"]), int(row["solver_seed"])) for row in rows
+    }
+
+    totals: Counter[str] = Counter()
+    invalid_action_count = 0
+    fingerprint_mismatch_count = 0
+    error_count = 0
+    for row in rows:
+        error_count += int(str(row.get("status")) not in {"ok", "resumed"})
+        summary = dict(row.get("summary") or {})
+        invalid_action_count += int(summary.get("invalid_action_count", 0))
+        fingerprint_mismatch_count += int(
+            summary.get("fingerprint_mismatch_count", 0)
+        )
+        for name, value in dict(summary.get("controller_totals") or {}).items():
+            totals[str(name)] += float(value)
+
+    decision_counts = {
+        controller_id: int(
+            totals[f"diagnostic_shadow_decision_count:{controller_id}"]
+        )
+        for controller_id in sorted(required_controllers)
+    }
+    disagreement_counts = {
+        controller_id: int(
+            totals[f"diagnostic_shadow_disagreement_count:{controller_id}"]
+        )
+        for controller_id in sorted(required_controllers)
+    }
+    fallback_counts = {
+        controller_id: int(
+            totals[f"diagnostic_shadow_range_fallback_count:{controller_id}"]
+        )
+        for controller_id in sorted(required_controllers)
+    }
+    inference_seconds = {
+        controller_id: float(
+            totals[f"diagnostic_shadow_inference_seconds:{controller_id}"]
+        )
+        for controller_id in sorted(required_controllers)
+    }
+    common_decisions = min(decision_counts.values(), default=0)
+    gates_config = dict(protocol["gates"])
+    maximum_fallback_rate = float(
+        gates_config["maximum_range_fallback_rate"]
+    )
+    fallback_rates = {
+        controller_id: (
+            fallback_counts[controller_id] / decision_counts[controller_id]
+            if decision_counts[controller_id]
+            else 0.0
+        )
+        for controller_id in sorted(required_controllers)
+    }
+    semantic_mismatches = int(
+        totals["diagnostic_shadow_semantic_mismatch_count"]
+    ) + fingerprint_mismatch_count
+    action_overrides = int(totals["diagnostic_shadow_action_override_count"])
+    collection_reported_errors = int(
+        dict(collection_summary.get("realized_dynamic") or {}).get(
+            "error_count", 0
+        )
+    )
+    gates = {
+        "registered_cohort_exact": (
+            registered_keys == expected_keys and result_keys == expected_keys
+        ),
+        "bundle_integrity": all(
+            row["hash_matches"]
+            and row["controller_id_matches"]
+            and row["diagnostic_only"]
+            and row["default_replacement_allowed"] is False
+            for row in bundle_integrity.values()
+        ),
+        "minimum_shadow_decisions": common_decisions
+        >= int(gates_config["minimum_shadow_decisions"]),
+        "zero_episode_errors": error_count == 0 and collection_reported_errors == 0,
+        "zero_invalid_actions": invalid_action_count == 0,
+        "zero_action_overrides": action_overrides == 0,
+        "zero_semantic_mismatches": semantic_mismatches == 0,
+        "range_fallback_rate": all(
+            rate <= maximum_fallback_rate + 1e-12
+            for rate in fallback_rates.values()
+        ),
+        "pair_accounting": int(
+            totals["diagnostic_shadow_pair_decision_count"]
+        )
+        == common_decisions,
+    }
+    report = {
+        "schema": "lns2.stride.stage4r_shadow_audit.v1",
+        "passed": all(gates.values()),
+        "scientific_status": "diagnostic_only",
+        "action_changing": False,
+        "formal_ood_data_read": False,
+        "test_data_read": False,
+        "episode_count": len(rows),
+        "common_shadow_decision_count": common_decisions,
+        "decision_count": decision_counts,
+        "disagreement_count_vs_v2": disagreement_counts,
+        "disagreement_rate_vs_v2": {
+            controller_id: (
+                disagreement_counts[controller_id]
+                / decision_counts[controller_id]
+                if decision_counts[controller_id]
+                else 0.0
+            )
+            for controller_id in sorted(required_controllers)
+        },
+        "control_quality_disagreement_count": int(
+            totals["diagnostic_shadow_pair_disagreement_count"]
+        ),
+        "control_quality_disagreement_rate": (
+            float(totals["diagnostic_shadow_pair_disagreement_count"])
+            / common_decisions
+            if common_decisions
+            else 0.0
+        ),
+        "range_fallback_count": fallback_counts,
+        "range_fallback_rate": fallback_rates,
+        "inference_seconds": inference_seconds,
+        "mean_inference_ms_per_decision": {
+            controller_id: (
+                1000.0
+                * inference_seconds[controller_id]
+                / decision_counts[controller_id]
+                if decision_counts[controller_id]
+                else 0.0
+            )
+            for controller_id in sorted(required_controllers)
+        },
+        "shadow_total_seconds": float(
+            totals["diagnostic_shadow_total_seconds"]
+        ),
+        "mean_shadow_total_ms_per_decision": (
+            1000.0
+            * float(totals["diagnostic_shadow_total_seconds"])
+            / common_decisions
+            if common_decisions
+            else 0.0
+        ),
+        "shadow_state_check_seconds": float(
+            totals["diagnostic_shadow_state_check_seconds"]
+        ),
+        "invalid_action_count": invalid_action_count,
+        "action_override_count": action_overrides,
+        "semantic_mismatch_count": semantic_mismatches,
+        "episode_error_count": error_count,
+        "gates": gates,
+        "bundle_integrity": bundle_integrity,
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "run_config_sha256": sha256_file(run_config_path),
+            "collection_summary_sha256": sha256_file(summary_path),
+            "realized_dynamic_manifest_sha256": sha256_file(manifest_path),
+            "collection_reported_errors": collection_reported_errors,
+        },
+    }
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    _write_json(output / "stage4r_shadow_audit.json", report)
+    return report
+
+
 __all__ = [
     "STRIDE_STAGE4R_CONFIG_SCHEMA",
     "STRIDE_STAGE4R_EXPORT_CONFIG_SCHEMA",
@@ -985,4 +1207,5 @@ __all__ = [
     "STRIDE_STAGE4R_REPORT_SCHEMA",
     "run_stride_stage4r_diagnostic",
     "run_stride_stage4r_export",
+    "run_stride_stage4r_shadow_audit",
 ]

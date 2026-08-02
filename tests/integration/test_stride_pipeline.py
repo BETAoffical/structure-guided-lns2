@@ -51,7 +51,9 @@ from experiments.stride_stage4 import (
 from experiments.stride_stage4r import (
     _aggregate_seed_half,
     _rank_correlation,
+    run_stride_stage4r_shadow_audit,
 )
+from scripts.collect_closed_loop_confirmation import _diagnostic_shadow_bundles
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -1101,6 +1103,117 @@ class StrideStage4ProtocolTest(unittest.TestCase):
 
 
 class StrideStage4RDiagnosticTest(unittest.TestCase):
+    def test_shadow_audit_accepts_exact_action_preserving_accounting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle_rows = {}
+            for controller_id in ("stride-control-v1", "stride-quality-v1"):
+                path = root / "models" / controller_id / "controller_manifest.json"
+                _write_json(
+                    path,
+                    {
+                        "controller_id": controller_id,
+                        "scientific_status": "diagnostic_only",
+                        "default_replacement_allowed": False,
+                    },
+                )
+                bundle_rows[controller_id] = {
+                    "path": str(path.parent.relative_to(root)),
+                    "controller_manifest_sha256": hashlib.sha256(
+                        path.read_bytes()
+                    ).hexdigest(),
+                }
+            config_path = root / "shadow.json"
+            _write_json(
+                config_path,
+                {
+                    "stride_stage4r_shadow": {
+                        "schema": "lns2.stride.stage4r_shadow_protocol.v1",
+                        "scientific_status": "diagnostic_only",
+                        "executed_controller": "v2-full",
+                        "solver_seed": 101,
+                        "registered_task_ids": ["task-a"],
+                        "shadow_bundles": bundle_rows,
+                        "gates": {
+                            "minimum_shadow_decisions": 2,
+                            "maximum_range_fallback_rate": 0.25,
+                            "require_zero_episode_errors": True,
+                            "require_zero_invalid_actions": True,
+                            "require_zero_action_overrides": True,
+                            "require_zero_semantic_mismatches": True,
+                        },
+                    }
+                },
+            )
+            collection = root / "collection"
+            _write_json(
+                collection / "run_config.json",
+                {
+                    "configuration": {
+                        "cohort_job_keys_override": [["task-a", 101]]
+                    }
+                },
+            )
+            _write_json(
+                collection / "collection_summary.json",
+                {"realized_dynamic": {"error_count": 0}},
+            )
+            _write_jsonl(
+                collection / "realized_dynamic_manifest.jsonl",
+                [
+                    {
+                        "task_id": "task-a",
+                        "solver_seed": 101,
+                        "status": "ok",
+                        "summary": {
+                            "invalid_action_count": 0,
+                            "fingerprint_mismatch_count": 0,
+                            "controller_totals": {
+                                "diagnostic_shadow_decision_count:stride-control-v1": 2,
+                                "diagnostic_shadow_decision_count:stride-quality-v1": 2,
+                                "diagnostic_shadow_disagreement_count:stride-control-v1": 1,
+                                "diagnostic_shadow_disagreement_count:stride-quality-v1": 1,
+                                "diagnostic_shadow_inference_seconds:stride-control-v1": 0.002,
+                                "diagnostic_shadow_inference_seconds:stride-quality-v1": 0.003,
+                                "diagnostic_shadow_range_fallback_count:stride-control-v1": 0,
+                                "diagnostic_shadow_range_fallback_count:stride-quality-v1": 0,
+                                "diagnostic_shadow_pair_decision_count": 2,
+                                "diagnostic_shadow_pair_disagreement_count": 1,
+                                "diagnostic_shadow_total_seconds": 0.010,
+                                "diagnostic_shadow_state_check_seconds": 0.001,
+                                "diagnostic_shadow_semantic_mismatch_count": 0,
+                                "diagnostic_shadow_action_override_count": 0,
+                            },
+                        },
+                    }
+                ],
+            )
+            report = run_stride_stage4r_shadow_audit(
+                config_path=config_path,
+                collection=collection,
+                output=root / "audit",
+                project_root=root,
+            )
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["common_shadow_decision_count"], 2)
+            self.assertEqual(report["control_quality_disagreement_rate"], 0.5)
+
+    def test_diagnostic_shadow_cli_registration(self) -> None:
+        self.assertEqual(
+            _diagnostic_shadow_bundles(
+                [
+                    "stride-control-v1=control",
+                    "stride-quality-v1=quality",
+                ]
+            ),
+            {
+                "stride-control-v1": "control",
+                "stride-quality-v1": "quality",
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "controller_id=path"):
+            _diagnostic_shadow_bundles(["invalid"])
+
     def test_seed_half_aggregation_and_rank_correlation(self) -> None:
         rows = []
         for candidate_id, conflicts in (("candidate-a", [2, 2, 3, 3]), ("candidate-b", [4, 4, 4, 4])):

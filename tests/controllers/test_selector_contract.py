@@ -5,7 +5,11 @@ from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
 
-from lns2_selector.controllers import CONTROLLER_IDS, load_selector
+from lns2_selector.controllers import (
+    CONTROLLER_IDS,
+    DIAGNOSTIC_CONTROLLER_IDS,
+    load_selector,
+)
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
@@ -54,7 +58,16 @@ class SelectorContractTests(unittest.TestCase):
     def test_active_controller_ids_are_canonical(self) -> None:
         self.assertEqual(
             CONTROLLER_IDS,
-            ("official_adaptive", "v2-full", "mixed-full-v2", "v3-s3"),
+            (
+                "official_adaptive",
+                "v2-full",
+                "mixed-full-v2",
+                "v3-s3",
+            ),
+        )
+        self.assertEqual(
+            DIAGNOSTIC_CONTROLLER_IDS,
+            ("stride-control-v1", "stride-quality-v1"),
         )
 
     def test_historical_controller_aliases_are_not_executable(self) -> None:
@@ -94,7 +107,12 @@ class SelectorContractTests(unittest.TestCase):
         self.assertEqual(decision.fallback_reason, "native_policy")
 
     def test_v2_contract_selects_best_candidate(self) -> None:
-        for controller_id in ("v2-full", "mixed-full-v2"):
+        for controller_id in (
+            "v2-full",
+            "mixed-full-v2",
+            "stride-control-v1",
+            "stride-quality-v1",
+        ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(
                     main_models={"realized_dynamic": DirectModel()}
@@ -110,7 +128,12 @@ class SelectorContractTests(unittest.TestCase):
                 self.assertIsNone(decision.fallback_reason)
 
     def test_v2_contract_rejects_an_empty_pool(self) -> None:
-        for controller_id in ("v2-full", "mixed-full-v2"):
+        for controller_id in (
+            "v2-full",
+            "mixed-full-v2",
+            "stride-control-v1",
+            "stride-quality-v1",
+        ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(
                     main_models={"realized_dynamic": DirectModel()}

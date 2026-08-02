@@ -42,6 +42,7 @@ from experiments.stride_stage4 import (  # noqa: E402
 from experiments.stride_stage4r import (  # noqa: E402
     run_stride_stage4r_diagnostic,
     run_stride_stage4r_export,
+    run_stride_stage4r_shadow_audit,
 )
 
 
@@ -254,6 +255,17 @@ def parse_arguments() -> argparse.Namespace:
     )
     stage4r_export.add_argument(
         "--output", default="build/stride-stage4r-models-v1"
+    )
+    stage4r_shadow_audit = subparsers.add_parser(
+        "audit-shadow-stage4r",
+        help="Audit an action-preserving Stage 4R online shadow collection.",
+    )
+    stage4r_shadow_audit.add_argument(
+        "--config", default="configs/stride_stage4r_shadow.json"
+    )
+    stage4r_shadow_audit.add_argument("--collection", required=True)
+    stage4r_shadow_audit.add_argument(
+        "--output", default="build/stride-stage4r-shadow-audit-v1"
     )
     return parser.parse_args()
 
@@ -485,6 +497,19 @@ def main() -> int:
             "stride_stage4r_export_passed"
             if report["passed"]
             else "stride_stage4r_export_failed"
+        )
+        return 0 if report["passed"] else 2
+    if arguments.stage == "audit-shadow-stage4r":
+        report = run_stride_stage4r_shadow_audit(
+            config_path=_resolve(arguments.config),
+            collection=_resolve(arguments.collection),
+            output=_resolve(arguments.output),
+            project_root=PROJECT_ROOT,
+        )
+        print(
+            "stride_stage4r_shadow_passed"
+            if report["passed"]
+            else "stride_stage4r_shadow_failed"
         )
         return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")

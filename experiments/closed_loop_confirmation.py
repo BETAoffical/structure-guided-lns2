@@ -95,7 +95,11 @@ from lns2_selector.evaluation.trace_validation import (
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
-from lns2_selector.runtime.contracts import CONTROLLER_IDS, SelectionRequest
+from lns2_selector.runtime.contracts import (
+    CONTROLLER_IDS,
+    DIAGNOSTIC_CONTROLLER_IDS,
+    SelectionRequest,
+)
 from lns2_selector.runtime.online_selection import (
     ClosedLoopExecutionError,
     feature_range_diagnostic,
@@ -124,6 +128,13 @@ POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_MODES = CONTROLLER_IDS
+EXECUTABLE_CONTROLLER_MODES = (*CONTROLLER_IDS, *DIAGNOSTIC_CONTROLLER_IDS)
+PAIRWISE_CONTROLLER_MODES = {
+    "v2-full",
+    "mixed-full-v2",
+    "stride-control-v1",
+    "stride-quality-v1",
+}
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
 STOPPING_RULES = ("historical", "wall-clock", "wall-clock-fixed-metric")
@@ -226,7 +237,7 @@ def resolve_controller_mode(
         )
     else:
         mode = str(controller)
-    if mode not in CONTROLLER_MODES:
+    if mode not in EXECUTABLE_CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {mode}")
     return mode, bundle_path, loaded.manifest if loaded is not None else None
 
@@ -787,7 +798,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     bundle = None
     pairwise_selector: PairwiseV2Selector | None = None
     controller_mode = str(job.get("controller", "official_adaptive"))
-    if controller_mode not in CONTROLLER_MODES:
+    if controller_mode not in EXECUTABLE_CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {controller_mode}")
     feature_backend = str(job.get("feature_backend", "auto"))
     requested_controller_runtime = str(job.get("controller_runtime", "reference"))
@@ -809,6 +820,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     shadow_models: dict[str, Any] = {}
+    diagnostic_shadow_selectors: dict[str, PairwiseV2Selector] = {}
+    diagnostic_shadow_ranges: dict[
+        str, dict[str, dict[str, tuple[float, float]]]
+    ] = {}
+    diagnostic_shadow_fallback_thresholds: dict[str, float] = {}
     if policy in LEARNED_POLICIES:
         bundle = load_frozen_policy_bundle(job["frozen_models"], job["model_registration"])
         if controller_mode == "official_adaptive":
@@ -834,8 +850,35 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     }
                     for name, model in runtime_models.items()
                 }
-        if controller_mode in {"v2-full", "mixed-full-v2"}:
+        if controller_mode in PAIRWISE_CONTROLLER_MODES:
             pairwise_selector = PairwiseV2Selector(controller_mode, runtime_models)
+        raw_diagnostic_shadows = dict(job.get("diagnostic_shadow_bundles") or {})
+        if raw_diagnostic_shadows:
+            if controller_mode != "v2-full" or policy != "realized_dynamic":
+                raise ValueError(
+                    "diagnostic shadows require a realized_dynamic v2-full episode"
+                )
+            for shadow_id, shadow_path in sorted(raw_diagnostic_shadows.items()):
+                shadow_bundle = load_controller_bundle(str(shadow_path))
+                if (
+                    str(shadow_bundle.manifest.get("controller_id")) != shadow_id
+                    or shadow_bundle.manifest.get("scientific_status")
+                    != "diagnostic_only"
+                    or shadow_bundle.manifest.get("default_replacement_allowed")
+                    is not False
+                ):
+                    raise ValueError(
+                        f"invalid diagnostic shadow bundle: {shadow_id}"
+                    )
+                diagnostic_shadow_selectors[shadow_id] = PairwiseV2Selector(
+                    shadow_id, shadow_bundle
+                )
+                diagnostic_shadow_ranges[shadow_id] = shadow_bundle.main_ranges
+                diagnostic_shadow_fallback_thresholds[shadow_id] = float(
+                    shadow_bundle.manifest["fallback_rules"][
+                        "maximum_outside_feature_fraction"
+                    ]
+                )
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path.unlink(missing_ok=True)
     started_wall = time.perf_counter()
@@ -1239,6 +1282,141 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     pruning_metrics = no_pruning_metrics(len(candidates))
                     retained_indices = list(range(len(candidates)))
                     base_selected_local_index = selected_local_index
+                    diagnostic_shadow_seconds = 0.0
+                    diagnostic_shadow_state_check_seconds = 0.0
+                    diagnostic_shadow_total_seconds = 0.0
+                    if diagnostic_shadow_selectors:
+                        diagnostic_shadow_block_started = time.perf_counter()
+                        shadow_check_started = time.perf_counter()
+                        shadow_input_fingerprint = _fingerprint(
+                            {
+                                "state_fingerprint": before_repair_hash,
+                                "candidate_rows": candidate_rows,
+                            }
+                        )
+                        diagnostic_shadow_state_check_seconds += (
+                            time.perf_counter() - shadow_check_started
+                        )
+                        diagnostic_records = {}
+                        diagnostic_indices = {}
+                        for shadow_id, shadow_selector in sorted(
+                            diagnostic_shadow_selectors.items()
+                        ):
+                            shadow_started = time.perf_counter()
+                            shadow_selection = shadow_selector.select(
+                                SelectionRequest(
+                                    candidates=candidates,
+                                    candidate_rows=candidate_rows,
+                                    before_fingerprint=before_repair_hash,
+                                    agent_count=int(row["agent_count"]),
+                                    profile=policy,
+                                )
+                            )
+                            shadow_seconds = time.perf_counter() - shadow_started
+                            diagnostic_shadow_seconds += shadow_seconds
+                            shadow_index = shadow_selection.candidate_index
+                            if (
+                                shadow_index is None
+                                or int(shadow_index) < 0
+                                or int(shadow_index) >= len(candidates)
+                            ):
+                                raise ClosedLoopExecutionError(
+                                    "diagnostic_shadow_invalid_action",
+                                    f"{shadow_id} selected an invalid candidate",
+                                )
+                            shadow_index = int(shadow_index)
+                            diagnostic_indices[shadow_id] = shadow_index
+                            selected_shadow_row = candidate_rows[shadow_index]
+                            range_diagnostic = feature_range_diagnostic(
+                                selected_shadow_row,
+                                policy,
+                                diagnostic_shadow_ranges[shadow_id][policy],
+                            )
+                            fallback_threshold = (
+                                diagnostic_shadow_fallback_thresholds[shadow_id]
+                            )
+                            diagnostic_records[shadow_id] = {
+                                "selected_candidate_id": candidates[shadow_index][
+                                    "candidate_id"
+                                ],
+                                "selected_candidate_matches_v2": (
+                                    shadow_index == base_selected_local_index
+                                ),
+                                "action_overridden": False,
+                                "candidate_count": len(candidates),
+                                "inference_seconds": shadow_seconds,
+                                "score_margin": float(
+                                    shadow_selection.diagnostics.get("margin", 0.0)
+                                ),
+                                "feature_range": range_diagnostic,
+                                "feature_range_fallback_threshold": (
+                                    fallback_threshold
+                                ),
+                                "feature_range_fallback_suggested": (
+                                    float(range_diagnostic["outside_fraction"])
+                                    > fallback_threshold
+                                ),
+                            }
+                            controller_totals[
+                                f"diagnostic_shadow_decision_count:{shadow_id}"
+                            ] += 1
+                            controller_totals[
+                                f"diagnostic_shadow_disagreement_count:{shadow_id}"
+                            ] += int(shadow_index != base_selected_local_index)
+                            controller_totals[
+                                f"diagnostic_shadow_inference_seconds:{shadow_id}"
+                            ] += shadow_seconds
+                            controller_totals[
+                                f"diagnostic_shadow_range_fallback_count:{shadow_id}"
+                            ] += int(
+                                float(range_diagnostic["outside_fraction"])
+                                > fallback_threshold
+                            )
+                        shadow_check_started = time.perf_counter()
+                        if _fingerprint(
+                            {
+                                "state_fingerprint": state_fingerprint(state),
+                                "candidate_rows": candidate_rows,
+                            }
+                        ) != shadow_input_fingerprint:
+                            raise ClosedLoopExecutionError(
+                                "diagnostic_shadow_semantic_mismatch",
+                                "diagnostic shadow changed state or candidate rows",
+                            )
+                        diagnostic_shadow_state_check_seconds += (
+                            time.perf_counter() - shadow_check_started
+                        )
+                        controller_totals[
+                            "diagnostic_shadow_state_check_seconds"
+                        ] += diagnostic_shadow_state_check_seconds
+                        controller_totals[
+                            "diagnostic_shadow_semantic_mismatch_count"
+                        ] += 0
+                        controller_totals[
+                            "diagnostic_shadow_action_override_count"
+                        ] += 0
+                        if len(diagnostic_indices) == 2:
+                            controller_totals[
+                                "diagnostic_shadow_pair_decision_count"
+                            ] += 1
+                            controller_totals[
+                                "diagnostic_shadow_pair_disagreement_count"
+                            ] += int(
+                                len(set(diagnostic_indices.values())) > 1
+                            )
+                        controller["diagnostic_shadows"] = {
+                            "passed": True,
+                            "state_fingerprint_matches": True,
+                            "candidate_rows_match": True,
+                            "executed_controller": "v2-full",
+                            "records": diagnostic_records,
+                        }
+                        diagnostic_shadow_total_seconds = (
+                            time.perf_counter() - diagnostic_shadow_block_started
+                        )
+                        controller_totals[
+                            "diagnostic_shadow_total_seconds"
+                        ] += diagnostic_shadow_total_seconds
                     if shadow_models:
                         assert feature_engine is not None
                         shadow_rows = feature_engine.last_shadow_rows.get(policy)
@@ -1415,7 +1593,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + feature_seconds
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
-                        + v3_s3_seconds,
+                        + v3_s3_seconds
+                        + diagnostic_shadow_total_seconds,
                     )
                     measured_selection_stages = (
                         candidate_generation_seconds
@@ -1424,6 +1603,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         + float(pruning_metrics["pruner_seconds"])
                         + inference_seconds
                         + v3_s3_seconds
+                        + diagnostic_shadow_total_seconds
                     )
                     controller.update(
                         {
@@ -1460,6 +1640,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 list(v3_s3_bundle.inference_backends)
                                 if v3_s3_bundle is not None
                                 else None
+                            ),
+                            "diagnostic_shadow_seconds": (
+                                diagnostic_shadow_seconds
+                            ),
+                            "diagnostic_shadow_state_check_seconds": (
+                                diagnostic_shadow_state_check_seconds
+                            ),
+                            "diagnostic_shadow_total_seconds": (
+                                diagnostic_shadow_total_seconds
                             ),
                             "candidate_pool": candidate_pool,
                             "pruning": pruning_metrics,
@@ -2332,6 +2521,7 @@ def run_closed_loop_collection(
     controller: str | None = None,
     feature_backend: str = "auto",
     controller_bundle: str | Path | None = None,
+    diagnostic_shadow_bundles: dict[str, str | Path] | None = None,
     feature_shadow_validation: bool = False,
     controller_runtime: str = "reference",
     verification_profile: str = "audit",
@@ -2371,6 +2561,30 @@ def run_closed_loop_collection(
     controller_mode, controller_root, controller_manifest = resolve_controller_mode(
         project_root, controller, controller_bundle
     )
+    diagnostic_shadow_roots: dict[str, Path] = {}
+    diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}
+    if diagnostic_shadow_bundles:
+        if controller_mode != "v2-full":
+            raise ValueError("diagnostic shadows require v2-full execution")
+        required_shadow_ids = {"stride-control-v1", "stride-quality-v1"}
+        if set(diagnostic_shadow_bundles) != required_shadow_ids:
+            raise ValueError("diagnostic shadow requires both STRIDE bundles")
+        for shadow_id, raw_path in sorted(diagnostic_shadow_bundles.items()):
+            shadow_root = Path(str(raw_path))
+            if not shadow_root.is_absolute():
+                shadow_root = project_root / shadow_root
+            shadow_root = shadow_root.resolve()
+            loaded_shadow = load_controller_bundle(shadow_root)
+            if (
+                str(loaded_shadow.manifest.get("controller_id")) != shadow_id
+                or loaded_shadow.manifest.get("scientific_status")
+                != "diagnostic_only"
+                or loaded_shadow.manifest.get("default_replacement_allowed")
+                is not False
+            ):
+                raise ValueError(f"invalid diagnostic shadow bundle: {shadow_id}")
+            diagnostic_shadow_roots[shadow_id] = shadow_root
+            diagnostic_shadow_manifests[shadow_id] = loaded_shadow.manifest
     v3_s3_root: Path | None = None
     v3_s3_manifest: dict[str, Any] | None = None
     if controller_mode == "v3-s3":
@@ -2491,10 +2705,15 @@ def run_closed_loop_collection(
         "feature_backend": feature_backend,
         "controller_runtime": controller_runtime,
         "verification_profile": verification_profile,
+        "diagnostic_shadow_controllers": sorted(diagnostic_shadow_roots),
         "deterministic_pp_replay": bool(
             config.get("deterministic_pp_replay", False)
         ),
         "controller_bundle": str(controller_root),
+        "diagnostic_shadow_bundles": {
+            shadow_id: str(path)
+            for shadow_id, path in diagnostic_shadow_roots.items()
+        },
         "feature_shadow_validation": bool(
             feature_shadow_validation
             or verification_profile == "audit"
@@ -2511,6 +2730,7 @@ def run_closed_loop_collection(
             "configuration_fingerprint": config_fp,
             "freeze_manifest": bundle.manifest,
             "controller_bundle_manifest": controller_manifest,
+            "diagnostic_shadow_bundle_manifests": diagnostic_shadow_manifests,
             "v3_s3_bundle_manifest": v3_s3_manifest,
             "controller_implementation": implementation,
         }
@@ -2580,6 +2800,7 @@ def run_closed_loop_collection(
                 else None
             ),
             "controller_bundle": controller_manifest,
+            "diagnostic_shadow_bundles": diagnostic_shadow_manifests,
             "v3_s3_bundle": v3_s3_manifest,
             "controller_implementation": implementation,
             "estimate": estimate,
@@ -2617,6 +2838,7 @@ def run_closed_loop_collection(
             else None
         ),
         "controller_bundle": controller_manifest,
+        "diagnostic_shadow_bundles": diagnostic_shadow_manifests,
         "v3_s3_bundle": v3_s3_manifest,
         "controller_implementation": implementation,
     }
@@ -2787,6 +3009,10 @@ def run_closed_loop_collection(
                 "controller_runtime": controller_runtime,
                 "verification_profile": verification_profile,
                 "controller_bundle": str(controller_root),
+                "diagnostic_shadow_bundles": {
+                    shadow_id: str(path)
+                    for shadow_id, path in diagnostic_shadow_roots.items()
+                },
                 "feature_shadow_validation": bool(
                     feature_shadow_validation
                     or verification_profile == "audit"
@@ -2853,6 +3079,7 @@ def run_closed_loop_collection(
 __all__ = [
     "CLOSED_LOOP_SCHEMA",
     "CONTROLLER_MODES",
+    "EXECUTABLE_CONTROLLER_MODES",
     "DEFAULT_CONTROLLER_BUNDLE",
     "STOPPING_RULES",
     "CollectionLockError",
