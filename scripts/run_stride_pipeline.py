@@ -39,7 +39,10 @@ from experiments.stride_stage4 import (  # noqa: E402
     prepare_stride_stage4_protocol,
     run_stride_stage4_training,
 )
-from experiments.stride_stage4r import run_stride_stage4r_diagnostic  # noqa: E402
+from experiments.stride_stage4r import (  # noqa: E402
+    run_stride_stage4r_diagnostic,
+    run_stride_stage4r_export,
+)
 
 
 def _resolve(value: str) -> Path:
@@ -241,6 +244,16 @@ def parse_arguments() -> argparse.Namespace:
     )
     stage4r_diagnose.add_argument(
         "--output", default="build/stride-stage4r-diagnostic-v1"
+    )
+    stage4r_export = subparsers.add_parser(
+        "export-stage4r",
+        help="Export diagnostic-only Stage 4R control and quality bundles.",
+    )
+    stage4r_export.add_argument(
+        "--config", default="configs/stride_stage4r_export.json"
+    )
+    stage4r_export.add_argument(
+        "--output", default="build/stride-stage4r-models-v1"
     )
     return parser.parse_args()
 
@@ -460,6 +473,18 @@ def main() -> int:
             "stride_stage4r_diagnostic_passed"
             if report["passed"]
             else "stride_stage4r_diagnostic_failed"
+        )
+        return 0 if report["passed"] else 2
+    if arguments.stage == "export-stage4r":
+        report = run_stride_stage4r_export(
+            config_path=_resolve(arguments.config),
+            output=_resolve(arguments.output),
+            project_root=PROJECT_ROOT,
+        )
+        print(
+            "stride_stage4r_export_passed"
+            if report["passed"]
+            else "stride_stage4r_export_failed"
         )
         return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")

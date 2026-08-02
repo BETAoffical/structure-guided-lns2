@@ -2,12 +2,31 @@ from __future__ import annotations
 
 import itertools
 import math
+import shutil
 import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import sha256_file
+from experiments.compact_controller_model import (
+    CONTROLLER_BUNDLE_SCHEMA,
+    CONTROLLER_BUNDLE_VERSION,
+    compact_portable_payload,
+    load_compact_model,
+    load_controller_bundle,
+)
+from experiments.context_audit import PairwiseModel
+from experiments.feature_schema_v2 import (
+    FEATURE_SCHEMA_ID,
+    FEATURE_SCHEMA_SHA256,
+    PROFILE_FEATURE_NAMES,
+)
+from experiments.mixed_full_v2 import (
+    _atomic_pickle,
+    _feature_ranges,
+    _portable_payload,
+)
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -20,12 +39,27 @@ from experiments.stride_lns import (
     assign_structure_scores,
 )
 from experiments.stride_stage3 import _project_path
-from experiments.stride_stage4 import _control_dominates
+from experiments.stride_stage4 import (
+    STRIDE_STAGE4_PROTOCOL_SCHEMA,
+    STRIDE_STAGE4_TRAINING_CONFIG_SCHEMA,
+    STRIDE_STAGE4_TRAINING_SCHEMA,
+    _candidate_matrix,
+    _control_dominates,
+    _fit_registered_model,
+    _load_candidates,
+    _pair_matrix,
+    _pair_table_from_control,
+    _pair_table_from_quality,
+    _variant_specifications,
+)
+from lns2_selector.runtime.online_selection import score_online_candidates
 
 
 STRIDE_STAGE4R_CONFIG_SCHEMA = "lns2.stride.stage4r_diagnostic_config.v1"
 STRIDE_STAGE4R_REPORT_SCHEMA = "lns2.stride.stage4r_diagnostic.v1"
 STRIDE_STAGE4R_STATE_SCHEMA = "lns2.stride.stage4r_state_diagnostic.v1"
+STRIDE_STAGE4R_EXPORT_CONFIG_SCHEMA = "lns2.stride.stage4r_export_config.v1"
+STRIDE_STAGE4R_EXPORT_REPORT_SCHEMA = "lns2.stride.stage4r_export.v1"
 
 
 def _number_summary(values: Iterable[float]) -> dict[str, float | int]:
@@ -614,8 +648,341 @@ def run_stride_stage4r_diagnostic(
     return report
 
 
+def _ranker_manifest_row(
+    path: Path, root: Path, payload: dict[str, Any]
+) -> dict[str, Any]:
+    profile = str(payload["profile"])
+    base_names = list(map(str, payload["base_feature_names"]))
+    registered = list(PROFILE_FEATURE_NAMES[profile])
+    return {
+        "file": path.relative_to(root).as_posix(),
+        "sha256": sha256_file(path),
+        "pairwise_input_dimension": int(payload["input_dimension"]),
+        "used_feature_names": base_names,
+        "used_feature_ids": [registered.index(name) for name in base_names],
+        "source_semantic_fingerprint": str(
+            payload["source_semantic_fingerprint"]
+        ),
+        "semantic_fingerprint": str(payload["semantic_fingerprint"]),
+    }
+
+
+def _export_diagnostic_controller(
+    *,
+    root: Path,
+    controller_id: str,
+    estimator: Any,
+    feature_names: tuple[str, ...],
+    candidates: list[dict[str, Any]],
+    grouped: dict[str, list[dict[str, Any]]],
+    source_bundle: Path,
+    source_manifest: dict[str, Any],
+    parameters: dict[str, Any],
+    training_pair_count: int,
+    source_hashes: dict[str, str],
+) -> dict[str, Any]:
+    root.mkdir(parents=True, exist_ok=True)
+    sklearn_model = PairwiseModel(
+        profile="realized_dynamic",
+        feature_names=list(feature_names),
+        estimator=estimator,
+    )
+    sklearn_path = root / "sklearn__realized_dynamic.pkl"
+    _atomic_pickle(sklearn_path, sklearn_model)
+    compact_payload = compact_portable_payload(
+        _portable_payload(sklearn_model, sha256_file(sklearn_path))
+    )
+    realized_path = root / "main__realized_dynamic.json"
+    _write_json(realized_path, compact_payload)
+    compact_model = load_compact_model(compact_payload)
+
+    mismatch_count = 0
+    maximum_score_delta = 0.0
+    for state in grouped.values():
+        rows = [
+            {
+                "candidate_id": row["candidate_id"],
+                "candidate_key": row["candidate_key"],
+                "features": {"realized_dynamic": row["features"]},
+            }
+            for row in state
+        ]
+        reference_index, reference_scores, _ = score_online_candidates(
+            rows, sklearn_model
+        )
+        compact_index, compact_scores, _ = score_online_candidates(
+            rows, compact_model
+        )
+        mismatch_count += int(reference_index != compact_index)
+        maximum_score_delta = max(
+            maximum_score_delta,
+            *(
+                abs(left - right)
+                for left, right in zip(reference_scores, compact_scores)
+            ),
+        )
+    equivalence = {
+        "state_count": len(grouped),
+        "selection_mismatch_count": mismatch_count,
+        "maximum_score_delta": maximum_score_delta,
+        "passed": mismatch_count == 0 and maximum_score_delta <= 1e-10,
+    }
+
+    proposal_source_row = dict(
+        source_manifest["main_rankers"]["proposal_dynamic"]
+    )
+    proposal_source_path = source_bundle / str(proposal_source_row["file"])
+    proposal_path = root / "main__proposal_dynamic.json"
+    shutil.copyfile(proposal_source_path, proposal_path)
+    if sha256_file(proposal_path) != str(proposal_source_row["sha256"]):
+        raise ValueError("copied proposal ranker differs from frozen V2")
+    proposal_source_row["file"] = proposal_path.relative_to(root).as_posix()
+    proposal_source_row["sha256"] = sha256_file(proposal_path)
+    realized_row = _ranker_manifest_row(realized_path, root, compact_payload)
+
+    evidence = {
+        "schema": "lns2.stride.stage4r_controller_evidence.v1",
+        "controller_id": controller_id,
+        "scientific_status": "diagnostic_only",
+        "default_replacement_allowed": False,
+        "formal_ood_data_read": False,
+        "test_data_read": False,
+        "training_state_count": len(grouped),
+        "training_candidate_count": len(candidates),
+        "training_pair_count": training_pair_count,
+        "model_parameters": parameters,
+        "portable_equivalence": equivalence,
+        "source_sha256": source_hashes,
+    }
+    evidence_path = root / "promotion_report.json"
+    _write_json(evidence_path, evidence)
+    manifest = {
+        "schema": CONTROLLER_BUNDLE_SCHEMA,
+        "schema_version": CONTROLLER_BUNDLE_VERSION,
+        "controller_id": controller_id,
+        "default_controller": controller_id,
+        "scientific_status": "diagnostic_only",
+        "default_replacement_allowed": False,
+        "feature_schema_id": FEATURE_SCHEMA_ID,
+        "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
+        "feature_dimensions": {
+            profile: len(names)
+            for profile, names in PROFILE_FEATURE_NAMES.items()
+        },
+        "main_rankers": {
+            "proposal_dynamic": proposal_source_row,
+            "realized_dynamic": realized_row,
+        },
+        "main_ranges": {
+            "proposal_dynamic": dict(source_manifest["main_ranges"])[
+                "proposal_dynamic"
+            ],
+            "realized_dynamic": _feature_ranges(candidates, list(feature_names)),
+        },
+        "main_ranker_semantic_fingerprint": compact_payload[
+            "source_semantic_fingerprint"
+        ],
+        "pruner": None,
+        "fallback_rules": dict(source_manifest["fallback_rules"]),
+        "source_bundle": {
+            "controller_id": "v2-full",
+            "manifest_sha256": sha256_file(
+                source_bundle / "controller_manifest.json"
+            ),
+            "proposal_ranker_reused_unchanged": True,
+        },
+        "promotion_report": {
+            "file": evidence_path.relative_to(root).as_posix(),
+            "sha256": sha256_file(evidence_path),
+        },
+        "storage_format_dependency": None,
+    }
+    manifest_path = root / "controller_manifest.json"
+    _write_json(manifest_path, manifest)
+    loaded = load_controller_bundle(root)
+    if str(loaded.manifest.get("controller_id")) != controller_id:
+        raise ValueError("diagnostic bundle controller id differs after loading")
+    return {
+        "controller_id": controller_id,
+        "bundle": str(root),
+        "controller_manifest_sha256": sha256_file(manifest_path),
+        "promotion_report_sha256": sha256_file(evidence_path),
+        "sklearn_sha256": sha256_file(sklearn_path),
+        "portable_sha256": sha256_file(realized_path),
+        "portable_semantic_fingerprint": compact_payload[
+            "semantic_fingerprint"
+        ],
+        "equivalence": equivalence,
+    }
+
+
+def run_stride_stage4r_export(
+    *, config_path: Path, output: Path, project_root: Path
+) -> dict[str, Any]:
+    config = _read_json(config_path)
+    if config.get("schema") != STRIDE_STAGE4R_EXPORT_CONFIG_SCHEMA:
+        raise ValueError("unexpected STRIDE Stage 4R export config schema")
+    required_controllers = {"stride-control-v1", "stride-quality-v1"}
+    configured_controllers = {
+        str(value) for value in config.get("controllers", [])
+    }
+    if configured_controllers != required_controllers:
+        raise ValueError("Stage 4R export requires both registered controllers")
+    if (
+        config.get("scientific_status") != "diagnostic_only"
+        or config.get("default_replacement_allowed") is not False
+        or config.get("formal_ood_allowed") is not False
+        or config.get("test_data_allowed") is not False
+    ):
+        raise ValueError("Stage 4R export must remain diagnostic-only")
+    project_root = project_root.resolve()
+    training_config_path = _project_path(
+        project_root, str(config["stage4_training_config"])
+    )
+    protocol_report_path = _project_path(
+        project_root, str(config["stage4_protocol_report"])
+    )
+    training_report_path = _project_path(
+        project_root, str(config["stage4_training_report"])
+    )
+    diagnostic_report_path = _project_path(
+        project_root, str(config["stage4r_diagnostic_report"])
+    )
+    training_config = _read_json(training_config_path)
+    protocol_report = _read_json(protocol_report_path)
+    training_report = _read_json(training_report_path)
+    diagnostic_report = _read_json(diagnostic_report_path)
+    if training_config.get("schema") != STRIDE_STAGE4_TRAINING_CONFIG_SCHEMA:
+        raise ValueError("Stage 4R export training config schema differs")
+    if protocol_report.get("schema") != STRIDE_STAGE4_PROTOCOL_SCHEMA:
+        raise ValueError("Stage 4R export protocol report schema differs")
+    if (
+        protocol_report.get("passed") is not True
+        or protocol_report.get("label_outcomes_read") is not False
+        or str(protocol_report.get("config_sha256"))
+        != _fingerprint(training_config)
+    ):
+        raise ValueError("Stage 4R export protocol report is not registered")
+    if training_report.get("schema") != STRIDE_STAGE4_TRAINING_SCHEMA:
+        raise ValueError("Stage 4R export training report schema differs")
+    if (
+        training_report.get("formal_ood_data_read") is not False
+        or training_report.get("test_data_read") is not False
+    ):
+        raise ValueError("Stage 4R export training report read forbidden data")
+    if (
+        diagnostic_report.get("schema") != STRIDE_STAGE4R_REPORT_SCHEMA
+        or diagnostic_report.get("passed") is not True
+        or diagnostic_report.get("diagnostic_only") is not True
+    ):
+        raise ValueError("Stage 4R export requires a passed diagnostic report")
+
+    labels = _project_path(project_root, str(training_config["labels"]))
+    aggregate_path = labels / "candidate_aggregates.jsonl"
+    quality_pair_path = labels / "dominance_pairs.jsonl"
+    fold_path = protocol_report_path.parent / "fold_manifest.jsonl"
+    source_bundle = _project_path(
+        project_root,
+        str(
+            training_config["protocol"]["models"]["frozen_anchor"]["bundle"]
+        ),
+    )
+    paths = {
+        "stage4_training_config": training_config_path,
+        "stage4_protocol_report": protocol_report_path,
+        "stage4_training_report": training_report_path,
+        "stage4r_diagnostic_report": diagnostic_report_path,
+        "candidate_aggregates": aggregate_path,
+        "dominance_pairs": quality_pair_path,
+        "fold_manifest": fold_path,
+        "source_controller_manifest": source_bundle / "controller_manifest.json",
+    }
+    expected_hashes = {
+        str(name): str(value)
+        for name, value in dict(config["expected_sha256"]).items()
+    }
+    actual_hashes = {name: sha256_file(path) for name, path in paths.items()}
+    if actual_hashes != expected_hashes:
+        raise ValueError("Stage 4R export source SHA256 differs from registration")
+
+    manifest_rows = _read_jsonl(fold_path)
+    candidates, grouped = _load_candidates(aggregate_path, manifest_rows)
+    if (
+        len(grouped) != int(training_report["state_count"])
+        or len(candidates) != int(training_report["candidate_count"])
+    ):
+        raise ValueError("Stage 4R export candidate coverage differs from Stage 4")
+    fold_by_state = {
+        str(row["state_id"]): int(row["fold_index"])
+        for row in manifest_rows
+    }
+    candidate_index = {
+        (str(row["state_id"]), str(row["candidate_id"])): int(
+            row["candidate_index"]
+        )
+        for row in candidates
+    }
+    candidate_values = _candidate_matrix(candidates)
+    tables = {
+        "stride-control-v1": _pair_table_from_control(grouped, fold_by_state),
+        "stride-quality-v1": _pair_table_from_quality(
+            quality_pair_path, candidate_index, fold_by_state
+        ),
+    }
+    variants = _variant_specifications(
+        dict(training_config["protocol"]["feature_variants"])
+    )
+    feature_names, input_specs = variants["full"]
+    parameters = dict(training_config["model_parameters"])
+    source_manifest = _read_json(source_bundle / "controller_manifest.json")
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    exports = {}
+    for controller_id in ("stride-control-v1", "stride-quality-v1"):
+        table = tables[controller_id]
+        values = _pair_matrix(candidate_values, table, input_specs)
+        estimator = _fit_registered_model(
+            values, table["labels"], table["weights"], parameters
+        )
+        exports[controller_id] = _export_diagnostic_controller(
+            root=output / controller_id,
+            controller_id=controller_id,
+            estimator=estimator,
+            feature_names=feature_names,
+            candidates=candidates,
+            grouped=grouped,
+            source_bundle=source_bundle,
+            source_manifest=source_manifest,
+            parameters=parameters,
+            training_pair_count=len(table["labels"]),
+            source_hashes=actual_hashes,
+        )
+    passed = all(
+        bool(dict(row["equivalence"])["passed"])
+        for row in exports.values()
+    )
+    report = {
+        "schema": STRIDE_STAGE4R_EXPORT_REPORT_SCHEMA,
+        "passed": passed,
+        "scientific_status": "diagnostic_only",
+        "default_replacement_allowed": False,
+        "formal_ood_data_read": False,
+        "test_data_read": False,
+        "state_count": len(grouped),
+        "candidate_count": len(candidates),
+        "source_sha256": actual_hashes,
+        "config_sha256": _fingerprint(config),
+        "exports": exports,
+    }
+    _write_json(output / "stage4r_export_report.json", report)
+    return report
+
+
 __all__ = [
     "STRIDE_STAGE4R_CONFIG_SCHEMA",
+    "STRIDE_STAGE4R_EXPORT_CONFIG_SCHEMA",
+    "STRIDE_STAGE4R_EXPORT_REPORT_SCHEMA",
     "STRIDE_STAGE4R_REPORT_SCHEMA",
     "run_stride_stage4r_diagnostic",
+    "run_stride_stage4r_export",
 ]

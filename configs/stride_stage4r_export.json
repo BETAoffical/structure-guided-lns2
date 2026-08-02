@@ -1,0 +1,25 @@
+{
+  "schema": "lns2.stride.stage4r_export_config.v1",
+  "stage4_training_config": "configs/stride_stage4_training.json",
+  "stage4_protocol_report": "build/stride-stage4-protocol-v1/stage4_protocol_report.json",
+  "stage4_training_report": "build/stride-stage4-training-v1/stage4_training_report.json",
+  "stage4r_diagnostic_report": "build/stride-stage4r-diagnostic-v1/stage4r_diagnostic_report.json",
+  "expected_sha256": {
+    "stage4_training_config": "27f9a56e21244c997d659d10e07f388ac4289eec01029340e9d9430e48a76e37",
+    "stage4_protocol_report": "29b5654cfbaef335bfa7b56f40ddd59d4d57aa9f45daac9253098e3ab4b8d8c6",
+    "stage4_training_report": "536ab28dd9560843c4556e19a35de8f73e3df23d294a8e377ae247308ba815d1",
+    "stage4r_diagnostic_report": "8513f0c34e4d7082a892bd43fd741b5c2180365d0f5313609f51e72460e93f9c",
+    "candidate_aggregates": "e4976b2da43e617452bde0fa753ac01d8626d263f40495ea54773ae5847d994c",
+    "dominance_pairs": "c2b028285c446555ec75c99a79452a62d31eebad331fa1edf01460a8193b62b7",
+    "fold_manifest": "28eca15b6292126c862ac13ae43aa5a4f3ed59ecadd3d437ab9fe50a281e56e2",
+    "source_controller_manifest": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "controllers": [
+    "stride-control-v1",
+    "stride-quality-v1"
+  ],
+  "scientific_status": "diagnostic_only",
+  "default_replacement_allowed": false,
+  "formal_ood_allowed": false,
+  "test_data_allowed": false
+}
