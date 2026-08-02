@@ -1,0 +1,60 @@
+{
+  "schema": "lns2.stride.stage4r_diagnostic_config.v1",
+  "labels": "build/stride-stage3-quality-v2-labels-v1",
+  "stage4_protocol_report": "build/stride-stage4-protocol-v1/stage4_protocol_report.json",
+  "stage4_training_report": "build/stride-stage4-training-v1/stage4_training_report.json",
+  "oof_predictions": "build/stride-stage4-training-v1/oof_predictions.jsonl",
+  "expected_sha256": {
+    "candidate_aggregates": "e4976b2da43e617452bde0fa753ac01d8626d263f40495ea54773ae5847d994c",
+    "dominance_pairs": "c2b028285c446555ec75c99a79452a62d31eebad331fa1edf01460a8193b62b7",
+    "fold_manifest": "28eca15b6292126c862ac13ae43aa5a4f3ed59ecadd3d437ab9fe50a281e56e2",
+    "stage4_training_report": "536ab28dd9560843c4556e19a35de8f73e3df23d294a8e377ae247308ba815d1",
+    "oof_predictions": "8584b33a4966a2712126a5fbeb9a1561b12b973e92cb6824dc9105c0a5e1a1d6"
+  },
+  "expected_state_count": 600,
+  "expected_candidate_count": 10713,
+  "expected_trials_per_candidate": 8,
+  "structure_weight": 0.02,
+  "seed_halves": [
+    [0, 1, 2, 3],
+    [4, 5, 6, 7]
+  ],
+  "trial_sources": [
+    "build/stride-stage2-pilot-v2/repair_trials.jsonl",
+    "build/stride-stage2-stability-v1/extra_trials.jsonl",
+    "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl",
+    "build/stride-stage3-retained-quality-v2-completion-v1/extra_trials.jsonl",
+    "build/stride-stage3-extension-trials-v1/repair_trials.jsonl",
+    "build/stride-stage3-extension-quality-v2-completion-v1/extra_trials.jsonl"
+  ],
+  "diagnostic_models": [
+    "v2-full",
+    "stride-control-v1",
+    "stride-quality-v1"
+  ],
+  "runtime": {
+    "scientific_status": "diagnostic_only",
+    "primary_metric": "mean_capped_wall_ttf",
+    "ttf_start": "immediately_before_environment_reset",
+    "ttf_end": "first_feasible_state",
+    "failure_value": "registered_episode_wall_budget",
+    "success_count_noninferiority_required": true,
+    "relative_capped_ttf_improvement_target": 0.05,
+    "common_success_ttf_required": true,
+    "required_secondary_metrics": [
+      "repair_rounds",
+      "fixed_step_conflict_auc",
+      "wall_conflict_auc",
+      "pp_time",
+      "proposal_time",
+      "feature_time",
+      "inference_time",
+      "controller_overhead",
+      "fallback_count",
+      "invalid_action_count",
+      "semantic_mismatch_count"
+    ],
+    "formal_ood_allowed": false,
+    "test_data_allowed": false
+  }
+}
