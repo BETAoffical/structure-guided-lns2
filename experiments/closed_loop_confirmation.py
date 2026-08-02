@@ -987,6 +987,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if policy in LEARNED_POLICIES and v3_s3_bundle is None
                 else set()
             )
+            if policy in LEARNED_POLICIES:
+                for shadow_selector in diagnostic_shadow_selectors.values():
+                    shadow_model = shadow_selector.models.get(policy)
+                    if shadow_model is None:
+                        raise ValueError(
+                            f"diagnostic shadow lacks profile: {policy}"
+                        )
+                    required_model_features.update(
+                        set(shadow_model.base_feature_names)
+                    )
             if v3_s3_bundle is not None and policy == "realized_dynamic":
                 required_model_features.update(
                     set(v3_s3_bundle.required_feature_names)
