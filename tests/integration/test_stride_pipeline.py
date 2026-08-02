@@ -41,7 +41,13 @@ from experiments.stride_quality_v2 import (
     select_stride_quality_v2_confirmation_states,
 )
 from experiments.stride_stage3 import run_stride_stage3_label_audit
-from experiments.stride_stage4 import prepare_stride_stage4_protocol
+from experiments.stride_stage4 import (
+    _control_dominates,
+    _mean_metrics,
+    _selection_records,
+    _variant_specifications,
+    prepare_stride_stage4_protocol,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -1013,6 +1019,81 @@ class StrideStage4ProtocolTest(unittest.TestCase):
             self.assertFalse(failed["passed"])
             self.assertFalse(failed["gates"]["stage3_audit_passed"])
             self.assertFalse(failed["gates"]["stage3_audit_hash_frozen"])
+
+    def test_training_helpers_preserve_registered_feature_and_quality_semantics(self) -> None:
+        variants = _variant_specifications(
+            {
+                "full": {"drop_prefixes": []},
+                "no_state_context": {"drop_prefixes": ["state."]},
+            }
+        )
+        full_names, full_specs = variants["full"]
+        candidate_names, candidate_specs = variants["no_state_context"]
+        self.assertGreater(len(full_specs), len(full_names))
+        self.assertEqual(len(candidate_specs), len(candidate_names))
+        self.assertTrue(all(not name.startswith("state.") for name in candidate_names))
+
+        better = {"feasible_rate": 0.5, "mean_conflict_reduction": 3.0}
+        worse = {"feasible_rate": 0.25, "mean_conflict_reduction": 2.0}
+        tradeoff = {"feasible_rate": 0.75, "mean_conflict_reduction": 1.0}
+        self.assertTrue(_control_dominates(better, worse))
+        self.assertFalse(_control_dominates(better, tradeoff))
+        self.assertFalse(_control_dominates(tradeoff, better))
+
+        shared = {
+            "state_id": "state-a",
+            "fold_index": 0,
+            "map_id": "map-a",
+            "layout_family": "family-a",
+            "source_policy": "v2-full",
+            "agent_band": "low_mid",
+            "decision_stage": "early",
+            "feasible_rate": 0.0,
+            "progress_rate": 1.0,
+            "mean_conflict_reduction": 1.0,
+            "mean_reduction_ratio": 0.5,
+            "structural_score": 0.5,
+        }
+        grouped = {
+            "state-a": [
+                {
+                    **shared,
+                    "candidate_id": "best",
+                    "candidate_key": "best",
+                    "quality_score": 0.8,
+                },
+                {
+                    **shared,
+                    "candidate_id": "middle",
+                    "candidate_key": "middle",
+                    "quality_score": 0.5,
+                },
+                {
+                    **shared,
+                    "candidate_id": "worst",
+                    "candidate_key": "worst",
+                    "quality_score": 0.2,
+                },
+                {
+                    **shared,
+                    "candidate_id": "fourth",
+                    "candidate_key": "fourth",
+                    "quality_score": 0.1,
+                },
+            ]
+        }
+        records = _selection_records(
+            "model", {"state-a": "middle"}, grouped
+        )
+        self.assertFalse(records[0]["exact_best"])
+        self.assertTrue(records[0]["top3_hit"])
+        self.assertAlmostEqual(records[0]["quality_regret"], 0.3)
+        self.assertAlmostEqual(
+            records[0]["normalized_quality_regret"], 0.3 / 0.7
+        )
+        metrics = _mean_metrics(records)
+        self.assertEqual(metrics["state_count"], 1)
+        self.assertEqual(metrics["top3_hit_rate"], 1.0)
 
 
 if __name__ == "__main__":

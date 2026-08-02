@@ -68,4 +68,9 @@ Stage 4.
 python scripts/run_stride_pipeline.py prepare-stage4 `
   --config configs/stride_stage4_training.json `
   --output build/stride-stage4-protocol-v1
+
+python scripts/run_stride_pipeline.py train-stage4 `
+  --config configs/stride_stage4_training.json `
+  --protocol-report build/stride-stage4-protocol-v1/stage4_protocol_report.json `
+  --output build/stride-stage4-training-v1
 ```

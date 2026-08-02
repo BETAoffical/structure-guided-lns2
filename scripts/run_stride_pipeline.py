@@ -35,7 +35,10 @@ from experiments.stride_quality_v2 import (  # noqa: E402
     select_stride_quality_v2_confirmation_states,
 )
 from experiments.stride_stage3 import run_stride_stage3_label_audit  # noqa: E402
-from experiments.stride_stage4 import prepare_stride_stage4_protocol  # noqa: E402
+from experiments.stride_stage4 import (  # noqa: E402
+    prepare_stride_stage4_protocol,
+    run_stride_stage4_training,
+)
 
 
 def _resolve(value: str) -> Path:
@@ -213,6 +216,20 @@ def parse_arguments() -> argparse.Namespace:
     )
     stage4_prepare.add_argument(
         "--output", default="build/stride-stage4-protocol-v1"
+    )
+    stage4_train = subparsers.add_parser(
+        "train-stage4",
+        help="Run registered Stage 4 control, quality, and feature-ablation training.",
+    )
+    stage4_train.add_argument(
+        "--config", default="configs/stride_stage4_training.json"
+    )
+    stage4_train.add_argument(
+        "--protocol-report",
+        default="build/stride-stage4-protocol-v1/stage4_protocol_report.json",
+    )
+    stage4_train.add_argument(
+        "--output", default="build/stride-stage4-training-v1"
     )
     return parser.parse_args()
 
@@ -407,6 +424,19 @@ def main() -> int:
             "stride_stage4_protocol_passed"
             if report["passed"]
             else "stride_stage4_protocol_failed"
+        )
+        return 0 if report["passed"] else 2
+    if arguments.stage == "train-stage4":
+        report = run_stride_stage4_training(
+            config_path=_resolve(arguments.config),
+            protocol_report_path=_resolve(arguments.protocol_report),
+            output=_resolve(arguments.output),
+            project_root=PROJECT_ROOT,
+        )
+        print(
+            "stride_stage4_training_passed"
+            if report["passed"]
+            else "stride_stage4_training_failed_gates"
         )
         return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")
