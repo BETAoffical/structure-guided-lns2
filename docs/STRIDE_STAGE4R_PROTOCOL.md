@@ -56,3 +56,28 @@ budget. A candidate cannot be called faster if it solves fewer episodes than
 A formal speed claim still requires Stage 5/6 evidence. A Stage 4R Quick result
 only decides whether to revise the label, retain a data-only control candidate,
 or resume the approved pipeline.
+
+## Registered Quick cohort
+
+The diagnostic Quick is frozen in `configs/stride_stage4r_quick.json` before
+any of its controller episodes run:
+
+- 11 tasks from 11 maps, with one seed-1 task per map and initial conflict
+  counts from 5 to 55.
+- Eight generated maps and three MovingAI development maps, covering
+  compartmentalized, dead-end, regular-beltway, game, and maze layouts.
+- Zero map overlap with the 36 Stage 4 training maps and the 36-map formal OOD
+  cohort. Formal OOD outcomes remain unread.
+- `v2-full`, `stride-control-v1`, and `stride-quality-v1` use the same task,
+  solver seed, 300-second wall budget, 100-step metric window, candidate pool,
+  PP+SIPPS repair, and audit runtime.
+- Episodes execute strictly one at a time. Controller order rotates by task so
+  each controller appears in every within-task position and the first-position
+  counts differ by at most one.
+- Task selection used only map/layout coverage and previously recorded initial
+  conflicts. No controller outcome was read during selection.
+
+TTF uses `lns2.ttf.reset_inclusive_wall.v1`: its clock and solve budget start
+immediately before `env.reset()`, and the clock stops when reset or repair first
+returns a feasible state. Environment construction, final trace validation,
+and report generation are recorded separately and excluded from TTF.

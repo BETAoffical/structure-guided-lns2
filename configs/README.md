@@ -16,6 +16,7 @@ deletable: registered reports bind the exact configuration that produced them.
 | `retention_manifest.json` | per-file executable retention decisions | prevent unclassified production modules or tests |
 | `result_consolidation.json` | frozen claim/source registry | verify report sources and claim boundaries |
 | `build_storage_compaction.json` | local generated-output inventory policy | manage build storage without deleting evidence |
+| `stride_*` | registered STRIDE-LNS stage inputs | reproduce labels, controlled training, Shadow, and TTF-first diagnostics |
 
 MovingAI maps themselves are downloaded into ignored `build/` directories.
 Generated warehouse maps also live under `build/`. The pinned upstream solver
