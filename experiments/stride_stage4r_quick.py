@@ -384,13 +384,29 @@ def _metric(summary: dict[str, Any], name: str) -> float:
 
 
 def _controller_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    episodes = [dict(row["summary"]) for row in rows]
+    completed_rows = [
+        row
+        for row in rows
+        if row.get("status") == "ok" and isinstance(row.get("summary"), dict)
+    ]
+    error_rows = [
+        row
+        for row in rows
+        if row.get("status") != "ok" or not isinstance(row.get("summary"), dict)
+    ]
+    episodes = [dict(row["summary"]) for row in completed_rows]
     totals = [dict(summary.get("controller_totals") or {}) for summary in episodes]
     successes = [summary for summary in episodes if bool(summary.get("success"))]
+    error_kinds = Counter(
+        str(row.get("error_kind") or "missing_summary") for row in error_rows
+    )
     return {
-        "episode_count": len(episodes),
+        "episode_count": len(rows),
+        "completed_episode_count": len(episodes),
+        "execution_error_count": len(error_rows),
+        "execution_error_kind_counts": dict(sorted(error_kinds.items())),
         "success_count": len(successes),
-        "failure_count": len(episodes) - len(successes),
+        "failure_count": len(rows) - len(successes),
         "mean_capped_wall_time_to_feasible": _mean(
             _metric(summary, "capped_wall_time_to_feasible") for summary in episodes
         ),
@@ -462,8 +478,14 @@ def analyze_stage4r_quick(
         }
         if set(indexed) != expected_keys:
             errors.append(f"{controller}: incomplete paired coverage")
-        if any(row.get("status") != "ok" for row in rows):
-            errors.append(f"{controller}: episode execution error")
+        episode_errors = sum(
+            row.get("status") != "ok" or not isinstance(row.get("summary"), dict)
+            for row in rows
+        )
+        if episode_errors:
+            errors.append(
+                f"{controller}: {episode_errors} episode execution error(s)"
+            )
         by_controller[controller] = indexed
 
     fingerprint_mismatches = 0
@@ -486,7 +508,8 @@ def analyze_stage4r_quick(
     comparisons = {}
     for challenger in CONTROLLERS[1:]:
         common = []
-        if not errors:
+        comparison_valid = not errors
+        if comparison_valid:
             for key in sorted(expected_keys):
                 left = by_controller["v2-full"][key]["summary"]
                 right = by_controller[challenger][key]["summary"]
@@ -499,12 +522,24 @@ def analyze_stage4r_quick(
                     )
         base_ttf = _mean(left for left, _right in common)
         challenger_ttf = _mean(right for _left, right in common)
-        success_noninferior = int(summaries.get(challenger, {}).get("success_count", 0)) >= int(
-            baseline.get("success_count", 0)
+        success_noninferior = int(
+            summaries.get(challenger, {}).get("success_count", 0)
+        ) >= int(baseline.get("success_count", 0))
+        capped = float(
+            summaries.get(challenger, {}).get(
+                "mean_capped_wall_time_to_feasible", 0.0
+            )
         )
-        capped = float(summaries.get(challenger, {}).get("mean_capped_wall_time_to_feasible", 0.0))
-        base_capped = float(baseline.get("mean_capped_wall_time_to_feasible", 0.0))
+        base_capped = float(
+            baseline.get("mean_capped_wall_time_to_feasible", 0.0)
+        )
+        capped_relative_improvement = None
+        if comparison_valid:
+            capped_relative_improvement = (
+                (base_capped - capped) / base_capped if base_capped else 0.0
+            )
         comparisons[challenger] = {
+            "valid": comparison_valid,
             "success_noninferior": success_noninferior,
             "common_success_count": len(common),
             "baseline_common_success_mean_ttf": base_ttf,
@@ -512,27 +547,35 @@ def analyze_stage4r_quick(
             "common_success_relative_ttf_improvement": (
                 (base_ttf - challenger_ttf) / base_ttf if base_ttf else 0.0
             ),
-            "mean_capped_ttf_improvement_seconds": base_capped - capped,
-            "mean_capped_ttf_relative_improvement": (
-                (base_capped - capped) / base_capped if base_capped else 0.0
+            "mean_capped_ttf_improvement_seconds": (
+                base_capped - capped if comparison_valid else None
             ),
-            "faster_under_primary_metric": success_noninferior and capped < base_capped,
+            "mean_capped_ttf_relative_improvement": capped_relative_improvement,
+            "faster_under_primary_metric": (
+                comparison_valid and success_noninferior and capped < base_capped
+            ),
         }
 
-    eligible = [
-        controller
-        for controller in CONTROLLERS
-        if controller == "v2-full"
-        or int(summaries.get(controller, {}).get("success_count", 0))
-        >= int(baseline.get("success_count", 0))
-    ]
+    eligible = (
+        []
+        if errors
+        else [
+            controller
+            for controller in CONTROLLERS
+            if controller == "v2-full"
+            or int(summaries.get(controller, {}).get("success_count", 0))
+            >= int(baseline.get("success_count", 0))
+        ]
+    )
     primary_winner = min(
         eligible,
         key=lambda controller: float(
             summaries[controller]["mean_capped_wall_time_to_feasible"]
         ),
     ) if eligible and not errors else None
-    if primary_winner == "stride-quality-v1":
+    if errors:
+        next_decision = "repair_execution_or_analysis_before_runtime_conclusion"
+    elif primary_winner == "stride-quality-v1":
         next_decision = "quality_candidate_warrants_larger_development_quick"
     elif primary_winner == "stride-control-v1":
         next_decision = "data_only_control_warrants_larger_development_quick"
@@ -553,7 +596,9 @@ def analyze_stage4r_quick(
             for summary in summaries.values()
         ),
         "ttf_clock_registered": all(
-            row["summary"].get("ttf_clock_schema") == TTF_CLOCK_SCHEMA
+            row.get("status") == "ok"
+            and isinstance(row.get("summary"), dict)
+            and row["summary"].get("ttf_clock_schema") == TTF_CLOCK_SCHEMA
             for indexed in by_controller.values()
             for row in indexed.values()
         ),

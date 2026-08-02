@@ -689,9 +689,10 @@ def _export_diagnostic_controller(
     )
     sklearn_path = root / "sklearn__realized_dynamic.pkl"
     _atomic_pickle(sklearn_path, sklearn_model)
-    compact_payload = compact_portable_payload(
-        _portable_payload(sklearn_model, sha256_file(sklearn_path))
-    )
+    source_payload = _portable_payload(sklearn_model, sha256_file(sklearn_path))
+    source_path = root / "source__realized_dynamic.json"
+    _write_json(source_path, source_payload)
+    compact_payload = compact_portable_payload(source_payload)
     realized_path = root / "main__realized_dynamic.json"
     _write_json(realized_path, compact_payload)
     compact_model = load_compact_model(compact_payload)
@@ -773,6 +774,13 @@ def _export_diagnostic_controller(
             "proposal_dynamic": proposal_source_row,
             "realized_dynamic": realized_row,
         },
+        "source_rankers": {
+            "realized_dynamic": {
+                "file": source_path.relative_to(root).as_posix(),
+                "sha256": sha256_file(source_path),
+                "source_model_sha256": sha256_file(sklearn_path),
+            }
+        },
         "main_ranges": {
             "proposal_dynamic": dict(source_manifest["main_ranges"])[
                 "proposal_dynamic"
@@ -808,6 +816,7 @@ def _export_diagnostic_controller(
         "controller_manifest_sha256": sha256_file(manifest_path),
         "promotion_report_sha256": sha256_file(evidence_path),
         "sklearn_sha256": sha256_file(sklearn_path),
+        "source_portable_sha256": sha256_file(source_path),
         "portable_sha256": sha256_file(realized_path),
         "portable_semantic_fingerprint": compact_payload[
             "semantic_fingerprint"

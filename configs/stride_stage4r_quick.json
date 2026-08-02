@@ -136,10 +136,10 @@
     },
     "registered_controller_bundles": {
       "stride-control-v1": {
-        "controller_manifest_sha256": "1f862525e1b24c568d5c6051a7849c85c03197d2d409c6caa3d5fd9815947136"
+        "controller_manifest_sha256": "8819e078a6c94b5b39a5443a703d73d3d27e2128a74a440d5612ebba0b3c7d3f"
       },
       "stride-quality-v1": {
-        "controller_manifest_sha256": "bac273e1c7a187b3d5b8374b7122f8f4051977406159aef78196a4361f2dc7b7"
+        "controller_manifest_sha256": "45c8a95b8bd66bba168ef979541bdfc20e266081f7686cf3df20bca0d39e5b5f"
       }
     }
   },

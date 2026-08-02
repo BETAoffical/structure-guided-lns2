@@ -14,6 +14,7 @@ import numpy as np
 from experiments.closed_loop_confirmation import (
     _collection_policy_summary,
     _closed_loop_episode_worker,
+    _matching_source_model,
     _native_repair_timing_schema,
     _qualification_reuse_fingerprint,
     _valid_episode_trace,
@@ -310,6 +311,63 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         from experiments.context_audit import PairwiseModel as compatibility_model
 
         self.assertEqual(compatibility_model.__module__, "experiments.context_audit")
+
+    def test_matching_source_model_uses_controller_local_portable_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_model_sha256 = "1" * 64
+            source_path = root / "source__realized_dynamic.json"
+            source_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "lns2.portable_pairwise_hist_gbdt.v1",
+                        "schema_version": 1,
+                        "profile": "realized_dynamic",
+                        "source_model_sha256": source_model_sha256,
+                        "feature_names": ["state.colliding_pairs"],
+                        "baseline": 0.0,
+                        "trees": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            compact_path = root / "main__realized_dynamic.json"
+            compact_path.write_text(
+                json.dumps({"source_model_sha256": source_model_sha256}),
+                encoding="utf-8",
+            )
+            bundle = SimpleNamespace(
+                manifest={
+                    "main_rankers": {
+                        "realized_dynamic": {"file": compact_path.name}
+                    },
+                    "source_rankers": {
+                        "realized_dynamic": {
+                            "file": source_path.name,
+                            "sha256": _digest(source_path),
+                        }
+                    }
+                }
+            )
+            frozen = SimpleNamespace(
+                models={"realized_dynamic": SimpleNamespace(profile="old")}
+            )
+
+            loaded, provenance = _matching_source_model(
+                controller_path=root,
+                controller_bundle=bundle,
+                frozen_bundle=frozen,
+                model_registration={
+                    "model_sha256": {"realized_dynamic": "0" * 64}
+                },
+                profile="realized_dynamic",
+            )
+
+        self.assertEqual(loaded.profile, "realized_dynamic")
+        self.assertEqual(provenance["kind"], "controller_local_portable_source")
+        self.assertEqual(
+            provenance["source_model_sha256"], source_model_sha256
+        )
 
     def test_qualification_accepts_an_explicit_partial_task_seed_cohort(self) -> None:
         rows = [

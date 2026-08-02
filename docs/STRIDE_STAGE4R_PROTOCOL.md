@@ -34,6 +34,16 @@ selection disagreement, inference overhead, feature-range fallback, invalid
 actions, and state/fingerprint equivalence while leaving the frozen V2 action
 unchanged.
 
+The audit runtime separates two contracts. Native/dense and reference feature
+rows are scored by the same active controller and must match in score, ranking,
+and selected action. The active compact controller is then compared with its
+own manifest-registered portable source model; a selected-action difference is
+fatal, while source score or lower-rank differences are retained as explicit
+diagnostics because neither affects the current pairwise controller action.
+STRIDE bundles include this portable source representation so WSL auditing does
+not depend on sklearn. A Quick collection containing any execution error has no
+valid TTF comparison or primary winner.
+
 ## TTF-first Quick semantics
 
 The exact Quick cohort and wall budget must be committed before execution. It

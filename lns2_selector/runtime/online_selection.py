@@ -29,9 +29,16 @@ CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 
 
 class ClosedLoopExecutionError(RuntimeError):
-    def __init__(self, kind: str, message: str) -> None:
+    def __init__(
+        self,
+        kind: str,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind = kind
+        self.details = dict(details or {})
 
 
 def proposal_random_seed(

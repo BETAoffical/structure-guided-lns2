@@ -192,25 +192,51 @@ def _load_portable_models(
             or str(payload["source_model_sha256"]) != expected_source[profile]
         ):
             raise ValueError(f"portable model provenance mismatch: {profile}")
-        native_predictor = None
-        try:
-            import lns2_env
-
-            predictor_type = getattr(lns2_env, "PortableTreeEnsemble", None)
-            if predictor_type is not None:
-                native_predictor = predictor_type(
-                    float(payload["baseline"]), list(payload["trees"])
-                )
-        except ImportError:
-            pass
-        models[profile] = PortablePairwiseModel(
-            profile=profile,
-            feature_names=list(map(str, payload["feature_names"])),
-            baseline=float(payload["baseline"]),
-            trees=list(payload["trees"]),
-            native_predictor=native_predictor,
+        models[profile] = load_portable_pairwise_model_payload(
+            payload,
+            expected_profile=profile,
+            expected_source_model_sha256=expected_source[profile],
         )
     return models
+
+
+def load_portable_pairwise_model_payload(
+    payload: dict[str, Any],
+    *,
+    expected_profile: str | None = None,
+    expected_source_model_sha256: str | None = None,
+) -> PortablePairwiseModel:
+    if str(payload.get("schema")) != "lns2.portable_pairwise_hist_gbdt.v1":
+        raise ValueError("unexpected portable pairwise model schema")
+    if int(payload.get("schema_version", -1)) != 1:
+        raise ValueError("unsupported portable pairwise model version")
+    profile = str(payload.get("profile", ""))
+    if expected_profile is not None and profile != str(expected_profile):
+        raise ValueError("portable pairwise model profile mismatch")
+    source_sha256 = str(payload.get("source_model_sha256", "")).lower()
+    if (
+        expected_source_model_sha256 is not None
+        and source_sha256 != str(expected_source_model_sha256).lower()
+    ):
+        raise ValueError("portable pairwise model source SHA256 mismatch")
+    native_predictor = None
+    try:
+        import lns2_env
+
+        predictor_type = getattr(lns2_env, "PortableTreeEnsemble", None)
+        if predictor_type is not None:
+            native_predictor = predictor_type(
+                float(payload["baseline"]), list(payload["trees"])
+            )
+    except ImportError:
+        pass
+    return PortablePairwiseModel(
+        profile=profile,
+        feature_names=list(map(str, payload["feature_names"])),
+        baseline=float(payload["baseline"]),
+        trees=list(payload["trees"]),
+        native_predictor=native_predictor,
+    )
 
 
 def _load_deployment_policy_bundle(
@@ -413,6 +439,7 @@ __all__ = [
     "FrozenPolicyBundle",
     "PortablePairwiseModel",
     "export_portable_policy_bundle",
+    "load_portable_pairwise_model_payload",
     "load_frozen_policy_bundle",
     "verify_portable_policy_bundle",
 ]

@@ -100,6 +100,54 @@ class StrideStage4RQuickTest(unittest.TestCase):
             ]
         )
 
+    def test_analysis_reports_error_rows_without_crashing(self) -> None:
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+        task_ids = config["stride_stage4r_quick"]["registered_task_ids"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "execution_schedule.jsonl").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            for controller in CONTROLLERS:
+                target = root / "controllers" / controller
+                target.mkdir(parents=True)
+                rows = [
+                    {
+                        "status": "error",
+                        "task_id": task_id,
+                        "solver_seed": 1,
+                        "summary": None,
+                        "error_kind": "controller_source_model_mismatch",
+                    }
+                    for task_id in task_ids
+                ]
+                (target / "realized_dynamic_manifest.jsonl").write_text(
+                    "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+                    encoding="utf-8",
+                )
+
+            report = analyze_stage4r_quick(CONFIG, root)
+
+        self.assertFalse(report["passed"])
+        self.assertIsNone(report["primary_winner"])
+        self.assertEqual(report["primary_eligible_controllers"], [])
+        self.assertEqual(
+            report["next_decision"],
+            "repair_execution_or_analysis_before_runtime_conclusion",
+        )
+        self.assertFalse(
+            report["comparisons_vs_v2_full"]["stride-quality-v1"]["valid"]
+        )
+        self.assertIsNone(
+            report["comparisons_vs_v2_full"]["stride-quality-v1"][
+                "mean_capped_ttf_relative_improvement"
+            ]
+        )
+        for controller in CONTROLLERS:
+            summary = report["controller_summaries"][controller]
+            self.assertEqual(summary["completed_episode_count"], 0)
+            self.assertEqual(summary["execution_error_count"], len(task_ids))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -117,6 +117,7 @@ from lns2_selector.training.policy_bundle import (
     PortablePairwiseModel,
     export_portable_policy_bundle,
     load_frozen_policy_bundle,
+    load_portable_pairwise_model_payload,
     verify_portable_policy_bundle,
 )
 
@@ -139,6 +140,111 @@ CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
 STOPPING_RULES = ("historical", "wall-clock", "wall-clock-fixed-metric")
 WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
+
+
+def _ranking_order(
+    rows: list[dict[str, Any]], values: list[float]
+) -> list[str]:
+    return [
+        str(rows[index]["candidate_key"])
+        for index in sorted(
+            range(len(rows)),
+            key=lambda index: (
+                -round(float(values[index]), 12),
+                str(rows[index]["candidate_key"]),
+            ),
+        )
+    ]
+
+
+def _score_equivalence_diagnostic(
+    *,
+    left_rows: list[dict[str, Any]],
+    left_index: int,
+    left_scores: list[float],
+    left_margin: float,
+    right_rows: list[dict[str, Any]],
+    right_index: int,
+    right_scores: list[float],
+    right_margin: float,
+) -> dict[str, Any]:
+    maximum_score_delta = max(
+        (
+            abs(float(left) - float(right))
+            for left, right in zip(left_scores, right_scores)
+        ),
+        default=0.0,
+    )
+    left_order = _ranking_order(left_rows, left_scores)
+    right_order = _ranking_order(right_rows, right_scores)
+    return {
+        "candidate_count": len(left_rows),
+        "maximum_score_delta": maximum_score_delta,
+        "selected_candidate_matches": left_index == right_index,
+        "left_selected_candidate_id": str(left_rows[left_index]["candidate_key"]),
+        "right_selected_candidate_id": str(right_rows[right_index]["candidate_key"]),
+        "ranking_matches": left_order == right_order,
+        "left_top_candidate_ids": left_order[:3],
+        "right_top_candidate_ids": right_order[:3],
+        "margin_delta": abs(float(left_margin) - float(right_margin)),
+    }
+
+
+def _matching_source_model(
+    *,
+    controller_path: Path,
+    controller_bundle: Any,
+    frozen_bundle: Any,
+    model_registration: dict[str, Any],
+    profile: str,
+) -> tuple[Any, dict[str, Any]]:
+    ranker_row = dict(controller_bundle.manifest["main_rankers"][profile])
+    compact_path = controller_path / str(ranker_row["file"])
+    compact_payload = _read_json(compact_path)
+    expected_source_sha = str(compact_payload.get("source_model_sha256", "")).lower()
+    if not expected_source_sha:
+        raise ValueError(f"controller source model SHA256 is missing: {profile}")
+
+    source_row_value = dict(
+        controller_bundle.manifest.get("source_rankers") or {}
+    ).get(profile)
+    if source_row_value is not None:
+        source_row = dict(source_row_value)
+        source_path = controller_path / str(source_row["file"])
+        actual_portable_sha = _sha256(source_path)
+        if actual_portable_sha != str(source_row["sha256"]).lower():
+            raise ValueError(
+                f"controller portable source model SHA256 mismatch: {profile}"
+            )
+        source_payload = _read_json(source_path)
+        model = load_portable_pairwise_model_payload(
+            source_payload,
+            expected_profile=profile,
+            expected_source_model_sha256=expected_source_sha,
+        )
+        return model, {
+            "kind": "controller_local_portable_source",
+            "profile": profile,
+            "source_model_sha256": expected_source_sha,
+            "portable_sha256": actual_portable_sha,
+            "file": source_path.name,
+        }
+
+    registered_frozen_sha = str(
+        dict(model_registration.get("model_sha256") or {}).get(profile, "")
+    ).lower()
+    if expected_source_sha == registered_frozen_sha:
+        return frozen_bundle.models[profile], {
+            "kind": "registered_frozen_model",
+            "profile": profile,
+            "source_model_sha256": expected_source_sha,
+        }
+
+    raise ValueError(
+        f"controller audit portable source model is missing for {profile}"
+    )
+
+
 DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_V3_S3_BUNDLE = (
     "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller"
@@ -819,7 +925,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("v3-s3 requires a sequence-aware controller bundle")
     runtime_models: dict[str, Any] = {}
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
-    shadow_models: dict[str, Any] = {}
+    source_models: dict[str, Any] = {}
+    source_model_provenance: dict[str, dict[str, Any]] = {}
     diagnostic_shadow_selectors: dict[str, PairwiseV2Selector] = {}
     diagnostic_shadow_ranges: dict[
         str, dict[str, dict[str, tuple[float, float]]]
@@ -831,13 +938,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             runtime_models = bundle.models
             runtime_ranges = bundle.ranges
         else:
-            if bool(job.get("feature_shadow_validation", False)):
-                shadow_models = bundle.models
             controller_path = Path(str(job["controller_bundle"]))
             if (controller_path / "controller_manifest.json").is_file():
                 compact_bundle = load_controller_bundle(controller_path)
                 runtime_models = compact_bundle.main_models
                 runtime_ranges = compact_bundle.main_ranges
+                if bool(job.get("feature_shadow_validation", False)):
+                    source_model, provenance = _matching_source_model(
+                        controller_path=controller_path,
+                        controller_bundle=compact_bundle,
+                        frozen_bundle=bundle,
+                        model_registration=dict(job["model_registration"]),
+                        profile=policy,
+                    )
+                    source_models[policy] = source_model
+                    source_model_provenance[policy] = provenance
             else:
                 runtime_models = {
                     name: compact_runtime_model(model)
@@ -850,6 +965,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     }
                     for name, model in runtime_models.items()
                 }
+                if bool(job.get("feature_shadow_validation", False)):
+                    source_models = dict(bundle.models)
+                    source_model_provenance[policy] = {
+                        "kind": "registered_frozen_model",
+                        "profile": policy,
+                        "source_model_sha256": str(
+                            dict(job["model_registration"]["model_sha256"])[policy]
+                        ).lower(),
+                    }
         if controller_mode in PAIRWISE_CONTROLLER_MODES:
             pairwise_selector = PairwiseV2Selector(controller_mode, runtime_models)
         raw_diagnostic_shadows = dict(job.get("diagnostic_shadow_bundles") or {})
@@ -1432,63 +1556,105 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals[
                             "diagnostic_shadow_total_seconds"
                         ] += diagnostic_shadow_total_seconds
-                    if shadow_models:
+                    if bool(job.get("feature_shadow_validation", False)):
                         assert feature_engine is not None
                         shadow_rows = feature_engine.last_shadow_rows.get(policy)
                         if shadow_rows is None or len(shadow_rows) != len(candidate_rows):
                             raise ClosedLoopExecutionError(
                                 "controller_shadow_mismatch",
-                                "v1/v2 shadow candidate rows are incomplete",
-                            )
-                        shadow_index, shadow_scores, shadow_margin = (
-                            score_online_candidates(shadow_rows, shadow_models[policy])
-                        )
-                        maximum_score_delta = max(
-                            (
-                                abs(float(left) - float(right))
-                                for left, right in zip(scores, shadow_scores)
-                            ),
-                            default=0.0,
-                        )
-
-                        def ranking_order(
-                            rows: list[dict[str, Any]], values: list[float]
-                        ) -> list[str]:
-                            return [
-                                str(rows[index]["candidate_key"])
-                                for index in sorted(
-                                    range(len(rows)),
-                                    key=lambda index: (
-                                        -round(float(values[index]), 12),
-                                        str(rows[index]["candidate_key"]),
+                                "feature shadow candidate rows are incomplete",
+                                details={
+                                    "candidate_count": len(candidate_rows),
+                                    "shadow_candidate_count": (
+                                        None if shadow_rows is None else len(shadow_rows)
                                     ),
-                                )
-                            ]
-
-                        ranking_matches = ranking_order(
-                            candidate_rows, scores
-                        ) == ranking_order(shadow_rows, shadow_scores)
+                                },
+                            )
+                        feature_index, feature_scores, feature_margin = (
+                            score_online_candidates(shadow_rows, runtime_models[policy])
+                        )
+                        feature_diagnostic = _score_equivalence_diagnostic(
+                            left_rows=candidate_rows,
+                            left_index=selected_local_index,
+                            left_scores=scores,
+                            left_margin=margin,
+                            right_rows=shadow_rows,
+                            right_index=feature_index,
+                            right_scores=feature_scores,
+                            right_margin=feature_margin,
+                        )
                         if (
-                            selected_local_index != shadow_index
-                            or not ranking_matches
-                            or maximum_score_delta > 1e-12
+                            not feature_diagnostic["selected_candidate_matches"]
+                            or not feature_diagnostic["ranking_matches"]
+                            or feature_diagnostic["maximum_score_delta"] > 1e-12
                         ):
                             raise ClosedLoopExecutionError(
-                                "controller_shadow_mismatch",
-                                "v1/v2 score, ranking, or selected candidate differs",
+                                "controller_feature_shadow_mismatch",
+                                "runtime scoring differs between native and reference feature rows",
+                                details=feature_diagnostic,
                             )
-                        controller["v1_v2_shadow"] = {
-                            "passed": True,
-                            "candidate_count": len(candidate_rows),
-                            "maximum_score_delta": maximum_score_delta,
-                            "selected_candidate_matches": True,
-                            "ranking_matches": True,
-                            "margin_delta": abs(float(margin) - float(shadow_margin)),
-                        }
+                        feature_diagnostic["passed"] = True
+                        controller["feature_shadow"] = feature_diagnostic
+                        controller_totals["feature_shadow_validation_count"] += 1
+                        controller_totals["feature_shadow_score_max_delta"] = max(
+                            float(
+                                controller_totals["feature_shadow_score_max_delta"]
+                            ),
+                            float(feature_diagnostic["maximum_score_delta"]),
+                        )
+
+                        if policy not in source_models:
+                            raise ClosedLoopExecutionError(
+                                "controller_source_model_missing",
+                                "audit profile lacks a matching controller source model",
+                                details={"profile": policy},
+                            )
+                        source_index, source_scores, source_margin = (
+                            score_online_candidates(shadow_rows, source_models[policy])
+                        )
+                        source_diagnostic = _score_equivalence_diagnostic(
+                            left_rows=shadow_rows,
+                            left_index=feature_index,
+                            left_scores=feature_scores,
+                            left_margin=feature_margin,
+                            right_rows=shadow_rows,
+                            right_index=source_index,
+                            right_scores=source_scores,
+                            right_margin=source_margin,
+                        )
+                        source_diagnostic["source_model"] = dict(
+                            source_model_provenance[policy]
+                        )
+                        source_diagnostic["score_tolerance"] = 1e-10
+                        source_diagnostic["score_equivalent"] = (
+                            source_diagnostic["maximum_score_delta"] <= 1e-10
+                        )
+                        source_diagnostic["ranking_equivalent"] = bool(
+                            source_diagnostic["ranking_matches"]
+                        )
+                        source_diagnostic["action_equivalent"] = bool(
+                            source_diagnostic["selected_candidate_matches"]
+                        )
+                        if not source_diagnostic["selected_candidate_matches"]:
+                            raise ClosedLoopExecutionError(
+                                "controller_source_model_mismatch",
+                                "portable controller changes the source-model selected action",
+                                details=source_diagnostic,
+                            )
+                        source_diagnostic["passed"] = True
+                        controller["source_model_shadow"] = source_diagnostic
+                        if controller_mode in {"v2-full", "mixed-full-v2"}:
+                            controller["v1_v2_shadow"] = dict(source_diagnostic)
                         controller_totals["shadow_validation_count"] += 1
+                        controller_totals["source_model_score_mismatch_count"] += int(
+                            not source_diagnostic["score_equivalent"]
+                        )
+                        controller_totals[
+                            "source_model_ranking_mismatch_count"
+                        ] += int(not source_diagnostic["ranking_equivalent"])
                         controller_totals["shadow_score_max_delta"] = max(
                             float(controller_totals["shadow_score_max_delta"]),
-                            maximum_score_delta,
+                            float(source_diagnostic["maximum_score_delta"]),
                         )
                     v3_s3_seconds = 0.0
                     if v3_s3_state is not None:
@@ -2443,6 +2609,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             "summary": None,
             "error_kind": getattr(error, "kind", type(error).__name__),
             "error": f"{type(error).__name__}: {error}",
+            "error_details": dict(getattr(error, "details", {}) or {}),
         }
 
 
