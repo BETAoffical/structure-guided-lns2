@@ -41,6 +41,7 @@ from experiments.stride_quality_v2 import (
     select_stride_quality_v2_confirmation_states,
 )
 from experiments.stride_stage3 import run_stride_stage3_label_audit
+from experiments.stride_stage4 import prepare_stride_stage4_protocol
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -889,6 +890,129 @@ class StrideStage3LabelAuditTest(unittest.TestCase):
             )
             self.assertFalse(failed["passed"])
             self.assertFalse(failed["gates"]["formal_ood_overlap_zero"])
+
+
+class StrideStage4ProtocolTest(unittest.TestCase):
+    def test_protocol_builds_deterministic_map_grouped_outcome_blind_folds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = []
+            families = ("family-a", "family-b", "family-c", "family-d")
+            state_index = 0
+            for family_index, family in enumerate(families):
+                for map_index in range(2):
+                    map_id = f"{family}-map-{map_index}"
+                    for local_index in range(4):
+                        rows.append(
+                            {
+                                "state_id": f"state-{state_index:03d}",
+                                "map_id": map_id,
+                                "layout_mode": family,
+                                "split": "registered",
+                                "source_policy": (
+                                    "official_adaptive"
+                                    if local_index % 2 == 0
+                                    else "v2-full"
+                                ),
+                                "agent_band": (
+                                    "low_mid" if local_index % 2 == 0 else "high"
+                                ),
+                                "decision_stage": (
+                                    "early" if local_index < 2 else "late"
+                                ),
+                                "agent_count": 200 + 100 * (local_index % 2),
+                            }
+                        )
+                        state_index += 1
+            _write_jsonl(root / "selection.jsonl", rows)
+            _write_json(
+                root / "stage3.json",
+                {"passed": True, "state_count": len(rows)},
+            )
+            audit_hash = hashlib.sha256((root / "stage3.json").read_bytes()).hexdigest()
+            config = {
+                "schema": "lns2.stride.stage4_training_config.v1",
+                "stage3_audit_report": "stage3.json",
+                "stage3_audit_sha256": audit_hash,
+                "labels": "labels-not-read",
+                "selections": ["selection.jsonl"],
+                "expected_state_count": len(rows),
+                "expected_state_count_per_policy": {
+                    "official_adaptive": len(rows) // 2,
+                    "v2-full": len(rows) // 2,
+                },
+                "fold_count": 2,
+                "layout_family_aliases": {},
+                "required_layout_families": list(families),
+                "fold_gates": {
+                    "min_states_per_fold": 12,
+                    "max_states_per_fold": 20,
+                    "min_maps_per_fold": 4,
+                    "min_policy_states_per_fold": 6,
+                    "min_agent_band_states_per_fold": 6,
+                    "min_decision_stage_states_per_fold": {
+                        "early": 6,
+                        "late": 6,
+                    },
+                },
+                "protocol": {
+                    "primary_label": "quality_post_structure_v2",
+                    "runtime_used_in_primary_label": False,
+                    "forbidden_primary_labels": ["repair_runtime"],
+                    "models": {
+                        "frozen_anchor": {"id": "v2-full", "read_only": True},
+                        "control": {"id": "stride-control-v1"},
+                        "quality": {"id": "stride-quality-v1"},
+                    },
+                    "feature_variants": {
+                        "full": {"drop_prefixes": []},
+                        "no_state_context": {"drop_prefixes": ["state."]},
+                    },
+                },
+            }
+            _write_json(root / "config.json", config)
+
+            first = prepare_stride_stage4_protocol(
+                config_path=root / "config.json",
+                output=root / "output-a",
+                project_root=root,
+            )
+            second = prepare_stride_stage4_protocol(
+                config_path=root / "config.json",
+                output=root / "output-b",
+                project_root=root,
+            )
+            self.assertTrue(first["passed"])
+            self.assertFalse(first["label_outcomes_read"])
+            self.assertEqual(
+                first["fold_manifest_sha256"], second["fold_manifest_sha256"]
+            )
+            manifest = [
+                json.loads(line)
+                for line in (root / "output-a" / "fold_manifest.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            map_folds: dict[str, set[int]] = {}
+            for row in manifest:
+                map_folds.setdefault(row["map_id"], set()).add(row["fold_index"])
+            self.assertTrue(all(len(values) == 1 for values in map_folds.values()))
+            self.assertTrue(
+                all(set(fold["layout_families"]) == set(families) for fold in first["folds"])
+            )
+
+            _write_json(
+                root / "stage3.json",
+                {"passed": False, "state_count": len(rows)},
+            )
+            failed = prepare_stride_stage4_protocol(
+                config_path=root / "config.json",
+                output=root / "output-failed",
+                project_root=root,
+            )
+            self.assertFalse(failed["passed"])
+            self.assertFalse(failed["gates"]["stage3_audit_passed"])
+            self.assertFalse(failed["gates"]["stage3_audit_hash_frozen"])
 
 
 if __name__ == "__main__":

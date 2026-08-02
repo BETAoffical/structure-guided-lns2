@@ -1,0 +1,130 @@
+{
+  "schema": "lns2.stride.stage4_training_config.v1",
+  "stage3_audit_report": "build/stride-stage3-label-audit-v1/stage3_label_audit_report.json",
+  "stage3_audit_sha256": "1fc63b3b85a3616da97a7b675a4c7294ea148ceca5010f7a1f1ab7ea1072a9db",
+  "labels": "build/stride-stage3-quality-v2-labels-v1",
+  "selections": [
+    "build/stride-stage2-pilot-selection-v2/state_selection.jsonl",
+    "build/stride-stage3-extension-selection-v2/state_selection.jsonl"
+  ],
+  "expected_state_count": 600,
+  "expected_state_count_per_policy": {
+    "official_adaptive": 300,
+    "v2-full": 300
+  },
+  "fold_count": 5,
+  "layout_family_aliases": {
+    "maze": "movingai_dev",
+    "random": "movingai_dev",
+    "room": "movingai_dev",
+    "warehouse": "movingai_dev"
+  },
+  "required_layout_families": [
+    "compartmentalized",
+    "dead_end_aisles",
+    "movingai_dev",
+    "regular_beltway"
+  ],
+  "fold_gates": {
+    "min_states_per_fold": 90,
+    "max_states_per_fold": 135,
+    "min_maps_per_fold": 7,
+    "min_policy_states_per_fold": 40,
+    "min_agent_band_states_per_fold": 30,
+    "min_decision_stage_states_per_fold": {
+      "early": 65,
+      "middle": 15,
+      "late": 15
+    }
+  },
+  "model_parameters": {
+    "early_stopping": false,
+    "l2_regularization": 0.1,
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "random_state": 20260714
+  },
+  "protocol": {
+    "primary_label": "quality_post_structure_v2",
+    "runtime_used_in_primary_label": false,
+    "forbidden_primary_labels": [
+      "cost_to_go",
+      "receding_q",
+      "remaining_repair_rounds",
+      "repair_runtime"
+    ],
+    "models": {
+      "frozen_anchor": {
+        "id": "v2-full",
+        "bundle": "artifacts/initlns-closed-loop-controller-v2",
+        "read_only": true
+      },
+      "control": {
+        "id": "stride-control-v1",
+        "label": "same_data_feasibility_then_conflict_reduction"
+      },
+      "quality": {
+        "id": "stride-quality-v1",
+        "label": "lns2.stride.quality_label.v2"
+      }
+    },
+    "feature_variants": {
+      "full": {
+        "drop_prefixes": []
+      },
+      "no_state_context": {
+        "drop_prefixes": [
+          "state."
+        ]
+      },
+      "no_proposal_context": {
+        "drop_prefixes": [
+          "proposal."
+        ]
+      },
+      "no_realized_context": {
+        "drop_prefixes": [
+          "realized."
+        ]
+      },
+      "no_path_geometry": {
+        "drop_prefixes": [
+          "realized.path_"
+        ]
+      }
+    },
+    "cross_validation": {
+      "unit": "map",
+      "fold_count": 5,
+      "outcome_blind_split": true,
+      "equal_state_training_weight": true,
+      "hyperparameter_tuning": false
+    },
+    "metrics": [
+      "pairwise_accuracy",
+      "exact_best_rate",
+      "top3_hit_rate",
+      "mean_quality_regret",
+      "mean_normalized_quality_regret"
+    ],
+    "promotion_gates": {
+      "pairwise_accuracy_min": 0.5,
+      "quality_vs_control_relative_normalized_regret_improvement_min": 0.05,
+      "quality_vs_control_absolute_normalized_regret_improvement_alternative": 0.01,
+      "frozen_anchor_normalized_regret_noninferiority_tolerance": 0.01,
+      "exact_best_rate_noninferiority_tolerance": 0.01,
+      "top3_hit_rate_noninferiority_tolerance": 0.01,
+      "minimum_fold_wins_vs_control": 3,
+      "subgroup_minimum_state_count": 20,
+      "maximum_subgroup_normalized_regret_degradation": 0.03
+    },
+    "feature_selection": {
+      "diagnostic_only": true,
+      "normalized_regret_best_tolerance": 0.005,
+      "rule": "prefer_the_fewest_features_among_gate_passing_variants_within_tolerance"
+    },
+    "formal_ood_data_allowed": false
+  }
+}
