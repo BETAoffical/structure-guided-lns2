@@ -55,6 +55,7 @@ def build_stride_state_selection_v2(
     exclusion_report: Path | None = None,
     target_per_policy: int = 120,
     max_per_episode: int = 2,
+    split: str = STRIDE_PILOT_SPLIT,
 ) -> dict[str, Any]:
     """Build a result-blind cohort restricted to source decisions 0--11."""
 
@@ -65,9 +66,14 @@ def build_stride_state_selection_v2(
     for source_root in roots:
         run = _read_json(source_root / "run_config.json")
         dataset_root = Path(str(run["dataset"])).resolve()
+        if str(run["configuration"].get("split", "")) != split:
+            raise ValueError(
+                f"STRIDE source split mismatch: expected {split}, "
+                f"found {run['configuration'].get('split')}"
+            )
         dataset = {
             str(row["task_id"]): row
-            for row in _load_dataset_rows(dataset_root, [STRIDE_PILOT_SPLIT])
+            for row in _load_dataset_rows(dataset_root, [split])
         }
         registered_maps.update(str(row["map_id"]) for row in dataset.values())
         for _, (manifest_name, source_policy) in STRIDE_SOURCE_POLICIES.items():
@@ -152,6 +158,7 @@ def build_stride_state_selection_v2(
         "schema": STRIDE_SELECTION_V2_SCHEMA,
         "schema_version": 2,
         "result_blind": True,
+        "registered_split": split,
         "source_decision_index_range": [0, MAX_SOURCE_DECISION_INDEX],
         "excluded_state_ids": sorted(excluded),
         "source_roots": [str(root) for root in roots],

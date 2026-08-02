@@ -29,7 +29,9 @@ from experiments.stride_quality_v2 import (  # noqa: E402
     analyze_stride_quality_v2_stability,
     build_stride_quality_v2_labels,
     collect_stride_quality_v2_confirmation_trials,
+    collect_stride_quality_v2_completion_trials,
     collect_stride_quality_v2_design_trials,
+    select_stride_quality_v2_completion_states,
     select_stride_quality_v2_confirmation_states,
 )
 
@@ -83,6 +85,7 @@ def parse_arguments() -> argparse.Namespace:
     selection_v2.add_argument("--exclude-report")
     selection_v2.add_argument("--target-per-policy", type=int, default=120)
     selection_v2.add_argument("--max-per-episode", type=int, default=2)
+    selection_v2.add_argument("--split", default="stride_pilot")
     preflight = subparsers.add_parser(
         "preflight-selection", help="Repeat replay and candidate generation before PP trials."
     )
@@ -146,6 +149,28 @@ def parse_arguments() -> argparse.Namespace:
         "--output", default="build/stride-quality-v2-confirmation-v1"
     )
     quality_v2_confirm.add_argument("--workers", type=int, default=4)
+    quality_v2_completion_select = subparsers.add_parser(
+        "select-quality-v2-completion",
+        help="Select registered states that still lack trial indices 4 through 7.",
+    )
+    quality_v2_completion_select.add_argument("--selection", required=True)
+    quality_v2_completion_select.add_argument("--base-trials", required=True)
+    quality_v2_completion_select.add_argument(
+        "--extension-trials", action="append", required=True
+    )
+    quality_v2_completion_select.add_argument(
+        "--output", default="build/stride-quality-v2-completion-selection-v1"
+    )
+    quality_v2_completion = subparsers.add_parser(
+        "collect-quality-v2-completion",
+        help="Collect trial indices 4 through 7 for an eight-seed label.",
+    )
+    quality_v2_completion.add_argument("--selection", required=True)
+    quality_v2_completion.add_argument("--collection", required=True)
+    quality_v2_completion.add_argument(
+        "--output", default="build/stride-quality-v2-completion-v1"
+    )
+    quality_v2_completion.add_argument("--workers", type=int, default=4)
     quality_v2_analyze = subparsers.add_parser(
         "analyze-quality-v2",
         help="Compare independent eight-seed halves under the V2 quality score.",
@@ -219,6 +244,7 @@ def main() -> int:
             ),
             target_per_policy=arguments.target_per_policy,
             max_per_episode=arguments.max_per_episode,
+            split=arguments.split,
         )
         print("stride_selection_v2_passed" if report["passed"] else "stride_selection_v2_failed")
         return 0 if report["passed"] else 2
@@ -294,6 +320,26 @@ def main() -> int:
             workers=arguments.workers,
         )
         print("stride_quality_v2_confirmation_complete" if report["complete"] else "stride_quality_v2_confirmation_failed")
+        return 0 if report["complete"] else 2
+    if arguments.stage == "select-quality-v2-completion":
+        report = select_stride_quality_v2_completion_states(
+            selection_path=_resolve(arguments.selection),
+            base_trials=_resolve(arguments.base_trials),
+            extension_trial_paths=[
+                _resolve(value) for value in arguments.extension_trials
+            ],
+            output=_resolve(arguments.output),
+        )
+        print(f"stride_quality_v2_completion_pending:{report['pending_state_count']}")
+        return 0 if report["passed"] else 2
+    if arguments.stage == "collect-quality-v2-completion":
+        report = collect_stride_quality_v2_completion_trials(
+            selection_path=_resolve(arguments.selection),
+            collection=_resolve(arguments.collection),
+            output=_resolve(arguments.output),
+            workers=arguments.workers,
+        )
+        print("stride_quality_v2_completion_complete" if report["complete"] else "stride_quality_v2_completion_failed")
         return 0 if report["complete"] else 2
     if arguments.stage == "analyze-quality-v2":
         report = analyze_stride_quality_v2_stability(

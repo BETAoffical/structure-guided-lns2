@@ -30,6 +30,9 @@ STRIDE_QUALITY_V2_DESIGN_EXTENSION_SCHEMA = (
 STRIDE_QUALITY_V2_CONFIRM_EXTENSION_SCHEMA = (
     "lns2.stride.quality_v2.confirm_extension.v1"
 )
+STRIDE_QUALITY_V2_COMPLETION_EXTENSION_SCHEMA = (
+    "lns2.stride.quality_v2.completion_extension.v1"
+)
 STRIDE_QUALITY_V2_SELECTION_SCHEMA = "lns2.stride.quality_v2.confirm_selection.v1"
 STRIDE_QUALITY_V2_STABILITY_SCHEMA = "lns2.stride.quality_v2.stability.v1"
 STRIDE_QUALITY_V2_BUILD_SCHEMA = "lns2.stride.quality_v2.label_build.v1"
@@ -37,6 +40,7 @@ STRIDE_QUALITY_V2_TRIALS_PER_HALF = 8
 STRIDE_QUALITY_V2_STRUCTURE_WEIGHT = 0.02
 STRIDE_QUALITY_V2_DESIGN_INDICES = tuple(range(8, 16))
 STRIDE_QUALITY_V2_CONFIRM_INDICES = tuple(range(4, 16))
+STRIDE_QUALITY_V2_COMPLETION_INDICES = tuple(range(4, 8))
 
 
 def collect_stride_quality_v2_design_trials(
@@ -63,6 +67,70 @@ def collect_stride_quality_v2_confirmation_trials(
         artifact_schema=STRIDE_QUALITY_V2_CONFIRM_EXTENSION_SCHEMA,
         workers=workers,
     )
+
+
+def collect_stride_quality_v2_completion_trials(
+    *, selection_path: Path, collection: Path, output: Path, workers: int = 4
+) -> dict[str, Any]:
+    return collect_stride_extension_trials(
+        selection_path=selection_path,
+        collection=collection,
+        output=output,
+        trial_indices=STRIDE_QUALITY_V2_COMPLETION_INDICES,
+        artifact_schema=STRIDE_QUALITY_V2_COMPLETION_EXTENSION_SCHEMA,
+        workers=workers,
+    )
+
+
+def select_stride_quality_v2_completion_states(
+    *, selection_path: Path, base_trials: Path,
+    extension_trial_paths: list[Path], output: Path,
+) -> dict[str, Any]:
+    """Select states whose candidate pools do not yet have trial indices 4--7."""
+
+    selection = load_stride_selection(selection_path)
+    selected_ids = {str(row["state_id"]) for row in selection}
+    base_candidates: defaultdict[str, set[str]] = defaultdict(set)
+    for row in _read_jsonl(base_trials):
+        state_id = str(row["state_id"])
+        if state_id in selected_ids:
+            base_candidates[state_id].add(str(row["candidate_id"]))
+    extension_coverage: defaultdict[tuple[str, str], set[int]] = defaultdict(set)
+    for path in extension_trial_paths:
+        for row in _read_jsonl(path):
+            state_id = str(row["state_id"])
+            if state_id in selected_ids:
+                extension_coverage[(state_id, str(row["candidate_id"]))].add(
+                    int(row["trial_index"])
+                )
+    required = set(STRIDE_QUALITY_V2_COMPLETION_INDICES)
+    complete_ids = {
+        state_id
+        for state_id, candidate_ids in base_candidates.items()
+        if candidate_ids
+        and all(
+            required.issubset(extension_coverage[(state_id, candidate_id)])
+            for candidate_id in candidate_ids
+        )
+    }
+    missing_base = sorted(selected_ids - set(base_candidates))
+    if missing_base:
+        raise ValueError(f"selected states are missing base trials: {missing_base}")
+    pending = [row for row in selection if str(row["state_id"]) not in complete_ids]
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(output / "completion_selection.jsonl", pending)
+    report = {
+        "schema": "lns2.stride.quality_v2.completion_selection.v1",
+        "source_state_count": len(selection),
+        "already_complete_state_count": len(complete_ids),
+        "pending_state_count": len(pending),
+        "required_trial_indices": list(STRIDE_QUALITY_V2_COMPLETION_INDICES),
+        "complete_state_ids": sorted(complete_ids),
+        "passed": len(complete_ids) + len(pending) == len(selection),
+    }
+    _write_json(output / "completion_selection_report.json", report)
+    return report
 
 
 def select_stride_quality_v2_confirmation_states(

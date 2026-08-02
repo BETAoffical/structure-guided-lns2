@@ -35,6 +35,7 @@ from experiments.stride_quality_v2 import (
     analyze_stride_quality_v2_stability,
     assign_stride_quality_v2_scores,
     build_stride_quality_v2_labels,
+    select_stride_quality_v2_completion_states,
     select_stride_quality_v2_confirmation_states,
 )
 
@@ -452,6 +453,77 @@ class StrideQualityLabelTest(unittest.TestCase):
 
 
 class StrideCollectionContractTest(unittest.TestCase):
+    def test_quality_v2_completion_selects_only_missing_seed_halves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selection = []
+            base = []
+            extension = []
+            for state_index in range(2):
+                state_id = f"state-{state_index}"
+                selection.append(
+                    {
+                        "schema": STRIDE_SELECTION_SCHEMA,
+                        "state_id": state_id,
+                        "map_id": "map",
+                        "task_id": f"task-{state_index}",
+                        "split": "pilot",
+                        "source_policy": "v2-full",
+                        "decision_stage": "early",
+                        "conflict_band": "low_1_10",
+                        "source_group": "generated",
+                        "layout_mode": "test",
+                        "source_root": "source",
+                        "episode_id": f"episode-{state_index}",
+                        "before_fingerprint": f"before-{state_index}",
+                        "before_conflicts": 2,
+                        "solver_seed": 1,
+                        "decision_index": 0,
+                        "agent_count": 100,
+                        "agent_band": "low_mid",
+                        "prefix_actions": [],
+                    }
+                )
+                for candidate in ("a", "b"):
+                    for trial_index in range(4):
+                        base.append(
+                            {
+                                "state_id": state_id,
+                                "candidate_id": candidate,
+                                "trial_index": trial_index,
+                            }
+                        )
+                    if state_index == 0:
+                        for trial_index in range(4, 8):
+                            extension.append(
+                                {
+                                    "state_id": state_id,
+                                    "candidate_id": candidate,
+                                    "trial_index": trial_index,
+                                }
+                            )
+            _write_jsonl(root / "selection.jsonl", selection)
+            _write_jsonl(root / "base.jsonl", base)
+            _write_jsonl(root / "extension.jsonl", extension)
+
+            report = select_stride_quality_v2_completion_states(
+                selection_path=root / "selection.jsonl",
+                base_trials=root / "base.jsonl",
+                extension_trial_paths=[root / "extension.jsonl"],
+                output=root / "output",
+            )
+            pending = [
+                json.loads(line)
+                for line in (root / "output" / "completion_selection.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["already_complete_state_count"], 1)
+            self.assertEqual(report["pending_state_count"], 1)
+            self.assertEqual(pending[0]["state_id"], "state-1")
+
     def test_quality_v2_confirmation_excludes_design_episodes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
