@@ -71,6 +71,48 @@ the report SHA-256 is
 This authorizes recovery policy-episode collection, but it is not PP-label or
 end-to-end solver evidence.
 
+## Executed source collection and selection
+
+Both recovery source policies completed all 768 registered episodes. Official
+Adaptive solved 768/768; frozen V2 solved 764/768. The four unsolved frozen-V2
+episodes are solver outcomes rather than collection errors: both policies had
+zero errors and zero timeouts. The official and frozen-V2 collection-manifest
+SHA-256 values are respectively
+`485df61c6cd6cf1ce64adc348a6a1bf2907bfe5f19195f0f6fe18a941378762d`
+and `3357861ef19de3adfa75f8e376d33b8292e1e739d41785030dae8365ffffd838`;
+the joint collection-summary SHA-256 is
+`6ef5b7a889ceb5933b4d8486b39a25aa74b6e7772b871235d6d9a37918b68e94`.
+
+Result-blind selection then combined the first Stage 3 source pool with the
+recovery pool and passed every registered extension gate:
+
+- exactly 360 states, 180 per source policy;
+- 360 distinct source episodes, preserving the one-state-per-episode cap;
+- all 22 extension-source maps represented;
+- 168 low/mid-agent and 192 high-agent states;
+- exactly 60 low-, 60 medium-, and 60 high-conflict states per policy;
+- official Adaptive contributed 90 low/mid and 90 high-agent states; frozen V2
+  contributed 78 low/mid and 102 high-agent states.
+
+The state-selection SHA-256 is
+`6114d521b862b7c7af54f5b0c6da3cb6e2fbea52aec17455fa6a71eeae232be9`;
+the selection-report SHA-256 is
+`06ce74120e295e6e87e71dba9380022a338317d6dba4521ec98dea5270262ea6`.
+Neither selection nor its gates read PP repair outcomes.
+
+## Executed replay preflight
+
+All 360 selected states passed three independent replay-and-candidate
+preflights. Every state succeeded in all three repetitions, every state had one
+candidate signature across repetitions, candidate counts remained between 16
+and 18, and there were zero failed states. The preflight-report SHA-256 is
+`ef5a889a0e41ce1d6f616a91eb12fedd7e3293fb37bd3c986902967b92a05e0d`.
+
+This preflight establishes deterministic state reconstruction and candidate
+generation. It does not establish label stability, selector quality, or
+end-to-end runtime improvement. It authorizes the registered eight-seed PP
+repair trials for the 360-state extension.
+
 ## Decision boundary
 
 If qualification fails, policy episodes and PP label trials remain disabled and
