@@ -130,6 +130,40 @@ model inference, and PP+SIPPS repairs. An unsuccessful episode is charged the
 same registered wall budget in capped TTF; actual consumed wall time is reported
 separately.
 
+## Stage 4R Quick result
+
+The first `quick-v1` collection is retained only as failed engineering
+evidence. Its controller/source-model audit compared unlike models and produced
+execution errors, so it has no valid TTF winner. After splitting the audit into
+active-model feature equivalence and matching-source action equivalence, the
+fresh `quick-v2` collection completed all 33 scheduled episodes and passed every
+registered integrity gate.
+
+All three controllers solved all 11 paired tasks, so capped and common-success
+TTF are identical for this diagnostic cohort:
+
+| Controller | Success | Mean wall TTF (s) | Relative TTF vs V2 | Mean repairs | Mean PP replan (s) | Mean controller (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `v2-full` | 11/11 | **6.6322** | reference | **9.8182** | **1.1309** | **1.7624** |
+| `stride-control-v1` | 11/11 | 7.7996 | `-17.6016%` | 12.6364 | 1.5719 | 2.4366 |
+| `stride-quality-v1` | 11/11 | 7.3879 | `-11.3939%` | 11.3636 | 1.4195 | 2.1943 |
+
+Here a negative improvement means slower TTF. Both STRIDE candidates preserve
+success but require more repair rounds, more PP time, and more controller time
+than frozen V2. `stride-quality-v1` is better than the same-data old-label
+control, but it does not beat V2. The primary winner is therefore `v2-full`.
+There were zero execution errors, invalid actions, fingerprint mismatches,
+initial-conflict mismatches, or semantic mismatches; the registered TTF clock
+was present for every episode, and no formal OOD or test outcome was read.
+
+This is an 11-task, one-solver-seed, in-development diagnostic and is not a
+formal speed claim. It rejects promotion of either Stage 4 controller and
+supports the registered next decision:
+`revise_quality_label_before_more_runtime_evaluation`. The next model iteration
+must improve current-step neighborhood quality in a way that reduces realized
+repair rounds and TTF; increasing training volume under the old label is not a
+sufficient change on this evidence.
+
 ## Reproducibility
 
 - Stage 4 config SHA-256:
@@ -154,3 +188,11 @@ separately.
   `fcee4d17a386862a7665cfc7abdd49da6f2ad7ec5b901942c1070c6d2fc38b3b`
 - Stage 4R shadow-v2 audit SHA-256:
   `643b3a28cb749a9e20a7ba408e06c38b0aea4d908ef57db59d3900cffabf254f`
+- Stage 4R Quick-v2 report SHA-256:
+  `db982f7a78ebb0a55cfc65c8086f20f9e1168a9b733ecf4f2392e3c3d1cec1a0`
+- Stage 4R Quick-v2 execution schedule SHA-256:
+  `a35ff001e9f920a03f1ab770ffbb3ca11d582a718c4295080fed1fcf8004e45b`
+- Stage 4R Quick-v2 V2/control/quality manifest SHA-256 values:
+  `29643131736e44c8c592b70b18f8d286baa2c26cd8387e3adeda3a6fac5cdd48`,
+  `15e1856de766e0713efccbf7d19f7ead7fb8ef7ea1132f0a93dc27e2adae97b1`,
+  and `c5b37f9ed7015d91831f6bb5bc89fd1e34200d372dea23819c622e1cb1d28983`.
