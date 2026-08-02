@@ -134,6 +134,27 @@ the base repair-trial JSONL SHA-256 is
 This authorizes collection of trial indices 4 through 7; it is not yet a
 complete `stride-quality-v2` labelled extension.
 
+## Executed quality-V2 completion trials
+
+Trial indices 4 through 7 also completed for all 360 extension states with
+zero collection errors. The completion artifact contains another 25,768 rows
+over the same 6,442 state-candidate pairs. Every pair has exactly one row for
+each required index; candidate pools match indices 0 through 3 exactly, the
+paired PP seed is constant across candidates at each state-index slot, and no
+completion seed overlaps a base seed.
+
+All rows retain the frozen 124-dimensional feature schema and complete
+post-repair structure. The mutually exclusive completion outcomes are 3,615
+feasible repairs, 14,225 conflict-reduced repairs, 4,698 state changes without
+conflict reduction, and 3,230 hard failures. The collection-report SHA-256 is
+`3722395dd6734d7329f406c14a0b0af5c3ff2b4c11da93f08979ec94eeafa291`;
+the completion-trial JSONL SHA-256 is
+`d6791b1d0402d4da33bf6f29e8f907409f1aa9d0991584abf17de71564c63325`.
+
+The 360-state extension now has complete trial indices 0 through 7. Stage 3
+still requires completion of the missing indices 4 through 7 for 144 retained
+Stage 2 states before the final 600-state label build and cohort audit.
+
 ## Decision boundary
 
 If qualification fails, policy episodes and PP label trials remain disabled and
