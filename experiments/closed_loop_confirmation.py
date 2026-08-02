@@ -525,6 +525,10 @@ def closed_loop_qualification_report(
             )
     nonzero = [row for row in cohort if int(row["initial_conflicts"]) > 0]
     by_layout = collections.Counter(str(row["layout_mode"]) for row in nonzero)
+    by_agent_band = collections.Counter(
+        "low_mid" if int(row["agent_count"]) <= 200 else "high"
+        for row in nonzero
+    )
     active_maps = sorted({str(row["map_id"]) for row in nonzero})
     by_solver_seed = collections.Counter(int(row["solver_seed"]) for row in nonzero)
     fingerprints_by_seed = {
@@ -554,6 +558,23 @@ def closed_loop_qualification_report(
     ]
     settings = dict(config["qualification"])
     qualification_mode = str(settings.get("mode", "structured"))
+    enforce_registered_thresholds = formal or bool(
+        settings.get("enforce_registered_thresholds", False)
+    )
+    minimum_by_agent_band = {
+        str(name): int(value)
+        for name, value in dict(
+            settings.get("minimum_nonzero_states_per_agent_band", {})
+        ).items()
+    }
+    if (
+        not set(minimum_by_agent_band) <= {"low_mid", "high"}
+        or any(value < 0 for value in minimum_by_agent_band.values())
+    ):
+        raise ValueError(
+            "qualification agent-band thresholds must be non-negative "
+            "low_mid/high counts"
+        )
     if formal and qualification_mode == "movingai_ood":
         required_families = set(map(str, settings["required_layout_families"]))
         active_families = {
@@ -580,17 +601,24 @@ def closed_loop_qualification_report(
                 >= int(settings.get("minimum_nonzero_states_per_solver_seed", 0))
                 for seed in solver_seeds
             ),
+            "minimum_nonzero_per_agent_band": all(
+                by_agent_band.get(name, 0) >= minimum
+                for name, minimum in minimum_by_agent_band.items()
+            ),
         }
-        if formal
+        if enforce_registered_thresholds
         else {
             "minimum_nonzero_states": bool(nonzero),
             "minimum_nonzero_per_layout": True,
             "minimum_active_maps": True,
             "minimum_nonzero_per_solver_seed": True,
+            "minimum_nonzero_per_agent_band": True,
         }
         )
     gates = {
-        "dataset_design": bool(design["passed"]) if formal else True,
+        "dataset_design": (
+            bool(design["passed"]) if enforce_registered_thresholds else True
+        ),
         "seed_isolation": bool(isolation["passed"]),
         "all_resets_valid": (
             len(cohort) == len(expected_keys)
@@ -646,6 +674,9 @@ def closed_loop_qualification_report(
         "nonzero_by_layout": dict(sorted(by_layout.items())),
         "nonzero_by_solver_seed": {
             str(seed): by_solver_seed.get(seed, 0) for seed in solver_seeds
+        },
+        "nonzero_by_agent_band": {
+            name: by_agent_band.get(name, 0) for name in ("low_mid", "high")
         },
         "duplicate_solver_seed_trajectories": duplicate_seed_streams,
         "active_map_count": len(active_maps),

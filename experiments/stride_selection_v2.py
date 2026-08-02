@@ -62,18 +62,23 @@ def build_stride_state_selection_v2(
     excluded = _excluded_ids(exclusion_report)
     pool: list[dict[str, Any]] = []
     registered_maps: set[str] = set()
+    registered_splits: set[str] = set()
     roots = [root.resolve() for root in source_roots]
     for source_root in roots:
         run = _read_json(source_root / "run_config.json")
         dataset_root = Path(str(run["dataset"])).resolve()
-        if str(run["configuration"].get("split", "")) != split:
+        source_split = str(run["configuration"].get("split", ""))
+        if not source_split:
+            raise ValueError("STRIDE source omits its registered split")
+        if split != "auto" and source_split != split:
             raise ValueError(
                 f"STRIDE source split mismatch: expected {split}, "
-                f"found {run['configuration'].get('split')}"
+                f"found {source_split}"
             )
+        registered_splits.add(source_split)
         dataset = {
             str(row["task_id"]): row
-            for row in _load_dataset_rows(dataset_root, [split])
+            for row in _load_dataset_rows(dataset_root, [source_split])
         }
         registered_maps.update(str(row["map_id"]) for row in dataset.values())
         for _, (manifest_name, source_policy) in STRIDE_SOURCE_POLICIES.items():
@@ -159,6 +164,7 @@ def build_stride_state_selection_v2(
         "schema_version": 2,
         "result_blind": True,
         "registered_split": split,
+        "registered_source_splits": sorted(registered_splits),
         "source_decision_index_range": [0, MAX_SOURCE_DECISION_INDEX],
         "excluded_state_ids": sorted(excluded),
         "source_roots": [str(root) for root in roots],

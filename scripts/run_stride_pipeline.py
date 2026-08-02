@@ -85,7 +85,14 @@ def parse_arguments() -> argparse.Namespace:
     selection_v2.add_argument("--exclude-report")
     selection_v2.add_argument("--target-per-policy", type=int, default=120)
     selection_v2.add_argument("--max-per-episode", type=int, default=2)
-    selection_v2.add_argument("--split", default="stride_pilot")
+    selection_v2.add_argument(
+        "--split",
+        default="stride_pilot",
+        help=(
+            "Required source split, or 'auto' to accept each source's own "
+            "registered split when combining Stage 3 extensions."
+        ),
+    )
     preflight = subparsers.add_parser(
         "preflight-selection", help="Repeat replay and candidate generation before PP trials."
     )

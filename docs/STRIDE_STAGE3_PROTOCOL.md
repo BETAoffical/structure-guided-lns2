@@ -65,3 +65,12 @@ Stage 4 training is allowed only if all of the following hold:
 
 Generated artifacts remain ignored under `build/`; configs, code, hashes, gate
 reports, and research decisions are committed.
+
+## Registered source-yield recovery
+
+The first source collection later completed without runtime errors but exposed
+an insufficient independent-episode yield: only 43 repairable resets and two
+low/mid-agent resets. The registered response is documented in
+`docs/STRIDE_STAGE3_YIELD_RECOVERY.md`. It adds a disjoint compact-map
+qualification pool and strengthens development qualification gates; it does not
+relax the 600-state target or the one-state-per-episode rule.

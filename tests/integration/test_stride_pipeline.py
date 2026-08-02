@@ -26,6 +26,7 @@ from experiments.stride_collection import (
 from experiments.stride_selection_v2 import (
     MAX_SOURCE_DECISION_INDEX,
     _excluded_ids,
+    build_stride_state_selection_v2,
     preflight_stride_selection,
 )
 from experiments.stride_stability import _extra_artifact_valid, stride_extended_pp_seed
@@ -598,6 +599,34 @@ class StrideCollectionContractTest(unittest.TestCase):
             _write_json(path, {"excluded_state_ids": ["state-a", "state-b"]})
             self.assertEqual(_excluded_ids(path), {"state-a", "state-b"})
             self.assertEqual(MAX_SOURCE_DECISION_INDEX, 11)
+
+    def test_selection_v2_auto_split_is_an_explicit_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source"
+            source.mkdir()
+            _write_json(
+                source / "run_config.json",
+                {
+                    "dataset": str(Path(directory) / "missing-dataset"),
+                    "configuration": {"split": "registered-extension"},
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "missing dataset split manifest"):
+                build_stride_state_selection_v2(
+                    source_roots=[source],
+                    output=Path(directory) / "output",
+                    target_per_policy=1,
+                    max_per_episode=1,
+                    split="auto",
+                )
+            with self.assertRaisesRegex(ValueError, "source split mismatch"):
+                build_stride_state_selection_v2(
+                    source_roots=[source],
+                    output=Path(directory) / "output",
+                    target_per_policy=1,
+                    max_per_episode=1,
+                    split="other",
+                )
 
     def test_preflight_requires_repeated_replay(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least two repetitions"):

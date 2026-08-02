@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "master_seed": 2026080204,
+  "output_dir": "build/stride-stage3-yield-recovery-dataset-v1",
+  "tasks_per_map": 8,
+  "task_variants": [
+    {"name": "uniform_100", "task": {"agent_count": 100, "scenario_type": "uniform_random", "swap_pair_ratio": 0.0}},
+    {"name": "swap_100", "task": {"agent_count": 100, "scenario_type": "uniform_random", "swap_pair_ratio": 0.60}},
+    {"name": "uniform_200_a", "task": {"agent_count": 200, "scenario_type": "uniform_random", "swap_pair_ratio": 0.0}},
+    {"name": "swap_200_a", "task": {"agent_count": 200, "scenario_type": "uniform_random", "swap_pair_ratio": 0.60}},
+    {"name": "uniform_200_b", "task": {"agent_count": 200, "scenario_type": "uniform_random", "swap_pair_ratio": 0.0}},
+    {"name": "swap_200_b", "task": {"agent_count": 200, "scenario_type": "uniform_random", "swap_pair_ratio": 0.35}},
+    {"name": "uniform_300", "task": {"agent_count": 300, "scenario_type": "uniform_random", "swap_pair_ratio": 0.0}},
+    {"name": "swap_300", "task": {"agent_count": 300, "scenario_type": "uniform_random", "swap_pair_ratio": 0.60}}
+  ],
+  "layout_variants": {
+    "compartmentalized": [
+      {"name": "cross_four_gate", "map": {"divider_template": "cross_four_gate"}},
+      {"name": "double_horizontal", "map": {"divider_template": "double_horizontal"}}
+    ]
+  },
+  "map": {
+    "layout_mode": "regular_beltway",
+    "rows": 40,
+    "cols": 48,
+    "shelf_block_height": 3,
+    "shelf_block_width": [5, 7],
+    "horizontal_aisle_width": 2,
+    "vertical_aisle_width": 2,
+    "outer_beltway_width": 2,
+    "beltway_mode": "full",
+    "wall_clearance": 0,
+    "dead_end_aisle_count": 8,
+    "dead_end_orientation_counts": {"vertical": 4, "horizontal": 4},
+    "dead_end_depth": 5,
+    "gate_count": 2,
+    "gate_width": 1,
+    "divider_template": "single",
+    "divider_orientation": "vertical",
+    "divider_thickness": 1,
+    "combine_layout_features": false,
+    "station_count": 4,
+    "station_sides": ["left", "right", "top", "bottom"],
+    "station_clearance": 3,
+    "station_placement": "opposite_sides",
+    "station_cluster_count": 2,
+    "station_entrance_width": 2,
+    "station_queue_depth": 3,
+    "station_queue_width": 2,
+    "station_demand_distribution": "uniform",
+    "layout_jitter": 0.05,
+    "generation_attempts": 120,
+    "topology_constraints": {"minimum_average_degree": 1.45}
+  },
+  "task": {
+    "agent_count": 100,
+    "scenario_type": "balanced_bidirectional",
+    "dominant_flow_ratio": 1.0,
+    "background_flow": "random",
+    "opposing_flow_ratio": 0.5,
+    "origin_cluster_count": 0,
+    "goal_cluster_count": 0,
+    "cluster_radius": 3,
+    "hotspot_skew": 0.0,
+    "hotspot_distribution": "uniform",
+    "required_bottleneck_crossing_ratio": 0.0,
+    "shared_corridor_ratio": 0.0,
+    "required_intersection_crossing_ratio": 0.0,
+    "target_intersection_count": 4,
+    "swap_pair_ratio": 0.0,
+    "minimum_shortest_distance": 8,
+    "maximum_shortest_distance": 180,
+    "max_sampling_attempts": 500000
+  },
+  "splits": {
+    "stride_stage3_yield_recovery": {
+      "layout_counts": {
+        "regular_beltway": 4,
+        "compartmentalized": 4,
+        "dead_end_aisles": 4
+      }
+    }
+  }
+}

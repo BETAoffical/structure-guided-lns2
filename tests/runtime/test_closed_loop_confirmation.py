@@ -749,6 +749,87 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             configured_policies({"policies": ["realized_dynamic"]})
 
+    def test_development_qualification_can_enforce_registered_agent_band_yield(self) -> None:
+        rows = [
+            {**row, "agent_count": 100 if index < 2 else 400}
+            for index, row in enumerate(make_dataset_rows())
+        ]
+        design = closed_loop_dataset_design(rows, "closed_loop")
+        qualification = []
+        for index, source in enumerate(rows):
+            qualification.append(
+                {
+                    **source,
+                    "initial_conflicts": 5,
+                    "initial_feasible": False,
+                    "initial_complete": True,
+                    "state_fingerprint": f"strict-{index}",
+                    "status": "ok",
+                    "error": None,
+                }
+            )
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "qualification": {
+                    "enforce_registered_thresholds": True,
+                    "minimum_nonzero_states": 20,
+                    "minimum_nonzero_states_per_layout": 1,
+                    "minimum_active_maps": 1,
+                    "minimum_nonzero_states_per_agent_band": {
+                        "low_mid": 3,
+                        "high": 1,
+                    },
+                },
+                "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            },
+            design,
+            {"passed": True},
+            formal=False,
+        )
+        self.assertFalse(report["passed"])
+        self.assertTrue(report["gates"]["minimum_nonzero_states"])
+        self.assertFalse(report["gates"]["minimum_nonzero_per_agent_band"])
+        self.assertEqual(report["nonzero_by_agent_band"], {"low_mid": 2, "high": 22})
+
+        rejected_design = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "qualification": {
+                    "enforce_registered_thresholds": True,
+                    "minimum_nonzero_states": 1,
+                    "minimum_nonzero_states_per_layout": 0,
+                    "minimum_active_maps": 1,
+                },
+                "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            },
+            {**design, "passed": False},
+            {"passed": True},
+            formal=False,
+        )
+        self.assertFalse(rejected_design["gates"]["dataset_design"])
+
+        with self.assertRaisesRegex(ValueError, "agent-band thresholds"):
+            closed_loop_qualification_report(
+                rows,
+                qualification,
+                {
+                    "qualification": {
+                        "enforce_registered_thresholds": True,
+                        "minimum_nonzero_states": 1,
+                        "minimum_nonzero_states_per_layout": 0,
+                        "minimum_active_maps": 1,
+                        "minimum_nonzero_states_per_agent_band": {"unknown": 1},
+                    },
+                    "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+                },
+                design,
+                {"passed": True},
+                formal=False,
+            )
+
     def test_qualification_rejects_duplicate_solver_seed_streams(self) -> None:
         rows = make_dataset_rows()
         design = closed_loop_dataset_design(rows, "closed_loop")
