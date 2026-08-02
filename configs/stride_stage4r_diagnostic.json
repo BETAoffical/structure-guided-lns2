@@ -7,6 +7,7 @@
   "expected_sha256": {
     "candidate_aggregates": "e4976b2da43e617452bde0fa753ac01d8626d263f40495ea54773ae5847d994c",
     "dominance_pairs": "c2b028285c446555ec75c99a79452a62d31eebad331fa1edf01460a8193b62b7",
+    "label_build_summary": "2d334e6d51a05760e24389ad8193272ae8129c70180a97c9105d9be23ed4b4c4",
     "fold_manifest": "28eca15b6292126c862ac13ae43aa5a4f3ed59ecadd3d437ab9fe50a281e56e2",
     "stage4_training_report": "536ab28dd9560843c4556e19a35de8f73e3df23d294a8e377ae247308ba815d1",
     "oof_predictions": "8584b33a4966a2712126a5fbeb9a1561b12b973e92cb6824dc9105c0a5e1a1d6"

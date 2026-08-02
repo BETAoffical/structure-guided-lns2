@@ -184,6 +184,11 @@
       "purpose": "Outcome-blind map-grouped Stage 4 protocol, split registration, controlled retraining, and feature-ablation workflow."
     },
     {
+      "path": "experiments/stride_stage4r.py",
+      "role": "active",
+      "purpose": "Post-Stage-4 label-disagreement, Oracle-opportunity, and paired-PP-seed stability diagnosis before TTF-first runtime evaluation."
+    },
+    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."

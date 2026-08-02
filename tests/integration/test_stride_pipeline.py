@@ -48,6 +48,10 @@ from experiments.stride_stage4 import (
     _variant_specifications,
     prepare_stride_stage4_protocol,
 )
+from experiments.stride_stage4r import (
+    _aggregate_seed_half,
+    _rank_correlation,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -1094,6 +1098,48 @@ class StrideStage4ProtocolTest(unittest.TestCase):
         metrics = _mean_metrics(records)
         self.assertEqual(metrics["state_count"], 1)
         self.assertEqual(metrics["top3_hit_rate"], 1.0)
+
+
+class StrideStage4RDiagnosticTest(unittest.TestCase):
+    def test_seed_half_aggregation_and_rank_correlation(self) -> None:
+        rows = []
+        for candidate_id, conflicts in (("candidate-a", [2, 2, 3, 3]), ("candidate-b", [4, 4, 4, 4])):
+            for trial_index, conflicts_after in enumerate(conflicts):
+                rows.append(
+                    {
+                        "candidate_id": candidate_id,
+                        "trial_index": trial_index,
+                        "before_conflicts": 5,
+                        "conflicts_after": conflicts_after,
+                        "feasible": conflicts_after == 0,
+                        "post_structure": {
+                            "post_largest_component_ratio": conflicts_after / 10.0,
+                            "post_conflict_edge_density": conflicts_after / 20.0,
+                            "post_event_density": conflicts_after / 15.0,
+                            "post_degree_concentration": conflicts_after / 25.0,
+                        },
+                    }
+                )
+        candidates = _aggregate_seed_half(rows, {0, 1, 2, 3}, 0.02)
+        by_id = {row["candidate_id"]: row for row in candidates}
+        self.assertGreater(
+            by_id["candidate-a"]["quality_score"],
+            by_id["candidate-b"]["quality_score"],
+        )
+        self.assertAlmostEqual(
+            _rank_correlation(
+                {"a": 3.0, "b": 2.0, "c": 1.0},
+                {"a": 6.0, "b": 4.0, "c": 2.0},
+            ),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            _rank_correlation(
+                {"a": 3.0, "b": 2.0, "c": 1.0},
+                {"a": 1.0, "b": 2.0, "c": 3.0},
+            ),
+            -1.0,
+        )
 
 
 if __name__ == "__main__":
