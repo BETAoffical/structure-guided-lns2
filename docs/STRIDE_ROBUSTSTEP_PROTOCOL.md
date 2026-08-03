@@ -1982,7 +1982,42 @@ direction agreement is 0.9212, and mean candidate-score standard deviation is
 0.0510. The combined values are 0.6073, 0.8284, 0.9101, and 0.0690. These are
 label-stability diagnostics, not selector or TTF improvements.
 
-The candidate aggregate, conflict-only pair, and label-summary SHA-256 values
-are `b0d643dd907f626ed9392e735dfdf9cef716b7c0c30c9878bf627407c3ae23c7`,
+The Windows-training-environment candidate aggregate, conflict-only pair, and
+label-summary SHA-256 values are
+`1a72ab8b0c9df89995ec0cc18f8e9f04ab8bae0261aa6ea0895a540ae688da12`,
 `9e3ce3896e61b67e1b5794c22820e91553256a8ff4a3970e7da289fee1b645e7`,
-and `b5ee3b0dde77261d71119040f4443b2e051fe87584b0b78ef56c3e6cddede4e1`.
+and `fc2222a5c18746c3890f1eb9f60012b78bf94b6cb2368f5cabbfe741ba2d68dd`.
+An independent WSL reconstruction has identical feature vectors, means, and
+conflict-only pair bytes. Its only candidate-row differences are the final
+floating-point bit of two descriptive standard-deviation fields (maximum
+absolute difference `1.11e-16`), neither of which is a model input.
+
+### Trained STRIDE-MapRank v1 and passed the offline gate
+
+Nested train-map OOF covers 237 states over 24 maps. MapRank normalized regret
+is 0.25687 versus 0.27040 for the frozen V2 anchor: an absolute improvement of
+0.01353 and relative improvement of 5.0041%, just above the preregistered 5%
+gate. Exact-best rate is 0.4430 versus 0.3924, Top-3 hit rate is 0.6371 versus
+0.5654, and pairwise accuracy is 0.8229 versus the 0.5 weighted-majority
+baseline. All exact, Top-3, pairwise, regret, and topology-group gates pass.
+The boundary-relevant group regresses by 0.00565 normalized regret, below the
+allowed 0.03; the control group improves by 0.04026.
+
+The train-calibrated thresholds are 0.60 for base challengers and 1.01 for
+Boundary challengers. Thus this bundle changes only sufficiently confident
+base-candidate choices and abstains from Boundary overrides, consistent with
+the failed fresh-map Boundary coverage audit and base-only MapBase extension.
+It changes 64/237 OOF selections: 35 improve, 22 worsen, and seven tie.
+
+The six-map legacy validation remains descriptive only. Its normalized regret
+is 0.13134 versus 0.18759 for V2, exact-best is 0.6212 versus 0.5909, and Top-3
+is 0.7727 versus 0.6515. Train and legacy runtime bundle equivalence both have
+zero selection mismatches. Every integrity gate passes; test and formal-OOD
+data were not read. Therefore `stride-maprank-v1` is eligible for fresh
+development evaluation, but it is not a default replacement and no TTF claim
+has been made.
+
+The training report, controller manifest, and offline-prediction SHA-256 values
+are `496144d4a5dc4ca5c47c5f8b4ba7c67a8f669bee19b8479d42138a35ef7543a4`,
+`1f367902d21530c531b58859814b28cf48bbfbb861d46c7377867c962e581054`,
+and `c14b608e857c2b474d103dd81769678ee9497faf71061753634765412b0ad7bb`.
