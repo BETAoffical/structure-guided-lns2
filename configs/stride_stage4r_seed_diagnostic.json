@@ -1,0 +1,69 @@
+{
+  "schema": "lns2.stride.stage4r_seed_diagnostic_registration.v1",
+  "base_config": "configs/stride_stage4r_quick.json",
+  "base_config_sha256": "eb966a345c355be52b84680f33209c6b1b1c11a2c65196849c81868228d91d33",
+  "stride_stage4r_seed_diagnostic": {
+    "schema": "lns2.stride.stage4r_seed_diagnostic_protocol.v1",
+    "scientific_status": "diagnostic_only",
+    "formal_speed_claim": false,
+    "primary_metric": "mean_capped_wall_time_to_feasible",
+    "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
+    "success_constraint": "candidate_success_count_gte_v2_full",
+    "selection_evidence_kind": "outcome_informed_quick_v2",
+    "selection_rule": "two expensive Quick-v2 quality-regression tasks plus two generated contrast tasks; selected after seed-1 controller outcomes and before seeds 2-4 were run",
+    "split": "balanced_wall_clock",
+    "solver_seeds": [1, 2, 3, 4],
+    "wall_time_budget_seconds": 120.0,
+    "episode_process_timeout_seconds": 180.0,
+    "workers": 1,
+    "execution_order": "strict_rotating_latin_order",
+    "source_dataset": "build/stride-stage4r-quick-dataset-v1",
+    "source_manifest": "build/stride-stage4r-quick-dataset-v1/balanced_wall_clock/manifest.jsonl",
+    "source_manifest_sha256": "992d20e05484a11f87cc65ae7c80fa8fb83f945f10ada2efb73e1bfde739b03f",
+    "source_dataset_summary": "build/stride-stage4r-quick-dataset-v1/dataset_summary.json",
+    "source_dataset_summary_sha256": "d534a5f05b07f73ff33bd4671165865452143295322cb86eaf20edb97bb28113",
+    "quick_v2_report": "build/stride-stage4r-quick-v2/stage4r_quick_report.json",
+    "quick_v2_report_sha256": "db982f7a78ebb0a55cfc65c8086f20f9e1168a9b733ecf4f2392e3c3d1cec1a0",
+    "quick_v2_controller_manifests": {
+      "v2-full": {
+        "path": "build/stride-stage4r-quick-v2/controllers/v2-full/realized_dynamic_manifest.jsonl",
+        "sha256": "29643131736e44c8c592b70b18f8d286baa2c26cd8387e3adeda3a6fac5cdd48"
+      },
+      "stride-control-v1": {
+        "path": "build/stride-stage4r-quick-v2/controllers/stride-control-v1/realized_dynamic_manifest.jsonl",
+        "sha256": "15e1856de766e0713efccbf7d19f7ead7fb8ef7ea1132f0a93dc27e2adae97b1"
+      },
+      "stride-quality-v1": {
+        "path": "build/stride-stage4r-quick-v2/controllers/stride-quality-v1/realized_dynamic_manifest.jsonl",
+        "sha256": "c5b37f9ed7015d91831f6bb5bc89fd1e34200d372dea23819c622e1cb1d28983"
+      }
+    },
+    "registered_task_ids": [
+      "balanced_wall_clock_compartmentalized_double_horizontal_0000__task_0001",
+      "balanced_wall_clock_v2_replacement_compartmentalized_cross_four_gate_0000__task_0000",
+      "lt_gallowstemplar_n__random_17__agents_0400",
+      "maze-128-128-2__random_17__agents_0400"
+    ],
+    "problem_task_ids": [
+      "lt_gallowstemplar_n__random_17__agents_0400",
+      "maze-128-128-2__random_17__agents_0400"
+    ],
+    "task_roles": {
+      "balanced_wall_clock_compartmentalized_double_horizontal_0000__task_0001": "generated_stall_contrast",
+      "balanced_wall_clock_v2_replacement_compartmentalized_cross_four_gate_0000__task_0000": "generated_control_quality_divergence",
+      "lt_gallowstemplar_n__random_17__agents_0400": "movingai_expensive_quality_regression",
+      "maze-128-128-2__random_17__agents_0400": "movingai_expensive_quality_regression"
+    },
+    "controllers": [
+      "v2-full",
+      "stride-control-v1",
+      "stride-quality-v1"
+    ],
+    "controller_bundles": {
+      "v2-full": "artifacts/initlns-closed-loop-controller-v2",
+      "stride-control-v1": "build/stride-stage4r-models-v2/stride-control-v1",
+      "stride-quality-v1": "build/stride-stage4r-models-v2/stride-quality-v1"
+    },
+    "formal_ood_data_allowed": false
+  }
+}
