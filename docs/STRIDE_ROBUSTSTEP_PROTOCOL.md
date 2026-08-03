@@ -179,6 +179,42 @@ and four solver seeds produce 36 tasks and 144 reset-only jobs. Controller
 actions and repair outcomes remain forbidden. The same mean-conflict targets
 50 and 200 select at most two tasks per map; loads below mean 10 are rejected.
 
+This construction also completed without errors but did not rescue the six
+maps. Only 13/144 resets had conflicts; best means were 0 for Berlin, Paris,
+and `brc202d`, 0.25 for Boston, 1.0 for `ost003d`, and 4.75 for the warehouse.
+The manifest, qualification report, and analysis hashes are
+`644d396066137868ec2199ced10dea5bf0c79c7e40e5782d0f0fc927617f2755`,
+`8572a96a85a38691c75920a607b0905cc7ce6bb2bd751028afbd830449da6036`,
+and `459f52fddfdcabb92fd78ac09020747ee871fc3afd03029d0988a0f4846c9659`.
+These open maps are therefore excluded from repair-label collection.
+
+Previously consumed reset-only DAO qualification pools provide the replacement
+map design evidence. Across 864 valid resets with zero errors, 15 compact or
+ultra-compact maps have at least one task with mean conflicts at least 10:
+`den009d`, `den020d`, `den101d`, `den201d`, `den202d`, `den203d`, `den308d`,
+`den998d`, `hrt002d`, `den404d`, `den408d`, `lak101d`, `lak108d`, `lak110d`,
+and `ost102d`. Examples near the target bands include `den009d` at 40.67/85,
+`den101d` at 34.67/165.67, `den308d` at 52/81.33, `den408d` at 85.33/210.33,
+and `lak101d` at 56/148.67. This evidence is consumed map/load design only;
+fresh task seeds and map-disjoint validation remain mandatory.
+
+## Registered distributional current-step score design
+
+Map design is now sufficient to continue label work, but the failed hard
+robust-pair contract is not reused. On the consumed 96-state, 16-seed cohort,
+the next design compares a plain mean immediate score with four risk-aware
+aggregates: mean minus 0.25 or 0.50 standard deviations, mean minus a 0.10
+no-progress penalty, and the lower quartile. Runtime, future repair rounds, and
+Cost-to-Go remain excluded.
+
+Indices 0--7 and 8--15 form independent halves. Each aggregate must reach 0.80
+pairwise consistency, 0.80 Top-3 overlap, and at most 0.10 symmetric
+cross-half normalized selection regret overall; both 48-state cohorts must
+also reach 0.75, 0.75, and 0.15. A risk-aware aggregate must improve regret
+over the plain mean by at least 0.005. Otherwise no new label is frozen and
+the next controller must retain V2 actions with an uncertainty/abstention
+mechanism rather than claiming a better learned ranking.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

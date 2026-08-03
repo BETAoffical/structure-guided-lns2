@@ -24,6 +24,8 @@ CONFIG_SCHEMA = "lns2.stride.robuststep_design_config.v1"
 REPORT_SCHEMA = "lns2.stride.robuststep_design_report.v1"
 SEED_DEPTH_CONFIG_SCHEMA = "lns2.stride.robuststep_seed_depth_config.v1"
 SEED_DEPTH_REPORT_SCHEMA = "lns2.stride.robuststep_seed_depth_report.v1"
+SCORE_CONFIG_SCHEMA = "lns2.stride.robuststep_score_design_config.v1"
+SCORE_REPORT_SCHEMA = "lns2.stride.robuststep_score_design_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -95,6 +97,45 @@ def validate_robuststep_seed_depth_config(config: dict[str, Any]) -> None:
         raise ValueError("seed-depth diagnostic requires two disjoint cohorts")
     if bool(config.get("runtime_used_in_label")):
         raise ValueError("runtime cannot enter the robust-step label")
+
+
+def validate_robuststep_score_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != SCORE_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step score config")
+    if (
+        config.get("scientific_status") != "consumed_score_design_only"
+        or bool(config.get("formal_speed_claim"))
+        or not bool(config.get("fresh_confirmation_required"))
+    ):
+        raise ValueError("score design must remain consumed and non-formal")
+    if config.get("controller_id") != CONTROLLER_ID:
+        raise ValueError("unexpected robust-step controller id")
+    if config.get("score_schema") != "lns2.stride.robust_step_score.v1":
+        raise ValueError("unexpected robust-step score schema")
+    indices = tuple(map(int, config.get("trial_indices") or ()))
+    first = tuple(map(int, config.get("first_half_indices") or ()))
+    second = tuple(map(int, config.get("second_half_indices") or ()))
+    if (
+        indices != tuple(range(16))
+        or first != tuple(range(8))
+        or second != tuple(range(8, 16))
+    ):
+        raise ValueError("score design requires registered 8+8 indices")
+    variants = list(config.get("variants") or [])
+    ids = [str(row.get("id")) for row in variants]
+    if len(variants) != 5 or len(set(ids)) != 5 or ids[0] != "mean":
+        raise ValueError("score design requires mean plus four risk variants")
+    for row in variants:
+        if str(row.get("mode")) not in {"mean", "lower_quartile"}:
+            raise ValueError("unsupported robust-step score mode")
+        if float(row.get("deviation_weight", -1.0)) < 0.0:
+            raise ValueError("score deviation weight must be nonnegative")
+        if float(row.get("no_progress_penalty", -1.0)) < 0.0:
+            raise ValueError("score no-progress penalty must be nonnegative")
+    if config.get("baseline_variant_id") != "mean":
+        raise ValueError("plain mean must remain the registered score baseline")
+    if bool(config.get("runtime_used_in_score")):
+        raise ValueError("runtime cannot enter the robust-step score")
 
 
 def robust_pair_winner(
@@ -611,6 +652,266 @@ def run_robuststep_seed_depth(
     return report
 
 
+def _lower_quartile(values: list[float]) -> float:
+    ordered = sorted(values)
+    if not ordered:
+        raise ValueError("score aggregation requires outcomes")
+    position = 0.25 * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
+
+
+def _aggregate_candidate_score(
+    profile: dict[str, list[Any]], indices: list[int], variant: dict[str, Any]
+) -> float:
+    values = [float(profile["scores"][index]) for index in indices]
+    progress = [bool(profile["progress"][index]) for index in indices]
+    if str(variant["mode"]) == "lower_quartile":
+        return _lower_quartile(values)
+    return (
+        statistics.fmean(values)
+        - float(variant["deviation_weight"]) * statistics.pstdev(values)
+        - float(variant["no_progress_penalty"])
+        * (1.0 - statistics.fmean(map(float, progress)))
+    )
+
+
+def evaluate_robuststep_score_variant(
+    profiles: dict[str, dict[str, dict[str, list[Any]]]],
+    variant: dict[str, Any],
+    first_indices: list[int],
+    second_indices: list[int],
+) -> dict[str, Any]:
+    pair_union = 0
+    pair_agreement = 0
+    top3_overlaps = []
+    normalized_regrets = []
+    winner_agreements = 0
+    state_rows = []
+    for state_id, candidates in sorted(profiles.items()):
+        candidate_ids = sorted(candidates)
+        halves = []
+        for indices in (first_indices, second_indices):
+            scores = {
+                candidate_id: _aggregate_candidate_score(
+                    candidates[candidate_id], indices, variant
+                )
+                for candidate_id in candidate_ids
+            }
+            ranking = sorted(candidate_ids, key=lambda value: (-scores[value], value))
+            halves.append((scores, ranking))
+        first_scores, first_rank = halves[0]
+        second_scores, second_rank = halves[1]
+        state_pairs = 0
+        state_agreements = 0
+        for left_id, right_id in combinations(candidate_ids, 2):
+            first_delta = first_scores[left_id] - first_scores[right_id]
+            second_delta = second_scores[left_id] - second_scores[right_id]
+            if abs(first_delta) <= 1e-12 and abs(second_delta) <= 1e-12:
+                continue
+            state_pairs += 1
+            state_agreements += int(first_delta * second_delta > 1e-24)
+        top3 = len(set(first_rank[:3]) & set(second_rank[:3])) / 3.0
+        state_regrets = []
+        for selected, evaluation in (
+            (first_rank[0], second_scores),
+            (second_rank[0], first_scores),
+        ):
+            values = list(evaluation.values())
+            span = max(values) - min(values)
+            regret = max(values) - evaluation[selected]
+            state_regrets.append(regret / span if span > 1e-12 else 0.0)
+        pair_union += state_pairs
+        pair_agreement += state_agreements
+        top3_overlaps.append(top3)
+        normalized_regrets.extend(state_regrets)
+        winner_agreements += first_rank[0] == second_rank[0]
+        state_rows.append(
+            {
+                "state_id": state_id,
+                "candidate_count": len(candidate_ids),
+                "pair_count": state_pairs,
+                "pair_agreement_count": state_agreements,
+                "pairwise_consistency": (
+                    state_agreements / state_pairs if state_pairs else 1.0
+                ),
+                "top3_overlap": top3,
+                "symmetric_normalized_regret": statistics.fmean(state_regrets),
+                "winner_agreement": first_rank[0] == second_rank[0],
+            }
+        )
+    state_count = len(profiles)
+    return {
+        "id": str(variant["id"]),
+        "mode": str(variant["mode"]),
+        "deviation_weight": float(variant["deviation_weight"]),
+        "no_progress_penalty": float(variant["no_progress_penalty"]),
+        "pair_count": pair_union,
+        "pair_agreement_count": pair_agreement,
+        "pairwise_consistency": pair_agreement / pair_union if pair_union else 0.0,
+        "mean_top3_overlap": statistics.fmean(top3_overlaps) if top3_overlaps else 0.0,
+        "mean_cross_half_normalized_regret": (
+            statistics.fmean(normalized_regrets) if normalized_regrets else 0.0
+        ),
+        "winner_agreement_rate": winner_agreements / state_count if state_count else 0.0,
+        "states": state_rows,
+    }
+
+
+def _score_gates(
+    result: dict[str, Any], thresholds: dict[str, Any]
+) -> dict[str, bool]:
+    return {
+        "pairwise_consistency": result["pairwise_consistency"]
+        >= float(thresholds["minimum_pairwise_consistency"]),
+        "mean_top3_overlap": result["mean_top3_overlap"]
+        >= float(thresholds["minimum_mean_top3_overlap"]),
+        "mean_cross_half_normalized_regret": result[
+            "mean_cross_half_normalized_regret"
+        ]
+        <= float(thresholds["maximum_mean_cross_half_normalized_regret"]),
+    }
+
+
+def run_robuststep_score_design(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_score_config(config)
+    formal_path = _checked_input(project_root, dict(config["formal_ood_config"]))
+    formal = _read_json(formal_path)
+    formal_maps = {str(row["benchmark_id"]) for row in formal.get("cases", [])}
+    trial_sources = {
+        str(row["path"]): dict(row) for row in config["trial_sources"]
+    }
+    cohort_state_ids: dict[str, set[str]] = {}
+    assigned: set[str] = set()
+    cohort_integrity = {}
+    for specification in config["cohorts"]:
+        cohort_id = str(specification["id"])
+        source_name = str(specification["membership_source"])
+        if source_name not in trial_sources:
+            raise ValueError("score cohort membership source is not registered")
+        source_path = _checked_input(project_root, trial_sources[source_name])
+        state_ids = {str(row["state_id"]) for row in _read_jsonl(source_path)}
+        if assigned & state_ids:
+            raise ValueError("score design cohorts overlap")
+        assigned.update(state_ids)
+        cohort_state_ids[cohort_id] = state_ids
+        expected = int(specification["expected_state_count"])
+        cohort_integrity[cohort_id] = {
+            "state_count": len(state_ids),
+            "expected_state_count": expected,
+            "passed": len(state_ids) == expected,
+        }
+    metadata, profiles, integrity = _load_seed_profiles(
+        project_root, config, state_ids=assigned
+    )
+    cohort_profiles = {
+        cohort_id: {
+            state_id: profiles[state_id] for state_id in sorted(state_ids)
+        }
+        for cohort_id, state_ids in cohort_state_ids.items()
+    }
+    formal_overlap = sorted(
+        {str(row["map_id"]) for row in metadata.values()} & formal_maps
+    )
+    integrity_gates = {
+        "state_count": integrity["state_count"] == int(config["expected_state_count"]),
+        "map_count": integrity["map_count"] == int(config["expected_map_count"]),
+        "candidate_count": integrity["candidate_count"]
+        == int(config["expected_candidate_count"]),
+        "outcome_count": integrity["outcome_count"]
+        == int(config["expected_outcome_count"]),
+        "cohort_partition_complete": assigned == set(profiles),
+        "cohort_integrity": all(row["passed"] for row in cohort_integrity.values()),
+        "formal_ood_overlap_zero": not formal_overlap,
+    }
+    first = list(map(int, config["first_half_indices"]))
+    second = list(map(int, config["second_half_indices"]))
+    variants = []
+    for specification in config["variants"]:
+        result = evaluate_robuststep_score_variant(
+            profiles, dict(specification), first, second
+        )
+        result["gates"] = _score_gates(result, dict(config["overall_gates"]))
+        result["cohorts"] = {}
+        for cohort_id, subset in cohort_profiles.items():
+            cohort_result = evaluate_robuststep_score_variant(
+                subset, dict(specification), first, second
+            )
+            cohort_result["gates"] = _score_gates(
+                cohort_result, dict(config["cohort_gates"])
+            )
+            cohort_result["passed"] = all(cohort_result["gates"].values())
+            result["cohorts"][cohort_id] = cohort_result
+        result["stability_passed"] = all(result["gates"].values()) and all(
+            row["passed"] for row in result["cohorts"].values()
+        )
+        variants.append(result)
+    baseline = next(
+        row for row in variants if row["id"] == str(config["baseline_variant_id"])
+    )
+    for result in variants:
+        improvement = float(baseline["mean_cross_half_normalized_regret"]) - float(
+            result["mean_cross_half_normalized_regret"]
+        )
+        result["regret_improvement_over_mean"] = improvement
+        result["risk_aware"] = result["id"] != baseline["id"]
+        result["improvement_gate"] = (
+            result["risk_aware"]
+            and improvement >= float(config["minimum_regret_improvement_over_mean"])
+        )
+        result["passed"] = bool(
+            result["stability_passed"] and result["improvement_gate"]
+        )
+    eligible = [row for row in variants if row["passed"]]
+    selected = min(
+        eligible,
+        key=lambda row: (
+            float(row["mean_cross_half_normalized_regret"]),
+            -float(row["mean_top3_overlap"]),
+            -float(row["pairwise_consistency"]),
+            str(row["id"]),
+        ),
+        default=None,
+    )
+    passed = all(integrity_gates.values()) and selected is not None
+    report = {
+        "schema": SCORE_REPORT_SCHEMA,
+        "scientific_status": "consumed_score_design_only",
+        "formal_speed_claim": False,
+        "controller_id": CONTROLLER_ID,
+        "score_schema": str(config["score_schema"]),
+        "runtime_used_in_score": False,
+        "fresh_confirmation_required": True,
+        "integrity": integrity,
+        "cohort_integrity": cohort_integrity,
+        "integrity_gates": integrity_gates,
+        "formal_ood_overlap": formal_overlap,
+        "variants": variants,
+        "selected_variant_id": str(selected["id"]) if selected else None,
+        "score_design_passed": passed,
+        "next_decision": (
+            "freeze_risk_score_and_collect_fresh_confirmation"
+            if passed
+            else "retain_v2_actions_and_design_uncertainty_abstention"
+        ),
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "formal_ood_config_sha256": sha256_file(formal_path),
+        },
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_json(output_root / "robuststep_score_design_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
@@ -618,6 +919,9 @@ __all__ = [
     "robust_pair_winner",
     "run_robuststep_design",
     "run_robuststep_seed_depth",
+    "run_robuststep_score_design",
     "validate_robuststep_config",
     "validate_robuststep_seed_depth_config",
+    "validate_robuststep_score_config",
+    "evaluate_robuststep_score_variant",
 ]

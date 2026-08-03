@@ -13,6 +13,7 @@ from experiments.stride_robuststep_preflight import (
 
 from experiments.stride_robuststep import (
     evaluate_robuststep_variant,
+    evaluate_robuststep_score_variant,
     robust_pair_winner,
     validate_robuststep_seed_depth_config,
 )
@@ -218,6 +219,32 @@ class StrideRobustStepTest(unittest.TestCase):
             first_scenario = next((root / "first" / "balanced_wall_clock" / "scenarios").glob("*.scen"))
             second_scenario = next((root / "second" / "balanced_wall_clock" / "scenarios").glob("*.scen"))
             self.assertEqual(first_scenario.read_bytes(), second_scenario.read_bytes())
+
+    def test_distributional_score_reports_stable_top_set_and_zero_regret(self) -> None:
+        profiles = {
+            "state-a": {
+                candidate: {
+                    "scores": [score] * 16,
+                    "progress": [score > 0.0] * 16,
+                }
+                for candidate, score in (("a", 4.0), ("b", 3.0), ("c", 2.0), ("d", 1.0))
+            }
+        }
+        report = evaluate_robuststep_score_variant(
+            profiles,
+            {
+                "id": "mean-sd025",
+                "mode": "mean",
+                "deviation_weight": 0.25,
+                "no_progress_penalty": 0.0,
+            },
+            list(range(8)),
+            list(range(8, 16)),
+        )
+        self.assertEqual(report["pairwise_consistency"], 1.0)
+        self.assertEqual(report["mean_top3_overlap"], 1.0)
+        self.assertEqual(report["mean_cross_half_normalized_regret"], 0.0)
+        self.assertEqual(report["winner_agreement_rate"], 1.0)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,51 @@
+{
+  "schema": "lns2.stride.robuststep_score_design_config.v1",
+  "scientific_status": "consumed_score_design_only",
+  "formal_speed_claim": false,
+  "controller_id": "stride-robuststep-v1",
+  "score_schema": "lns2.stride.robust_step_score.v1",
+  "formal_ood_config": {
+    "path": "configs/movingai_ood_dataset.json",
+    "sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a"
+  },
+  "trial_sources": [
+    {"path": "build/stride-stage2-pilot-v2/repair_trials.jsonl", "sha256": "9b82158312a5a67572e41013fae389d8b3ac6532c176bd457602304d72407a8d"},
+    {"path": "build/stride-stage2-stability-v1/extra_trials.jsonl", "sha256": "318caa489ca0734d7a8cc35d8eac4b8958bfeebd0429e2ee36a2a1ff03382de3"},
+    {"path": "build/stride-quality-v2-design-extension-v1/extra_trials.jsonl", "sha256": "a0a7e5dfda852eba699e80307ff05d624784e780af05ec5e4c5a8133678e5ea5"},
+    {"path": "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl", "sha256": "64a4a73baa33ebcde266d76082c8afab3b1bbe257ffbae58747df94f6f634af3"}
+  ],
+  "cohorts": [
+    {"id": "quality_v2_design", "membership_source": "build/stride-quality-v2-design-extension-v1/extra_trials.jsonl", "expected_state_count": 48},
+    {"id": "quality_v2_confirmation", "membership_source": "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl", "expected_state_count": 48}
+  ],
+  "expected_state_count": 96,
+  "expected_map_count": 14,
+  "expected_candidate_count": 1700,
+  "expected_outcome_count": 27200,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+  "structure_weight": 0.02,
+  "baseline_variant_id": "mean",
+  "variants": [
+    {"id": "mean", "mode": "mean", "deviation_weight": 0.0, "no_progress_penalty": 0.0},
+    {"id": "mean-sd025", "mode": "mean", "deviation_weight": 0.25, "no_progress_penalty": 0.0},
+    {"id": "mean-sd050", "mode": "mean", "deviation_weight": 0.5, "no_progress_penalty": 0.0},
+    {"id": "mean-np100", "mode": "mean", "deviation_weight": 0.0, "no_progress_penalty": 0.1},
+    {"id": "lower-quartile", "mode": "lower_quartile", "deviation_weight": 0.0, "no_progress_penalty": 0.0}
+  ],
+  "overall_gates": {
+    "minimum_pairwise_consistency": 0.8,
+    "minimum_mean_top3_overlap": 0.8,
+    "maximum_mean_cross_half_normalized_regret": 0.1
+  },
+  "cohort_gates": {
+    "minimum_pairwise_consistency": 0.75,
+    "minimum_mean_top3_overlap": 0.75,
+    "maximum_mean_cross_half_normalized_regret": 0.15
+  },
+  "minimum_regret_improvement_over_mean": 0.005,
+  "selection_rule": "lowest_cross_half_regret_then_top3_overlap_then_pairwise_consistency",
+  "runtime_used_in_score": false,
+  "fresh_confirmation_required": true
+}
