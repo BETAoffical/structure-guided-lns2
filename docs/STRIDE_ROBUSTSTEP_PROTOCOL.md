@@ -1965,3 +1965,24 @@ The repair-trial, collection-report, and run-config SHA-256 values are
 `2564ddc07a9827109352062603497f2eba21a9774b0a04ac51380dfb111f8b4f`,
 and `aa25e4a27d26f7b42fc5c216e77a5151682d6c12bfe394a4c6f93048aeea0234`.
 This is an audited training-data milestone, not a model or TTF result.
+
+### Built STRIDE-MapRank v1 labels
+
+The audited two-source build produced 303 independent states, 5,513 candidate
+aggregates, 22,779 robust primary repairability pairs, and 21,033 robust
+conflict-only pairs. A total of 295 states have at least one primary robust
+pair. The train/legacy-validation map counts are exactly 24/6, and runtime and
+future trajectory inputs remain absent.
+
+Relative to the earlier 240-state artifact, MapBase adds 63 states, 1,128
+candidates, 4,515 primary robust pairs, and 4,165 conflict-only robust pairs;
+all 63 added states have trainable pairs. On the new states alone, seed-half
+exact-winner agreement is 0.7619, mean Top-3 overlap is 0.8413, pairwise
+direction agreement is 0.9212, and mean candidate-score standard deviation is
+0.0510. The combined values are 0.6073, 0.8284, 0.9101, and 0.0690. These are
+label-stability diagnostics, not selector or TTF improvements.
+
+The candidate aggregate, conflict-only pair, and label-summary SHA-256 values
+are `b0d643dd907f626ed9392e735dfdf9cef716b7c0c30c9878bf627407c3ae23c7`,
+`9e3ce3896e61b67e1b5794c22820e91553256a8ff4a3970e7da289fee1b645e7`,
+and `b5ee3b0dde77261d71119040f4443b2e051fe87584b0b78ef56c3e6cddede4e1`.
