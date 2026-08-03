@@ -155,7 +155,10 @@ def _checked_input(project_root: Path, specification: dict[str, Any]) -> Path:
 
 
 def _load_seed_profiles(
-    project_root: Path, config: dict[str, Any]
+    project_root: Path,
+    config: dict[str, Any],
+    *,
+    state_ids: set[str] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, dict[str, list[Any]]]], dict[str, Any]]:
     expected_indices = set(map(int, config["trial_indices"]))
     state_metadata: dict[str, dict[str, Any]] = {}
@@ -171,10 +174,12 @@ def _load_seed_profiles(
         for row in _read_jsonl(path):
             if row.get("schema") != STRIDE_TRIAL_SCHEMA:
                 raise ValueError(f"unexpected repair-trial schema: {path}")
+            state_id = str(row["state_id"])
+            if state_ids is not None and state_id not in state_ids:
+                continue
             trial_index = int(row["trial_index"])
             if trial_index not in expected_indices:
                 continue
-            state_id = str(row["state_id"])
             candidate_id = str(row["candidate_id"])
             key = (state_id, candidate_id, trial_index)
             if key in seen:
@@ -494,33 +499,42 @@ def run_robuststep_seed_depth(
     formal_path = _checked_input(project_root, dict(config["formal_ood_config"]))
     formal = _read_json(formal_path)
     formal_maps = {str(row["benchmark_id"]) for row in formal.get("cases", [])}
-    metadata, profiles, integrity = _load_seed_profiles(project_root, config)
-    observed_maps = {str(row["map_id"]) for row in metadata.values()}
-    formal_overlap = sorted(observed_maps & formal_maps)
-
-    cohort_profiles: dict[str, dict[str, dict[str, dict[str, list[Any]]]]] = {}
+    cohort_state_ids: dict[str, set[str]] = {}
     cohort_integrity: dict[str, Any] = {}
     assigned: set[str] = set()
+    trial_sources = {
+        str(row["path"]): dict(row) for row in config["trial_sources"]
+    }
     for specification in config["cohorts"]:
         cohort_id = str(specification["id"])
-        source_path = _project_path(project_root, str(specification["membership_source"]))
-        if not source_path.is_file():
-            raise FileNotFoundError(source_path)
+        source_name = str(specification["membership_source"])
+        if source_name not in trial_sources:
+            raise ValueError("cohort membership source is not hash-registered")
+        source_path = _checked_input(project_root, trial_sources[source_name])
         state_ids = {str(row["state_id"]) for row in _read_jsonl(source_path)}
         if assigned & state_ids:
             raise ValueError("seed-depth cohorts overlap")
-        missing = state_ids - set(profiles)
-        if missing:
-            raise ValueError(f"seed-depth cohort has missing states: {cohort_id}")
         assigned.update(state_ids)
-        cohort_profiles[cohort_id] = {
-            state_id: profiles[state_id] for state_id in sorted(state_ids)
-        }
+        cohort_state_ids[cohort_id] = state_ids
         cohort_integrity[cohort_id] = {
             "state_count": len(state_ids),
             "expected_state_count": int(specification["expected_state_count"]),
             "passed": len(state_ids) == int(specification["expected_state_count"]),
         }
+    metadata, profiles, integrity = _load_seed_profiles(
+        project_root, config, state_ids=assigned
+    )
+    missing = assigned - set(profiles)
+    if missing:
+        raise ValueError("seed-depth cohort has missing trial profiles")
+    observed_maps = {str(row["map_id"]) for row in metadata.values()}
+    formal_overlap = sorted(observed_maps & formal_maps)
+    cohort_profiles = {
+        cohort_id: {
+            state_id: profiles[state_id] for state_id in sorted(state_ids)
+        }
+        for cohort_id, state_ids in cohort_state_ids.items()
+    }
     integrity_gates = {
         "state_count": integrity["state_count"] == int(config["expected_state_count"]),
         "map_count": integrity["map_count"] == int(config["expected_map_count"]),
