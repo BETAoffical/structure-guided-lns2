@@ -234,6 +234,11 @@
       "purpose": "Non-promoting paired capped-TTF Quick for frozen V2 with optional topology-boundary candidate augmentation."
     },
     {
+      "path": "experiments/stride_boundary_gate_ablation.py",
+      "role": "active",
+      "purpose": "Non-promoting run-to-completion paired ablation of map-only and stall-guard topology-boundary activation."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -719,6 +724,11 @@
       "purpose": "CLI entry point for the exploratory paired boundary-candidate TTF Quick."
     },
     {
+      "path": "scripts/run_stride_boundary_gate_ablation.py",
+      "role": "active",
+      "purpose": "CLI entry point for the uncapped paired boundary map-gate versus stall-guard ablation."
+    },
+    {
       "path": "scripts/run_stride_boundary_runtime_optimization.py",
       "role": "active",
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
@@ -967,6 +977,11 @@
       "path": "tests/integration/test_stride_boundary_ttf_quick.py",
       "role": "active",
       "contract": "Paired alternating schedule, capped-TTF primary metric, boundary activation accounting, and non-promotion gates."
+    },
+    {
+      "path": "tests/integration/test_stride_boundary_gate_ablation.py",
+      "role": "active",
+      "contract": "Uncapped runtime, complete three-controller pairing, rotating execution order, frozen stall gate, and non-promotion boundaries."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

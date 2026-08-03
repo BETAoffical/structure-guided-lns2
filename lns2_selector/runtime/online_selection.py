@@ -56,6 +56,23 @@ _TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG = {
         "minimum_low_degree_cell_ratio": 0.06,
     },
 }
+_TOPOLOGY_BOUNDARY_MAP_GATE_CONFIG = {
+    **_TOPOLOGY_BOUNDARY_LEGACY_CONFIG,
+    "runtime_id": "stride-boundary-map-gate-v1",
+    "static_grid_cache": True,
+    "activation_gate": {
+        "gate_id": "stride-boundary-map-topology-v1",
+        "minimum_low_degree_cell_ratio": 0.06,
+    },
+}
+_TOPOLOGY_BOUNDARY_STALL_GUARD_CONFIG = {
+    **_TOPOLOGY_BOUNDARY_MAP_GATE_CONFIG,
+    "runtime_id": "stride-boundary-stall-guard-v1",
+    "phase_guard": {
+        "gate_id": "stride-boundary-stall-guard-v1",
+        "maximum_no_progress_streak": 5,
+    },
+}
 _TOPOLOGY_BOUNDARY_PHASE_GUARD_CONFIG = {
     **_TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG,
     "runtime_id": "stride-boundary-phase-guard-v2",
@@ -79,6 +96,8 @@ def validate_topology_boundary_augmentation(
         _TOPOLOGY_BOUNDARY_LEGACY_CONFIG,
         _TOPOLOGY_BOUNDARY_STATIC_CACHE_CONFIG,
         _TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG,
+        _TOPOLOGY_BOUNDARY_MAP_GATE_CONFIG,
+        _TOPOLOGY_BOUNDARY_STALL_GUARD_CONFIG,
         _TOPOLOGY_BOUNDARY_PHASE_GUARD_CONFIG,
     ):
         raise ValueError("unsupported topology-boundary runtime augmentation")
@@ -738,19 +757,24 @@ def generate_online_candidates(
             topology_phase_started = time.perf_counter()
             current_conflicts = int(state.get("num_of_colliding_pairs", 0))
             if (
-                current_conflicts < int(phase_guard["low_conflict_pair_threshold"])
+                "low_conflict_pair_threshold" in phase_guard
+                and current_conflicts
+                < int(phase_guard["low_conflict_pair_threshold"])
                 and topology_boundary_no_progress_streak
                 >= int(phase_guard["low_conflict_no_progress_streak"])
             ):
                 topology_boundary_gate_passed = False
                 topology_boundary_gate_reason = "low_conflict_no_progress"
-            elif topology_boundary_no_progress_streak >= int(
-                phase_guard["maximum_no_progress_streak"]
+            elif (
+                "maximum_no_progress_streak" in phase_guard
+                and topology_boundary_no_progress_streak
+                >= int(phase_guard["maximum_no_progress_streak"])
             ):
                 topology_boundary_gate_passed = False
                 topology_boundary_gate_reason = "no_progress_streak"
             elif (
-                topology_boundary_remaining_wall_seconds is not None
+                "minimum_remaining_wall_seconds" in phase_guard
+                and topology_boundary_remaining_wall_seconds is not None
                 and topology_boundary_remaining_wall_seconds
                 < float(phase_guard["minimum_remaining_wall_seconds"])
             ):

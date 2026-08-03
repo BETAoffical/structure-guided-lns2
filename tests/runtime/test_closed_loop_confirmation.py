@@ -612,6 +612,27 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(source["environment"]["max_repair_iterations"], 100)
         self.assertFalse(source["deterministic_pp_replay"])
 
+    def test_run_to_completion_removes_scientific_and_process_time_limits(self) -> None:
+        source = {
+            "environment": {"time_limit": 300.0, "max_repair_iterations": 100},
+            "max_decisions": 100,
+            "metric_iteration_budget": 100,
+            "wall_time_budget_seconds": 300.0,
+            "episode_process_timeout_seconds": 360.0,
+            "deterministic_pp_replay": False,
+        }
+        updated = _with_stopping_rule(source, "run-to-completion")
+        self.assertEqual(updated["stopping_rule"], "run-to-completion")
+        self.assertEqual(updated["environment"]["time_limit"], 0.0)
+        self.assertTrue(updated["environment"]["unlimited_time"])
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 0)
+        self.assertEqual(updated["max_decisions"], 0)
+        self.assertIsNone(updated["metric_iteration_budget"])
+        self.assertIsNone(updated["wall_time_budget_seconds"])
+        self.assertIsNone(updated["episode_process_timeout_seconds"])
+        self.assertTrue(updated["deterministic_pp_replay"])
+        self.assertEqual(source["environment"]["time_limit"], 300.0)
+
     def test_paired_pp_replay_seed_is_controller_independent(self) -> None:
         arguments = ("task", 17, "state", 3)
         official = pp_replay_random_seed(*arguments, "official_adaptive")
@@ -1240,6 +1261,97 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(metrics["topology_boundary_generated_count"], 1)
         self.assertGreater(len(candidates), metrics["base_candidate_count"])
 
+    def test_topology_boundary_map_gate_does_not_read_remaining_time(self) -> None:
+        state = make_state(2)
+        topology = {
+            "enabled": True,
+            "generator_id": "stride-topoboundary-v1",
+            "neighborhood_size": 16,
+            "core_budget": 4,
+            "maximum_added_candidates": 2,
+            "runtime_id": "stride-boundary-map-gate-v1",
+            "static_grid_cache": True,
+            "activation_gate": {
+                "gate_id": "stride-boundary-map-topology-v1",
+                "minimum_low_degree_cell_ratio": 0.06,
+            },
+        }
+        candidates, metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": topology,
+            },
+            topology_static_grid=analyze_static_grid(state),
+            topology_no_progress_streak=100,
+            topology_remaining_wall_seconds=0.0,
+        )
+        self.assertTrue(metrics["topology_boundary_gate_passed"])
+        self.assertEqual(metrics["topology_boundary_gate_reason"], "map_topology_passed")
+        self.assertEqual(metrics["topology_boundary_generated_count"], 1)
+        self.assertGreater(len(candidates), metrics["base_candidate_count"])
+
+    def test_topology_boundary_stall_guard_only_reads_progress_streak(self) -> None:
+        state = make_state(2)
+        topology = {
+            "enabled": True,
+            "generator_id": "stride-topoboundary-v1",
+            "neighborhood_size": 16,
+            "core_budget": 4,
+            "maximum_added_candidates": 2,
+            "runtime_id": "stride-boundary-stall-guard-v1",
+            "static_grid_cache": True,
+            "activation_gate": {
+                "gate_id": "stride-boundary-map-topology-v1",
+                "minimum_low_degree_cell_ratio": 0.06,
+            },
+            "phase_guard": {
+                "gate_id": "stride-boundary-stall-guard-v1",
+                "maximum_no_progress_streak": 5,
+            },
+        }
+        common = {
+            "task_id": "task-a",
+            "solver_seed": 0,
+            "decision_index": 0,
+            "proposal_config": {
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": topology,
+            },
+            "topology_static_grid": analyze_static_grid(state),
+            "topology_remaining_wall_seconds": 0.0,
+        }
+        _, progressing = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            topology_no_progress_streak=4,
+            **common,
+        )
+        candidates, stalled = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            topology_no_progress_streak=5,
+            **common,
+        )
+        self.assertTrue(progressing["topology_boundary_gate_passed"])
+        self.assertEqual(progressing["topology_boundary_generated_count"], 1)
+        self.assertFalse(stalled["topology_boundary_gate_passed"])
+        self.assertEqual(stalled["topology_boundary_gate_reason"], "no_progress_streak")
+        self.assertEqual(stalled["topology_boundary_generated_count"], 0)
+        self.assertEqual(len(candidates), stalled["base_candidate_count"])
+
     def test_topology_boundary_runtime_augmentation_rejects_protocol_drift(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported topology-boundary"):
             generate_online_candidates(
@@ -1554,6 +1666,45 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             finalization["episode_process_wall_seconds"],
             result["summary"]["episode_observed_wall_seconds"],
         )
+
+    def test_run_to_completion_reports_raw_ttf_without_capped_score(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run-to-completion",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {"unlimited_time": True},
+                "max_decisions": 0,
+                "metric_iteration_budget": None,
+                "wall_time_budget_seconds": None,
+                "stopping_rule": "run-to-completion",
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=UnlimitedRepairEnvironment(solve_after=2),
+            ):
+                result = _closed_loop_episode_worker(job)
+        summary = result["summary"]
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(summary["success"])
+        self.assertEqual(summary["stop_reason"], "success")
+        self.assertEqual(summary["repair_iterations"], 2)
+        self.assertIsNone(summary["wall_time_budget_seconds"])
+        self.assertIsNone(summary["capped_wall_time_to_feasible"])
+        self.assertIsNotNone(summary["wall_time_to_feasible"])
+        self.assertFalse(summary["external_timeout"])
 
     def test_ttf_clock_excludes_environment_construction(self) -> None:
         class ManualClock:

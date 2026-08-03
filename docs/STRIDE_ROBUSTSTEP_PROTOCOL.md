@@ -1230,6 +1230,35 @@ The V2 and guarded controller-manifest SHA-256 values are
 `9ea205069b7900703bb24f10c21d415fc86ca1307d774124b7ddd7be3edf062c`
 and `5ea238f0f37a796112c85b298aa7f4730a501ff70cbde9374bf9bf1de9766ee7`.
 
+### Registered run-to-completion boundary gate ablation
+
+The capped Quick is retained unchanged, but its five-second remaining-time
+branch is not used as scientific evidence for the next diagnostic. The
+registered `stride-boundary-gate-ablation-rtc-v1` instead measures
+reset-inclusive raw wall TTF and runs every episode until feasibility. It has
+no scientific wall limit, native time limit, process timeout, repair-iteration
+limit, or diagnostic decision cap. An unfinished or interrupted episode has no
+raw TTF and prevents selection; it is never converted into a capped score.
+
+The ablation reuses the same outcome-informed 18-state mechanism cohort, so it
+cannot promote a model, support an OOD claim, or become training data. Each
+state executes a strict rotating triplet under paired deterministic PP replay:
+frozen `v2-full`, `stride-boundary-map-gate-v1`, and
+`stride-boundary-stall-guard-v1`. The map-gate route uses only the preregistered
+6% low-degree-cell map check. The stall-guard route adds exactly one condition:
+skip topology-boundary construction after five consecutive repairs without a
+conflict reduction. Neither route uses remaining wall time or the earlier
+low-conflict joint rule.
+
+All three controllers must solve all 18 states with zero execution, semantic,
+or pairing errors before raw TTF is compared. Retaining the stall guard requires
+at least 2% lower mean raw TTF than the map-only gate, non-worse mean repair
+iterations, at most 10% raw-TTF regression in every topology subgroup, and at
+least one executed boundary repair. Passing selects the stall guard for the
+next action-preserving feature-cache optimization; failing selects the map-only
+gate. This choice does not replace frozen V2. The frozen config SHA-256 is
+`a915edc4f13dd817874d36f99ab33a11ef7f9b73ffed404c69e193086965beb0`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

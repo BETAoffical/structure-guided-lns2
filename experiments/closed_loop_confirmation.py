@@ -139,7 +139,12 @@ PAIRWISE_CONTROLLER_MODES = {
 }
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
-STOPPING_RULES = ("historical", "wall-clock", "wall-clock-fixed-metric")
+STOPPING_RULES = (
+    "historical",
+    "wall-clock",
+    "wall-clock-fixed-metric",
+    "run-to-completion",
+)
 WALL_CLOCK_SAFETY_MAX_DECISIONS = 100_000
 
 
@@ -1103,10 +1108,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             stopping_rule = str(job.get("stopping_rule", "historical"))
             if stopping_rule not in STOPPING_RULES:
                 raise ValueError(f"unsupported stopping rule: {stopping_rule}")
-            safety_max_decisions = int(
-                job.get("safety_max_decisions", WALL_CLOCK_SAFETY_MAX_DECISIONS)
+            raw_safety_max_decisions = job.get(
+                "safety_max_decisions", WALL_CLOCK_SAFETY_MAX_DECISIONS
             )
-            wall_budget = float(job["wall_time_budget_seconds"])
+            safety_max_decisions = (
+                None
+                if raw_safety_max_decisions is None
+                else int(raw_safety_max_decisions)
+            )
+            raw_wall_budget = job.get("wall_time_budget_seconds")
+            wall_budget = (
+                None if raw_wall_budget is None else float(raw_wall_budget)
+            )
             static_grid = (
                 analyze_static_grid(state)
                 if policy in LEARNED_POLICIES
@@ -1169,12 +1182,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             while not bool(state["done"]) and (
                 max_decisions <= 0 or len(conflicts) - 1 < max_decisions
             ):
-                if len(conflicts) - 1 >= safety_max_decisions:
+                if (
+                    safety_max_decisions is not None
+                    and len(conflicts) - 1 >= safety_max_decisions
+                ):
                     raise ClosedLoopExecutionError(
                         "safety_iteration_limit",
                         "wall-clock execution reached its diagnostic safety limit",
                     )
-                if time.perf_counter() - ttf_started_wall >= wall_budget:
+                if (
+                    wall_budget is not None
+                    and time.perf_counter() - ttf_started_wall >= wall_budget
+                ):
                     external_timeout = True
                     break
                 iteration_started = time.perf_counter()
@@ -1310,10 +1329,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 else None
                             ),
                             topology_no_progress_streak=no_progress_streak,
-                            topology_remaining_wall_seconds=max(
-                                0.0,
-                                wall_budget
-                                - (time.perf_counter() - ttf_started_wall),
+                            topology_remaining_wall_seconds=(
+                                max(
+                                    0.0,
+                                    wall_budget
+                                    - (time.perf_counter() - ttf_started_wall),
+                                )
+                                if wall_budget is not None
+                                else None
                             ),
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
@@ -2047,7 +2070,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 # rejects that call, but an expected timeout must not turn the
                 # whole episode into an execution error.  Keep this before
                 # route counters so only executed repairs are counted.
-                if time.perf_counter() - ttf_started_wall >= wall_budget:
+                if (
+                    wall_budget is not None
+                    and time.perf_counter() - ttf_started_wall >= wall_budget
+                ):
                     external_timeout = True
                     break
                 if bool(job.get("deterministic_pp_replay", False)):
@@ -2062,7 +2088,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         decision_index,
                         route,
                     )
-                if time.perf_counter() - ttf_started_wall >= wall_budget:
+                if (
+                    wall_budget is not None
+                    and time.perf_counter() - ttf_started_wall >= wall_budget
+                ):
                     external_timeout = True
                     break
                 repair_started = time.perf_counter()
@@ -2073,6 +2102,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     if (
                         "repair episode" in str(error)
                         and "finished" in str(error)
+                        and wall_budget is not None
                         and elapsed_after_error >= wall_budget
                     ):
                         external_timeout = True
@@ -2166,7 +2196,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     no_progress_streak += 1
                 elapsed_wall = transition_ttf_elapsed_seconds
                 transition_elapsed_seconds.append(elapsed_wall)
-                within_wall_budget = elapsed_wall <= wall_budget
+                within_wall_budget = (
+                    wall_budget is None or elapsed_wall <= wall_budget
+                )
                 if within_wall_budget:
                     repair_iterations_within_budget += 1
                     budget_final_conflicts = conflicts[-1]
@@ -2398,7 +2430,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 trace_write_seconds = _emit(stream, transition)
                 transition_trace_write_seconds.append(trace_write_seconds)
                 controller_totals["trace_write_seconds"] += trace_write_seconds
-                if elapsed_wall >= wall_budget and not bool(state["done"]):
+                if (
+                    wall_budget is not None
+                    and elapsed_wall >= wall_budget
+                    and not bool(state["done"])
+                ):
                     external_timeout = True
                     break
             elapsed_wall = time.perf_counter() - ttf_started_wall
@@ -2410,8 +2446,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else initial_state_elapsed_seconds
             )
             feasible_elapsed = algorithm_elapsed if bool(state["feasible"]) else None
-            success = feasible_elapsed is not None and feasible_elapsed <= wall_budget
-            if not success and algorithm_elapsed >= wall_budget:
+            success = feasible_elapsed is not None and (
+                wall_budget is None or feasible_elapsed <= wall_budget
+            )
+            if (
+                not success
+                and wall_budget is not None
+                and algorithm_elapsed >= wall_budget
+            ):
                 external_timeout = True
             truncated = not success
             repair_limit_reached = (
@@ -2436,11 +2478,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 and metric_iteration_budget is not None
                 else None
             )
+            wall_metric_horizon = (
+                wall_budget
+                if wall_budget is not None
+                else max(algorithm_elapsed, 1e-12)
+            )
             wall_auc = wall_clock_conflict_auc(
-                conflicts, transition_elapsed_seconds, wall_budget
+                conflicts, transition_elapsed_seconds, wall_metric_horizon
             )
             normalized_wall_auc = (
-                wall_auc / (float(conflicts[0]) * wall_budget)
+                wall_auc / (float(conflicts[0]) * wall_metric_horizon)
                 if conflicts[0] > 0
                 else None
             )
@@ -2450,9 +2497,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 stop_reason = "controller_stalled"
             elif repair_limit_reached:
                 stop_reason = "repair_limit"
-            elif external_timeout or bool(state["done"]):
+            elif external_timeout:
                 stop_reason = "wall_timeout"
-                external_timeout = True
+            elif bool(state["done"]):
+                stop_reason = "native_terminal"
             else:
                 stop_reason = "truncated"
             model_decisions = int(controller_totals["model_decision_count"])
@@ -2491,10 +2539,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "wall_clock_conflict_auc": wall_auc,
                 "normalized_wall_clock_conflict_auc": normalized_wall_auc,
                 "wall_time_to_feasible": feasible_elapsed if success else None,
-                "capped_wall_time_to_feasible": min(feasible_elapsed, wall_budget)
-                if success
-                else wall_budget,
-                "budget_overshoot_seconds": max(0.0, algorithm_elapsed - wall_budget),
+                "capped_wall_time_to_feasible": (
+                    min(feasible_elapsed, wall_budget)
+                    if success and wall_budget is not None
+                    else wall_budget
+                    if wall_budget is not None
+                    else None
+                ),
+                "budget_overshoot_seconds": (
+                    max(0.0, algorithm_elapsed - wall_budget)
+                    if wall_budget is not None
+                    else 0.0
+                ),
                 "native_time_to_feasible": float(state["runtime"]) if success else None,
                 "repair_wall_seconds": total_repair_wall_seconds,
                 "environment_construct_seconds": environment_construct_seconds,
@@ -2753,6 +2809,16 @@ def _with_stopping_rule(
         raise ValueError(f"unsupported stopping rule: {stopping_rule}")
     result = {**config, "environment": dict(config["environment"])}
     result["stopping_rule"] = stopping_rule
+    if stopping_rule == "run-to-completion":
+        result["max_decisions"] = 0
+        result["metric_iteration_budget"] = None
+        result["wall_time_budget_seconds"] = None
+        result["episode_process_timeout_seconds"] = None
+        result["environment"]["time_limit"] = 0.0
+        result["environment"]["unlimited_time"] = True
+        result["environment"]["max_repair_iterations"] = 0
+        result["deterministic_pp_replay"] = True
+        return result
     if stopping_rule in {"wall-clock", "wall-clock-fixed-metric"}:
         result["max_decisions"] = 0
         result["environment"]["max_repair_iterations"] = 0
@@ -3054,9 +3120,15 @@ def run_closed_loop_collection(
         "feature_backend": feature_backend,
         "controller_runtime": controller_runtime,
         "verification_profile": verification_profile,
-        "wall_time_budget_seconds": float(config["wall_time_budget_seconds"]),
-        "episode_process_timeout_seconds": float(
-            config["episode_process_timeout_seconds"]
+        "wall_time_budget_seconds": (
+            float(config["wall_time_budget_seconds"])
+            if config.get("wall_time_budget_seconds") is not None
+            else None
+        ),
+        "episode_process_timeout_seconds": (
+            float(config["episode_process_timeout_seconds"])
+            if config.get("episode_process_timeout_seconds") is not None
+            else None
         ),
         "environment_time_limit_seconds": float(config["environment"]["time_limit"]),
         "environment_max_repair_iterations": int(
@@ -3222,7 +3294,11 @@ def run_closed_loop_collection(
                         phase="closed-loop-qualification",
                         output_root=output_root,
                         run_fingerprint=run_fp,
-                        timeout_seconds=float(config["episode_process_timeout_seconds"]),
+                        timeout_seconds=(
+                            float(config["episode_process_timeout_seconds"])
+                            if config.get("episode_process_timeout_seconds") is not None
+                            else None
+                        ),
                     )
             qualification_manifest = output_root / "qualification_manifest.jsonl"
             existing_results = (
@@ -3289,9 +3365,17 @@ def run_closed_loop_collection(
                     if config.get("metric_iteration_budget") is not None
                     else None
                 ),
-                "wall_time_budget_seconds": float(config["wall_time_budget_seconds"]),
+                "wall_time_budget_seconds": (
+                    float(config["wall_time_budget_seconds"])
+                    if config.get("wall_time_budget_seconds") is not None
+                    else None
+                ),
                 "stopping_rule": stopping_rule,
-                "safety_max_decisions": WALL_CLOCK_SAFETY_MAX_DECISIONS,
+                "safety_max_decisions": (
+                    None
+                    if stopping_rule == "run-to-completion"
+                    else WALL_CLOCK_SAFETY_MAX_DECISIONS
+                ),
                 "frozen_models": str(frozen_root.resolve()),
                 "model_registration": config["model_registration"],
                 "output_root": str(output_root),
@@ -3349,7 +3433,11 @@ def run_closed_loop_collection(
                 phase=f"closed-loop-{current}",
                 output_root=output_root,
                 run_fingerprint=run_fp,
-                timeout_seconds=float(config["episode_process_timeout_seconds"]),
+                timeout_seconds=(
+                    float(config["episode_process_timeout_seconds"])
+                    if config.get("episode_process_timeout_seconds") is not None
+                    else None
+                ),
             )
         merged = {
             (str(value["task_id"]), int(value["solver_seed"])): value

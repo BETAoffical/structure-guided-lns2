@@ -37,6 +37,7 @@ COUNTERFACTUAL_SCHEMA = "lns2.counterfactual.v2"
 COUNTERFACTUAL_METADATA_SCHEMA = "lns2.counterfactual_metadata.v2"
 NATIVE_REPAIR_TIMING_SCHEMA = "lns2.repair_timing.v2"
 REPAIR_TIME_LABEL = "lns2.repair_time.native_step_seconds.v2"
+NATIVE_UNLIMITED_TIME_SENTINEL_SECONDS = 1e100
 POLICY_DESTROY_STRATEGIES = {
     "official_adaptive": "Adaptive",
     "fixed_target": "Target",
@@ -516,11 +517,20 @@ def _make_environment(
             f"{native_semantics_schema or 'missing'}"
         )
     split_root = Path(dataset_root) / str(row["split"])
+    unlimited_time = bool(environment_config.get("unlimited_time", False))
+    configured_time_limit = float(environment_config["time_limit"])
+    if unlimited_time and configured_time_limit != 0.0:
+        raise ValueError("unlimited native time requires time_limit=0")
+    native_time_limit = (
+        NATIVE_UNLIMITED_TIME_SENTINEL_SECONDS
+        if unlimited_time
+        else configured_time_limit
+    )
     return module.LNS2RepairEnv(
         str(split_root / str(row["map_file"])),
         str(split_root / str(row["scenario_file"])),
         agent_count=int(row["agent_count"]),
-        time_limit=float(environment_config["time_limit"]),
+        time_limit=native_time_limit,
         neighborhood_size=int(environment_config["neighborhood_size"]),
         destroy_strategy=destroy_strategy,
         replan_algorithm=str(environment_config["replan_algorithm"]),
@@ -2442,9 +2452,17 @@ def _validate_config(config: dict[str, Any]) -> None:
     }
     if not required_environment.issubset(environment):
         raise ValueError("collection config omits environment settings")
+    unlimited_time = bool(environment.get("unlimited_time", False))
+    configured_time_limit = float(environment["time_limit"])
     if (
-        float(environment["time_limit"]) <= 0
-        or int(environment["max_repair_iterations"]) <= 0
+        configured_time_limit < 0
+        or (configured_time_limit == 0 and not unlimited_time)
+        or (configured_time_limit > 0 and unlimited_time)
+        or int(environment["max_repair_iterations"]) < 0
+        or (
+            int(environment["max_repair_iterations"]) == 0
+            and not unlimited_time
+        )
         or int(environment["neighborhood_size"]) <= 0
     ):
         raise ValueError("collection environment limits must be positive")

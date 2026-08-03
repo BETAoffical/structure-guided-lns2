@@ -15,6 +15,8 @@ from experiments.repair_collection import (
     COUNTERFACTUAL_METADATA_SCHEMA,
     EPISODE_SCHEMA,
     NATIVE_REPAIR_TIMING_SCHEMA,
+    NATIVE_SEMANTICS_SCHEMA,
+    NATIVE_UNLIMITED_TIME_SENTINEL_SECONDS,
     REPAIR_COLLECTION_ARTIFACT_VERSION,
     REPAIR_COLLECTION_SCHEMA,
     REPAIR_TIME_LABEL,
@@ -450,6 +452,45 @@ class RepairCollectionTests(unittest.TestCase):
                 "Adaptive",
             )
         legacy_module.LNS2RepairEnv.assert_not_called()
+
+    def test_make_environment_maps_explicit_unlimited_mode_to_native_sentinel(self) -> None:
+        module = mock.Mock()
+        module.repair_timing_schema = NATIVE_REPAIR_TIMING_SCHEMA
+        module.native_semantics_schema = NATIVE_SEMANTICS_SCHEMA
+        module.LNS2RepairEnv.return_value = object()
+        row = {
+            "split": "train",
+            "map_file": "map.map",
+            "scenario_file": "task.scen",
+            "agent_count": 10,
+        }
+        environment = {
+            "time_limit": 0.0,
+            "unlimited_time": True,
+            "neighborhood_size": 8,
+            "replan_algorithm": "PP",
+            "use_sipp": True,
+            "max_repair_iterations": 0,
+        }
+        with mock.patch(
+            "experiments.repair_collection._load_environment_module",
+            return_value=module,
+        ):
+            _make_environment(".", row, environment, "Adaptive")
+        self.assertEqual(
+            module.LNS2RepairEnv.call_args.kwargs["time_limit"],
+            NATIVE_UNLIMITED_TIME_SENTINEL_SECONDS,
+        )
+
+        invalid = {**environment, "time_limit": 1.0}
+        with (
+            mock.patch(
+                "experiments.repair_collection._load_environment_module",
+                return_value=module,
+            ),
+            self.assertRaisesRegex(ValueError, "requires time_limit=0"),
+        ):
+            _make_environment(".", row, invalid, "Adaptive")
 
     def test_episode_resume_rejects_legacy_or_non_v2_timing_trace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
