@@ -1918,3 +1918,12 @@ schema, thresholds, and anchor rankers all match. No label construction or
 training result is implied by registering this executable path. The training
 config SHA-256 is
 `db84f0a5a38d433dc49aa926140a69768f5528c83ae305599e6648b526792760`.
+
+The registered label builder is likewise MapRank-specific at the artifact
+boundary. It accepts only the two source paths frozen in the design, requires
+their passed audit reports, writes only to `build/stride-maprank-labels-v1`,
+and rechecks 303 states, 24/6 train/legacy-validation maps, 16 trials per
+candidate, and the runtime/future-input exclusions before emitting a separate
+MapRank label report. The underlying conflict-only label formula and row schema
+remain unchanged, so the new name means expanded audited data rather than a
+post-hoc change to label meaning.

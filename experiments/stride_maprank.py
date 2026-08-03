@@ -22,6 +22,7 @@ TRAINING_CONFIG_SCHEMA = "lns2.stride.maprank_training_config.v1"
 TRAINING_REPORT_SCHEMA = "lns2.stride.maprank_training.v1"
 PREDICTION_SCHEMA = "lns2.stride.maprank_prediction.v1"
 STRATEGY_SCHEMA = "lns2.stride.maprank_strategy.v1"
+LABEL_REPORT_SCHEMA = "lns2.stride.maprank_label_build.v1"
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -399,6 +400,83 @@ def prepare_maprank_selection(
     return report
 
 
+def build_maprank_labels(
+    *, training_config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    from experiments.stride_repairability import build_repairability_labels
+
+    training_path = Path(training_config_path).resolve()
+    training = _read_json(training_path)
+    validate_maprank_training_config(training)
+    project_root = training_path.parents[1]
+    design_path = (project_root / str(training["data_design"])).resolve()
+    label_design_path = (project_root / str(training["label_design"])).resolve()
+    if sha256_file(design_path) != str(training["data_design_sha256"]):
+        raise ValueError("STRIDE-MapRank design SHA differs")
+    if sha256_file(label_design_path) != str(training["label_design_sha256"]):
+        raise ValueError("STRIDE-MapRank label design SHA differs")
+    design = _read_json(design_path)
+    validate_maprank_design(design)
+    registered_output = (project_root / str(training["labels"])).resolve()
+    if Path(output).resolve() != registered_output:
+        raise ValueError("STRIDE-MapRank label output differs from registration")
+    sources = list(design["source_collections"])
+    trial_paths = [(project_root / str(row["trials"])).resolve() for row in sources]
+    audit_paths = [(project_root / str(row["audit"])).resolve() for row in sources]
+    if any(not path.is_file() for path in [*trial_paths, *audit_paths]):
+        raise ValueError("STRIDE-MapRank audited label sources are incomplete")
+    summary = build_repairability_labels(
+        config_path=label_design_path,
+        trial_paths=trial_paths,
+        audit_report_paths=audit_paths,
+        output=registered_output,
+    )
+    expected = dict(design["expected_data_coverage"])
+    if (
+        int(summary.get("state_count", -1)) != int(expected["state_count"])
+        or dict(summary.get("map_count_by_split") or {})
+        != {
+            "train": int(expected["train_map_count"]),
+            "validation": int(expected["legacy_validation_map_count"]),
+        }
+        or int(summary.get("trials_per_candidate", -1)) != 16
+        or bool(summary.get("runtime_used_in_label"))
+        or bool(summary.get("future_trajectory_used_in_label"))
+    ):
+        raise ValueError("STRIDE-MapRank label coverage or semantics changed")
+    summary_path = registered_output / "label_build_summary.json"
+    report = {
+        "schema": LABEL_REPORT_SCHEMA,
+        "label_artifact_id": str(design["label_artifact_id"]),
+        "controller_id": CONTROLLER_ID,
+        "state_count": int(summary["state_count"]),
+        "map_count_by_split": dict(summary["map_count_by_split"]),
+        "candidate_count": int(summary["candidate_count"]),
+        "robust_pair_count": int(summary["robust_pair_count"]),
+        "conflict_only_robust_pair_count": int(
+            summary["conflict_only_robust_pair_count"]
+        ),
+        "states_with_pairs": int(summary["states_with_pairs"]),
+        "runtime_used_in_label": False,
+        "future_trajectory_used_in_label": False,
+        "formal_speed_claim": False,
+        "sha256": {
+            "training_config": sha256_file(training_path),
+            "design": sha256_file(design_path),
+            "label_design": sha256_file(label_design_path),
+            "label_summary": sha256_file(summary_path),
+            "candidate_aggregates": sha256_file(
+                registered_output / "candidate_aggregates.jsonl"
+            ),
+            "conflict_only_pairs": sha256_file(
+                registered_output / "conflict_only_dominance_pairs.jsonl"
+            ),
+        },
+    }
+    _write_json(registered_output / "maprank_label_report.json", report)
+    return report
+
+
 def run_maprank_training(
     *, config_path: str | Path, output: str | Path
 ) -> dict[str, Any]:
@@ -428,6 +506,7 @@ def run_maprank_training(
 
 
 __all__ = [
+    "build_maprank_labels",
     "build_maprank_selection",
     "prepare_maprank_selection",
     "run_maprank_training",

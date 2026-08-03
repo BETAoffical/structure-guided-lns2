@@ -884,6 +884,11 @@
       "purpose": "CLI entry point for nested train-map-only STRIDE-MapRank training and diagnostic bundle export."
     },
     {
+      "path": "scripts/build_stride_maprank_labels.py",
+      "role": "active",
+      "purpose": "CLI entry point for building checksum-audited multi-source STRIDE-MapRank labels."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."

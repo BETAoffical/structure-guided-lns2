@@ -10,6 +10,7 @@ from experiments.stride_mapbase import (
     validate_mapbase_config,
 )
 from experiments.stride_maprank import (
+    build_maprank_labels,
     prepare_maprank_selection,
     validate_maprank_design,
     validate_maprank_training_config,
@@ -135,3 +136,15 @@ def test_maprank_training_registration_matches_frozen_design() -> None:
         assert "offline gates changed" in str(error)
     else:
         raise AssertionError("MapRank accepted a relaxed promotion gate")
+
+
+def test_maprank_label_builder_rejects_unregistered_output(tmp_path: Path) -> None:
+    try:
+        build_maprank_labels(
+            training_config_path=MAPRANK_TRAINING_PATH,
+            output=tmp_path / "unregistered-labels",
+        )
+    except ValueError as error:
+        assert "label output differs from registration" in str(error)
+    else:
+        raise AssertionError("MapRank accepted an unregistered label output")
