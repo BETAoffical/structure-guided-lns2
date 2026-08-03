@@ -1192,6 +1192,44 @@ failure retains frozen `v2-full` and stops this optimization route. The frozen
 config SHA-256 is
 `8a063b9299fff03c0056eb2b0f18a832cf2184fe197b16fc99bf97c3dd54a9cc`.
 
+### Completed gated boundary-runtime optimization Quick
+
+All 36 paired episodes completed with zero execution errors, invalid actions,
+semantic mismatches, initial-state mismatches, conflict mismatches, or
+fingerprint mismatches. Both frozen V2 and the guarded boundary route solved
+17/18 states; the unsolved state was the shared 1000-agent `arena` control.
+The guarded route reduced mean repair iterations from 48.50 to 41.67
+(14.09%) and reduced mean capped wall TTF from 13.738 to 13.373 seconds
+(2.66%). On the 17 common successes, mean wall TTF changed from 11.017 to
+10.630 seconds.
+
+The implementation optimization worked as intended but was not sufficient for
+the registered speed claim. Mean boundary-analysis time fell from 4.22 seconds
+in the previous unconditional Quick to 0.599 seconds here. The gate evaluated
+751 decisions, passed 250, rejected 480 on the static map-topology check, and
+rejected 21 after a no-progress streak. Mean total controller time was 7.253
+seconds versus 7.416 for paired V2, while PP replan time was 2.680 versus
+2.830 seconds. The guarded route executed 191 boundary-marked repairs.
+
+All subgroup safeguards passed: capped TTF improved by 3.67% on articulated
+states, 17.86% on ultra-bottleneck states, and 0.80% on the low-articulation
+control group. The primary continuation gate nevertheless failed because the
+overall 2.66% capped-TTF improvement was below the preregistered 5% minimum.
+The per-task effects also remained mixed: fewer rounds produced large gains on
+some `den020d`, `den404d`, `hrt002d`, and `lak109d` instances, but other paired
+instances regressed, and the two 900-agent `lak515d` runs retained 139/122
+repairs under both routes.
+
+This is a positive mechanism result but a negative continuation result. It
+does not warrant the registered fresh map-disjoint Quick, new-model training,
+V2 replacement, or a formal speed claim. Frozen `v2-full` remains the default
+and this boundary-runtime optimization route is stopped. Re-analysis reproduced
+the report byte-for-byte; its SHA-256 is
+`cd033ff8cd052595116d88614474dad631d1ad7cb29e68ad1706db3c36700308`.
+The V2 and guarded controller-manifest SHA-256 values are
+`9ea205069b7900703bb24f10c21d415fc86ca1307d774124b7ddd7be3edf062c`
+and `5ea238f0f37a796112c85b298aa7f4730a501ff70cbde9374bf9bf1de9766ee7`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
