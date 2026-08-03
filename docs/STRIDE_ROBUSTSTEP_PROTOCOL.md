@@ -727,6 +727,30 @@ Only a pass permits a separately registered paired multi-PP-seed immediate-
 quality Pilot for `stride-topoanchor-v1`; it still cannot promote a model or
 claim lower TTF.
 
+### Completed topology-anchor coverage result
+
+The augmented diagnostic passed every registered gate and reproduced exactly
+on an independent run. It retained 503 candidates over 24 states: 17--24 per
+state, mean 20.958, with 72 unique additions in total and no more than the
+registered six additions per state. All repeated proposal signatures and state
+fingerprints matched, and no candidate repair was executed.
+
+Across the 14 relevant states, best-candidate incident coverage rose to 1.0
+for both articulation and low degree. Mean best internal coverage was 0.9880
+for articulation and 0.8948 for low degree. All relevant states in the ultra-
+bottleneck, articulated, and control groups reached incident coverage 1.0.
+This establishes that `stride-topoanchor-v1` closes the measured proposal-pool
+coverage gap under the candidate cap; it does not establish repair quality.
+
+The deterministic report SHA-256 is
+`13510170e21d4b31eb44743a6e11ed07fdcbad4baef7d270a4fbe37df53c537d`;
+candidate and state row hashes are
+`6c0d2aba662300361e68c1bf427e50d7e384c7090e9d4e4313cc7bab303f48d0`
+and `fc07313d3d3a7043cafe314ef6711d0bfe8b7042feb23d5169ee330371448fbe`.
+The next permitted step is a separately frozen paired multi-PP-seed immediate-
+quality Pilot. Frozen V2 remains the active controller until that Pilot and
+later paired TTF gates pass.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
