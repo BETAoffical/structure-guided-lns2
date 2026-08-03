@@ -136,10 +136,10 @@
     },
     "registered_controller_bundles": {
       "stride-control-v1": {
-        "controller_manifest_sha256": "8819e078a6c94b5b39a5443a703d73d3d27e2128a74a440d5612ebba0b3c7d3f"
+        "controller_manifest_sha256": "23cf2c6888f26e9bb9b4bb157f648a11ef0eeb11bf711ae88016decb1ba75cb6"
       },
       "stride-quality-v1": {
-        "controller_manifest_sha256": "45c8a95b8bd66bba168ef979541bdfc20e266081f7686cf3df20bca0d39e5b5f"
+        "controller_manifest_sha256": "f6f005bffdf02ac6bf8c7af6e5bbfd743ae6df1f1ddf840a4be35c56f4b348fc"
       }
     }
   },
@@ -175,8 +175,8 @@
     "controllers": ["v2-full", "stride-control-v1", "stride-quality-v1"],
     "controller_bundles": {
       "v2-full": "artifacts/initlns-closed-loop-controller-v2",
-      "stride-control-v1": "build/stride-stage4r-models-v1/stride-control-v1",
-      "stride-quality-v1": "build/stride-stage4r-models-v1/stride-quality-v1"
+      "stride-control-v1": "build/stride-stage4r-models-v2/stride-control-v1",
+      "stride-quality-v1": "build/stride-stage4r-models-v2/stride-quality-v1"
     },
     "execution_order": "strict_rotating_latin_order",
     "success_constraint": "candidate_success_count_gte_v2_full",

@@ -44,6 +44,10 @@ STRIDE bundles include this portable source representation so WSL auditing does
 not depend on sklearn. A Quick collection containing any execution error has no
 valid TTF comparison or primary winner.
 
+Compact controller range registrations must contain exactly the base features
+used by that compact ranker. Pruned features are not runtime inputs and must not
+be treated as zero-valued out-of-range observations by dense diagnostics.
+
 ## TTF-first Quick semantics
 
 The exact Quick cohort and wall budget must be committed before execution. It

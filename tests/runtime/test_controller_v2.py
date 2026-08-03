@@ -356,6 +356,25 @@ class ControllerV2Tests(unittest.TestCase):
             )
             self.assertEqual(native_ranking, python_ranking)
 
+    def test_bundle_loader_rejects_ranges_for_pruned_features(self) -> None:
+        source = PROJECT_ROOT / "artifacts" / "initlns-closed-loop-policy-v1"
+        with tempfile.TemporaryDirectory() as directory:
+            export_controller_bundle(source, directory)
+            manifest_path = Path(directory) / "controller_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["main_ranges"]["realized_dynamic"][
+                "unused.test_feature"
+            ] = [0.0, 1.0]
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError, "main feature ranges differ from compact inputs"
+            ):
+                load_controller_bundle(directory)
+
     def test_bundle_loader_uses_python_when_native_type_is_missing(self) -> None:
         source = PROJECT_ROOT / "artifacts" / "initlns-closed-loop-policy-v1"
         with tempfile.TemporaryDirectory() as directory:

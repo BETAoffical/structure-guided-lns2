@@ -164,6 +164,20 @@ must improve current-step neighborhood quality in a way that reduces realized
 repair rounds and TTF; increasing training volume under the old label is not a
 sufficient change on this evidence.
 
+The post-run range audit found an engineering-only reporting defect in the
+first diagnostic bundles. Their manifests registered all 124 realized feature
+ranges although the compact control and quality rankers use only 74 and 73
+base features. Dense runtime rows intentionally materialize only model inputs,
+but the range diagnostic treated every omitted, pruned feature as zero and
+could therefore report a false out-of-range value. This did not change scores,
+rankings, actions, fallbacks, or the Quick TTF result. Recomputing against only
+the actual compact inputs reduced mean selected-feature out-of-range fractions
+from `0.1423` to `0.0358` for control and from `0.1828` to `0.0365` for quality;
+neither controller had a corrected decision above `0.25`. The export and bundle
+loader now require exact equality between registered range names and compact
+model inputs. Fresh `models-v2` bundles preserve the original model payloads
+and pass portable selection equivalence on all `600/600` development states.
+
 ## Reproducibility
 
 - Stage 4 config SHA-256:
@@ -196,3 +210,8 @@ sufficient change on this evidence.
   `29643131736e44c8c592b70b18f8d286baa2c26cd8387e3adeda3a6fac5cdd48`,
   `15e1856de766e0713efccbf7d19f7ead7fb8ef7ea1132f0a93dc27e2adae97b1`,
   and `c5b37f9ed7015d91831f6bb5bc89fd1e34200d372dea23819c622e1cb1d28983`.
+- Stage 4R range-contract `models-v2` export report SHA-256:
+  `044fa1e1770ba1bd751be052e63014b1c1999e508b097bed5e22745f25dd416f`
+- Stage 4R range-contract control/quality manifest SHA-256 values:
+  `23cf2c6888f26e9bb9b4bb157f648a11ef0eeb11bf711ae88016decb1ba75cb6`
+  and `f6f005bffdf02ac6bf8c7af6e5bbfd743ae6df1f1ddf840a4be35c56f4b348fc`.

@@ -785,7 +785,9 @@ def _export_diagnostic_controller(
             "proposal_dynamic": dict(source_manifest["main_ranges"])[
                 "proposal_dynamic"
             ],
-            "realized_dynamic": _feature_ranges(candidates, list(feature_names)),
+            "realized_dynamic": _feature_ranges(
+                candidates, list(compact_payload["base_feature_names"])
+            ),
         },
         "main_ranker_semantic_fingerprint": compact_payload[
             "source_semantic_fingerprint"

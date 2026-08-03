@@ -553,6 +553,16 @@ def load_controller_bundle(path: str | Path) -> ControllerBundleV2:
         }
         for profile, profile_ranges in dict(manifest.get("main_ranges", {})).items()
     }
+    for profile, model in models.items():
+        registered = set(ranges.get(profile, {}))
+        required = set(model.base_feature_names)
+        if registered != required:
+            missing = sorted(required - registered)
+            extra = sorted(registered - required)
+            raise ValueError(
+                f"controller main feature ranges differ from compact inputs: "
+                f"{profile}; missing={missing}; extra={extra}"
+            )
     report_row = dict(manifest.get("promotion_report", {}))
     report_path = root / str(report_row["file"])
     if _file_sha256(report_path) != str(report_row["sha256"]):
