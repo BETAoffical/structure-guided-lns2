@@ -719,6 +719,11 @@
       "purpose": "CLI entry point for the exploratory paired boundary-candidate TTF Quick."
     },
     {
+      "path": "scripts/run_stride_boundary_runtime_optimization.py",
+      "role": "active",
+      "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."

@@ -1160,6 +1160,38 @@ and useful but insufficient; the next permitted diagnostic is a cheap pre-
 analysis activation gate followed by low-conflict/stall fallback. No model,
 label, default controller, promotion result, or formal TTF claim changes.
 
+### Registered gated boundary-runtime optimization Quick
+
+The cheap-gate diagnostic first rejected a conflict-count-only phase rule. On
+four representative episodes, disabling boundary analysis whenever fewer than
+two conflict pairs remained changed `den404d` seed 2 from 20 repairs to 52,
+showing that a low-conflict state can still need a topology-boundary action.
+The registered `stride-boundary-phase-guard-v2` therefore keeps the frozen V2
+ranker and candidate generator unchanged, reuses the static grid, and skips the
+expensive dynamic analysis only when one of three joint conditions holds:
+fewer than two conflict pairs after at least two non-improving repairs, at
+least five consecutive non-improving repairs, or less than five seconds of
+wall budget remaining. A map-level gate also requires at least 6% of free
+cells to have degree at most two. No map identity, task label, repair outcome,
+or PP result is used by either gate.
+
+The revised guard kept all four representative episodes successful: the two
+`den020d`/`den404d` checks retained 7/20 repairs, while `hrt002d` and `lak109d`
+used 33/46 repairs and rejected 2/9 boundary analyses. A blind cooldown was
+not registered because trace inspection found a successful `den404d` episode
+with 13 consecutive useful boundary selections. These checks are mechanism
+diagnostics, not TTF evidence.
+
+`stride-boundary-runtime-optimization-quick-v1` now repeats the exact same 18
+states and 36 paired episodes as the failed boundary Quick. This deliberate
+same-cohort reuse isolates runtime logic and is outcome-informed, so it cannot
+support promotion, training, an OOD claim, or a formal speed claim. It retains
+the original 60-second capped wall-TTF primary metric and all continuation
+gates. A pass only permits a separately registered fresh map-disjoint Quick; a
+failure retains frozen `v2-full` and stops this optimization route. The frozen
+config SHA-256 is
+`8a063b9299fff03c0056eb2b0f18a832cf2184fe197b16fc99bf97c3dd54a9cc`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

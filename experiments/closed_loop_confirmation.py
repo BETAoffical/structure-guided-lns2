@@ -1151,6 +1151,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
             pending_changed_agents: set[int] = set()
+            no_progress_streak = 0
             previous_route: str | None = None
             v3_s3_selector = (
                 V3S3Selector(v3_s3_bundle)
@@ -1307,6 +1308,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ).get("static_grid_cache")
                                 is True
                                 else None
+                            ),
+                            topology_no_progress_streak=no_progress_streak,
+                            topology_remaining_wall_seconds=max(
+                                0.0,
+                                wall_budget
+                                - (time.perf_counter() - ttf_started_wall),
                             ),
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
@@ -1935,6 +1942,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "topology_boundary_dynamic_seconds",
                         "topology_boundary_candidate_seconds",
                         "topology_boundary_merge_seconds",
+                        "topology_boundary_gate_seconds",
                     ):
                         controller_totals[topology_metric] += float(
                             proposal_metrics.get(topology_metric, 0.0)
@@ -1948,6 +1956,37 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             )
                         )
                     )
+                    controller_totals[
+                        "topology_boundary_gate_evaluated_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "topology_boundary_gate_evaluated", False
+                            )
+                        )
+                    )
+                    controller_totals[
+                        "topology_boundary_gate_passed_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "topology_boundary_gate_evaluated", False
+                            )
+                        )
+                        and bool(
+                            proposal_metrics.get(
+                                "topology_boundary_gate_passed", False
+                            )
+                        )
+                    )
+                    gate_reason = str(
+                        proposal_metrics.get(
+                            "topology_boundary_gate_reason", "not_enabled"
+                        )
+                    )
+                    controller_totals[
+                        f"topology_boundary_gate_reason={gate_reason}"
+                    ] += 1
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
                     )
@@ -2121,6 +2160,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         route_controller_seconds + repair_wall_seconds
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
+                if conflicts[-1] < conflicts[-2]:
+                    no_progress_streak = 0
+                else:
+                    no_progress_streak += 1
                 elapsed_wall = transition_ttf_elapsed_seconds
                 transition_elapsed_seconds.append(elapsed_wall)
                 within_wall_budget = elapsed_wall <= wall_budget

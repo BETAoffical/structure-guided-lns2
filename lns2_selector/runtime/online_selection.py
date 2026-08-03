@@ -47,6 +47,26 @@ _TOPOLOGY_BOUNDARY_STATIC_CACHE_CONFIG = {
     "runtime_id": "stride-boundary-static-cache-v1",
     "static_grid_cache": True,
 }
+_TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG = {
+    **_TOPOLOGY_BOUNDARY_LEGACY_CONFIG,
+    "runtime_id": "stride-boundary-cheap-gate-v1",
+    "static_grid_cache": True,
+    "activation_gate": {
+        "gate_id": "stride-boundary-map-topology-v1",
+        "minimum_low_degree_cell_ratio": 0.06,
+    },
+}
+_TOPOLOGY_BOUNDARY_PHASE_GUARD_CONFIG = {
+    **_TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG,
+    "runtime_id": "stride-boundary-phase-guard-v2",
+    "phase_guard": {
+        "gate_id": "stride-boundary-phase-guard-v2",
+        "low_conflict_pair_threshold": 2,
+        "low_conflict_no_progress_streak": 2,
+        "maximum_no_progress_streak": 5,
+        "minimum_remaining_wall_seconds": 5.0,
+    },
+}
 
 
 def validate_topology_boundary_augmentation(
@@ -58,6 +78,8 @@ def validate_topology_boundary_augmentation(
     if result not in (
         _TOPOLOGY_BOUNDARY_LEGACY_CONFIG,
         _TOPOLOGY_BOUNDARY_STATIC_CACHE_CONFIG,
+        _TOPOLOGY_BOUNDARY_CHEAP_GATE_CONFIG,
+        _TOPOLOGY_BOUNDARY_PHASE_GUARD_CONFIG,
     ):
         raise ValueError("unsupported topology-boundary runtime augmentation")
     return result
@@ -351,6 +373,8 @@ def generate_online_candidates(
     shadow_validation: bool = False,
     seed_agents_override: Iterable[int] | None = None,
     topology_static_grid: StaticGridAnalysis | None = None,
+    topology_no_progress_streak: int = 0,
+    topology_remaining_wall_seconds: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if proposal_backend not in CONTROLLER_RUNTIMES:
         raise ValueError(f"unsupported proposal backend: {proposal_backend}")
@@ -648,6 +672,24 @@ def generate_online_candidates(
     topology_boundary_candidate_seconds = 0.0
     topology_boundary_merge_seconds = 0.0
     topology_boundary_static_cache_hit = False
+    topology_boundary_gate_seconds = 0.0
+    topology_boundary_gate_evaluated = False
+    topology_boundary_gate_passed = True
+    topology_boundary_gate_reason = "legacy_unconditional"
+    topology_boundary_low_degree_cell_ratio: float | None = None
+    topology_boundary_no_progress_streak = int(topology_no_progress_streak)
+    topology_boundary_remaining_wall_seconds = (
+        None
+        if topology_remaining_wall_seconds is None
+        else float(topology_remaining_wall_seconds)
+    )
+    if topology_boundary_no_progress_streak < 0:
+        raise ValueError("topology no-progress streak must be non-negative")
+    if (
+        topology_boundary_remaining_wall_seconds is not None
+        and topology_boundary_remaining_wall_seconds < 0.0
+    ):
+        raise ValueError("topology remaining wall time must be non-negative")
     topology_boundary_generated_count = 0
     topology_boundary_added_candidate_count = 0
     topology_boundary = validate_topology_boundary_augmentation(
@@ -664,28 +706,85 @@ def generate_online_candidates(
         topology_boundary_static_seconds = (
             time.perf_counter() - topology_static_started
         )
-        topology_dynamic_started = time.perf_counter()
-        analysis = analyze_state(state, static_grid=static_grid)
-        topology_boundary_dynamic_seconds = (
-            time.perf_counter() - topology_dynamic_started
-        )
-        topology_candidate_started = time.perf_counter()
-        topology_candidates = generate_topology_boundary_candidates(
-            state,
-            analysis,
-            neighborhood_size=int(topology_boundary["neighborhood_size"]),
-            core_budget=int(topology_boundary["core_budget"]),
-        )
-        topology_boundary_candidate_seconds = (
-            time.perf_counter() - topology_candidate_started
-        )
         maximum = int(topology_boundary["maximum_added_candidates"])
-        if len(topology_candidates) > maximum:
-            raise RuntimeError("topology-boundary runtime candidate cap exceeded")
-        topology_boundary_generated_count = len(topology_candidates)
-        topology_merge_started = time.perf_counter()
-        candidates = merge_topology_anchor_candidates(candidates, topology_candidates)
-        topology_boundary_merge_seconds = time.perf_counter() - topology_merge_started
+        activation_gate = dict(topology_boundary.get("activation_gate") or {})
+        if activation_gate:
+            topology_boundary_gate_evaluated = True
+            topology_gate_started = time.perf_counter()
+            topology_boundary_low_degree_cell_ratio = (
+                sum(
+                    int(static_grid.degrees.get(cell, 0)) <= 2
+                    for cell in static_grid.free_cells
+                )
+                / len(static_grid.free_cells)
+                if static_grid.free_cells
+                else 0.0
+            )
+            minimum_ratio = float(
+                activation_gate["minimum_low_degree_cell_ratio"]
+            )
+            topology_boundary_gate_passed = (
+                topology_boundary_low_degree_cell_ratio >= minimum_ratio
+            )
+            topology_boundary_gate_reason = (
+                "map_topology_passed"
+                if topology_boundary_gate_passed
+                else "low_degree_cell_ratio_below_threshold"
+            )
+            topology_boundary_gate_seconds = time.perf_counter() - topology_gate_started
+        phase_guard = dict(topology_boundary.get("phase_guard") or {})
+        if topology_boundary_gate_passed and phase_guard:
+            topology_boundary_gate_evaluated = True
+            topology_phase_started = time.perf_counter()
+            current_conflicts = int(state.get("num_of_colliding_pairs", 0))
+            if (
+                current_conflicts < int(phase_guard["low_conflict_pair_threshold"])
+                and topology_boundary_no_progress_streak
+                >= int(phase_guard["low_conflict_no_progress_streak"])
+            ):
+                topology_boundary_gate_passed = False
+                topology_boundary_gate_reason = "low_conflict_no_progress"
+            elif topology_boundary_no_progress_streak >= int(
+                phase_guard["maximum_no_progress_streak"]
+            ):
+                topology_boundary_gate_passed = False
+                topology_boundary_gate_reason = "no_progress_streak"
+            elif (
+                topology_boundary_remaining_wall_seconds is not None
+                and topology_boundary_remaining_wall_seconds
+                < float(phase_guard["minimum_remaining_wall_seconds"])
+            ):
+                topology_boundary_gate_passed = False
+                topology_boundary_gate_reason = "insufficient_remaining_wall_time"
+            else:
+                topology_boundary_gate_reason = "map_and_phase_passed"
+            topology_boundary_gate_seconds += (
+                time.perf_counter() - topology_phase_started
+            )
+        if topology_boundary_gate_passed:
+            topology_dynamic_started = time.perf_counter()
+            analysis = analyze_state(state, static_grid=static_grid)
+            topology_boundary_dynamic_seconds = (
+                time.perf_counter() - topology_dynamic_started
+            )
+            topology_candidate_started = time.perf_counter()
+            topology_candidates = generate_topology_boundary_candidates(
+                state,
+                analysis,
+                neighborhood_size=int(topology_boundary["neighborhood_size"]),
+                core_budget=int(topology_boundary["core_budget"]),
+            )
+            topology_boundary_candidate_seconds = (
+                time.perf_counter() - topology_candidate_started
+            )
+            if len(topology_candidates) > maximum:
+                raise RuntimeError("topology-boundary runtime candidate cap exceeded")
+            topology_boundary_generated_count = len(topology_candidates)
+            topology_merge_started = time.perf_counter()
+            candidates = merge_topology_anchor_candidates(candidates, topology_candidates)
+            topology_boundary_merge_seconds = (
+                time.perf_counter() - topology_merge_started
+            )
         topology_boundary_analysis_seconds = time.perf_counter() - topology_started
         topology_boundary_added_candidate_count = len(candidates) - base_candidate_count
         if not 0 <= topology_boundary_added_candidate_count <= maximum:
@@ -714,6 +813,17 @@ def generate_online_candidates(
         "topology_boundary_candidate_seconds": topology_boundary_candidate_seconds,
         "topology_boundary_merge_seconds": topology_boundary_merge_seconds,
         "topology_boundary_static_cache_hit": topology_boundary_static_cache_hit,
+        "topology_boundary_gate_seconds": topology_boundary_gate_seconds,
+        "topology_boundary_gate_evaluated": topology_boundary_gate_evaluated,
+        "topology_boundary_gate_passed": topology_boundary_gate_passed,
+        "topology_boundary_gate_reason": topology_boundary_gate_reason,
+        "topology_boundary_low_degree_cell_ratio": (
+            topology_boundary_low_degree_cell_ratio
+        ),
+        "topology_boundary_no_progress_streak": topology_boundary_no_progress_streak,
+        "topology_boundary_remaining_wall_seconds": (
+            topology_boundary_remaining_wall_seconds
+        ),
         "seed_agents": list(seed_agents),
         "seed_agent_count": len(seed_agents),
         "seed_agents_overridden": seed_agents_override is not None,

@@ -20,6 +20,16 @@ class StrideBoundaryTTFQuickTest(unittest.TestCase):
             )
         )
 
+    def _optimization_config(self) -> dict:
+        root = Path(__file__).resolve().parents[2]
+        return json.loads(
+            (
+                root
+                / "configs"
+                / "stride_boundary_runtime_optimization_quick.json"
+            ).read_text(encoding="utf-8")
+        )
+
     def test_quick_is_paired_exploratory_and_non_promoting(self) -> None:
         config = self._config()
         validate_boundary_ttf_quick_config(config)
@@ -49,6 +59,30 @@ class StrideBoundaryTTFQuickTest(unittest.TestCase):
         config = self._config()
         config["continuation_gates"]["minimum_capped_ttf_relative_improvement"] = 0.0
         with self.assertRaisesRegex(ValueError, "continuation gates changed"):
+            validate_boundary_ttf_quick_config(config)
+
+    def test_runtime_optimization_is_separate_and_non_promoting(self) -> None:
+        config = self._optimization_config()
+        validate_boundary_ttf_quick_config(config)
+        self.assertEqual(
+            config["controllers"],
+            ["v2-full", "stride-boundary-phase-guard-v2"],
+        )
+        self.assertFalse(config["cohort_independent_of_shadow_outcomes"])
+        self.assertFalse(config["formal_speed_claim"])
+        self.assertFalse(config["default_replacement_allowed"])
+        schedule = boundary_ttf_quick_schedule(config)
+        self.assertEqual(len(schedule), 36)
+        self.assertEqual(
+            {row["controller"] for row in schedule}, set(config["controllers"])
+        )
+
+    def test_runtime_optimization_rejects_phase_guard_drift(self) -> None:
+        config = self._optimization_config()
+        config["topology_boundary_augmentation"]["phase_guard"][
+            "maximum_no_progress_streak"
+        ] = 6
+        with self.assertRaisesRegex(ValueError, "candidate augmentation changed"):
             validate_boundary_ttf_quick_config(config)
 
     def test_summary_counts_boundary_generation_and_selection(self) -> None:

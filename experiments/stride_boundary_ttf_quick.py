@@ -33,10 +33,23 @@ def _registered_path(project_root: Path, specification: dict[str, Any]) -> Path:
 def validate_boundary_ttf_quick_config(config: dict[str, Any]) -> None:
     if config.get("schema") != CONFIG_SCHEMA:
         raise ValueError("unexpected boundary TTF Quick config")
+    experiment_id = str(config.get("experiment_id"))
+    original = experiment_id == "stride-boundary-ttf-quick-v1"
+    optimization = experiment_id == "stride-boundary-runtime-optimization-quick-v1"
+    if not original and not optimization:
+        raise ValueError("unsupported boundary TTF Quick identity")
+    expected_status = (
+        "exploratory_paired_runtime_quick_after_offline_shadow"
+        if original
+        else "outcome_informed_same_cohort_boundary_runtime_optimization_quick"
+    )
+    expected_controllers = (
+        CONTROLLERS
+        if original
+        else ("v2-full", "stride-boundary-phase-guard-v2")
+    )
     if (
-        config.get("scientific_status")
-        != "exploratory_paired_runtime_quick_after_offline_shadow"
-        or config.get("experiment_id") != "stride-boundary-ttf-quick-v1"
+        config.get("scientific_status") != expected_status
         or bool(config.get("formal_speed_claim"))
         or bool(config.get("default_replacement_allowed"))
         or bool(config.get("training_allowed"))
@@ -49,7 +62,7 @@ def validate_boundary_ttf_quick_config(config: dict[str, Any]) -> None:
         or config.get("success_constraint")
         != "challenger_success_count_gte_v2_full"
         or config.get("ttf_clock_schema") != TTF_CLOCK_SCHEMA
-        or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
+        or tuple(map(str, config.get("controllers") or ())) != expected_controllers
         or config.get("executed_controller") != "v2-full"
         or config.get("controller_bundle")
         != "artifacts/initlns-closed-loop-controller-v2"
@@ -75,13 +88,32 @@ def validate_boundary_ttf_quick_config(config: dict[str, Any]) -> None:
         "dao_ultra_bottleneck": 6,
     }:
         raise ValueError("boundary TTF Quick group registry changed")
-    if dict(config.get("topology_boundary_augmentation") or {}) != {
+    expected_augmentation: dict[str, Any] = {
         "enabled": True,
         "generator_id": "stride-topoboundary-v1",
         "neighborhood_size": 16,
         "core_budget": 4,
         "maximum_added_candidates": 2,
-    }:
+    }
+    if optimization:
+        expected_augmentation.update(
+            {
+                "runtime_id": "stride-boundary-phase-guard-v2",
+                "static_grid_cache": True,
+                "activation_gate": {
+                    "gate_id": "stride-boundary-map-topology-v1",
+                    "minimum_low_degree_cell_ratio": 0.06,
+                },
+                "phase_guard": {
+                    "gate_id": "stride-boundary-phase-guard-v2",
+                    "low_conflict_pair_threshold": 2,
+                    "low_conflict_no_progress_streak": 2,
+                    "maximum_no_progress_streak": 5,
+                    "minimum_remaining_wall_seconds": 5.0,
+                },
+            }
+        )
+    if dict(config.get("topology_boundary_augmentation") or {}) != expected_augmentation:
         raise ValueError("boundary TTF Quick candidate augmentation changed")
     if dict(config.get("continuation_gates") or {}) != {
         "minimum_capped_ttf_relative_improvement": 0.05,
@@ -91,7 +123,7 @@ def validate_boundary_ttf_quick_config(config: dict[str, Any]) -> None:
         "minimum_boundary_selected_repair_count": 1,
     }:
         raise ValueError("boundary TTF Quick continuation gates changed")
-    if set(config.get("inputs") or {}) != {
+    expected_inputs = {
         "runtime_config",
         "coverage_state_rows",
         "dataset_manifest",
@@ -100,7 +132,10 @@ def validate_boundary_ttf_quick_config(config: dict[str, Any]) -> None:
         "shadow_report",
         "shadow_selections",
         "controller_manifest",
-    }:
+    }
+    if optimization:
+        expected_inputs.add("predecessor_report")
+    if set(config.get("inputs") or {}) != expected_inputs:
         raise ValueError("boundary TTF Quick input registry changed")
 
 
@@ -110,7 +145,8 @@ def boundary_ttf_quick_schedule(config: dict[str, Any]) -> list[dict[str, Any]]:
     )
     schedule = []
     for key_index, (task_id, solver_seed) in enumerate(jobs):
-        order = CONTROLLERS if key_index % 2 == 0 else tuple(reversed(CONTROLLERS))
+        controllers = tuple(map(str, config["controllers"]))
+        order = controllers if key_index % 2 == 0 else tuple(reversed(controllers))
         for position, controller in enumerate(order):
             schedule.append(
                 {
@@ -195,6 +231,15 @@ def _cohort_metadata(
     runtime = _read_json(inputs["runtime_config"])
     if runtime.get("deterministic_pp_replay") is not True:
         raise ValueError("boundary TTF Quick requires paired PP replay")
+    if "predecessor_report" in inputs:
+        predecessor = _read_json(inputs["predecessor_report"])
+        if (
+            predecessor.get("warrants_larger_development_quick") is not False
+            or predecessor.get("next_decision")
+            != "retain_v2_and_stop_boundary_runtime_route"
+            or predecessor.get("formal_speed_claim") is not False
+        ):
+            raise ValueError("boundary runtime optimization predecessor differs")
     return metadata
 
 
@@ -221,7 +266,7 @@ def _collection_kwargs(
             config["environment_time_limit_seconds"]
         ),
     }
-    if controller == "v2-boundary-explore-v1":
+    if controller != "v2-full":
         kwargs["topology_boundary_augmentation"] = dict(
             config["topology_boundary_augmentation"]
         )
@@ -257,6 +302,39 @@ def _extended_controller_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_topology_boundary_analysis_seconds": _mean(
                 [float(row.get("topology_boundary_analysis_seconds", 0.0)) for row in totals]
             ),
+            "mean_topology_boundary_static_seconds": _mean(
+                [float(row.get("topology_boundary_static_seconds", 0.0)) for row in totals]
+            ),
+            "mean_topology_boundary_dynamic_seconds": _mean(
+                [float(row.get("topology_boundary_dynamic_seconds", 0.0)) for row in totals]
+            ),
+            "mean_topology_boundary_candidate_seconds": _mean(
+                [float(row.get("topology_boundary_candidate_seconds", 0.0)) for row in totals]
+            ),
+            "mean_topology_boundary_gate_seconds": _mean(
+                [float(row.get("topology_boundary_gate_seconds", 0.0)) for row in totals]
+            ),
+            "topology_boundary_gate_evaluated_count": sum(
+                int(row.get("topology_boundary_gate_evaluated_count", 0))
+                for row in totals
+            ),
+            "topology_boundary_gate_passed_count": sum(
+                int(row.get("topology_boundary_gate_passed_count", 0)) for row in totals
+            ),
+            "topology_boundary_gate_reason_counts": dict(
+                sorted(
+                    Counter(
+                        {
+                            str(name).split("=", 1)[1]: sum(
+                                int(row.get(name, 0)) for row in totals
+                            )
+                            for row in totals
+                            for name in row
+                            if str(name).startswith("topology_boundary_gate_reason=")
+                        }
+                    ).items()
+                )
+            ),
             "mean_initial_conflicts": _mean(
                 [float(row.get("initial_conflicts", 0.0)) for row in episodes]
             ),
@@ -278,10 +356,12 @@ def analyze_boundary_ttf_quick(
     _, inputs = _registered_inputs(config_path, config)
     metadata = _cohort_metadata(config, inputs)
     expected = set(metadata)
+    controllers = tuple(map(str, config["controllers"]))
+    baseline_name, challenger_name = controllers
     collection = Path(collection).resolve()
     by_controller: dict[str, dict[tuple[str, int], dict[str, Any]]] = {}
     errors = []
-    for controller in CONTROLLERS:
+    for controller in controllers:
         path = collection / "controllers" / controller / "realized_dynamic_manifest.jsonl"
         rows = _read_jsonl(path)
         indexed = {
@@ -302,7 +382,7 @@ def analyze_boundary_ttf_quick(
     registered_state_mismatches = 0
     if not errors:
         for key in sorted(expected):
-            summaries = [by_controller[name][key]["summary"] for name in CONTROLLERS]
+            summaries = [by_controller[name][key]["summary"] for name in controllers]
             fingerprint_mismatches += len(
                 {str(summary["initial_fingerprint"]) for summary in summaries}
             ) != 1
@@ -331,13 +411,13 @@ def analyze_boundary_ttf_quick(
             for controller, indexed in by_controller.items()
         }
 
-    baseline = summaries["v2-full"]
-    challenger = summaries["v2-boundary-explore-v1"]
+    baseline = summaries[baseline_name]
+    challenger = summaries[challenger_name]
     common = []
     if not errors:
         for key in sorted(expected):
-            left = by_controller["v2-full"][key]["summary"]
-            right = by_controller["v2-boundary-explore-v1"][key]["summary"]
+            left = by_controller[baseline_name][key]["summary"]
+            right = by_controller[challenger_name][key]["summary"]
             if bool(left["success"]) and bool(right["success"]):
                 common.append(
                     (
@@ -350,9 +430,9 @@ def analyze_boundary_ttf_quick(
     capped_improvement = _relative_improvement(base_capped, challenger_capped)
     group_comparisons = {}
     for group, values in subgroup_summaries.items():
-        base_value = float(values["v2-full"]["mean_capped_wall_time_to_feasible"])
+        base_value = float(values[baseline_name]["mean_capped_wall_time_to_feasible"])
         challenger_value = float(
-            values["v2-boundary-explore-v1"]["mean_capped_wall_time_to_feasible"]
+            values[challenger_name]["mean_capped_wall_time_to_feasible"]
         )
         group_comparisons[group] = {
             "baseline_mean_capped_ttf": base_value,
@@ -462,7 +542,7 @@ def analyze_boundary_ttf_quick(
                     / controller
                     / "realized_dynamic_manifest.jsonl"
                 )
-                for controller in CONTROLLERS
+                for controller in controllers
             },
         },
     }
@@ -483,6 +563,7 @@ def run_boundary_ttf_quick(
     project_root, inputs = _registered_inputs(config_path, config)
     metadata = _cohort_metadata(config, inputs)
     cohort = set(metadata)
+    controllers = tuple(map(str, config["controllers"]))
     schedule = boundary_ttf_quick_schedule(config)
     if len(schedule) != int(config["expected_schedule_entry_count"]):
         raise ValueError("boundary TTF Quick schedule size differs")
@@ -518,7 +599,7 @@ def run_boundary_ttf_quick(
                         controller=controller,
                     ),
                 )
-                for controller in CONTROLLERS
+                for controller in controllers
             },
         }
     output.mkdir(parents=True, exist_ok=True)
@@ -548,7 +629,7 @@ def run_boundary_ttf_quick(
         job_keys=cohort,
         **baseline_kwargs,
     )
-    for controller in CONTROLLERS:
+    for controller in controllers:
         controller_root = output / "controllers" / controller
         run_closed_loop_collection(
             dataset,

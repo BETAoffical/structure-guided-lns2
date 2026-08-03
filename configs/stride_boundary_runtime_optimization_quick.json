@@ -1,0 +1,117 @@
+{
+  "schema": "lns2.stride.boundary_ttf_quick_config.v1",
+  "scientific_status": "outcome_informed_same_cohort_boundary_runtime_optimization_quick",
+  "experiment_id": "stride-boundary-runtime-optimization-quick-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "training_allowed": false,
+  "formal_ood_allowed": false,
+  "cohort_independent_of_shadow_outcomes": false,
+  "primary_metric": "mean_capped_wall_time_to_feasible",
+  "success_constraint": "challenger_success_count_gte_v2_full",
+  "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
+  "dataset_root": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+  "controllers": ["v2-full", "stride-boundary-phase-guard-v2"],
+  "executed_controller": "v2-full",
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "expected_state_count": 18,
+  "expected_schedule_entry_count": 36,
+  "expected_state_count_by_group": {
+    "dao_low_articulation_control": 4,
+    "dao_articulated": 8,
+    "dao_ultra_bottleneck": 6
+  },
+  "registered_job_keys": [
+    ["arena__derived_uniform_random__task_seed_0157__agents_1000", 2],
+    ["den020d__derived_opposite_exchange__task_seed_0157__agents_0620", 1],
+    ["den020d__derived_opposite_exchange__task_seed_0157__agents_0620", 2],
+    ["den020d__derived_uniform_random__task_seed_0157__agents_0620", 1],
+    ["den020d__derived_uniform_random__task_seed_0157__agents_0620", 2],
+    ["den404d__derived_uniform_random__task_seed_0157__agents_0130", 1],
+    ["den404d__derived_uniform_random__task_seed_0157__agents_0130", 2],
+    ["den404d__derived_uniform_random__task_seed_0181__agents_0130", 2],
+    ["hrt002d__derived_opposite_exchange__task_seed_0181__agents_0260", 1],
+    ["hrt002d__derived_opposite_exchange__task_seed_0181__agents_0260", 2],
+    ["hrt002d__derived_uniform_random__task_seed_0157__agents_0260", 1],
+    ["hrt002d__derived_uniform_random__task_seed_0157__agents_0260", 2],
+    ["lak109d__derived_uniform_random__task_seed_0157__agents_0110", 1],
+    ["lak109d__derived_uniform_random__task_seed_0157__agents_0110", 2],
+    ["lak109d__derived_uniform_random__task_seed_0181__agents_0110", 2],
+    ["lak515d__derived_opposite_exchange__task_seed_0181__agents_0550", 2],
+    ["lak515d__derived_uniform_random__task_seed_0181__agents_0900", 1],
+    ["lak515d__derived_uniform_random__task_seed_0181__agents_0900", 2]
+  ],
+  "topology_boundary_augmentation": {
+    "enabled": true,
+    "generator_id": "stride-topoboundary-v1",
+    "neighborhood_size": 16,
+    "core_budget": 4,
+    "maximum_added_candidates": 2,
+    "runtime_id": "stride-boundary-phase-guard-v2",
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-boundary-map-topology-v1",
+      "minimum_low_degree_cell_ratio": 0.06
+    },
+    "phase_guard": {
+      "gate_id": "stride-boundary-phase-guard-v2",
+      "low_conflict_pair_threshold": 2,
+      "low_conflict_no_progress_streak": 2,
+      "maximum_no_progress_streak": 5,
+      "minimum_remaining_wall_seconds": 5.0
+    }
+  },
+  "wall_time_budget_seconds": 60.0,
+  "environment_time_limit_seconds": 60.0,
+  "episode_process_timeout_seconds": 90.0,
+  "workers": 1,
+  "execution_order": "strict_alternating_pair_order",
+  "deterministic_pp_replay_required": true,
+  "continuation_gates": {
+    "minimum_capped_ttf_relative_improvement": 0.05,
+    "repair_iterations_noninferior": true,
+    "maximum_relevant_group_capped_ttf_regression": 0.10,
+    "maximum_control_group_capped_ttf_regression": 0.20,
+    "minimum_boundary_selected_repair_count": 1
+  },
+  "inputs": {
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    },
+    "coverage_state_rows": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_states.jsonl",
+      "sha256": "d1238c0508018905bd1fe7a57ca7813bb92490ce2b560f61f438d5b8ad3004d7"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "76ea8a63a0e3ed4c8a7933603b38463ebce1b29fb46296914d23beb63a20106b"
+    },
+    "qualification_report": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_report.json",
+      "sha256": "8055a6a78581597736a6a707f0ace01e8db4dcd8e36858926e09b2fa2bea623e"
+    },
+    "shadow_report": {
+      "path": "build/stride-boundary-explore-v1/topology_boundary_v2_shadow_report.json",
+      "sha256": "9baafd6ca06ec0bad43f1961cc17f3452b5789fd3cac415f20876af1e178cced"
+    },
+    "shadow_selections": {
+      "path": "build/stride-boundary-explore-v1/outcome_blind_selections.jsonl",
+      "sha256": "ab0ee0f247ab220fdcc10dda21365d246a8a2b5a852391032552d732bad76dac"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "predecessor_report": {
+      "path": "build/stride-boundary-ttf-quick-v1/boundary_ttf_quick_report.json",
+      "sha256": "013e7f6d9911aff904db167fa7f9b32c31f57b3a090fcce93da937531e753aeb"
+    }
+  },
+  "next_decision_on_pass": "register_fresh_map_disjoint_boundary_runtime_optimization_quick",
+  "next_decision_on_failure": "retain_v2_and_stop_boundary_runtime_optimization"
+}

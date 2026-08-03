@@ -1077,6 +1077,169 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertFalse(uncached_metrics["topology_boundary_static_cache_hit"])
         self.assertTrue(cached_metrics["topology_boundary_static_cache_hit"])
 
+    def test_topology_boundary_cheap_gate_skips_low_articulation_grid(self) -> None:
+        state = make_state()
+        state.update(
+            {
+                "rows": 10,
+                "cols": 10,
+                "obstacles": [0] * 100,
+                "agents": [
+                    _agent(0, [0, 1, 2], 1),
+                    _agent(1, [1, 0, 10], 1),
+                    _agent(2, [11, 12, 13]),
+                    _agent(3, [13, 13, 13]),
+                ],
+            }
+        )
+        candidates, metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": {
+                    "enabled": True,
+                    "generator_id": "stride-topoboundary-v1",
+                    "neighborhood_size": 16,
+                    "core_budget": 4,
+                    "maximum_added_candidates": 2,
+                    "runtime_id": "stride-boundary-cheap-gate-v1",
+                    "static_grid_cache": True,
+                    "activation_gate": {
+                        "gate_id": "stride-boundary-map-topology-v1",
+                        "minimum_low_degree_cell_ratio": 0.06,
+                    },
+                },
+            },
+            topology_static_grid=analyze_static_grid(state),
+        )
+        self.assertTrue(metrics["topology_boundary_gate_evaluated"])
+        self.assertFalse(metrics["topology_boundary_gate_passed"])
+        self.assertEqual(
+            metrics["topology_boundary_gate_reason"],
+            "low_degree_cell_ratio_below_threshold",
+        )
+        self.assertEqual(metrics["topology_boundary_generated_count"], 0)
+        self.assertEqual(metrics["topology_boundary_added_candidate_count"], 0)
+        self.assertEqual(len(candidates), metrics["base_candidate_count"])
+
+    def test_topology_boundary_cheap_gate_preserves_relevant_grid_candidates(self) -> None:
+        state = make_state()
+        candidates, metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": {
+                    "enabled": True,
+                    "generator_id": "stride-topoboundary-v1",
+                    "neighborhood_size": 16,
+                    "core_budget": 4,
+                    "maximum_added_candidates": 2,
+                    "runtime_id": "stride-boundary-cheap-gate-v1",
+                    "static_grid_cache": True,
+                    "activation_gate": {
+                        "gate_id": "stride-boundary-map-topology-v1",
+                        "minimum_low_degree_cell_ratio": 0.06,
+                    },
+                },
+            },
+            topology_static_grid=analyze_static_grid(state),
+        )
+        self.assertTrue(metrics["topology_boundary_gate_evaluated"])
+        self.assertTrue(metrics["topology_boundary_gate_passed"])
+        self.assertEqual(metrics["topology_boundary_gate_reason"], "map_topology_passed")
+        self.assertEqual(metrics["topology_boundary_generated_count"], 1)
+        self.assertGreater(len(candidates), metrics["base_candidate_count"])
+
+    def test_topology_boundary_phase_guard_skips_expensive_analysis(self) -> None:
+        topology = {
+            "enabled": True,
+            "generator_id": "stride-topoboundary-v1",
+            "neighborhood_size": 16,
+            "core_budget": 4,
+            "maximum_added_candidates": 2,
+            "runtime_id": "stride-boundary-phase-guard-v2",
+            "static_grid_cache": True,
+            "activation_gate": {
+                "gate_id": "stride-boundary-map-topology-v1",
+                "minimum_low_degree_cell_ratio": 0.06,
+            },
+            "phase_guard": {
+                "gate_id": "stride-boundary-phase-guard-v2",
+                "low_conflict_pair_threshold": 2,
+                "low_conflict_no_progress_streak": 2,
+                "maximum_no_progress_streak": 5,
+                "minimum_remaining_wall_seconds": 5.0,
+            },
+        }
+        cases = (
+            (make_state(1), 2, 60.0, "low_conflict_no_progress"),
+            (make_state(2), 5, 60.0, "no_progress_streak"),
+            (make_state(2), 0, 4.0, "insufficient_remaining_wall_time"),
+        )
+        for state, no_progress, remaining, reason in cases:
+            with self.subTest(reason=reason):
+                candidates, metrics = generate_online_candidates(
+                    FakeProposalEnvironment(state),
+                    state,
+                    task_id="task-a",
+                    solver_seed=0,
+                    decision_index=0,
+                    proposal_config={
+                        "max_seed_agents": 1,
+                        "heuristics": ["target", "collision", "random"],
+                        "neighborhood_sizes": [4],
+                        "trials": 2,
+                        "candidates_per_family": 1,
+                        "topology_boundary": topology,
+                    },
+                    topology_static_grid=analyze_static_grid(state),
+                    topology_no_progress_streak=no_progress,
+                    topology_remaining_wall_seconds=remaining,
+                )
+                self.assertFalse(metrics["topology_boundary_gate_passed"])
+                self.assertEqual(metrics["topology_boundary_gate_reason"], reason)
+                self.assertEqual(metrics["topology_boundary_generated_count"], 0)
+                self.assertEqual(len(candidates), metrics["base_candidate_count"])
+
+        progressing = make_state(1)
+        candidates, metrics = generate_online_candidates(
+            FakeProposalEnvironment(progressing),
+            progressing,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": topology,
+            },
+            topology_static_grid=analyze_static_grid(progressing),
+            topology_no_progress_streak=0,
+            topology_remaining_wall_seconds=60.0,
+        )
+        self.assertTrue(metrics["topology_boundary_gate_passed"])
+        self.assertEqual(metrics["topology_boundary_generated_count"], 1)
+        self.assertGreater(len(candidates), metrics["base_candidate_count"])
+
     def test_topology_boundary_runtime_augmentation_rejects_protocol_drift(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported topology-boundary"):
             generate_online_candidates(
