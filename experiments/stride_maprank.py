@@ -23,6 +23,7 @@ TRAINING_REPORT_SCHEMA = "lns2.stride.maprank_training.v1"
 PREDICTION_SCHEMA = "lns2.stride.maprank_prediction.v1"
 STRATEGY_SCHEMA = "lns2.stride.maprank_strategy.v1"
 LABEL_REPORT_SCHEMA = "lns2.stride.maprank_label_build.v1"
+EVALUATION_CONFIG_SCHEMA = "lns2.stride.maprank_evaluation_config.v1"
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -240,6 +241,87 @@ def validate_maprank_training_config(config: dict[str, Any]) -> None:
         or bool(config.get("formal_speed_claim"))
     ):
         raise ValueError("STRIDE-MapRank evidence boundary changed")
+
+
+def validate_maprank_evaluation_config(config: dict[str, Any]) -> None:
+    if (
+        config.get("schema") != EVALUATION_CONFIG_SCHEMA
+        or config.get("scientific_status")
+        != "registered_before_maprank_training_outcomes"
+        or config.get("experiment_id") != "stride-maprank-evaluation-v1"
+        or config.get("controller_id") != CONTROLLER_ID
+        or bool(config.get("default_replacement_allowed"))
+        or bool(config.get("formal_speed_claim"))
+        or config.get("primary_metric") != "mean_raw_wall_time_to_feasible"
+        or config.get("ttf_clock_schema") != "lns2.ttf.reset_inclusive_wall.v1"
+        or config.get("stopping_rule") != "run-to-completion"
+        or config.get("scientific_time_limit_seconds") is not None
+        or config.get("environment_time_limit_seconds") is not None
+        or config.get("episode_process_timeout_seconds") is not None
+    ):
+        raise ValueError("STRIDE-MapRank evaluation identity or raw-TTF clock changed")
+    if list(config.get("controllers") or ()) != [
+        "v2-full",
+        "v2-augmented-pool",
+        CONTROLLER_ID,
+    ] or config.get("execution_order") != "strict_rotating_triplet_order":
+        raise ValueError("STRIDE-MapRank comparator design changed")
+    if int(config.get("workers", -1)) != 1 or config.get(
+        "deterministic_pp_replay_required"
+    ) is not True:
+        raise ValueError("STRIDE-MapRank paired execution changed")
+    if config.get("offline_gate_required") is not True:
+        raise ValueError("STRIDE-MapRank evaluation bypasses its offline gate")
+    augmentation = dict(config.get("topology_boundary_augmentation") or {})
+    if augmentation != {
+        "enabled": True,
+        "generator_id": "stride-topoboundary-v1",
+        "neighborhood_size": 16,
+        "core_budget": 4,
+        "maximum_added_candidates": 2,
+        "runtime_id": "stride-boundary-static-cache-v1",
+        "static_grid_cache": True,
+    }:
+        raise ValueError("STRIDE-MapRank candidate-pool comparator changed")
+    development = dict(config.get("high_load_development") or {})
+    if list(development.get("solver_seeds") or ()) != [1, 2, 3, 4] or [
+        str(row.get("id")) for row in development.get("cohorts") or ()
+    ] != ["maze300", "room500"]:
+        raise ValueError("STRIDE-MapRank high-load cohort changed")
+    if dict(development.get("gates") or {}) != {
+        "minimum_raw_ttf_improvement_vs_v2_full": 0.02,
+        "minimum_ranker_raw_ttf_improvement_vs_v2_augmented": 0.0,
+        "maximum_cohort_raw_ttf_regression": 0.10,
+        "repair_iterations_noninferior": True,
+        "success_count_noninferior": True,
+    }:
+        raise ValueError("STRIDE-MapRank high-load gates changed")
+    fresh = dict(config.get("fresh_map_raw_ttf") or {})
+    if list(fresh.get("solver_seeds") or ()) != [1, 2, 3] or [
+        str(row.get("id")) for row in fresh.get("cohorts") or ()
+    ] != ["maze200", "room400", "random500", "warehouse500", "den300", "lak500"]:
+        raise ValueError("STRIDE-MapRank fresh-map cohort changed")
+    if dict(fresh.get("gates") or {}) != {
+        "minimum_raw_ttf_improvement_vs_v2_full": 0.05,
+        "minimum_ranker_raw_ttf_improvement_vs_v2_augmented": 0.0,
+        "maximum_map_raw_ttf_regression": 0.10,
+        "minimum_paired_faster_fraction": 0.50,
+        "repair_iterations_noninferior": True,
+        "success_count_noninferior": True,
+    }:
+        raise ValueError("STRIDE-MapRank fresh-map gates changed")
+    if set(map(str, config.get("required_metrics") or ())) != {
+        "success_count",
+        "raw_wall_time_to_feasible",
+        "repair_iterations",
+        "normalized_wall_clock_conflict_auc",
+        "pp_replan_seconds",
+        "controller_seconds_before_repair",
+        "neighborhood_selection_seconds",
+        "invalid_action_count",
+        "fingerprint_mismatch_count",
+    }:
+        raise ValueError("STRIDE-MapRank required metrics changed")
 
 
 def _registered_path(project_root: Path, artifact: dict[str, Any]) -> Path:
@@ -511,5 +593,6 @@ __all__ = [
     "prepare_maprank_selection",
     "run_maprank_training",
     "validate_maprank_design",
+    "validate_maprank_evaluation_config",
     "validate_maprank_training_config",
 ]

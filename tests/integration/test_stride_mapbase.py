@@ -13,6 +13,7 @@ from experiments.stride_maprank import (
     build_maprank_labels,
     prepare_maprank_selection,
     validate_maprank_design,
+    validate_maprank_evaluation_config,
     validate_maprank_training_config,
 )
 
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "configs" / "stride_mapbase_collection.json"
 MAPRANK_DESIGN_PATH = ROOT / "configs" / "stride_maprank_design.json"
 MAPRANK_TRAINING_PATH = ROOT / "configs" / "stride_maprank_training.json"
+MAPRANK_EVALUATION_PATH = ROOT / "configs" / "stride_maprank_evaluation.json"
 
 
 def _config() -> dict:
@@ -148,3 +150,18 @@ def test_maprank_label_builder_rejects_unregistered_output(tmp_path: Path) -> No
         assert "label output differs from registration" in str(error)
     else:
         raise AssertionError("MapRank accepted an unregistered label output")
+
+
+def test_maprank_evaluation_is_uncapped_paired_and_preregistered() -> None:
+    config = json.loads(MAPRANK_EVALUATION_PATH.read_text(encoding="utf-8"))
+    validate_maprank_evaluation_config(config)
+    assert config["controllers"] == [
+        "v2-full",
+        "v2-augmented-pool",
+        "stride-maprank-v1",
+    ]
+    assert config["scientific_time_limit_seconds"] is None
+    assert config["environment_time_limit_seconds"] is None
+    assert config["episode_process_timeout_seconds"] is None
+    assert config["high_load_development"]["cohorts"][1]["id"] == "room500"
+    assert len(config["fresh_map_raw_ttf"]["cohorts"]) == 6

@@ -1927,3 +1927,18 @@ candidate, and the runtime/future-input exclusions before emitting a separate
 MapRank label report. The underlying conflict-only label formula and row schema
 remain unchanged, so the new name means expanded audited data rather than a
 post-hoc change to label meaning.
+
+The downstream evaluation is preregistered before MapRank training outcomes.
+It has no scientific, environment, or episode-process time limit and uses the
+reset-inclusive run-to-completion raw wall TTF clock. Every episode is run in a
+strict rotating triplet across frozen V2, V2 with the same augmented candidate
+pool, and MapRank, with deterministic PP replay and one worker. A legacy
+held-out execution Shadow is only a sanity layer. The registered high-load
+development layer uses the two maze-300 and two room-500 tasks with four seeds;
+the fresh-map layer uses six untouched maze, room, random, warehouse, den, and
+lak cohorts with three seeds. The ranker must beat the same-pool V2 comparator,
+not merely benefit from extra candidates, while success, repair iterations,
+per-cohort/map regressions, invalid actions, fingerprints, AUC, PP time, and
+selector overhead remain explicit gates or required metrics. Execution remains
+forbidden unless the offline gate passes. The evaluation config SHA-256 is
+`e6ef4a6ff50965b733a313141db22a356ec12511c0ce6154d341169ab0e61430`.
