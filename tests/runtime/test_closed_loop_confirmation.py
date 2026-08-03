@@ -989,6 +989,67 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(environment.calls, 12)
         self.assertEqual(state_fingerprint(environment.state), state_fingerprint(state))
 
+    def test_topology_boundary_runtime_augmentation_is_additive_and_capped(self) -> None:
+        state = make_state()
+        environment = FakeProposalEnvironment(state)
+        candidates, metrics = generate_online_candidates(
+            environment,
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config={
+                "max_seed_agents": 1,
+                "heuristics": ["target", "collision", "random"],
+                "neighborhood_sizes": [4],
+                "trials": 2,
+                "candidates_per_family": 1,
+                "topology_boundary": {
+                    "enabled": True,
+                    "generator_id": "stride-topoboundary-v1",
+                    "neighborhood_size": 16,
+                    "core_budget": 4,
+                    "maximum_added_candidates": 2,
+                },
+            },
+        )
+        self.assertTrue(metrics["topology_boundary_enabled"])
+        self.assertEqual(metrics["base_candidate_count"], 2)
+        self.assertEqual(metrics["topology_boundary_generated_count"], 1)
+        self.assertEqual(metrics["topology_boundary_added_candidate_count"], 1)
+        self.assertEqual(len(candidates), 3)
+        self.assertTrue(
+            any(
+                family.startswith("topology-boundary-")
+                for candidate in candidates
+                for family in candidate["selection_families"]
+            )
+        )
+
+    def test_topology_boundary_runtime_augmentation_rejects_protocol_drift(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported topology-boundary"):
+            generate_online_candidates(
+                FakeProposalEnvironment(make_state()),
+                make_state(),
+                task_id="task-a",
+                solver_seed=0,
+                decision_index=0,
+                proposal_config={
+                    "max_seed_agents": 1,
+                    "heuristics": ["target"],
+                    "neighborhood_sizes": [4],
+                    "trials": 1,
+                    "candidates_per_family": 1,
+                    "topology_boundary": {
+                        "enabled": True,
+                        "generator_id": "stride-topoboundary-v1",
+                        "neighborhood_size": 8,
+                        "core_budget": 4,
+                        "maximum_added_candidates": 2,
+                    },
+                },
+            )
+
     def test_proposal_full_check_allows_live_runtime_to_advance(self) -> None:
         state = make_state()
 

@@ -110,6 +110,7 @@ from lns2_selector.runtime.online_selection import (
     proposal_random_seeds,
     repair_random_seed,
     score_online_candidates,
+    validate_topology_boundary_augmentation,
 )
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 from lns2_selector.solver.native import load_native_module
@@ -269,6 +270,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/fingerprints.py",
     "lns2_selector/runtime/metrics.py",
     "lns2_selector/runtime/online_selection.py",
+    "lns2_selector/runtime/topology_candidates.py",
     "lns2_selector/runtime/portable_scalar.py",
     "lns2_selector/runtime/repair_outcomes.py",
     "lns2_selector/compatibility/controller_diagnostics.py",
@@ -1905,6 +1907,20 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             selected_families[str(family)] += 1
                     controller_totals["proposal_count"] += int(proposal_metrics["proposal_count"])
                     controller_totals["candidate_count"] += int(proposal_metrics["candidate_count"])
+                    controller_totals["base_candidate_count"] += int(
+                        proposal_metrics.get(
+                            "base_candidate_count", proposal_metrics["candidate_count"]
+                        )
+                    )
+                    controller_totals["topology_boundary_generated_count"] += int(
+                        proposal_metrics.get("topology_boundary_generated_count", 0)
+                    )
+                    controller_totals["topology_boundary_added_candidate_count"] += int(
+                        proposal_metrics.get("topology_boundary_added_candidate_count", 0)
+                    )
+                    controller_totals["topology_boundary_analysis_seconds"] += float(
+                        proposal_metrics.get("topology_boundary_analysis_seconds", 0.0)
+                    )
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
                     )
@@ -2723,6 +2739,7 @@ def run_closed_loop_collection(
     stopping_rule: str = "historical",
     qualification_source: str | Path | None = None,
     use_global_collection_lock: bool = True,
+    topology_boundary_augmentation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -2732,6 +2749,17 @@ def run_closed_loop_collection(
         raise ValueError("unsupported closed-loop config")
     if not isinstance(config.get("deterministic_pp_replay", False), bool):
         raise ValueError("deterministic_pp_replay must be boolean")
+    topology_boundary_augmentation = validate_topology_boundary_augmentation(
+        topology_boundary_augmentation
+    )
+    if topology_boundary_augmentation is not None:
+        config = {
+            **config,
+            "proposal": {
+                **dict(config["proposal"]),
+                "topology_boundary": topology_boundary_augmentation,
+            },
+        }
     config = _with_time_budget_overrides(
         config,
         wall_time_budget_seconds,
@@ -2750,6 +2778,8 @@ def run_closed_loop_collection(
     controller_mode, controller_root, controller_manifest = resolve_controller_mode(
         project_root, controller, controller_bundle
     )
+    if topology_boundary_augmentation is not None and controller_mode != "v2-full":
+        raise ValueError("topology-boundary augmentation requires frozen v2-full")
     diagnostic_shadow_roots: dict[str, Path] = {}
     diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}
     if diagnostic_shadow_bundles:
@@ -2943,7 +2973,12 @@ def run_closed_loop_collection(
         * int(config["proposal"]["trials"]),
         "maximum_candidates_per_decision": len(config["proposal"]["heuristics"])
         * len(config["proposal"]["neighborhood_sizes"])
-        * int(config["proposal"]["candidates_per_family"]),
+        * int(config["proposal"]["candidates_per_family"])
+        + int(
+            dict(config["proposal"].get("topology_boundary") or {}).get(
+                "maximum_added_candidates", 0
+            )
+        ),
         "workers": effective_workers,
         "controller": controller_mode,
         "feature_backend": feature_backend,

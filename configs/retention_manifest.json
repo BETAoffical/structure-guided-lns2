@@ -229,6 +229,11 @@
       "purpose": "Outcome-blind frozen-V2 base-versus-boundary-pool Shadow after the formal boundary confirmation failure."
     },
     {
+      "path": "experiments/stride_boundary_ttf_quick.py",
+      "role": "active",
+      "purpose": "Non-promoting paired capped-TTF Quick for frozen V2 with optional topology-boundary candidate augmentation."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -709,6 +714,11 @@
       "purpose": "CLI entry point for the non-promoting frozen-V2 topology-boundary Shadow."
     },
     {
+      "path": "scripts/run_stride_boundary_ttf_quick.py",
+      "role": "active",
+      "purpose": "CLI entry point for the exploratory paired boundary-candidate TTF Quick."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -947,6 +957,11 @@
       "path": "tests/integration/test_stride_topology_boundary_v2_shadow.py",
       "role": "active",
       "contract": "Exploratory-only status, outcome-blind selection order, frozen-V2 pool comparison, and Quick decision gates."
+    },
+    {
+      "path": "tests/integration/test_stride_boundary_ttf_quick.py",
+      "role": "active",
+      "contract": "Paired alternating schedule, capped-TTF primary metric, boundary activation accounting, and non-promotion gates."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

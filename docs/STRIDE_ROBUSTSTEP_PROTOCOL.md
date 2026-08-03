@@ -1080,6 +1080,32 @@ The registered next step is a small paired runtime Quick that retains both
 topology-relevant and low-articulation control tasks, uses capped wall TTF as
 the primary diagnostic, and cannot promote or replace V2.
 
+### Registered paired boundary-candidate TTF Quick
+
+`stride-boundary-ttf-quick-v1` keeps the same 18 Shadow states because it is a
+mechanism diagnostic, not independent confirmation. It compares frozen
+`v2-full` against the same frozen ranker with `stride-topoboundary-v1` enabled
+at every repair decision. The augmentation is additive, deterministic, size
+16/core 4, and capped at two candidates per decision. It is disabled by
+default, has a separate run fingerprint, and does not create a new production
+controller identity. Both routes use deterministic same-state PP replay.
+
+The 36 episodes use strict alternating pair order, one worker, a reset-inclusive
+60-second wall TTF budget, a 60-second native limit, and a 90-second process
+safety timeout. The cohort contains four low-articulation controls, eight
+articulated states, and six ultra-bottleneck states. Primary evidence is mean
+capped wall time to feasible under success noninferiority; the report also
+records common-success TTF, repair iterations, wall AUC, PP time, controller
+time, proposal/feature/inference time, boundary additions/selections, and each
+topology subgroup.
+
+Continuation requires at least 5% lower mean capped TTF, no loss of successes,
+non-worse mean repair iterations, no more than 10% capped-TTF regression in
+either topology-relevant group, no more than 20% regression in the control
+group, and at least one executed boundary repair. A pass only permits a larger
+map-disjoint development Quick. The frozen config SHA-256 is
+`66b2a6aa19bcb7ea7760993c37e13f378ee5d38952952e75aa507228f7ad8a5a`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

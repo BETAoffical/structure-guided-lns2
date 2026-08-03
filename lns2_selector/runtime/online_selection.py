@@ -23,9 +23,30 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.state_analysis import StaticGridAnalysis, analyze_state
+from lns2_selector.runtime.topology_candidates import (
+    generate_topology_boundary_candidates,
+    merge_topology_anchor_candidates,
+)
 
 
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
+
+
+def validate_topology_boundary_augmentation(
+    value: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    result = dict(value)
+    if result != {
+        "enabled": True,
+        "generator_id": "stride-topoboundary-v1",
+        "neighborhood_size": 16,
+        "core_budget": 4,
+        "maximum_added_candidates": 2,
+    }:
+        raise ValueError("unsupported topology-boundary runtime augmentation")
+    return result
 
 
 class ClosedLoopExecutionError(RuntimeError):
@@ -605,6 +626,31 @@ def generate_online_candidates(
         unique_neighborhood_count = len(
             {tuple(row["agents"]) for row in proposals}
         )
+    base_candidate_count = len(candidates)
+    topology_boundary_analysis_seconds = 0.0
+    topology_boundary_generated_count = 0
+    topology_boundary_added_candidate_count = 0
+    topology_boundary = validate_topology_boundary_augmentation(
+        proposal_config.get("topology_boundary")
+    )
+    if topology_boundary is not None:
+        topology_started = time.perf_counter()
+        analysis = analyze_state(state)
+        topology_candidates = generate_topology_boundary_candidates(
+            state,
+            analysis,
+            neighborhood_size=int(topology_boundary["neighborhood_size"]),
+            core_budget=int(topology_boundary["core_budget"]),
+        )
+        topology_boundary_analysis_seconds = time.perf_counter() - topology_started
+        maximum = int(topology_boundary["maximum_added_candidates"])
+        if len(topology_candidates) > maximum:
+            raise RuntimeError("topology-boundary runtime candidate cap exceeded")
+        topology_boundary_generated_count = len(topology_candidates)
+        candidates = merge_topology_anchor_candidates(candidates, topology_candidates)
+        topology_boundary_added_candidate_count = len(candidates) - base_candidate_count
+        if not 0 <= topology_boundary_added_candidate_count <= maximum:
+            raise RuntimeError("topology-boundary runtime merge changed the candidate cap")
     if not candidates:
         raise RuntimeError("online proposal stage produced no explicit candidates")
     candidate_postprocess_seconds = (
@@ -619,6 +665,11 @@ def generate_online_candidates(
         "proposal_count": proposal_count,
         "unique_neighborhood_count": unique_neighborhood_count,
         "candidate_count": len(candidates),
+        "base_candidate_count": base_candidate_count,
+        "topology_boundary_enabled": topology_boundary is not None,
+        "topology_boundary_generated_count": topology_boundary_generated_count,
+        "topology_boundary_added_candidate_count": topology_boundary_added_candidate_count,
+        "topology_boundary_analysis_seconds": topology_boundary_analysis_seconds,
         "seed_agents": list(seed_agents),
         "seed_agent_count": len(seed_agents),
         "seed_agents_overridden": seed_agents_override is not None,
@@ -651,4 +702,5 @@ __all__ = [
     "proposal_random_seeds",
     "repair_random_seed",
     "score_online_candidates",
+    "validate_topology_boundary_augmentation",
 ]
