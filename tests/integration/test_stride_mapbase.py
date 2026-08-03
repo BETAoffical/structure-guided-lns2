@@ -17,6 +17,7 @@ from experiments.stride_maprank import (
     validate_maprank_evaluation_config,
     validate_maprank_training_config,
 )
+from experiments.stride_maprank_evaluation import _training_evidence
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -191,3 +192,14 @@ def test_maprank_evaluation_is_uncapped_paired_and_preregistered() -> None:
         assert "high-load cohort changed" in str(error)
     else:
         raise AssertionError("MapRank accepted a post-hoc high-load task")
+
+
+def test_maprank_shadow_accepts_only_offline_gated_training_report() -> None:
+    config = json.loads(MAPRANK_EVALUATION_PATH.read_text(encoding="utf-8"))
+    report_path = ROOT / config["training_report"]
+    if not report_path.is_file():
+        return
+    path, report = _training_evidence(ROOT, config)
+    assert path == report_path.resolve()
+    assert report["controller_id"] == "stride-maprank-v1"
+    assert report["fresh_development_eligible"] is True
