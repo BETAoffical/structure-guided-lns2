@@ -116,6 +116,16 @@ def _event_counts(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _dataset_identity(row: dict[str, Any]) -> tuple[str, str]:
+    map_id = row.get("benchmark_id", row.get("map_id"))
+    layout_family = row.get("layout_family", row.get("layout_mode"))
+    if not isinstance(map_id, str) or not map_id:
+        raise ValueError("relevance dataset row lacks a map identity")
+    if not isinstance(layout_family, str) or not layout_family:
+        raise ValueError("relevance dataset row lacks a layout family")
+    return map_id, layout_family
+
+
 def _task_summaries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -231,6 +241,7 @@ def collect_guardrank_relevance(
         ):
             raise RuntimeError(f"qualified relevance state did not replay: {task_id}")
         counts = _event_counts(state)
+        map_id, layout_family = _dataset_identity(dataset_row)
         preserved = state_fingerprint(_plain(environment.get_state())) == fingerprint
         rows.append(
             {
@@ -238,8 +249,8 @@ def collect_guardrank_relevance(
                 "state_id": f"{task_id}::solver_seed_{int(qualification['solver_seed'])}",
                 "task_id": task_id,
                 "solver_seed": int(qualification["solver_seed"]),
-                "map_id": str(dataset_row["benchmark_id"]),
-                "layout_family": str(dataset_row["layout_family"]),
+                "map_id": map_id,
+                "layout_family": layout_family,
                 "agent_count": int(dataset_row["agent_count"]),
                 "initial_conflicts": int(qualification["initial_conflicts"]),
                 "state_fingerprint": fingerprint,

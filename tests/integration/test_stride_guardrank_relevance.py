@@ -5,6 +5,7 @@ from pathlib import Path
 
 from experiments._common import sha256_file
 from experiments.stride_guardrank_relevance import (
+    _dataset_identity,
     validate_guardrank_relevance_config,
 )
 
@@ -36,3 +37,9 @@ def test_guardrank_relevance_registered_inputs_match_when_available() -> None:
         path = ROOT / artifact["path"]
         if path.is_file():
             assert sha256_file(path) == artifact["sha256"]
+
+
+def test_guardrank_relevance_accepts_map_derived_manifest_identity() -> None:
+    assert _dataset_identity(
+        {"map_id": "den405d", "layout_mode": "dao_compact_mid_topology"}
+    ) == ("den405d", "dao_compact_mid_topology")
