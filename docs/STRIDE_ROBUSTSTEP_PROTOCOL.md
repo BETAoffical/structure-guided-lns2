@@ -916,6 +916,30 @@ unchanged from the consumed-state audit. Task overlap is fixed at zero and no
 quality outcome may be read. Only a pass permits registration of a four-seed
 immediate-quality Pilot on the subset with relevant topology events.
 
+### Completed fresh-task topology-boundary proposal audit
+
+The fresh audit passed every frozen gate and independently reproduced all three
+artifacts byte-for-byte. It covered 24 initial states and 455 candidates, with
+23 unique boundary additions. Six states had no relevant topology event and
+received no addition, leaving 18 eligible states for a later quality Pilot. No
+candidate repair or controller action was executed.
+
+Mean articulation and low-degree incident coverage were 0.9934 and 0.9926;
+their boundary ratios were 0.9314 and 0.8301. Ultra-bottleneck boundary ratios
+were 0.9744 and 0.9630. Relative to the outcome-free base frontier, global event
+incidence, global boundary ratio, and conflict-component reach improved by
+0.3514, 0.2539, and 0.4365. This confirms that the intended proposal shape
+transfers to fresh OD tasks on the same maps; repair quality and TTF remain
+unmeasured.
+
+The report, state-row, and candidate-row SHA-256 values are
+`a8b856c2be07e930866572c41f2dd4aa4f75cc2e15b18d719fe5e127f634bd18`,
+`d1238c0508018905bd1fe7a57ca7813bb92490ce2b560f61f438d5b8ad3004d7`,
+and `f0e5075663c43072e757a2f7a19831fa94471bb57b6fc5e5bfb19bbc34d6857a`.
+The next permitted step is a separately frozen, paired four-PP-seed immediate-
+quality Pilot over the 18 relevant fresh states. It still cannot train a model,
+replace V2, or claim lower TTF.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
