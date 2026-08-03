@@ -1768,3 +1768,33 @@ and speed claims are all forbidden. A pass only authorizes registration of a
 separate multi-PP-seed repair collection; a failure forbids collecting new
 repair labels from this pool. The registered config SHA-256 is
 `edcdaa2b59ae8fa93a410df7aa2b77df9f0db0d7ab6c67c001542ad3348b250f`.
+
+### Failed fresh-map GuardRank candidate coverage
+
+The proposal-only audit replayed all 32 selected states without errors. State
+fingerprints, solver-seed pairing, requested sizes, repeated proposal
+determinism, and the 12--20 candidate cap all passed. It produced 586 total
+candidates, of which only 13 were new topology-boundary candidates.
+
+The registered pool failed three gates. Only 8 states contained articulation
+events and only 7 contained low-degree events, below the registered 16-state
+low-degree minimum. The low-topology controls contained zero relevant topology
+events and therefore failed their registered low-degree relevance requirement.
+Finally, the boundary candidates improved global event incidence by 0.3640 and
+conflict-component reach by 0.2495, but reduced global boundary ratio by
+0.1240 relative to the best base frontier, failing the non-negative delta gate.
+Their conditional incident coverage remained high (articulation 0.9384,
+low-degree 1.0000), as did their conditional boundary ratios (0.7043 and
+0.8571). Thus the failure is primarily sparse applicability plus excess
+internal closure relative to the base frontier, not nondeterminism or state
+corruption.
+
+No repair trials or labels are authorized from this failed 32-state pool. The
+next safe diagnostic is an input-only topology-relevance scan over all 96
+already qualified reset states. It must determine whether coverage was lost by
+the conflict-target task selection or is intrinsically absent on these maps;
+low-topology controls must be evaluated as abstention controls if they remain
+event-free. The report, state-row, and candidate-row SHA-256 values are
+`9db4231f230999a592a457c127d861c7e707c5ff65cccc8a4255512ba79149c6`,
+`b111e2ac7ebeb2cad994b8415143de0770b97f1da43da6586545df558e756d60`,
+and `1f7fd000acde801a524518ce60f7a0a61a5100d810e493ad36343108a0eadd75`.
