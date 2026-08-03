@@ -346,6 +346,43 @@ uncertainty. A new learned successor requires a separately registered design
 and new confirmation data; the reserved nine-map training expansion is not
 opened by this failed result.
 
+### Completed frozen-V2 headroom diagnostic
+
+The post-hoc headroom audit evaluated the frozen `v2-full` action against the
+plain-mean, 16-seed immediate-quality Oracle on the same 48 fresh-confirmation
+states. It is diagnostic evidence only: it does not train a model, open the
+reserved maps, authorize a controller replacement, or make a TTF claim. All
+48 states, 854 candidates, 13,664 outcomes, frozen candidate identities, and
+124-dimensional feature rows passed the registered integrity checks.
+
+The two independent eight-seed halves selected the exact same Oracle winner
+in 34/48 states (70.83 percent). Even within these 34 stable-winner states,
+frozen V2 selected the Oracle winner in only 35.29 percent of states and lay
+in the Oracle Top-3 in 47.06 percent. Its mean normalized regret was 0.3789,
+and 22/34 states (64.71 percent) exceeded the preregistered 0.10 meaningful-
+headroom threshold. Therefore the result is not explained solely by PP-seed
+winner instability: a repeatable immediate-quality gap remains after unstable
+states are removed.
+
+Across all 48 states, V2 exact-best accuracy was 33.33 percent, V2-in-Oracle-
+Top-3 was 50.00 percent, mean normalized regret was 0.3469, and meaningful
+headroom occurred in 62.50 percent. The medium-conflict subgroup showed the
+largest gap: 17.65 percent exact-best, 0.4122 regret, and 82.35 percent
+meaningful headroom. High-conflict regret was 0.3970; low-conflict regret was
+lower at 0.2193. Source-policy results were effectively identical, so the
+diagnosis is not confined to states collected from either Adaptive or V2
+trajectories.
+
+The registered diagnosis is
+`frozen_v2_has_stable_model_or_representation_headroom`. This does not yet say
+whether the old V2 ranker/label is mismatched or whether the existing 124
+features are insufficient. The next safe step is a grouped, out-of-sample
+feature-sufficiency probe: candidate rows from the same state must never cross
+train/test boundaries, map-held-out results must be reported separately, and
+the frozen V2 remains the only runtime controller. The headroom report
+SHA-256 is
+`75b0748d68841bc508a628dfbf7124a540fd7b2d6dc5b78e9d7fc0eeaf5a3165`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
