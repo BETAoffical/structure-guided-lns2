@@ -78,7 +78,11 @@ def run_maprank_shadow(
     shadow = dict(config["legacy_shadow"])
     dataset = _project_path(root, str(shadow["dataset"]))
     runtime = _project_path(root, str(shadow["runtime_config"]))
-    qualification = _project_path(root, str(shadow["qualification_source"]))
+    historical_qualification = _project_path(
+        root, str(shadow["qualification_source"])
+    )
+    if not (historical_qualification / "qualification_report.json").is_file():
+        raise ValueError("MapRank historical qualification reference is incomplete")
     rows = _dataset_tasks(dataset, "balanced_wall_clock")
     maps = set(map(str, shadow["validation_maps"]))
     task_ids = sorted(
@@ -92,24 +96,40 @@ def run_maprank_shadow(
         for seed in map(int, shadow["solver_seeds"])
     }
     output = Path(output).resolve()
+    collection_kwargs = {
+        "workers": 1,
+        "cohort_job_keys": keys,
+        "job_keys": keys,
+        # The registered reference used a wall-clock reset protocol.  The
+        # run-to-completion Shadow must qualify the same keys afresh instead
+        # of bypassing the reset-protocol fingerprint check.
+        "qualification_source": None,
+        "controller": "v2-full",
+        "controller_bundle": str(bundles["v2-full"]),
+        "diagnostic_shadow_bundles": {CONTROLLER_ID: bundles[CONTROLLER_ID]},
+        "feature_backend": "native",
+        "controller_runtime": "optimized",
+        "verification_profile": "deployment",
+        "topology_boundary_augmentation": dict(
+            config["topology_boundary_augmentation"]
+        ),
+        "stopping_rule": "run-to-completion",
+    }
+    run_closed_loop_collection(
+        dataset,
+        runtime,
+        output,
+        phase="qualify",
+        resume=resume,
+        **collection_kwargs,
+    )
     run_closed_loop_collection(
         dataset,
         runtime,
         output,
         phase="realized_dynamic",
-        workers=1,
-        resume=resume,
-        cohort_job_keys=keys,
-        job_keys=keys,
-        qualification_source=qualification,
-        controller="v2-full",
-        controller_bundle=str(bundles["v2-full"]),
-        diagnostic_shadow_bundles={CONTROLLER_ID: bundles[CONTROLLER_ID]},
-        feature_backend="native",
-        controller_runtime="optimized",
-        verification_profile="deployment",
-        topology_boundary_augmentation=dict(config["topology_boundary_augmentation"]),
-        stopping_rule="run-to-completion",
+        resume=True,
+        **collection_kwargs,
     )
     return analyze_maprank_shadow(path, output, training_path=training_path)
 
@@ -125,6 +145,8 @@ def analyze_maprank_shadow(
         training_path, _ = _training_evidence(root, config)
     output = Path(output).resolve()
     manifest = output / "realized_dynamic_manifest.jsonl"
+    qualification_path = output / "qualification_report.json"
+    qualification = _read_json(qualification_path)
     rows = _read_jsonl(manifest)
     expected = 12 * len(config["legacy_shadow"]["solver_seeds"])
     totals = [
@@ -137,6 +159,7 @@ def analyze_maprank_shadow(
     disagreement_count = sum(int(row.get(disagreements, 0)) for row in totals)
     gates = {
         "complete_episode_coverage": len(rows) == expected,
+        "fresh_qualification_passed": qualification.get("passed") is True,
         "zero_execution_errors": all(row.get("status") == "ok" for row in rows),
         "minimum_shadow_decisions": decisions
         >= int(config["legacy_shadow"]["minimum_decisions"]),
@@ -175,6 +198,7 @@ def analyze_maprank_shadow(
         "inputs": {
             "config_sha256": sha256_file(path),
             "training_report_sha256": sha256_file(training_path),
+            "qualification_report_sha256": sha256_file(qualification_path),
             "manifest_sha256": sha256_file(manifest),
         },
     }
