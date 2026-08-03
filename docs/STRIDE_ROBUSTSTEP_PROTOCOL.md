@@ -1106,6 +1106,37 @@ group, and at least one executed boundary repair. A pass only permits a larger
 map-disjoint development Quick. The frozen config SHA-256 is
 `66b2a6aa19bcb7ea7760993c37e13f378ee5d38952952e75aa507228f7ad8a5a`.
 
+### Completed paired boundary-candidate TTF Quick
+
+All 36 paired episodes completed with zero execution errors, invalid actions,
+semantic mismatches, initial-state mismatches, or fingerprint mismatches. The
+boundary route executed 234 boundary-selected repairs and reduced mean repair
+iterations from 49.72 to 35.28 (29.05%). It did not convert that action-quality
+gain into the preregistered primary runtime result: successes decreased from
+17/18 to 16/18, and mean capped wall TTF increased from 13.21 to 15.06 seconds
+(14.01% regression). On the 15 common-success episodes, mean TTF changed from
+6.43 to 6.30 seconds, which is only a 2.06% improvement and does not repair the
+success loss.
+
+The failure mechanism is visible in the timing split. Mean PP replan time was
+essentially unchanged (2.62 versus 2.63 seconds), while boundary analysis added
+4.22 seconds per episode and increased total controller time from 7.30 to 9.40
+seconds. Ultra-bottleneck tasks improved capped TTF by 10.58%, articulated
+tasks were effectively flat with a 0.41% regression, and the low-articulation
+control group regressed by 23.74% while losing one success. Thus the repair-
+iteration, topology-group, and activation gates passed, but the primary TTF,
+success-noninferiority, and control-safeguard gates failed.
+
+This exploratory same-cohort Quick is retained as a negative runtime result.
+It does not warrant a larger development Quick, training, V2 replacement, or a
+speed claim; `v2-full` remains the default and this boundary runtime route is
+stopped. The controller-manifest SHA-256 values are
+`801c3d42c4e8957bc6fd884f0ad7523dc8f10170ff044fb31b97bd9695e96189`
+for V2 and
+`7db6ee30d4cdbcb0c6029403b12c18180282e5383525d1c88b81e118c34506dc`
+for the boundary route. The report SHA-256 is
+`013e7f6d9911aff904db167fa7f9b32c31f57b3a090fcce93da937531e753aeb`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
