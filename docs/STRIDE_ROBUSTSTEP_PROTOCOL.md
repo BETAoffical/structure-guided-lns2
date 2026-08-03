@@ -1137,6 +1137,29 @@ for V2 and
 for the boundary route. The report SHA-256 is
 `013e7f6d9911aff904db167fa7f9b32c31f57b3a090fcce93da937531e753aeb`.
 
+### Boundary runtime profiling and action-preserving static reuse
+
+The stopped runtime result motivated a non-promoting implementation diagnostic,
+not a relaxation of its gates. Per-decision timing now separates static-grid
+analysis, dynamic path/conflict reconstruction, boundary-candidate construction,
+and candidate merging while preserving the original aggregate timer. On the two
+`lak515d` 900-agent failures, an unchanged legacy rerun spent 21.14 and 22.09
+seconds in boundary analysis. Static-grid work accounted for only 3.45 and 2.64
+seconds; dynamic reconstruction accounted for 16.40 and 14.24 seconds, candidate
+construction for 1.28 and 5.20 seconds, and merging for less than 0.01 seconds.
+
+`stride-boundary-static-cache-v1` is an explicit opt-in runtime revision. It
+reuses the already validated per-episode `StaticGridAnalysis`; the historical
+`stride-topoboundary-v1` configuration retains its original uncached behavior.
+Across the two diagnostic episodes the cache hit on every decision and reduced
+per-round controller cost by approximately 6.7% and 10.2%. It did not solve
+either episode within 60 seconds. Every state fingerprint, selected candidate,
+repair action, and post-repair conflict value matched the uncached execution for
+the entire common trace prefix (126 and 95 repairs). Thus static reuse is safe
+and useful but insufficient; the next permitted diagnostic is a cheap pre-
+analysis activation gate followed by low-conflict/stall fallback. No model,
+label, default controller, promotion result, or formal TTF claim changes.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

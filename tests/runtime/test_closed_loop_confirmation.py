@@ -51,7 +51,7 @@ from experiments.closed_loop_confirmation_analysis import (
 )
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
 from experiments.neighborhood_features import _feature_profiles
-from experiments.state_analysis import analyze_state
+from experiments.state_analysis import analyze_state, analyze_static_grid
 from experiments.repair_collection import state_fingerprint
 
 
@@ -1017,6 +1017,18 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(metrics["base_candidate_count"], 2)
         self.assertEqual(metrics["topology_boundary_generated_count"], 1)
         self.assertEqual(metrics["topology_boundary_added_candidate_count"], 1)
+        self.assertFalse(metrics["topology_boundary_static_cache_hit"])
+        self.assertGreaterEqual(metrics["topology_boundary_static_seconds"], 0.0)
+        self.assertGreaterEqual(metrics["topology_boundary_dynamic_seconds"], 0.0)
+        self.assertGreaterEqual(metrics["topology_boundary_candidate_seconds"], 0.0)
+        self.assertGreaterEqual(metrics["topology_boundary_merge_seconds"], 0.0)
+        self.assertGreaterEqual(
+            metrics["topology_boundary_analysis_seconds"],
+            metrics["topology_boundary_static_seconds"]
+            + metrics["topology_boundary_dynamic_seconds"]
+            + metrics["topology_boundary_candidate_seconds"]
+            + metrics["topology_boundary_merge_seconds"],
+        )
         self.assertEqual(len(candidates), 3)
         self.assertTrue(
             any(
@@ -1025,6 +1037,45 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 for family in candidate["selection_families"]
             )
         )
+
+    def test_topology_boundary_static_cache_preserves_candidates(self) -> None:
+        state = make_state()
+        config = {
+            "max_seed_agents": 1,
+            "heuristics": ["target", "collision", "random"],
+            "neighborhood_sizes": [4],
+            "trials": 2,
+            "candidates_per_family": 1,
+            "topology_boundary": {
+                "enabled": True,
+                "generator_id": "stride-topoboundary-v1",
+                "neighborhood_size": 16,
+                "core_budget": 4,
+                "maximum_added_candidates": 2,
+                "runtime_id": "stride-boundary-static-cache-v1",
+                "static_grid_cache": True,
+            },
+        }
+        uncached, uncached_metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config=config,
+        )
+        cached, cached_metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config=config,
+            topology_static_grid=analyze_static_grid(state),
+        )
+        self.assertEqual(cached, uncached)
+        self.assertFalse(uncached_metrics["topology_boundary_static_cache_hit"])
+        self.assertTrue(cached_metrics["topology_boundary_static_cache_hit"])
 
     def test_topology_boundary_runtime_augmentation_rejects_protocol_drift(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported topology-boundary"):

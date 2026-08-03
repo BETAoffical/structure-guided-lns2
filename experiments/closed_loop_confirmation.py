@@ -1299,6 +1299,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 job.get("proposal_shadow_validation", False)
                                 and optimized_runtime_available
                             ),
+                            topology_static_grid=(
+                                feature_engine.static_grid
+                                if feature_engine is not None
+                                and dict(
+                                    effective_proposal.get("topology_boundary") or {}
+                                ).get("static_grid_cache")
+                                is True
+                                else None
+                            ),
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
                         if controller_mode == "official_adaptive":
@@ -1920,6 +1929,24 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                     controller_totals["topology_boundary_analysis_seconds"] += float(
                         proposal_metrics.get("topology_boundary_analysis_seconds", 0.0)
+                    )
+                    for topology_metric in (
+                        "topology_boundary_static_seconds",
+                        "topology_boundary_dynamic_seconds",
+                        "topology_boundary_candidate_seconds",
+                        "topology_boundary_merge_seconds",
+                    ):
+                        controller_totals[topology_metric] += float(
+                            proposal_metrics.get(topology_metric, 0.0)
+                        )
+                    controller_totals[
+                        "topology_boundary_static_cache_hit_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "topology_boundary_static_cache_hit", False
+                            )
+                        )
                     )
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
