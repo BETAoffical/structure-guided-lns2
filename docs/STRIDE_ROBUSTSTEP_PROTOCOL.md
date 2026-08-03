@@ -512,6 +512,36 @@ regret than V2. Passing permits only a new fresh-map confirmation design;
 failure keeps V2 and moves to candidate-relative topology/interaction feature
 design. Neither outcome can promote a controller from this consumed cohort.
 
+### Completed nested current-step confidence gate
+
+All state, candidate, outcome, fold-partition, frozen-action reproduction, and
+outer-challenger reproduction integrity gates passed. Nevertheless the nested
+gate failed. For five outer maps, no threshold passed the inner safety gates,
+so those folds correctly abstained to V2 everywhere. When `ost102d` was the
+outer test map, thresholds 0.65--0.90 all looked safe on the other five maps;
+the registered lowest-safe rule selected 0.65.
+
+That `ost102d` fold made exactly one switch. It occurred on stable-winner state
+`stride-111baa94c49bfabe8b9eaaa0` with predicted challenger-over-V2 probability
+0.9222. Frozen V2 had zero normalized regret on the state, while the challenger
+had 0.7047 regret. Thus even a post-hoc increase to the largest registered
+0.90 threshold would not have prevented the error, and threshold retuning on
+this outer test map is prohibited.
+
+Across all 48 states, the one switch worsened overall normalized regret by
+0.0147 and stable-state regret by 0.0207. Stable Top-3 decreased by 0.0294,
+no map improved, `ost102d` degraded by 0.0881, and switch precision was zero.
+Only the stable-state-count gate passed. The registered diagnosis is
+`nested_confidence_gate_does_not_control_consumed_map_regression`.
+
+This result rejects confidence-only abstention with the current representation:
+the pairwise probability can be highly confident and wrong on an unseen map.
+No step gate or challenger model is exported, and frozen V2 remains active.
+The next step is candidate-relative topology/conflict-interaction feature
+design, followed by a small map-grouped diagnostic before any larger label
+collection. The deterministic report SHA-256 is
+`225bf2af658022b978f78f1ceb765db179aa3d0ed007343f6903bc976982a8f6`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
