@@ -59,3 +59,44 @@ python3 scripts/run_stride_stage4r_pp_replay.py dry-run
 python3 scripts/run_stride_stage4r_pp_replay.py run
 python3 scripts/run_stride_stage4r_pp_replay.py analyze
 ```
+
+## Completed result
+
+The replay completed all 16 states and 512 registered repairs with zero
+artifact errors. All six integrity gates passed: complete state/trial coverage,
+strictly paired PP seeds, exact same-action outcome equality, at least four
+different-action states, and zero recorded errors. The ten identical-action
+states behaved as the intended determinism control.
+
+PP randomness is material under the pre-registered rule. Among the six states
+where V2 and quality selected different neighborhoods, five changed winner
+across PP seeds (`83.3333%`). Mean non-tie winner stability was `0.6957`, just
+below the registered `0.70` threshold. Quality was robustly preferred in three
+states, V2 in zero, and three were inconclusive. Therefore a single PP rollout
+is not a reliable action label even though the quality selector produced the
+stronger robust preferences in this small cohort.
+
+Across all 256 trials per action, including the ten same-action controls:
+
+| Action | Mean conflict reduction | No-progress rate | Replan failures | Mean PP replan (s) |
+| --- | ---: | ---: | ---: | ---: |
+| `v2-full` | 11.1523 | 0.1367 | 28 | 0.5885 |
+| `stride-quality-v1` | 13.1445 | 0.0781 | 14 | 0.5637 |
+
+These values describe one repaired step from fixed recorded states. They do
+not establish lower end-to-end TTF, formal OOD generalization, or controller
+promotion. The registered decision is
+`retain_multiseed_label_and_model_action_uncertainty`: future labels must
+aggregate multiple paired PP seeds and retain uncertainty or a robust margin,
+then be tested again in paired end-to-end TTF evaluation.
+
+Reproducibility:
+
+- Config SHA-256:
+  `db9f0f4c09056fbeeedc0f65dfd88692d6d588690c0bf3e984a837691cc00053`
+- Selection SHA-256:
+  `f6fa72a0e08cf232621a57f7c35e8aca23fe02bd1c95f83fb78017a40d23711c`
+- Artifact manifest SHA-256:
+  `a87b09eca382b0b89e8a7e6643cf380387352616ee1b6f9d89a74c763a43b015`
+- Replay report SHA-256:
+  `2a31ec49f093e342c2787ce959e7424e11833d87a0a0210f310cea0a0b56bd81`

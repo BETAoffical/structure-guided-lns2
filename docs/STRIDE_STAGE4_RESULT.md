@@ -241,3 +241,35 @@ selected after reading Quick-v2 outcomes.
   `7bf441ebe234cc8df6ad25cb672eab868b237c46d8d306acb5ab9f4492256dde`,
   `831d7a0fac2f8b8faf5dfbea12fc34bbd9d3fc163781229bbaa552c32ee8b8ff`,
   and `590cc3ea40ee98e17307980ec56eb52e76621fcae87d9a3e6ffaad01594c5122`.
+
+## Stage 4R same-state paired PP replay result
+
+The registered follow-up fixed each incoming path state and repaired the V2
+and quality first-step neighborhoods under the same 16 PP seeds. It completed
+16 states and 512 trials with zero errors; all state/trial coverage, paired-seed,
+same-action determinism, and artifact-integrity gates passed. Ten states were
+same-action controls and six states contained genuinely different actions.
+
+Five of the six different-action states changed winner across PP seeds
+(`83.3333%`), while mean winner stability was `0.6957`. Both trigger the
+registered conclusion that PP randomness is material. Quality was robustly
+better in 3/6 states, V2 in 0/6, and 3/6 were inconclusive. Across all trials,
+quality reduced `13.1445` conflicts on average versus `11.1523` for V2 and had
+a lower no-progress rate (`0.0781` versus `0.1367`). This supports the quality
+direction at the current step, but it does not overturn the adverse end-to-end
+TTF result: the cohort is small and outcome-informed, and half of the differing
+states still lack a robust winner.
+
+The next registered decision is
+`retain_multiseed_label_and_model_action_uncertainty`. A successor label must
+aggregate multiple paired PP seeds and expose uncertainty or a robust action
+margin; it must then pass paired end-to-end TTF evaluation before promotion.
+
+- PP replay config SHA-256:
+  `db9f0f4c09056fbeeedc0f65dfd88692d6d588690c0bf3e984a837691cc00053`
+- PP replay selection SHA-256:
+  `f6fa72a0e08cf232621a57f7c35e8aca23fe02bd1c95f83fb78017a40d23711c`
+- PP replay artifact manifest SHA-256:
+  `a87b09eca382b0b89e8a7e6643cf380387352616ee1b6f9d89a74c763a43b015`
+- PP replay report SHA-256:
+  `2a31ec49f093e342c2787ce959e7424e11833d87a0a0210f310cea0a0b56bd81`
