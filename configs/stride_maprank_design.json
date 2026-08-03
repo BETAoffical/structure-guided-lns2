@@ -1,0 +1,100 @@
+{
+  "schema": "lns2.stride.maprank_design.v1",
+  "scientific_status": "registered_before_mapbase_collection_summary_and_label_analysis",
+  "design_id": "stride-maprank-design-v1",
+  "controller_id": "stride-maprank-v1",
+  "label_artifact_id": "stride-maprank-labels-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "source_collections": [
+    {
+      "id": "stride-repairability-collection-v2",
+      "trials": "build/stride-repairability-collection-v2/repair_trials.jsonl",
+      "audit": "build/stride-repairability-collection-audit-v1/repairability_audit_report.json",
+      "expected_state_count": 240
+    },
+    {
+      "id": "stride-mapbase-v1",
+      "trials": "build/stride-mapbase-collection-v1/repair_trials.jsonl",
+      "audit": "build/stride-mapbase-audit-v1/mapbase_audit_report.json",
+      "expected_state_count": 63
+    }
+  ],
+  "expected_data_coverage": {
+    "state_count": 303,
+    "train_state_count": 237,
+    "legacy_validation_state_count": 66,
+    "train_map_count": 24,
+    "legacy_validation_map_count": 6,
+    "map_level_split_required": true,
+    "new_mapbase_maps_are_train_only": true
+  },
+  "label_design": {
+    "schema": "lns2.stride.repairability_conflict_only_ablation.v1",
+    "meaning": "current_step_conflict_reduction_normalized_by_before_conflicts",
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_pp_seeds_within_state_and_trial_index": true,
+    "minimum_paired_win_fraction": 0.75,
+    "minimum_absolute_mean_effect": 0.02,
+    "require_both_half_mean_directions": true,
+    "sample_weighting": "equal_total_weight_per_state",
+    "runtime_used_in_label": false,
+    "future_trajectory_used_in_label": false
+  },
+  "candidate_design": {
+    "base_families": ["target", "collision", "random"],
+    "base_sizes": [4, 8, 16],
+    "topology_boundary_runtime_status": "optional_abstaining_augmentation",
+    "mapbase_training_rows": "base_only_after_fresh_map_boundary_coverage_failure",
+    "frozen_v2_anchor": "artifacts/initlns-closed-loop-controller-v2"
+  },
+  "ranking_design": {
+    "architecture": "frozen_v2_anchor_plus_conflict_only_challenger",
+    "feature_schema": "lns2.realized_features.v2",
+    "base_feature_dimension": 124,
+    "pair_representation": "candidate_feature_delta",
+    "model_class": "sklearn.ensemble.HistGradientBoostingClassifier",
+    "model_parameters": {
+      "early_stopping": false,
+      "l2_regularization": 0.1,
+      "learning_rate": 0.05,
+      "max_iter": 100,
+      "max_leaf_nodes": 15,
+      "min_samples_leaf": 20,
+      "random_state": 20260804
+    },
+    "outer_train_map_folds": 4,
+    "inner_train_map_folds": 3,
+    "threshold_grid": [0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "threshold_kinds": ["base", "boundary_only"],
+    "legacy_validation_is_descriptive_only": true,
+    "fresh_development_validation_required": true
+  },
+  "offline_gates": {
+    "minimum_relative_normalized_regret_improvement_over_frozen_v2": 0.05,
+    "absolute_normalized_regret_improvement_alternative": 0.02,
+    "top3_hit_rate_noninferiority_tolerance": 0.01,
+    "exact_best_rate_noninferiority_tolerance": 0.01,
+    "maximum_topology_group_normalized_regret_degradation": 0.03,
+    "minimum_pairwise_accuracy_gain_over_weighted_majority": 0.03
+  },
+  "evaluation_order": [
+    "nested_train_map_oof",
+    "legacy_validation_descriptive",
+    "fresh_map_shadow",
+    "paired_high_load_raw_ttf",
+    "paired_fresh_map_raw_ttf"
+  ],
+  "runtime_primary_metric": "mean_raw_run_to_completion_wall_ttf",
+  "forbidden_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome",
+    "validation_labels_for_threshold_calibration",
+    "test_data",
+    "formal_ood_data"
+  ]
+}

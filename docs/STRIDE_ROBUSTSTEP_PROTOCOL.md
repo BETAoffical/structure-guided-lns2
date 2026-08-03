@@ -1871,3 +1871,29 @@ feature names, consolidated JSONL equality, training split, zero errors, and
 artifact SHA-256. This remains training data and makes no TTF claim. The config
 SHA-256 is
 `abc0495fb7e0530a731116d2bf5e0c8d9dcbe76700e040907550ebe535d6c4fb`.
+
+### Registered STRIDE-MapRank v1 successor design
+
+Before inspecting the STRIDE-MapBase collection summary or constructing its
+labels, `stride-maprank-design-v1` freezes the separately named successor.
+The combined label artifact will be `stride-maprank-labels-v1`, and the model
+and controller identity will be `stride-maprank-v1`; neither overwrites frozen
+V2, STRIDE-Quality, AugControl, or GuardRank artifacts.
+
+The design expects 240 audited earlier states plus 63 audited MapBase states:
+237 training states over 24 maps and 66 legacy-validation states over six
+maps. The new eight maps are training-only. The primary label remains the
+current-step conflict reduction normalized by conflicts before repair, using
+16 paired PP seeds, a 75% paired-win requirement, a 0.02 minimum absolute
+effect, consistent direction in both seed halves, and equal total weight per
+state. Runtime, TTF, future repair rounds, Cost-to-Go, Receding-Q, controller
+outcomes, test data, and formal-OOD data remain forbidden label inputs.
+
+The ranker is a frozen-V2 anchor plus a 124-feature conflict-only challenger.
+Calibration remains nested and train-map-only (four outer folds, three inner
+folds); the six old validation maps are descriptive and cannot tune the
+threshold. The existing offline gates are not relaxed. Only a passing offline
+result can proceed through fresh-map Shadow, paired high-load raw TTF, and
+paired fresh-map raw run-to-completion TTF. This registration is a design
+boundary, not a performance or speed claim. The frozen design SHA-256 is
+`473bcab80cbebeab58297933d8a435f1384fc19cc2bfaaf09adce6ea061b6227`.
