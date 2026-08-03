@@ -890,6 +890,32 @@ are comparable while OD tasks are fresh. It is explicitly not cross-map
 generalization evidence; a successful quality Pilot must still pass later
 held-out-map Stage 5/OOD evaluation.
 
+### Completed topology-boundary fresh-task preflight
+
+Qualification completed all 96 solver-seed resets over 48 new tasks with zero
+errors and zero timeouts. The new and consumed task-ID sets have zero overlap.
+The outcome-blind preflight passed every registered gate, found no forbidden
+outcome field, read no controller outcome, represented all six maps and three
+topology groups, and selected exactly two tasks per map (12 tasks, 24 initial
+states). None of the six maps was underloaded under the registered rule.
+
+The preflight report, qualification manifest, qualification report, and dataset
+manifest SHA-256 values are
+`eb8e36020c413b1c514c5a8b74bf7dfa6728259088f85cad46ac6a80bc0159e3`,
+`76ea8a63a0e3ed4c8a7933603b38463ebce1b29fb46296914d23beb63a20106b`,
+`8055a6a78581597736a6a707f0ace01e8db4dcd8e36858926e09b2fa2bea623e`,
+and `df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca`.
+
+### Registered fresh-task topology-boundary proposal audit
+
+The 12 selected tasks and both solver seeds now form a separately pinned
+24-state proposal-only cohort. `stride-topoboundary-v1`, its size-16/core-4
+construction, two-addition and 20-total-candidate caps, and every incident,
+boundary, global-reach, group, determinism, and state-preservation gate remain
+unchanged from the consumed-state audit. Task overlap is fixed at zero and no
+quality outcome may be read. Only a pass permits registration of a four-seed
+immediate-quality Pilot on the subset with relevant topology events.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

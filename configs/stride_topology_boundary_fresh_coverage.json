@@ -1,0 +1,110 @@
+{
+  "schema": "lns2.stride.topology_boundary_fresh_coverage_config.v1",
+  "scientific_status": "proposal_only_development_diagnostic",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "candidate_repair_trials_allowed": false,
+  "controller_actions_allowed": false,
+  "controller_outcomes_allowed": false,
+  "diagnostic_id": "stride-topoboundary-fresh-coverage-v1",
+  "candidate_generator_id": "stride-topoboundary-v1",
+  "predecessor_id": "stride-topoboundary-fresh-preflight-v1",
+  "dataset_root": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+  "qualification_root": "build/stride-topoboundary-fresh-preflight-qualification-v1",
+  "inputs": {
+    "preflight_report": {
+      "path": "build/stride-topoboundary-fresh-preflight-analysis-v1/robuststep_map_preflight_report.json",
+      "sha256": "eb8e36020c413b1c514c5a8b74bf7dfa6728259088f85cad46ac6a80bc0159e3"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "76ea8a63a0e3ed4c8a7933603b38463ebce1b29fb46296914d23beb63a20106b"
+    },
+    "qualification_report": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_report.json",
+      "sha256": "8055a6a78581597736a6a707f0ace01e8db4dcd8e36858926e09b2fa2bea623e"
+    },
+    "source_config": {
+      "path": "configs/stride_topology_boundary_fresh_preflight_source.json",
+      "sha256": "853b1c6766abc17ef85c311c5ad11669c46e71eaa939e52c349432156ff1a1a8"
+    },
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    },
+    "predecessor_boundary_report": {
+      "path": "build/stride-topology-boundary-coverage-v1/topology_coverage_report.json",
+      "sha256": "dcc8320c02a7769764b683f3d4efcf2fcc861d7500185b5e1ccfd54e8e96f582"
+    }
+  },
+  "freshness": {
+    "task_id_overlap_with_consumed_cohort": 0,
+    "quality_outcomes_consumed": false,
+    "scope": "within_map_fresh_od_proposal_audit"
+  },
+  "expected_task_count": 12,
+  "solver_seeds": [1, 2],
+  "expected_state_count": 24,
+  "proposal_backend": "optimized",
+  "proposal_repetitions": 2,
+  "expected_requested_sizes": [4, 8, 16],
+  "augmentation": {
+    "strategy": "one_endpoint_topology_core_then_global_boundary_fill",
+    "kinds": ["articulation", "low_degree"],
+    "neighborhood_size": 16,
+    "topology_core_budget": 4,
+    "maximum_added_candidates_per_state": 2,
+    "maximum_total_candidates_per_state": 20,
+    "selection_objective": "new_incident_minus_internal_closure_then_component_diversity"
+  },
+  "diagnostic_gates": {
+    "minimum_candidate_count_per_state": 12,
+    "maximum_candidate_count_per_state": 20,
+    "maximum_added_candidates_per_state": 2,
+    "minimum_articulation_relevant_state_count": 8,
+    "minimum_low_degree_relevant_state_count": 12,
+    "minimum_mean_max_incident_articulation_coverage": 0.60,
+    "minimum_articulation_state_fraction_at_half_coverage": 0.60,
+    "minimum_mean_max_incident_low_degree_coverage": 0.75,
+    "minimum_low_degree_state_fraction_at_half_coverage": 0.75
+  },
+  "topology_group_gates": {
+    "required_groups": [
+      "dao_ultra_bottleneck",
+      "dao_articulated",
+      "dao_low_articulation_control"
+    ],
+    "minimum_articulation_relevant_states_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1
+    },
+    "minimum_low_degree_relevant_states_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1,
+      "dao_low_articulation_control": 1
+    },
+    "minimum_mean_max_incident_articulation_coverage_by_group": {
+      "dao_ultra_bottleneck": 0.50,
+      "dao_articulated": 0.50
+    }
+  },
+  "boundary_gates": {
+    "minimum_mean_incident_articulation_coverage": 0.70,
+    "minimum_mean_incident_low_degree_coverage": 0.70,
+    "minimum_mean_boundary_articulation_ratio": 0.65,
+    "minimum_mean_boundary_low_degree_ratio": 0.65,
+    "minimum_ultra_mean_boundary_articulation_ratio": 0.65,
+    "minimum_ultra_mean_boundary_low_degree_ratio": 0.65,
+    "minimum_mean_global_event_incident_delta_vs_base_frontier": -0.02,
+    "minimum_mean_global_boundary_ratio_delta_vs_base_frontier": 0.0,
+    "minimum_mean_component_reach_delta_vs_base_frontier": -0.05
+  },
+  "next_decision_on_pass": "register_paired_four_seed_boundary_quality_pilot_on_fresh_relevant_states",
+  "next_decision_on_failure": "terminate_topology_specific_candidate_revision_line"
+}

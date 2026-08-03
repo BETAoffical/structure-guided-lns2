@@ -209,6 +209,11 @@
       "purpose": "Proposal-only audit of boundary-oriented size-16 topology candidates after the anchor failure."
     },
     {
+      "path": "experiments/stride_topology_boundary_fresh_coverage.py",
+      "role": "active",
+      "purpose": "Fresh-task proposal-only confirmation of the frozen topology-boundary candidate generator."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -667,6 +672,11 @@
       "path": "scripts/run_stride_topology_boundary_coverage.py",
       "role": "active",
       "purpose": "CLI entry point for the registered proposal-only topology-boundary audit."
+    },
+    {
+      "path": "scripts/run_stride_topology_boundary_fresh_coverage.py",
+      "role": "active",
+      "purpose": "CLI entry point for the fresh-task proposal-only topology-boundary audit."
     },
     {
       "path": "scripts/run_stride_stage4r_high_load.py",

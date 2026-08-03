@@ -10,6 +10,10 @@ from experiments.stride_topology_boundary_coverage import (
     collect_topology_boundary_coverage,
     validate_topology_boundary_coverage_config,
 )
+from experiments.stride_topology_boundary_fresh_coverage import (
+    collect_topology_boundary_fresh_coverage,
+    validate_topology_boundary_fresh_coverage_config,
+)
 
 
 class StrideTopologyBoundaryCoverageTest(unittest.TestCase):
@@ -54,6 +58,18 @@ class StrideTopologyBoundaryCoverageTest(unittest.TestCase):
         self.assertIn(
             "candidate_repair_outcome", fresh["selection_inputs_forbidden"]
         )
+
+    def test_fresh_coverage_is_proposal_only_and_result_isolation_is_frozen(self) -> None:
+        config = self._read("stride_topology_boundary_fresh_coverage.json")
+        validate_topology_boundary_fresh_coverage_config(config)
+        self.assertEqual(config["expected_task_count"], 12)
+        self.assertEqual(config["expected_state_count"], 24)
+        self.assertEqual(config["freshness"]["task_id_overlap_with_consumed_cohort"], 0)
+        self.assertFalse(config["candidate_repair_trials_allowed"])
+        self.assertNotIn(".step(", inspect.getsource(collect_topology_boundary_fresh_coverage))
+        config["freshness"]["quality_outcomes_consumed"] = True
+        with self.assertRaisesRegex(ValueError, "isolation"):
+            validate_topology_boundary_fresh_coverage_config(config)
 
 
 if __name__ == "__main__":
