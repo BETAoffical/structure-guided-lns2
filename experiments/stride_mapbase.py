@@ -678,7 +678,6 @@ def audit_mapbase_collection(
     consolidated_path = collection_root / "repair_trials.jsonl"
     consolidated = _read_jsonl(consolidated_path) if consolidated_path.is_file() else []
     state_rows = []
-    all_trials = []
     errors = []
     trial_indices = tuple(map(int, config["trial_indices"]))
     for state_file in state_files:
@@ -704,7 +703,10 @@ def audit_mapbase_collection(
         ):
             errors.append(f"paired PP seed mismatch: {state_id}")
         state_rows.append(payload)
-        all_trials.extend(payload["trials"])
+    state_rows.sort(key=lambda payload: str(payload["state_id"]))
+    all_trials = [
+        trial for payload in state_rows for trial in payload["trials"]
+    ]
     expected_ids = {str(row["state_id"]) for row in selection}
     observed_ids = {str(row["state_id"]) for row in state_rows}
     gates = {
@@ -745,6 +747,7 @@ def audit_mapbase_collection(
     report = {
         "schema": AUDIT_SCHEMA,
         "collection_id": str(config["collection_id"]),
+        "run_fingerprint": str(run["run_fingerprint"]),
         "state_count": len(state_rows),
         "trial_count": len(consolidated),
         "errors": errors,

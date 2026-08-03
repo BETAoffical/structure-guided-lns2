@@ -6,6 +6,7 @@ from pathlib import Path
 from experiments._common import sha256_file
 from experiments.repair_collection import _read_jsonl
 from experiments.stride_mapbase import (
+    audit_mapbase_collection,
     build_mapbase_selection,
     validate_mapbase_config,
 )
@@ -60,6 +61,23 @@ def test_mapbase_registered_inputs_and_selection_match_when_available() -> None:
     assert len({row["map_id"] for row in selection}) == 8
     assert all(row["before_conflicts"] > 0 for row in selection)
     assert all(row["research_split"] == "train" for row in selection)
+
+
+def test_completed_mapbase_collection_audits_in_state_id_order_when_available(
+    tmp_path: Path,
+) -> None:
+    collection = ROOT / "build" / "stride-mapbase-collection-v1"
+    report_path = collection / "collection_report.json"
+    if not report_path.is_file():
+        return
+    collection_report = json.loads(report_path.read_text(encoding="utf-8"))
+    if collection_report.get("complete") is not True:
+        return
+    report = audit_mapbase_collection(CONFIG_PATH, collection, tmp_path)
+    assert report["passed"] is True
+    assert report["state_count"] == 63
+    assert report["run_fingerprint"]
+    assert report["gates"]["consolidated_trials_match"] is True
 
 
 def test_maprank_successor_design_is_distinct_and_outcome_independent() -> None:

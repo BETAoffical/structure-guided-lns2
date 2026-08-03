@@ -1942,3 +1942,26 @@ per-cohort/map regressions, invalid actions, fingerprints, AUC, PP time, and
 selector overhead remain explicit gates or required metrics. Execution remains
 forbidden unless the offline gate passes. The evaluation config SHA-256 is
 `e6ef4a6ff50965b733a313141db22a356ec12511c0ce6154d341169ab0e61430`.
+
+### Completed and audited STRIDE-MapBase v1 collection
+
+The collection completed all 63 registered states with zero errors and no
+resumed rows. It produced 18,048 repair trials. Candidate counts were 16 on two
+states, 17 on two states, and 18 on 59 states; every candidate was a frozen
+target/collision/random base candidate and the Boundary candidate count was
+zero. The audit sorts state payloads by state identity, matching the producer's
+deterministic consolidated order rather than filesystem hash-name order; this
+ordering correction changes no collected row.
+
+All audit gates passed: complete state and artifact coverage, zero collection
+errors, base-only families, no topology families, registered candidate caps,
+exact candidate-by-trial coverage for indices 0--15, one paired deterministic
+PP seed per state/trial index, the exact 124-feature schema, all-train split,
+trial count, consolidated JSONL identity, and a nonempty run fingerprint. The
+run fingerprint is
+`e631303b542e16f70a8d5475f9f865765ced9c90b92e5938946f8e089f46afa0`.
+The repair-trial, collection-report, and run-config SHA-256 values are
+`34976a38a0a95e11c7c7c4dc5997e27fd4e260636727c8cea2d6e5a56cdeead2`,
+`2564ddc07a9827109352062603497f2eba21a9774b0a04ac51380dfb111f8b4f`,
+and `aa25e4a27d26f7b42fc5c216e77a5151682d6c12bfe394a4c6f93048aeea0234`.
+This is an audited training-data milestone, not a model or TTF result.
