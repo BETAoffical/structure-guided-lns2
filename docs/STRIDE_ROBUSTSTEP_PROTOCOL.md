@@ -1564,6 +1564,13 @@ Training reopens the recorded audit and raw trial source, verifies both stored
 SHA-256 values, the passed audit identity, run fingerprint, and audited state
 count, and refuses to fit if any provenance item has changed.
 
+Label construction also emits a descriptive, non-gating
+`seed_half_action_stability.jsonl`. It compares trial halves 0--7 and 8--15
+using exact winner agreement, Top-3 overlap, comparable-pair ordering agreement,
+the full-sample Top-1 score margin, and candidate score dispersion. These
+quantify PP-seed action uncertainty without changing the registered robust-pair
+rule or consulting runtime and future trajectories.
+
 ### Preregistered staged raw-TTF evaluation
 
 Runtime evaluation separates candidate-pool quality from ranking quality with

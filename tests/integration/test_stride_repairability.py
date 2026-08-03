@@ -13,6 +13,7 @@ from experiments.stride_lns import (
     STRIDE_TRIAL_SCHEMA,
 )
 from experiments.stride_repairability import (
+    _seed_half_action_stability,
     build_repairability_labels,
     validate_repairability_label_config,
 )
@@ -222,6 +223,20 @@ class StrideRepairabilityTest(unittest.TestCase):
             self.assertEqual(summary["robust_pair_count"], 1)
             self.assertEqual(summary["uncertain_pair_count"], 2)
             self.assertEqual(summary["conflict_only_robust_pair_count"], 1)
+            stability = summary["seed_half_action_stability"]
+            self.assertEqual(stability["state_count"], 1)
+            self.assertEqual(stability["exact_winner_agreement_rate"], 1.0)
+            self.assertEqual(stability["mean_top3_overlap"], 1.0)
+            stability_rows = [
+                json.loads(line)
+                for line in (
+                    root / "labels" / "seed_half_action_stability.jsonl"
+                )
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            self.assertEqual(stability_rows[0]["first_half_winner"], "good")
+            self.assertEqual(stability_rows[0]["second_half_winner"], "good")
             self.assertEqual({row["label"] for row in pairs}, {0, 1})
             self.assertEqual(sum(row["sample_weight"] for row in pairs), 1.0)
             positive = next(row for row in pairs if row["label"] == 1)
@@ -263,6 +278,7 @@ class StrideRepairabilityTest(unittest.TestCase):
                 "candidate_aggregates.jsonl",
                 "dominance_pairs.jsonl",
                 "conflict_only_dominance_pairs.jsonl",
+                "seed_half_action_stability.jsonl",
             ):
                 self.assertEqual(
                     (root / "first-labels" / name).read_bytes(),
@@ -325,6 +341,16 @@ class StrideRepairabilityTest(unittest.TestCase):
                     audit_report_paths=[passed],
                     output=root / "mismatched-labels",
                 )
+
+    def test_seed_half_winner_tie_is_reported_as_uncertain(self) -> None:
+        result = _seed_half_action_stability(
+            "state-tied",
+            {"candidate-a": [0.5] * 16, "candidate-b": [0.5] * 16},
+            tie_epsilon=1e-12,
+        )
+        self.assertFalse(result["exact_winner_agreement"])
+        self.assertEqual(result["comparable_pair_count"], 0)
+        self.assertEqual(result["full_score_top1_margin"], 0.0)
 
     def test_collection_seed_is_paired_by_state_and_distinct_by_trial(self) -> None:
         first = [

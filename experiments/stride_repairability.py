@@ -18,6 +18,7 @@ LABEL_SCHEMA = "lns2.stride.repairability_label.v1"
 CONFLICT_ONLY_LABEL_SCHEMA = "lns2.stride.repairability_conflict_only_ablation.v1"
 CANDIDATE_SCHEMA = "lns2.stride.repairability_candidate.v1"
 BUILD_SCHEMA = "lns2.stride.repairability_label_build.v1"
+SEED_STABILITY_SCHEMA = "lns2.stride.repairability_seed_stability.v1"
 CONTROLLER_ID = "stride-augcontrol-v1"
 FEATURE_SCHEMA = "lns2.realized_features.v2"
 FEATURE_DIMENSION = 124
@@ -339,6 +340,80 @@ def _robust_winner(
     }
 
 
+def _seed_half_action_stability(
+    state_id: str, scores: dict[str, list[float]], *, tie_epsilon: float
+) -> dict[str, Any]:
+    if any(len(values) != 16 for values in scores.values()):
+        raise ValueError("seed-half stability requires exactly 16 scores per candidate")
+    first = {
+        candidate_id: statistics.fmean(values[:8])
+        for candidate_id, values in scores.items()
+    }
+    second = {
+        candidate_id: statistics.fmean(values[8:])
+        for candidate_id, values in scores.items()
+    }
+    full = {
+        candidate_id: statistics.fmean(values)
+        for candidate_id, values in scores.items()
+    }
+    ranking = lambda values: sorted(values, key=lambda key: (-values[key], key))
+    first_ranking = ranking(first)
+    second_ranking = ranking(second)
+    full_ranking = ranking(full)
+    top_k = min(3, len(full_ranking))
+    comparable_pairs = 0
+    agreeing_pairs = 0
+    for left, right in combinations(sorted(scores), 2):
+        first_delta = first[left] - first[right]
+        second_delta = second[left] - second[right]
+        if abs(first_delta) <= tie_epsilon or abs(second_delta) <= tie_epsilon:
+            continue
+        comparable_pairs += 1
+        agreeing_pairs += int(first_delta * second_delta > 0.0)
+    top1_margin = (
+        full[full_ranking[0]] - full[full_ranking[1]]
+        if len(full_ranking) > 1
+        else 0.0
+    )
+    first_top1_margin = (
+        first[first_ranking[0]] - first[first_ranking[1]]
+        if len(first_ranking) > 1
+        else 0.0
+    )
+    second_top1_margin = (
+        second[second_ranking[0]] - second[second_ranking[1]]
+        if len(second_ranking) > 1
+        else 0.0
+    )
+    return {
+        "schema": SEED_STABILITY_SCHEMA,
+        "state_id": state_id,
+        "candidate_count": len(scores),
+        "first_half_winner": first_ranking[0],
+        "second_half_winner": second_ranking[0],
+        "full_winner": full_ranking[0],
+        "exact_winner_agreement": first_ranking[0] == second_ranking[0]
+        and first_top1_margin > tie_epsilon
+        and second_top1_margin > tie_epsilon,
+        "top3_overlap": len(
+            set(first_ranking[:top_k]) & set(second_ranking[:top_k])
+        )
+        / top_k,
+        "comparable_pair_count": comparable_pairs,
+        "pairwise_direction_agreement_count": agreeing_pairs,
+        "pairwise_direction_agreement": (
+            agreeing_pairs / comparable_pairs if comparable_pairs else 0.0
+        ),
+        "full_score_top1_margin": top1_margin,
+        "first_half_score_top1_margin": first_top1_margin,
+        "second_half_score_top1_margin": second_top1_margin,
+        "mean_candidate_score_std": statistics.fmean(
+            statistics.pstdev(values) for values in scores.values()
+        ),
+    }
+
+
 def build_repairability_labels(
     *,
     config_path: str | Path,
@@ -387,6 +462,7 @@ def build_repairability_labels(
     conflict_only_uncertain_pair_count = 0
     states_with_pairs = 0
     boundary_candidate_count = 0
+    stability_rows: list[dict[str, Any]] = []
     for state_id, candidates in sorted(states.items()):
         state_metadata = metadata[state_id]
         before_conflicts = int(state_metadata["before_conflicts"])
@@ -395,6 +471,19 @@ def build_repairability_labels(
             before_conflicts=before_conflicts,
             indices=indices,
             structure_weight=structure_weight,
+        )
+        stability_rows.append(
+            {
+                **_seed_half_action_stability(
+                    state_id,
+                    scores,
+                    tie_epsilon=float(robust["tie_epsilon"]),
+                ),
+                "map_id": state_metadata["map_id"],
+                "split": state_metadata["split"],
+                "source_policy": state_metadata["source_policy"],
+                "decision_stage": state_metadata["decision_stage"],
+            }
         )
         conflict_only_scores = {
             candidate_id: [
@@ -555,6 +644,13 @@ def build_repairability_labels(
     _write_jsonl(
         output / "conflict_only_dominance_pairs.jsonl", conflict_only_pairs
     )
+    _write_jsonl(output / "seed_half_action_stability.jsonl", stability_rows)
+    comparable_pair_count = sum(
+        int(row["comparable_pair_count"]) for row in stability_rows
+    )
+    agreeing_pair_count = sum(
+        int(row["pairwise_direction_agreement_count"]) for row in stability_rows
+    )
     summary = {
         "schema": BUILD_SCHEMA,
         "controller_id": CONTROLLER_ID,
@@ -581,6 +677,27 @@ def build_repairability_labels(
         "uncertain_pair_count": uncertain_pair_count,
         "conflict_only_robust_pair_count": len(conflict_only_pairs) // 2,
         "conflict_only_uncertain_pair_count": conflict_only_uncertain_pair_count,
+        "seed_half_action_stability": {
+            "state_count": len(stability_rows),
+            "exact_winner_agreement_rate": statistics.fmean(
+                bool(row["exact_winner_agreement"]) for row in stability_rows
+            ),
+            "mean_top3_overlap": statistics.fmean(
+                float(row["top3_overlap"]) for row in stability_rows
+            ),
+            "comparable_pair_count": comparable_pair_count,
+            "pairwise_direction_agreement_rate": (
+                agreeing_pair_count / comparable_pair_count
+                if comparable_pair_count
+                else 0.0
+            ),
+            "mean_full_score_top1_margin": statistics.fmean(
+                float(row["full_score_top1_margin"]) for row in stability_rows
+            ),
+            "mean_candidate_score_std": statistics.fmean(
+                float(row["mean_candidate_score_std"]) for row in stability_rows
+            ),
+        },
         "oriented_training_row_count": len(oriented_pairs),
         "runtime_used_in_label": False,
         "future_trajectory_used_in_label": False,
@@ -590,6 +707,12 @@ def build_repairability_labels(
             {"path": str(path), "sha256": sha256_file(path)} for path in paths
         ],
         "audit_sources": audit_sources,
+        "artifacts": {
+            "seed_half_action_stability": "seed_half_action_stability.jsonl",
+            "seed_half_action_stability_sha256": sha256_file(
+                output / "seed_half_action_stability.jsonl"
+            ),
+        },
     }
     _write_json(output / "label_build_summary.json", summary)
     return summary
