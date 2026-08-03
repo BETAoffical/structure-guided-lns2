@@ -12,6 +12,8 @@ from experiments.stride_augcontrol import (
     _oracle_pool_opportunity,
     _pair_label_subgroup_coverage,
     _prediction_records,
+    _portable_prediction_equivalence,
+    _training_export_view,
     _validate_label_audit_provenance,
     validate_augcontrol_training_config,
 )
@@ -107,6 +109,45 @@ class StrideAugcontrolTest(unittest.TestCase):
             trials.write_text('{"trial": 2}\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "raw trial source differs"):
                 _validate_label_audit_provenance(summary)
+
+    def test_export_ranges_use_only_training_maps_and_validation_is_rechecked(self) -> None:
+        grouped = {
+            "train-state": [
+                {"state_id": "train-state", "candidate_id": "train-a", "split": "train"},
+                {"state_id": "train-state", "candidate_id": "train-b", "split": "train"},
+            ],
+            "validation-state": [
+                {
+                    "state_id": "validation-state",
+                    "candidate_id": "validation-a",
+                    "split": "validation",
+                },
+                {
+                    "state_id": "validation-state",
+                    "candidate_id": "validation-b",
+                    "split": "validation",
+                },
+            ],
+        }
+        candidates = [row for rows in grouped.values() for row in rows]
+        train_candidates, train_grouped = _training_export_view(candidates, grouped)
+        self.assertEqual(set(train_grouped), {"train-state"})
+        self.assertEqual(
+            {row["candidate_id"] for row in train_candidates},
+            {"train-a", "train-b"},
+        )
+        self.assertTrue(
+            _portable_prediction_equivalence(
+                {"validation-state": "validation-a"},
+                {"validation-state": "validation-a"},
+            )["passed"]
+        )
+        self.assertFalse(
+            _portable_prediction_equivalence(
+                {"validation-state": "validation-a"},
+                {"validation-state": "validation-b"},
+            )["passed"]
+        )
 
     def test_pair_table_reports_labeled_state_and_map_coverage(self) -> None:
         rows = []

@@ -1563,6 +1563,10 @@ python3 scripts/build_stride_repairability_labels.py \
 Training reopens the recorded audit and raw trial source, verifies both stored
 SHA-256 values, the passed audit identity, run fingerprint, and audited state
 count, and refuses to fit if any provenance item has changed.
+The exported feature ranges and bundle training counts use train maps only;
+held-out validation candidates cannot influence runtime fallback ranges. The
+portable model is then loaded back and its selected action is compared with the
+in-memory estimator on every validation state as a separate equivalence gate.
 
 Label construction also emits a descriptive, non-gating
 `seed_half_action_stability.jsonl`. It compares trial halves 0--7 and 8--15

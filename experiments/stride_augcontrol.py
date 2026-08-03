@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
+from experiments.compact_controller_model import load_controller_bundle
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import (
     _read_json,
@@ -399,6 +400,41 @@ def _model_predictions(
     return predictions
 
 
+def _training_export_view(
+    candidates: list[dict[str, Any]],
+    grouped: dict[str, list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    train_grouped = {
+        state_id: rows
+        for state_id, rows in grouped.items()
+        if str(rows[0]["split"]) == "train"
+    }
+    train_candidates = [
+        row for row in candidates if str(row["split"]) == "train"
+    ]
+    if {str(row["state_id"]) for row in train_candidates} != set(train_grouped):
+        raise ValueError("STRIDE augcontrol training export split differs")
+    return train_candidates, train_grouped
+
+
+def _portable_prediction_equivalence(
+    expected: dict[str, str], observed: dict[str, str]
+) -> dict[str, Any]:
+    keys_match = set(expected) == set(observed)
+    mismatches = sorted(
+        state_id
+        for state_id in set(expected) & set(observed)
+        if expected[state_id] != observed[state_id]
+    )
+    return {
+        "state_count": len(expected),
+        "state_coverage_matches": keys_match,
+        "selection_mismatch_count": len(mismatches),
+        "selection_mismatch_state_ids": mismatches,
+        "passed": keys_match and not mismatches,
+    }
+
+
 def _prediction_records(
     model_id: str,
     predictions: dict[str, str],
@@ -655,6 +691,9 @@ def run_augcontrol_training(
         for state_id, rows in grouped.items()
         if str(rows[0]["split"]) == "validation"
     }
+    training_candidates, training_grouped = _training_export_view(
+        candidates, grouped
+    )
     primary_predictions = _model_predictions(
         validation_grouped, primary_estimator, input_specs
     )
@@ -910,8 +949,8 @@ def run_augcontrol_training(
         controller_id=CONTROLLER_ID,
         estimator=primary_estimator,
         feature_names=names,
-        candidates=candidates,
-        grouped=grouped,
+        candidates=training_candidates,
+        grouped=training_grouped,
         source_bundle=frozen_bundle,
         source_manifest=source_manifest,
         parameters=parameters,
@@ -923,13 +962,27 @@ def run_augcontrol_training(
         controller_id=CONFLICT_CONTROLLER_ID,
         estimator=conflict_estimator,
         feature_names=names,
-        candidates=candidates,
-        grouped=grouped,
+        candidates=training_candidates,
+        grouped=training_grouped,
         source_bundle=frozen_bundle,
         source_manifest=source_manifest,
         parameters=parameters,
         training_pair_count=len(conflict_train["labels"]),
         source_hashes=source_hashes,
+    )
+    portable_primary = load_controller_bundle(
+        output / CONTROLLER_ID
+    ).main_models["realized_dynamic"]
+    portable_conflict = load_controller_bundle(
+        output / CONFLICT_CONTROLLER_ID
+    ).main_models["realized_dynamic"]
+    validation_portable_equivalence = _portable_prediction_equivalence(
+        primary_predictions,
+        _model_predictions(validation_grouped, portable_primary, input_specs),
+    )
+    conflict_validation_portable_equivalence = _portable_prediction_equivalence(
+        conflict_predictions,
+        _model_predictions(validation_grouped, portable_conflict, input_specs),
     )
     integrity_gates = {
         "label_summary_identity": True,
@@ -941,8 +994,14 @@ def run_augcontrol_training(
         "test_data_not_read": True,
         "runtime_not_used_in_label": True,
         "portable_equivalence": bool(exported["equivalence"]["passed"]),
+        "validation_portable_equivalence": bool(
+            validation_portable_equivalence["passed"]
+        ),
         "conflict_ablation_portable_equivalence": bool(
             conflict_exported["equivalence"]["passed"]
+        ),
+        "conflict_ablation_validation_portable_equivalence": bool(
+            conflict_validation_portable_equivalence["passed"]
         ),
     }
     report = {
@@ -986,6 +1045,10 @@ def run_augcontrol_training(
             CONTROLLER_ID: exported,
             CONFLICT_CONTROLLER_ID: conflict_exported,
         },
+        "validation_portable_equivalence": validation_portable_equivalence,
+        "conflict_validation_portable_equivalence": (
+            conflict_validation_portable_equivalence
+        ),
         "model_parameters": parameters,
         "input_dimension": len(input_specs),
         "source_sha256": source_hashes,
