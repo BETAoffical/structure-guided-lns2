@@ -259,6 +259,11 @@
       "purpose": "Paired 16-seed robust repairability label construction for the independently named STRIDE augmented-pool successor."
     },
     {
+      "path": "experiments/stride_repairability_audit.py",
+      "role": "reproducibility",
+      "purpose": "Read-only integrity, pairing, schema, coverage, and SHA-256 audit for the completed 16-seed repairability collection."
+    },
+    {
       "path": "experiments/stride_repairability_collection.py",
       "role": "active",
       "purpose": "Resumable collection of the frozen base-plus-topology candidate pool under 16 paired PP seeds."
@@ -804,6 +809,11 @@
       "purpose": "CLI entry point for outcome-blind repairability map/load confirmation analysis."
     },
     {
+      "path": "scripts/audit_stride_repairability_collection.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for the completed STRIDE repairability collection audit."
+    },
+    {
       "path": "scripts/run_stride_boundary_runtime_optimization.py",
       "role": "active",
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
@@ -1087,6 +1097,11 @@
       "path": "tests/integration/test_stride_repairability.py",
       "role": "active",
       "contract": "Frozen 8+8 paired seeds, exact 124-feature rows, robust-pair filtering, runtime exclusion, and equal state weight."
+    },
+    {
+      "path": "tests/integration/test_stride_repairability_audit.py",
+      "role": "reproducibility",
+      "contract": "Collection audit coverage for exact state artifacts, paired seed products, feature schema, aggregate identity, and hashes."
     },
     {
       "path": "tests/integration/test_stride_repairability_preflight.py",

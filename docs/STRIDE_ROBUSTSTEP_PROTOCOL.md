@@ -1536,6 +1536,20 @@ fingerprints matched exactly. The interrupted v1 output is preserved as failure
 evidence; v2 writes to a new output directory and has a new run fingerprint.
 This restoration milestone is not a label, ranking, or TTF result.
 
+After collection completes, the registered read-only audit is:
+
+```bash
+python3 scripts/audit_stride_repairability_collection.py \
+  --collection build/stride-repairability-collection-v2 \
+  --output build/stride-repairability-collection-audit-v1
+```
+
+It must pass exact 240-state coverage, trial indices 0--15, deterministic
+same-state seed pairing, distinct seeds across trials, the 124-feature schema,
+frozen base-family preservation, the two-candidate topology cap, target-path
+restore provenance, map-held-out splitting, aggregate/state-row identity, zero
+collection errors, and SHA-256 materialization before labels are built.
+
 ### Preregistered staged raw-TTF evaluation
 
 Runtime evaluation separates candidate-pool quality from ranking quality with
