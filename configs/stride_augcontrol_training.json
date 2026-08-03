@@ -61,7 +61,15 @@
     "minimum_validation_pair_state_fraction": 0.50,
     "minimum_train_pair_maps": 16,
     "minimum_validation_pair_maps": 6,
-    "minimum_pair_states_per_map": 3
+    "minimum_pair_states_per_map": 3,
+    "required_subgroup_fields": [
+      "source_policy",
+      "decision_stage",
+      "topology_group",
+      "agent_band"
+    ],
+    "minimum_subgroup_pair_state_fraction": 0.30,
+    "minimum_pair_states_per_subgroup": 5
   },
   "forbidden_training_inputs": [
     "repair_runtime",

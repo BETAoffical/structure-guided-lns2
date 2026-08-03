@@ -10,6 +10,7 @@ from experiments.stride_augcontrol import (
     _input_specifications,
     _load_pair_table,
     _oracle_pool_opportunity,
+    _pair_label_subgroup_coverage,
     _prediction_records,
     validate_augcontrol_training_config,
 )
@@ -45,6 +46,14 @@ class StrideAugcontrolTest(unittest.TestCase):
                 "minimum_train_pair_maps": 16,
                 "minimum_validation_pair_maps": 6,
                 "minimum_pair_states_per_map": 3,
+                "required_subgroup_fields": [
+                    "source_policy",
+                    "decision_stage",
+                    "topology_group",
+                    "agent_band",
+                ],
+                "minimum_subgroup_pair_state_fraction": 0.30,
+                "minimum_pair_states_per_subgroup": 5,
             },
         )
 
@@ -110,6 +119,37 @@ class StrideAugcontrolTest(unittest.TestCase):
         self.assertEqual(table["state_count"], 2)
         self.assertEqual(table["state_ids"], ["state-0", "state-1"])
         self.assertEqual(table["map_state_counts"], {"map-a": 1, "map-b": 1})
+
+    def test_subgroup_coverage_rejects_concentrated_pair_labels(self) -> None:
+        common = {
+            "split": "validation",
+            "decision_stage": "early",
+            "topology_group": "control",
+            "agent_band": "low_mid",
+        }
+        grouped = {
+            **{
+                f"official-{index}": [
+                    {**common, "source_policy": "official_adaptive"}
+                ]
+                for index in range(10)
+            },
+            **{
+                f"v2-{index}": [{**common, "source_policy": "v2-full"}]
+                for index in range(10)
+            },
+        }
+        rows = _pair_label_subgroup_coverage(
+            grouped,
+            {f"official-{index}" for index in range(10)},
+            split="validation",
+            fields=("source_policy",),
+            minimum_fraction=0.30,
+            minimum_count=5,
+        )
+        by_value = {row["value"]: row for row in rows}
+        self.assertTrue(by_value["official_adaptive"]["passed"])
+        self.assertFalse(by_value["v2-full"]["passed"])
 
     @staticmethod
     def _candidates() -> dict[str, list[dict]]:

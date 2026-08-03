@@ -111,6 +111,14 @@ def validate_augcontrol_training_config(config: dict[str, Any]) -> None:
         "minimum_train_pair_maps": 16,
         "minimum_validation_pair_maps": 6,
         "minimum_pair_states_per_map": 3,
+        "required_subgroup_fields": [
+            "source_policy",
+            "decision_stage",
+            "topology_group",
+            "agent_band",
+        ],
+        "minimum_subgroup_pair_state_fraction": 0.30,
+        "minimum_pair_states_per_subgroup": 5,
     }:
         raise ValueError("STRIDE augcontrol label coverage gates changed")
     if set(map(str, config.get("forbidden_training_inputs") or ())) != {
@@ -277,6 +285,46 @@ def _pairwise_metrics(estimator: Any, values: Any, table: dict[str, Any]) -> dic
         "weighted_majority_accuracy": majority,
         "validation_weight": total,
     }
+
+
+def _pair_label_subgroup_coverage(
+    grouped: dict[str, list[dict[str, Any]]],
+    pair_state_ids: set[str],
+    *,
+    split: str,
+    fields: tuple[str, ...],
+    minimum_fraction: float,
+    minimum_count: int,
+) -> list[dict[str, Any]]:
+    selected = {
+        state_id: rows[0]
+        for state_id, rows in grouped.items()
+        if str(rows[0]["split"]) == split
+    }
+    records = []
+    for field in fields:
+        values = sorted({str(row[field]) for row in selected.values()})
+        for value in values:
+            selected_ids = {
+                state_id
+                for state_id, row in selected.items()
+                if str(row[field]) == value
+            }
+            labeled_count = len(selected_ids & pair_state_ids)
+            fraction = labeled_count / len(selected_ids)
+            records.append(
+                {
+                    "split": split,
+                    "field": field,
+                    "value": value,
+                    "selected_state_count": len(selected_ids),
+                    "pair_state_count": labeled_count,
+                    "pair_state_fraction": fraction,
+                    "passed": labeled_count >= minimum_count
+                    and fraction + 1e-12 >= minimum_fraction,
+                }
+            )
+    return records
 
 
 def _model_predictions(
@@ -675,6 +723,32 @@ def run_augcontrol_training(
         selected_state_counts["validation"]
     )
     minimum_per_map = int(coverage_config["minimum_pair_states_per_map"])
+    subgroup_coverage = [
+        *_pair_label_subgroup_coverage(
+            grouped,
+            set(primary_train["state_ids"]),
+            split="train",
+            fields=tuple(coverage_config["required_subgroup_fields"]),
+            minimum_fraction=float(
+                coverage_config["minimum_subgroup_pair_state_fraction"]
+            ),
+            minimum_count=int(
+                coverage_config["minimum_pair_states_per_subgroup"]
+            ),
+        ),
+        *_pair_label_subgroup_coverage(
+            grouped,
+            set(primary_validation["state_ids"]),
+            split="validation",
+            fields=tuple(coverage_config["required_subgroup_fields"]),
+            minimum_fraction=float(
+                coverage_config["minimum_subgroup_pair_state_fraction"]
+            ),
+            minimum_count=int(
+                coverage_config["minimum_pair_states_per_subgroup"]
+            ),
+        ),
+    ]
     label_coverage = {
         "selected_train_state_count": int(selected_state_counts["train"]),
         "selected_validation_state_count": int(
@@ -690,6 +764,7 @@ def run_augcontrol_training(
         "validation_pair_states_by_map": dict(
             primary_validation["map_state_counts"]
         ),
+        "subgroups": subgroup_coverage,
     }
     promotion_gates = {
         "validation_map_coverage": validation_map_count
@@ -750,6 +825,9 @@ def run_augcontrol_training(
             int(primary_validation["map_state_counts"].get(map_id, 0))
             >= minimum_per_map
             for map_id in validation_maps
+        ),
+        "pair_subgroup_coverage": all(
+            row["passed"] for row in subgroup_coverage
         ),
     }
 

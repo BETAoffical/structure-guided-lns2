@@ -1466,8 +1466,12 @@ contribute, with at least three labeled states per map. These thresholds were
 registered before reading the 16-seed candidate outcomes. They prevent a model
 trained on a small, easy subset from passing merely because all selected maps
 remain present in the unlabeled candidate aggregate.
+Within both train and validation, every observed source-policy, decision-stage,
+topology-group, and agent-band subgroup must additionally retain at least 30%
+of its selected states and at least five labeled states. This prevents stable
+pairs from concentrating only in one controller trajectory or load regime.
 The preregistered training-config SHA-256 after this coverage correction is
-`b75aaf0abd987188f6d94469ef29e6ed064695af6054d1529780a6586a953464`.
+`ae52f1e58fe2c49f05f78fd9fd69a4a3bc140880d3195bc9666a9435a3a6d4b8`.
 
 ### Completed paired source traces and result-blind state selection
 
