@@ -217,8 +217,17 @@ def audit_repairability_collection(
     leaking_maps = sorted(map_id for map_id, splits in split_maps.items() if len(splits) != 1)
     gates = {
         "registered_collection_schema": run.get("schema") == COLLECTION_SCHEMA,
+        "consistent_run_fingerprint": status.get("run_fingerprint")
+        == run_fingerprint
+        and collection_report.get("run_fingerprint") == run_fingerprint,
         "registered_restore_contract": run.get("target_state_restore_contract")
         == TARGET_STATE_RESTORE_CONTRACT,
+        "registered_selection_identity": list(
+            map(str, run.get("selected_state_ids") or ())
+        )
+        == [str(row["state_id"]) for row in selection]
+        and collection_report.get("selection_sha256")
+        == sha256_file(selection_path),
         "complete_status": status.get("status") == "complete",
         "complete_report": collection_report.get("complete") is True,
         "zero_collection_errors": int(status.get("error_state_count", -1)) == 0
@@ -228,6 +237,31 @@ def audit_repairability_collection(
         and len(observed_state_ids) == expected_state_count,
         "trial_indices_0_15": trial_indices == tuple(range(16)),
         "complete_trial_aggregation": actual_trial_hashes == expected_trial_hashes,
+        "reported_counts_match": int(
+            collection_report.get("requested_state_count", -1)
+        )
+        == expected_state_count
+        and int(collection_report.get("completed_state_count", -1))
+        == expected_state_count
+        and int(collection_report.get("trial_count", -1))
+        == len(actual_trial_hashes)
+        and int(collection_report.get("expected_trial_count", -1))
+        == len(expected_trial_hashes),
+        "reported_candidate_distributions_match": dict(
+            collection_report.get("candidate_count_distribution") or {}
+        )
+        == {
+            str(key): value
+            for key, value in sorted(candidate_count_distribution.items())
+        }
+        and dict(
+            collection_report.get("boundary_candidate_count_distribution")
+            or {}
+        )
+        == {
+            str(key): value
+            for key, value in sorted(boundary_count_distribution.items())
+        },
         "map_held_out_split": not leaking_maps,
         "no_validation_errors": not errors,
     }

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
+from experiments._common import sha256_file
 from experiments.repair_collection import _write_json, _write_jsonl
 from experiments.stride_lns import FROZEN_FEATURE_SCHEMA_ID, STRIDE_TRIAL_SCHEMA
 from experiments.stride_repairability_audit import audit_repairability_collection
@@ -79,10 +80,19 @@ class StrideRepairabilityAuditTest(unittest.TestCase):
                 },
             )
             _write_jsonl(collection / "state_selection.jsonl", [selection])
+            selection_sha256 = sha256_file(collection / "state_selection.jsonl")
             complete = {
+                "run_fingerprint": run_fingerprint,
                 "status": "complete",
                 "complete": True,
                 "error_state_count": 0,
+                "selection_sha256": selection_sha256,
+                "requested_state_count": 1,
+                "completed_state_count": 1,
+                "trial_count": len(trials),
+                "expected_trial_count": len(trials),
+                "candidate_count_distribution": {"2": 1},
+                "boundary_candidate_count_distribution": {"1": 1},
             }
             _write_json(collection / "collection_status.json", complete)
             _write_json(collection / "collection_report.json", complete)
