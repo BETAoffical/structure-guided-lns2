@@ -215,6 +215,67 @@ over the plain mean by at least 0.005. Otherwise no new label is frozen and
 the next controller must retain V2 actions with an uncertainty/abstention
 mechanism rather than claiming a better learned ranking.
 
+### Completed distributional score result
+
+The 96-state design completed with 1,700 candidates, 27,200 paired outcomes,
+16 PP seeds per candidate, and zero integrity errors. The plain mean itself was
+stable (0.8687 pairwise consistency, 0.8264 Top-3 overlap, and 0.0487 symmetric
+normalized regret), but the registered `mean-np100` risk score was the only
+risk-aware variant that also improved selection regret. It achieved 0.8580
+pairwise consistency, 0.8090 Top-3 overlap, and 0.0359 regret, an absolute
+regret reduction of 0.0128 from the mean. Both independent 48-state cohorts
+passed: their regrets were 0.0285 and 0.0433.
+
+Penalizing standard deviation did not help: weights 0.25 and 0.50 increased
+regret to 0.0635 and 0.0750. The lower-quartile score reached only 0.7743
+Top-3 overlap and failed. Therefore `mean-np100` is frozen for a fresh
+confirmation, but it is not yet a training label or a runtime controller. The
+deterministic report SHA-256 is
+`b204e19cfb93fe71a9149382e3e5764514cf83c8f5289d808ef06c0422f0d815`.
+
+## Registered fresh score confirmation
+
+The confirmation uses six compact DAO maps that do not overlap the 14 maps in
+the consumed score-design label cohort: `den009d`, `den101d`, `den308d`,
+`den408d`, `lak101d`, and `ost102d`. These maps have previously contributed
+reset-only load evidence and some belong to older runtime-development
+registries, so this is explicitly not a historically untouched-map or formal
+OOD claim. It is a fresh-task, fresh-state confirmation of score stability.
+The formal MovingAI/OOD registry remains excluded.
+
+Each map contributes deterministic project-derived `uniform_random` and
+`opposite_exchange` tasks at new task seeds 53 and 71. Loads are 200, 160, 320,
+240, 160, and 120 agents in the map order above. They were selected from
+consumed reset-only evidence to cover moderate/high conflicts while avoiding
+the extreme thousands-of-conflicts cells. The resulting 24 tasks run under
+new solver seeds 401 and 503. Official Adaptive and frozen `v2-full` provide
+source trajectories, limited to decisions 0--11.
+
+Selection is result-blind and takes 24 states per source policy, at most one
+state per source episode. Every selected state must replay deterministically,
+retain the same candidate pool, and supply the frozen 124-dimensional features.
+Each candidate receives exactly 16 paired PP outcomes, split 8+8. Runtime,
+future repair rounds, and Cost-to-Go remain forbidden.
+
+Only the already selected score is tested:
+
+```text
+mean normalized immediate quality
+- 0.10 * no-progress probability
+```
+
+No coefficient or alternative score may be selected on this cohort. Overall,
+it must reach at least 0.75 pairwise consistency and 0.75 Top-3 overlap, at
+most 0.15 normalized regret, and improve regret over the plain mean by at
+least 0.005. Both source-policy subgroups and both DAO compactness groups must
+contain at least eight states and reach 0.70, 0.70, and 0.20 respectively.
+Failure keeps `v2-full` as the action source and forbids robust-step training;
+passing permits only the next small balanced Pilot, not a speed claim.
+
+Nine eligible DAO maps are reserved for later training expansion and are not
+used in this confirmation: `den020d`, `den201d`, `den202d`, `den203d`,
+`den998d`, `hrt002d`, `den404d`, `lak108d`, and `lak110d`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

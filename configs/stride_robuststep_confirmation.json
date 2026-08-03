@@ -1,0 +1,92 @@
+{
+  "schema": "lns2.stride.robuststep_confirmation_config.v1",
+  "scientific_status": "fresh_task_state_score_confirmation",
+  "formal_speed_claim": false,
+  "historically_untouched_map_claim": false,
+  "controller_id": "stride-robuststep-v1",
+  "score_schema": "lns2.stride.robust_step_score.v1",
+  "score_design_report": {
+    "path": "build/stride-robuststep-score-design-v1/robuststep_score_design_report.json",
+    "sha256": "b204e19cfb93fe71a9149382e3e5764514cf83c8f5289d808ef06c0422f0d815"
+  },
+  "formal_ood_config": {
+    "path": "configs/movingai_ood_dataset.json",
+    "sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a"
+  },
+  "dataset_config": {
+    "path": "configs/stride_robuststep_confirmation_dataset.json",
+    "sha256": "bad7f9cfc884464b4daf7316451deebce3dd9643c8a64cfc1ec51456e136023b"
+  },
+  "source_config": {
+    "path": "configs/stride_robuststep_confirmation_source.json",
+    "sha256": "53e314571414873d5669314bc59a80624a8ab6d81e8392b702f2cc20eb92b661"
+  },
+  "dataset_root": "build/stride-robuststep-confirmation-dataset-v1",
+  "selection_path": "build/stride-robuststep-confirmation-selection-v1/state_selection.jsonl",
+  "trial_sources": [
+    "build/stride-robuststep-confirmation-base-v1/repair_trials.jsonl",
+    "build/stride-robuststep-confirmation-extension-v1/extra_trials.jsonl"
+  ],
+  "expected_maps": [
+    "den009d", "den101d", "den308d", "den408d", "lak101d", "ost102d"
+  ],
+  "map_groups": {
+    "dao_compact_game": ["den009d", "den101d", "den308d"],
+    "dao_ultra_compact_game": ["den408d", "lak101d", "ost102d"]
+  },
+  "old_label_map_ids": [
+    "maze-32-32-2", "random-32-32-20", "room-32-32-4",
+    "stride_pilot_compartmentalized_cross_four_gate_0002",
+    "stride_pilot_compartmentalized_double_horizontal_0000",
+    "stride_pilot_compartmentalized_double_vertical_0001",
+    "stride_pilot_dead_end_aisles_0000", "stride_pilot_dead_end_aisles_0001",
+    "stride_pilot_dead_end_aisles_0002", "stride_pilot_regular_beltway_0000",
+    "stride_pilot_regular_beltway_0001", "stride_pilot_regular_beltway_0002",
+    "warehouse-10-20-10-2-1", "warehouse-20-40-10-2-1"
+  ],
+  "fresh_task_seeds": [53, 71],
+  "source_solver_seeds": [401, 503],
+  "expected_state_count": 48,
+  "expected_states_per_source_policy": 24,
+  "minimum_candidate_count": 720,
+  "expected_feature_schema_id": "lns2.realized_features.v2",
+  "expected_feature_dimension": 124,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+  "structure_weight": 0.02,
+  "baseline_variant": {
+    "id": "mean",
+    "mode": "mean",
+    "deviation_weight": 0.0,
+    "no_progress_penalty": 0.0
+  },
+  "selected_variant": {
+    "id": "mean-np100",
+    "mode": "mean",
+    "deviation_weight": 0.0,
+    "no_progress_penalty": 0.1
+  },
+  "overall_gates": {
+    "minimum_pairwise_consistency": 0.75,
+    "minimum_mean_top3_overlap": 0.75,
+    "maximum_mean_cross_half_normalized_regret": 0.15,
+    "minimum_regret_improvement_over_mean": 0.005
+  },
+  "subgroup_gates": {
+    "minimum_state_count": 8,
+    "minimum_pairwise_consistency": 0.70,
+    "minimum_mean_top3_overlap": 0.70,
+    "maximum_mean_cross_half_normalized_regret": 0.20
+  },
+  "selection_contract": {
+    "source_policies": ["official_adaptive", "v2-full"],
+    "maximum_source_decision_index": 11,
+    "maximum_states_per_episode": 1,
+    "result_blind": true
+  },
+  "runtime_used_in_score": false,
+  "future_repair_rounds_used_in_score": false,
+  "cost_to_go_used_in_score": false,
+  "training_before_confirmation_pass_forbidden": true
+}

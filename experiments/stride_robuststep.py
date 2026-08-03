@@ -13,6 +13,8 @@ from experiments.repair_collection import (
     _write_json,
 )
 from experiments.stride_lns import (
+    FROZEN_FEATURE_DIMENSION,
+    FROZEN_FEATURE_SCHEMA_ID,
     REQUIRED_POST_STRUCTURE_FIELDS,
     STRIDE_TRIAL_SCHEMA,
     assign_structure_scores,
@@ -26,6 +28,8 @@ SEED_DEPTH_CONFIG_SCHEMA = "lns2.stride.robuststep_seed_depth_config.v1"
 SEED_DEPTH_REPORT_SCHEMA = "lns2.stride.robuststep_seed_depth_report.v1"
 SCORE_CONFIG_SCHEMA = "lns2.stride.robuststep_score_design_config.v1"
 SCORE_REPORT_SCHEMA = "lns2.stride.robuststep_score_design_report.v1"
+CONFIRMATION_CONFIG_SCHEMA = "lns2.stride.robuststep_confirmation_config.v1"
+CONFIRMATION_REPORT_SCHEMA = "lns2.stride.robuststep_confirmation_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -136,6 +140,78 @@ def validate_robuststep_score_config(config: dict[str, Any]) -> None:
         raise ValueError("plain mean must remain the registered score baseline")
     if bool(config.get("runtime_used_in_score")):
         raise ValueError("runtime cannot enter the robust-step score")
+
+
+def validate_robuststep_confirmation_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != CONFIRMATION_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step confirmation config")
+    if (
+        config.get("scientific_status") != "fresh_task_state_score_confirmation"
+        or bool(config.get("formal_speed_claim"))
+        or bool(config.get("historically_untouched_map_claim"))
+    ):
+        raise ValueError("robust-step confirmation has an invalid evidence boundary")
+    if config.get("controller_id") != CONTROLLER_ID:
+        raise ValueError("unexpected robust-step confirmation controller id")
+    if config.get("score_schema") != "lns2.stride.robust_step_score.v1":
+        raise ValueError("unexpected robust-step confirmation score schema")
+    indices = tuple(map(int, config.get("trial_indices") or ()))
+    first = tuple(map(int, config.get("first_half_indices") or ()))
+    second = tuple(map(int, config.get("second_half_indices") or ()))
+    if (
+        indices != tuple(range(16))
+        or first != tuple(range(8))
+        or second != tuple(range(8, 16))
+    ):
+        raise ValueError("score confirmation requires registered 8+8 indices")
+    if float(config.get("structure_weight", -1.0)) != 0.02:
+        raise ValueError("score confirmation structure weight differs")
+    baseline = dict(config.get("baseline_variant") or {})
+    selected = dict(config.get("selected_variant") or {})
+    if baseline != {
+        "id": "mean",
+        "mode": "mean",
+        "deviation_weight": 0.0,
+        "no_progress_penalty": 0.0,
+    }:
+        raise ValueError("score confirmation baseline was changed")
+    if selected != {
+        "id": "mean-np100",
+        "mode": "mean",
+        "deviation_weight": 0.0,
+        "no_progress_penalty": 0.1,
+    }:
+        raise ValueError("score confirmation may not retune the selected score")
+    if (
+        bool(config.get("runtime_used_in_score"))
+        or bool(config.get("future_repair_rounds_used_in_score"))
+        or bool(config.get("cost_to_go_used_in_score"))
+    ):
+        raise ValueError("confirmation score contains a forbidden future/runtime field")
+    if not bool(config.get("training_before_confirmation_pass_forbidden")):
+        raise ValueError("training must remain forbidden before confirmation passes")
+    if int(config.get("expected_feature_dimension", -1)) != FROZEN_FEATURE_DIMENSION:
+        raise ValueError("confirmation feature dimension differs from the frozen schema")
+    if config.get("expected_feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID:
+        raise ValueError("confirmation feature schema differs from the frozen schema")
+    expected_maps = list(map(str, config.get("expected_maps") or ()))
+    if len(expected_maps) != 6 or len(set(expected_maps)) != 6:
+        raise ValueError("score confirmation requires six unique maps")
+    grouped = [
+        str(map_id)
+        for map_ids in dict(config.get("map_groups") or {}).values()
+        for map_id in map_ids
+    ]
+    if sorted(grouped) != sorted(expected_maps) or len(grouped) != len(set(grouped)):
+        raise ValueError("score confirmation map groups must partition the six maps")
+    contract = dict(config.get("selection_contract") or {})
+    if (
+        contract.get("source_policies") != ["official_adaptive", "v2-full"]
+        or int(contract.get("maximum_source_decision_index", -1)) != 11
+        or int(contract.get("maximum_states_per_episode", -1)) != 1
+        or not bool(contract.get("result_blind"))
+    ):
+        raise ValueError("score confirmation selection contract was changed")
 
 
 def robust_pair_winner(
@@ -912,15 +988,273 @@ def run_robuststep_score_design(
     return report
 
 
+def _confirmation_path(project_root: Path, value: str) -> Path:
+    path = _project_path(project_root, value)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return path
+
+
+def _confirmation_feature_integrity(
+    paths: list[Path], state_ids: set[str], trial_indices: set[int]
+) -> dict[str, Any]:
+    observed: dict[tuple[str, str], dict[str, float]] = {}
+    schema_ids: set[str] = set()
+    dimensions: Counter[int] = Counter()
+    rows_read = 0
+    for path in paths:
+        for row in _read_jsonl(path):
+            state_id = str(row.get("state_id", ""))
+            if state_id not in state_ids or int(row.get("trial_index", -1)) not in trial_indices:
+                continue
+            features = row.get("features")
+            if not isinstance(features, dict):
+                raise ValueError("score confirmation requires candidate feature dictionaries")
+            normalized = {str(name): float(value) for name, value in features.items()}
+            key = (state_id, str(row["candidate_id"]))
+            previous = observed.setdefault(key, normalized)
+            if previous != normalized:
+                raise ValueError(f"candidate features changed across PP seeds: {key}")
+            schema_ids.add(str(row.get("feature_schema_id", "")))
+            dimensions[len(normalized)] += 1
+            rows_read += 1
+    return {
+        "candidate_feature_count": len(observed),
+        "rows_read": rows_read,
+        "feature_schema_ids": sorted(schema_ids),
+        "feature_dimension_counts": {
+            str(key): value for key, value in sorted(dimensions.items())
+        },
+    }
+
+
+def run_robuststep_confirmation(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_confirmation_config(config)
+
+    design_path = _checked_input(project_root, dict(config["score_design_report"]))
+    design = _read_json(design_path)
+    if (
+        design.get("score_design_passed") is not True
+        or design.get("selected_variant_id") != "mean-np100"
+    ):
+        raise ValueError("fresh confirmation is not backed by the frozen score design")
+    formal_path = _checked_input(project_root, dict(config["formal_ood_config"]))
+    dataset_config_path = _checked_input(project_root, dict(config["dataset_config"]))
+    source_config_path = _checked_input(project_root, dict(config["source_config"]))
+    formal = _read_json(formal_path)
+    dataset_config = _read_json(dataset_config_path)
+    source_config = _read_json(source_config_path)
+
+    selection_path = _confirmation_path(project_root, str(config["selection_path"]))
+    trial_paths = [
+        _confirmation_path(project_root, str(value))
+        for value in config["trial_sources"]
+    ]
+    selection = _read_jsonl(selection_path)
+    state_ids = [str(row["state_id"]) for row in selection]
+    selected_ids = set(state_ids)
+    if len(state_ids) != len(selected_ids):
+        raise ValueError("score confirmation selection repeats state IDs")
+
+    loader_config = {
+        "trial_indices": list(config["trial_indices"]),
+        "structure_weight": float(config["structure_weight"]),
+        "trial_sources": [
+            {"path": str(path), "sha256": sha256_file(path)} for path in trial_paths
+        ],
+    }
+    metadata, profiles, integrity = _load_seed_profiles(
+        project_root, loader_config, state_ids=selected_ids
+    )
+    trial_indices = set(map(int, config["trial_indices"]))
+    feature_integrity = _confirmation_feature_integrity(
+        trial_paths, selected_ids, trial_indices
+    )
+
+    expected_maps = set(map(str, config["expected_maps"]))
+    current_maps = {str(row["map_id"]) for row in metadata.values()}
+    old_label_overlap = sorted(current_maps & set(map(str, config["old_label_map_ids"])))
+    formal_maps = {str(row["benchmark_id"]) for row in formal.get("cases", [])}
+    formal_overlap = sorted(current_maps & formal_maps)
+    policy_counts = Counter(str(row["source_policy"]) for row in selection)
+    episode_counts = Counter(
+        (str(row["source_policy"]), str(row["episode_id"])) for row in selection
+    )
+    selection_forbidden_fields = sorted(
+        {
+            key
+            for row in selection
+            for key in (
+                "actual_action",
+                "after_fingerprint",
+                "repair_seconds",
+                "repair_state_changed",
+            )
+            if key in row
+        }
+    )
+    source_roots = {Path(str(row["source_root"])).resolve() for row in selection}
+    dataset_root = _project_path(project_root, str(config["dataset_root"])).resolve()
+    source_dataset_roots = set()
+    for root in source_roots:
+        run = _read_json(root / "run_config.json")
+        source_dataset_roots.add(Path(str(run["dataset"])).resolve())
+    dataset_manifest_path = dataset_root / str(source_config["split"]) / "manifest.jsonl"
+    if not dataset_manifest_path.is_file():
+        raise FileNotFoundError(dataset_manifest_path)
+    dataset_rows = _read_jsonl(dataset_manifest_path)
+    dataset_task_ids = {str(row["task_id"]) for row in dataset_rows}
+    selected_task_ids = {str(row["task_id"]) for row in selection}
+    registered_task_seeds = list(map(int, dataset_config.get("task_seeds") or ()))
+
+    expected_policy_count = int(config["expected_states_per_source_policy"])
+    expected_dimension = int(config["expected_feature_dimension"])
+    expected_schema = str(config["expected_feature_schema_id"])
+    integrity_gates = {
+        "state_count": len(profiles) == int(config["expected_state_count"]),
+        "selection_profile_identity": set(profiles) == selected_ids,
+        "map_set": current_maps == expected_maps,
+        "candidate_floor": integrity["candidate_count"]
+        >= int(config["minimum_candidate_count"]),
+        "outcome_cartesian_complete": integrity["outcome_count"]
+        == integrity["candidate_count"] * len(trial_indices),
+        "candidate_feature_complete": feature_integrity["candidate_feature_count"]
+        == integrity["candidate_count"],
+        "feature_schema": feature_integrity["feature_schema_ids"] == [expected_schema],
+        "feature_dimension": feature_integrity["feature_dimension_counts"]
+        == {str(expected_dimension): integrity["outcome_count"]},
+        "source_policy_balance": policy_counts
+        == Counter({"official_adaptive": expected_policy_count, "v2-full": expected_policy_count}),
+        "one_state_per_source_episode": max(episode_counts.values(), default=0) <= 1,
+        "source_decision_cap": all(int(row["decision_index"]) <= 11 for row in selection),
+        "result_blind_selection": not selection_forbidden_fields,
+        "fresh_task_seeds": registered_task_seeds
+        == list(map(int, config["fresh_task_seeds"])),
+        "source_solver_seeds": list(map(int, source_config["solver_seeds"]))
+        == list(map(int, config["source_solver_seeds"])),
+        "selection_tasks_registered": selected_task_ids <= dataset_task_ids,
+        "source_dataset_identity": source_dataset_roots == {dataset_root},
+        "old_label_map_overlap_zero": not old_label_overlap,
+        "formal_ood_overlap_zero": not formal_overlap,
+    }
+
+    first = list(map(int, config["first_half_indices"]))
+    second = list(map(int, config["second_half_indices"]))
+    baseline = evaluate_robuststep_score_variant(
+        profiles, dict(config["baseline_variant"]), first, second
+    )
+    selected = evaluate_robuststep_score_variant(
+        profiles, dict(config["selected_variant"]), first, second
+    )
+    overall_thresholds = dict(config["overall_gates"])
+    selected["gates"] = _score_gates(selected, overall_thresholds)
+    regret_improvement = float(baseline["mean_cross_half_normalized_regret"]) - float(
+        selected["mean_cross_half_normalized_regret"]
+    )
+    selected["regret_improvement_over_mean"] = regret_improvement
+    selected["gates"]["regret_improvement_over_mean"] = regret_improvement >= float(
+        overall_thresholds["minimum_regret_improvement_over_mean"]
+    )
+    selected["passed"] = all(selected["gates"].values())
+
+    subgroup_thresholds = dict(config["subgroup_gates"])
+    subgroup_specs: dict[str, set[str]] = {
+        f"source_policy:{policy}": {
+            state_id
+            for state_id, row in metadata.items()
+            if str(row["source_policy"]) == policy
+        }
+        for policy in ("official_adaptive", "v2-full")
+    }
+    subgroup_specs.update(
+        {
+            f"map_group:{group_id}": {
+                state_id
+                for state_id, row in metadata.items()
+                if str(row["map_id"]) in set(map(str, map_ids))
+            }
+            for group_id, map_ids in dict(config["map_groups"]).items()
+        }
+    )
+    subgroups = {}
+    for subgroup_id, subgroup_state_ids in sorted(subgroup_specs.items()):
+        subset = {state_id: profiles[state_id] for state_id in sorted(subgroup_state_ids)}
+        result = evaluate_robuststep_score_variant(
+            subset, dict(config["selected_variant"]), first, second
+        )
+        result["state_count"] = len(subset)
+        result["gates"] = {
+            "minimum_state_count": len(subset)
+            >= int(subgroup_thresholds["minimum_state_count"]),
+            **_score_gates(result, subgroup_thresholds),
+        }
+        result["passed"] = all(result["gates"].values())
+        subgroups[subgroup_id] = result
+
+    confirmation_passed = bool(
+        all(integrity_gates.values())
+        and selected["passed"]
+        and all(row["passed"] for row in subgroups.values())
+    )
+    report = {
+        "schema": CONFIRMATION_REPORT_SCHEMA,
+        "scientific_status": "fresh_task_state_score_confirmation",
+        "formal_speed_claim": False,
+        "historically_untouched_map_claim": False,
+        "controller_id": CONTROLLER_ID,
+        "score_schema": str(config["score_schema"]),
+        "runtime_used_in_score": False,
+        "training_was_allowed_before_analysis": False,
+        "integrity": integrity,
+        "feature_integrity": feature_integrity,
+        "integrity_gates": integrity_gates,
+        "current_maps": sorted(current_maps),
+        "old_label_map_overlap": old_label_overlap,
+        "formal_ood_overlap": formal_overlap,
+        "selection_forbidden_fields": selection_forbidden_fields,
+        "baseline": baseline,
+        "selected": selected,
+        "subgroups": subgroups,
+        "confirmation_passed": confirmation_passed,
+        "next_decision": (
+            "freeze_mean_np100_and_start_small_balanced_pilot"
+            if confirmation_passed
+            else "retain_v2_actions_and_do_not_train_robuststep"
+        ),
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "score_design_report_sha256": sha256_file(design_path),
+            "dataset_config_sha256": sha256_file(dataset_config_path),
+            "source_config_sha256": sha256_file(source_config_path),
+            "selection_sha256": sha256_file(selection_path),
+            "dataset_manifest_sha256": sha256_file(dataset_manifest_path),
+            "trial_source_sha256": {
+                str(path): sha256_file(path) for path in trial_paths
+            },
+        },
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_json(output_root / "robuststep_confirmation_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
     "evaluate_robuststep_variant",
     "robust_pair_winner",
     "run_robuststep_design",
+    "run_robuststep_confirmation",
     "run_robuststep_seed_depth",
     "run_robuststep_score_design",
     "validate_robuststep_config",
+    "validate_robuststep_confirmation_config",
     "validate_robuststep_seed_depth_config",
     "validate_robuststep_score_config",
     "evaluate_robuststep_score_variant",

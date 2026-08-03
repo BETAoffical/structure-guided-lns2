@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_fresh_task_confirmation_dataset",
+  "dataset_revision": "stride-robuststep-confirmation-dataset-v1",
+  "source": "https://www.movingai.com/benchmarks/dao/index.html",
+  "master_seed": 20280803,
+  "task_seeds": [53, 71],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
+    "sha256": "229393af31caaec732e5f4fd923940845ab056e94dadfb96b8afc24da472d3af"
+  },
+  "expected_map_count": 6,
+  "expected_instance_count": 24,
+  "benchmarks": [
+    {
+      "id": "den009d",
+      "layout_family": "dao_compact_game",
+      "member": "den009d.map",
+      "member_sha256": "ee825ba89e5b345bb2f7828adcee0dba32a7c18a030c05e9708206083923779a",
+      "agent_counts": [200]
+    },
+    {
+      "id": "den101d",
+      "layout_family": "dao_compact_game",
+      "member": "den101d.map",
+      "member_sha256": "a43f92df61f9bda523686b568127e410a79fc8dd460feaa06ed315bb7fb816a5",
+      "agent_counts": [160]
+    },
+    {
+      "id": "den308d",
+      "layout_family": "dao_compact_game",
+      "member": "den308d.map",
+      "member_sha256": "d264bcb64e93e1ec9cae3dca69eb053322178188c8224c3ab3fdc0ba1d56bffb",
+      "agent_counts": [320]
+    },
+    {
+      "id": "den408d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "den408d.map",
+      "member_sha256": "2f8198b8af734bd328f231cdfbc2c2c97011607b336420b5761e8831b266ed43",
+      "agent_counts": [240]
+    },
+    {
+      "id": "lak101d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "lak101d.map",
+      "member_sha256": "701b2d222fa1dc97c76c2f28a60c238f1af166c4af933092ad837000b5e6aa12",
+      "agent_counts": [160]
+    },
+    {
+      "id": "ost102d",
+      "layout_family": "dao_ultra_compact_game",
+      "member": "ost102d.map",
+      "member_sha256": "44eaf2e95fba8e9dfbaeb47ae2aced17db3ddfbb4fc63ed5275bebee7abb7da5",
+      "agent_counts": [120]
+    }
+  ]
+}

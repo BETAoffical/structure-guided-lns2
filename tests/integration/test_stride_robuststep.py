@@ -15,6 +15,7 @@ from experiments.stride_robuststep import (
     evaluate_robuststep_variant,
     evaluate_robuststep_score_variant,
     robust_pair_winner,
+    validate_robuststep_confirmation_config,
     validate_robuststep_seed_depth_config,
 )
 
@@ -245,6 +246,49 @@ class StrideRobustStepTest(unittest.TestCase):
         self.assertEqual(report["mean_top3_overlap"], 1.0)
         self.assertEqual(report["mean_cross_half_normalized_regret"], 0.0)
         self.assertEqual(report["winner_agreement_rate"], 1.0)
+
+    def test_confirmation_contract_freezes_selected_score_and_evidence_boundary(self) -> None:
+        config = {
+            "schema": "lns2.stride.robuststep_confirmation_config.v1",
+            "scientific_status": "fresh_task_state_score_confirmation",
+            "formal_speed_claim": False,
+            "historically_untouched_map_claim": False,
+            "controller_id": "stride-robuststep-v1",
+            "score_schema": "lns2.stride.robust_step_score.v1",
+            "trial_indices": list(range(16)),
+            "first_half_indices": list(range(8)),
+            "second_half_indices": list(range(8, 16)),
+            "structure_weight": 0.02,
+            "baseline_variant": {
+                "id": "mean", "mode": "mean", "deviation_weight": 0.0,
+                "no_progress_penalty": 0.0,
+            },
+            "selected_variant": {
+                "id": "mean-np100", "mode": "mean", "deviation_weight": 0.0,
+                "no_progress_penalty": 0.1,
+            },
+            "runtime_used_in_score": False,
+            "future_repair_rounds_used_in_score": False,
+            "cost_to_go_used_in_score": False,
+            "training_before_confirmation_pass_forbidden": True,
+            "expected_feature_dimension": 124,
+            "expected_feature_schema_id": "lns2.realized_features.v2",
+            "expected_maps": [f"map-{index}" for index in range(6)],
+            "map_groups": {
+                "compact": ["map-0", "map-1", "map-2"],
+                "ultra": ["map-3", "map-4", "map-5"],
+            },
+            "selection_contract": {
+                "source_policies": ["official_adaptive", "v2-full"],
+                "maximum_source_decision_index": 11,
+                "maximum_states_per_episode": 1,
+                "result_blind": True,
+            },
+        }
+        validate_robuststep_confirmation_config(config)
+        config["selected_variant"]["no_progress_penalty"] = 0.2
+        with self.assertRaisesRegex(ValueError, "retune"):
+            validate_robuststep_confirmation_config(config)
 
 
 if __name__ == "__main__":
