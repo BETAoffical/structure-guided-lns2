@@ -1052,6 +1052,34 @@ separately; no action or quality gate changed. The final corrected frozen
 Shadow-config SHA-256 is
 `c2a76b38fd46ffa705b7469774222f22914a3fe84c7e7ef57908c7d44cea5b9f`.
 
+### Completed non-promoting frozen-V2 boundary Shadow
+
+The Shadow completed all 18 states with every integrity and exploratory Quick
+gate passing. Adding the 23 boundary candidates changed the frozen V2 action
+on 18/18 states, and every augmented-pool action was boundary-only. Against the
+same eight paired PP-seed immediate-quality yardstick, 12/18 actions improved
+and 6/18 worsened. Mean normalized selected-action gain was 0.2999 and remained
+0.2940 on the previously unseen seed half. Exact-best rate increased from
+0.0556 to 0.6111 and quality Top-3 rate from 0.4444 to 0.7778; mean normalized
+regret decreased from 0.4332 to 0.1333.
+
+The benefit was concentrated in topology-relevant groups: articulated states
+improved on 6/8 and ultra-bottleneck states on 5/6. The low-articulation
+control group improved on only 1/4 and worsened on 3/4. In addition, the chosen
+boundary actions had 0.2726 mean frozen-V2 feature-range violation fraction.
+Thus the result shows that frozen V2 can exploit this candidate family on the
+same states, but also signals out-of-distribution confidence and a necessary
+control-group safeguard. It remains offline immediate-quality evidence, not a
+TTF result or promotion evidence.
+
+An independent rerun reproduced both artifacts byte-for-byte. The outcome-
+blind selections and report SHA-256 values are
+`ab0ee0f247ab220fdcc10dda21365d246a8a2b5a852391032552d732bad76dac`
+and `9baafd6ca06ec0bad43f1961cc17f3452b5789fd3cac415f20876af1e178cced`.
+The registered next step is a small paired runtime Quick that retains both
+topology-relevant and low-articulation control tasks, uses capped wall TTF as
+the primary diagnostic, and cannot promote or replace V2.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
