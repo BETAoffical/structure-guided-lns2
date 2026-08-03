@@ -1,0 +1,40 @@
+{
+  "schema": "lns2.stride.topology_anchor_failure_config.v1",
+  "scientific_status": "posthoc_failure_mechanism_diagnostic",
+  "formal_speed_claim": false,
+  "training_allowed": false,
+  "candidate_repair_trials_allowed": false,
+  "diagnostic_id": "stride-topoanchor-failure-v1",
+  "candidate_generator_id": "stride-topoanchor-v1",
+  "expected_state_count": 16,
+  "expected_candidate_count": 360,
+  "expected_trial_count": 1440,
+  "trial_indices": [0, 1, 2, 3],
+  "label": {
+    "structure_weight": 0.02,
+    "no_progress_penalty": 0.10
+  },
+  "inputs": {
+    "quality_config": {
+      "path": "configs/stride_topology_anchor_quality_pilot.json",
+      "sha256": "146e3b03f18fcc455665190bd1c635acb758d7604894c645485dfd140c2459d3"
+    },
+    "collection_report": {
+      "path": "build/stride-topology-anchor-quality-pilot-v1/collection_report.json",
+      "sha256": "89e0415f2f9434106579a70bd16b8cca6689bf7bf67f72832e5bff74767e687d"
+    },
+    "repair_trials": {
+      "path": "build/stride-topology-anchor-quality-pilot-v1/repair_trials.jsonl",
+      "sha256": "28e2a793eb4edca470a90879ae96ceb677caef56a47711cc3d94cb4e0da245e7"
+    },
+    "coverage_candidate_rows": {
+      "path": "build/stride-topology-anchor-coverage-v1/topology_coverage_candidates.jsonl",
+      "sha256": "6c0d2aba662300361e68c1bf427e50d7e384c7090e9d4e4313cc7bab303f48d0"
+    },
+    "quality_report": {
+      "path": "build/stride-topology-anchor-quality-analysis-v1/topology_anchor_quality_report.json",
+      "sha256": "799c21413db13f54ba8932d17d1486f205b880d0a6abd358b64a28fbfa356e67"
+    }
+  },
+  "next_decision": "register_one_boundary_oriented_proposal_only_revision_before_fresh_quality_data"
+}

@@ -261,6 +261,7 @@ def _collect_topology_coverage(
     validator: Any,
     analyzer: Any,
     augmenter: Any = None,
+    analyzer_uses_candidate_rows: bool = False,
 ) -> dict[str, Any]:
     config_path = Path(config_path).resolve()
     project_root = config_path.parents[1]
@@ -354,6 +355,8 @@ def _collect_topology_coverage(
                     "selection_families": list(map(str, candidate["selection_families"])),
                     "features": features,
                 }
+                if "proposal_audit" in candidate:
+                    row["proposal_audit"] = _plain(candidate["proposal_audit"])
                 candidate_rows.append(row)
                 feature_rows.append(row)
             first_features = dict(feature_rows[0]["features"])
@@ -418,7 +421,11 @@ def _collect_topology_coverage(
     candidate_rows.sort(
         key=lambda row: (str(row["state_id"]), str(row["candidate_id"]))
     )
-    report = analyzer(config, state_rows)
+    report = (
+        analyzer(config, state_rows, candidate_rows)
+        if analyzer_uses_candidate_rows
+        else analyzer(config, state_rows)
+    )
     output_root = Path(output).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     state_path = output_root / "topology_coverage_states.jsonl"

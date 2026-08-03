@@ -149,6 +149,159 @@ def generate_topology_anchor_candidates(
     return sorted(by_agents.values(), key=lambda row: str(row["candidate_id"]))
 
 
+def topology_candidate_audit(
+    analysis: StateAnalysis, selected_agents: Iterable[int]
+) -> dict[str, float]:
+    """Return outcome-free conflict coverage diagnostics for one neighborhood."""
+
+    selected = set(map(int, selected_agents))
+    if not selected:
+        raise ValueError("topology candidate audit requires a non-empty neighborhood")
+    known = set(analysis.component_id)
+    event_count = len(analysis.events)
+    pair_count = len(analysis.pair_set)
+
+    def counts(items: Iterable[Any]) -> tuple[int, int, int]:
+        internal = 0
+        incident = 0
+        boundary = 0
+        for item in items:
+            left = int(item.left if hasattr(item, "left") else item[0])
+            right = int(item.right if hasattr(item, "right") else item[1])
+            left_selected = left in selected
+            right_selected = right in selected
+            internal += int(left_selected and right_selected)
+            incident += int(left_selected or right_selected)
+            boundary += int(left_selected != right_selected)
+        return internal, incident, boundary
+
+    event_internal, event_incident, event_boundary = counts(analysis.events)
+    pair_internal, pair_incident, pair_boundary = counts(sorted(analysis.pair_set))
+    reached_components = {
+        int(analysis.component_id[agent]) for agent in selected if agent in known
+    }
+    component_count = len(analysis.component_members)
+    return {
+        "global_event_incident_coverage": event_incident / event_count if event_count else 0.0,
+        "global_event_internal_coverage": event_internal / event_count if event_count else 0.0,
+        "global_event_boundary_ratio": event_boundary / event_incident if event_incident else 0.0,
+        "global_pair_incident_coverage": pair_incident / pair_count if pair_count else 0.0,
+        "global_pair_internal_coverage": pair_internal / pair_count if pair_count else 0.0,
+        "global_pair_boundary_ratio": pair_boundary / pair_incident if pair_incident else 0.0,
+        "conflict_component_reach": (
+            len(reached_components) / component_count if component_count else 0.0
+        ),
+    }
+
+
+def _boundary_neighborhood(
+    state: dict[str, Any], analysis: StateAnalysis, events: list[ConflictEvent],
+    *, size: int, core_budget: int,
+) -> list[int]:
+    """Select incident endpoints while discouraging closure of covered conflicts."""
+
+    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    if size <= 0 or core_budget <= 0 or not events:
+        raise ValueError("topology boundary candidate requires events and positive budgets")
+    selected: set[int] = set()
+
+    def choose(available: set[int], scored_events: list[ConflictEvent]) -> int:
+        def score(agent: int) -> tuple[int, int, int, int, int, int]:
+            newly_incident = sum(
+                agent in {event.left, event.right}
+                and event.left not in selected
+                and event.right not in selected
+                for event in scored_events
+            )
+            newly_internal = sum(
+                agent in {event.left, event.right}
+                and ((event.left in selected) != (event.right in selected))
+                for event in scored_events
+            )
+            component = analysis.component_id.get(agent)
+            component_novel = int(
+                component is not None
+                and all(analysis.component_id.get(current) != component for current in selected)
+            )
+            return (
+                3 * newly_incident - newly_internal,
+                newly_incident,
+                -newly_internal,
+                component_novel,
+                int(agent_rows[agent].get("conflict_degree", 0)),
+                -agent,
+            )
+
+        return max(available, key=score)
+
+    relevant_agents = {
+        agent for event in events for agent in (int(event.left), int(event.right))
+    }
+    while len(selected) < min(core_budget, size) and relevant_agents - selected:
+        candidate = choose(relevant_agents - selected, events)
+        before_coverage = sum(
+            event.left in selected or event.right in selected for event in events
+        )
+        selected.add(candidate)
+        after_coverage = sum(
+            event.left in selected or event.right in selected for event in events
+        )
+        if after_coverage == before_coverage:
+            selected.remove(candidate)
+            break
+
+    active_agents = {
+        agent for event in analysis.events for agent in (int(event.left), int(event.right))
+    }
+    limit = min(size, len(agent_rows))
+    while len(selected) < limit:
+        remaining_active = active_agents - selected
+        available = remaining_active if remaining_active else set(agent_rows) - selected
+        selected.add(choose(available, analysis.events))
+    return sorted(selected)
+
+
+def generate_topology_boundary_candidates(
+    state: dict[str, Any], analysis: StateAnalysis, *, neighborhood_size: int,
+    core_budget: int,
+) -> list[dict[str, Any]]:
+    """Generate at most one boundary-oriented size-16 candidate per topology kind."""
+
+    by_agents: dict[tuple[int, ...], dict[str, Any]] = {}
+    for kind in ("articulation", "low_degree"):
+        events = _relevant_events(analysis, kind)
+        if not events:
+            continue
+        agents = tuple(
+            _boundary_neighborhood(
+                state, analysis, events, size=neighborhood_size, core_budget=core_budget
+            )
+        )
+        family = f"topology-boundary-{kind}:{neighborhood_size}"
+        row = by_agents.setdefault(
+            agents,
+            {
+                "candidate_id": candidate_id(agents),
+                "agents": list(agents),
+                "actual_size": len(agents),
+                "selection_families": [],
+                "selection_rank_by_family": {},
+                "proposal_count_by_family": {},
+                "proposal_seeds": [],
+                "seed_agents": [],
+                "proposal_audit": topology_candidate_audit(analysis, agents),
+            },
+        )
+        row["selection_families"].append(family)
+        row["selection_rank_by_family"][family] = 0
+        row["proposal_count_by_family"][family] = 1
+    for row in by_agents.values():
+        row["selection_families"].sort()
+        row["selection_rank_by_family"] = dict(sorted(row["selection_rank_by_family"].items()))
+        row["proposal_count_by_family"] = dict(sorted(row["proposal_count_by_family"].items()))
+    return sorted(by_agents.values(), key=lambda row: str(row["candidate_id"]))
+
+
 def merge_topology_anchor_candidates(
     base_candidates: list[dict[str, Any]], anchor_candidates: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -187,5 +340,7 @@ def merge_topology_anchor_candidates(
 
 __all__ = [
     "generate_topology_anchor_candidates",
+    "generate_topology_boundary_candidates",
     "merge_topology_anchor_candidates",
+    "topology_candidate_audit",
 ]

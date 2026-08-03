@@ -808,6 +808,47 @@ Frozen V2 remains active. The next safe step is an outcome decomposition of
 anchor size, topology kind, PP progress, conflict reduction, and structure
 penalty, not additional training or seed collection.
 
+### Completed topology-anchor failure decomposition
+
+The read-only post-hoc decomposition reused the 1440 registered outcomes and
+executed no new repair. The best anchor used size 16 on 14/16 states; across all
+anchor candidates, mean label score rose from 0.0116 at size 4 and 0.0954 at
+size 8 to 0.2299 at size 16. Removing the small sizes is therefore supported by
+the existing Pilot rather than by a new outcome search.
+
+The ultra-bottleneck failure came primarily from realized repair quality. Its
+best-anchor minus best-base normalized conflict-reduction delta was -0.1138,
+while the weighted structure-penalty delta was only +0.0041 and PP time differed
+by only +0.0024 seconds. Articulated states had the same direction but smaller
+magnitude (-0.0214 conflict reduction), while controls improved by +0.0325.
+Thus complete topology-event coverage was not a sufficient repair objective;
+selecting both endpoints appears to over-close mutually dependent bottleneck
+conflicts. This is a mechanism hypothesis, not a causal or TTF result.
+
+The deterministic decomposition-report SHA-256 is
+`991741b2e703cf56ced4655cf91204bf7463f06290146a7f4a0fc707ae7f488e`.
+
+### Registered topology-boundary candidate revision
+
+`stride-topoboundary-v1` is one final proposal-only revision of this line. It
+retains only size 16 and adds at most two candidates per state. For each topology
+kind it first selects at most four individual incident endpoints, explicitly
+penalizing conversion of already covered conflicts from boundary to internal,
+then fills from the global conflict graph using the same boundary objective and
+component diversity. It does not read repair outcomes, call PP, train a model,
+or change the active controller.
+
+The diagnostic reuses the 24 consumed states only to audit proposal shape. It
+requires mean relevant incident coverage at least 0.70, mean relevant boundary
+ratio at least 0.65 overall and on ultra-bottleneck states, no more than 0.02
+mean loss in global event incidence versus the outcome-free base frontier, no
+loss in global boundary ratio, and no more than 0.05 mean loss in conflict-
+component reach. The total pool is capped at 20 candidates. These gates are
+frozen before generating the revised candidates. A pass permits construction
+of a fresh topology-balanced cohort; it does not permit repair on these reused
+states, training, runtime export, or a TTF claim. A failure terminates this
+topology-specific proposal line.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
