@@ -19,6 +19,7 @@ from experiments.stride_robuststep import (
     validate_robuststep_confirmation_config,
     validate_robuststep_feature_probe_config,
     validate_robuststep_seed_depth_config,
+    validate_robuststep_stepgate_config,
     validate_robuststep_v2_headroom_config,
 )
 
@@ -393,6 +394,61 @@ class StrideRobustStepTest(unittest.TestCase):
         config["runtime_export_allowed"] = True
         with self.assertRaisesRegex(ValueError, "diagnostic-only"):
             validate_robuststep_feature_probe_config(config)
+
+    def test_stepgate_contract_uses_nested_map_calibration_and_abstention(self) -> None:
+        config = {
+            "schema": "lns2.stride.robuststep_stepgate_config.v1",
+            "scientific_status": "consumed_nested_abstention_diagnostic",
+            "formal_speed_claim": False,
+            "default_replacement_allowed": False,
+            "runtime_export_allowed": False,
+            "formal_ood_allowed": False,
+            "diagnostic_result_may_promote_model": False,
+            "ephemeral_probe_training_allowed": True,
+            "diagnostic_controller_id": "stride-stepgate-v1",
+            "frozen_anchor_id": "v2-full",
+            "challenger_id": "stride-stepdiag-v1/exact-v2-86",
+            "challenger_input_profile": "exact_v2_86",
+            "outer_fold_protocol": {
+                "mode": "leave_one_whole_map_out",
+                "fold_count": 6,
+                "held_out_maps": [f"map-{index}" for index in range(6)],
+                "test_map_outcome_blind": True,
+            },
+            "inner_calibration": {
+                "mode": "leave_one_whole_training_map_out",
+                "candidate_thresholds": [0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90],
+                "abstain_threshold": 1.01,
+                "selection_rule": "lowest_threshold_passing_all_inner_gates",
+                "fallback": "abstain_all_to_frozen_v2",
+            },
+            "inner_gates": {
+                "minimum_overall_regret_improvement": 0.02,
+                "minimum_stable_regret_improvement": 0.02,
+                "minimum_stable_top3_delta": 0.0,
+                "maximum_worst_map_regret_degradation": 0.03,
+                "minimum_switch_count": 2,
+            },
+            "diagnostic_gates": {
+                "minimum_stable_state_count": 24,
+                "minimum_overall_regret_improvement": 0.02,
+                "minimum_stable_regret_improvement": 0.03,
+                "minimum_stable_top3_delta": 0.0,
+                "minimum_map_regret_win_count": 3,
+                "maximum_worst_map_regret_degradation": 0.03,
+                "minimum_switch_count": 4,
+                "minimum_switch_precision": 0.60,
+            },
+            "switch_timing": "before_pp_repair",
+            "failure_triggered_switching": False,
+            "runtime_used_in_oracle": False,
+            "future_repair_rounds_used_in_oracle": False,
+            "cost_to_go_used_in_oracle": False,
+        }
+        validate_robuststep_stepgate_config(config)
+        config["failure_triggered_switching"] = True
+        with self.assertRaisesRegex(ValueError, "current-step"):
+            validate_robuststep_stepgate_config(config)
 
 
 if __name__ == "__main__":

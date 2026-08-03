@@ -38,6 +38,8 @@ V2_HEADROOM_CONFIG_SCHEMA = "lns2.stride.robuststep_v2_headroom_config.v1"
 V2_HEADROOM_REPORT_SCHEMA = "lns2.stride.robuststep_v2_headroom_report.v1"
 FEATURE_PROBE_CONFIG_SCHEMA = "lns2.stride.robuststep_feature_probe_config.v1"
 FEATURE_PROBE_REPORT_SCHEMA = "lns2.stride.robuststep_feature_probe_report.v1"
+STEPGATE_CONFIG_SCHEMA = "lns2.stride.robuststep_stepgate_config.v1"
+STEPGATE_REPORT_SCHEMA = "lns2.stride.robuststep_stepgate_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -355,6 +357,75 @@ def validate_robuststep_feature_probe_config(config: dict[str, Any]) -> None:
         "random_state": 20260714,
     }:
         raise ValueError("feature-probe model parameters were changed")
+
+
+def validate_robuststep_stepgate_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != STEPGATE_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step step-gate config")
+    if (
+        config.get("scientific_status") != "consumed_nested_abstention_diagnostic"
+        or bool(config.get("formal_speed_claim"))
+        or bool(config.get("default_replacement_allowed"))
+        or bool(config.get("runtime_export_allowed"))
+        or bool(config.get("formal_ood_allowed"))
+        or bool(config.get("diagnostic_result_may_promote_model"))
+        or not bool(config.get("ephemeral_probe_training_allowed"))
+    ):
+        raise ValueError("step gate must remain ephemeral and diagnostic-only")
+    if (
+        config.get("diagnostic_controller_id") != "stride-stepgate-v1"
+        or config.get("frozen_anchor_id") != "v2-full"
+        or config.get("challenger_id") != "stride-stepdiag-v1/exact-v2-86"
+        or config.get("challenger_input_profile") != "exact_v2_86"
+    ):
+        raise ValueError("unexpected step-gate controller identity")
+    outer = dict(config.get("outer_fold_protocol") or {})
+    maps = tuple(map(str, outer.get("held_out_maps") or ()))
+    if (
+        outer.get("mode") != "leave_one_whole_map_out"
+        or int(outer.get("fold_count", -1)) != 6
+        or len(maps) != 6
+        or len(set(maps)) != 6
+        or not bool(outer.get("test_map_outcome_blind"))
+    ):
+        raise ValueError("step gate requires six outcome-blind outer map folds")
+    calibration = dict(config.get("inner_calibration") or {})
+    if (
+        calibration.get("mode") != "leave_one_whole_training_map_out"
+        or list(map(float, calibration.get("candidate_thresholds") or ()))
+        != [0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]
+        or float(calibration.get("abstain_threshold", -1.0)) != 1.01
+        or calibration.get("selection_rule") != "lowest_threshold_passing_all_inner_gates"
+        or calibration.get("fallback") != "abstain_all_to_frozen_v2"
+    ):
+        raise ValueError("step-gate inner calibration was changed")
+    if dict(config.get("inner_gates") or {}) != {
+        "minimum_overall_regret_improvement": 0.02,
+        "minimum_stable_regret_improvement": 0.02,
+        "minimum_stable_top3_delta": 0.0,
+        "maximum_worst_map_regret_degradation": 0.03,
+        "minimum_switch_count": 2,
+    }:
+        raise ValueError("step-gate inner safety gates were changed")
+    if dict(config.get("diagnostic_gates") or {}) != {
+        "minimum_stable_state_count": 24,
+        "minimum_overall_regret_improvement": 0.02,
+        "minimum_stable_regret_improvement": 0.03,
+        "minimum_stable_top3_delta": 0.0,
+        "minimum_map_regret_win_count": 3,
+        "maximum_worst_map_regret_degradation": 0.03,
+        "minimum_switch_count": 4,
+        "minimum_switch_precision": 0.60,
+    }:
+        raise ValueError("step-gate diagnostic gates were changed")
+    if (
+        bool(config.get("runtime_used_in_oracle"))
+        or bool(config.get("future_repair_rounds_used_in_oracle"))
+        or bool(config.get("cost_to_go_used_in_oracle"))
+        or config.get("switch_timing") != "before_pp_repair"
+        or config.get("failure_triggered_switching") is not False
+    ):
+        raise ValueError("step gate violates the current-step evidence boundary")
 
 
 def robust_pair_winner(
@@ -2134,6 +2205,559 @@ def run_robuststep_feature_probe(
     return report
 
 
+def _rebuild_stepgate_states(
+    project_root: Path, feature_config: dict[str, Any]
+) -> dict[str, Any]:
+    selection_path = _checked_input(project_root, dict(feature_config["selection"]))
+    manifest_path = _checked_input(
+        project_root, dict(feature_config["controller_bundle"])
+    )
+    ranker_path = _checked_input(project_root, dict(feature_config["frozen_ranker"]))
+    trial_paths = [
+        _checked_input(project_root, dict(specification))
+        for specification in feature_config["trial_sources"]
+    ]
+    selection = _read_jsonl(selection_path)
+    selection_by_id = {str(row["state_id"]): row for row in selection}
+    state_ids = set(selection_by_id)
+    if len(state_ids) != len(selection):
+        raise ValueError("step-gate selection repeats state IDs")
+    _, profiles, integrity = _load_seed_profiles(
+        project_root, feature_config, state_ids=state_ids
+    )
+    features = _confirmation_candidate_features(
+        trial_paths,
+        state_ids,
+        set(map(int, feature_config["trial_indices"])),
+    )
+    registered_names = tuple(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    first = list(map(int, feature_config["first_half_indices"]))
+    second = list(map(int, feature_config["second_half_indices"]))
+    full = list(map(int, feature_config["trial_indices"]))
+    oracle = dict(feature_config["oracle_score"])
+    map_group_by_id = {
+        str(map_id): str(group_id)
+        for group_id, map_ids in dict(feature_config["map_groups"]).items()
+        for map_id in map_ids
+    }
+    states: dict[str, list[dict[str, Any]]] = {}
+    for state_id, candidates in sorted(profiles.items()):
+        source = selection_by_id[state_id]
+        candidate_ids = sorted(candidates)
+        if set(features.get(state_id, {})) != set(candidate_ids):
+            raise ValueError(f"step-gate feature/candidate mismatch: {state_id}")
+        rows = []
+        first_ranking = []
+        second_ranking = []
+        for candidate_id in candidate_ids:
+            feature_row = features[state_id][candidate_id]
+            if set(feature_row) != set(registered_names):
+                raise ValueError(f"step-gate feature schema mismatch: {state_id}")
+            first_score = _aggregate_candidate_score(
+                candidates[candidate_id], first, oracle
+            )
+            second_score = _aggregate_candidate_score(
+                candidates[candidate_id], second, oracle
+            )
+            rows.append(
+                {
+                    "candidate_id": candidate_id,
+                    "candidate_key": candidate_id,
+                    "features": feature_row,
+                    "first_score": first_score,
+                    "second_score": second_score,
+                    "full_score": _aggregate_candidate_score(
+                        candidates[candidate_id], full, oracle
+                    ),
+                    "map_id": str(source["map_id"]),
+                    "map_group": map_group_by_id[str(source["map_id"])],
+                    "source_policy": str(source["source_policy"]),
+                    "conflict_band": str(source["conflict_band"]),
+                }
+            )
+            first_ranking.append((candidate_id, first_score))
+            second_ranking.append((candidate_id, second_score))
+        first_winner = min(first_ranking, key=lambda row: (-row[1], row[0]))[0]
+        second_winner = min(second_ranking, key=lambda row: (-row[1], row[0]))[0]
+        for row in rows:
+            row["oracle_half_winner_agreement"] = first_winner == second_winner
+        states[state_id] = rows
+
+    ranker_payload = _read_json(ranker_path)
+    input_specs = tuple(
+        (str(row["mode"]), str(row["name"]))
+        for row in ranker_payload["input_features"]
+    )
+    if len(input_specs) != 86:
+        raise ValueError("step-gate exact V2 input dimension differs")
+    bundle = load_controller_bundle(manifest_path.parent)
+    frozen_model = bundle.main_models["realized_dynamic"]
+    frozen_predictions = {}
+    for state_id, state in sorted(states.items()):
+        online_rows = [
+            {
+                "candidate_id": row["candidate_id"],
+                "candidate_key": row["candidate_key"],
+                "features": {"realized_dynamic": row["features"]},
+            }
+            for row in state
+        ]
+        selected_index, _, _ = score_online_candidates(online_rows, frozen_model)
+        frozen_predictions[state_id] = str(state[selected_index]["candidate_id"])
+    return {
+        "states": states,
+        "state_ids": state_ids,
+        "input_specs": input_specs,
+        "frozen_predictions": frozen_predictions,
+        "integrity": integrity,
+        "feature_candidate_count": sum(len(rows) for rows in features.values()),
+        "input_paths": {
+            "selection": selection_path,
+            "controller_manifest": manifest_path,
+            "frozen_ranker": ranker_path,
+            "trial_sources": trial_paths,
+        },
+    }
+
+
+def _stepgate_advantage_probability(
+    estimator: Any,
+    challenger: dict[str, Any],
+    anchor: dict[str, Any],
+    input_specs: tuple[tuple[str, str], ...],
+) -> float:
+    import numpy as np
+
+    if challenger["candidate_id"] == anchor["candidate_id"]:
+        return 0.5
+    forward = estimator.predict_proba(
+        np.asarray(
+            [pair_vector(challenger["features"], anchor["features"], input_specs)],
+            dtype=np.float32,
+        )
+    )[0, 1]
+    reverse = estimator.predict_proba(
+        np.asarray(
+            [pair_vector(anchor["features"], challenger["features"], input_specs)],
+            dtype=np.float32,
+        )
+    )[0, 1]
+    return (float(forward) + (1.0 - float(reverse))) / 2.0
+
+
+def _stepgate_fold_decisions(
+    *,
+    states: dict[str, list[dict[str, Any]]],
+    train_ids: list[str],
+    test_ids: list[str],
+    input_specs: tuple[tuple[str, str], ...],
+    parameters: dict[str, Any],
+    frozen_predictions: dict[str, str],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    pair_rows = _feature_probe_pairs(states, train_ids, input_specs)
+    estimator = _fit_feature_probe(pair_rows, parameters)
+    decisions = {}
+    for state_id in test_ids:
+        state = states[state_id]
+        challenger = _select_model(state, estimator, input_specs)
+        by_id = {str(row["candidate_id"]): row for row in state}
+        anchor = by_id[frozen_predictions[state_id]]
+        decisions[state_id] = {
+            "challenger_candidate_id": str(challenger["candidate_id"]),
+            "frozen_candidate_id": str(anchor["candidate_id"]),
+            "challenger_advantage_probability": _stepgate_advantage_probability(
+                estimator, challenger, anchor, input_specs
+            ),
+        }
+    return decisions, {
+        "training_state_count": len(train_ids),
+        "test_state_count": len(test_ids),
+        "training_directional_pair_count": pair_rows["directional_pair_count"],
+    }
+
+
+def _stepgate_predictions(
+    decisions: dict[str, dict[str, Any]], threshold: float
+) -> dict[str, str]:
+    return {
+        state_id: (
+            str(row["challenger_candidate_id"])
+            if str(row["challenger_candidate_id"])
+            != str(row["frozen_candidate_id"])
+            and float(row["challenger_advantage_probability"]) + 1e-12 >= threshold
+            else str(row["frozen_candidate_id"])
+        )
+        for state_id, row in decisions.items()
+    }
+
+
+def _stepgate_model_summary(
+    records: list[dict[str, Any]], maps: list[str]
+) -> dict[str, Any]:
+    return {
+        "overall": _feature_probe_summary(records),
+        "stable_states": _feature_probe_summary(
+            [row for row in records if row["oracle_half_winner_agreement"]]
+        ),
+        "unstable_states": _feature_probe_summary(
+            [row for row in records if not row["oracle_half_winner_agreement"]]
+        ),
+        "by_map": {
+            map_id: _feature_probe_summary(
+                [row for row in records if row["map_id"] == map_id]
+            )
+            for map_id in maps
+        },
+    }
+
+
+def _stepgate_evaluation(
+    *,
+    predictions: dict[str, str],
+    decisions: dict[str, dict[str, Any]],
+    states: dict[str, list[dict[str, Any]]],
+    frozen_predictions: dict[str, str],
+    maps: list[str],
+    gates_config: dict[str, Any],
+    include_stable_count_gate: bool,
+) -> dict[str, Any]:
+    model_records = [
+        _feature_probe_record(
+            "stride-stepgate-v1", state_id, predictions[state_id], states[state_id]
+        )
+        for state_id in sorted(predictions)
+    ]
+    frozen_records = [
+        _feature_probe_record(
+            "v2-full", state_id, frozen_predictions[state_id], states[state_id]
+        )
+        for state_id in sorted(predictions)
+    ]
+    model = _stepgate_model_summary(model_records, maps)
+    frozen = _stepgate_model_summary(frozen_records, maps)
+    overall_improvement = float(frozen["overall"]["mean_normalized_regret"]) - float(
+        model["overall"]["mean_normalized_regret"]
+    )
+    stable_improvement = float(
+        frozen["stable_states"]["mean_normalized_regret"]
+    ) - float(model["stable_states"]["mean_normalized_regret"])
+    stable_top3_delta = float(model["stable_states"]["top3_hit_rate"]) - float(
+        frozen["stable_states"]["top3_hit_rate"]
+    )
+    map_deltas = {
+        map_id: float(model["by_map"][map_id]["mean_normalized_regret"])
+        - float(frozen["by_map"][map_id]["mean_normalized_regret"])
+        for map_id in maps
+    }
+    switched = [
+        state_id
+        for state_id, selected_id in predictions.items()
+        if selected_id != frozen_predictions[state_id]
+    ]
+    model_by_state = {str(row["state_id"]): row for row in model_records}
+    frozen_by_state = {str(row["state_id"]): row for row in frozen_records}
+    improved_switches = sum(
+        float(model_by_state[state_id]["normalized_regret"]) + 1e-12
+        < float(frozen_by_state[state_id]["normalized_regret"])
+        for state_id in switched
+    )
+    degraded_switches = sum(
+        float(model_by_state[state_id]["normalized_regret"])
+        > float(frozen_by_state[state_id]["normalized_regret"]) + 1e-12
+        for state_id in switched
+    )
+    switch_precision = improved_switches / len(switched) if switched else 0.0
+    gates = {
+        "minimum_overall_regret_improvement": overall_improvement
+        >= float(gates_config["minimum_overall_regret_improvement"]),
+        "minimum_stable_regret_improvement": stable_improvement
+        >= float(gates_config["minimum_stable_regret_improvement"]),
+        "minimum_stable_top3_delta": stable_top3_delta
+        >= float(gates_config["minimum_stable_top3_delta"]),
+        "maximum_worst_map_regret_degradation": max(map_deltas.values())
+        <= float(gates_config["maximum_worst_map_regret_degradation"]),
+        "minimum_switch_count": len(switched)
+        >= int(gates_config["minimum_switch_count"]),
+    }
+    if include_stable_count_gate:
+        gates.update(
+            {
+                "minimum_stable_state_count": int(
+                    model["stable_states"]["state_count"]
+                )
+                >= int(gates_config["minimum_stable_state_count"]),
+                "minimum_map_regret_win_count": sum(
+                    delta < -1e-12 for delta in map_deltas.values()
+                )
+                >= int(gates_config["minimum_map_regret_win_count"]),
+                "minimum_switch_precision": switch_precision
+                >= float(gates_config["minimum_switch_precision"]),
+            }
+        )
+    return {
+        "model": model,
+        "frozen": frozen,
+        "overall_regret_improvement": overall_improvement,
+        "stable_regret_improvement": stable_improvement,
+        "stable_top3_delta": stable_top3_delta,
+        "map_regret_deltas": map_deltas,
+        "map_regret_win_count": sum(delta < -1e-12 for delta in map_deltas.values()),
+        "worst_map_regret_degradation": max(map_deltas.values()),
+        "switch_count": len(switched),
+        "switch_rate": len(switched) / len(predictions),
+        "improved_switch_count": improved_switches,
+        "degraded_switch_count": degraded_switches,
+        "switch_precision": switch_precision,
+        "gates": gates,
+        "passed": all(gates.values()),
+    }
+
+
+def run_robuststep_stepgate(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_stepgate_config(config)
+    feature_config_path = _checked_input(
+        project_root, dict(config["feature_probe_config"])
+    )
+    feature_report_path = _checked_input(
+        project_root, dict(config["feature_probe_report"])
+    )
+    feature_config = _read_json(feature_config_path)
+    validate_robuststep_feature_probe_config(feature_config)
+    feature_report = _read_json(feature_report_path)
+    if (
+        feature_report.get("diagnosis")
+        != "feature_sufficiency_not_demonstrated_on_consumed_cohort"
+        or feature_report.get("diagnostic_complete") is not True
+        or feature_report.get("default_replacement_allowed") is not False
+    ):
+        raise ValueError("step gate requires the completed failed feature probe")
+    prepared = _rebuild_stepgate_states(project_root, feature_config)
+    states = prepared["states"]
+    state_ids = prepared["state_ids"]
+    input_specs = prepared["input_specs"]
+    frozen_predictions = prepared["frozen_predictions"]
+    parameters = dict(feature_config["model_parameters"])
+    maps = list(map(str, dict(config["outer_fold_protocol"])["held_out_maps"]))
+    thresholds = list(map(float, dict(config["inner_calibration"])["candidate_thresholds"]))
+    abstain_threshold = float(dict(config["inner_calibration"])["abstain_threshold"])
+    inner_gates = dict(config["inner_gates"])
+
+    outer_predictions = {}
+    outer_challenger_predictions = {}
+    outer_decisions = {}
+    fold_reports = []
+    for fold_index, outer_map in enumerate(maps):
+        outer_train_maps = [map_id for map_id in maps if map_id != outer_map]
+        inner_decisions = {}
+        inner_fold_rows = []
+        for inner_map in outer_train_maps:
+            inner_train_ids = sorted(
+                state_id
+                for state_id, state in states.items()
+                if str(state[0]["map_id"]) not in {outer_map, inner_map}
+            )
+            inner_test_ids = sorted(
+                state_id
+                for state_id, state in states.items()
+                if str(state[0]["map_id"]) == inner_map
+            )
+            decisions, fit = _stepgate_fold_decisions(
+                states=states,
+                train_ids=inner_train_ids,
+                test_ids=inner_test_ids,
+                input_specs=input_specs,
+                parameters=parameters,
+                frozen_predictions=frozen_predictions,
+            )
+            inner_decisions.update(decisions)
+            inner_fold_rows.append(
+                {
+                    "held_out_inner_map": inner_map,
+                    "inner_training_maps": sorted(
+                        set(outer_train_maps) - {inner_map}
+                    ),
+                    **fit,
+                }
+            )
+        calibration_rows = []
+        selected_threshold = abstain_threshold
+        for threshold in thresholds:
+            predictions = _stepgate_predictions(inner_decisions, threshold)
+            evaluation = _stepgate_evaluation(
+                predictions=predictions,
+                decisions=inner_decisions,
+                states=states,
+                frozen_predictions=frozen_predictions,
+                maps=outer_train_maps,
+                gates_config=inner_gates,
+                include_stable_count_gate=False,
+            )
+            calibration_rows.append(
+                {
+                    "threshold": threshold,
+                    "overall_regret_improvement": evaluation[
+                        "overall_regret_improvement"
+                    ],
+                    "stable_regret_improvement": evaluation[
+                        "stable_regret_improvement"
+                    ],
+                    "stable_top3_delta": evaluation["stable_top3_delta"],
+                    "worst_map_regret_degradation": evaluation[
+                        "worst_map_regret_degradation"
+                    ],
+                    "switch_count": evaluation["switch_count"],
+                    "gates": evaluation["gates"],
+                    "passed": evaluation["passed"],
+                }
+            )
+            if evaluation["passed"] and selected_threshold == abstain_threshold:
+                selected_threshold = threshold
+
+        outer_train_ids = sorted(
+            state_id
+            for state_id, state in states.items()
+            if str(state[0]["map_id"]) != outer_map
+        )
+        outer_test_ids = sorted(
+            state_id
+            for state_id, state in states.items()
+            if str(state[0]["map_id"]) == outer_map
+        )
+        decisions, fit = _stepgate_fold_decisions(
+            states=states,
+            train_ids=outer_train_ids,
+            test_ids=outer_test_ids,
+            input_specs=input_specs,
+            parameters=parameters,
+            frozen_predictions=frozen_predictions,
+        )
+        predictions = _stepgate_predictions(decisions, selected_threshold)
+        outer_predictions.update(predictions)
+        outer_decisions.update(decisions)
+        outer_challenger_predictions.update(
+            {
+                state_id: str(row["challenger_candidate_id"])
+                for state_id, row in decisions.items()
+            }
+        )
+        fold_reports.append(
+            {
+                "fold_index": fold_index,
+                "held_out_outer_map": outer_map,
+                "outer_training_maps": outer_train_maps,
+                "selected_threshold": selected_threshold,
+                "calibration_fell_back_to_abstain": selected_threshold
+                == abstain_threshold,
+                "inner_folds": inner_fold_rows,
+                "calibration": calibration_rows,
+                "outer_fit": fit,
+                "outer_switch_count": sum(
+                    predictions[state_id] != frozen_predictions[state_id]
+                    for state_id in outer_test_ids
+                ),
+            }
+        )
+
+    evaluation = _stepgate_evaluation(
+        predictions=outer_predictions,
+        decisions=outer_decisions,
+        states=states,
+        frozen_predictions=frozen_predictions,
+        maps=maps,
+        gates_config=dict(config["diagnostic_gates"]),
+        include_stable_count_gate=True,
+    )
+    feature_frozen = {
+        str(row["state_id"]): str(row["selected_candidate_id"])
+        for row in feature_report["records"]["v2-full"]
+    }
+    feature_challenger = {
+        str(row["state_id"]): str(row["selected_candidate_id"])
+        for row in feature_report["records"][str(config["challenger_id"])]
+    }
+    integrity = prepared["integrity"]
+    integrity_gates = {
+        "state_count": integrity["state_count"]
+        == int(feature_config["expected_state_count"]),
+        "candidate_count": integrity["candidate_count"]
+        == int(feature_config["expected_candidate_count"]),
+        "outcome_count": integrity["outcome_count"]
+        == int(feature_config["expected_outcome_count"]),
+        "feature_candidate_complete": prepared["feature_candidate_count"]
+        == integrity["candidate_count"],
+        "outer_predictions_complete": set(outer_predictions) == state_ids,
+        "outer_challenger_matches_feature_probe": outer_challenger_predictions
+        == feature_challenger,
+        "frozen_predictions_match_feature_probe": frozen_predictions == feature_frozen,
+        "thresholds_are_inner_selected_or_abstain": all(
+            float(row["selected_threshold"]) in {*thresholds, abstain_threshold}
+            for row in fold_reports
+        ),
+        "outer_maps_partition_states": {
+            str(state[0]["map_id"]) for state in states.values()
+        }
+        == set(maps),
+    }
+    diagnostic_passed = all(integrity_gates.values()) and bool(evaluation["passed"])
+    report = {
+        "schema": STEPGATE_REPORT_SCHEMA,
+        "scientific_status": "consumed_nested_abstention_diagnostic",
+        "formal_speed_claim": False,
+        "default_replacement_allowed": False,
+        "runtime_model_exported": False,
+        "formal_ood_claim": False,
+        "switch_timing": "before_pp_repair",
+        "failure_triggered_switching": False,
+        "diagnostic_controller_id": str(config["diagnostic_controller_id"]),
+        "frozen_anchor_id": str(config["frozen_anchor_id"]),
+        "challenger_id": str(config["challenger_id"]),
+        "integrity": integrity,
+        "integrity_gates": integrity_gates,
+        "folds": fold_reports,
+        "evaluation": evaluation,
+        "diagnostic_passed": diagnostic_passed,
+        "diagnosis": (
+            "nested_confidence_gate_controls_consumed_map_regression"
+            if diagnostic_passed
+            else "nested_confidence_gate_does_not_control_consumed_map_regression"
+        ),
+        "next_decision": (
+            "register_fresh_map_confirmation_for_stepgate_without_promoting"
+            if diagnostic_passed
+            else "retain_v2_and_start_topology_interaction_feature_design"
+        ),
+        "decisions": outer_decisions,
+        "predictions": outer_predictions,
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "feature_probe_config_sha256": sha256_file(feature_config_path),
+            "feature_probe_report_sha256": sha256_file(feature_report_path),
+            "selection_sha256": sha256_file(
+                prepared["input_paths"]["selection"]
+            ),
+            "controller_manifest_sha256": sha256_file(
+                prepared["input_paths"]["controller_manifest"]
+            ),
+            "frozen_ranker_sha256": sha256_file(
+                prepared["input_paths"]["frozen_ranker"]
+            ),
+            "trial_source_sha256": {
+                str(path): sha256_file(path)
+                for path in prepared["input_paths"]["trial_sources"]
+            },
+        },
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_json(output_root / "robuststep_stepgate_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
@@ -2145,10 +2769,12 @@ __all__ = [
     "run_robuststep_score_design",
     "run_robuststep_v2_headroom",
     "run_robuststep_feature_probe",
+    "run_robuststep_stepgate",
     "validate_robuststep_config",
     "validate_robuststep_confirmation_config",
     "validate_robuststep_v2_headroom_config",
     "validate_robuststep_feature_probe_config",
+    "validate_robuststep_stepgate_config",
     "validate_robuststep_seed_depth_config",
     "validate_robuststep_score_config",
     "evaluate_robuststep_score_variant",

@@ -15,6 +15,7 @@ from experiments.stride_robuststep import (  # noqa: E402
     run_robuststep_feature_probe,
     run_robuststep_score_design,
     run_robuststep_seed_depth,
+    run_robuststep_stepgate,
     run_robuststep_v2_headroom,
 )
 
@@ -32,6 +33,7 @@ def main() -> int:
             "confirmation",
             "v2-headroom",
             "feature-probe",
+            "stepgate",
         ),
         default="design",
     )
@@ -49,6 +51,7 @@ def main() -> int:
         "confirmation": run_robuststep_confirmation,
         "v2-headroom": run_robuststep_v2_headroom,
         "feature-probe": run_robuststep_feature_probe,
+        "stepgate": run_robuststep_stepgate,
     }[arguments.analysis]
     report = runner(arguments.config, arguments.output)
     print(json.dumps(report, indent=2, sort_keys=True))

@@ -484,6 +484,34 @@ regressions, the next expansion must combine broader topology-balanced maps
 with candidate-relative bottleneck/conflict-interaction features rather than
 repeating static global context alone.
 
+### Registered nested current-step confidence gate
+
+`stride-stepgate-v1` is an ephemeral abstention diagnostic around the smallest
+probe, `stride-stepdiag-v1/exact-v2-86`. It does not use the 124-feature
+variants and never exports a runtime model. The outer evaluation leaves one of
+the same six consumed maps wholly unseen. Within each outer training set, five
+additional leave-one-map-out models calibrate a threshold from the fixed grid
+0.55 through 0.90. The outer test map contributes neither repair outcomes nor
+threshold selection. If no threshold passes the inner safety gates, that
+outer fold uses threshold 1.01 and therefore keeps V2 for every state.
+
+At a decision, the challenger is first selected from the candidate pool. Its
+symmetrized pairwise probability of beating the frozen-V2 action is then
+computed before PP runs. The action switches only when that probability meets
+the calibrated threshold; otherwise it abstains to frozen V2. This is not a
+failed-repair trigger and does not use repair time, future rounds, Cost-to-Go,
+or any post-action field.
+
+An inner threshold must improve both overall and stable-winner regret by at
+least 0.02, keep stable Top-3 non-inferior, switch at least two states, and
+degrade no inner held-out map by more than 0.03. The final nested OOF result
+must improve overall regret by 0.02 and stable regret by 0.03, preserve stable
+Top-3, win at least three maps, degrade no map by more than 0.03, switch at
+least four states, and make at least 60 percent of switches genuinely lower-
+regret than V2. Passing permits only a new fresh-map confirmation design;
+failure keeps V2 and moves to candidate-relative topology/interaction feature
+design. Neither outcome can promote a controller from this consumed cohort.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
