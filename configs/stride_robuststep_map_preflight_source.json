@@ -21,6 +21,16 @@
     "controller_action",
     "controller_repair_outcome"
   ],
+  "expected_map_count": 8,
+  "expected_task_count": 34,
+  "solver_seeds": [1, 2, 3, 4],
+  "selection_rule": {
+    "minimum_mean_initial_conflicts": 10.0,
+    "target_mean_initial_conflicts": [50.0, 200.0],
+    "maximum_tasks_per_map": 2,
+    "tie_break": ["absolute_target_distance", "lower_agent_count", "lower_scenario_index", "task_id"],
+    "underloaded_fallback": "highest_mean_initial_conflicts"
+  },
   "benchmarks": [
     {
       "id": "maze-128-128-2", "layout_family": "maze", "agent_counts": [350, 400],

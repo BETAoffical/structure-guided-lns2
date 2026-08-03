@@ -89,6 +89,23 @@ same four label variants and gates are retained, and a variant must pass both
 greater PP-seed depth makes the proposed contract plausible; a new result-blind
 confirmation cohort would still be required.
 
+The 96-state seed-depth diagnostic completed with 1,700 candidates and 27,200
+outcomes. No variant passed. For `w625-p125`, eight-versus-eight pairwise
+consistency increased to 0.7789 and good-set Jaccard to 0.7123, but consistency
+remained below 0.80; the confirmation subgroup also remained below the Jaccard
+gate at 0.6946. This shows that extra seeds reduce noise but do not by
+themselves make the current robust-pair contract reliable. Report SHA-256:
+`3b438754f65555237ea831e85f7bca1f0aea626d03c08b3b6fe2d462a40d765f`.
+
+The map/load preflight is separately frozen before qualification. It contains
+34 tasks (eight maps, two scenarios, and registered load candidates) and four
+solver seeds, for 136 reset-only jobs. For each map, tasks with mean initial
+conflicts at least 10 are eligible; without controller outcomes, the selector
+chooses at most two distinct tasks closest to mean conflict targets 50 and 200.
+If no task reaches 10, it reports the highest-conflict task as an underloaded
+fallback and requires a higher-load preflight rather than silently accepting
+it. Ties prefer lower agent count, lower scenario index, then task ID.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

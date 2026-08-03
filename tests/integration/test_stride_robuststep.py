@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 
+from experiments.stride_robuststep_preflight import analyze_preflight_rows
+
 from experiments.stride_robuststep import (
     evaluate_robuststep_variant,
     robust_pair_winner,
@@ -99,6 +101,60 @@ class StrideRobustStepTest(unittest.TestCase):
         config["second_half_indices"] = list(range(7, 15))
         with self.assertRaisesRegex(ValueError, "8\\+8"):
             validate_robuststep_seed_depth_config(config)
+
+    def test_preflight_selection_is_outcome_blind_and_targeted(self) -> None:
+        source = {
+            "role": "stride_robuststep_outcome_blind_load_preflight",
+            "solver_seeds": [1, 2],
+            "expected_map_count": 1,
+            "expected_task_count": 2,
+            "consumed_development_exceptions": [],
+            "benchmarks": [{"id": "map-a", "layout_family": "maze"}],
+            "selection_rule": {
+                "minimum_mean_initial_conflicts": 10.0,
+                "target_mean_initial_conflicts": [50.0, 200.0],
+                "maximum_tasks_per_map": 2,
+            },
+        }
+        dataset = [
+            {
+                "task_id": f"task-{index}", "map_id": "map-a",
+                "layout_mode": "maze", "scenario_type": f"movingai_random_{index}",
+                "agent_count": 100 * index,
+            }
+            for index in (1, 2)
+        ]
+        qualification = []
+        for index, conflicts in ((1, 40), (2, 180)):
+            for seed in (1, 2):
+                qualification.append(
+                    {
+                        "task_id": f"task-{index}", "map_id": "map-a",
+                        "solver_seed": seed, "agent_count": 100 * index,
+                        "status": "ok", "initial_complete": True,
+                        "state_fingerprint": f"state-{index}-{seed}",
+                        "initial_conflicts": conflicts,
+                        "initial_complexity": {
+                            "conflict_pair_density": 0.01,
+                            "mean_path_cost": 12.0,
+                            "initial_low_level_expanded": 100.0,
+                        },
+                    }
+                )
+        report = analyze_preflight_rows(
+            source, dataset, qualification, {"passed": True}, {"cases": []}
+        )
+        self.assertTrue(report["passed"])
+        self.assertEqual(
+            [row["task_id"] for row in report["recommended_tasks"]],
+            ["task-1", "task-2"],
+        )
+        qualification[0]["controller_action"] = "forbidden"
+        report = analyze_preflight_rows(
+            source, dataset, qualification, {"passed": True}, {"cases": []}
+        )
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["forbidden_outcome_fields_found"], ["controller_action"])
 
 
 if __name__ == "__main__":

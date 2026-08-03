@@ -179,6 +179,16 @@
       "purpose": "Paired-seed robust current-step label design with explicit action uncertainty and fresh-confirmation boundary."
     },
     {
+      "path": "experiments/stride_robuststep_preflight.py",
+      "role": "active",
+      "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
+    },
+    {
+      "path": "scripts/analyze_stride_robuststep_preflight.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the registered STRIDE robust-step map/load preflight analysis."
+    },
+    {
       "path": "experiments/stride_stage3.py",
       "role": "active",
       "purpose": "Final integrity, coverage, leakage, weighting, and reproducibility audit for the registered STRIDE Stage 3 label cohort."
@@ -781,7 +791,7 @@
     {
       "path": "tests/integration/test_stride_robuststep.py",
       "role": "active",
-      "contract": "Robust paired-seed dominance, no-progress noninferiority, good-set stability, and uncertainty contracts."
+      "contract": "Robust paired-seed dominance, seed-depth stability, outcome-blind map/load selection, OOD isolation, and uncertainty contracts."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",
