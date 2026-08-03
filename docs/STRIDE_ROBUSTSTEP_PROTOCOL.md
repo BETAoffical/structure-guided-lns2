@@ -1492,6 +1492,36 @@ and `f24f7bfb48064791332f046f75db5a4fc9d21227692828dce437bd9b43f4f8eb`.
 This selection remains a data-source artifact; it contains no repairability
 label and reads no formal OOD map.
 
+### Exact target-path restoration for paired repair trials
+
+The first 16-seed collection attempt was interrupted after nine completed
+states because two high-load `v2-full` states exposed a replay-integrity
+failure. Re-running reset plus the complete recorded prefix either terminated
+before the selected decision or reached a different full fingerprint. This is
+an operational wall-clock sensitivity of high-load initial PP, not a candidate
+repair outcome, and neither failed state is removed or replaced.
+
+Repairability collection v2 therefore reconstructs the selected pre-action
+state directly from the stored trace deltas and stops before reading the target
+action or outcome. Each native proposal or PP branch is created with
+`reset_paths` from the exact recorded agent paths. Full iteration, low-level,
+and wall-clock counters intentionally reset in the native branch, while the
+repair-structure fingerprint (map, paths, conflicts, feasibility, and cost)
+must match exactly. The registered 124 features continue to use the complete
+stored source state, including its true decision index and accumulated search
+context. Proposal generation additionally requires an unchanged native state
+revision and repair-structure fingerprint. All candidates at a state use the
+same deterministic restore seed, and every candidate at a trial index still
+uses the same paired PP seed.
+
+The two states that triggered the interruption were restored successfully
+under this contract: the `den206d` state retained 225 conflict pairs while its
+iteration counter reset from 7 to 0, and the `ht_mansion_n` state retained nine
+conflict pairs while its counter reset from 8 to 0. Both repair-structure
+fingerprints matched exactly. The interrupted v1 output is preserved as failure
+evidence; v2 writes to a new output directory and has a new run fingerprint.
+This restoration milestone is not a label, ranking, or TTF result.
+
 ### Preregistered staged raw-TTF evaluation
 
 Runtime evaluation separates candidate-pool quality from ranking quality with

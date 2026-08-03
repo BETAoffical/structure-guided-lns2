@@ -12,6 +12,7 @@ from experiments.repair_collection import (
     _fingerprint,
     _plain,
     _read_json,
+    _read_jsonl,
     _run_jobs,
     _write_json,
     _write_jsonl,
@@ -20,6 +21,7 @@ from experiments.repair_collection import (
 from experiments.state_analysis import summarize_initial_state_complexity
 from experiments.stride_collection import (
     FULL_POOL_PROPOSAL,
+    STRIDE_SOURCE_POLICIES,
     _paired_action,
     _replay_job,
     _validate_native_repair,
@@ -32,14 +34,18 @@ from experiments.stride_lns import (
     post_structure_metrics,
 )
 from experiments.stride_repairability import validate_repairability_label_config
-from experiments.trace_replay import replay_prefix
+from experiments.trace_replay import (
+    TARGET_STATE_RESTORE_CONTRACT,
+    restore_repair_state,
+    target_state_from_trace,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.online_selection import generate_online_candidates
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
 
-COLLECTION_SCHEMA = "lns2.stride.repairability_collection.v1"
-STATE_SCHEMA = "lns2.stride.repairability_state.v1"
+COLLECTION_SCHEMA = "lns2.stride.repairability_collection.v2"
+STATE_SCHEMA = "lns2.stride.repairability_state.v2"
 BOUNDARY_AUGMENTATION = {
     "enabled": True,
     "generator_id": "stride-topoboundary-v1",
@@ -80,6 +86,55 @@ def repairability_pp_seed(state_repair_fingerprint: str, trial_index: int) -> in
         )[:16],
         16,
     ) % (2**31)
+
+
+def repairability_restore_seed(state_repair_fingerprint: str) -> int:
+    return int(
+        _fingerprint(
+            {
+                "namespace": TARGET_STATE_RESTORE_CONTRACT,
+                "repair_state": str(state_repair_fingerprint),
+            }
+        )[:16],
+        16,
+    ) % (2**31)
+
+
+def _source_target_state(
+    decision: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], Path]:
+    source_root = Path(str(decision["source_root"])).resolve()
+    source_policy = str(decision["source_policy"])
+    matching_policies = [
+        manifest_name
+        for _policy_key, (manifest_name, policy_name) in STRIDE_SOURCE_POLICIES.items()
+        if policy_name == source_policy
+    ]
+    if len(matching_policies) != 1:
+        raise ValueError(f"unsupported repairability source policy: {source_policy}")
+    manifests = [
+        row
+        for row in _read_jsonl(source_root / matching_policies[0])
+        if str(row.get("episode_id")) == str(decision["episode_id"])
+    ]
+    if len(manifests) != 1:
+        raise ValueError("selected repairability episode must resolve exactly once")
+    manifest = manifests[0]
+    if (
+        str(manifest.get("status")) != "ok"
+        or str(manifest.get("task_id")) != str(decision["task_id"])
+        or int(manifest.get("solver_seed", -1)) != int(decision["solver_seed"])
+    ):
+        raise ValueError("selected repairability episode provenance changed")
+    state, trace_path = target_state_from_trace(
+        source_root,
+        manifest,
+        decision_index=int(decision["decision_index"]),
+        expected_fingerprint=str(decision["before_fingerprint"]),
+    )
+    if int(state["num_of_colliding_pairs"]) != int(decision["before_conflicts"]):
+        raise ValueError("selected repairability conflict count changed")
+    return state, manifest, trace_path
 
 
 def _candidate_signature(candidate: dict[str, Any]) -> tuple[Any, ...]:
@@ -188,13 +243,18 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"completed repairability artifact is invalid: {output_path}")
 
     replay = _replay_job(decision)
-    environment, state = replay_prefix(replay, decision["prefix_actions"])
+    state, source_manifest, source_trace_path = _source_target_state(decision)
     initial_fingerprint = state_fingerprint(state)
     if initial_fingerprint != str(decision["before_fingerprint"]):
         raise RuntimeError(
             f"repairability replay mismatch for {decision['state_id']}"
         )
     initial_repair_fingerprint = repair_structure_fingerprint(state)
+    restore_seed = repairability_restore_seed(initial_repair_fingerprint)
+    environment, restored_state = restore_repair_state(
+        replay, state, seed=restore_seed
+    )
+    restored_fingerprint = state_fingerprint(restored_state)
     before_conflicts = int(state["num_of_colliding_pairs"])
     if before_conflicts <= 0 or bool(state.get("done")):
         raise ValueError("repairability state must be active and conflicting")
@@ -209,7 +269,7 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         decision_index=int(decision["decision_index"]),
         proposal_config=base_proposal,
         state_hash=initial_fingerprint,
-        verify_full_state=True,
+        verify_full_state=False,
         proposal_backend="optimized",
         shadow_validation=False,
     )
@@ -233,14 +293,18 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         decision_index=int(decision["decision_index"]),
         proposal_config=augmented_proposal,
         state_hash=initial_fingerprint,
-        verify_full_state=True,
+        verify_full_state=False,
         proposal_backend="optimized",
         shadow_validation=False,
         topology_static_grid=feature_engine.static_grid,
         topology_no_progress_streak=0,
         topology_remaining_wall_seconds=None,
     )
-    if state_fingerprint(state) != initial_fingerprint:
+    if (
+        state_fingerprint(state) != initial_fingerprint
+        or repair_structure_fingerprint(_plain(environment.get_state()))
+        != initial_repair_fingerprint
+    ):
         raise RuntimeError("repairability candidate generation changed the state")
     base_by_id = {
         str(candidate["candidate_id"]): _candidate_signature(candidate)
@@ -289,11 +353,14 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         }
         candidate_records.append(candidate_record)
         for trial_index in trial_indices:
-            branch_environment, branch_state = replay_prefix(
-                replay, decision["prefix_actions"]
+            branch_environment, branch_state = restore_repair_state(
+                replay, state, seed=restore_seed
             )
-            if state_fingerprint(branch_state) != initial_fingerprint:
-                raise RuntimeError("repairability paired branch replay changed")
+            if (
+                repair_structure_fingerprint(branch_state)
+                != initial_repair_fingerprint
+            ):
+                raise RuntimeError("repairability paired branch restore changed")
             seed = repairability_pp_seed(initial_repair_fingerprint, trial_index)
             result = _plain(branch_environment.step(_paired_action(agents, seed)))
             after, metrics = _validate_native_repair(
@@ -357,6 +424,15 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         "before_fingerprint": initial_fingerprint,
         "before_repair_fingerprint": initial_repair_fingerprint,
         "before_conflicts": before_conflicts,
+        "state_restore": {
+            "contract": TARGET_STATE_RESTORE_CONTRACT,
+            "restore_seed": restore_seed,
+            "source_trace_file": str(source_manifest["trace_file"]),
+            "source_trace_path": str(source_trace_path),
+            "source_full_fingerprint": initial_fingerprint,
+            "restored_full_fingerprint": restored_fingerprint,
+            "repair_structure_fingerprint": initial_repair_fingerprint,
+        },
         "state_summary": summarize_initial_state_complexity(state),
         "base_candidate_generation": base_generation,
         "augmented_candidate_generation": generation,
@@ -445,6 +521,7 @@ def collect_repairability_trials(
         "feature_dimension": FROZEN_FEATURE_DIMENSION,
         "base_proposal": FULL_POOL_PROPOSAL,
         "boundary_augmentation": BOUNDARY_AUGMENTATION,
+        "target_state_restore_contract": TARGET_STATE_RESTORE_CONTRACT,
         "pp_trial_indices": list(trial_indices),
         "source_run_config_sha256": dict(sorted(source_run_configs.items())),
         "producer": producer,
@@ -600,4 +677,8 @@ def collect_repairability_trials(
     return report
 
 
-__all__ = ["collect_repairability_trials", "repairability_pp_seed"]
+__all__ = [
+    "collect_repairability_trials",
+    "repairability_pp_seed",
+    "repairability_restore_seed",
+]

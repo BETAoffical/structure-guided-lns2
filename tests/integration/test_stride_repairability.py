@@ -16,9 +16,12 @@ from experiments.stride_repairability import (
     validate_repairability_label_config,
 )
 from experiments.stride_repairability_collection import (
+    STATE_SCHEMA,
     _artifact_valid,
     repairability_pp_seed,
+    repairability_restore_seed,
 )
+from experiments.trace_replay import state_before_decision
 from experiments.stride_repairability_selection import (
     prepare_repairability_selection,
     validate_repairability_data_design,
@@ -284,6 +287,53 @@ class StrideRepairabilityTest(unittest.TestCase):
             first,
             [repairability_pp_seed("other-state", index) for index in range(16)],
         )
+        self.assertEqual(
+            repairability_restore_seed("state-fingerprint"),
+            repairability_restore_seed("state-fingerprint"),
+        )
+        self.assertNotEqual(
+            repairability_restore_seed("state-fingerprint"),
+            repairability_restore_seed("other-state"),
+        )
+
+    def test_target_state_reconstruction_does_not_read_target_outcome(self) -> None:
+        initial = {
+            "initialized": True,
+            "initial_solution_complete": True,
+            "feasible": False,
+            "done": False,
+            "rows": 1,
+            "cols": 2,
+            "obstacles": [],
+            "sum_of_costs": 2,
+            "num_of_colliding_pairs": 1,
+            "conflict_edges": [[0, 1]],
+            "agents": [
+                {"id": 0, "path": [0, 1], "conflict_degree": 1},
+                {"id": 1, "path": [1, 0], "conflict_degree": 1},
+            ],
+            "iteration": 7,
+            "low_level": {"expanded": 1, "generated": 2, "reopened": 0, "runs": 1},
+        }
+        from experiments.repair_collection import state_fingerprint
+
+        target = {
+            "decision_index": 7,
+            "before_fingerprint": state_fingerprint(initial),
+            "state_delta": "must-not-be-read",
+            "state_extras_delta": "must-not-be-read",
+            "metrics": "must-not-be-read",
+            "after": "must-not-be-read",
+        }
+        self.assertEqual(
+            state_before_decision(
+                initial,
+                [target],
+                decision_index=7,
+                expected_fingerprint=state_fingerprint(initial),
+            ),
+            initial,
+        )
 
     def test_collection_resume_artifact_requires_complete_candidate_product(self) -> None:
         candidates = [{"candidate_id": "a"}, {"candidate_id": "b"}]
@@ -303,7 +353,7 @@ class StrideRepairabilityTest(unittest.TestCase):
             for index in range(16)
         ]
         payload = {
-            "schema": "lns2.stride.repairability_state.v1",
+            "schema": STATE_SCHEMA,
             "run_fingerprint": "run-a",
             "state_id": "state-a",
             "complete": True,

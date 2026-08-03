@@ -17,6 +17,7 @@ from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
 TRACE_REPLAY_CONTRACT = "lns2.trace_replay.pp-seeded-neighborhood.v2"
+TARGET_STATE_RESTORE_CONTRACT = "lns2.trace_replay.target-path-restore.v1"
 
 
 def recorded_replay_action(event: dict[str, Any]) -> dict[str, Any]:
@@ -245,6 +246,72 @@ def result_blind_decision_rows(
     return rows, events
 
 
+def state_before_decision(
+    initial_state: dict[str, Any],
+    transition_events: Iterable[dict[str, Any]],
+    *,
+    decision_index: int,
+    expected_fingerprint: str | None = None,
+) -> dict[str, Any]:
+    """Reconstruct one recorded pre-action state without reading its outcome.
+
+    Only deltas from decisions strictly before ``decision_index`` are applied.
+    The target transition's action, metrics, repair outcome, and after-state
+    delta are deliberately not inspected.
+    """
+
+    target = int(decision_index)
+    state = dict(initial_state)
+    for event in transition_events:
+        current = int(event["decision_index"])
+        before_fingerprint = state_fingerprint(state)
+        if before_fingerprint != str(event.get("before_fingerprint")):
+            raise ValueError("source before fingerprint mismatch")
+        if current == target:
+            if (
+                expected_fingerprint is not None
+                and before_fingerprint != str(expected_fingerprint)
+            ):
+                raise ValueError("selected target fingerprint mismatch")
+            return state
+        if current > target:
+            break
+        if str(event.get("schema")) == EPISODE_SCHEMA_V2:
+            after = apply_state_delta(state, event["state_delta"])
+            after.update(apply_extras_delta(state, event["state_extras_delta"]))
+        else:
+            after = dict(event["after"])
+        state = after
+    raise ValueError(f"source trace does not contain decision {target}")
+
+
+def target_state_from_trace(
+    collection_root: Path,
+    manifest: dict[str, Any],
+    *,
+    decision_index: int,
+    expected_fingerprint: str | None = None,
+) -> tuple[dict[str, Any], Path]:
+    """Load the exact stored state immediately before a selected decision."""
+
+    trace_path = contained_file(
+        collection_root,
+        manifest.get("trace_file"),
+        field="trace_file",
+    )
+    events = read_trace_events(trace_path)
+    if len(events) < 2:
+        raise ValueError("source trace has no decision transitions")
+    initial = _initial_state(collection_root, trace_path, events[0])
+    state = state_before_decision(
+        initial,
+        events[1:-1],
+        decision_index=decision_index,
+        expected_fingerprint=expected_fingerprint,
+    )
+    return state, trace_path
+
+
 def replay_prefix(
     job: dict[str, Any], actions: Iterable[dict[str, Any]]
 ) -> tuple[Any, dict[str, Any]]:
@@ -258,3 +325,32 @@ def replay_prefix(
             raise RuntimeError("prefix terminated before target state")
         state = _plain(environment.step(dict(action)))["observation"]
     return environment, state
+
+
+def restore_repair_state(
+    job: dict[str, Any], source_state: dict[str, Any], *, seed: int
+) -> tuple[Any, dict[str, Any]]:
+    """Create an independent native branch from recorded repair paths.
+
+    ``reset_paths`` intentionally resets counters and the wall clock, so full
+    state fingerprints need not match.  The repair-structure fingerprint must
+    match exactly before a branch is allowed to run.
+    """
+
+    agents = sorted(source_state.get("agents", []), key=lambda row: int(row["id"]))
+    if [int(agent["id"]) for agent in agents] != list(range(len(agents))):
+        raise ValueError("source repair state has non-contiguous agent ids")
+    paths = [list(map(int, agent.get("path", []))) for agent in agents]
+    if not paths or any(not path for path in paths):
+        raise ValueError("source repair state has an empty agent path")
+    environment = _make_environment(
+        job["dataset_root"],
+        job["row"],
+        job["environment"],
+        str(job.get("replay_destroy_strategy", "Adaptive")),
+    )
+    restored = _plain(environment.reset_paths(paths, seed=int(seed)))
+    expected = repair_structure_fingerprint(source_state)
+    if repair_structure_fingerprint(restored) != expected:
+        raise RuntimeError("restored native repair structure differs from source")
+    return environment, restored
