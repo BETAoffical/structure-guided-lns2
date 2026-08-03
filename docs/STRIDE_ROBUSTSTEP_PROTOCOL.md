@@ -1822,3 +1822,26 @@ Its result determines whether the next separately registered collection should
 be topology-enriched or should keep Boundary optional while prioritizing
 map-diverse base candidates. The config SHA-256 is
 `05a847c730546c6275ef167b0471491f4952cd9c55a9b453c36feb0f8aa360b7`.
+
+### Completed all-state GuardRank topology relevance scan
+
+The input-only scan replayed all 96 states and passed every integrity gate.
+It found 33 relevant states (0.34375). Excluding the low-topology controls,
+the high/mid relevance fraction was 0.45833, exactly equal to the failed
+32-state selection; the preregistered full-minus-selected delta was therefore
+0.0 rather than the 0.10 required to attribute undercoverage to task selection.
+Both low-topology control maps remained entirely event-free, giving a control
+relevance fraction of 0.0 and confirming their role as abstention controls.
+
+This rejects the hypothesis that conflict-target selection caused the sparse
+Boundary coverage. Under the current articulation/low-degree definitions,
+topology applicability is intrinsically sparse on these fresh maps. Boundary
+must remain optional; the next data extension should prioritize repair labels
+for map-diverse frozen base candidates and must not reuse the failed 32-state
+Boundary pool as though it had passed. No candidates, repairs, actions,
+outcomes, or labels were produced by this scan.
+
+The state, task-summary, and input-only recommended-task SHA-256 values are
+`88e2425f77a7ae0628ded3b77d436f38c9cec1bb35642077d559d08cbc3ce939`,
+`9a1c09cdf577eb55b1de0373831b27333296164c410f75cb42758ed208126050`,
+and `3c8755475f7c224c699639622303b8f70d2364482c862142c85b893786e414d8`.
