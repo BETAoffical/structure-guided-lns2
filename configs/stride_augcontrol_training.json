@@ -56,6 +56,13 @@
     "exact_best_rate_noninferiority_tolerance": 0.01,
     "maximum_topology_group_normalized_regret_degradation": 0.03
   },
+  "label_coverage_gates": {
+    "minimum_train_pair_state_fraction": 0.50,
+    "minimum_validation_pair_state_fraction": 0.50,
+    "minimum_train_pair_maps": 16,
+    "minimum_validation_pair_maps": 6,
+    "minimum_pair_states_per_map": 3
+  },
   "forbidden_training_inputs": [
     "repair_runtime",
     "time_to_feasible",

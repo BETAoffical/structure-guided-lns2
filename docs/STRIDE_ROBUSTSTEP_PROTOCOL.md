@@ -1459,6 +1459,16 @@ and no static-topology group regret degradation above 0.03. A pass authorizes
 only action-preserving Shadow; the exported bundle remains diagnostic-only and
 cannot replace V2 before paired raw-TTF evidence.
 
+Candidate-state coverage alone cannot satisfy the offline gate. At least half
+of the 174 train states and half of the 66 validation states must produce a
+stable robust-pair label; all 16 train maps and all six validation maps must
+contribute, with at least three labeled states per map. These thresholds were
+registered before reading the 16-seed candidate outcomes. They prevent a model
+trained on a small, easy subset from passing merely because all selected maps
+remain present in the unlabeled candidate aggregate.
+The preregistered training-config SHA-256 after this coverage correction is
+`b75aaf0abd987188f6d94469ef29e6ed064695af6054d1529780a6586a953464`.
+
 ### Completed paired source traces and result-blind state selection
 
 The unified source run completed 88 reset-only qualifications, 88

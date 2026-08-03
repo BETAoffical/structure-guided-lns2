@@ -105,6 +105,14 @@ def validate_augcontrol_training_config(config: dict[str, Any]) -> None:
         "maximum_topology_group_normalized_regret_degradation": 0.03,
     }:
         raise ValueError("STRIDE augcontrol promotion gates changed")
+    if dict(config.get("label_coverage_gates") or {}) != {
+        "minimum_train_pair_state_fraction": 0.50,
+        "minimum_validation_pair_state_fraction": 0.50,
+        "minimum_train_pair_maps": 16,
+        "minimum_validation_pair_maps": 6,
+        "minimum_pair_states_per_map": 3,
+    }:
+        raise ValueError("STRIDE augcontrol label coverage gates changed")
     if set(map(str, config.get("forbidden_training_inputs") or ())) != {
         "repair_runtime",
         "time_to_feasible",
@@ -218,24 +226,29 @@ def _load_pair_table(
     right: list[int] = []
     labels: list[int] = []
     weights: list[float] = []
-    states: Counter[str] = Counter()
+    state_weights: Counter[str] = Counter()
+    state_maps: dict[str, str] = {}
     for row in _read_jsonl(pair_path):
         if row.get("schema") != expected_schema:
             raise ValueError(f"unexpected augcontrol pair schema in {pair_path}")
         if str(row["split"]) != split:
             continue
         state_id = str(row["state_id"])
+        map_id = str(row["map_id"])
+        if state_id in state_maps and state_maps[state_id] != map_id:
+            raise ValueError(f"augcontrol pair state changed map: {state_id}")
+        state_maps[state_id] = map_id
         left.append(candidate_index[(state_id, str(row["left_candidate_id"]))])
         right.append(candidate_index[(state_id, str(row["right_candidate_id"]))])
         labels.append(int(row["label"]))
         weight = float(row["sample_weight"])
         weights.append(weight)
-        states[state_id] += weight
+        state_weights[state_id] += weight
     if not labels or set(labels) != {0, 1}:
         raise ValueError(f"augcontrol {split} pairs require both labels")
     if any(
         not math.isclose(value, 1.0, rel_tol=0.0, abs_tol=1e-9)
-        for value in states.values()
+        for value in state_weights.values()
     ):
         raise ValueError(f"augcontrol {split} pair weights differ by state")
     return {
@@ -243,7 +256,9 @@ def _load_pair_table(
         "right": np.asarray(right, dtype=np.int32),
         "labels": np.asarray(labels, dtype=np.int8),
         "weights": np.asarray(weights, dtype=np.float64),
-        "state_count": len(states),
+        "state_count": len(state_weights),
+        "state_ids": sorted(state_weights),
+        "map_state_counts": dict(sorted(Counter(state_maps.values()).items())),
     }
 
 
@@ -639,6 +654,43 @@ def run_augcontrol_training(
     validation_map_count = len(
         {str(rows[0]["map_id"]) for rows in validation_grouped.values()}
     )
+    selected_state_counts = Counter(
+        str(rows[0]["split"]) for rows in grouped.values()
+    )
+    train_maps = {
+        map_id for map_id, split in expected_split.items() if split == "train"
+    }
+    validation_maps = {
+        map_id
+        for map_id, split in expected_split.items()
+        if split == "validation"
+    }
+    primary_train_maps = set(primary_train["map_state_counts"])
+    primary_validation_maps = set(primary_validation["map_state_counts"])
+    coverage_config = dict(config["label_coverage_gates"])
+    train_pair_fraction = int(primary_train["state_count"]) / int(
+        selected_state_counts["train"]
+    )
+    validation_pair_fraction = int(primary_validation["state_count"]) / int(
+        selected_state_counts["validation"]
+    )
+    minimum_per_map = int(coverage_config["minimum_pair_states_per_map"])
+    label_coverage = {
+        "selected_train_state_count": int(selected_state_counts["train"]),
+        "selected_validation_state_count": int(
+            selected_state_counts["validation"]
+        ),
+        "train_pair_state_count": int(primary_train["state_count"]),
+        "validation_pair_state_count": int(primary_validation["state_count"]),
+        "train_pair_state_fraction": train_pair_fraction,
+        "validation_pair_state_fraction": validation_pair_fraction,
+        "train_pair_map_count": len(primary_train_maps),
+        "validation_pair_map_count": len(primary_validation_maps),
+        "train_pair_states_by_map": dict(primary_train["map_state_counts"]),
+        "validation_pair_states_by_map": dict(
+            primary_validation["map_state_counts"]
+        ),
+    }
     promotion_gates = {
         "validation_map_coverage": validation_map_count
         >= int(gates_config["minimum_validation_maps"]),
@@ -674,6 +726,30 @@ def run_augcontrol_training(
         >= float(frozen_metrics["top3_hit_rate"]),
         "topology_groups_noninferior": all(
             row["passed"] for row in topology_comparisons
+        ),
+        "train_pair_state_coverage": train_pair_fraction + 1e-12
+        >= float(coverage_config["minimum_train_pair_state_fraction"]),
+        "validation_pair_state_coverage": validation_pair_fraction + 1e-12
+        >= float(coverage_config["minimum_validation_pair_state_fraction"]),
+        "train_pair_map_coverage": (
+            primary_train_maps == train_maps
+            and len(primary_train_maps)
+            >= int(coverage_config["minimum_train_pair_maps"])
+        ),
+        "validation_pair_map_coverage": (
+            primary_validation_maps == validation_maps
+            and len(primary_validation_maps)
+            >= int(coverage_config["minimum_validation_pair_maps"])
+        ),
+        "minimum_pair_states_per_map": all(
+            int(primary_train["map_state_counts"].get(map_id, 0))
+            >= minimum_per_map
+            for map_id in train_maps
+        )
+        and all(
+            int(primary_validation["map_state_counts"].get(map_id, 0))
+            >= minimum_per_map
+            for map_id in validation_maps
         ),
     }
 
@@ -759,6 +835,7 @@ def run_augcontrol_training(
         "validation_pair_state_count": int(primary_validation["state_count"]),
         "primary_pairwise_validation": pairwise,
         "conflict_pairwise_validation": conflict_pairwise,
+        "label_coverage": label_coverage,
         "metrics": metrics,
         "oracle_pool_opportunity": _oracle_pool_opportunity(validation_grouped),
         "normalized_regret_improvement_vs_v2": regret_improvement,
