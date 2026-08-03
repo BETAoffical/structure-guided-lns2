@@ -7,6 +7,7 @@ from typing import Any
 
 from experiments._common import sha256_file
 from experiments.compact_controller_model import load_controller_bundle
+from experiments.feature_schema_v2 import canonicalize_features
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -70,7 +71,7 @@ def validate_topology_boundary_v2_shadow_config(config: dict[str, Any]) -> None:
         or int(config.get("expected_boundary_only_candidate_count", -1)) != 23
         or int(config.get("expected_outcome_count", -1)) != 2776
         or config.get("expected_feature_schema_id") != "lns2.realized_features.v2"
-        or int(config.get("expected_generated_feature_dimension", -1)) != 124
+        or int(config.get("expected_canonical_feature_dimension", -1)) != 124
         or int(config.get("expected_model_input_dimension", -1)) != 86
         or tuple(map(int, config.get("trial_indices") or ())) != tuple(range(8))
         or tuple(map(int, config.get("first_half_indices") or ())) != (0, 1, 2, 3)
@@ -202,7 +203,7 @@ def _score_frozen_v2_pools(
     confirmation_config_path: Path,
     confirmation_config: dict[str, Any],
     controller_manifest_path: Path,
-    expected_generated_feature_dimension: int,
+    expected_canonical_feature_dimension: int,
     expected_model_input_dimension: int,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]], dict[str, Any]]:
     _, quality_inputs = _quality_inputs(confirmation_config_path, confirmation_config)
@@ -258,14 +259,17 @@ def _score_frozen_v2_pools(
         ]
         if not base_rows or len(online_rows) <= len(base_rows):
             raise ValueError(f"boundary V2 Shadow pool is not augmented: {state_id}")
-        generated_dimensions = set()
+        canonical_dimensions = set()
         for row in online_rows:
-            features = dict(row["features"]["realized_dynamic"])
-            generated_dimensions.add(len(features))
-            if not set(feature_names).issubset(features):
+            canonical = canonicalize_features(
+                dict(row["features"]["realized_dynamic"]), "realized_dynamic"
+            )
+            row["features"]["realized_dynamic"] = canonical
+            canonical_dimensions.add(len(canonical))
+            if not set(feature_names).issubset(canonical):
                 raise ValueError(f"boundary V2 Shadow feature schema differs: {state_id}")
-        if generated_dimensions != {expected_generated_feature_dimension}:
-            raise ValueError(f"boundary V2 Shadow generated feature dimension differs: {state_id}")
+        if canonical_dimensions != {expected_canonical_feature_dimension}:
+            raise ValueError(f"boundary V2 Shadow canonical feature dimension differs: {state_id}")
         base_index, base_scores, base_margin = score_online_candidates(base_rows, model)
         all_index, all_scores, all_margin = score_online_candidates(online_rows, model)
         base_selected = str(base_rows[base_index]["candidate_id"])
@@ -300,7 +304,7 @@ def _score_frozen_v2_pools(
                 "augmented_v2_margin": float(all_margin),
                 "baseline_selected_v2_score": float(base_scores[base_index]),
                 "augmented_selected_v2_score": float(all_scores[all_index]),
-                "generated_feature_dimension": next(iter(generated_dimensions)),
+                "canonical_feature_dimension": next(iter(canonical_dimensions)),
                 "model_input_dimension": len(feature_names),
                 "augmented_selected_feature_outside_fraction": outside
                 / len(ranges)
@@ -316,8 +320,8 @@ def _score_frozen_v2_pools(
         "boundary_only_candidate_count": sum(
             row["boundary_only_candidate_count"] for row in selections
         ),
-        "generated_feature_dimension_set": sorted(
-            {int(row["generated_feature_dimension"]) for row in selections}
+        "canonical_feature_dimension_set": sorted(
+            {int(row["canonical_feature_dimension"]) for row in selections}
         ),
         "model_input_dimension_set": sorted(
             {int(row["model_input_dimension"]) for row in selections}
@@ -349,8 +353,8 @@ def run_topology_boundary_v2_shadow(
         confirmation_config_path=registered["confirmation_config"],
         confirmation_config=confirmation_config,
         controller_manifest_path=registered["controller_manifest"],
-        expected_generated_feature_dimension=int(
-            config["expected_generated_feature_dimension"]
+        expected_canonical_feature_dimension=int(
+            config["expected_canonical_feature_dimension"]
         ),
         expected_model_input_dimension=int(config["expected_model_input_dimension"]),
     )
@@ -449,8 +453,8 @@ def run_topology_boundary_v2_shadow(
         == int(config["expected_outcome_count"]),
         "trial_indices": integrity["trial_index_set"]
         == list(map(int, config["trial_indices"])),
-        "generated_feature_dimension": integrity["generated_feature_dimension_set"]
-        == [int(config["expected_generated_feature_dimension"])],
+        "canonical_feature_dimension": integrity["canonical_feature_dimension_set"]
+        == [int(config["expected_canonical_feature_dimension"])],
         "model_input_dimension": integrity["model_input_dimension_set"]
         == [int(config["expected_model_input_dimension"])],
         "selection_outcome_blind": not integrity["selection_forbidden_fields_observed"],

@@ -1041,14 +1041,16 @@ seed half, and worsens at most 35% of states. Even a pass is only a signal to
 run the Quick; it is not promotion evidence. A failure stops this boundary
 runtime route while preserving the formal confirmation result.
 
-The first pre-outcome execution exposed an integrity-specification error: the
-online realized profile correctly contains all 124 schema features, while the
-frozen compact V2 ranker intentionally consumes its registered 86-feature
-subset. The run stopped before an outcome selection file or outcome join was
-created. The corrected registration verifies both dimensions and subset
-identity separately; no action or quality gate changed. The corrected frozen
+The first pre-outcome executions exposed an integrity-specification error: the
+raw online feature dictionary is sparse, omits zero-valued one-hot fields, and
+retains derivable aliases. The registered feature-v2 canonicalization expands
+it to the fixed 124-feature schema, while the frozen compact V2 ranker consumes
+its registered 86-feature subset. Both runs stopped before an outcome selection
+file or outcome join was created. The corrected registration applies the
+existing `canonicalize_features` contract and verifies the 124/86 dimensions
+separately; no action or quality gate changed. The final corrected frozen
 Shadow-config SHA-256 is
-`1c12fce619afc33387e59e3257487f17fcac2c27aea3b31a69cb8e9ce37c4e7e`.
+`c2a76b38fd46ffa705b7469774222f22914a3fe84c7e7ef57908c7d44cea5b9f`.
 
 ## Promotion boundary
 

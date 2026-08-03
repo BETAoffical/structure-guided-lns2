@@ -4,6 +4,8 @@ import json
 import unittest
 from pathlib import Path
 
+from experiments.compact_controller_model import load_controller_bundle
+from experiments.feature_schema_v2 import canonicalize_features
 from experiments.stride_topology_boundary_v2_shadow import (
     _shadow_gate_results,
     _shadow_summary,
@@ -30,7 +32,7 @@ class StrideTopologyBoundaryV2ShadowTest(unittest.TestCase):
         self.assertTrue(config["selection_protocol"]["outcome_blind_before_join"])
         self.assertEqual(config["expected_candidate_count"], 347)
         self.assertEqual(config["expected_outcome_count"], 2776)
-        self.assertEqual(config["expected_generated_feature_dimension"], 124)
+        self.assertEqual(config["expected_canonical_feature_dimension"], 124)
         self.assertEqual(config["expected_model_input_dimension"], 86)
 
     def test_protocol_rejects_gate_or_promotion_drift(self) -> None:
@@ -85,6 +87,21 @@ class StrideTopologyBoundaryV2ShadowTest(unittest.TestCase):
                 ).values()
             )
         )
+
+    def test_sparse_online_features_canonicalize_before_v2_projection(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        canonical = canonicalize_features(
+            {"proposal.actual_size": 16.0, "state.agent_count": 100.0},
+            "realized_dynamic",
+        )
+        bundle = load_controller_bundle(
+            root / "artifacts" / "initlns-closed-loop-controller-v2"
+        )
+        model_names = set(bundle.main_models["realized_dynamic"].feature_names)
+        self.assertEqual(len(canonical), 124)
+        self.assertEqual(len(model_names), 86)
+        self.assertTrue(model_names.issubset(canonical))
+        self.assertEqual(canonical["proposal.actual_size=16"], 0.0)
 
 
 if __name__ == "__main__":
