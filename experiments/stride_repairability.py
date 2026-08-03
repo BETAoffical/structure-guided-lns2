@@ -24,6 +24,16 @@ FEATURE_SCHEMA = "lns2.realized_features.v2"
 FEATURE_DIMENSION = 124
 
 
+def _supported_collection_audit_schemas() -> frozenset[str]:
+    # Imported lazily to avoid collection -> label-config import cycles.
+    from experiments.stride_mapbase import AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA
+    from experiments.stride_repairability_audit import (
+        AUDIT_SCHEMA as REPAIRABILITY_AUDIT_SCHEMA,
+    )
+
+    return frozenset((REPAIRABILITY_AUDIT_SCHEMA, MAPBASE_AUDIT_SCHEMA))
+
+
 def validate_repairability_label_config(config: dict[str, Any]) -> None:
     if config.get("schema") != CONFIG_SCHEMA:
         raise ValueError("unexpected repairability label config")
@@ -421,10 +431,6 @@ def build_repairability_labels(
     audit_report_paths: list[Path],
     output: str | Path,
 ) -> dict[str, Any]:
-    # Imported lazily because the audit module validates collection artifacts,
-    # while the collection module imports this label configuration validator.
-    from experiments.stride_repairability_audit import AUDIT_SCHEMA
-
     config_path = Path(config_path).resolve()
     config = _read_json(config_path)
     validate_repairability_label_config(config)
@@ -432,10 +438,17 @@ def build_repairability_labels(
     audit_paths = [Path(path).resolve() for path in audit_report_paths]
     if len(paths) != len(audit_paths):
         raise ValueError("repairability trial and audit source counts differ")
+    supported_audit_schemas = _supported_collection_audit_schemas()
     audit_sources = []
     for path, audit_path in zip(paths, audit_paths):
         audit = _read_json(audit_path)
-        if audit.get("schema") != AUDIT_SCHEMA or audit.get("passed") is not True:
+        audit_schema = str(audit.get("schema", ""))
+        run_fingerprint = str(audit.get("run_fingerprint", ""))
+        if (
+            audit_schema not in supported_audit_schemas
+            or audit.get("passed") is not True
+            or not run_fingerprint
+        ):
             raise ValueError(f"repairability collection audit did not pass: {audit_path}")
         audited_trial_sha256 = str(dict(audit.get("sha256") or {}).get("repair_trials", ""))
         if audited_trial_sha256 != sha256_file(path):
@@ -446,7 +459,8 @@ def build_repairability_labels(
             {
                 "path": str(audit_path),
                 "sha256": sha256_file(audit_path),
-                "run_fingerprint": str(audit.get("run_fingerprint", "")),
+                "schema": audit_schema,
+                "run_fingerprint": run_fingerprint,
                 "state_count": int(audit.get("state_count", 0)),
             }
         )

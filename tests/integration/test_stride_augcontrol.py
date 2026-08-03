@@ -22,6 +22,7 @@ from experiments.stride_augcontrol import (
 )
 from experiments._common import sha256_file
 from experiments.stride_repairability_audit import AUDIT_SCHEMA
+from experiments.stride_mapbase import AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA
 from experiments.stride_repairability import LABEL_SCHEMA
 
 
@@ -112,6 +113,38 @@ class StrideAugcontrolTest(unittest.TestCase):
             trials.write_text('{"trial": 2}\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "raw trial source differs"):
                 _validate_label_audit_provenance(summary)
+
+    def test_training_accepts_mapbase_audit_with_matching_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trials = root / "repair_trials.jsonl"
+            trials.write_text('{"trial": 1}\n', encoding="utf-8")
+            audit = root / "mapbase_audit_report.json"
+            audit_payload = {
+                "schema": MAPBASE_AUDIT_SCHEMA,
+                "passed": True,
+                "run_fingerprint": "mapbase-run",
+                "state_count": 63,
+                "sha256": {"repair_trials": sha256_file(trials)},
+            }
+            audit.write_text(json.dumps(audit_payload), encoding="utf-8")
+            summary = {
+                "state_count": 63,
+                "trial_sources": [
+                    {"path": str(trials), "sha256": sha256_file(trials)}
+                ],
+                "audit_sources": [
+                    {
+                        "path": str(audit),
+                        "sha256": sha256_file(audit),
+                        "schema": MAPBASE_AUDIT_SCHEMA,
+                        "run_fingerprint": "mapbase-run",
+                        "state_count": 63,
+                    }
+                ],
+            }
+            verified = _validate_label_audit_provenance(summary)
+            self.assertEqual(verified[0]["audit_schema"], MAPBASE_AUDIT_SCHEMA)
 
     def test_export_ranges_use_only_training_maps_and_validation_is_rechecked(self) -> None:
         grouped = {

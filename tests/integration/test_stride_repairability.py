@@ -12,6 +12,7 @@ from experiments.stride_lns import (
     REQUIRED_POST_STRUCTURE_FIELDS,
     STRIDE_TRIAL_SCHEMA,
 )
+from experiments.stride_mapbase import AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA
 from experiments.stride_repairability import (
     _seed_half_action_stability,
     build_repairability_labels,
@@ -101,11 +102,17 @@ class StrideRepairabilityTest(unittest.TestCase):
         )
 
     @staticmethod
-    def _write_audit(path: Path, trials: Path, *, passed: bool = True) -> Path:
+    def _write_audit(
+        path: Path,
+        trials: Path,
+        *,
+        passed: bool = True,
+        schema: str = AUDIT_SCHEMA,
+    ) -> Path:
         path.write_text(
             json.dumps(
                 {
-                    "schema": AUDIT_SCHEMA,
+                    "schema": schema,
                     "passed": passed,
                     "run_fingerprint": "test-run",
                     "state_count": 1,
@@ -252,6 +259,25 @@ class StrideRepairabilityTest(unittest.TestCase):
             good = next(row for row in candidates if row["candidate_id"] == "good")
             self.assertEqual(good["candidate_kind"], "base")
             self.assertEqual(good["agents"], [0, 1, 2, 3])
+
+    def test_builder_accepts_passed_mapbase_audit_with_identical_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trials = root / "mapbase-trials.jsonl"
+            self._write_rows(trials, self._rows())
+            audit = self._write_audit(
+                root / "mapbase-audit.json",
+                trials,
+                schema=MAPBASE_AUDIT_SCHEMA,
+            )
+            summary = build_repairability_labels(
+                config_path=self._config_path(),
+                trial_paths=[trials],
+                audit_report_paths=[audit],
+                output=root / "labels",
+            )
+            self.assertEqual(summary["audit_sources"][0]["schema"], MAPBASE_AUDIT_SCHEMA)
+            self.assertEqual(summary["state_count"], 1)
 
     def test_runtime_fields_do_not_change_candidates_or_pairs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

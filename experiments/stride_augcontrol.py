@@ -21,6 +21,7 @@ from experiments.stride_repairability import (
     CONFLICT_ONLY_LABEL_SCHEMA,
     CONTROLLER_ID,
     LABEL_SCHEMA,
+    _supported_collection_audit_schemas,
 )
 from experiments.stride_repairability_selection import (
     validate_repairability_data_design,
@@ -55,9 +56,7 @@ def _input_specifications() -> tuple[tuple[str, ...], tuple[tuple[str, str], ...
 def _validate_label_audit_provenance(
     label_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    # Lazy import avoids the collection -> label-config import cycle.
-    from experiments.stride_repairability_audit import AUDIT_SCHEMA
-
+    supported_audit_schemas = _supported_collection_audit_schemas()
     trial_sources = list(label_summary.get("trial_sources") or ())
     audit_sources = list(label_summary.get("audit_sources") or ())
     if not trial_sources or len(trial_sources) != len(audit_sources):
@@ -79,8 +78,9 @@ def _validate_label_audit_provenance(
             raise ValueError(f"STRIDE augcontrol collection audit differs: {audit_path}")
         audit = _read_json(audit_path)
         state_count = int(audit.get("state_count", 0))
+        audit_schema = str(audit.get("schema", ""))
         if (
-            audit.get("schema") != AUDIT_SCHEMA
+            audit_schema not in supported_audit_schemas
             or audit.get("passed") is not True
             or str(audit.get("run_fingerprint", ""))
             != str(audit_source.get("run_fingerprint", ""))
@@ -96,6 +96,7 @@ def _validate_label_audit_provenance(
                 "trial_sha256": str(trial_source["sha256"]),
                 "audit_path": str(audit_path),
                 "audit_sha256": str(audit_source["sha256"]),
+                "audit_schema": audit_schema,
                 "run_fingerprint": str(audit["run_fingerprint"]),
                 "state_count": state_count,
             }
