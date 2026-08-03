@@ -189,6 +189,11 @@
       "purpose": "Command-line entry point for the registered STRIDE robust-step map/load preflight analysis."
     },
     {
+      "path": "scripts/prepare_stride_robuststep_congestion_preflight.py",
+      "role": "active",
+      "purpose": "Deterministic preparation of opposite-exchange OD tasks on checksum-pinned MovingAI maps."
+    },
+    {
       "path": "experiments/stride_stage3.py",
       "role": "active",
       "purpose": "Final integrity, coverage, leakage, weighting, and reproducibility audit for the registered STRIDE Stage 3 label cohort."

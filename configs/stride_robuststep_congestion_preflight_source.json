@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_congestion_preflight",
+  "scientific_status": "development_only",
+  "dataset_revision": "stride-robuststep-congestion-preflight-v1",
+  "source": "https://movingai.com/benchmarks/mapf/index.html",
+  "task_semantics": "project_derived_opposite_exchange_not_official_scenario",
+  "fetched_manifest_sha256": "432aab4d8af81042898ffafd5aac32927718736d4619ad86805a563708609b8a",
+  "formal_ood_config": "configs/movingai_ood_dataset.json",
+  "formal_ood_config_sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a",
+  "consumed_development_exceptions": [],
+  "predecessor_report": {
+    "path": "build/stride-robuststep-map-preflight-extension-analysis-v1/robuststep_map_preflight_report.json",
+    "sha256": "ec6a2b9e4271df373ebbe99b4c36e5bbb598b71da84d441460e3feeb6435e3c0"
+  },
+  "master_seed": 20260803,
+  "task_seeds": [23, 41],
+  "task_variants": ["opposite_exchange"],
+  "selection_inputs_allowed": [
+    "map_topology", "agent_count", "initial_conflicts",
+    "initial_pp_wall_seconds", "initial_path_statistics"
+  ],
+  "selection_inputs_forbidden": [
+    "v2_relative_ttf", "robuststep_relative_ttf",
+    "controller_action", "controller_repair_outcome"
+  ],
+  "expected_map_count": 6,
+  "expected_task_count": 36,
+  "solver_seeds": [1, 2, 3, 4],
+  "selection_rule": {
+    "minimum_mean_initial_conflicts": 10.0,
+    "target_mean_initial_conflicts": [50.0, 200.0],
+    "maximum_tasks_per_map": 2,
+    "tie_break": ["absolute_target_distance", "lower_agent_count", "lower_task_seed", "task_id"],
+    "underloaded_fallback": "highest_mean_initial_conflicts"
+  },
+  "benchmarks": [
+    {"id": "Berlin_1_256", "layout_family": "street", "map_sha256": "1e381d55ea4c69b9d6ffac00dc3d37e17d29384a002ae4175b190394e2a302c0", "agent_counts": [250, 500, 750]},
+    {"id": "Boston_0_256", "layout_family": "street", "map_sha256": "992299786882228ff5e27112e7422124912bffec42655bb5d2375f4fd9ba8102", "agent_counts": [250, 500, 750]},
+    {"id": "Paris_1_256", "layout_family": "street", "map_sha256": "8f21d8894691b31c0decf1043aacc1deede92554a5fd03ecc5f18da72dfd0c24", "agent_counts": [250, 500, 750]},
+    {"id": "brc202d", "layout_family": "game", "map_sha256": "ee4f1b89431452b6a07f7a56c6ca653edd7f9f9f32906ab8280fb1a76e4b8a24", "agent_counts": [250, 500, 750]},
+    {"id": "ost003d", "layout_family": "game", "map_sha256": "2081e15b565f6285eb59308b3626a61843763a0df14756ff5906ab0bb8f34c3d", "agent_counts": [250, 500, 750]},
+    {"id": "warehouse-20-40-10-2-1", "layout_family": "warehouse", "map_sha256": "bd3bec2d1c20a8bbf900583cb4c2cf9dc16101470fbfae93b272ee0fb575d3ec", "agent_counts": [250, 500, 750]}
+  ]
+}

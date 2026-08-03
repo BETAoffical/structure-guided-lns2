@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import unittest
+import hashlib
+import json
+import tempfile
+from pathlib import Path
 
-from experiments.stride_robuststep_preflight import analyze_preflight_rows
+from experiments.stride_robuststep_preflight import (
+    analyze_preflight_rows,
+    prepare_congestion_preflight_dataset,
+)
 
 from experiments.stride_robuststep import (
     evaluate_robuststep_variant,
@@ -155,6 +162,62 @@ class StrideRobustStepTest(unittest.TestCase):
         )
         self.assertFalse(report["passed"])
         self.assertEqual(report["forbidden_outcome_fields_found"], ["controller_action"])
+
+    def test_congestion_preflight_is_pinned_and_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fetched = root / "fetched"
+            (fetched / "maps").mkdir(parents=True)
+            map_path = fetched / "maps" / "map-a.map"
+            map_path.write_text(
+                "type octile\nheight 6\nwidth 6\nmap\n" + "......\n" * 6,
+                encoding="utf-8",
+            )
+            map_sha = hashlib.sha256(map_path.read_bytes()).hexdigest()
+            manifest = fetched / "manifest.jsonl"
+            manifest.write_text(
+                json.dumps(
+                    {"id": "map-a", "map_file": "maps/map-a.map", "map_sha256": map_sha},
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            predecessor = root / "predecessor.json"
+            predecessor.write_text("{}\n", encoding="utf-8")
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "role": "stride_robuststep_outcome_blind_congestion_preflight",
+                        "dataset_revision": "test-congestion-v1",
+                        "predecessor_report": {
+                            "path": str(predecessor),
+                            "sha256": hashlib.sha256(predecessor.read_bytes()).hexdigest(),
+                        },
+                        "fetched_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                        "master_seed": 123,
+                        "task_seeds": [7],
+                        "task_variants": ["opposite_exchange"],
+                        "expected_map_count": 1,
+                        "expected_task_count": 1,
+                        "benchmarks": [
+                            {"id": "map-a", "layout_family": "test", "map_sha256": map_sha, "agent_counts": [8]}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            first = prepare_congestion_preflight_dataset(
+                fetched=fetched, source_config=config, output=root / "first"
+            )
+            second = prepare_congestion_preflight_dataset(
+                fetched=fetched, source_config=config, output=root / "second"
+            )
+            self.assertEqual(first, second)
+            first_scenario = next((root / "first" / "balanced_wall_clock" / "scenarios").glob("*.scen"))
+            second_scenario = next((root / "second" / "balanced_wall_clock" / "scenarios").glob("*.scen"))
+            self.assertEqual(first_scenario.read_bytes(), second_scenario.read_bytes())
 
 
 if __name__ == "__main__":

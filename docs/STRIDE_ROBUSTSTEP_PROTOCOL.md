@@ -154,6 +154,31 @@ agent-count scaling is stopped for that map. Its next candidate must instead
 use a separately preregistered congestion-oriented scenario construction; it
 must not be admitted to training as a zero-conflict map.
 
+The maximum-prefix extension completed all 96 jobs with zero errors. It did
+not rescue any map: the best mean initial conflicts were 0 for all three
+street maps, 0.75 for `brc202d`, 1.0 for `ost003d`, and 4.75 for the warehouse.
+Only 13/96 resets had any conflict. Qualification manifest, qualification
+report, and analysis SHA-256 values are respectively
+`07d1c1c78c4a75f10c02ff17f65472965f5d1b1215c450d240baebc14b85560d`,
+`6e1380c2cfb5ec6b6c70219289f966909a1343ecdcfc3a71b00498825e091c59`,
+and `ec6a2b9e4271df373ebbe99b4c36e5bbb598b71da84d441460e3feeb6435e3c0`.
+
+### Registered congestion-oriented scenario preflight
+
+The next preflight keeps the six official MovingAI map files but replaces the
+insufficient official random scenario prefixes with deterministic,
+project-derived `opposite_exchange` OD tasks. Starts are sampled without
+replacement from the largest four-connected component, sorted along the map's
+longer spatial axis, and paired with the reversed ordering. This creates
+bidirectional long-range flow while preserving unique starts, unique goals,
+reachable pairs, and exact four-neighbor distances.
+
+This is explicitly not an official MovingAI scenario and cannot be reported as
+one. Two endpoint seeds (23 and 41), three candidate loads (250, 500, and 750),
+and four solver seeds produce 36 tasks and 144 reset-only jobs. Controller
+actions and repair outcomes remain forbidden. The same mean-conflict targets
+50 and 200 select at most two tasks per map; loads below mean 10 are rejected.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

@@ -1,11 +1,24 @@
 from __future__ import annotations
 
 import statistics
+import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
+from experiments.balanced_wall_clock import (
+    SPLIT,
+    _derived_endpoint_seed,
+    _derived_endpoints,
+    _fingerprint,
+    _four_neighbor_distances,
+    _largest_four_connected_component,
+    _map_metrics,
+    _movingai_passable_cells,
+    _write_derived_scenario,
+    _write_jsonl_atomic,
+)
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 
 
@@ -19,11 +32,20 @@ FORBIDDEN_OUTCOME_FIELDS = {
 PREFLIGHT_ROLES = {
     "stride_robuststep_outcome_blind_load_preflight",
     "stride_robuststep_outcome_blind_load_extension",
+    "stride_robuststep_outcome_blind_congestion_preflight",
 }
 
 
 def _mean(values: list[float]) -> float:
     return statistics.fmean(values) if values else 0.0
+
+
+def _scenario_rank(row: dict[str, Any]) -> int:
+    if "scenario_index" in row:
+        return int(row["scenario_index"])
+    if "task_seed" in row:
+        return int(row["task_seed"])
+    return int(str(row["scenario_type"]).rsplit("_", 1)[-1])
 
 
 def analyze_preflight_rows(
@@ -106,7 +128,7 @@ def analyze_preflight_rows(
                 "task_id": task_id,
                 "map_id": str(source_row["map_id"]),
                 "layout_family": str(source_row["layout_mode"]),
-                "scenario_index": int(str(source_row["scenario_type"]).rsplit("_", 1)[-1]),
+                "scenario_index": _scenario_rank(source_row),
                 "agent_count": int(source_row["agent_count"]),
                 "seed_count": len(rows),
                 "mean_initial_conflicts": _mean(conflicts),
@@ -224,6 +246,179 @@ def analyze_preflight_rows(
     }
 
 
+def _registered_path(config_path: Path, value: str) -> Path:
+    path = Path(value)
+    return path.resolve() if path.is_absolute() else (config_path.parents[1] / path).resolve()
+
+
+def prepare_congestion_preflight_dataset(
+    *, fetched: str | Path, source_config: str | Path, output: str | Path,
+) -> dict[str, Any]:
+    """Build deterministic opposite-exchange OD tasks on pinned MovingAI maps."""
+
+    fetched_root = Path(fetched).resolve()
+    config_path = Path(source_config).resolve()
+    output_root = Path(output).resolve()
+    config = _read_json(config_path)
+    if config.get("role") != "stride_robuststep_outcome_blind_congestion_preflight":
+        raise ValueError("unexpected congestion preflight role")
+    predecessor = dict(config["predecessor_report"])
+    predecessor_path = _registered_path(config_path, str(predecessor["path"]))
+    if sha256_file(predecessor_path) != str(predecessor["sha256"]):
+        raise ValueError("congestion preflight predecessor SHA differs")
+    fetched_manifest = fetched_root / "manifest.jsonl"
+    if sha256_file(fetched_manifest) != str(config["fetched_manifest_sha256"]):
+        raise ValueError("congestion preflight fetched manifest SHA differs")
+    source_index = {
+        str(row["id"]): row for row in _read_jsonl(fetched_manifest)
+    }
+    fingerprint = _fingerprint(config)
+    summary_path = output_root / "dataset_summary.json"
+    if summary_path.is_file():
+        existing = _read_json(summary_path)
+        if existing.get("configuration_fingerprint") != fingerprint:
+            raise ValueError("congestion output belongs to a different config")
+        return existing
+    if output_root.is_dir() and any(output_root.iterdir()):
+        raise ValueError("congestion output is non-empty but has no summary")
+    task_seeds = list(map(int, config["task_seeds"]))
+    variants = list(map(str, config["task_variants"]))
+    if not task_seeds or len(task_seeds) != len(set(task_seeds)):
+        raise ValueError("congestion task seeds must be unique")
+    if variants != ["opposite_exchange"]:
+        raise ValueError("congestion preflight requires opposite_exchange only")
+    split_root = output_root / SPLIT
+    manifest = []
+    observed_maps: set[str] = set()
+    for raw_case in config["benchmarks"]:
+        case = dict(raw_case)
+        map_id = str(case["id"])
+        if map_id in observed_maps or map_id not in source_index:
+            raise ValueError(f"invalid congestion map registration: {map_id}")
+        observed_maps.add(map_id)
+        source = source_index[map_id]
+        if str(source["map_sha256"]) != str(case["map_sha256"]):
+            raise ValueError(f"congestion source map SHA differs: {map_id}")
+        source_map = fetched_root / str(source["map_file"])
+        if sha256_file(source_map) != str(case["map_sha256"]):
+            raise ValueError(f"congestion map file SHA differs: {map_id}")
+        map_path = split_root / "maps" / source_map.name
+        map_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_map, map_path)
+        rows, cols, _grid, passable = _movingai_passable_cells(map_path)
+        component = _largest_four_connected_component(passable)
+        metrics = _map_metrics(map_path)
+        metadata_path = split_root / "maps" / f"{map_id}.json"
+        _write_json(
+            metadata_path,
+            {
+                "schema_version": 1,
+                "benchmark_id": map_id,
+                "source": "MovingAI map with project-derived congestion OD",
+                "map_sha256": sha256_file(map_path),
+                "largest_four_connected_component": len(component),
+                "topology_metrics": metrics,
+            },
+        )
+        for agent_count in map(int, case["agent_counts"]):
+            if agent_count <= 0 or agent_count > len(component):
+                raise ValueError(f"invalid congestion agent count: {map_id}")
+            for task_seed in task_seeds:
+                endpoint_seed = _derived_endpoint_seed(
+                    int(config["master_seed"]),
+                    map_id,
+                    task_seed,
+                    "opposite_exchange",
+                    agent_count,
+                )
+                starts, goals = _derived_endpoints(
+                    component, agent_count, "opposite_exchange", endpoint_seed
+                )
+                distances = _four_neighbor_distances(passable, starts, goals)
+                task_id = (
+                    f"{map_id}__derived_opposite_exchange"
+                    f"__task_seed_{task_seed:04d}__agents_{agent_count:04d}"
+                )
+                scenario_path = split_root / "scenarios" / f"{task_id}.scen"
+                _write_derived_scenario(
+                    scenario_path,
+                    map_path.name,
+                    rows,
+                    cols,
+                    starts,
+                    goals,
+                    distances,
+                )
+                task_path = split_root / "tasks" / f"{task_id}.json"
+                _write_json(
+                    task_path,
+                    {
+                        "schema_version": 1,
+                        "task_semantics": "project-derived opposite-axis exchange on an official MovingAI map",
+                        "benchmark_id": map_id,
+                        "task_seed": task_seed,
+                        "endpoint_seed": endpoint_seed,
+                        "agent_count": agent_count,
+                        "unique_starts": len(set(starts)) == agent_count,
+                        "unique_goals": len(set(goals)) == agent_count,
+                        "fixed_point_count": sum(
+                            start == goal for start, goal in zip(starts, goals)
+                        ),
+                        "minimum_shortest_distance": min(distances),
+                        "maximum_shortest_distance": max(distances),
+                        "mean_shortest_distance": statistics.fmean(distances),
+                        "scenario_sha256": sha256_file(scenario_path),
+                    },
+                )
+                manifest.append(
+                    {
+                        "split": SPLIT,
+                        "source_group": "movingai",
+                        "instance_origin": "movingai_map_project_derived_congestion_od",
+                        "map_id": map_id,
+                        "task_id": task_id,
+                        "map_file": f"maps/{map_path.name}",
+                        "scenario_file": f"scenarios/{scenario_path.name}",
+                        "map_metadata_file": f"maps/{metadata_path.name}",
+                        "task_file": f"tasks/{task_path.name}",
+                        "layout_mode": str(case["layout_family"]),
+                        "layout_variant": map_id,
+                        "scenario_type": "movingai_map_derived_opposite_exchange",
+                        "task_variant": f"opposite_exchange_seed_{task_seed}_agents_{agent_count}",
+                        "task_seed": task_seed,
+                        "agent_count": agent_count,
+                        "topology_metrics": metrics,
+                        "dominant_flow_ratio": 1.0,
+                        "hotspot_skew": 0.0,
+                        "required_bottleneck_crossing_ratio": 0.0,
+                        "mean_shortest_distance": statistics.fmean(distances),
+                    }
+                )
+    if (
+        len(observed_maps) != int(config["expected_map_count"])
+        or len(manifest) != int(config["expected_task_count"])
+    ):
+        raise ValueError("congestion dataset dimensions differ from registration")
+    manifest.sort(key=lambda row: str(row["task_id"]))
+    _write_jsonl_atomic(split_root / "manifest.jsonl", manifest)
+    summary = {
+        "schema_version": 1,
+        "dataset_revision": str(config["dataset_revision"]),
+        "configuration_fingerprint": fingerprint,
+        "source": "official MovingAI maps with project-derived opposite-exchange OD",
+        "task_semantics": "derived_not_official_mapf_scenarios",
+        "splits": {
+            SPLIT: {
+                "map_count": len(observed_maps),
+                "instance_count": len(manifest),
+                "source_counts": {"movingai": len(manifest)},
+            }
+        },
+    }
+    _write_json(summary_path, summary)
+    return summary
+
+
 def analyze_robuststep_map_preflight(
     *, source_config: str | Path, dataset: str | Path,
     qualification: str | Path, output: str | Path,
@@ -258,4 +453,8 @@ def analyze_robuststep_map_preflight(
     return report
 
 
-__all__ = ["analyze_preflight_rows", "analyze_robuststep_map_preflight"]
+__all__ = [
+    "analyze_preflight_rows",
+    "analyze_robuststep_map_preflight",
+    "prepare_congestion_preflight_dataset",
+]
