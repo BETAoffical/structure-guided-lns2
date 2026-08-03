@@ -454,6 +454,36 @@ distribution coverage from missing topology/interaction representation before
 opening a new training expansion. The deterministic report SHA-256 is
 `04b39aee19046c5a20936b3ec6b1a54a7a823ff2834ca3d82e9e1817a30b6f08`.
 
+### Post-hoc transfer-support inspection
+
+A descriptive min/max support check used trial-index zero only, so repeated PP
+outcomes were not counted as independent feature observations. `lak101d` had
+the lowest all-feature outside-training-range rate of the six maps (0.77
+percent), and only 0.02 percent on the 38 features absent from the old 86-
+input subset. Its two degradations were both half-winner-unstable states. This
+is more consistent with PP-label uncertainty than with ordinary covariate
+support failure.
+
+`ost102d` had a 3.72 percent all-feature outside rate and a 1.88 percent rate
+on the 38 added features, but the successful `den009d` fold had an even higher
+4.17 percent all-feature rate. Shared state-feature outside rates were 18.36
+and 14.60 percent respectively. Therefore simple numeric range shift neither
+explains the sign of transfer nor justifies opening a larger same-feature
+training run by itself. The bad-map action correlation and low `ost102d`
+pairwise accuracy instead point to a mixture of uncertainty and missing
+map-conditioned topology/interaction information.
+
+Before changing the feature schema, the next low-risk diagnostic should test
+a conservative current-step switch: keep frozen V2 unless an outer-map OOF
+probe gives strong pairwise evidence that its alternative beats the V2 action.
+Any confidence threshold must be chosen only inside the outer training maps
+(nested map-grouped calibration), with an abstain-to-V2 option when no safe
+threshold exists. This remains a pre-PP neighborhood decision; it does not
+switch after a failed repair. If that gate cannot remove held-out-map
+regressions, the next expansion must combine broader topology-balanced maps
+with candidate-relative bottleneck/conflict-interaction features rather than
+repeating static global context alone.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
