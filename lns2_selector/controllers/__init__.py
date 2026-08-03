@@ -5,6 +5,7 @@ from pathlib import Path
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.v3_s3 import load_v3_s3_bundle
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
+from lns2_selector.controllers.guardrank import GuardRankSelector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.runtime.contracts import (
@@ -36,6 +37,17 @@ def load_selector(
         "stride-quality-v1",
         "stride-augcontrol-v1",
     }
+    if resolved == "stride-guardrank-v1":
+        loaded = load_controller_bundle(bundle)
+        if (
+            str(loaded.manifest.get("controller_id")) != resolved
+            or loaded.manifest.get("scientific_status") != "diagnostic_only"
+            or loaded.manifest.get("default_replacement_allowed") is not False
+        ):
+            raise ValueError(
+                "stride-guardrank-v1 requires an exactly matching diagnostic bundle"
+            )
+        return GuardRankSelector(loaded)
     if resolved in pairwise_ids:
         loaded = load_controller_bundle(bundle)
         manifest_id = str(loaded.manifest.get("controller_id", "v2-full"))

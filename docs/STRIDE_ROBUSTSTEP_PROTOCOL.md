@@ -1658,3 +1658,41 @@ respectively `d697cf919805bdcc1e50dad5af434a4e7a8d13f3637e864bfa4c7081ffd2ada2`,
 `5cddd7f0c580fc48fe863ff37a4b97f8820daae4a1b33db68b6743933397bff6`,
 `c1de46caff61a707da966dd27f0e490c2459458f4bc1943bb0698ac8274e544f`,
 and `71f966046c295c3e774ca50116dea543513e4bbc071b482eeabffd2ad672fece`.
+
+### Train-only V2-anchored guard ranker
+
+The separately named `stride-guardrank-v1` follow-up preserves frozen V2 as
+the action anchor and permits the conflict-only challenger to replace V2 only
+when its symmetric pairwise probability exceeds a candidate-kind threshold.
+The base and Topology Boundary thresholds were calibrated without validation,
+test, formal-OOD, runtime, or future-trajectory inputs. Four outer map folds
+measured generalization; each outer training split used three inner map folds
+to choose thresholds. Thus every reported train OOF action was produced by a
+ranker and threshold calibration that excluded that action's map.
+
+The nested train-map OOF result did not pass the preregistered regret gate.
+Frozen V2's normalized repairability regret of `0.239843` decreased to
+`0.228648`, an absolute improvement of `0.011195` and a relative improvement
+of `4.6675%`. The fixed gate required at least `5%` relative or `0.02`
+absolute improvement. Exact-best improved from `0.4368` to `0.5000`, Top-3
+from `0.5920` to `0.6494`, and 18 of 28 changed actions improved while nine
+worsened and one tied. Pairwise accuracy, exact-best, Top-3, and both topology
+subgroup gates passed; only the regret-improvement gate failed.
+
+The final train-only calibration chose probability thresholds `0.55` for base
+candidates and `1.01` for Boundary candidates. Since a probability cannot
+exceed one, the latter conservatively disables Boundary overrides and records
+that their cross-map confidence is not yet reliable. On the already observed
+six-map validation cohort the same frozen model descriptively reduced regret
+from `0.187595` to `0.145574`, with 10 better, seven worse, and three tied
+changes. That cohort did not select thresholds and cannot authorize promotion.
+All runtime bundle selections matched the reference implementation on 174
+train and 66 legacy-validation states, but `shadow_eligible` remains false and
+frozen V2 remains the default.
+
+The config, training report, offline predictions, and diagnostic controller
+manifest SHA-256 values are respectively
+`b243f71d226c84f5658f842cf2ff1dce561f27392503617a4f265a9ca7bc7aca`,
+`3c22957a5a0a22f876191844380e505b71cfcc87f9e185ca1381b8a76b2976d8`,
+`4885e225e410f2524235e190353d67be93f3560c514ce539a26c123a8aa6aa44`,
+and `43dad5ad0ef1d1eb4b3368097e6f37b43f0531ef1d5bf5cab445f1161343038d`.

@@ -417,6 +417,12 @@ class ControllerBundleV2:
     pruner_threshold: float | None
     manifest: dict[str, Any]
     promotion_report: dict[str, Any]
+    anchor_models: dict[str, CompactPortablePairwiseModel] = field(
+        default_factory=dict
+    )
+    anchor_ranges: dict[str, dict[str, tuple[float, float]]] = field(
+        default_factory=dict
+    )
 
 
 def export_controller_bundle(
@@ -563,6 +569,56 @@ def load_controller_bundle(path: str | Path) -> ControllerBundleV2:
                 f"controller main feature ranges differ from compact inputs: "
                 f"{profile}; missing={missing}; extra={extra}"
             )
+    anchor_models = {}
+    for profile, row_value in dict(manifest.get("anchor_rankers") or {}).items():
+        row = dict(row_value)
+        model_path = root / str(row["file"])
+        if _file_sha256(model_path) != str(row["sha256"]):
+            raise ValueError(f"controller anchor model SHA256 mismatch: {profile}")
+        model = _connect_native_predictor(load_compact_model(_read_json(model_path)))
+        if model.profile != profile:
+            raise ValueError(f"controller anchor model profile mismatch: {profile}")
+        anchor_models[profile] = model
+    anchor_ranges = {
+        str(profile): {
+            str(name): (float(bounds[0]), float(bounds[1]))
+            for name, bounds in dict(profile_ranges).items()
+        }
+        for profile, profile_ranges in dict(
+            manifest.get("anchor_ranges") or {}
+        ).items()
+    }
+    if anchor_models:
+        if set(anchor_models) != set(PROFILE_FEATURE_NAMES):
+            raise ValueError("controller bundle has an incomplete anchor model set")
+        for profile, model in anchor_models.items():
+            registered = set(anchor_ranges.get(profile, {}))
+            required = set(model.base_feature_names)
+            if registered != required:
+                raise ValueError(
+                    "controller anchor feature ranges differ from compact inputs: "
+                    f"{profile}"
+                )
+    elif manifest.get("anchor_ranges"):
+        raise ValueError("controller bundle has anchor ranges without anchor models")
+    strategy = manifest.get("selection_strategy")
+    if strategy is not None:
+        strategy = dict(strategy)
+        thresholds = dict(strategy.get("challenger_thresholds") or {})
+        if (
+            strategy.get("schema") != "lns2.stride.guardrank_strategy.v1"
+            or strategy.get("strategy_id") != "v2_anchor_pairwise_guard"
+            or strategy.get("applied_profile") != "realized_dynamic"
+            or set(thresholds) != {"base", "boundary_only"}
+            or any(
+                not math.isfinite(float(value))
+                or float(value) < 0.5
+                or float(value) > 1.01
+                for value in thresholds.values()
+            )
+            or not anchor_models
+        ):
+            raise ValueError("controller guarded selection strategy is invalid")
     report_row = dict(manifest.get("promotion_report", {}))
     report_path = root / str(report_row["file"])
     if _file_sha256(report_path) != str(report_row["sha256"]):
@@ -592,6 +648,8 @@ def load_controller_bundle(path: str | Path) -> ControllerBundleV2:
         pruner_threshold=pruner_threshold,
         manifest=manifest,
         promotion_report=report,
+        anchor_models=anchor_models,
+        anchor_ranges=anchor_ranges,
     )
 
 

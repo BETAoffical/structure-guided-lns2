@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from typing import Any, Iterable
 
@@ -350,6 +351,55 @@ def score_online_candidates(
         else stable_scores[order[0]]
     )
     return order[0], scores, margin
+
+
+def pairwise_win_probability(
+    rows: list[dict[str, Any]], model: Any, left: int, right: int
+) -> float:
+    """Return the symmetric probability that ``left`` beats ``right``.
+
+    This uses the same forward/reverse averaging rule as
+    :func:`score_online_candidates`, but evaluates only the requested pair.
+    Keeping the helper on the runtime path makes guarded selectors portable
+    across sklearn, Python compact-tree, and native compact-tree backends.
+    """
+
+    if not rows or left == right:
+        raise ValueError("pairwise evidence requires two distinct candidates")
+    if min(left, right) < 0 or max(left, right) >= len(rows):
+        raise IndexError("pairwise evidence candidate index is out of range")
+    pair_vector = getattr(model, "pair_vector", None)
+    if callable(pair_vector):
+        forward_vector = pair_vector(rows[left], rows[right])
+        reverse_vector = pair_vector(rows[right], rows[left])
+    else:
+        forward_vector = _pair_vector(
+            rows[left], rows[right], model.profile, model.feature_names
+        )
+        reverse_vector = _pair_vector(
+            rows[right], rows[left], model.profile, model.feature_names
+        )
+    predict_positive = getattr(model, "predict_positive", None)
+    if callable(predict_positive):
+        forward = float(predict_positive([forward_vector])[0])
+        reverse = float(predict_positive([reverse_vector])[0])
+    else:
+        import numpy as np
+
+        forward = float(
+            model.estimator.predict_proba(
+                np.asarray([forward_vector], dtype=float)
+            )[0, 1]
+        )
+        reverse = float(
+            model.estimator.predict_proba(
+                np.asarray([reverse_vector], dtype=float)
+            )[0, 1]
+        )
+    probability = (forward + (1.0 - reverse)) / 2.0
+    if not math.isfinite(probability):
+        raise ValueError("pairwise evidence is non-finite")
+    return min(1.0, max(0.0, probability))
 
 
 def feature_range_diagnostic(
