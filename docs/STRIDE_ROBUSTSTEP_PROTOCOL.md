@@ -1727,3 +1727,44 @@ repair labels, retraining, Shadow, or a speed claim.
 The source and reset-runtime config SHA-256 values are respectively
 `2de44eea6ba4ed9b5057c7eb8811e2af06a19784348fcf998cecd77149b591d0`
 and `91ffea3a5c64f9b69d71393e7cb0b8882d94e13e9dd7c3e33d93971daea85d8d`.
+
+### Completed fresh-map GuardRank training-expansion preflight
+
+The reset-only collection completed all 96 registered jobs with zero errors,
+zero timeouts, no candidate repairs, and no controller outcomes. All eight maps
+qualified: 3/3 compact high-topology, 3/3 compact mid-topology, and 2/2
+low-topology controls. Across all reset rows, initial conflict count had mean
+327.75, median 27.5, and range 0--3018; 26 of 96 reset rows were initially
+feasible. The analyzer passed every isolation, coverage, group, and forbidden-
+outcome gate and selected two tasks per map (16 tasks, 32 paired solver-seed
+states) for a proposal-only audit.
+
+The selected mean conflict counts were `den405d` 12.5/126.5, `den407d`
+71.5/90.5, `isound1` 617.0/1743.5, `lak103d` 32.0/477.5, `lak105d`
+11.0/15.0, `lgt101d` 26.5/103.5, `orz106d` 45.0/312.5, and `oth999d`
+10.0/158.0. These are load-qualification statistics, not repair-quality or
+TTF results.
+
+The dataset manifest, qualification manifest, qualification report, and
+preflight report SHA-256 values are respectively
+`1298c20deb2e05dbab756aea4d0c13c9f119b857f0ae8edf0221acb31e1653c7`,
+`b42e03e9be57f87141263230998e1e2bbceda1ea1be5846d69d1ea31a279271b`,
+`4c6815b112d14676eb6c76b8820115244e4c5252a1415dff868a3939272e3063`,
+and `61e147414f433b25865c7861bf22159cc697bb34bfd43f8bc1132cfe9d35cdf4`.
+
+### Registered fresh-map GuardRank candidate coverage
+
+`stride-guardrank-mapcoverage-v1` freezes the existing V2 candidate pool plus
+at most two `stride-topoboundary-v1` candidates on each of the 32 selected
+initial states. It repeats proposal generation twice to require deterministic
+candidate identities and preserves the initial-state fingerprint. Requested
+sizes remain 4/8/16, the total candidate count must stay in 12--20, and the
+audit measures articulation/low-degree incident coverage, boundary ratio, and
+component reach against the best base candidate frontier.
+
+This stage remains proposal-only: PP repair trials, controller actions,
+controller outcomes, labels, runtime export, default replacement, formal OOD,
+and speed claims are all forbidden. A pass only authorizes registration of a
+separate multi-PP-seed repair collection; a failure forbids collecting new
+repair labels from this pool. The registered config SHA-256 is
+`edcdaa2b59ae8fa93a410df7aa2b77df9f0db0d7ab6c67c001542ad3348b250f`.

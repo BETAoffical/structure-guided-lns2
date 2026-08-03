@@ -254,6 +254,11 @@
       "purpose": "Train-only nested map OOF calibration and diagnostic export for the V2-anchored GuardRank experiment."
     },
     {
+      "path": "experiments/stride_guardrank_map_coverage.py",
+      "role": "reproducibility",
+      "purpose": "Fresh-map proposal-only audit for the frozen V2 plus topology-boundary candidate pool."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -839,6 +844,11 @@
       "purpose": "CLI entry point for train-only nested GuardRank training and diagnostic export."
     },
     {
+      "path": "scripts/run_stride_guardrank_map_coverage.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for the checksum-pinned GuardRank fresh-map candidate coverage audit."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
@@ -1112,6 +1122,11 @@
       "path": "tests/integration/test_stride_guardrank_expansion.py",
       "role": "reproducibility",
       "contract": "Fresh DAO map disjointness, checksum pinning, outcome-blind reset-only preflight, and formal-OOD exclusion."
+    },
+    {
+      "path": "tests/integration/test_stride_guardrank_map_coverage.py",
+      "role": "reproducibility",
+      "contract": "Fresh-map candidate coverage identity, outcome blindness, group gates, and registered input checksums."
     },
     {
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",
