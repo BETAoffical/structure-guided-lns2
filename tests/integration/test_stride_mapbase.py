@@ -9,6 +9,10 @@ from experiments.stride_mapbase import (
     build_mapbase_selection,
     validate_mapbase_config,
 )
+from experiments.stride_maprank import (
+    prepare_maprank_selection,
+    validate_maprank_design,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +59,7 @@ def test_mapbase_registered_inputs_and_selection_match_when_available() -> None:
 
 def test_maprank_successor_design_is_distinct_and_outcome_independent() -> None:
     design = json.loads(MAPRANK_DESIGN_PATH.read_text(encoding="utf-8"))
+    validate_maprank_design(design)
     assert design["schema"] == "lns2.stride.maprank_design.v1"
     assert design["controller_id"] == "stride-maprank-v1"
     assert design["label_artifact_id"] == "stride-maprank-labels-v1"
@@ -90,3 +95,22 @@ def test_maprank_successor_design_is_distinct_and_outcome_independent() -> None:
     )
     assert design["formal_speed_claim"] is False
     assert design["default_replacement_allowed"] is False
+
+
+def test_maprank_selection_combines_fresh_train_maps_when_inputs_exist(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(MAPRANK_DESIGN_PATH.read_text(encoding="utf-8"))
+    if any(
+        not (ROOT / artifact["path"]).is_file()
+        for artifact in design["selection_sources"].values()
+    ):
+        return
+    report = prepare_maprank_selection(MAPRANK_DESIGN_PATH, tmp_path)
+    assert report["state_count"] == 303
+    assert report["split_state_counts"] == {"train": 237, "validation": 66}
+    assert report["split_map_counts"] == {"train": 24, "validation": 6}
+    assert report["new_map_count"] == 8
+    assert report["new_state_count"] == 63
+    assert report["repair_outcomes_used"] is False
+    assert report["controller_outcomes_used"] is False

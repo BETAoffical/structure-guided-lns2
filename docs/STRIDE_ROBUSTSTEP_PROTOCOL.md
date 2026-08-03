@@ -1896,4 +1896,13 @@ threshold. The existing offline gates are not relaxed. Only a passing offline
 result can proceed through fresh-map Shadow, paired high-load raw TTF, and
 paired fresh-map raw run-to-completion TTF. This registration is a design
 boundary, not a performance or speed claim. The frozen design SHA-256 is
-`473bcab80cbebeab58297933d8a435f1384fc19cc2bfaaf09adce6ea061b6227`.
+`54784badfd210019595fdebcc0e06b98564c2c4a4fb8f73c82f60fecd15082cc`.
+
+The outcome-blind selection merge was then materialized before label analysis.
+It contains the registered 303 states: 237 training states on 24 maps and 66
+legacy-validation states on six disjoint maps. All 63 MapBase states and all
+eight new maps are training-only; 47 new states are in the registered
+boundary-relevant topology group and 16 are controls. Neither candidate repair
+outcomes nor controller outcomes are selection inputs. The combined selection
+SHA-256 is
+`14644c37c85b16796c053a1a001a8f0e52bb59b07d6a1beba2fa7a0302e263c3`.

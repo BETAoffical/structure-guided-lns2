@@ -20,6 +20,20 @@
       "expected_state_count": 63
     }
   ],
+  "selection_sources": {
+    "legacy_selection": {
+      "path": "build/stride-repairability-selection-v1/state_selection.jsonl",
+      "sha256": "f523122c62a000274df1250f4bbda9ff7757c73991d26ce33644f4040bfe6bb8"
+    },
+    "mapbase_selection": {
+      "path": "build/stride-mapbase-collection-v1/state_selection.jsonl",
+      "sha256": "1de7ece23f626516e05f87169ca7f509a52288744d00b4281aab3eace97b3e0b"
+    },
+    "mapbase_dataset_manifest": {
+      "path": "build/stride-guardrank-map-expansion-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "1298c20deb2e05dbab756aea4d0c13c9f119b857f0ae8edf0221acb31e1653c7"
+    }
+  },
   "expected_data_coverage": {
     "state_count": 303,
     "train_state_count": 237,

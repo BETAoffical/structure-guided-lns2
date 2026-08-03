@@ -269,6 +269,11 @@
       "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
     },
     {
+      "path": "experiments/stride_maprank.py",
+      "role": "active",
+      "purpose": "Outcome-blind selection merge and frozen design validation for the separately named STRIDE-MapRank successor."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -867,6 +872,11 @@
       "path": "scripts/run_stride_mapbase.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for collecting and auditing STRIDE-MapBase fresh-map repair trials."
+    },
+    {
+      "path": "scripts/prepare_stride_maprank.py",
+      "role": "active",
+      "purpose": "CLI entry point for preparing the checksum-pinned STRIDE-MapRank combined selection."
     },
     {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
