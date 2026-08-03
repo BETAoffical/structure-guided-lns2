@@ -14,6 +14,7 @@ deletable: registered reports bind the exact configuration that produced them.
 | `stage1_*` | warehouse map and static OD example | reproduce the registered generator contract |
 | `repository_hygiene.json` | repository and evidence audit policy | protect tracked evidence and reject repository debris |
 | `retention_manifest.json` | per-file executable retention decisions | prevent unclassified production modules or tests |
+| `stride_stage4r_pp_replay.json` | registered 16-state paired PP-seed replay | separate first-neighborhood quality from stochastic PP repair outcomes |
 | `stride_stage4r_seed_diagnostic.json` | registered four-task, four-seed Stage 4R tail diagnostic | distinguish persistent selector weakness from solver-seed sensitivity without a formal speed claim |
 | `result_consolidation.json` | frozen claim/source registry | verify report sources and claim boundaries |
 | `build_storage_compaction.json` | local generated-output inventory policy | manage build storage without deleting evidence |

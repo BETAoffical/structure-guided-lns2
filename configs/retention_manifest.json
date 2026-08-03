@@ -194,6 +194,11 @@
       "purpose": "Registered map-disjoint Stage 4R dataset, strict rotating controller schedule, capped-TTF collection, and paired diagnostic analysis."
     },
     {
+      "path": "experiments/stride_stage4r_pp_replay.py",
+      "role": "active",
+      "purpose": "Registered same-state, same-action-set PP-seed replay that separates current-step neighborhood quality from stochastic repair outcomes."
+    },
+    {
       "path": "experiments/stride_stage4r_seed_diagnostic.py",
       "role": "active",
       "purpose": "Outcome-informed multi-seed Stage 4R tail diagnosis that separates persistent controller weakness from solver-seed sensitivity without making a formal speed claim."
@@ -574,6 +579,11 @@
       "purpose": "CLI entry point for the registered diagnostic-only STRIDE Stage 4R TTF Quick."
     },
     {
+      "path": "scripts/run_stride_stage4r_pp_replay.py",
+      "role": "active",
+      "purpose": "CLI entry point for the registered Stage 4R same-state paired PP-seed replay."
+    },
+    {
       "path": "scripts/run_stride_stage4r_seed_diagnostic.py",
       "role": "active",
       "purpose": "CLI entry point for the registered outcome-informed Stage 4R multi-seed TTF diagnostic."
@@ -752,6 +762,11 @@
       "path": "tests/integration/test_stride_stage4r_quick.py",
       "role": "active",
       "contract": "Strict rotating Stage 4R schedule, capped-TTF primary metric, success noninferiority, and diagnostic decision contracts."
+    },
+    {
+      "path": "tests/integration/test_stride_stage4r_pp_replay.py",
+      "role": "active",
+      "contract": "Same-state paired PP seed generation, registered replay thresholds, identical-action determinism, and winner-flip diagnosis contracts."
     },
     {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",

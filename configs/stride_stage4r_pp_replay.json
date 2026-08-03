@@ -1,0 +1,46 @@
+{
+  "schema": "lns2.stride.stage4r_pp_replay_registration.v1",
+  "scientific_status": "diagnostic_only",
+  "formal_speed_claim": false,
+  "formal_ood_data_allowed": false,
+  "primary_metric": "paired_current_step_conflict_reduction",
+  "selection_rule": "all decision-zero states from the registered four-task, four-solver-seed Stage 4R diagnostic; no source action outcome is used to select a state",
+  "source_report": "build/stride-stage4r-seed-diagnostic-v1/stage4r_seed_diagnostic_report.json",
+  "source_report_sha256": "a42df7995a7b2ab7781118f0f2396ee37f0c8a08e08ddd90d2d8ace0b04968cc",
+  "registered_task_ids": [
+    "balanced_wall_clock_compartmentalized_double_horizontal_0000__task_0001",
+    "balanced_wall_clock_v2_replacement_compartmentalized_cross_four_gate_0000__task_0000",
+    "lt_gallowstemplar_n__random_17__agents_0400",
+    "maze-128-128-2__random_17__agents_0400"
+  ],
+  "solver_seeds": [1, 2, 3, 4],
+  "decision_index": 0,
+  "action_labels": ["v2-full", "stride-quality-v1"],
+  "pp_trial_count": 16,
+  "workers": 1,
+  "execution_order": "paired_seed_alternating_action_order",
+  "expected_same_action_states": 10,
+  "expected_different_action_states": 6,
+  "sources": {
+    "v2-full": {
+      "collection_root": "build/stride-stage4r-seed-diagnostic-v1/controllers/v2-full",
+      "run_config": "build/stride-stage4r-seed-diagnostic-v1/controllers/v2-full/run_config.json",
+      "run_config_sha256": "0033e3c41b887c3ed13a547f1ab86380bcc3f31a962a6a594213c379b03af2a8",
+      "manifest": "build/stride-stage4r-seed-diagnostic-v1/controllers/v2-full/realized_dynamic_manifest.jsonl",
+      "manifest_sha256": "7bf441ebe234cc8df6ad25cb672eab868b237c46d8d306acb5ab9f4492256dde"
+    },
+    "stride-quality-v1": {
+      "collection_root": "build/stride-stage4r-seed-diagnostic-v1/controllers/stride-quality-v1",
+      "run_config": "build/stride-stage4r-seed-diagnostic-v1/controllers/stride-quality-v1/run_config.json",
+      "run_config_sha256": "e866566fdeb12b566801ec8a78e21d21f85d4f5c72a02c9dd5bc1b2c74cb5de9",
+      "manifest": "build/stride-stage4r-seed-diagnostic-v1/controllers/stride-quality-v1/realized_dynamic_manifest.jsonl",
+      "manifest_sha256": "590cc3ea40ee98e17307980ec56eb52e76621fcae87d9a3e6ffaad01594c5122"
+    }
+  },
+  "decision_thresholds": {
+    "minimum_different_action_states": 4,
+    "winner_flip_state_fraction": 0.25,
+    "minimum_mean_winner_stability": 0.7,
+    "robust_action_minimum_wins": 10
+  }
+}
