@@ -13,7 +13,10 @@ from experiments.stride_augcontrol import (
     _pair_label_subgroup_coverage,
     _prediction_records,
     _portable_prediction_equivalence,
+    _portable_model_predictions,
     _training_export_view,
+    _selection_change_diagnostics,
+    _selection_kind_diagnostics,
     _validate_label_audit_provenance,
     validate_augcontrol_training_config,
 )
@@ -113,18 +116,22 @@ class StrideAugcontrolTest(unittest.TestCase):
     def test_export_ranges_use_only_training_maps_and_validation_is_rechecked(self) -> None:
         grouped = {
             "train-state": [
-                {"state_id": "train-state", "candidate_id": "train-a", "split": "train"},
-                {"state_id": "train-state", "candidate_id": "train-b", "split": "train"},
+                {"state_id": "train-state", "candidate_id": "train-a", "candidate_key": "train-a", "features": {}, "split": "train"},
+                {"state_id": "train-state", "candidate_id": "train-b", "candidate_key": "train-b", "features": {}, "split": "train"},
             ],
             "validation-state": [
                 {
                     "state_id": "validation-state",
                     "candidate_id": "validation-a",
+                    "candidate_key": "validation-a",
+                    "features": {},
                     "split": "validation",
                 },
                 {
                     "state_id": "validation-state",
                     "candidate_id": "validation-b",
+                    "candidate_key": "validation-b",
+                    "features": {},
                     "split": "validation",
                 },
             ],
@@ -148,6 +155,20 @@ class StrideAugcontrolTest(unittest.TestCase):
                 {"validation-state": "validation-b"},
             )["passed"]
         )
+
+        class DirectRuntimeModel:
+            @staticmethod
+            def score_candidates(rows: list[dict]) -> list[float]:
+                return [
+                    1.0 if row["candidate_id"] == "validation-b" else 0.0
+                    for row in rows
+                ]
+
+        portable = _portable_model_predictions(
+            {"validation-state": grouped["validation-state"]},
+            DirectRuntimeModel(),
+        )
+        self.assertEqual(portable, {"validation-state": "validation-b"})
 
     def test_pair_table_reports_labeled_state_and_map_coverage(self) -> None:
         rows = []
@@ -283,6 +304,24 @@ class StrideAugcontrolTest(unittest.TestCase):
         self.assertAlmostEqual(
             opportunity["mean_best_score_improvement_over_base_pool"], 0.2
         )
+        baseline = _prediction_records(
+            "baseline",
+            {"state-a": "base-good"},
+            grouped,
+            evaluation_pool="augmented",
+        )
+        challenger = _prediction_records(
+            "challenger",
+            {"state-a": "boundary-best"},
+            grouped,
+            evaluation_pool="augmented",
+        )
+        change = _selection_change_diagnostics(baseline, challenger)
+        self.assertEqual(change["selection_change_count"], 1)
+        self.assertEqual(change["better_change_count"], 1)
+        kinds = _selection_kind_diagnostics(challenger)
+        self.assertEqual(kinds[0]["candidate_kind"], "boundary_only")
+        self.assertEqual(kinds[0]["exact_best_rate"], 1.0)
 
 
 if __name__ == "__main__":

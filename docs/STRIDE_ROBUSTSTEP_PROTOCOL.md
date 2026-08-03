@@ -1617,3 +1617,44 @@ and `23d102c37bb0ed42f05214a6a936b72f85566ab0eef3c3e2a4ae90ba1165b14f`.
 The next sequence is paired 16-seed label collection, controlled retraining,
 action-preserving Shadow, development high-load raw TTF, and formal OOD raw
 TTF. Failure at any gate retains frozen V2 and leaves later holdout data unread.
+
+### Completed augmented-pool repairability pilot and offline gate
+
+The audited collection completed all 240 selected states with zero errors. It
+contains 4,385 candidates and 70,160 paired repair trials; all collection gates
+passed. The 113 independent Topology Boundary candidates occurred in 98
+states. The strict label retained 18,264 of 37,932 candidate pairs and produced
+at least one robust pair in 232/240 states. Train and validation pair-state
+coverage was 169/174 and 63/66 respectively, with all registered maps and
+subgroups passing their coverage thresholds.
+
+PP-seed diagnostics show 56.67% exact winner agreement between the two
+eight-seed halves, 82.50% Top-3 overlap, and 90.72% direction agreement among
+comparable candidate pairs. Thus coarse candidate quality is much more stable
+than a unique winner, supporting robust pair learning rather than a single
+Oracle action.
+
+`stride-augcontrol-v1` passed all integrity, coverage, portability, and
+pairwise-accuracy gates, but failed the preregistered offline quality gate. On
+the six held-out maps its weighted pairwise accuracy was 0.8572 versus a 0.5
+majority baseline, but exact-best rate was 0.5000 versus frozen V2's 0.5909 and
+normalized repairability regret was 0.1928 versus 0.1876 (2.77% relatively
+worse). Top-3 rate improved from 0.6515 to 0.7273. Consequently Shadow remains
+forbidden and frozen V2 remains the default.
+
+The conflict-only ablation was materially stronger than the registered
+structure-weighted primary model: pairwise accuracy 0.8787, normalized regret
+0.1535, exact-best 0.5455, and Top-3 0.7727. It still failed the fixed
+exact-best noninferiority gate. Candidate-type diagnostics locate the primary
+failure in ranking calibration across the augmented pool: the primary model
+improved base-only regret versus V2 but degraded Boundary choices, even though
+Boundary was uniquely best in 22.73% of validation states. This result supports
+a separately named, train-only calibrated anchored ranker as the next research
+step; it does not authorize retuning on these already observed validation maps.
+The collection-audit report, Windows label summary, offline training report,
+validation predictions, and primary controller manifest SHA-256 values are
+respectively `d697cf919805bdcc1e50dad5af434a4e7a8d13f3637e864bfa4c7081ffd2ada2`,
+`ba59fda93c145fcdb4b7f29f352d02aa10852193817590824c95e3eeba1fd26e`,
+`5cddd7f0c580fc48fe863ff37a4b97f8820daae4a1b33db68b6743933397bff6`,
+`c1de46caff61a707da966dd27f0e490c2459458f4bc1943bb0698ac8274e544f`,
+and `71f966046c295c3e774ca50116dea543513e4bbc071b482eeabffd2ad672fece`.

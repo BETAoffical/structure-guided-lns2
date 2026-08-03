@@ -34,6 +34,7 @@ from experiments.stride_stage4 import (
 from experiments.stride_stage4r import _export_diagnostic_controller
 from experiments.stride_stage3 import _project_path
 from experiments.v2_factorial_audit import _select_model
+from lns2_selector.runtime.online_selection import score_online_candidates
 
 
 CONFIG_SCHEMA = "lns2.stride.augcontrol_training_config.v1"
@@ -435,6 +436,24 @@ def _portable_prediction_equivalence(
     }
 
 
+def _portable_model_predictions(
+    grouped: dict[str, list[dict[str, Any]]], model: Any
+) -> dict[str, str]:
+    predictions = {}
+    for state_id, candidates in sorted(grouped.items()):
+        rows = [
+            {
+                "candidate_id": row["candidate_id"],
+                "candidate_key": row["candidate_key"],
+                "features": {"realized_dynamic": row["features"]},
+            }
+            for row in candidates
+        ]
+        index, _scores, _margin = score_online_candidates(rows, model)
+        predictions[state_id] = str(rows[index]["candidate_id"])
+    return predictions
+
+
 def _prediction_records(
     model_id: str,
     predictions: dict[str, str],
@@ -537,6 +556,62 @@ def _mean_metrics_without_subgroups(records: list[dict[str, Any]]) -> dict[str, 
         "top3_hit_rate": mean("top3_hit"),
         "mean_normalized_repairability_regret": mean(
             "normalized_repairability_regret"
+        ),
+    }
+
+
+def _selection_kind_diagnostics(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for kind in sorted({str(row["selected_candidate_kind"]) for row in records}):
+        selected = [
+            row for row in records if str(row["selected_candidate_kind"]) == kind
+        ]
+        result.append(
+            {
+                "candidate_kind": kind,
+                "state_count": len(selected),
+                "exact_best_rate": statistics.fmean(
+                    bool(row["exact_best"]) for row in selected
+                ),
+                "top3_hit_rate": statistics.fmean(
+                    bool(row["top3_hit"]) for row in selected
+                ),
+                "mean_normalized_repairability_regret": statistics.fmean(
+                    float(row["normalized_repairability_regret"])
+                    for row in selected
+                ),
+            }
+        )
+    return result
+
+
+def _selection_change_diagnostics(
+    baseline: list[dict[str, Any]], challenger: list[dict[str, Any]]
+) -> dict[str, Any]:
+    baseline_by_state = {str(row["state_id"]): row for row in baseline}
+    challenger_by_state = {str(row["state_id"]): row for row in challenger}
+    if set(baseline_by_state) != set(challenger_by_state):
+        raise ValueError("augcontrol selection comparison coverage differs")
+    changed = [
+        state_id
+        for state_id in sorted(baseline_by_state)
+        if str(baseline_by_state[state_id]["selected_candidate_id"])
+        != str(challenger_by_state[state_id]["selected_candidate_id"])
+    ]
+    deltas = [
+        float(challenger_by_state[state_id]["repairability_score"])
+        - float(baseline_by_state[state_id]["repairability_score"])
+        for state_id in changed
+    ]
+    return {
+        "state_count": len(baseline_by_state),
+        "selection_change_count": len(changed),
+        "selection_change_fraction": len(changed) / len(baseline_by_state),
+        "better_change_count": sum(delta > 1e-12 for delta in deltas),
+        "worse_change_count": sum(delta < -1e-12 for delta in deltas),
+        "tied_change_count": sum(abs(delta) <= 1e-12 for delta in deltas),
+        "mean_changed_score_delta": (
+            statistics.fmean(deltas) if deltas else 0.0
         ),
     }
 
@@ -753,6 +828,19 @@ def run_augcontrol_training(
     }
     metrics = {
         model_id: _mean_metrics(records)
+        for model_id, records in records_by_model.items()
+    }
+    selection_diagnostics = {
+        model_id: {
+            "by_selected_candidate_kind": _selection_kind_diagnostics(records),
+            "change_vs_v2_augmented": (
+                None
+                if model_id == "v2-full/augmented-pool"
+                else _selection_change_diagnostics(
+                    records_by_model["v2-full/augmented-pool"], records
+                )
+            ),
+        }
         for model_id, records in records_by_model.items()
     }
     primary_metrics = metrics[CONTROLLER_ID]
@@ -978,11 +1066,11 @@ def run_augcontrol_training(
     ).main_models["realized_dynamic"]
     validation_portable_equivalence = _portable_prediction_equivalence(
         primary_predictions,
-        _model_predictions(validation_grouped, portable_primary, input_specs),
+        _portable_model_predictions(validation_grouped, portable_primary),
     )
     conflict_validation_portable_equivalence = _portable_prediction_equivalence(
         conflict_predictions,
-        _model_predictions(validation_grouped, portable_conflict, input_specs),
+        _portable_model_predictions(validation_grouped, portable_conflict),
     )
     integrity_gates = {
         "label_summary_identity": True,
@@ -1030,6 +1118,7 @@ def run_augcontrol_training(
         "label_coverage": label_coverage,
         "label_audit_provenance": label_audit_provenance,
         "metrics": metrics,
+        "selection_diagnostics": selection_diagnostics,
         "oracle_pool_opportunity": _oracle_pool_opportunity(validation_grouped),
         "normalized_regret_improvement_vs_v2": regret_improvement,
         "relative_normalized_regret_improvement_vs_v2": relative_regret_improvement,
