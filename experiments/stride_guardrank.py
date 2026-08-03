@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-import math
 import shutil
 import statistics
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.context_audit import PairwiseModel
-from experiments.feature_schema_v2 import (
-    FEATURE_SCHEMA_ID,
-    FEATURE_SCHEMA_SHA256,
-    PROFILE_FEATURE_NAMES,
-)
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import _read_json, _write_json, _write_jsonl
 from experiments.stride_augcontrol import (
     _input_specifications,
@@ -40,10 +34,7 @@ from experiments.stride_stage4 import (
 from experiments.stride_stage4r import _export_diagnostic_controller
 from lns2_selector.controllers import load_selector
 from lns2_selector.runtime.contracts import SelectionRequest
-from lns2_selector.runtime.online_selection import (
-    pairwise_win_probability,
-    score_online_candidates,
-)
+from lns2_selector.runtime.online_selection import pairwise_win_probability
 from lns2_selector.training.tree_utils import balanced_map_folds
 
 

@@ -1696,3 +1696,34 @@ manifest SHA-256 values are respectively
 `3c22957a5a0a22f876191844380e505b71cfcc87f9e185ca1381b8a76b2976d8`,
 `4885e225e410f2524235e190353d67be93f3560c514ce539a26c123a8aa6aa44`,
 and `43dad5ad0ef1d1eb4b3368097e6f37b43f0531ef1d5bf5cab445f1161343038d`.
+
+### Registered fresh-map GuardRank training-expansion preflight
+
+The failed `stride-guardrank-v1` gate does not authorize threshold relaxation
+or Shadow. Its next step is an outcome-blind load preflight on eight
+checksum-pinned DAO maps that did not occur in the current 22-map repairability
+cohort or the 12-map formal-OOD registry. A `git grep` audit at predecessor
+commit `0a79abb45adccede1a42a8b534ab5a8505a79f80` also found none of the eight
+map IDs in the registered configs or this protocol before registration.
+
+The strata are compact high-topology (`lgt101d`, `lak105d`, `orz106d`),
+compact mid-topology (`den405d`, `den407d`, `lak103d`), and low-topology
+controls (`oth999d`, `isound1`). Their registered low-degree-cell ratios range
+from approximately 0.003 to 0.130. Each map uses one new task seed, both
+uniform-random and opposite-exchange OD variants, and three map-scaled agent
+loads. Two solver seeds give 48 tasks and 96 reset-only jobs.
+
+The preflight stops after initialization (`max_decisions=0` and
+`max_repair_iterations=0`). It may read only map topology, load, initial
+conflicts, initial PP time, and initial path statistics; candidate repairs,
+controller actions, relative TTF, and controller outcomes are forbidden. A
+map qualifies at mean initial conflicts of at least 10. At least six maps must
+qualify, including two of three high-topology maps and two of three
+mid-topology maps; only the two low-topology controls may be underloaded. At
+most two tasks per map are then selected against 25/100-conflict targets. A
+pass permits a separately registered proposal/state-collection design, not
+repair labels, retraining, Shadow, or a speed claim.
+
+The source and reset-runtime config SHA-256 values are respectively
+`399abd2b2e8a837e8387683e5040612f79a02f39ac81632d2e3d96123635d8c0`
+and `91ffea3a5c64f9b69d71393e7cb0b8882d94e13e9dd7c3e33d93971daea85d8d`.
