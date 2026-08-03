@@ -1003,6 +1003,46 @@ TTF claims remain forbidden. Only a complete pass permits registration of the
 boundary-aware training-data design. The frozen confirmation-config SHA-256 is
 `185b6d83b557ba19680a7b2d6cd3d8795b02bdba217291b4bdbff0ad7efad177`.
 
+### Completed eight-seed topology-boundary quality confirmation
+
+The extension completed all 1,388 new outcomes with zero errors and produced
+the exact 2,776-outcome eight-seed product. Both the full aggregate and the
+previously unseen four-seed half passed every original immediate-quality gate.
+The full aggregate had 12/18 strict augmented-pool wins, mean normalized pool
+gain 0.2158, boundary Top-3 rate 0.7778, and mean best-boundary normalized
+regret 0.1316. The unseen half had 11/18 strict wins, gain 0.2095, Top-3 rate
+0.7222, and regret 0.1500.
+
+The formal confirmation nevertheless failed its separately frozen action-
+stability gate: half-to-half Top-3 overlap was 0.7222, below 0.75. Pairwise
+consistency (0.8678) and cross-half normalized regret (0.0549) passed; exact
+winner agreement was 0.6667 and remained diagnostic. This failure is retained:
+the revision is not eligible for training, runtime export, V2 replacement, or
+a formal TTF claim. The report and combined-trial SHA-256 values are
+`ac618d8387404034d62f6319a97602ab0fe9ce2882257e9009a7925478244a4e`
+and `c9e1a52d5b242871ac70e9e6f89bc8ad03d4744dbeb9ec8852ba58257cae4b01`.
+
+### Registered non-promoting frozen-V2 boundary Shadow
+
+At the user's request, `stride-boundary-explore-v1` is a bounded exploratory
+exception after that formal failure. It does not relax or overwrite the failed
+gate. For each of the same 18 states, frozen `v2-full` first scores only the
+324 original candidates and then separately scores the 347-candidate pool with
+23 boundary-only additions. Both routes use the same model; outcome fields are
+forbidden until both action files have been written. The selected actions are
+then compared on the already collected eight paired PP-seed immediate-quality
+yardstick. No new repair trial, training, future-round label, runtime label, or
+TTF measurement is used.
+
+A small paired TTF Quick may be registered only if V2 actually selects a
+boundary-only action at least once, improves at least one state, achieves mean
+normalized selected-action gain at least 0.01, is nonnegative on the unseen
+seed half, and worsens at most 35% of states. Even a pass is only a signal to
+run the Quick; it is not promotion evidence. A failure stops this boundary
+runtime route while preserving the formal confirmation result. The frozen
+Shadow-config SHA-256 is
+`383d8973fb37727bc6c0b7c0488513792e6f69c14652da3ca51b0e28bfb3a74d`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

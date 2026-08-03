@@ -1,0 +1,67 @@
+{
+  "schema": "lns2.stride.topology_boundary_v2_shadow_config.v1",
+  "scientific_status": "exploratory_non_promoting_after_confirmation_failure",
+  "experiment_id": "stride-boundary-explore-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "training_allowed": false,
+  "runtime_export_allowed": false,
+  "ttf_claim_allowed": false,
+  "future_repair_rounds_used": false,
+  "cost_to_go_used": false,
+  "runtime_used_in_label": false,
+  "frozen_controller_id": "v2-full",
+  "baseline_pool_id": "target-collision-random-v2-frozen",
+  "augmented_pool_id": "target-collision-random-v2-plus-stride-topoboundary-v1",
+  "expected_state_count": 18,
+  "expected_candidate_count": 347,
+  "expected_base_candidate_count": 324,
+  "expected_boundary_only_candidate_count": 23,
+  "expected_outcome_count": 2776,
+  "expected_feature_schema_id": "lns2.realized_features.v2",
+  "expected_feature_dimension": 124,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "first_half_indices": [0, 1, 2, 3],
+  "second_half_indices": [4, 5, 6, 7],
+  "selection_protocol": {
+    "outcome_blind_before_join": true,
+    "baseline_and_augmented_use_same_frozen_model": true,
+    "baseline_and_augmented_scored_as_separate_pools": true,
+    "quality_yardstick": "same_eight_paired_pp_seed_mean_np100_current_step",
+    "forbidden_selection_fields": [
+      "conflicts_after",
+      "repair_outcome",
+      "replan_success",
+      "post_structure",
+      "pp_replan_seconds",
+      "native_step_seconds"
+    ]
+  },
+  "exploratory_quick_gates": {
+    "minimum_boundary_selected_state_count": 1,
+    "minimum_improved_state_count": 1,
+    "minimum_mean_normalized_selected_gain": 0.01,
+    "minimum_unseen_half_mean_normalized_selected_gain": 0.0,
+    "maximum_worsened_state_rate": 0.35
+  },
+  "inputs": {
+    "confirmation_config": {
+      "path": "configs/stride_topology_boundary_quality_confirmation.json",
+      "sha256": "185b6d83b557ba19680a7b2d6cd3d8795b02bdba217291b4bdbff0ad7efad177"
+    },
+    "confirmation_report": {
+      "path": "build/stride-topoboundary-quality-confirmation-analysis-v1/topology_boundary_quality_confirmation_report.json",
+      "sha256": "ac618d8387404034d62f6319a97602ab0fe9ce2882257e9009a7925478244a4e"
+    },
+    "combined_trials": {
+      "path": "build/stride-topoboundary-quality-confirmation-analysis-v1/combined_collection/repair_trials.jsonl",
+      "sha256": "c9e1a52d5b242871ac70e9e6f89bc8ad03d4744dbeb9ec8852ba58257cae4b01"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "next_decision_on_pass": "register_small_paired_boundary_v2_ttf_quick",
+  "next_decision_on_failure": "retain_formal_failure_and_stop_boundary_runtime_route"
+}

@@ -224,6 +224,11 @@
       "purpose": "Unseen-seed extension and independent-half eight-seed confirmation for topology-boundary quality."
     },
     {
+      "path": "experiments/stride_topology_boundary_v2_shadow.py",
+      "role": "active",
+      "purpose": "Outcome-blind frozen-V2 base-versus-boundary-pool Shadow after the formal boundary confirmation failure."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -699,6 +704,11 @@
       "purpose": "CLI entry point for the paired eight-seed topology-boundary quality confirmation."
     },
     {
+      "path": "scripts/run_stride_topology_boundary_v2_shadow.py",
+      "role": "active",
+      "purpose": "CLI entry point for the non-promoting frozen-V2 topology-boundary Shadow."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -932,6 +942,11 @@
       "path": "tests/integration/test_stride_topology_boundary_quality_confirmation.py",
       "role": "active",
       "contract": "Unseen trial indices, eight-seed product, independent second-half gates, and non-training boundary."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_boundary_v2_shadow.py",
+      "role": "active",
+      "contract": "Exploratory-only status, outcome-blind selection order, frozen-V2 pool comparison, and Quick decision gates."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",
