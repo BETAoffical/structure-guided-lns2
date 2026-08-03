@@ -778,6 +778,36 @@ A pass permits extension to eight paired PP seeds. A failure stops this anchor
 candidate line before training or TTF evaluation. These gates were frozen
 before any anchor candidate repair outcome was collected.
 
+### Completed topology-anchor immediate-quality Pilot
+
+The Pilot completed all 16 states, 360 candidates, and 1440 paired repair
+outcomes with zero collection errors. The augmented pool strictly beat the
+frozen pool on 5 of 16 states (31.25%) and achieved mean normalized pool gain
+0.0749. An anchor candidate entered the full four-seed Top-3 on 68.75% of
+states. These three registered gates passed.
+
+The Pilot nevertheless failed two mandatory gates. Mean anchor-best normalized
+regret was 0.1842, above the 0.15 maximum. More importantly, the ultra-
+bottleneck group produced zero strict wins over five states, below its required
+one; articulated maps produced 3/8 wins and low-articulation controls 2/3.
+Thus complete incident-event coverage did not imply good PP repair quality,
+especially on ultra-bottleneck maps.
+
+Four-seed uncertainty remained material: half-seed pairwise consistency was
+0.8001, mean Top-3 overlap 0.6875, exact winner agreement 0.4375, and mean
+cross-half normalized regret 0.1501. These are diagnostic and do not override
+the failed quality gates. The registered decision is
+`do_not_train_or_run_ttf_with_stride_topoanchor_v1`; no eight-seed extension is
+permitted for this candidate generator.
+
+The repair-trial SHA-256 is
+`28e2a793eb4edca470a90879ae96ceb677caef56a47711cc3d94cb4e0da245e7`;
+the deterministic analysis-report SHA-256 is
+`799c21413db13f54ba8932d17d1486f205b880d0a6abd358b64a28fbfa356e67`.
+Frozen V2 remains active. The next safe step is an outcome decomposition of
+anchor size, topology kind, PP progress, conflict reduction, and structure
+penalty, not additional training or seed collection.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
