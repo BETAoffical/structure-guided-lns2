@@ -1798,3 +1798,27 @@ event-free. The report, state-row, and candidate-row SHA-256 values are
 `9db4231f230999a592a457c127d861c7e707c5ff65cccc8a4255512ba79149c6`,
 `b111e2ac7ebeb2cad994b8415143de0770b97f1da43da6586545df558e756d60`,
 and `1f7fd000acde801a524518ce60f7a0a61a5100d810e493ad36343108a0eadd75`.
+
+### Registered all-state GuardRank topology relevance scan
+
+`stride-guardrank-relevance-v1` replays all 48 tasks and both solver seeds from
+the passed reset qualification, giving 96 initial states. It reads only the
+map, initial paths, initial conflicts, and static-topology interaction of those
+conflict events. Candidate generation, candidate repair, controller actions,
+controller outcomes, labels, and speed claims are forbidden.
+
+The failed 32-state selection had any topology relevance in 11/32 states
+(0.34375), or 11/24 (0.45833) after excluding the low-topology controls. The
+scan attributes the failure to task selection only if the complete high/mid
+pool improves that fraction by at least 0.10. A control relevance fraction no
+greater than 0.25 confirms that the control maps should measure topology
+abstention rather than topology-event coverage. The scan also preregisters an
+input-only recommendation of at most four tasks per map: high/mid maps prefer
+paired-seed event relevance and event count, while controls prefer zero-
+relevance states with substantial initial conflicts.
+
+A valid scan is diagnostic, not an authorization to reuse the failed pool.
+Its result determines whether the next separately registered collection should
+be topology-enriched or should keep Boundary optional while prioritizing
+map-diverse base candidates. The config SHA-256 is
+`05a847c730546c6275ef167b0471491f4952cd9c55a9b453c36feb0f8aa360b7`.
