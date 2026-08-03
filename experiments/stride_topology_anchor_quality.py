@@ -33,6 +33,21 @@ COLLECTION_SCHEMA = "lns2.stride.topology_anchor_quality_collection.v1"
 REPORT_SCHEMA = "lns2.stride.topology_anchor_quality_report.v1"
 
 
+ANCHOR_PROTOCOL = {
+    "quality_name": "topology-anchor",
+    "trial_schema": TRIAL_SCHEMA,
+    "state_schema": STATE_SCHEMA,
+    "collection_schema": COLLECTION_SCHEMA,
+    "report_schema": REPORT_SCHEMA,
+    "augmented_prefix_key": "anchor_prefix",
+    "augmented_label": "anchor",
+    "expected_only_count_key": "expected_anchor_only_candidate_count",
+    "minimum_top3_gate": "minimum_anchor_top3_state_rate",
+    "maximum_regret_gate": "maximum_mean_anchor_best_normalized_regret",
+    "report_filename": "topology_anchor_quality_report.json",
+}
+
+
 def _quality_registered_path(project_root: Path, artifact: dict[str, Any]) -> Path:
     path = (project_root / str(artifact["path"])).resolve()
     if sha256_file(path) != str(artifact["sha256"]):
@@ -113,9 +128,10 @@ def validate_topology_anchor_quality_config(config: dict[str, Any]) -> None:
 def _pilot_artifact_valid(
     payload: dict[str, Any], *, identity: str, state_id: str,
     candidate_ids: list[str], trial_indices: tuple[int, ...],
+    state_schema: str = STATE_SCHEMA,
 ) -> bool:
     if (
-        payload.get("schema") != STATE_SCHEMA
+        payload.get("schema") != state_schema
         or payload.get("identity") != identity
         or payload.get("state_id") != state_id
         or payload.get("complete") is not True
@@ -145,6 +161,9 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
     trial_indices = tuple(map(int, job["trial_indices"]))
     output_path = Path(str(job["output_path"]))
     identity = str(job["identity"])
+    quality_name = str(job.get("quality_name", "topology-anchor"))
+    state_schema = str(job.get("state_schema", STATE_SCHEMA))
+    trial_schema = str(job.get("trial_schema", TRIAL_SCHEMA))
     state_id = str(state_row["state_id"])
     if bool(job["resume"]) and output_path.is_file():
         existing = _read_json(output_path)
@@ -154,6 +173,7 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
             state_id=state_id,
             candidate_ids=candidate_ids,
             trial_indices=trial_indices,
+            state_schema=state_schema,
         ):
             return {
                 "state_id": state_id,
@@ -161,7 +181,7 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
                 "output_path": str(output_path),
                 "trial_count": len(existing["trials"]),
             }
-        raise ValueError(f"invalid completed topology-anchor Pilot state: {output_path}")
+        raise ValueError(f"invalid completed {quality_name} Pilot state: {output_path}")
     environment_config = dict(job["environment"])
     environment_config["max_repair_iterations"] = max(
         1, int(environment_config.get("max_repair_iterations", 0))
@@ -176,11 +196,11 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
     _, initial = replay_prefix(replay, [])
     before_fingerprint = state_fingerprint(initial)
     if before_fingerprint != str(state_row["state_fingerprint"]):
-        raise RuntimeError(f"topology-anchor Pilot replay mismatch: {state_id}")
+        raise RuntimeError(f"{quality_name} Pilot replay mismatch: {state_id}")
     before_repair = repair_structure_fingerprint(initial)
     before_conflicts = int(initial["num_of_colliding_pairs"])
     if before_conflicts != int(state_row["initial_conflicts"]) or before_conflicts <= 0:
-        raise RuntimeError(f"topology-anchor Pilot conflict mismatch: {state_id}")
+        raise RuntimeError(f"{quality_name} Pilot conflict mismatch: {state_id}")
     trials: list[dict[str, Any]] = []
     for trial_index in trial_indices:
         pp_seed = stride_extended_pp_seed(before_repair, trial_index)
@@ -188,7 +208,7 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
         for candidate in ordered:
             branch_environment, branch = replay_prefix(replay, [])
             if state_fingerprint(branch) != before_fingerprint:
-                raise RuntimeError("topology-anchor paired branch replay changed")
+                raise RuntimeError(f"{quality_name} paired branch replay changed")
             agents = list(map(int, candidate["agents"]))
             result = _plain(branch_environment.step(_paired_action(agents, pp_seed)))
             after, metrics = _validate_native_repair(
@@ -198,7 +218,7 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
             after_repair = repair_structure_fingerprint(after)
             trials.append(
                 {
-                    "schema": TRIAL_SCHEMA,
+                    "schema": trial_schema,
                     "state_id": state_id,
                     "task_id": str(state_row["task_id"]),
                     "map_id": str(state_row["map_id"]),
@@ -233,7 +253,7 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
             )
     trials.sort(key=lambda row: (int(row["trial_index"]), str(row["candidate_id"])))
     payload = {
-        "schema": STATE_SCHEMA,
+        "schema": state_schema,
         "identity": identity,
         "complete": True,
         "state_id": state_id,
@@ -264,7 +284,9 @@ def _quality_inputs(
 
 
 def _selected_quality_rows(
-    config: dict[str, Any], inputs: dict[str, Path]
+    config: dict[str, Any], inputs: dict[str, Path], *,
+    augmented_prefix_key: str = "anchor_prefix",
+    augmented_label: str = "anchor",
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     state_rows = [
         row
@@ -273,7 +295,7 @@ def _selected_quality_rows(
     ]
     candidate_rows: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     base_prefixes = tuple(config["candidate_families"]["base_prefixes"])
-    anchor_prefix = str(config["candidate_families"]["anchor_prefix"])
+    augmented_prefix = str(config["candidate_families"][augmented_prefix_key])
     selected_ids = {str(row["state_id"]) for row in state_rows}
     for row in _read_jsonl(inputs["coverage_candidate_rows"]):
         state_id = str(row["state_id"])
@@ -281,17 +303,17 @@ def _selected_quality_rows(
             continue
         families = list(map(str, row["selection_families"]))
         is_base = any(family.startswith(base_prefixes) for family in families)
-        is_anchor = any(family.startswith(anchor_prefix) for family in families)
+        is_augmented = any(family.startswith(augmented_prefix) for family in families)
         candidate_rows[state_id].append(
             {
                 **row,
                 "candidate_kind": (
-                    "base_and_anchor"
-                    if is_base and is_anchor
+                    f"base_and_{augmented_label}"
+                    if is_base and is_augmented
                     else "base"
                     if is_base
-                    else "anchor_only"
-                    if is_anchor
+                    else f"{augmented_label}_only"
+                    if is_augmented
                     else "unknown"
                 ),
             }
@@ -302,16 +324,30 @@ def _selected_quality_rows(
     return state_rows, dict(candidate_rows)
 
 
-def collect_topology_anchor_quality_pilot(
-    config_path: str | Path, output: str | Path, *, resume: bool = True
+def _collect_topology_quality_pilot(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    resume: bool,
+    validator: Any,
+    protocol: dict[str, str],
 ) -> dict[str, Any]:
     config_path = Path(config_path).resolve()
     config = _read_json(config_path)
-    validate_topology_anchor_quality_config(config)
+    validator(config)
+    quality_name = protocol["quality_name"]
+    augmented_label = protocol["augmented_label"]
+    base_and_augmented = f"base_and_{augmented_label}"
+    augmented_only = f"{augmented_label}_only"
     project_root, inputs = _quality_inputs(config_path, config)
     if _read_json(inputs["coverage_report"]).get("passed") is not True:
-        raise ValueError("quality Pilot requires passed topology-anchor coverage")
-    state_rows, candidates_by_state = _selected_quality_rows(config, inputs)
+        raise ValueError(f"quality Pilot requires passed {quality_name} coverage")
+    state_rows, candidates_by_state = _selected_quality_rows(
+        config,
+        inputs,
+        augmented_prefix_key=protocol["augmented_prefix_key"],
+        augmented_label=augmented_label,
+    )
     dataset_rows = {
         str(row["task_id"]): row for row in _read_jsonl(inputs["dataset_manifest"])
     }
@@ -323,12 +359,12 @@ def collect_topology_anchor_quality_pilot(
     group_counts = Counter(str(row["layout_family"]) for row in state_rows)
     candidate_count = sum(len(candidates_by_state.get(str(row["state_id"]), [])) for row in state_rows)
     base_count = sum(
-        candidate["candidate_kind"] in {"base", "base_and_anchor"}
+        candidate["candidate_kind"] in {"base", base_and_augmented}
         for rows in candidates_by_state.values()
         for candidate in rows
     )
-    anchor_only_count = sum(
-        candidate["candidate_kind"] == "anchor_only"
+    augmented_only_count = sum(
+        candidate["candidate_kind"] == augmented_only
         for rows in candidates_by_state.values()
         for candidate in rows
     )
@@ -337,12 +373,12 @@ def collect_topology_anchor_quality_pilot(
         or dict(group_counts) != dict(config["expected_state_count_by_group"])
         or candidate_count != int(config["expected_candidate_count"])
         or base_count != int(config["expected_base_candidate_count"])
-        or anchor_only_count != int(config["expected_anchor_only_candidate_count"])
+        or augmented_only_count != int(config[protocol["expected_only_count_key"]])
         or set(candidates_by_state) != {str(row["state_id"]) for row in state_rows}
     ):
-        raise ValueError("topology-anchor quality selected cohort differs")
+        raise ValueError(f"{quality_name} quality selected cohort differs")
     identity_payload = {
-        "schema": COLLECTION_SCHEMA,
+        "schema": protocol["collection_schema"],
         "config_sha256": sha256_file(config_path),
         "state_rows": state_rows,
         "candidate_ids_by_state": {
@@ -361,9 +397,9 @@ def collect_topology_anchor_quality_pilot(
         task_id = str(row["task_id"])
         key = (task_id, int(row["solver_seed"]))
         if task_id not in dataset_rows or key not in qualification:
-            raise ValueError(f"topology-anchor quality replay input missing: {state_id}")
+            raise ValueError(f"{quality_name} quality replay input missing: {state_id}")
         if str(qualification[key]["state_fingerprint"]) != str(row["state_fingerprint"]):
-            raise ValueError(f"topology-anchor quality qualification differs: {state_id}")
+            raise ValueError(f"{quality_name} quality qualification differs: {state_id}")
         jobs.append(
             {
                 "state_row": row,
@@ -373,6 +409,9 @@ def collect_topology_anchor_quality_pilot(
                 "dataset_row": dataset_rows[task_id],
                 "environment": runtime["environment"],
                 "identity": identity,
+                "quality_name": quality_name,
+                "trial_schema": protocol["trial_schema"],
+                "state_schema": protocol["state_schema"],
                 "resume": bool(resume),
                 "output_path": str(
                     output_root / "states" / f"{_fingerprint({'state_id': state_id})[:20]}.json"
@@ -401,7 +440,7 @@ def collect_topology_anchor_quality_pilot(
             _write_json(
                 output_root / "collection_status.json",
                 {
-                    "schema": COLLECTION_SCHEMA,
+                    "schema": protocol["collection_schema"],
                     "identity": identity,
                     "requested_state_count": len(jobs),
                     "completed_state_count": len(results),
@@ -420,6 +459,7 @@ def collect_topology_anchor_quality_pilot(
             state_id=state_id,
             candidate_ids=[str(row["candidate_id"]) for row in candidates_by_state[state_id]],
             trial_indices=tuple(map(int, config["trial_indices"])),
+            state_schema=protocol["state_schema"],
         ):
             errors.append({"state_id": state_id, "error": "invalid completed artifact"})
         else:
@@ -433,7 +473,7 @@ def collect_topology_anchor_quality_pilot(
         )
         _write_jsonl(output_root / "repair_trials.jsonl", all_trials)
     report = {
-        "schema": COLLECTION_SCHEMA,
+        "schema": protocol["collection_schema"],
         "identity": identity,
         "requested_state_count": len(jobs),
         "completed_state_count": len(results),
@@ -452,6 +492,18 @@ def collect_topology_anchor_quality_pilot(
         {**report, "status": "complete" if report["complete"] else "error"},
     )
     return report
+
+
+def collect_topology_anchor_quality_pilot(
+    config_path: str | Path, output: str | Path, *, resume: bool = True
+) -> dict[str, Any]:
+    return _collect_topology_quality_pilot(
+        config_path,
+        output,
+        resume=resume,
+        validator=validate_topology_anchor_quality_config,
+        protocol=ANCHOR_PROTOCOL,
+    )
 
 
 def _aggregate_quality_scores(
@@ -512,12 +564,21 @@ def _quality_ranking(
     return aggregated, ranking
 
 
-def analyze_topology_anchor_quality_pilot(
-    config_path: str | Path, collection: str | Path, output: str | Path
+def _analyze_topology_quality_pilot(
+    config_path: str | Path,
+    collection: str | Path,
+    output: str | Path,
+    *,
+    validator: Any,
+    protocol: dict[str, str],
 ) -> dict[str, Any]:
     config_path = Path(config_path).resolve()
     config = _read_json(config_path)
-    validate_topology_anchor_quality_config(config)
+    validator(config)
+    quality_name = protocol["quality_name"]
+    augmented_label = protocol["augmented_label"]
+    base_and_augmented = f"base_and_{augmented_label}"
+    augmented_only = f"{augmented_label}_only"
     _, inputs = _quality_inputs(config_path, config)
     collection_root = Path(collection).resolve()
     collection_report = _read_json(collection_root / "collection_report.json")
@@ -525,13 +586,18 @@ def analyze_topology_anchor_quality_pilot(
     trials = _read_jsonl(trials_path)
     by_state: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in trials:
-        if row.get("schema") != TRIAL_SCHEMA:
-            raise ValueError("unexpected topology-anchor quality trial schema")
+        if row.get("schema") != protocol["trial_schema"]:
+            raise ValueError(f"unexpected {quality_name} quality trial schema")
         by_state[str(row["state_id"])].append(row)
-    state_rows, candidate_rows = _selected_quality_rows(config, inputs)
+    state_rows, candidate_rows = _selected_quality_rows(
+        config,
+        inputs,
+        augmented_prefix_key=protocol["augmented_prefix_key"],
+        augmented_label=augmented_label,
+    )
     state_metadata = {str(row["state_id"]): row for row in state_rows}
     if set(by_state) != set(state_metadata):
-        raise ValueError("topology-anchor quality analyzed state set differs")
+        raise ValueError(f"{quality_name} quality analyzed state set differs")
     state_reports = []
     pair_agreements = 0
     pair_count = 0
@@ -548,10 +614,10 @@ def analyze_topology_anchor_quality_pilot(
         base_ids = sorted(
             candidate_id
             for candidate_id, kind in kinds.items()
-            if kind in {"base", "base_and_anchor"}
+            if kind in {"base", base_and_augmented}
         )
-        anchor_ids = sorted(
-            candidate_id for candidate_id, kind in kinds.items() if kind == "anchor_only"
+        augmented_ids = sorted(
+            candidate_id for candidate_id, kind in kinds.items() if kind == augmented_only
         )
         full_scores, full_rank = _quality_ranking(
             scores,
@@ -591,14 +657,20 @@ def analyze_topology_anchor_quality_pilot(
             )
         best_all = full_rank[0]
         best_base = max(base_ids, key=lambda value: (full_scores[value], value))
-        best_anchor = max(anchor_ids, key=lambda value: (full_scores[value], value))
+        best_augmented = max(
+            augmented_ids, key=lambda value: (full_scores[value], value)
+        )
         span = max(full_scores.values()) - min(full_scores.values())
         pool_gain = full_scores[best_all] - full_scores[best_base]
         normalized_gain = pool_gain / span if span > 1e-12 else 0.0
-        anchor_regret = full_scores[best_all] - full_scores[best_anchor]
-        normalized_anchor_regret = anchor_regret / span if span > 1e-12 else 0.0
-        strict_win = best_all in anchor_ids and pool_gain > 1e-12
-        anchor_top3 = any(candidate_id in anchor_ids for candidate_id in full_rank[:3])
+        augmented_regret = full_scores[best_all] - full_scores[best_augmented]
+        normalized_augmented_regret = (
+            augmented_regret / span if span > 1e-12 else 0.0
+        )
+        strict_win = best_all in augmented_ids and pool_gain > 1e-12
+        augmented_top3 = any(
+            candidate_id in augmented_ids for candidate_id in full_rank[:3]
+        )
         pair_agreements += state_pair_agreement
         pair_count += state_pair_count
         top3_overlaps.append(top3_overlap)
@@ -611,14 +683,14 @@ def analyze_topology_anchor_quality_pilot(
                 "layout_family": str(state_metadata[state_id]["layout_family"]),
                 "candidate_count": len(scores),
                 "base_candidate_count": len(base_ids),
-                "anchor_only_candidate_count": len(anchor_ids),
+                f"{augmented_label}_only_candidate_count": len(augmented_ids),
                 "best_all_candidate_id": best_all,
                 "best_base_candidate_id": best_base,
-                "best_anchor_candidate_id": best_anchor,
+                f"best_{augmented_label}_candidate_id": best_augmented,
                 "augmented_pool_strict_win": strict_win,
                 "normalized_augmented_pool_gain": normalized_gain,
-                "anchor_in_top3": anchor_top3,
-                "anchor_best_normalized_regret": normalized_anchor_regret,
+                f"{augmented_label}_in_top3": augmented_top3,
+                f"{augmented_label}_best_normalized_regret": normalized_augmented_regret,
                 "half_pairwise_consistency": (
                     state_pair_agreement / state_pair_count if state_pair_count else 1.0
                 ),
@@ -650,11 +722,12 @@ def analyze_topology_anchor_quality_pilot(
         "mean_normalized_augmented_pool_gain": statistics.fmean(
             float(row["normalized_augmented_pool_gain"]) for row in state_reports
         ) if state_reports else 0.0,
-        "anchor_top3_state_rate": statistics.fmean(
-            float(row["anchor_in_top3"]) for row in state_reports
+        f"{augmented_label}_top3_state_rate": statistics.fmean(
+            float(row[f"{augmented_label}_in_top3"]) for row in state_reports
         ) if state_reports else 0.0,
-        "mean_anchor_best_normalized_regret": statistics.fmean(
-            float(row["anchor_best_normalized_regret"]) for row in state_reports
+        f"mean_{augmented_label}_best_normalized_regret": statistics.fmean(
+            float(row[f"{augmented_label}_best_normalized_regret"])
+            for row in state_reports
         ) if state_reports else 0.0,
     }
     uncertainty = {
@@ -679,11 +752,12 @@ def analyze_topology_anchor_quality_pilot(
         "minimum_mean_normalized_augmented_pool_gain": summary[
             "mean_normalized_augmented_pool_gain"
         ] >= float(gates_config["minimum_mean_normalized_augmented_pool_gain"]),
-        "minimum_anchor_top3_state_rate": summary["anchor_top3_state_rate"]
-        >= float(gates_config["minimum_anchor_top3_state_rate"]),
-        "maximum_mean_anchor_best_normalized_regret": summary[
-            "mean_anchor_best_normalized_regret"
-        ] <= float(gates_config["maximum_mean_anchor_best_normalized_regret"]),
+        protocol["minimum_top3_gate"]: summary[
+            f"{augmented_label}_top3_state_rate"
+        ] >= float(gates_config[protocol["minimum_top3_gate"]]),
+        protocol["maximum_regret_gate"]: summary[
+            f"mean_{augmented_label}_best_normalized_regret"
+        ] <= float(gates_config[protocol["maximum_regret_gate"]]),
     }
     for group, minimum in gates_config["minimum_strict_wins_by_group"].items():
         gates[f"{group}_minimum_strict_wins"] = (
@@ -691,7 +765,7 @@ def analyze_topology_anchor_quality_pilot(
         )
     passed = all(gates.values())
     report = {
-        "schema": REPORT_SCHEMA,
+        "schema": protocol["report_schema"],
         "scientific_status": "paired_four_seed_immediate_quality_pilot",
         "formal_speed_claim": False,
         "training_allowed": False,
@@ -724,8 +798,20 @@ def analyze_topology_anchor_quality_pilot(
     }
     output_root = Path(output).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
-    _write_json(output_root / "topology_anchor_quality_report.json", report)
+    _write_json(output_root / protocol["report_filename"], report)
     return report
+
+
+def analyze_topology_anchor_quality_pilot(
+    config_path: str | Path, collection: str | Path, output: str | Path
+) -> dict[str, Any]:
+    return _analyze_topology_quality_pilot(
+        config_path,
+        collection,
+        output,
+        validator=validate_topology_anchor_quality_config,
+        protocol=ANCHOR_PROTOCOL,
+    )
 
 
 __all__ = [

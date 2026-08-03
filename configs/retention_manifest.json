@@ -214,6 +214,11 @@
       "purpose": "Fresh-task proposal-only confirmation of the frozen topology-boundary candidate generator."
     },
     {
+      "path": "experiments/stride_topology_boundary_quality.py",
+      "role": "active",
+      "purpose": "Fresh-state paired four-seed immediate-quality Pilot for topology-boundary candidates."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -679,6 +684,11 @@
       "purpose": "CLI entry point for the fresh-task proposal-only topology-boundary audit."
     },
     {
+      "path": "scripts/run_stride_topology_boundary_quality.py",
+      "role": "active",
+      "purpose": "CLI entry point for the fresh-state paired topology-boundary quality Pilot."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -902,6 +912,11 @@
       "path": "tests/integration/test_stride_topology_boundary_coverage.py",
       "role": "active",
       "contract": "Post-hoc decomposition boundary plus capped, deterministic, proposal-only topology-boundary revision."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_boundary_quality.py",
+      "role": "active",
+      "contract": "Fresh-state cohort, current-step label, paired seed product, frozen gates, and boundary artifact schema."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

@@ -940,6 +940,34 @@ The next permitted step is a separately frozen, paired four-PP-seed immediate-
 quality Pilot over the 18 relevant fresh states. It still cannot train a model,
 replace V2, or claim lower TTF.
 
+### Registered fresh-state topology-boundary quality Pilot
+
+`stride-topoboundary-quality-pilot-v1` freezes the 18 relevant fresh states:
+six ultra-bottleneck, eight articulated, and four low-articulation control
+states. Their 347-candidate product contains 324 unchanged Target/Collision/
+Random V2 candidates and 23 unique `stride-topoboundary-v1` additions. Trial
+indices 0--3 use one paired PP seed per state and index for every candidate,
+giving exactly 1,388 current-step repair outcomes. State order is not used to
+choose seeds, and candidates are traversed in reverse order on odd trials as an
+order-sensitivity guard.
+
+The frozen label remains `stride-topoboundary-mean-np100-v1`: for each seed it
+is normalized current conflict reduction minus 0.02 times the post-repair
+structural score; the four-seed aggregate subtracts 0.10 times the no-progress
+rate. Runtime, future repair rounds, Cost-to-Go, controller outcomes, and prior
+quality outcomes are excluded. This is the same quality and gate family used
+by the failed anchor Pilot, with only the preregistered fresh cohort and
+boundary candidate identity changed.
+
+The Pilot passes only if the augmented pool strictly wins on at least 20% of
+states, mean normalized pool gain is at least 0.01, a boundary-only candidate
+enters the Top-3 on at least 35% of states, mean best-boundary normalized regret
+is at most 0.15, and there is at least one strict win in both ultra-bottleneck
+and articulated groups. Four-seed half-versus-half ranking stability remains
+diagnostic only. A pass permits an eight-seed confirmation; it does not permit
+training, runtime export, V2 replacement, or a TTF claim. A failure terminates
+this topology-boundary revision line.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

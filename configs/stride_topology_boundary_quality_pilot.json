@@ -1,0 +1,89 @@
+{
+  "schema": "lns2.stride.topology_boundary_quality_pilot_config.v1",
+  "scientific_status": "paired_four_seed_immediate_quality_pilot",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "training_allowed": false,
+  "future_repair_rounds_used": false,
+  "cost_to_go_used": false,
+  "runtime_used_in_label": false,
+  "pilot_id": "stride-topoboundary-quality-pilot-v1",
+  "candidate_generator_id": "stride-topoboundary-v1",
+  "baseline_pool_id": "target-collision-random-v2-frozen",
+  "dataset_root": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+  "qualification_root": "build/stride-topoboundary-fresh-preflight-qualification-v1",
+  "inputs": {
+    "coverage_report": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_report.json",
+      "sha256": "a8b856c2be07e930866572c41f2dd4aa4f75cc2e15b18d719fe5e127f634bd18"
+    },
+    "coverage_state_rows": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_states.jsonl",
+      "sha256": "d1238c0508018905bd1fe7a57ca7813bb92490ce2b560f61f438d5b8ad3004d7"
+    },
+    "coverage_candidate_rows": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_candidates.jsonl",
+      "sha256": "f0e5075663c43072e757a2f7a19831fa94471bb57b6fc5e5bfb19bbc34d6857a"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "76ea8a63a0e3ed4c8a7933603b38463ebce1b29fb46296914d23beb63a20106b"
+    },
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    }
+  },
+  "freshness": {
+    "scope": "within_map_fresh_od_immediate_quality",
+    "task_id_overlap_with_consumed_cohort": 0,
+    "prior_quality_outcomes_used_for_state_or_candidate_selection": false
+  },
+  "state_selection": "articulation_relevant_or_low_degree_relevant",
+  "expected_state_count": 18,
+  "expected_state_count_by_group": {
+    "dao_ultra_bottleneck": 6,
+    "dao_articulated": 8,
+    "dao_low_articulation_control": 4
+  },
+  "expected_candidate_count": 347,
+  "expected_base_candidate_count": 324,
+  "expected_boundary_only_candidate_count": 23,
+  "trial_indices": [0, 1, 2, 3],
+  "first_half_indices": [0, 1],
+  "second_half_indices": [2, 3],
+  "expected_outcome_count": 1388,
+  "workers": 4,
+  "label": {
+    "id": "stride-topoboundary-mean-np100-v1",
+    "mode": "mean_np100_current_step",
+    "structure_weight": 0.02,
+    "no_progress_penalty": 0.10,
+    "primary_term": "normalized_current_conflict_reduction",
+    "paired_seed_scope": "same_state_and_trial_index_for_every_candidate"
+  },
+  "candidate_families": {
+    "base_prefixes": ["target:", "collision:", "random:"],
+    "boundary_prefix": "topology-boundary-"
+  },
+  "pilot_gates": {
+    "minimum_augmented_pool_strict_win_rate": 0.20,
+    "minimum_mean_normalized_augmented_pool_gain": 0.01,
+    "minimum_boundary_top3_state_rate": 0.35,
+    "maximum_mean_boundary_best_normalized_regret": 0.15,
+    "minimum_strict_wins_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1,
+      "dao_low_articulation_control": 0
+    }
+  },
+  "four_seed_uncertainty_is_diagnostic_only": true,
+  "next_decision_on_pass": "extend_stride_topoboundary_quality_to_eight_paired_pp_seeds",
+  "next_decision_on_failure": "terminate_topology_boundary_revision_without_training_or_ttf"
+}
