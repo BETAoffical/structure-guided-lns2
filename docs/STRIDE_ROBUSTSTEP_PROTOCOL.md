@@ -1725,5 +1725,5 @@ pass permits a separately registered proposal/state-collection design, not
 repair labels, retraining, Shadow, or a speed claim.
 
 The source and reset-runtime config SHA-256 values are respectively
-`399abd2b2e8a837e8387683e5040612f79a02f39ac81632d2e3d96123635d8c0`
+`2de44eea6ba4ed9b5057c7eb8811e2af06a19784348fcf998cecd77149b591d0`
 and `91ffea3a5c64f9b69d71393e7cb0b8882d94e13e9dd7c3e33d93971daea85d8d`.

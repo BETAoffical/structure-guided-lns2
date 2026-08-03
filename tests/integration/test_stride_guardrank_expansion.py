@@ -43,6 +43,11 @@ def test_guardrank_expansion_is_outcome_blind_map_disjoint_preflight() -> None:
         for row in source["benchmarks"]
     )
     assert expected_tasks == source["expected_task_count"] == 48
+    assert all(
+        agent_count % 2 == 0
+        for benchmark in source["benchmarks"]
+        for agent_count in benchmark["agent_counts"]
+    ), "opposite_exchange requires even loads under the frozen endpoint generator"
     assert runtime["max_decisions"] == 0
     assert runtime["environment"]["max_repair_iterations"] == 0
     assert runtime["dataset_design"]["map_count"] == 8

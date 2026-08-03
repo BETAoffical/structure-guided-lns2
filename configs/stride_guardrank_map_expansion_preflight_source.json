@@ -80,7 +80,7 @@
       "id": "lak105d", "layout_family": "dao_compact_high_topology",
       "member": "lak105d.map",
       "member_sha256": "89aeca11488bae65ceb5ff8cbd72de9c105256b10b580d338de130a91b7512c8",
-      "agent_counts": [75, 130, 210]
+      "agent_counts": [76, 130, 210]
     },
     {
       "id": "orz106d", "layout_family": "dao_compact_high_topology",
