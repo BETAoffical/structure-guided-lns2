@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import math
 import statistics
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from experiments._common import sha256_file
 from experiments.closed_loop_confirmation import run_closed_loop_collection
@@ -15,7 +14,13 @@ from experiments.repair_collection import (
     _write_json,
     _write_jsonl,
 )
-from experiments.stride_stage4r_quick import TTF_CLOCK_SCHEMA, _project_path
+from experiments.stride_stage4r_quick import (
+    TTF_CLOCK_SCHEMA,
+    _mean,
+    _metric,
+    _project_path,
+)
+from experiments.stride_stage4r_seed_diagnostic import _no_progress_steps
 
 
 REGISTRATION_SCHEMA = "lns2.stride.stage4r_high_load_registration.v1"
@@ -25,24 +30,6 @@ CONTROLLERS = ("v2-full", "stride-quality-v1")
 SOLVER_SEEDS = (1, 2, 3, 4)
 WALL_BUDGET_SECONDS = 180.0
 PROCESS_TIMEOUT_SECONDS = 240.0
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    numbers = list(map(float, values))
-    return statistics.fmean(numbers) if numbers else 0.0
-
-
-def _metric(row: dict[str, Any], name: str) -> float:
-    value = row.get(name)
-    return float(value) if isinstance(value, (int, float)) and math.isfinite(value) else 0.0
-
-
-def _no_progress_steps(summary: dict[str, Any]) -> int:
-    trajectory = [int(value) for value in summary.get("conflict_trajectory") or []]
-    return sum(
-        right >= left and left > 0
-        for left, right in zip(trajectory, trajectory[1:])
-    )
 
 
 def validate_high_load_registration(config: dict[str, Any]) -> None:
