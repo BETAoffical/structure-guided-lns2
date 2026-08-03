@@ -119,6 +119,33 @@ class TopologyCandidatesTest(unittest.TestCase):
             all(row["proposal_audit"]["global_event_boundary_ratio"] >= 0.5 for row in first)
         )
 
+    def test_boundary_candidate_skips_states_without_relevant_events(self) -> None:
+        state = {
+            "agents": [{"id": 0, "path": [0], "conflict_degree": 0}],
+            "conflict_edges": [],
+        }
+        analysis = StateAnalysis(
+            rows=1,
+            cols=1,
+            free_cells={0},
+            degrees={0: 4},
+            articulation=set(),
+            obstacle_rate_2={},
+            obstacle_rate_4={},
+            visit_heat=collections.Counter(),
+            agent_heat=collections.Counter(),
+            events=[],
+            pair_set=set(),
+            component_id={},
+            component_members={},
+        )
+        self.assertEqual(
+            generate_topology_boundary_candidates(
+                state, analysis, neighborhood_size=16, core_budget=4
+            ),
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

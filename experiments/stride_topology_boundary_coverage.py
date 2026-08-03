@@ -106,10 +106,22 @@ def analyze_topology_boundary_coverage_rows(
         rows = by_state[state_id]
         base = [row for row in rows if any(_is_family(row, prefix) for prefix in ("target:", "collision:", "random:"))]
         boundary = [row for row in rows if _is_family(row, "topology-boundary-")]
-        if not base or not boundary:
+        if not base:
             raise ValueError(f"topology-boundary state lacks a pool partition: {state_id}")
         if any("proposal_audit" not in row for row in rows):
             raise ValueError(f"topology-boundary state lacks proposal audit: {state_id}")
+        if not boundary:
+            if bool(state["articulation_relevant"]) or bool(state["low_degree_relevant"]):
+                raise ValueError(f"topology-boundary relevant state lacks a candidate: {state_id}")
+            details.append({
+                "state_id": state_id,
+                "layout_family": state["layout_family"],
+                "candidate_count": state["candidate_count"],
+                "added_candidate_count": state["added_candidate_count"],
+                "status": "no_relevant_topology_events",
+                "topology_kinds": {},
+            })
+            continue
         all_boundary_rows.extend(boundary)
         best_base = _best(base)
         best_boundary = _best(boundary)
