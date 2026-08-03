@@ -184,6 +184,11 @@
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
     },
     {
+      "path": "experiments/stride_topology_coverage.py",
+      "role": "active",
+      "purpose": "Proposal-only candidate determinism, state preservation, and bottleneck-conflict coverage diagnostic."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -614,6 +619,11 @@
       "purpose": "CLI entry point for the consumed candidate-relative STRIDE topology diagnostic."
     },
     {
+      "path": "scripts/run_stride_topology_coverage.py",
+      "role": "active",
+      "purpose": "CLI entry point for the registered proposal-only STRIDE topology coverage diagnostic."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -812,6 +822,11 @@
       "path": "tests/integration/test_stride_topology_probe.py",
       "role": "reproducibility",
       "contract": "No-candidate-repair extraction boundary and registered candidate-relative topology feature semantics."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_coverage.py",
+      "role": "active",
+      "contract": "Proposal-only execution boundary, exact replay pairing, and frozen topology-coverage promotion gates."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

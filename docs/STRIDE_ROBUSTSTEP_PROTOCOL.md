@@ -656,6 +656,28 @@ coverage of articulation and low-degree bottleneck conflict endpoints without
 calling candidate PP repair. Multi-seed quality labels remain prohibited until
 that coverage gate passes.
 
+### Registered proposal-only candidate coverage diagnostic
+
+`stride-topocoverage-v1` freezes the 12 recommended tasks and both solver seeds
+from the completed topology-balanced preflight. On each of the 24 initial
+states it generates the existing Target/Collision/Random proposal pool twice,
+using sizes 4/8/16 and the optimized read-only proposal backend. It executes no
+controller action and no candidate PP repair.
+
+Every state must preserve its exact fingerprint, reproduce the exact candidate
+IDs/agents/families, represent all three requested sizes, and retain at least
+12 candidates. At least 8 states must contain articulation-cell conflict events
+and at least 12 must contain low-degree-cell conflict events. Among relevant
+states, the mean best incident-event coverage must reach 0.60 for articulation
+and 0.75 for low degree; at least 60% and 75%, respectively, must reach 0.50.
+Both non-control topology groups must contain articulation-relevant states and
+reach 0.50 mean best articulation coverage. These gates were fixed before any
+fresh candidates were generated.
+
+A pass permits registration of paired multi-PP-seed immediate-quality labels;
+it does not promote a model or establish a TTF improvement. A failure instead
+requires revising candidate generation before paying for repair labels.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
