@@ -633,6 +633,29 @@ candidate coverage check on the qualified states. Only that second no-repair
 gate can decide whether the existing Target/Collision/Random pool covers the
 relevant bottlenecks or candidate generation must change first.
 
+### Completed topology-balanced map/load preflight
+
+The frozen preflight completed all 96 initialization-only jobs with zero
+errors and zero timeouts. No neighborhood action was executed and no candidate
+repair outcome was collected. Initial conflicting-pair counts had mean
+377.823, median 202, and maximum 2557; only 2 of 96 initial states were already
+feasible. All 15 registered integrity and qualification gates passed.
+
+All six maps qualified, including both ultra-bottleneck maps, both articulated
+maps, and both low-articulation controls. The registered selector retained two
+tasks per map, giving 12 tasks and 24 paired solver-seed states for the next
+diagnostic. This result establishes useful topology and load coverage only; it
+does not establish neighborhood quality or solver speed.
+
+The deterministic report SHA-256 is
+`9673f77e85a9866eb0ec23347b0906f7c835d223766f529749cd904b0605e9e8`.
+Its next decision is `register_proposal_only_candidate_coverage`: generate the
+existing proposal pool twice from each retained initial state, verify exact
+state preservation and proposal determinism, and measure candidate-relative
+coverage of articulation and low-degree bottleneck conflict endpoints without
+calling candidate PP repair. Multi-seed quality labels remain prohibited until
+that coverage gate passes.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
