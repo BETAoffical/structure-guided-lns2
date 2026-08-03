@@ -678,6 +678,33 @@ A pass permits registration of paired multi-PP-seed immediate-quality labels;
 it does not promote a model or establish a TTF improvement. A failure instead
 requires revising candidate generation before paying for repair labels.
 
+### Completed proposal-only candidate coverage result
+
+The frozen diagnostic completed all 24 paired initial states with 431 retained
+candidates. Every state fingerprint was preserved, both proposal repetitions
+were identical, every state represented sizes 4/8/16, and the candidate count
+was 17--18 per state. The independent repeat reproduced the candidate rows,
+state rows, and full report exactly. No controller action or candidate repair
+was executed.
+
+The coverage gates did not pass. Fourteen states were relevant to each topology
+definition. Best-candidate articulation incident coverage averaged 0.6158, but
+only 57.14% of relevant states reached 0.50, below the registered 60% gate.
+Low-degree incident coverage averaged 0.6316 and only 57.14% reached 0.50,
+below the registered 0.75 and 75% gates. The ultra-bottleneck group was strong
+(0.9167 articulation, 0.9643 low degree), while the articulated group reached
+only 0.4944 articulation coverage and the low-articulation control group only
+0.1667 low-degree coverage on its relevant states.
+
+The deterministic report SHA-256 is
+`e868539074485222f0a3ed7d6d2164e65fc7fc3f2d4512279b8cae95c4ae7c32`;
+candidate and state row hashes are
+`1dada28a25b2ce52c40ad34093e6fe0e8f9e4d70dd886cc87434a6a9707ee624`
+and `9a5d3892d763f1b901df6aec4d78fdb2a63f92a3ea48b5cd31c0bcf9cf9a0776`.
+The registered next decision is therefore
+`revise_candidate_generation_before_quality_labels`. Frozen V2 remains the
+active baseline and paired PP quality-label collection remains blocked.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
