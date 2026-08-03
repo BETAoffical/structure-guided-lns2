@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
+from experiments.compact_controller_model import load_controller_bundle
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -20,6 +21,7 @@ from experiments.stride_lns import (
     assign_structure_scores,
 )
 from experiments.stride_stage3 import _project_path
+from lns2_selector.runtime.online_selection import score_online_candidates
 
 
 CONFIG_SCHEMA = "lns2.stride.robuststep_design_config.v1"
@@ -30,6 +32,8 @@ SCORE_CONFIG_SCHEMA = "lns2.stride.robuststep_score_design_config.v1"
 SCORE_REPORT_SCHEMA = "lns2.stride.robuststep_score_design_report.v1"
 CONFIRMATION_CONFIG_SCHEMA = "lns2.stride.robuststep_confirmation_config.v1"
 CONFIRMATION_REPORT_SCHEMA = "lns2.stride.robuststep_confirmation_report.v1"
+V2_HEADROOM_CONFIG_SCHEMA = "lns2.stride.robuststep_v2_headroom_config.v1"
+V2_HEADROOM_REPORT_SCHEMA = "lns2.stride.robuststep_v2_headroom_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -212,6 +216,56 @@ def validate_robuststep_confirmation_config(config: dict[str, Any]) -> None:
         or not bool(contract.get("result_blind"))
     ):
         raise ValueError("score confirmation selection contract was changed")
+
+
+def validate_robuststep_v2_headroom_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != V2_HEADROOM_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step V2 headroom config")
+    if (
+        config.get("scientific_status") != "posthoc_diagnostic_only"
+        or bool(config.get("formal_speed_claim"))
+        or bool(config.get("default_replacement_allowed"))
+        or bool(config.get("training_allowed"))
+        or bool(config.get("formal_ood_allowed"))
+        or bool(config.get("diagnostic_result_may_promote_model"))
+    ):
+        raise ValueError("V2 headroom audit must remain diagnostic-only")
+    if config.get("controller_id") != "v2-full":
+        raise ValueError("V2 headroom audit requires frozen v2-full")
+    if config.get("score_schema") != "lns2.stride.robust_step_score.v1":
+        raise ValueError("unexpected V2 headroom score schema")
+    indices = tuple(map(int, config.get("trial_indices") or ()))
+    first = tuple(map(int, config.get("first_half_indices") or ()))
+    second = tuple(map(int, config.get("second_half_indices") or ()))
+    if (
+        indices != tuple(range(16))
+        or first != tuple(range(8))
+        or second != tuple(range(8, 16))
+    ):
+        raise ValueError("V2 headroom audit requires registered 8+8 indices")
+    if float(config.get("structure_weight", -1.0)) != 0.02:
+        raise ValueError("V2 headroom structure weight differs")
+    if dict(config.get("oracle_score") or {}) != {
+        "id": "mean",
+        "mode": "mean",
+        "deviation_weight": 0.0,
+        "no_progress_penalty": 0.0,
+    }:
+        raise ValueError("V2 headroom oracle must remain the plain immediate mean")
+    if config.get("stable_state_definition") != (
+        "exact_first_half_and_second_half_oracle_winner_agreement"
+    ):
+        raise ValueError("V2 headroom stable-state definition was changed")
+    if (
+        bool(config.get("runtime_used_in_oracle"))
+        or bool(config.get("future_repair_rounds_used_in_oracle"))
+        or bool(config.get("cost_to_go_used_in_oracle"))
+    ):
+        raise ValueError("V2 headroom oracle contains a forbidden field")
+    if int(config.get("expected_feature_dimension", -1)) != FROZEN_FEATURE_DIMENSION:
+        raise ValueError("V2 headroom feature dimension differs")
+    if config.get("expected_feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID:
+        raise ValueError("V2 headroom feature schema differs")
 
 
 def robust_pair_winner(
@@ -1267,6 +1321,270 @@ def run_robuststep_confirmation(
     return report
 
 
+def _confirmation_candidate_features(
+    paths: list[Path], state_ids: set[str], trial_indices: set[int]
+) -> dict[str, dict[str, dict[str, float]]]:
+    result: defaultdict[str, dict[str, dict[str, float]]] = defaultdict(dict)
+    for path in paths:
+        for row in _read_jsonl(path):
+            state_id = str(row.get("state_id", ""))
+            if state_id not in state_ids or int(row.get("trial_index", -1)) not in trial_indices:
+                continue
+            candidate_id = str(row["candidate_id"])
+            features = {str(name): float(value) for name, value in row["features"].items()}
+            previous = result[state_id].setdefault(candidate_id, features)
+            if previous != features:
+                raise ValueError("V2 headroom candidate features changed across seeds")
+    return {state_id: dict(rows) for state_id, rows in result.items()}
+
+
+def _normalized_selection_regret(
+    scores: dict[str, float], selected_id: str
+) -> float:
+    values = list(scores.values())
+    span = max(values) - min(values)
+    regret = max(values) - float(scores[selected_id])
+    return regret / span if span > 1e-12 else 0.0
+
+
+def _headroom_summary(
+    records: list[dict[str, Any]], meaningful_regret: float
+) -> dict[str, Any]:
+    if not records:
+        return {
+            "state_count": 0,
+            "v2_exact_best_rate": None,
+            "v2_in_oracle_top3_rate": None,
+            "oracle_in_v2_top3_rate": None,
+            "mean_v2_normalized_regret": None,
+            "meaningful_headroom_rate": None,
+        }
+    mean = lambda name: statistics.fmean(float(row[name]) for row in records)
+    return {
+        "state_count": len(records),
+        "v2_exact_best_rate": mean("v2_exact_best"),
+        "v2_in_oracle_top3_rate": mean("v2_in_oracle_top3"),
+        "oracle_in_v2_top3_rate": mean("oracle_in_v2_top3"),
+        "mean_v2_normalized_regret": mean("v2_normalized_regret"),
+        "mean_v2_half_normalized_regret": mean("v2_half_normalized_regret"),
+        "meaningful_headroom_rate": statistics.fmean(
+            float(row["v2_normalized_regret"] >= meaningful_regret)
+            for row in records
+        ),
+        "oracle_half_winner_agreement_rate": mean("oracle_half_winner_agreement"),
+        "mean_oracle_half_top3_overlap": mean("oracle_half_top3_overlap"),
+        "mean_v2_margin": mean("v2_margin"),
+        "mean_selected_feature_outside_fraction": mean(
+            "selected_feature_outside_fraction"
+        ),
+    }
+
+
+def run_robuststep_v2_headroom(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_v2_headroom_config(config)
+    confirmation_path = _checked_input(
+        project_root, dict(config["confirmation_report"])
+    )
+    confirmation = _read_json(confirmation_path)
+    if confirmation.get("confirmation_passed") is not False:
+        raise ValueError("V2 headroom diagnostic requires the failed fresh confirmation")
+    selection_path = _checked_input(project_root, dict(config["selection"]))
+    bundle_manifest_path = _checked_input(
+        project_root, dict(config["controller_bundle"])
+    )
+    trial_paths = [
+        _checked_input(project_root, dict(specification))
+        for specification in config["trial_sources"]
+    ]
+    selection = _read_jsonl(selection_path)
+    state_ids = {str(row["state_id"]) for row in selection}
+    selection_by_id = {str(row["state_id"]): row for row in selection}
+    if len(state_ids) != len(selection):
+        raise ValueError("V2 headroom selection repeats state IDs")
+    metadata, profiles, integrity = _load_seed_profiles(
+        project_root, config, state_ids=state_ids
+    )
+    trial_indices = set(map(int, config["trial_indices"]))
+    features = _confirmation_candidate_features(
+        trial_paths, state_ids, trial_indices
+    )
+    bundle = load_controller_bundle(bundle_manifest_path.parent)
+    if str(bundle.manifest.get("default_controller")) != "v2-full":
+        raise ValueError("V2 headroom bundle is not the frozen v2-full controller")
+    model = bundle.main_models["realized_dynamic"]
+    ranges = dict(bundle.main_ranges["realized_dynamic"])
+    first = list(map(int, config["first_half_indices"]))
+    second = list(map(int, config["second_half_indices"]))
+    full = list(map(int, config["trial_indices"]))
+    oracle = dict(config["oracle_score"])
+    map_group_by_id = {
+        str(map_id): str(group_id)
+        for group_id, map_ids in dict(config["map_groups"]).items()
+        for map_id in map_ids
+    }
+    records = []
+    for state_id, candidates in sorted(profiles.items()):
+        candidate_ids = sorted(candidates)
+        if set(features.get(state_id, {})) != set(candidate_ids):
+            raise ValueError(f"V2 headroom feature/candidate mismatch: {state_id}")
+        score_sets = []
+        rankings = []
+        for indices in (first, second, full):
+            scores = {
+                candidate_id: _aggregate_candidate_score(
+                    candidates[candidate_id], indices, oracle
+                )
+                for candidate_id in candidate_ids
+            }
+            ranking = sorted(candidate_ids, key=lambda value: (-scores[value], value))
+            score_sets.append(scores)
+            rankings.append(ranking)
+        first_scores, second_scores, full_scores = score_sets
+        first_rank, second_rank, full_rank = rankings
+        candidate_rows = [
+            {
+                "candidate_id": candidate_id,
+                "candidate_key": candidate_id,
+                "features": {"realized_dynamic": features[state_id][candidate_id]},
+            }
+            for candidate_id in candidate_ids
+        ]
+        selected_index, v2_scores, margin = score_online_candidates(
+            candidate_rows, model
+        )
+        selected_id = candidate_ids[selected_index]
+        stable_v2_scores = [round(float(value), 12) for value in v2_scores]
+        v2_order = sorted(
+            range(len(candidate_ids)),
+            key=lambda index: (-stable_v2_scores[index], candidate_ids[index]),
+        )
+        v2_rank = [candidate_ids[index] for index in v2_order]
+        selected_features = features[state_id][selected_id]
+        outside = sum(
+            float(selected_features[name]) < float(bounds[0])
+            or float(selected_features[name]) > float(bounds[1])
+            for name, bounds in ranges.items()
+        )
+        outside_fraction = outside / len(ranges) if ranges else 0.0
+        half_regrets = [
+            _normalized_selection_regret(scores, selected_id)
+            for scores in (first_scores, second_scores)
+        ]
+        source = selection_by_id[state_id]
+        records.append(
+            {
+                "state_id": state_id,
+                "map_id": str(source["map_id"]),
+                "map_group": map_group_by_id[str(source["map_id"])],
+                "source_policy": str(source["source_policy"]),
+                "conflict_band": str(source["conflict_band"]),
+                "candidate_count": len(candidate_ids),
+                "v2_selected_candidate_id": selected_id,
+                "full_oracle_candidate_id": full_rank[0],
+                "v2_exact_best": full_scores[selected_id]
+                >= full_scores[full_rank[0]] - 1e-12,
+                "v2_in_oracle_top3": selected_id in set(full_rank[:3]),
+                "oracle_in_v2_top3": full_rank[0] in set(v2_rank[:3]),
+                "v2_normalized_regret": _normalized_selection_regret(
+                    full_scores, selected_id
+                ),
+                "v2_half_normalized_regret": statistics.fmean(half_regrets),
+                "oracle_half_winner_agreement": first_rank[0] == second_rank[0],
+                "oracle_half_top3_overlap": len(
+                    set(first_rank[:3]) & set(second_rank[:3])
+                )
+                / 3.0,
+                "v2_margin": float(margin),
+                "selected_feature_outside_fraction": outside_fraction,
+            }
+        )
+    thresholds = dict(config["diagnostic_thresholds"])
+    meaningful = float(thresholds["meaningful_normalized_regret"])
+    stable = [row for row in records if row["oracle_half_winner_agreement"]]
+    unstable = [row for row in records if not row["oracle_half_winner_agreement"]]
+    overall = _headroom_summary(records, meaningful)
+    stable_summary = _headroom_summary(stable, meaningful)
+    unstable_summary = _headroom_summary(unstable, meaningful)
+    stable_headroom = bool(
+        len(stable) >= int(thresholds["minimum_stable_state_count"])
+        and float(stable_summary["meaningful_headroom_rate"])
+        >= float(thresholds["minimum_stable_headroom_rate"])
+    )
+    uncertainty_dominant = bool(
+        overall["oracle_half_winner_agreement_rate"]
+        <= float(thresholds["maximum_uncertainty_dominant_winner_agreement"])
+        and not stable_headroom
+    )
+    diagnosis = (
+        "frozen_v2_has_stable_model_or_representation_headroom"
+        if stable_headroom
+        else "pp_seed_uncertainty_dominant"
+        if uncertainty_dominant
+        else "mixed_or_limited_stable_headroom"
+    )
+    subgroups = {}
+    for field in ("map_group", "source_policy", "conflict_band"):
+        for value in sorted({str(row[field]) for row in records}):
+            subset = [row for row in records if str(row[field]) == value]
+            subgroups[f"{field}:{value}"] = _headroom_summary(subset, meaningful)
+    integrity_gates = {
+        "state_count": integrity["state_count"] == int(config["expected_state_count"]),
+        "candidate_count": integrity["candidate_count"]
+        == int(config["expected_candidate_count"]),
+        "outcome_count": integrity["outcome_count"]
+        == int(config["expected_outcome_count"]),
+        "selection_identity": set(profiles) == state_ids,
+        "feature_candidate_complete": sum(len(rows) for rows in features.values())
+        == integrity["candidate_count"],
+        "all_maps_grouped": all(
+            str(row["map_id"]) in map_group_by_id for row in selection
+        ),
+    }
+    report = {
+        "schema": V2_HEADROOM_REPORT_SCHEMA,
+        "scientific_status": "posthoc_diagnostic_only",
+        "formal_speed_claim": False,
+        "default_replacement_allowed": False,
+        "training_allowed": False,
+        "controller_id": "v2-full",
+        "oracle_score_id": "mean",
+        "integrity": integrity,
+        "integrity_gates": integrity_gates,
+        "overall": overall,
+        "stable_states": stable_summary,
+        "unstable_states": unstable_summary,
+        "subgroups": subgroups,
+        "diagnosis": diagnosis,
+        "diagnostic_complete": all(integrity_gates.values()),
+        "next_decision": (
+            "separate_feature_sufficiency_from_frozen_ranker_error"
+            if stable_headroom
+            else "retain_v2_and_stop_one_step_successor_training"
+            if uncertainty_dominant
+            else "retain_v2_and_require_new_diagnostic_design"
+        ),
+        "records": records,
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "confirmation_report_sha256": sha256_file(confirmation_path),
+            "selection_sha256": sha256_file(selection_path),
+            "controller_manifest_sha256": sha256_file(bundle_manifest_path),
+            "trial_source_sha256": {
+                str(path): sha256_file(path) for path in trial_paths
+            },
+        },
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_json(output_root / "robuststep_v2_headroom_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
@@ -1276,8 +1594,10 @@ __all__ = [
     "run_robuststep_confirmation",
     "run_robuststep_seed_depth",
     "run_robuststep_score_design",
+    "run_robuststep_v2_headroom",
     "validate_robuststep_config",
     "validate_robuststep_confirmation_config",
+    "validate_robuststep_v2_headroom_config",
     "validate_robuststep_seed_depth_config",
     "validate_robuststep_score_config",
     "evaluate_robuststep_score_variant",

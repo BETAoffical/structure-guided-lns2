@@ -14,6 +14,7 @@ from experiments.stride_robuststep import (  # noqa: E402
     run_robuststep_design,
     run_robuststep_score_design,
     run_robuststep_seed_depth,
+    run_robuststep_v2_headroom,
 )
 
 
@@ -23,7 +24,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--analysis",
-        choices=("design", "seed-depth", "score-design", "confirmation"),
+        choices=(
+            "design", "seed-depth", "score-design", "confirmation", "v2-headroom"
+        ),
         default="design",
     )
     parser.add_argument(
@@ -38,6 +41,7 @@ def main() -> int:
         "seed-depth": run_robuststep_seed_depth,
         "score-design": run_robuststep_score_design,
         "confirmation": run_robuststep_confirmation,
+        "v2-headroom": run_robuststep_v2_headroom,
     }[arguments.analysis]
     report = runner(arguments.config, arguments.output)
     print(json.dumps(report, indent=2, sort_keys=True))

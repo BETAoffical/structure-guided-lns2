@@ -18,6 +18,7 @@ from experiments.stride_robuststep import (
     robust_pair_winner,
     validate_robuststep_confirmation_config,
     validate_robuststep_seed_depth_config,
+    validate_robuststep_v2_headroom_config,
 )
 
 
@@ -301,6 +302,39 @@ class StrideRobustStepTest(unittest.TestCase):
         config["selected_variant"]["no_progress_penalty"] = 0.2
         with self.assertRaisesRegex(ValueError, "retune"):
             validate_robuststep_confirmation_config(config)
+
+    def test_v2_headroom_contract_is_diagnostic_and_uses_plain_mean(self) -> None:
+        config = {
+            "schema": "lns2.stride.robuststep_v2_headroom_config.v1",
+            "scientific_status": "posthoc_diagnostic_only",
+            "formal_speed_claim": False,
+            "default_replacement_allowed": False,
+            "training_allowed": False,
+            "formal_ood_allowed": False,
+            "diagnostic_result_may_promote_model": False,
+            "controller_id": "v2-full",
+            "score_schema": "lns2.stride.robust_step_score.v1",
+            "trial_indices": list(range(16)),
+            "first_half_indices": list(range(8)),
+            "second_half_indices": list(range(8, 16)),
+            "structure_weight": 0.02,
+            "oracle_score": {
+                "id": "mean", "mode": "mean", "deviation_weight": 0.0,
+                "no_progress_penalty": 0.0,
+            },
+            "stable_state_definition": (
+                "exact_first_half_and_second_half_oracle_winner_agreement"
+            ),
+            "runtime_used_in_oracle": False,
+            "future_repair_rounds_used_in_oracle": False,
+            "cost_to_go_used_in_oracle": False,
+            "expected_feature_dimension": 124,
+            "expected_feature_schema_id": "lns2.realized_features.v2",
+        }
+        validate_robuststep_v2_headroom_config(config)
+        config["training_allowed"] = True
+        with self.assertRaisesRegex(ValueError, "diagnostic-only"):
+            validate_robuststep_v2_headroom_config(config)
 
 
 if __name__ == "__main__":
