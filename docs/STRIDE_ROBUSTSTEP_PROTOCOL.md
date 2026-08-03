@@ -570,6 +570,42 @@ failure retains V2 and shifts attention to broader map coverage or candidate
 generation. This consumed-data result cannot export or promote a model and
 cannot support a TTF or formal OOD claim.
 
+### Completed candidate-relative topology diagnostic
+
+Extraction reconstructed all 48 registered states and produced one 14-value
+row for each of the 854 candidates. No candidate repair trial was executed.
+Every feature was finite and non-constant over the cohort. The feature JSONL
+SHA-256 is
+`d6ddbedf38322691c528398f7c64d2a8b24fc204ac97bf5b957f350ecd639563`.
+
+The 100-input topology probe did not pass. Relative to the exact-86 OOF
+baseline, overall normalized regret improved by only 0.00247 against the 0.01
+gate, and stable-state regret improved by only 0.00349 against the 0.02 gate.
+Stable Top-3 increased by 0.0294, but the probe won only two of six maps:
+`den308d` improved by 0.0593 regret and `den408d` by 0.0167, while `den009d`
+degraded by 0.0486. `den101d`, `lak101d`, and `ost102d` were unchanged.
+
+Only seven of 48 selected actions changed: two on `den009d`, three on
+`den308d`, and two on `den408d`. Thus the new features were neither degenerate
+nor universally harmful, but they did not change either of the two previously
+problematic `lak101d`/`ost102d` folds and did not provide a transferable
+selection signal on this small cohort. Five of seven gates passed; the failed
+gates were overall improvement, stable improvement, and at least three map
+wins.
+
+The registered diagnosis is
+`topology_interaction_features_do_not_show_consumed_oof_signal`. Frozen V2
+remains active, and no topology model is exported. The deterministic analysis
+report SHA-256 is
+`f577e59f6230c0534151e138c991798878e5eb9b7a2a7a8cc9da9d770e8c8b95`.
+The next safe step is not another fit on the same 48 states. It is a fresh,
+broader topology-balanced map/task preflight that first checks map structure,
+load, conflict range, and candidate-pool coverage without collecting new PP
+labels. Only a qualified cohort should proceed to paired multi-seed immediate-
+quality collection. Candidate generation should be changed only if that
+preflight demonstrates systematic failure to propose neighborhoods covering
+the relevant bottlenecks.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
