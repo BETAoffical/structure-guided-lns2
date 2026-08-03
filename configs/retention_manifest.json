@@ -189,6 +189,11 @@
       "purpose": "Proposal-only candidate determinism, state preservation, and bottleneck-conflict coverage diagnostic."
     },
     {
+      "path": "experiments/stride_topology_anchor_coverage.py",
+      "role": "active",
+      "purpose": "Capped proposal-only coverage gate for the additive STRIDE topology-anchor candidate family."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -414,6 +419,11 @@
       "purpose": "Shared online proposal seeds, candidate generation, feature projection, and pairwise scoring for active selectors."
     },
     {
+      "path": "lns2_selector/runtime/topology_candidates.py",
+      "role": "active",
+      "purpose": "Non-default deterministic conflict-pair set-cover proposals for topology-relevant events."
+    },
+    {
       "path": "lns2_selector/runtime/portable_scalar.py",
       "role": "shared",
       "purpose": "Shared selector runtime contract: portable scalar."
@@ -624,6 +634,11 @@
       "purpose": "CLI entry point for the registered proposal-only STRIDE topology coverage diagnostic."
     },
     {
+      "path": "scripts/run_stride_topology_anchor_coverage.py",
+      "role": "active",
+      "purpose": "CLI entry point for the registered capped topology-anchor coverage diagnostic."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -789,6 +804,11 @@
       "contract": "Regression contract for retained producer identity behavior, artifact integrity, or reproducibility."
     },
     {
+      "path": "tests/runtime/test_topology_candidates.py",
+      "role": "active",
+      "contract": "Deterministic topology-event pair set cover, exact-size fill, and additive deduplication semantics."
+    },
+    {
       "path": "tests/solver/test_python_env.py",
       "role": "active",
       "contract": "Official native boundary, RNG ownership, proposal generation, terminal behavior, timing schema, and portable inference."
@@ -827,6 +847,11 @@
       "path": "tests/integration/test_stride_topology_coverage.py",
       "role": "active",
       "contract": "Proposal-only execution boundary, exact replay pairing, and frozen topology-coverage promotion gates."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_anchor_coverage.py",
+      "role": "active",
+      "contract": "Frozen anchor strategy, unchanged coverage gates, candidate cap, and proposal-only boundary."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

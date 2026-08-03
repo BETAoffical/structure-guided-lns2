@@ -705,6 +705,28 @@ The registered next decision is therefore
 `revise_candidate_generation_before_quality_labels`. Frozen V2 remains the
 active baseline and paired PP quality-label collection remains blocked.
 
+### Registered topology-anchor candidate revision
+
+`stride-topoanchor-v1` is an additive, non-default proposal family. For each
+of articulation and low-degree relevant conflict events, it greedily selects
+the conflict pair that covers the most still-uncovered events per newly added
+agent, then fills to sizes 4/8/16 by conflict-graph adjacency, conflict degree,
+and event weight. It keeps both endpoints when capacity permits, so it targets
+repairable conflict pairs rather than merely adding a map-level feature.
+
+The follow-up `stride-topoanchor-coverage-v1` repeats the same 24-state,
+no-repair diagnostic with the six possible anchor candidates added to the
+unchanged Target/Collision/Random pool. The original coverage thresholds are
+unchanged. A new cap requires no more than 6 additions and 24 total candidates
+per state, limiting later controller overhead. Exact replay, proposal
+determinism, state preservation, size-family, overall coverage, and topology-
+group gates all remain mandatory. These rules are frozen before the augmented
+candidate results are observed.
+
+Only a pass permits a separately registered paired multi-PP-seed immediate-
+quality Pilot for `stride-topoanchor-v1`; it still cannot promote a model or
+claim lower TTF.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

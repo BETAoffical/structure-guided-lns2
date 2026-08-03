@@ -9,7 +9,7 @@ from experiments._common import ratio as _ratio
 from experiments.repair_collection import _read_jsonl
 
 
-def _candidate_id(agents: Iterable[int]) -> str:
+def candidate_id(agents: Iterable[int]) -> str:
     ordered = sorted(map(int, agents))
     payload = "[" + ",".join(map(str, ordered)) + "]"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -64,7 +64,7 @@ def select_representative_neighborhood_groups(
         record = by_agents.setdefault(
             agents,
             {
-                "candidate_id": _candidate_id(agents),
+                "candidate_id": candidate_id(agents),
                 "agents": list(agents),
                 "proposal_count_by_family": collections.Counter(),
                 "proposal_seeds": set(),

@@ -254,13 +254,18 @@ def analyze_topology_coverage_rows(
     }
 
 
-def collect_topology_coverage(
-    config_path: str | Path, output: str | Path
+def _collect_topology_coverage(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    validator: Any,
+    analyzer: Any,
+    augmenter: Any = None,
 ) -> dict[str, Any]:
     config_path = Path(config_path).resolve()
     project_root = config_path.parents[1]
     config = _read_json(config_path)
-    validate_topology_coverage_config(config)
+    validator(config)
     inputs = {
         name: _registered_path(project_root, dict(artifact))
         for name, artifact in dict(config["inputs"]).items()
@@ -322,6 +327,8 @@ def collect_topology_coverage(
                     proposal_backend=str(config["proposal_backend"]),
                     shadow_validation=False,
                 )
+                if augmenter is not None:
+                    candidates = augmenter(state, analysis, candidates, config)
                 repetitions.append(candidates)
                 generations.append(generation)
             signatures = [_candidate_signature(candidates) for candidates in repetitions]
@@ -363,8 +370,7 @@ def collect_topology_coverage(
                     for family in candidate["selection_families"]
                 }
             )
-            state_rows.append(
-                {
+            state_row = {
                     "state_id": f"{task_id}::solver_seed_{solver_seed}",
                     "task_id": task_id,
                     "solver_seed": solver_seed,
@@ -400,12 +406,19 @@ def collect_topology_coverage(
                         for row in feature_rows
                     ),
                 }
-            )
+            if augmenter is not None:
+                state_row["base_candidate_count"] = int(
+                    generations[0]["candidate_count"]
+                )
+                state_row["added_candidate_count"] = len(candidates) - int(
+                    generations[0]["candidate_count"]
+                )
+            state_rows.append(state_row)
     state_rows.sort(key=lambda row: str(row["state_id"]))
     candidate_rows.sort(
         key=lambda row: (str(row["state_id"]), str(row["candidate_id"]))
     )
-    report = analyze_topology_coverage_rows(config, state_rows)
+    report = analyzer(config, state_rows)
     output_root = Path(output).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     state_path = output_root / "topology_coverage_states.jsonl"
@@ -426,7 +439,19 @@ def collect_topology_coverage(
     return report
 
 
+def collect_topology_coverage(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    return _collect_topology_coverage(
+        config_path,
+        output,
+        validator=validate_topology_coverage_config,
+        analyzer=analyze_topology_coverage_rows,
+    )
+
+
 __all__ = [
+    "_collect_topology_coverage",
     "analyze_topology_coverage_rows",
     "collect_topology_coverage",
     "validate_topology_coverage_config",

@@ -1,0 +1,107 @@
+{
+  "schema": "lns2.stride.topology_anchor_coverage_config.v1",
+  "scientific_status": "proposal_only_development_diagnostic",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "candidate_repair_trials_allowed": false,
+  "controller_actions_allowed": false,
+  "controller_outcomes_allowed": false,
+  "diagnostic_id": "stride-topoanchor-coverage-v1",
+  "candidate_generator_id": "stride-topoanchor-v1",
+  "predecessor_id": "stride-topocoverage-v1",
+  "dataset_root": "build/stride-robuststep-topology-preflight-dataset-v1",
+  "qualification_root": "build/stride-robuststep-topology-preflight-v1",
+  "inputs": {
+    "preflight_report": {
+      "path": "build/stride-robuststep-topology-preflight-analysis-v1/robuststep_map_preflight_report.json",
+      "sha256": "9673f77e85a9866eb0ec23347b0906f7c835d223766f529749cd904b0605e9e8"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-robuststep-topology-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "dcc43f91be2403f8a725136e24a46206a675682e9b15937008f4da844dd649f3"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-robuststep-topology-preflight-v1/qualification_manifest.jsonl",
+      "sha256": "2655b1ab44b0cd3795f430d3ef01176e8fd047da18deaa4da5db6434d6372ae6"
+    },
+    "qualification_report": {
+      "path": "build/stride-robuststep-topology-preflight-v1/qualification_report.json",
+      "sha256": "0e7722d6586ccdb4c6687cfe47663ad693b53bd0bc132b00bac76988c11610b0"
+    },
+    "source_config": {
+      "path": "configs/stride_robuststep_topology_preflight_source.json",
+      "sha256": "d7046034631fc5e983578d300dfc0757502d5927df41672985ee26405c9e54fa"
+    },
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    },
+    "predecessor_report": {
+      "path": "build/stride-topology-coverage-v1/topology_coverage_report.json",
+      "sha256": "e868539074485222f0a3ed7d6d2164e65fc7fc3f2d4512279b8cae95c4ae7c32"
+    },
+    "predecessor_state_rows": {
+      "path": "build/stride-topology-coverage-v1/topology_coverage_states.jsonl",
+      "sha256": "9a5d3892d763f1b901df6aec4d78fdb2a63f92a3ea48b5cd31c0bcf9cf9a0776"
+    },
+    "predecessor_candidate_rows": {
+      "path": "build/stride-topology-coverage-v1/topology_coverage_candidates.jsonl",
+      "sha256": "1dada28a25b2ce52c40ad34093e6fe0e8f9e4d70dd886cc87434a6a9707ee624"
+    }
+  },
+  "expected_task_count": 12,
+  "solver_seeds": [1, 2],
+  "expected_state_count": 24,
+  "proposal_backend": "optimized",
+  "proposal_repetitions": 2,
+  "expected_requested_sizes": [4, 8, 16],
+  "augmentation": {
+    "strategy": "topology_relevant_conflict_pair_set_cover",
+    "kinds": ["articulation", "low_degree"],
+    "neighborhood_sizes": [4, 8, 16],
+    "maximum_added_candidates_per_state": 6,
+    "maximum_total_candidates_per_state": 24,
+    "fill_order": "selected_conflict_adjacency_then_conflict_degree_then_event_weight"
+  },
+  "coverage_features": {
+    "articulation": "topology.realized.incident_articulation_event_coverage",
+    "low_degree": "topology.realized.incident_low_degree_event_coverage",
+    "relevance_articulation": "topology.state.articulation_event_ratio",
+    "relevance_low_degree": "topology.state.low_degree_event_ratio"
+  },
+  "diagnostic_gates": {
+    "minimum_candidate_count_per_state": 12,
+    "maximum_candidate_count_per_state": 24,
+    "maximum_added_candidates_per_state": 6,
+    "minimum_articulation_relevant_state_count": 8,
+    "minimum_low_degree_relevant_state_count": 12,
+    "minimum_mean_max_incident_articulation_coverage": 0.60,
+    "minimum_articulation_state_fraction_at_half_coverage": 0.60,
+    "minimum_mean_max_incident_low_degree_coverage": 0.75,
+    "minimum_low_degree_state_fraction_at_half_coverage": 0.75
+  },
+  "topology_group_gates": {
+    "required_groups": [
+      "dao_ultra_bottleneck",
+      "dao_articulated",
+      "dao_low_articulation_control"
+    ],
+    "minimum_articulation_relevant_states_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1
+    },
+    "minimum_low_degree_relevant_states_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1,
+      "dao_low_articulation_control": 1
+    },
+    "minimum_mean_max_incident_articulation_coverage_by_group": {
+      "dao_ultra_bottleneck": 0.50,
+      "dao_articulated": 0.50
+    }
+  },
+  "next_decision_on_pass": "register_paired_multiseed_immediate_quality_pilot_with_stride_topoanchor_v1",
+  "next_decision_on_failure": "redesign_candidate_generation_before_quality_labels"
+}
