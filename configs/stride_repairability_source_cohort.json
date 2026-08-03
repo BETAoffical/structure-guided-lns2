@@ -1,0 +1,76 @@
+{
+  "schema": "lns2.stride.repairability_source_cohort_config.v1",
+  "scientific_status": "preregistered_outcome_blind_source_task_selection",
+  "controller_id": "stride-augcontrol-v1",
+  "data_design": "configs/stride_repairability_data_design.json",
+  "data_design_sha256": "d3882d9ad0a5224c3d242e259550202769502e940964c147ff04fac153d658e0",
+  "effective_map_split": {
+    "train": [
+      "brc502d", "den009d", "den101d", "den201d", "den203d",
+      "den206d", "den207d", "den308d", "den404d", "den408d",
+      "den998d", "hrt002d", "ht_mansion_n", "lak108d", "lak110d",
+      "ost102d"
+    ],
+    "validation": [
+      "brc300d", "den011d", "den020d", "den202d", "den204d", "lak101d"
+    ]
+  },
+  "replacements": {
+    "arena2": "den206d",
+    "den001d": "den011d",
+    "den005d": "ht_mansion_n"
+  },
+  "tasks_per_map": 2,
+  "expected_map_count": 22,
+  "expected_task_count": 44,
+  "target_median_initial_conflicts": [20, 150],
+  "minimum_nonzero_solver_seed_fraction": 0.6666666666666666,
+  "minimum_median_initial_conflicts": 1,
+  "prefer_distinct_task_variants": true,
+  "selection_inputs_allowed": [
+    "map_id", "task_id", "task_variant", "agent_count",
+    "initial_conflicts", "initial_complete", "solver_seed",
+    "static_low_degree_cell_ratio", "research_split"
+  ],
+  "selection_inputs_forbidden": [
+    "candidate_repair_outcome", "selected_candidate", "controller_action",
+    "future_trajectory", "controller_ttf", "repair_runtime"
+  ],
+  "sources": [
+    {
+      "id": "movingai-map-derived-v4",
+      "dataset": "build/initlns-v2-mixed-movingai-map-derived-candidates-v4",
+      "dataset_manifest_sha256": "521063b3f300f696ea6c077a6ce593db58c651088fb880199e00a806a81acf68",
+      "qualification": "build/initlns-v2-mixed-movingai-map-derived-qualification-v4",
+      "qualification_manifest_sha256": "3bf8ad62a1c1a9307b3d98c140241a68f33f43513ab4156f481a60f2c27ea164",
+      "solver_seeds": [1, 2, 3]
+    },
+    {
+      "id": "movingai-targeted-load-v5",
+      "dataset": "build/initlns-v2-mixed-movingai-targeted-load-candidates-v5",
+      "dataset_manifest_sha256": "95dd9c2e090760c21961c94ffe6425dedf685696c87f542c0b0fdf30315fbe8e",
+      "qualification": "build/initlns-v2-mixed-movingai-targeted-load-qualification-v5",
+      "qualification_manifest_sha256": "7164936e880f1849dbcd1fae6300ccc4530a20a4cf0d0d96f01d29cdb4e8c6cc",
+      "solver_seeds": [1, 2, 3]
+    },
+    {
+      "id": "repairability-load-confirmation-v1",
+      "dataset": "build/stride-repairability-load-confirmation-dataset-v1",
+      "dataset_manifest_sha256": "0882928ff87acb369fba2161acd5308a34f45ca44c0a35b2b6b093052b2722a7",
+      "qualification": "build/stride-repairability-load-confirmation-qualification-v1",
+      "qualification_manifest_sha256": "cd648992025f8217e1fa66932f968bf731088e042a626d2c84e27bbbcf300eec",
+      "solver_seeds": [1, 2]
+    },
+    {
+      "id": "repairability-den005-reserve-v2",
+      "dataset": "build/stride-repairability-den005-reserve-dataset-v2",
+      "dataset_manifest_sha256": "d692e91b6805f92caf0247b15bb84a1a3558937636e427040287647f374a696f",
+      "qualification": "build/stride-repairability-den005-reserve-qualification-v2",
+      "qualification_manifest_sha256": "589a4a74ce8ecb0b65faa672e59ce291c78d5fd5f0c4c9d9e2deee20b0a0271b",
+      "solver_seeds": [1, 2]
+    }
+  ],
+  "candidate_outcomes_read": false,
+  "formal_ood_data_allowed": false,
+  "formal_speed_claim": false
+}

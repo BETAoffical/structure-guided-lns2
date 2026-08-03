@@ -1403,6 +1403,32 @@ is not training data. The passed qualification-manifest and report hashes are
 `589a4a74ce8ecb0b65faa672e59ce291c78d5fd5f0c4c9d9e2deee20b0a0271b`
 and `3d1a191009cf7eb6b0b52756bd4189c94431d0e52e967c5fefc0dfa48cec3283`.
 
+### Frozen repairability source-task cohort
+
+After the three load replacements were fixed, result-blind selection produced
+44 source tasks on 22 checksum-pinned MovingAI maps: two tasks per map, 32
+train tasks on 16 maps, and 12 validation tasks on six disjoint maps. Twenty
+tasks are in the static-topology control group and 24 are boundary-relevant.
+Selection used only initial-PP completion/conflict evidence across registered
+solver seeds, task identity/variant, load, static low-degree ratio, and the
+predeclared research split. No candidate repair, controller action, future
+trajectory, runtime, or TTF was read. The effective replacements are exactly
+`arena2 -> den206d`, `den001d -> den011d`, and
+`den005d -> ht_mansion_n`.
+
+The source runtime registers two solver seeds, both `official_adaptive` and
+frozen `v2-full` trajectories, and up to 12 current decisions per episode.
+It contains no remaining-time guard or selector time-limit rule; its purpose is
+to provide outcome-blind state coverage before the separately paired 16-seed
+candidate-repair experiment. Rebuilding the cohort left all three core
+artifact hashes unchanged. The cohort config, manifest, report, and summary
+SHA-256 values are respectively
+`1d96bf649360dcf926f865b71f280d9c29463591ee2e3b6eb57bc67a0214bd21`,
+`f2c32aad71393be14128549094d9c69f683c83f611f09fb0e3ad732bb2ab8ef4`,
+`a066b0a28de671d502c896459205ec87980eac1e52e4a5e0c92c7c88800da95f`,
+and `0e51d0ce19065e620e948425faba49850f6c0527d47efc913af102f3dfbe358d`.
+This is a data-source milestone only; it is not a label, model, or speed claim.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

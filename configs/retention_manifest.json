@@ -259,6 +259,11 @@
       "purpose": "Outcome-blind initial-PP load confirmation and split-preserving effective-map registration."
     },
     {
+      "path": "experiments/stride_repairability_source.py",
+      "role": "active",
+      "purpose": "Checksum-pinned, result-blind construction of the topology-balanced repairability source-task cohort."
+    },
+    {
       "path": "experiments/stride_repairability_selection.py",
       "role": "active",
       "purpose": "Outcome-blind topology-balanced state selection with map-level train-validation isolation."
@@ -774,6 +779,11 @@
       "purpose": "CLI entry point for registered topology-balanced repairability state selection."
     },
     {
+      "path": "scripts/prepare_stride_repairability_source.py",
+      "role": "active",
+      "purpose": "CLI entry point for checksum-pinned STRIDE repairability source-cohort construction."
+    },
+    {
       "path": "scripts/analyze_stride_repairability_preflight.py",
       "role": "active",
       "purpose": "CLI entry point for outcome-blind repairability map/load confirmation analysis."
@@ -1047,6 +1057,11 @@
       "path": "tests/integration/test_stride_repairability_preflight.py",
       "role": "active",
       "contract": "Reset-only load confirmation, forbidden-outcome boundary, and split-preserving reserve registration."
+    },
+    {
+      "path": "tests/integration/test_stride_repairability_source.py",
+      "role": "active",
+      "contract": "Effective-map split, result-blind source selection, replacement registry, and uncapped source-runtime contracts."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",
