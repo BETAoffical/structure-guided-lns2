@@ -1,0 +1,46 @@
+{
+  "schema": "lns2.stride.robuststep_design_config.v1",
+  "scientific_status": "consumed_design_only",
+  "formal_speed_claim": false,
+  "controller_id": "stride-robuststep-v1",
+  "label_schema": "lns2.stride.robust_step_label.v1",
+  "stage3_audit": {
+    "path": "build/stride-stage3-label-audit-v1/stage3_label_audit_report.json",
+    "sha256": "1fc63b3b85a3616da97a7b675a4c7294ea148ceca5010f7a1f1ab7ea1072a9db"
+  },
+  "formal_ood_config": {
+    "path": "configs/movingai_ood_dataset.json",
+    "sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a"
+  },
+  "trial_sources": [
+    {"path": "build/stride-stage2-pilot-v2/repair_trials.jsonl", "sha256": "9b82158312a5a67572e41013fae389d8b3ac6532c176bd457602304d72407a8d"},
+    {"path": "build/stride-stage2-stability-v1/extra_trials.jsonl", "sha256": "318caa489ca0734d7a8cc35d8eac4b8958bfeebd0429e2ee36a2a1ff03382de3"},
+    {"path": "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl", "sha256": "64a4a73baa33ebcde266d76082c8afab3b1bbe257ffbae58747df94f6f634af3"},
+    {"path": "build/stride-stage3-retained-quality-v2-completion-v1/extra_trials.jsonl", "sha256": "fc116ddead77fffee852c2c8bbc11d1504c52cb2f4f893e720c9e3437f179eb3"},
+    {"path": "build/stride-stage3-extension-trials-v1/repair_trials.jsonl", "sha256": "4e408c7246e493142110a177619193b24184c99ff33938e5403e8d64c1dec7fe"},
+    {"path": "build/stride-stage3-extension-quality-v2-completion-v1/extra_trials.jsonl", "sha256": "d6791b1d0402d4da33bf6f29e8f907409f1aa9d0991584abf17de71564c63325"}
+  ],
+  "expected_state_count": 600,
+  "expected_map_count": 36,
+  "expected_candidate_count": 10713,
+  "expected_outcome_count": 85704,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "first_half_indices": [0, 1, 2, 3],
+  "second_half_indices": [4, 5, 6, 7],
+  "structure_weight": 0.02,
+  "variants": [
+    {"id": "w625-p125", "minimum_paired_win_fraction": 0.625, "maximum_no_progress_disadvantage": 0.125},
+    {"id": "w750-p125", "minimum_paired_win_fraction": 0.75, "maximum_no_progress_disadvantage": 0.125},
+    {"id": "w750-p000", "minimum_paired_win_fraction": 0.75, "maximum_no_progress_disadvantage": 0.0},
+    {"id": "w875-p000", "minimum_paired_win_fraction": 0.875, "maximum_no_progress_disadvantage": 0.0}
+  ],
+  "design_gates": {
+    "minimum_half_pairwise_consistency": 0.8,
+    "minimum_mean_good_set_jaccard": 0.7,
+    "minimum_full_pair_coverage": 0.15,
+    "minimum_state_five_pair_coverage": 0.8
+  },
+  "selection_rule": "highest_full_pair_coverage_then_pairwise_consistency_then_good_set_jaccard",
+  "runtime_used_in_label": false,
+  "fresh_confirmation_required": true
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_load_preflight",
+  "scientific_status": "development_only",
+  "source": "https://movingai.com/benchmarks/mapf/index.html",
+  "allow_fetched_superset": true,
+  "scenario_indices": [6, 12],
+  "formal_ood_config": "configs/movingai_ood_dataset.json",
+  "formal_ood_config_sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a",
+  "consumed_development_exceptions": ["room-64-64-8"],
+  "selection_inputs_allowed": [
+    "map_topology",
+    "agent_count",
+    "initial_conflicts",
+    "initial_pp_wall_seconds",
+    "initial_path_statistics"
+  ],
+  "selection_inputs_forbidden": [
+    "v2_relative_ttf",
+    "robuststep_relative_ttf",
+    "controller_action",
+    "controller_repair_outcome"
+  ],
+  "benchmarks": [
+    {
+      "id": "maze-128-128-2", "layout_family": "maze", "agent_counts": [350, 400],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/maze-128-128-2.map.zip", "sha256": "e289362aa688dc27dc0e31b176a75ef35ba2c48ede14739ec4dd332d75388048", "member": "maze-128-128-2.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/maze-128-128-2.map-scen-random.zip", "sha256": "7473c3e3a9b18aaa5587c06b1cc1d2f658781c89e652cba2a51e6fb38b75a1da", "member": "scen-random/maze-128-128-2-random-1.scen"}
+    },
+    {
+      "id": "room-64-64-8", "layout_family": "room", "agent_counts": [400, 500, 600],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/room-64-64-8.map.zip", "sha256": "7b354497b6fee9e02dd1caa6339a2877d9cdbe741d6bbfcfdfa1961673b4426a", "member": "room-64-64-8.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/room-64-64-8.map-scen-random.zip", "sha256": "c0f2b4c317a68e1a92efd57ed6dc9ee3c3934975a9532a958890bf1ea313b4e8", "member": "scen-random/room-64-64-8-random-1.scen"}
+    },
+    {
+      "id": "warehouse-20-40-10-2-1", "layout_family": "warehouse", "agent_counts": [400, 600],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/warehouse-20-40-10-2-1.map.zip", "sha256": "c117920858e83f4c64eaf41d76fef4946cbdf38d9725b664a3646684ea3d4f04", "member": "warehouse-20-40-10-2-1.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/warehouse-20-40-10-2-1.map-scen-random.zip", "sha256": "9425edb1aaa736ed345cc9c2cca26e29f556184257eb8a7847dda42d098a8cae", "member": "scen-random/warehouse-20-40-10-2-1-random-1.scen"}
+    },
+    {
+      "id": "Berlin_1_256", "layout_family": "street", "agent_counts": [300, 500],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/Berlin_1_256.map.zip", "sha256": "5608750db0a56213c774e25e62bbfae105a068b7c6767490e3a1c1f853fb30d8", "member": "Berlin_1_256.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/Berlin_1_256.map-scen-random.zip", "sha256": "9ea8ec21a296ea1ebd6f44779867d47294e0276d4d5edf1e72e08ff5dcf1c1c0", "member": "scen-random/Berlin_1_256-random-1.scen"}
+    },
+    {
+      "id": "Boston_0_256", "layout_family": "street", "agent_counts": [300, 500],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/Boston_0_256.map.zip", "sha256": "ee82f632d35299301c4cf55c3d33c39ec32bddc95a7f05439eb349f01ac8a870", "member": "Boston_0_256.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/Boston_0_256.map-scen-random.zip", "sha256": "8c70ad024e91aa9aa8cf5e32c2edaeb14f880c60b32ed2079bf3f66968d22e61", "member": "scen-random/Boston_0_256-random-1.scen"}
+    },
+    {
+      "id": "Paris_1_256", "layout_family": "street", "agent_counts": [300, 500],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/Paris_1_256.map.zip", "sha256": "cc5451496408570481a10dc3c8df2fc87b10ba251baf407f369ef7232534ca2f", "member": "Paris_1_256.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/Paris_1_256.map-scen-random.zip", "sha256": "0d792e98d23b98d06aabcac7852717a4d02b4518e54f6ddf27a812354f353606", "member": "scen-random/Paris_1_256-random-1.scen"}
+    },
+    {
+      "id": "brc202d", "layout_family": "game", "agent_counts": [300, 500],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/brc202d.map.zip", "sha256": "ca55daa309baa9d59f83d70e3df5b87190f00940efe6ed7808b880268a070326", "member": "brc202d.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/brc202d.map-scen-random.zip", "sha256": "f97751247b6e369b7f11b527c20ad1704a92366c46f462bb4e425d00b1fad1df", "member": "scen-random/brc202d-random-1.scen"}
+    },
+    {
+      "id": "ost003d", "layout_family": "game", "agent_counts": [300, 500],
+      "map_archive": {"url": "https://movingai.com/benchmarks/mapf/ost003d.map.zip", "sha256": "965a89cc1a57fbb2b65c17623031c12e9e53d024705a4bf5be2dccfa0e711bbd", "member": "ost003d.map"},
+      "scenario_archive": {"url": "https://movingai.com/benchmarks/mapf/ost003d.map-scen-random.zip", "sha256": "55182abb4358aac59710c5927d451bb6bff987f2ec776d1386caf505ba8ff645", "member": "scen-random/ost003d-random-1.scen"}
+    }
+  ]
+}
