@@ -4,8 +4,10 @@ import json
 import unittest
 from pathlib import Path
 
+from experiments.closed_loop_confirmation import _with_stopping_rule
 from experiments.stride_augcontrol_evaluation import (
     CONTROLLERS,
+    _controller_kwargs,
     _paired_comparison,
     _registered_tasks,
     _schedule,
@@ -57,6 +59,36 @@ class StrideAugcontrolEvaluationTest(unittest.TestCase):
         config["topology_boundary_augmentation"]["maximum_added_candidates"] = 3
         with self.assertRaisesRegex(ValueError, "candidate pool"):
             validate_augcontrol_evaluation_config(config)
+
+    def test_runtime_defaults_are_overridden_to_true_run_to_completion(self) -> None:
+        config = self._config()
+        bundles = {
+            "v2-full": self._root() / "artifacts" / "initlns-closed-loop-controller-v2",
+            "stride-augcontrol-v1": self._root() / "build" / "diagnostic-bundle",
+        }
+        for controller in CONTROLLERS:
+            kwargs = _controller_kwargs(
+                controller,
+                bundles,
+                config["topology_boundary_augmentation"],
+            )
+            self.assertEqual(kwargs["stopping_rule"], "run-to-completion")
+        for runtime_name in (
+            "stride_stage4r_high_load_runtime.json",
+            "stride_augcontrol_ood_runtime.json",
+        ):
+            runtime = json.loads(
+                (self._root() / "configs" / runtime_name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            effective = _with_stopping_rule(runtime, "run-to-completion")
+            self.assertEqual(effective["environment"]["time_limit"], 0.0)
+            self.assertTrue(effective["environment"]["unlimited_time"])
+            self.assertEqual(effective["environment"]["max_repair_iterations"], 0)
+            self.assertIsNone(effective["wall_time_budget_seconds"])
+            self.assertIsNone(effective["episode_process_timeout_seconds"])
+            self.assertIsNone(effective["metric_iteration_budget"])
 
     def test_schedule_rotates_base_pool_and_ranker_controllers(self) -> None:
         cohorts = [
