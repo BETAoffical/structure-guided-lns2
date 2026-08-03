@@ -1,0 +1,84 @@
+{
+  "schema": "lns2.stride.topology_anchor_quality_pilot_config.v1",
+  "scientific_status": "paired_four_seed_immediate_quality_pilot",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "training_allowed": false,
+  "future_repair_rounds_used": false,
+  "cost_to_go_used": false,
+  "runtime_used_in_label": false,
+  "pilot_id": "stride-topoanchor-quality-pilot-v1",
+  "candidate_generator_id": "stride-topoanchor-v1",
+  "baseline_pool_id": "target-collision-random-v2-frozen",
+  "dataset_root": "build/stride-robuststep-topology-preflight-dataset-v1",
+  "qualification_root": "build/stride-robuststep-topology-preflight-v1",
+  "inputs": {
+    "coverage_report": {
+      "path": "build/stride-topology-anchor-coverage-v1/topology_coverage_report.json",
+      "sha256": "13510170e21d4b31eb44743a6e11ed07fdcbad4baef7d270a4fbe37df53c537d"
+    },
+    "coverage_state_rows": {
+      "path": "build/stride-topology-anchor-coverage-v1/topology_coverage_states.jsonl",
+      "sha256": "fc07313d3d3a7043cafe314ef6711d0bfe8b7042feb23d5169ee330371448fbe"
+    },
+    "coverage_candidate_rows": {
+      "path": "build/stride-topology-anchor-coverage-v1/topology_coverage_candidates.jsonl",
+      "sha256": "6c0d2aba662300361e68c1bf427e50d7e384c7090e9d4e4313cc7bab303f48d0"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-robuststep-topology-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "dcc43f91be2403f8a725136e24a46206a675682e9b15937008f4da844dd649f3"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-robuststep-topology-preflight-v1/qualification_manifest.jsonl",
+      "sha256": "2655b1ab44b0cd3795f430d3ef01176e8fd047da18deaa4da5db6434d6372ae6"
+    },
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    }
+  },
+  "state_selection": "articulation_relevant_or_low_degree_relevant",
+  "expected_state_count": 16,
+  "expected_state_count_by_group": {
+    "dao_ultra_bottleneck": 5,
+    "dao_articulated": 8,
+    "dao_low_articulation_control": 3
+  },
+  "expected_candidate_count": 360,
+  "expected_base_candidate_count": 288,
+  "expected_anchor_only_candidate_count": 72,
+  "trial_indices": [0, 1, 2, 3],
+  "first_half_indices": [0, 1],
+  "second_half_indices": [2, 3],
+  "expected_outcome_count": 1440,
+  "workers": 4,
+  "label": {
+    "id": "stride-topoanchor-mean-np100-v1",
+    "mode": "mean_np100_current_step",
+    "structure_weight": 0.02,
+    "no_progress_penalty": 0.10,
+    "primary_term": "normalized_current_conflict_reduction",
+    "paired_seed_scope": "same_state_and_trial_index_for_every_candidate"
+  },
+  "candidate_families": {
+    "base_prefixes": ["target:", "collision:", "random:"],
+    "anchor_prefix": "topology-anchor-"
+  },
+  "pilot_gates": {
+    "minimum_augmented_pool_strict_win_rate": 0.20,
+    "minimum_mean_normalized_augmented_pool_gain": 0.01,
+    "minimum_anchor_top3_state_rate": 0.35,
+    "maximum_mean_anchor_best_normalized_regret": 0.15,
+    "minimum_strict_wins_by_group": {
+      "dao_ultra_bottleneck": 1,
+      "dao_articulated": 1,
+      "dao_low_articulation_control": 0
+    }
+  },
+  "four_seed_uncertainty_is_diagnostic_only": true,
+  "next_decision_on_pass": "extend_stride_topoanchor_quality_to_eight_paired_pp_seeds",
+  "next_decision_on_failure": "do_not_train_or_run_ttf_with_stride_topoanchor_v1"
+}

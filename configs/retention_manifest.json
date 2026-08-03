@@ -194,6 +194,11 @@
       "purpose": "Capped proposal-only coverage gate for the additive STRIDE topology-anchor candidate family."
     },
     {
+      "path": "experiments/stride_topology_anchor_quality.py",
+      "role": "active",
+      "purpose": "Paired four-seed current-step quality Pilot and action-uncertainty analysis for topology-anchor candidates."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -639,6 +644,11 @@
       "purpose": "CLI entry point for the registered capped topology-anchor coverage diagnostic."
     },
     {
+      "path": "scripts/run_stride_topology_anchor_quality.py",
+      "role": "active",
+      "purpose": "CLI entry point for the paired STRIDE topology-anchor immediate-quality Pilot."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -852,6 +862,11 @@
       "path": "tests/integration/test_stride_topology_anchor_coverage.py",
       "role": "active",
       "contract": "Frozen anchor strategy, unchanged coverage gates, candidate cap, and proposal-only boundary."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_anchor_quality.py",
+      "role": "active",
+      "contract": "Paired PP seeds, current-step mean-np100 label, complete candidate products, and non-promotion boundary."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

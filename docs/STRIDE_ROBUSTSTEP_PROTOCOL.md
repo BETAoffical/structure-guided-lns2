@@ -751,6 +751,33 @@ The next permitted step is a separately frozen paired multi-PP-seed immediate-
 quality Pilot. Frozen V2 remains the active controller until that Pilot and
 later paired TTF gates pass.
 
+### Registered topology-anchor immediate-quality Pilot
+
+`stride-topoanchor-quality-pilot-v1` retains the 16 initial states that contain
+at least one articulation or low-degree relevant conflict event. The cohort
+contains 5 ultra-bottleneck, 8 articulated, and 3 low-articulation-control
+states, with 360 total candidates: 288 frozen Target/Collision/Random candidates
+and 72 unique `stride-topoanchor-v1` additions.
+
+Every candidate receives repair trials 0--3. Within one state and trial index,
+all candidates use the same deterministic PP seed. The 1440 outcomes are scored
+only from the current repair: normalized conflict reduction minus 0.02 times
+post-repair structural score, aggregated as the four-seed mean minus 0.10 times
+the no-progress rate (`stride-topoanchor-mean-np100-v1`). Repair runtime, future
+rounds, Cost-to-Go, and TTF are excluded from the label.
+
+The augmented pool must strictly beat the frozen pool on at least 20% of states,
+obtain mean normalized pool gain at least 0.01, place an anchor candidate in the
+Top-3 on at least 35% of states, and keep mean anchor-best normalized regret at
+most 0.15. Ultra-bottleneck and articulated groups each require at least one
+strict win. Two-seed halves also report pairwise consistency, Top-3 overlap,
+winner agreement, and cross-half regret, but these four-seed uncertainty values
+are diagnostic only and cannot promote or train a model.
+
+A pass permits extension to eight paired PP seeds. A failure stops this anchor
+candidate line before training or TTF evaluation. These gates were frozen
+before any anchor candidate repair outcome was collected.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
