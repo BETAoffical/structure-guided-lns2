@@ -340,12 +340,41 @@ def _robust_winner(
 
 
 def build_repairability_labels(
-    *, config_path: str | Path, trial_paths: list[Path], output: str | Path
+    *,
+    config_path: str | Path,
+    trial_paths: list[Path],
+    audit_report_paths: list[Path],
+    output: str | Path,
 ) -> dict[str, Any]:
+    # Imported lazily because the audit module validates collection artifacts,
+    # while the collection module imports this label configuration validator.
+    from experiments.stride_repairability_audit import AUDIT_SCHEMA
+
     config_path = Path(config_path).resolve()
     config = _read_json(config_path)
     validate_repairability_label_config(config)
     paths = [Path(path).resolve() for path in trial_paths]
+    audit_paths = [Path(path).resolve() for path in audit_report_paths]
+    if len(paths) != len(audit_paths):
+        raise ValueError("repairability trial and audit source counts differ")
+    audit_sources = []
+    for path, audit_path in zip(paths, audit_paths):
+        audit = _read_json(audit_path)
+        if audit.get("schema") != AUDIT_SCHEMA or audit.get("passed") is not True:
+            raise ValueError(f"repairability collection audit did not pass: {audit_path}")
+        audited_trial_sha256 = str(dict(audit.get("sha256") or {}).get("repair_trials", ""))
+        if audited_trial_sha256 != sha256_file(path):
+            raise ValueError(
+                f"repairability trial source differs from its audit: {path}"
+            )
+        audit_sources.append(
+            {
+                "path": str(audit_path),
+                "sha256": sha256_file(audit_path),
+                "run_fingerprint": str(audit.get("run_fingerprint", "")),
+                "state_count": int(audit.get("state_count", 0)),
+            }
+        )
     indices = tuple(map(int, config["trial_indices"]))
     states, metadata, features, candidate_metadata = _load_trials(paths, indices)
     structure_weight = float(config["current_step_quality"]["post_structure_weight"])
@@ -560,6 +589,7 @@ def build_repairability_labels(
         "trial_sources": [
             {"path": str(path), "sha256": sha256_file(path)} for path in paths
         ],
+        "audit_sources": audit_sources,
     }
     _write_json(output / "label_build_summary.json", summary)
     return summary

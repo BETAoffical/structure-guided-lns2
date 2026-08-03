@@ -1549,6 +1549,16 @@ same-state seed pairing, distinct seeds across trials, the 124-feature schema,
 frozen base-family preservation, the two-candidate topology cap, target-path
 restore provenance, map-held-out splitting, aggregate/state-row identity, zero
 collection errors, and SHA-256 materialization before labels are built.
+Label construction requires that passed audit as a positional input and verifies
+the audited `repair_trials.jsonl` SHA-256 before reading any row:
+
+```bash
+python3 scripts/build_stride_repairability_labels.py \
+  --config configs/stride_repairability_label_design.json \
+  --trials build/stride-repairability-collection-v2/repair_trials.jsonl \
+  --audit build/stride-repairability-collection-audit-v1/repairability_audit_report.json \
+  --output build/stride-repairability-labels-v1
+```
 
 ### Preregistered staged raw-TTF evaluation
 

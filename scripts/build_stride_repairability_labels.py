@@ -19,11 +19,18 @@ def main() -> int:
     )
     parser.add_argument("--config", required=True)
     parser.add_argument("--trials", action="append", required=True)
+    parser.add_argument(
+        "--audit",
+        action="append",
+        required=True,
+        help="Passed collection audit corresponding positionally to each --trials source.",
+    )
     parser.add_argument("--output", required=True)
     arguments = parser.parse_args()
     report = build_repairability_labels(
         config_path=arguments.config,
         trial_paths=[Path(value) for value in arguments.trials],
+        audit_report_paths=[Path(value) for value in arguments.audit],
         output=arguments.output,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

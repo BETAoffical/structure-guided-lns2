@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
+from experiments._common import sha256_file
 from experiments.stride_lns import (
     FROZEN_FEATURE_SCHEMA_ID,
     REQUIRED_POST_STRUCTURE_FIELDS,
@@ -15,6 +16,7 @@ from experiments.stride_repairability import (
     build_repairability_labels,
     validate_repairability_label_config,
 )
+from experiments.stride_repairability_audit import AUDIT_SCHEMA
 from experiments.stride_repairability_collection import (
     STATE_SCHEMA,
     _artifact_valid,
@@ -96,6 +98,23 @@ class StrideRepairabilityTest(unittest.TestCase):
             "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _write_audit(path: Path, trials: Path, *, passed: bool = True) -> Path:
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": AUDIT_SCHEMA,
+                    "passed": passed,
+                    "run_fingerprint": "test-run",
+                    "state_count": 1,
+                    "sha256": {"repair_trials": sha256_file(trials)},
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        return path
 
     def test_config_freezes_identity_seed_product_and_forbidden_inputs(self) -> None:
         config = json.loads(self._config_path().read_text(encoding="utf-8"))
@@ -186,9 +205,11 @@ class StrideRepairabilityTest(unittest.TestCase):
             root = Path(directory)
             trials = root / "trials.jsonl"
             self._write_rows(trials, self._rows())
+            audit = self._write_audit(root / "audit.json", trials)
             summary = build_repairability_labels(
                 config_path=self._config_path(),
                 trial_paths=[trials],
+                audit_report_paths=[audit],
                 output=root / "labels",
             )
             pairs = [
@@ -224,14 +245,18 @@ class StrideRepairabilityTest(unittest.TestCase):
             second = root / "second.jsonl"
             self._write_rows(first, self._rows(runtime_scale=1.0))
             self._write_rows(second, self._rows(runtime_scale=999.0))
+            first_audit = self._write_audit(root / "first-audit.json", first)
+            second_audit = self._write_audit(root / "second-audit.json", second)
             build_repairability_labels(
                 config_path=self._config_path(),
                 trial_paths=[first],
+                audit_report_paths=[first_audit],
                 output=root / "first-labels",
             )
             build_repairability_labels(
                 config_path=self._config_path(),
                 trial_paths=[second],
+                audit_report_paths=[second_audit],
                 output=root / "second-labels",
             )
             for name in (
@@ -249,10 +274,12 @@ class StrideRepairabilityTest(unittest.TestCase):
             root = Path(directory)
             trials = root / "trials.jsonl"
             self._write_rows(trials, self._rows(unpaired=True))
+            audit = self._write_audit(root / "audit.json", trials)
             with self.assertRaisesRegex(ValueError, "PP seeds are not paired"):
                 build_repairability_labels(
                     config_path=self._config_path(),
                     trial_paths=[trials],
+                    audit_report_paths=[audit],
                     output=root / "labels",
                 )
 
@@ -267,11 +294,36 @@ class StrideRepairabilityTest(unittest.TestCase):
                 )
             trials = root / "trials.jsonl"
             self._write_rows(trials, [*rows, *validation])
+            audit = self._write_audit(root / "audit.json", trials)
             with self.assertRaisesRegex(ValueError, "map split leakage"):
                 build_repairability_labels(
                     config_path=self._config_path(),
                     trial_paths=[trials],
+                    audit_report_paths=[audit],
                     output=root / "labels",
+                )
+
+    def test_builder_requires_passed_matching_collection_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trials = root / "trials.jsonl"
+            self._write_rows(trials, self._rows())
+            failed = self._write_audit(root / "failed-audit.json", trials, passed=False)
+            with self.assertRaisesRegex(ValueError, "audit did not pass"):
+                build_repairability_labels(
+                    config_path=self._config_path(),
+                    trial_paths=[trials],
+                    audit_report_paths=[failed],
+                    output=root / "failed-labels",
+                )
+            passed = self._write_audit(root / "passed-audit.json", trials)
+            trials.write_text(trials.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "differs from its audit"):
+                build_repairability_labels(
+                    config_path=self._config_path(),
+                    trial_paths=[trials],
+                    audit_report_paths=[passed],
+                    output=root / "mismatched-labels",
                 )
 
     def test_collection_seed_is_paired_by_state_and_distinct_by_trial(self) -> None:
