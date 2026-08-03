@@ -264,6 +264,11 @@
       "purpose": "Input-only all-state topology relevance scan after the fresh-map candidate-coverage failure."
     },
     {
+      "path": "experiments/stride_mapbase.py",
+      "role": "reproducibility",
+      "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -859,6 +864,11 @@
       "purpose": "CLI entry point for the checksum-pinned GuardRank input-only topology relevance scan."
     },
     {
+      "path": "scripts/run_stride_mapbase.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for collecting and auditing STRIDE-MapBase fresh-map repair trials."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
@@ -1142,6 +1152,11 @@
       "path": "tests/integration/test_stride_guardrank_relevance.py",
       "role": "reproducibility",
       "contract": "All-state topology relevance scan identity, input-only boundary, interpretation threshold, and registered checksums."
+    },
+    {
+      "path": "tests/integration/test_stride_mapbase.py",
+      "role": "reproducibility",
+      "contract": "Base-only candidate pool, 16 paired PP seeds, 124-feature schema, fresh-map selection, and registered input checksums."
     },
     {
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",

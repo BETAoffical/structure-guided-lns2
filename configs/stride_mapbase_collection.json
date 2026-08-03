@@ -1,0 +1,73 @@
+{
+  "schema": "lns2.stride.mapbase_collection_config.v1",
+  "scientific_status": "preregistered_map_diverse_base_candidate_repair_collection",
+  "formal_speed_claim": false,
+  "formal_ood_allowed": false,
+  "topology_boundary_candidates_allowed": false,
+  "controller_actions_allowed": false,
+  "controller_outcomes_allowed": false,
+  "collection_id": "stride-mapbase-v1",
+  "predecessor_id": "stride-guardrank-relevance-v1",
+  "dataset_root": "build/stride-guardrank-map-expansion-preflight-dataset-v1",
+  "expected_map_count": 8,
+  "expected_task_count": 32,
+  "expected_active_state_count": 63,
+  "solver_seeds": [1, 2],
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "feature_schema_id": "lns2.realized_features.v2",
+  "feature_schema_sha256": "1bcab94bf8a6009de9ce0506621df128b254730b2611e7d30a04ca69ba8818a1",
+  "feature_dimension": 124,
+  "inputs": {
+    "relevance_report": {
+      "path": "build/stride-guardrank-topology-relevance-v1/topology_relevance_report.json",
+      "sha256": "902b9d369e829220eaf5082a872dc8cf25f7dcdbeefdc356c96e45d467f47861"
+    },
+    "recommended_tasks": {
+      "path": "build/stride-guardrank-topology-relevance-v1/recommended_tasks.jsonl",
+      "sha256": "3c8755475f7c224c699639622303b8f70d2364482c862142c85b893786e414d8"
+    },
+    "relevance_states": {
+      "path": "build/stride-guardrank-topology-relevance-v1/topology_relevance_states.jsonl",
+      "sha256": "88e2425f77a7ae0628ded3b77d436f38c9cec1bb35642077d559d08cbc3ce939"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-guardrank-map-expansion-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "1298c20deb2e05dbab756aea4d0c13c9f119b857f0ae8edf0221acb31e1653c7"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-guardrank-map-expansion-preflight-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "b42e03e9be57f87141263230998e1e2bbceda1ea1be5846d69d1ea31a279271b"
+    },
+    "qualification_report": {
+      "path": "build/stride-guardrank-map-expansion-preflight-qualification-v1/qualification_report.json",
+      "sha256": "4c6815b112d14676eb6c76b8820115244e4c5252a1415dff868a3939272e3063"
+    },
+    "runtime_config": {
+      "path": "configs/stride_guardrank_map_expansion_preflight_runtime.json",
+      "sha256": "91ffea3a5c64f9b69d71393e7cb0b8882d94e13e9dd7c3e33d93971daea85d8d"
+    }
+  },
+  "candidate_pool": {
+    "families": ["target", "collision", "random"],
+    "requested_sizes": [4, 8, 16],
+    "proposal_backend": "optimized",
+    "minimum_candidates_per_state": 12,
+    "maximum_candidates_per_state": 18,
+    "topology_boundary": "forbidden"
+  },
+  "selection": {
+    "research_split": "train",
+    "maximum_tasks_per_map": 4,
+    "exclude_initially_feasible_states": true,
+    "selection_inputs": [
+      "map_id", "layout_family", "agent_count", "initial_conflicts",
+      "input_topology_relevance"
+    ],
+    "forbidden_selection_inputs": [
+      "candidate_repair_outcome", "candidate_conflicts_after",
+      "candidate_runtime", "controller_ttf"
+    ]
+  },
+  "workers": 8,
+  "state_timeout_seconds": 3600.0
+}

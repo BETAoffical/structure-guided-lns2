@@ -1845,3 +1845,29 @@ The state, task-summary, and input-only recommended-task SHA-256 values are
 `88e2425f77a7ae0628ded3b77d436f38c9cec1bb35642077d559d08cbc3ce939`,
 `9a1c09cdf577eb55b1de0373831b27333296164c410f75cb42758ed208126050`,
 and `3c8755475f7c224c699639622303b8f70d2364482c862142c85b893786e414d8`.
+
+### Registered STRIDE-MapBase v1 repair collection
+
+The next data artifact is separately named `stride-mapbase-v1`. It consumes
+the input-only 32-task recommendation, both solver seeds, and excludes the one
+initially feasible row, yielding 63 independent active initial states across
+all eight fresh maps. Every row is assigned to the training split; none of the
+new maps are used to tune a validation threshold or enter formal OOD.
+
+The candidate pool is the frozen V2 base pool only: target, collision, and
+random families at requested sizes 4/8/16, with 12--18 deduplicated candidates
+per state. Topology Boundary is explicitly forbidden because its fresh-map
+coverage gate failed. Each candidate receives trial indices 0--15. A trial
+index maps to the same deterministic PP seed for every candidate in the same
+state, so candidate comparisons remain paired while exposing PP uncertainty.
+Every trial must carry the frozen 124-dimensional realized feature schema.
+
+The collector restores the exact initial repair structure before each branch,
+never executes a controller action, and records repair success, conflict
+change, structural post-state, native step time, and PP time. Completion is not
+sufficient by itself: the registered audit must verify 63 state artifacts,
+base-only families, candidate caps, exact 16-seed coverage, paired seeds,
+feature names, consolidated JSONL equality, training split, zero errors, and
+artifact SHA-256. This remains training data and makes no TTF claim. The config
+SHA-256 is
+`abc0495fb7e0530a731116d2bf5e0c8d9dcbe76700e040907550ebe535d6c4fb`.
