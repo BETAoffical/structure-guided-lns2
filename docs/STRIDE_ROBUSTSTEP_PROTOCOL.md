@@ -416,6 +416,44 @@ This probe may not export or promote a runtime model. Even a positive result
 requires a separately registered fresh-data design before successor training;
 `v2-full` remains the active controller throughout.
 
+### Completed consumed feature-sufficiency probe
+
+All integrity gates passed: 48 states, 854 candidates, 13,664 outcomes, whole-
+map OOF coverage, frozen-V2 action reproduction, and complete feature rows.
+The independent halves agreed on 5,852/7,176 candidate-pair directions
+(81.55 percent), and every state supplied at least one stable training pair.
+
+Frozen V2 had 0.3469 overall normalized regret and 0.3789 regret on the 34
+stable-winner states. All three ephemeral probes improved the aggregate
+numbers:
+
+- the exact-V2 86-input probe reached 0.2722 overall and 0.3074 stable regret,
+  with stable Top-3 hit rate increasing from 0.4706 to 0.5588;
+- the 124-delta probe reached 0.2722 overall and 0.2875 stable regret, with
+  stable Top-3 hit rate 0.6176;
+- the 124-context probe reached 0.2653 overall and 0.2976 stable regret, with
+  stable Top-3 hit rate 0.6471.
+
+Each probe improved four of six held-out maps and passed five of the six
+registered gates. All nevertheless failed the worst-map gate. The exact-86
+and 124-delta probes degraded `ost102d` by 0.1161 normalized regret versus the
+allowed 0.10; the context probe degraded it by 0.1189. All three also degraded
+`lak101d` by 0.0637. The failure is correlated rather than variant-specific:
+all three chose the same actions on `lak101d`, and the exact-86 and 124-delta
+probes chose the same actions on `ost102d`. The `ost102d` OOF pairwise accuracy
+was only 0.637--0.651, the lowest held-out-map range.
+
+The registered diagnosis is therefore
+`feature_sufficiency_not_demonstrated_on_consumed_cohort`. The improvement on
+four maps is evidence that the new immediate-quality target contains useful
+signal, but it is not evidence that an 86-, 124-, or context-input successor
+will generalize safely. Extra dimensions and existing state context did not
+remove the shared bad-map choices, so no runtime model is exported and
+`v2-full` remains active. The next diagnostic must distinguish missing map-
+distribution coverage from missing topology/interaction representation before
+opening a new training expansion. The deterministic report SHA-256 is
+`04b39aee19046c5a20936b3ec6b1a54a7a823ff2834ca3d82e9e1817a30b6f08`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
