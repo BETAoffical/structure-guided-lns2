@@ -873,6 +873,23 @@ and `a482eaa598b6563267b3d475084de6b677981eec06e1d3e0b3d9fdc0480b3134`.
 The next permitted step is an outcome-blind fresh-task preflight. The consumed
 24 states may not be used to claim boundary repair quality.
 
+### Registered topology-boundary fresh-task preflight
+
+The next cohort keeps the same six DAO maps, two registered load levels per
+map, and both uniform-random and opposite-exchange OD variants, but replaces
+master seed `20260804` and task seeds 109/131 with master seed `20260805` and
+task seeds 157/181. This creates 48 new task IDs and 96 solver-seed initial
+states. Task IDs and endpoint seeds must be disjoint from the consumed cohort.
+
+Qualification and selection remain outcome blind. Only map topology, agent
+count, initial conflicts, initial PP time, and initial path statistics may be
+used; candidate repairs and controller outcomes are forbidden. At most two
+tasks per map are selected against the same 25/100-conflict targets. The purpose
+is a controlled within-map mechanism confirmation in which map family and load
+are comparable while OD tasks are fresh. It is explicitly not cross-map
+generalization evidence; a successful quality Pilot must still pass later
+held-out-map Stage 5/OOD evaluation.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

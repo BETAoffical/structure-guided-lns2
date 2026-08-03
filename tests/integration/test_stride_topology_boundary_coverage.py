@@ -34,6 +34,27 @@ class StrideTopologyBoundaryCoverageTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "augmentation protocol"):
             validate_topology_boundary_coverage_config(config)
 
+    def test_fresh_preflight_is_task_disjoint_and_not_cross_map_evidence(self) -> None:
+        fresh = self._read("stride_topology_boundary_fresh_preflight_source.json")
+        predecessor = self._read("stride_robuststep_topology_preflight_source.json")
+        self.assertEqual(fresh["expected_task_count"], 48)
+        self.assertEqual(fresh["solver_seeds"], [1, 2])
+        self.assertTrue(
+            set(fresh["task_seeds"]).isdisjoint(predecessor["task_seeds"])
+        )
+        self.assertNotEqual(fresh["master_seed"], predecessor["master_seed"])
+        self.assertEqual(
+            fresh["freshness"]["evidence_scope"],
+            "within_map_fresh_od_not_cross_map_generalization",
+        )
+        self.assertEqual(
+            {row["id"] for row in fresh["benchmarks"]},
+            {row["id"] for row in predecessor["benchmarks"]},
+        )
+        self.assertIn(
+            "candidate_repair_outcome", fresh["selection_inputs_forbidden"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
