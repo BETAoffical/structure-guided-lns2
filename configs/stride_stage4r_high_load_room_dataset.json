@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "source": "https://www.movingai.com/benchmarks/mapf/index.html",
+  "scenario_indices": [4, 5],
+  "allow_fetched_superset": true,
+  "benchmarks": [
+    {
+      "id": "room-64-64-8",
+      "layout_family": "room",
+      "agent_counts": [500]
+    }
+  ]
+}

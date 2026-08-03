@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "source": "https://www.movingai.com/benchmarks/mapf/index.html",
+  "scenario_indices": [11, 17],
+  "allow_fetched_superset": true,
+  "benchmarks": [
+    {
+      "id": "maze-128-128-2",
+      "layout_family": "maze",
+      "agent_counts": [300]
+    }
+  ]
+}

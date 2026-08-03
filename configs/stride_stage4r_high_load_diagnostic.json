@@ -1,0 +1,57 @@
+{
+  "schema": "lns2.stride.stage4r_high_load_registration.v1",
+  "scientific_status": "development_diagnostic_only",
+  "formal_speed_claim": false,
+  "primary_metric": "mean_capped_wall_time_to_feasible",
+  "success_constraint": "stride_quality_success_count_gte_v2_full",
+  "controllers": ["v2-full", "stride-quality-v1"],
+  "solver_seeds": [1, 2, 3, 4],
+  "wall_time_budget_seconds": 180.0,
+  "episode_process_timeout_seconds": 240.0,
+  "execution_order": "paired_rotating_controller_order",
+  "runtime_config": "configs/stride_stage4r_high_load_runtime.json",
+  "controller_bundles": {
+    "v2-full": "artifacts/initlns-closed-loop-controller-v2",
+    "stride-quality-v1": "build/stride-stage4r-models-v2/stride-quality-v1"
+  },
+  "cohorts": [
+    {
+      "id": "maze300",
+      "source_dataset": "build/stride-stage4r-high-load-maze-dataset-v1",
+      "source_split": "balanced_wall_clock",
+      "tasks": [
+        "maze-128-128-2__random_11__agents_0300",
+        "maze-128-128-2__random_17__agents_0300"
+      ]
+    },
+    {
+      "id": "room500",
+      "source_dataset": "build/stride-stage4r-high-load-room-dataset-v1",
+      "source_split": "balanced_wall_clock",
+      "tasks": [
+        "room-64-64-8__random_04__agents_0500",
+        "room-64-64-8__random_05__agents_0500"
+      ]
+    }
+  ],
+  "interpretation": {
+    "room_64_64_8_reclassified_as_development": true,
+    "room_64_64_16_remains_unread_current_policy_holdout": true,
+    "map_count": 2,
+    "task_count": 4,
+    "paired_episode_count_per_controller": 16,
+    "required_metrics": [
+      "success_count",
+      "capped_wall_time_to_feasible",
+      "common_success_wall_time_to_feasible",
+      "repair_iterations",
+      "no_progress_steps",
+      "wall_clock_conflict_auc",
+      "pp_replan_seconds",
+      "controller_seconds_before_repair",
+      "pruner_fallback_fraction",
+      "pruner_ood_fallback_fraction",
+      "mean_selected_feature_outside_fraction"
+    ]
+  }
+}
