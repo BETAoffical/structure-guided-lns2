@@ -37,7 +37,7 @@ def load_selector(
         "stride-quality-v1",
         "stride-augcontrol-v1",
     }
-    if resolved == "stride-guardrank-v1":
+    if resolved in {"stride-guardrank-v1", "stride-maprank-v1"}:
         loaded = load_controller_bundle(bundle)
         if (
             str(loaded.manifest.get("controller_id")) != resolved
@@ -45,9 +45,9 @@ def load_selector(
             or loaded.manifest.get("default_replacement_allowed") is not False
         ):
             raise ValueError(
-                "stride-guardrank-v1 requires an exactly matching diagnostic bundle"
+                f"{resolved} requires an exactly matching diagnostic bundle"
             )
-        return GuardRankSelector(loaded)
+        return GuardRankSelector(loaded, controller_id=resolved)
     if resolved in pairwise_ids:
         loaded = load_controller_bundle(bundle)
         manifest_id = str(loaded.manifest.get("controller_id", "v2-full"))

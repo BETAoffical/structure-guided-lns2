@@ -72,6 +72,7 @@ class SelectorContractTests(unittest.TestCase):
                 "stride-quality-v1",
                 "stride-augcontrol-v1",
                 "stride-guardrank-v1",
+                "stride-maprank-v1",
             ),
         )
 

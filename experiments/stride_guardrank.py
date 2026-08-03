@@ -200,6 +200,7 @@ def _calibrate_thresholds(
     grid: list[float],
     exact_tolerance: float,
     top3_tolerance: float,
+    controller_id: str = CONTROLLER_ID,
 ) -> dict[str, Any]:
     anchor_records = _prediction_records(
         "v2-full/anchor",
@@ -214,7 +215,7 @@ def _calibrate_thresholds(
             thresholds = {"base": base, "boundary_only": boundary}
             predictions = _guard_predictions(evidence, thresholds)
             records = _prediction_records(
-                CONTROLLER_ID,
+                controller_id,
                 predictions,
                 grouped,
                 evaluation_pool="augmented",
@@ -343,6 +344,7 @@ def _nested_train_oof(
     grid: list[float],
     exact_tolerance: float,
     top3_tolerance: float,
+    controller_id: str = CONTROLLER_ID,
 ) -> dict[str, Any]:
     import numpy as np
 
@@ -395,6 +397,7 @@ def _nested_train_oof(
             grid=grid,
             exact_tolerance=exact_tolerance,
             top3_tolerance=top3_tolerance,
+            controller_id=controller_id,
         )
         outer_estimator = _fit_maps(
             maps=outer_train_maps,
@@ -439,7 +442,7 @@ def _nested_train_oof(
     if set(nested_predictions) != set(grouped) or set(crossfit_evidence) != set(grouped):
         raise ValueError("guardrank nested OOF state coverage differs")
     records = _prediction_records(
-        CONTROLLER_ID,
+        controller_id,
         nested_predictions,
         grouped,
         evaluation_pool="augmented",
@@ -457,6 +460,7 @@ def _nested_train_oof(
         grid=grid,
         exact_tolerance=exact_tolerance,
         top3_tolerance=top3_tolerance,
+        controller_id=controller_id,
     )
     return {
         "predictions": nested_predictions,
@@ -484,11 +488,13 @@ def _export_guardrank_bundle(
     training_pair_count: int,
     source_hashes: dict[str, str],
     nested_passed: bool,
+    controller_id: str = CONTROLLER_ID,
+    strategy_schema: str = STRATEGY_SCHEMA,
 ) -> dict[str, Any]:
     source_manifest = _read_json(frozen_bundle / "controller_manifest.json")
     exported = _export_diagnostic_controller(
         root=root,
-        controller_id=CONTROLLER_ID,
+        controller_id=controller_id,
         estimator=estimator,
         feature_names=tuple(PROFILE_FEATURE_NAMES["realized_dynamic"]),
         candidates=candidates,
@@ -515,7 +521,7 @@ def _export_guardrank_bundle(
     manifest["anchor_rankers"] = anchor_rows
     manifest["anchor_ranges"] = dict(source_manifest["main_ranges"])
     manifest["selection_strategy"] = {
-        "schema": STRATEGY_SCHEMA,
+        "schema": strategy_schema,
         "strategy_id": "v2_anchor_pairwise_guard",
         "applied_profile": "realized_dynamic",
         "anchor_controller_id": "v2-full",
@@ -552,9 +558,12 @@ def _export_guardrank_bundle(
 
 
 def _runtime_predictions(
-    bundle: Path, grouped: dict[str, list[dict[str, Any]]]
+    bundle: Path,
+    grouped: dict[str, list[dict[str, Any]]],
+    *,
+    controller_id: str = CONTROLLER_ID,
 ) -> dict[str, str]:
-    selector = load_selector(CONTROLLER_ID, bundle)
+    selector = load_selector(controller_id, bundle)
     result = {}
     for state_id, rows in sorted(grouped.items()):
         candidates = [
@@ -576,8 +585,16 @@ def _runtime_predictions(
     return result
 
 
-def run_guardrank_training(
-    *, config_path: str | Path, output: str | Path
+def _run_anchor_guard_training(
+    *,
+    config_path: str | Path,
+    output: str | Path,
+    config_validator: Any,
+    controller_id: str,
+    report_schema: str,
+    prediction_schema: str,
+    strategy_schema: str,
+    report_filename: str,
 ) -> dict[str, Any]:
     import numpy as np
 
@@ -585,7 +602,7 @@ def run_guardrank_training(
     config_path = Path(config_path).resolve()
     output = Path(output).resolve()
     config = _read_json(config_path)
-    validate_guardrank_training_config(config)
+    config_validator(config)
     data_design_path = _project_path(project_root, str(config["data_design"]))
     if sha256_file(data_design_path) != str(config["data_design_sha256"]):
         raise ValueError("STRIDE guardrank data design differs")
@@ -603,10 +620,15 @@ def run_guardrank_training(
     audit_provenance = _validate_label_audit_provenance(summary)
     aggregate_path = labels / "candidate_aggregates.jsonl"
     pair_path = labels / "conflict_only_dominance_pairs.jsonl"
+    topology_threshold = float(
+        config["topology_boundary_threshold"]
+        if "topology_boundary_threshold" in config
+        else data_design["topology_boundary_threshold"]
+    )
     candidates, grouped = _load_candidates(
         aggregate_path,
         selection_path,
-        topology_threshold=float(data_design["topology_boundary_threshold"]),
+        topology_threshold=topology_threshold,
     )
     candidate_index = {
         (str(row["state_id"]), str(row["candidate_id"])): int(row["candidate_index"])
@@ -659,6 +681,7 @@ def run_guardrank_training(
         grid=list(map(float, config["threshold_grid"])),
         exact_tolerance=float(gates["exact_best_rate_noninferiority_tolerance"]),
         top3_tolerance=float(gates["top3_hit_rate_noninferiority_tolerance"]),
+        controller_id=controller_id,
     )
     nested_metrics = dict(nested["metrics"])
     anchor_metrics = dict(nested["anchor_metrics"])
@@ -723,7 +746,7 @@ def run_guardrank_training(
     )
     legacy_predictions = _guard_predictions(legacy_evidence, final_thresholds)
     legacy_records = _prediction_records(
-        CONTROLLER_ID,
+        controller_id,
         legacy_predictions,
         legacy_validation_grouped,
         evaluation_pool="augmented",
@@ -739,11 +762,11 @@ def run_guardrank_training(
     _write_jsonl(
         prediction_path,
         [
-            {**row, "schema": PREDICTION_SCHEMA, "evidence_role": "nested_train_oof"}
+            {**row, "schema": prediction_schema, "evidence_role": "nested_train_oof"}
             for row in nested["records"]
         ]
         + [
-            {**row, "schema": PREDICTION_SCHEMA, "evidence_role": "legacy_validation_descriptive"}
+            {**row, "schema": prediction_schema, "evidence_role": "legacy_validation_descriptive"}
             for row in legacy_records
         ],
     )
@@ -758,7 +781,7 @@ def run_guardrank_training(
         ),
     }
     export = _export_guardrank_bundle(
-        root=output / CONTROLLER_ID,
+        root=output / controller_id,
         estimator=final_estimator,
         thresholds=final_thresholds,
         candidates=[row for row in candidates if str(row["split"]) == "train"],
@@ -768,6 +791,8 @@ def run_guardrank_training(
         training_pair_count=len(train_pairs["labels"]),
         source_hashes=source_hashes,
         nested_passed=nested_passed,
+        controller_id=controller_id,
+        strategy_schema=strategy_schema,
     )
     reference_train = _guard_predictions(
         _challenger_evidence(
@@ -775,9 +800,13 @@ def run_guardrank_training(
         ),
         final_thresholds,
     )
-    runtime_train = _runtime_predictions(output / CONTROLLER_ID, train_grouped)
+    runtime_train = _runtime_predictions(
+        output / controller_id, train_grouped, controller_id=controller_id
+    )
     runtime_legacy = _runtime_predictions(
-        output / CONTROLLER_ID, legacy_validation_grouped
+        output / controller_id,
+        legacy_validation_grouped,
+        controller_id=controller_id,
     )
     runtime_equivalence = {
         "train_state_count": len(train_grouped),
@@ -809,8 +838,8 @@ def run_guardrank_training(
     }
     fresh_eligible = all(integrity_gates.values()) and nested_passed
     report = {
-        "schema": REPORT_SCHEMA,
-        "controller_id": CONTROLLER_ID,
+        "schema": report_schema,
+        "controller_id": controller_id,
         "scientific_status": (
             "fresh_development_eligible"
             if fresh_eligible
@@ -860,8 +889,23 @@ def run_guardrank_training(
             "offline_predictions_sha256": sha256_file(prediction_path),
         },
     }
-    _write_json(output / "guardrank_training_report.json", report)
+    _write_json(output / report_filename, report)
     return report
+
+
+def run_guardrank_training(
+    *, config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    return _run_anchor_guard_training(
+        config_path=config_path,
+        output=output,
+        config_validator=validate_guardrank_training_config,
+        controller_id=CONTROLLER_ID,
+        report_schema=REPORT_SCHEMA,
+        prediction_schema=PREDICTION_SCHEMA,
+        strategy_schema=STRATEGY_SCHEMA,
+        report_filename="guardrank_training_report.json",
+    )
 
 
 __all__ = [
@@ -870,6 +914,7 @@ __all__ = [
     "REPORT_SCHEMA",
     "_calibrate_thresholds",
     "_guard_predictions",
+    "_run_anchor_guard_training",
     "run_guardrank_training",
     "validate_guardrank_training_config",
 ]

@@ -606,7 +606,11 @@ def load_controller_bundle(path: str | Path) -> ControllerBundleV2:
         strategy = dict(strategy)
         thresholds = dict(strategy.get("challenger_thresholds") or {})
         if (
-            strategy.get("schema") != "lns2.stride.guardrank_strategy.v1"
+            strategy.get("schema")
+            not in {
+                "lns2.stride.guardrank_strategy.v1",
+                "lns2.stride.maprank_strategy.v1",
+            }
             or strategy.get("strategy_id") != "v2_anchor_pairwise_guard"
             or strategy.get("applied_profile") != "realized_dynamic"
             or set(thresholds) != {"base", "boundary_only"}

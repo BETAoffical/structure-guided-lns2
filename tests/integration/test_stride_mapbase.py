@@ -12,12 +12,14 @@ from experiments.stride_mapbase import (
 from experiments.stride_maprank import (
     prepare_maprank_selection,
     validate_maprank_design,
+    validate_maprank_training_config,
 )
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "configs" / "stride_mapbase_collection.json"
 MAPRANK_DESIGN_PATH = ROOT / "configs" / "stride_maprank_design.json"
+MAPRANK_TRAINING_PATH = ROOT / "configs" / "stride_maprank_training.json"
 
 
 def _config() -> dict:
@@ -114,3 +116,22 @@ def test_maprank_selection_combines_fresh_train_maps_when_inputs_exist(
     assert report["new_state_count"] == 63
     assert report["repair_outcomes_used"] is False
     assert report["controller_outcomes_used"] is False
+
+
+def test_maprank_training_registration_matches_frozen_design() -> None:
+    config = json.loads(MAPRANK_TRAINING_PATH.read_text(encoding="utf-8"))
+    validate_maprank_training_config(config)
+    assert config["controller_id"] == "stride-maprank-v1"
+    assert config["labels"] == "build/stride-maprank-labels-v1"
+    assert config["model_parameters"]["random_state"] == 20260804
+    assert config["topology_boundary_threshold"] == 0.06
+    changed = json.loads(MAPRANK_TRAINING_PATH.read_text(encoding="utf-8"))
+    changed["offline_gates"][
+        "minimum_relative_normalized_regret_improvement_over_frozen_v2"
+    ] = 0.0
+    try:
+        validate_maprank_training_config(changed)
+    except ValueError as error:
+        assert "offline gates changed" in str(error)
+    else:
+        raise AssertionError("MapRank accepted a relaxed promotion gate")

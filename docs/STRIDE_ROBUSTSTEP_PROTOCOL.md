@@ -1906,3 +1906,15 @@ boundary-relevant topology group and 16 are controls. Neither candidate repair
 outcomes nor controller outcomes are selection inputs. The combined selection
 SHA-256 is
 `14644c37c85b16796c053a1a001a8f0e52bb59b07d6a1beba2fa7a0302e263c3`.
+
+The executable training contract is also registered under the distinct
+`stride-maprank-v1` controller and `lns2.stride.maprank_strategy.v1` runtime
+schema. It reuses the tested V2-anchor guard mechanism without changing the
+GuardRank identity or artifacts. Model capacity, four-by-three nested map
+folds, threshold grid, 0.06 topology grouping boundary, and all offline gates
+match the frozen MapRank design. The runtime loader accepts MapRank only when
+the bundle manifest, diagnostic-only status, controller identity, strategy
+schema, thresholds, and anchor rankers all match. No label construction or
+training result is implied by registering this executable path. The training
+config SHA-256 is
+`db84f0a5a38d433dc49aa926140a69768f5528c83ae305599e6648b526792760`.

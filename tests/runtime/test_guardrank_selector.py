@@ -29,9 +29,14 @@ class _ScoreModel:
         return [0.8 if vector[0] > 0.0 else 0.2 for vector in vectors]
 
 
-def _bundle(threshold: float):
+def _bundle(
+    threshold: float,
+    *,
+    controller_id: str = "stride-guardrank-v1",
+    strategy_schema: str = "lns2.stride.guardrank_strategy.v1",
+):
     strategy = {
-        "schema": "lns2.stride.guardrank_strategy.v1",
+        "schema": strategy_schema,
         "strategy_id": "v2_anchor_pairwise_guard",
         "applied_profile": "realized_dynamic",
         "challenger_thresholds": {
@@ -41,7 +46,7 @@ def _bundle(threshold: float):
     }
     return SimpleNamespace(
         manifest={
-            "controller_id": "stride-guardrank-v1",
+            "controller_id": controller_id,
             "selection_strategy": strategy,
         },
         main_models={
@@ -103,6 +108,20 @@ def test_guardrank_non_applied_profile_is_exact_anchor() -> None:
     )
     assert decision.candidate_index == 0
     assert decision.diagnostics["route"] == "anchor-profile"
+
+
+def test_maprank_uses_distinct_identity_with_same_anchor_guard_contract() -> None:
+    bundle = _bundle(
+        0.75,
+        controller_id="stride-maprank-v1",
+        strategy_schema="lns2.stride.maprank_strategy.v1",
+    )
+    decision = GuardRankSelector(
+        bundle, controller_id="stride-maprank-v1"
+    ).select(_request())
+    assert decision.controller_id == "stride-maprank-v1"
+    assert decision.candidate_index == 1
+    assert decision.diagnostics["route"] == "guard-override"
 
 
 def test_pairwise_evidence_uses_forward_reverse_symmetry() -> None:

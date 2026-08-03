@@ -16,6 +16,7 @@ DIAGNOSTIC_CONTROLLER_IDS = (
     "stride-quality-v1",
     "stride-augcontrol-v1",
     "stride-guardrank-v1",
+    "stride-maprank-v1",
 )
 
 

@@ -10,6 +10,11 @@ from lns2_selector.runtime.online_selection import (
 
 
 CONTROLLER_ID = "stride-guardrank-v1"
+MAPRANK_CONTROLLER_ID = "stride-maprank-v1"
+STRATEGY_SCHEMAS = {
+    CONTROLLER_ID: "lns2.stride.guardrank_strategy.v1",
+    MAPRANK_CONTROLLER_ID: "lns2.stride.maprank_strategy.v1",
+}
 
 
 def candidate_kind(candidate: Any, row: Any) -> str:
@@ -27,16 +32,18 @@ def candidate_kind(candidate: Any, row: Any) -> str:
 class GuardRankSelector:
     """Conservative conflict ranker that keeps frozen V2 as its anchor."""
 
-    def __init__(self, bundle: Any):
+    def __init__(self, bundle: Any, *, controller_id: str = CONTROLLER_ID):
         manifest = dict(getattr(bundle, "manifest", {}) or {})
         strategy = dict(manifest.get("selection_strategy") or {})
+        resolved = str(controller_id)
         if (
-            str(manifest.get("controller_id")) != CONTROLLER_ID
-            or strategy.get("schema") != "lns2.stride.guardrank_strategy.v1"
+            resolved not in STRATEGY_SCHEMAS
+            or str(manifest.get("controller_id")) != resolved
+            or strategy.get("schema") != STRATEGY_SCHEMAS[resolved]
             or strategy.get("strategy_id") != "v2_anchor_pairwise_guard"
         ):
-            raise ValueError("stride-guardrank-v1 requires its registered strategy")
-        self.controller_id = CONTROLLER_ID
+            raise ValueError(f"{resolved} requires its registered strategy")
+        self.controller_id = resolved
         self.models = bundle.main_models
         self.anchor_models = bundle.anchor_models
         self.applied_profile = str(strategy["applied_profile"])
@@ -112,4 +119,9 @@ class GuardRankSelector:
         )
 
 
-__all__ = ["CONTROLLER_ID", "GuardRankSelector", "candidate_kind"]
+__all__ = [
+    "CONTROLLER_ID",
+    "MAPRANK_CONTROLLER_ID",
+    "GuardRankSelector",
+    "candidate_kind",
+]

@@ -18,6 +18,10 @@ from experiments.stride_collection import _agent_band, _conflict_band
 DESIGN_SCHEMA = "lns2.stride.maprank_design.v1"
 SELECTION_SCHEMA = "lns2.stride.maprank_selection.v1"
 CONTROLLER_ID = "stride-maprank-v1"
+TRAINING_CONFIG_SCHEMA = "lns2.stride.maprank_training_config.v1"
+TRAINING_REPORT_SCHEMA = "lns2.stride.maprank_training.v1"
+PREDICTION_SCHEMA = "lns2.stride.maprank_prediction.v1"
+STRATEGY_SCHEMA = "lns2.stride.maprank_strategy.v1"
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -142,6 +146,99 @@ def validate_maprank_design(config: dict[str, Any]) -> None:
         "formal_ood_data",
     }:
         raise ValueError("STRIDE-MapRank forbidden inputs changed")
+
+
+def validate_maprank_training_config(config: dict[str, Any]) -> None:
+    if (
+        config.get("schema") != TRAINING_CONFIG_SCHEMA
+        or config.get("scientific_status")
+        != "registered_before_mapbase_label_analysis"
+        or config.get("controller_id") != CONTROLLER_ID
+        or config.get("challenger_label_schema")
+        != "lns2.stride.repairability_conflict_only_ablation.v1"
+        or config.get("feature_schema") != "lns2.realized_features.v2"
+        or int(config.get("base_feature_dimension", -1)) != 124
+        or config.get("labels") != "build/stride-maprank-labels-v1"
+        or config.get("selection")
+        != "build/stride-maprank-selection-v1/state_selection.jsonl"
+        or config.get("data_design") != "configs/stride_maprank_design.json"
+        or config.get("label_design")
+        != "configs/stride_repairability_label_design.json"
+        or config.get("frozen_v2_bundle")
+        != "artifacts/initlns-closed-loop-controller-v2"
+        or float(config.get("topology_boundary_threshold", -1.0)) != 0.06
+    ):
+        raise ValueError("STRIDE-MapRank training identity changed")
+    for field in (
+        "data_design_sha256",
+        "label_design_sha256",
+        "frozen_v2_manifest_sha256",
+    ):
+        if not _valid_sha256(config.get(field)):
+            raise ValueError(f"STRIDE-MapRank registration hash is invalid: {field}")
+    ranking = {
+        "model_class": config.get("model_class"),
+        "model_parameters": config.get("model_parameters"),
+        "outer_train_map_folds": config.get("outer_map_folds"),
+        "inner_train_map_folds": config.get("inner_map_folds"),
+        "threshold_grid": config.get("threshold_grid"),
+        "threshold_kinds": config.get("threshold_kinds"),
+    }
+    design_ranking = {
+        "model_class": "sklearn.ensemble.HistGradientBoostingClassifier",
+        "model_parameters": {
+            "early_stopping": False,
+            "l2_regularization": 0.1,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 20,
+            "random_state": 20260804,
+        },
+        "outer_train_map_folds": 4,
+        "inner_train_map_folds": 3,
+        "threshold_grid": [
+            0.55,
+            0.60,
+            0.65,
+            0.70,
+            0.75,
+            0.80,
+            0.85,
+            0.90,
+            0.95,
+            1.01,
+        ],
+        "threshold_kinds": ["base", "boundary_only"],
+    }
+    if ranking != design_ranking or config.get("calibration_objective") != (
+        "minimize_normalized_regret_subject_to_v2_exact_and_top3_noninferiority"
+    ):
+        raise ValueError("STRIDE-MapRank model or calibration protocol changed")
+    if dict(config.get("offline_gates") or {}) != {
+        "minimum_relative_normalized_regret_improvement_over_frozen_v2": 0.05,
+        "absolute_normalized_regret_improvement_alternative": 0.02,
+        "top3_hit_rate_noninferiority_tolerance": 0.01,
+        "exact_best_rate_noninferiority_tolerance": 0.01,
+        "maximum_topology_group_normalized_regret_degradation": 0.03,
+        "minimum_pairwise_accuracy_gain_over_weighted_majority": 0.03,
+    }:
+        raise ValueError("STRIDE-MapRank offline gates changed")
+    if (
+        config.get("training_split") != "train"
+        or config.get("legacy_validation_split") != "validation"
+        or set(map(str, config.get("forbidden_calibration_splits") or ()))
+        != {"validation", "test", "formal_ood"}
+        or config.get("legacy_validation_is_descriptive_only") is not True
+        or config.get("fresh_development_validation_required") is not True
+        or bool(config.get("formal_ood_data_allowed"))
+        or bool(config.get("test_data_allowed"))
+        or bool(config.get("runtime_used_in_label"))
+        or bool(config.get("future_trajectory_used_in_label"))
+        or bool(config.get("default_replacement_allowed"))
+        or bool(config.get("formal_speed_claim"))
+    ):
+        raise ValueError("STRIDE-MapRank evidence boundary changed")
 
 
 def _registered_path(project_root: Path, artifact: dict[str, Any]) -> Path:
@@ -302,8 +399,38 @@ def prepare_maprank_selection(
     return report
 
 
+def run_maprank_training(
+    *, config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    from experiments.stride_guardrank import _run_anchor_guard_training
+
+    path = Path(config_path).resolve()
+    config = _read_json(path)
+    validate_maprank_training_config(config)
+    project_root = path.parents[1]
+    design_path = (project_root / str(config["data_design"])).resolve()
+    label_design_path = (project_root / str(config["label_design"])).resolve()
+    if sha256_file(design_path) != str(config["data_design_sha256"]):
+        raise ValueError("STRIDE-MapRank design SHA differs")
+    if sha256_file(label_design_path) != str(config["label_design_sha256"]):
+        raise ValueError("STRIDE-MapRank label design SHA differs")
+    validate_maprank_design(_read_json(design_path))
+    return _run_anchor_guard_training(
+        config_path=path,
+        output=output,
+        config_validator=validate_maprank_training_config,
+        controller_id=CONTROLLER_ID,
+        report_schema=TRAINING_REPORT_SCHEMA,
+        prediction_schema=PREDICTION_SCHEMA,
+        strategy_schema=STRATEGY_SCHEMA,
+        report_filename="maprank_training_report.json",
+    )
+
+
 __all__ = [
     "build_maprank_selection",
     "prepare_maprank_selection",
+    "run_maprank_training",
     "validate_maprank_design",
+    "validate_maprank_training_config",
 ]
