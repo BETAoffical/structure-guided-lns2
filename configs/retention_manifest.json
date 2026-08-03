@@ -244,6 +244,11 @@
       "purpose": "Map-held-out training, ablation, portable export, and repairability-regret evaluation for stride-augcontrol-v1."
     },
     {
+      "path": "experiments/stride_augcontrol_evaluation.py",
+      "role": "reproducibility",
+      "purpose": "Staged Shadow, high-load, and formal raw-TTF evaluation with separate candidate-pool and ranker effects."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -809,6 +814,11 @@
       "purpose": "CLI entry point for preregistered stride-augcontrol-v1 training and validation."
     },
     {
+      "path": "scripts/run_stride_augcontrol_evaluation.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -1057,6 +1067,11 @@
       "path": "tests/integration/test_stride_augcontrol.py",
       "role": "active",
       "contract": "Independent controller identity, frozen 147-input capacity, runtime exclusion, repairability regret, and augmented-pool opportunity semantics."
+    },
+    {
+      "path": "tests/integration/test_stride_augcontrol_evaluation.py",
+      "role": "reproducibility",
+      "contract": "Uncapped three-controller evaluation, exact candidate-pool decomposition, load registration, and raw-TTF comparison semantics."
     },
     {
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",

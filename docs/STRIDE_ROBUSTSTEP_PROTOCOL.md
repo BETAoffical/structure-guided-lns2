@@ -1447,6 +1447,8 @@ training ablation is `stride-augcontrol-conflict-v1`. Both use the already
 registered 124 realized features, 147 pairwise inputs, fixed
 `HistGradientBoostingClassifier` capacity, equal state weight, and no
 hyperparameter tuning. Six whole validation maps remain excluded from fitting.
+Both estimators are exported under their own diagnostic-only bundle names;
+only the primary bundle is eligible for Shadow and runtime evaluation.
 The primary model is evaluated against frozen V2 on the identical augmented
 pool, the same primary model restricted to base candidates, and the
 conflict-only-label ablation. The earlier committed gates are preserved: at
@@ -1457,9 +1459,45 @@ and no static-topology group regret degradation above 0.03. A pass authorizes
 only action-preserving Shadow; the exported bundle remains diagnostic-only and
 cannot replace V2 before paired raw-TTF evidence.
 
+### Preregistered staged raw-TTF evaluation
+
+Runtime evaluation separates candidate-pool quality from ranking quality with
+three strictly paired controllers: original `v2-full`, the frozen V2 ranker on
+the augmented base-plus-topology pool (`v2-augmented-pool`), and
+`stride-augcontrol-v1` on that identical augmented pool. All speed comparisons
+use reset-inclusive `wall_time_to_feasible` under `run-to-completion`; capped
+TTF, remaining-time guards, environment time limits, and process timeouts are
+not scientific scores and are absent from this protocol. Execution rotates the
+three controllers within every task/seed key and requires matching initial
+fingerprints and conflict counts.
+
+The order is fixed. An offline pass first permits an action-preserving Shadow
+on the six held-out DAO validation maps. Shadow must produce valid decisions
+without action override or state-semantic mismatch. It then permits a
+development high-load comparison on `maze-128-128-2` at 300 agents and
+`room-64-64-8` at 500 agents, two scenarios and four solver seeds per map. The
+development gate requires at least 2% lower mean raw TTF than original V2,
+non-worse repair rounds and success count, no cohort regression above 10%, and
+non-worse raw TTF than the V2 ranker on the same augmented pool.
+
+Only a development pass opens the formal OOD data. The six fixed MovingAI
+holdouts are `maze-128-128-10` at 200 agents, `room-64-64-16` at 400,
+`random-64-64-20` at 500, `warehouse-20-40-10-2-2` at 500, `den312d` at 300,
+and `lak303d` at 500. Each uses random scenarios 4 and 5 and solver seeds 1--3.
+The lower maze load prevents the extreme-conflict regime from dominating the
+comparison, while the 300--500-agent loads retain substantial pressure on the
+other map families. Formal support requires at least 5% lower mean raw TTF
+than original V2, non-worse success and repair rounds, no map regression above
+10%, at least half of paired episodes faster, and non-worse ranking than frozen
+V2 on the identical augmented pool. Even a pass supports a speed claim only;
+it does not automatically replace the default V2 controller.
+The evaluation, formal-dataset, and formal-runtime config SHA-256 values are
+`87fa1d44f61489ee1ad1f5cd9e53e52f49349cd00a09162ea14307e5308fa124`,
+`5b0404a3d2bd6898866ceabb30bacbeb1a6678c33441d57c446f5483bf61477c`,
+and `23d102c37bb0ed42f05214a6a936b72f85566ab0eef3c3e2a4ae90ba1165b14f`.
+
 ## Promotion boundary
 
-The next sequence is design, fresh label confirmation, a small balanced Pilot,
-controlled retraining, action-preserving Shadow, and paired TTF Quick. Only a
-success-noninferior model with lower mean capped TTF and no material map-family
-regression may proceed to formal Stage 5/OOD evaluation.
+The next sequence is paired 16-seed label collection, controlled retraining,
+action-preserving Shadow, development high-load raw TTF, and formal OOD raw
+TTF. Failure at any gate retains frozen V2 and leaves later holdout data unread.

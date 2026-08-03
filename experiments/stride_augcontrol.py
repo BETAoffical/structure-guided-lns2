@@ -710,6 +710,19 @@ def run_augcontrol_training(
         training_pair_count=len(primary_train["labels"]),
         source_hashes=source_hashes,
     )
+    conflict_exported = _export_diagnostic_controller(
+        root=output / CONFLICT_CONTROLLER_ID,
+        controller_id=CONFLICT_CONTROLLER_ID,
+        estimator=conflict_estimator,
+        feature_names=names,
+        candidates=candidates,
+        grouped=grouped,
+        source_bundle=frozen_bundle,
+        source_manifest=source_manifest,
+        parameters=parameters,
+        training_pair_count=len(conflict_train["labels"]),
+        source_hashes=source_hashes,
+    )
     integrity_gates = {
         "label_summary_identity": True,
         "map_held_out_split": True,
@@ -719,6 +732,9 @@ def run_augcontrol_training(
         "test_data_not_read": True,
         "runtime_not_used_in_label": True,
         "portable_equivalence": bool(exported["equivalence"]["passed"]),
+        "conflict_ablation_portable_equivalence": bool(
+            conflict_exported["equivalence"]["passed"]
+        ),
     }
     report = {
         "schema": REPORT_SCHEMA,
@@ -755,6 +771,10 @@ def run_augcontrol_training(
         "shadow_eligible": all(integrity_gates.values())
         and all(promotion_gates.values()),
         "export": exported,
+        "exports": {
+            CONTROLLER_ID: exported,
+            CONFLICT_CONTROLLER_ID: conflict_exported,
+        },
         "model_parameters": parameters,
         "input_dimension": len(input_specs),
         "source_sha256": source_hashes,

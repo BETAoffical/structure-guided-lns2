@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from experiments.stride_augcontrol import (
+    CONFLICT_CONTROLLER_ID,
     _input_specifications,
     _oracle_pool_opportunity,
     _prediction_records,
@@ -28,6 +29,9 @@ class StrideAugcontrolTest(unittest.TestCase):
         self.assertEqual(len(names), 124)
         self.assertEqual(len(specifications), 147)
         self.assertEqual(config["controller_id"], "stride-augcontrol-v1")
+        self.assertEqual(
+            config["conflict_ablation_id"], CONFLICT_CONTROLLER_ID
+        )
         self.assertFalse(config["hyperparameter_tuning"])
         self.assertFalse(config["default_replacement_allowed"])
 
