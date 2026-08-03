@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_topology_balanced_preflight",
+  "scientific_status": "development_only",
+  "dataset_revision": "stride-robuststep-topology-preflight-v1",
+  "source": "https://www.movingai.com/benchmarks/dao/index.html",
+  "task_semantics": "project_derived_uniform_and_opposite_exchange_not_official_scenario",
+  "predecessor_report": {
+    "path": "build/stride-topology-probe-analysis-v1/topology_probe_report.json",
+    "sha256": "f577e59f6230c0534151e138c991798878e5eb9b7a2a7a8cc9da9d770e8c8b95"
+  },
+  "formal_ood_config": "configs/movingai_ood_dataset.json",
+  "formal_ood_config_sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a",
+  "consumed_development_exceptions": [],
+  "selection_inputs_allowed": [
+    "map_topology", "agent_count", "initial_conflicts",
+    "initial_pp_wall_seconds", "initial_path_statistics"
+  ],
+  "selection_inputs_forbidden": [
+    "v2_relative_ttf", "robuststep_relative_ttf",
+    "controller_action", "controller_repair_outcome",
+    "candidate_repair_outcome"
+  ],
+  "master_seed": 20260804,
+  "task_seeds": [109, 131],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
+    "sha256": "229393af31caaec732e5f4fd923940845ab056e94dadfb96b8afc24da472d3af"
+  },
+  "expected_map_count": 6,
+  "expected_task_count": 48,
+  "solver_seeds": [1, 2],
+  "selection_rule": {
+    "minimum_mean_initial_conflicts": 10.0,
+    "target_mean_initial_conflicts": [25.0, 100.0],
+    "maximum_tasks_per_map": 2,
+    "tie_break": ["absolute_target_distance", "lower_agent_count", "lower_task_seed", "task_id"],
+    "underloaded_fallback": "highest_mean_initial_conflicts"
+  },
+  "topology_group_gates": {
+    "required_groups": [
+      "dao_ultra_bottleneck", "dao_articulated", "dao_low_articulation_control"
+    ],
+    "minimum_qualified_map_count": 4,
+    "minimum_qualified_maps_by_group": {
+      "dao_ultra_bottleneck": 2,
+      "dao_articulated": 2,
+      "dao_low_articulation_control": 0
+    },
+    "underloaded_allowed_only_in_groups": ["dao_low_articulation_control"]
+  },
+  "benchmarks": [
+    {
+      "id": "lak109d", "layout_family": "dao_ultra_bottleneck",
+      "member": "lak109d.map",
+      "member_sha256": "7a2c3c94b2462d7c5378a91e80595c1c4a68dee42f5bb56813f6dd3c2bba4815",
+      "agent_counts": [110, 150]
+    },
+    {
+      "id": "den404d", "layout_family": "dao_ultra_bottleneck",
+      "member": "den404d.map",
+      "member_sha256": "d9e35f584ca9ad2b0159077825c4faedd0dbdeca7267ae40eb7c78bdd0627a87",
+      "agent_counts": [130, 180]
+    },
+    {
+      "id": "hrt002d", "layout_family": "dao_articulated",
+      "member": "hrt002d.map",
+      "member_sha256": "ba7e78e835e5b15ade824d803d33275d4525219f44250cc61592cae4e3d907e2",
+      "agent_counts": [260, 380]
+    },
+    {
+      "id": "den020d", "layout_family": "dao_articulated",
+      "member": "den020d.map",
+      "member_sha256": "a347249aef9fd6b4b0d15ec7e0e936ce9b1e5b6520d557e7caef64cc7760ba25",
+      "agent_counts": [620, 930]
+    },
+    {
+      "id": "arena", "layout_family": "dao_low_articulation_control",
+      "member": "arena.map",
+      "member_sha256": "9887c3022fb76d8e2b49db4a54641e31df79607cf96c2a0ec362702808113d4d",
+      "agent_counts": [620, 1000]
+    },
+    {
+      "id": "lak515d", "layout_family": "dao_low_articulation_control",
+      "member": "lak515d.map",
+      "member_sha256": "60008b1aef01e574b87b75b7b960903f8dfa10d80d027993f475da5d3a43297f",
+      "agent_counts": [550, 900]
+    }
+  ]
+}

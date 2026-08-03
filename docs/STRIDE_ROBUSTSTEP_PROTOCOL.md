@@ -606,6 +606,33 @@ quality collection. Candidate generation should be changed only if that
 preflight demonstrates systematic failure to propose neighborhoods covering
 the relevant bottlenecks.
 
+### Registered topology-balanced map/load preflight
+
+The next outcome-blind preflight uses six checksum-pinned, previously unused
+members of the official MovingAI DAO map archive. It does not use the six
+consumed confirmation maps or the formal OOD maps. The selected topology
+strata are:
+
+- ultra-bottleneck: `lak109d` and `den404d`, with 110/150 and 130/180 agents;
+- articulated: `hrt002d` and `den020d`, with 260/380 and 620/930 agents;
+- low-articulation controls: `arena` and `lak515d`, with 620/1000 and 550/900
+  agents.
+
+Each map receives two fresh task seeds, both uniform-random and opposite-
+exchange project-derived OD semantics, and two load levels. Two solver seeds
+give 96 initial-state jobs over 48 tasks. Collection stops after initial PP:
+`max_decisions=0`, so neither a neighborhood action nor a candidate repair
+outcome can affect map/load qualification.
+
+A task is load-qualified at mean initial conflicts of at least 10; targets are
+25 and 100 conflicts. Both ultra-bottleneck maps and both articulated maps
+must qualify, giving at least four qualified maps in total. Underloaded maps
+are allowed only in the registered low-articulation control stratum. A pass
+does not permit label collection immediately; it permits a proposal-only
+candidate coverage check on the qualified states. Only that second no-repair
+gate can decide whether the existing Target/Collision/Random pool covers the
+relevant bottlenecks or candidate generation must change first.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

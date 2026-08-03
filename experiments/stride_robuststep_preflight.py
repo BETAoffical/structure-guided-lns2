@@ -28,11 +28,13 @@ FORBIDDEN_OUTCOME_FIELDS = {
     "robuststep_relative_ttf",
     "controller_action",
     "controller_repair_outcome",
+    "candidate_repair_outcome",
 }
 PREFLIGHT_ROLES = {
     "stride_robuststep_outcome_blind_load_preflight",
     "stride_robuststep_outcome_blind_load_extension",
     "stride_robuststep_outcome_blind_congestion_preflight",
+    "stride_robuststep_topology_balanced_preflight",
 }
 
 
@@ -213,6 +215,62 @@ def analyze_preflight_rows(
         "all_maps_represented": set(by_map) == set(benchmark_index),
     }
     underloaded = [str(row["map_id"]) for row in map_reports if row["underloaded"]]
+    topology_gates = dict(source.get("topology_group_gates") or {})
+    group_reports: dict[str, dict[str, Any]] = {}
+    if topology_gates:
+        expected_groups = set(map(str, topology_gates["required_groups"]))
+        actual_groups = {
+            str(row["layout_family"]) for row in benchmark_index.values()
+        }
+        qualified_maps = {
+            str(row["map_id"])
+            for row in map_reports
+            if int(row["eligible_task_count"]) > 0
+        }
+        for group in sorted(actual_groups):
+            group_maps = {
+                map_id
+                for map_id, row in benchmark_index.items()
+                if str(row["layout_family"]) == group
+            }
+            group_reports[group] = {
+                "map_count": len(group_maps),
+                "qualified_map_count": len(group_maps & qualified_maps),
+                "underloaded_maps": sorted(group_maps & set(underloaded)),
+            }
+        minimum_by_group = {
+            str(group): int(value)
+            for group, value in dict(
+                topology_gates["minimum_qualified_maps_by_group"]
+            ).items()
+        }
+        allowed_underloaded_groups = set(
+            map(str, topology_gates["underloaded_allowed_only_in_groups"])
+        )
+        underloaded_groups = {
+            str(benchmark_index[map_id]["layout_family"])
+            for map_id in underloaded
+        }
+        gates.update(
+            {
+                "topology_group_registry_exact": actual_groups == expected_groups,
+                "topology_group_threshold_registry_exact": (
+                    set(minimum_by_group) == expected_groups
+                    and allowed_underloaded_groups <= expected_groups
+                ),
+                "minimum_topology_qualified_map_count": len(qualified_maps)
+                >= int(topology_gates["minimum_qualified_map_count"]),
+                "minimum_topology_qualified_maps_by_group": all(
+                    int(group_reports.get(group, {}).get("qualified_map_count", 0))
+                    >= minimum
+                    for group, minimum in minimum_by_group.items()
+                ),
+                "underloaded_only_in_registered_control_groups": (
+                    underloaded_groups <= allowed_underloaded_groups
+                ),
+            }
+        )
+    passed = all(gates.values())
     return {
         "schema": REPORT_SCHEMA,
         "scientific_status": "development_only_outcome_blind_preflight",
@@ -232,15 +290,18 @@ def analyze_preflight_rows(
         "row_errors": row_errors,
         "task_summaries": task_summaries,
         "map_reports": map_reports,
+        "topology_group_reports": group_reports,
         "recommended_tasks": sorted(recommended, key=lambda row: str(row["task_id"])),
         "underloaded_maps": underloaded,
         "gates": gates,
-        "passed": all(gates.values()),
+        "passed": passed,
         "next_decision": (
-            "increase_candidate_loads_for_underloaded_maps"
-            if all(gates.values()) and underloaded
+            "register_proposal_only_candidate_coverage"
+            if passed and topology_gates
+            else "increase_candidate_loads_for_underloaded_maps"
+            if passed and underloaded
             else "register_outcome_blind_pilot_cohort"
-            if all(gates.values())
+            if passed
             else "repair_preflight_integrity_before_selection"
         ),
     }
@@ -427,6 +488,12 @@ def analyze_robuststep_map_preflight(
     dataset_root = Path(dataset).resolve()
     qualification_root = Path(qualification).resolve()
     source = _read_json(source_path)
+    predecessor_path = None
+    if source.get("predecessor_report"):
+        predecessor = dict(source["predecessor_report"])
+        predecessor_path = _registered_path(source_path, str(predecessor["path"]))
+        if sha256_file(predecessor_path) != str(predecessor["sha256"]):
+            raise ValueError("robust-step preflight predecessor SHA differs")
     formal_path = source_path.parents[1] / str(source["formal_ood_config"])
     if sha256_file(formal_path) != str(source["formal_ood_config_sha256"]):
         raise ValueError("formal OOD config SHA differs")
@@ -447,6 +514,10 @@ def analyze_robuststep_map_preflight(
         "qualification_report_sha256": sha256_file(qualification_report_path),
         "formal_ood_config_sha256": sha256_file(formal_path),
     }
+    if predecessor_path is not None:
+        report["inputs"]["predecessor_report_sha256"] = sha256_file(
+            predecessor_path
+        )
     output_root = Path(output).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     _write_json(output_root / "robuststep_map_preflight_report.json", report)

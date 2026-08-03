@@ -180,6 +180,76 @@ class StrideRobustStepTest(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertEqual(report["forbidden_outcome_fields_found"], ["controller_action"])
 
+    def test_topology_preflight_requires_qualified_noncontrol_groups(self) -> None:
+        groups = ("ultra", "articulated", "control")
+        source = {
+            "role": "stride_robuststep_topology_balanced_preflight",
+            "solver_seeds": [1],
+            "expected_map_count": 3,
+            "expected_task_count": 3,
+            "consumed_development_exceptions": [],
+            "benchmarks": [
+                {"id": f"map-{group}", "layout_family": group}
+                for group in groups
+            ],
+            "selection_rule": {
+                "minimum_mean_initial_conflicts": 10.0,
+                "target_mean_initial_conflicts": [25.0],
+                "maximum_tasks_per_map": 1,
+            },
+            "topology_group_gates": {
+                "required_groups": list(groups),
+                "minimum_qualified_map_count": 2,
+                "minimum_qualified_maps_by_group": {
+                    "ultra": 1, "articulated": 1, "control": 0,
+                },
+                "underloaded_allowed_only_in_groups": ["control"],
+            },
+        }
+        dataset = [
+            {
+                "task_id": f"task-{group}",
+                "map_id": f"map-{group}",
+                "layout_mode": group,
+                "task_seed": 1,
+                "agent_count": 20,
+            }
+            for group in groups
+        ]
+        qualification = [
+            {
+                "task_id": f"task-{group}",
+                "map_id": f"map-{group}",
+                "solver_seed": 1,
+                "agent_count": 20,
+                "status": "ok",
+                "initial_complete": True,
+                "state_fingerprint": f"state-{group}",
+                "initial_conflicts": 0 if group == "control" else 20,
+                "initial_complexity": {
+                    "conflict_pair_density": 0.01,
+                    "mean_path_cost": 12.0,
+                    "initial_low_level_expanded": 100.0,
+                },
+            }
+            for group in groups
+        ]
+        report = analyze_preflight_rows(
+            source, dataset, qualification, {"passed": True}, {"cases": []}
+        )
+        self.assertTrue(report["passed"])
+        self.assertEqual(
+            report["next_decision"], "register_proposal_only_candidate_coverage"
+        )
+        self.assertEqual(
+            report["topology_group_reports"]["control"]["qualified_map_count"], 0
+        )
+        qualification[0]["initial_conflicts"] = 0
+        report = analyze_preflight_rows(
+            source, dataset, qualification, {"passed": True}, {"cases": []}
+        )
+        self.assertFalse(report["passed"])
+
     def test_congestion_preflight_is_pinned_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
