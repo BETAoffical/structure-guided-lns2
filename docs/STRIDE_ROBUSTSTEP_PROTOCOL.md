@@ -1367,6 +1367,42 @@ baseline, reduce validation normalized repairability regret versus frozen V2,
 retain exact-best and Top-3 rates, and avoid a topology-group regression. Even
 an offline pass only permits Shadow evaluation; it cannot replace V2.
 
+### Completed repairability map/load confirmation
+
+The first reset-only sweep covered ten preregistered primary/reserve DAO maps,
+60 tasks, and 120 solver-seed jobs. It intentionally tested aggressive loads
+and found 14 invalid initializations, all `state contains an empty agent path`.
+Those failures were confined to unstable high-load combinations and no
+candidate repair, controller outcome, future state, or TTF was read. The sweep
+also showed that `arena2` remained almost conflict-free through 1800 agents
+and that `den001d` remained weak. The split-preserving replacements were
+therefore fixed as `arena2 -> den206d` for train and
+`den001d -> den011d` for validation.
+
+A fresh 48-task, 96-job confirmation then used only validated loads. All 96
+initializations completed with zero errors and passed dataset, seed-isolation,
+and semantic gates. The five effective maps contributed respectively 20
+(`brc300d`), 15 (`brc502d`), 11 (`den011d`), 16 (`den204d`), and 16
+(`den206d`) nonzero-conflict jobs, all above the minimum of eight. Registered
+loads are 900, 1300, 1200, 650, and 700 agents. Candidate and controller
+outcomes were not read. The qualification-manifest and qualification-report
+SHA-256 values are
+`cd648992025f8217e1fa66932f968bf731088e042a626d2c84e27bbbcf300eec`
+and `9b0127dbba8dded7cb41da4ab5fa864452de8a2f0cf05cc4ea88f662945e5fc3`.
+
+Auditing all 22 planned maps exposed one additional underload missed by the
+original registration: `den005d` produced a nonzero reset on at most one third
+of jobs at 500--750 agents. The statically closest unused development map was
+`ht_mansion_n`, with low-degree-cell ratio 0.04934 versus 0.05131. A first
+1000-agent check was rejected after two empty-path initializations. A fresh
+900-agent confirmation then completed 16/16 jobs with zero errors and 16
+nonzero states. Median initial conflicts were 97.5 for opposite-exchange and
+4.5 for uniform-random OD. This registers the same-train-split replacement
+`den005d -> ht_mansion_n`; the failed 1000-agent evidence remains retained but
+is not training data. The passed qualification-manifest and report hashes are
+`589a4a74ce8ecb0b65faa672e59ce291c78d5fd5f0c4c9d9e2deee20b0a0271b`
+and `3d1a191009cf7eb6b0b52756bd4189c94431d0e52e967c5fefc0dfa48cec3283`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

@@ -46,6 +46,7 @@
     "den408d": 0.10036496350364964,
     "den998d": 0.083648138154344312,
     "hrt002d": 0.12599469496021221,
+    "ht_mansion_n": 0.04933586337760911,
     "lak101d": 0.084905660377358486,
     "lak102d": 0.0770712909441233,
     "lak108d": 0.1153846153846154,
@@ -94,6 +95,8 @@
   },
   "qualified_load_rule": {
     "preflight_source_config": "configs/stride_repairability_underload_preflight_source.json",
+    "confirmation_source_config": "configs/stride_repairability_load_confirmation_source.json",
+    "reserve_extension_source_config": "configs/stride_repairability_den005_reserve_source.json",
     "uses_candidate_outcomes": false,
     "preferred_initial_conflict_interval": [5, 500],
     "minimum_nonzero_solver_seed_fraction": 0.6666666666666666,
@@ -103,6 +106,7 @@
       "arena2",
       "brc300d",
       "brc502d",
+      "den005d",
       "den001d",
       "den204d"
     ],
@@ -126,6 +130,12 @@
       "split": "validation",
       "map_sha256": "c6938e3a958375ab212be6db65f41c14fd820ef94b609fb370f04811829e9cfc",
       "static_low_degree_cell_ratio": 0.0770712909441233
+    },
+    "den005d": {
+      "id": "ht_mansion_n",
+      "split": "train",
+      "map_sha256": "d0d82f6e8becb0d2c1e61bcbfd9d94ed6d061725e38107be2c9defc8dcbfd9b4",
+      "static_low_degree_cell_ratio": 0.04933586337760911
     },
     "den001d": {
       "id": "den011d",

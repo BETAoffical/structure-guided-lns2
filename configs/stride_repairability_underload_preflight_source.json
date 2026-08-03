@@ -5,6 +5,7 @@
   "source": "https://www.movingai.com/benchmarks/dao/index.html",
   "master_seed": 20271103,
   "task_seeds": [31],
+  "solver_seeds": [1, 2],
   "task_variants": ["uniform_random", "opposite_exchange"],
   "map_archive": {
     "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
@@ -12,6 +13,7 @@
   },
   "expected_map_count": 10,
   "expected_instance_count": 60,
+  "expected_qualification_job_count": 120,
   "benchmarks": [
     {
       "id": "arena2",

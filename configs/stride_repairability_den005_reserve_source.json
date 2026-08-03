@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "role": "repairability_reset_only_reserve_extension",
+  "scientific_status": "outcome_blind_initial_pp_confirmation",
+  "dataset_revision": "stride-repairability-den005-reserve-v2",
+  "source": "https://movingai.com/benchmarks/mapf/index.html",
+  "master_seed": 20271106,
+  "task_seeds": [109, 113, 127, 131],
+  "solver_seeds": [1, 2],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://movingai.com/benchmarks/mapf/mapf-map.zip",
+    "sha256": "9da2e4c5ce03aa4e063b3a283ce874590b36cc4f31a297fe7ecb00d105abf288"
+  },
+  "expected_map_count": 1,
+  "expected_instance_count": 8,
+  "expected_qualification_job_count": 16,
+  "selection_inputs_allowed": [
+    "map_id", "task_variant", "task_seed", "agent_count",
+    "initial_conflicts", "initial_complete", "initial_pp_wall_seconds"
+  ],
+  "selection_inputs_forbidden": [
+    "candidate_repair_outcome", "selected_candidate", "controller_action",
+    "future_trajectory", "controller_ttf"
+  ],
+  "minimum_conflicting_jobs": 8,
+  "benchmarks": [
+    {
+      "id": "ht_mansion_n",
+      "primary_map_id": "den005d",
+      "research_split": "train",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "ht_mansion_n.map",
+      "member_sha256": "d0d82f6e8becb0d2c1e61bcbfd9d94ed6d061725e38107be2c9defc8dcbfd9b4",
+      "agent_counts": [900]
+    }
+  ]
+}

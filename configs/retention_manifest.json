@@ -254,6 +254,11 @@
       "purpose": "Resumable collection of the frozen base-plus-topology candidate pool under 16 paired PP seeds."
     },
     {
+      "path": "experiments/stride_repairability_preflight.py",
+      "role": "active",
+      "purpose": "Outcome-blind initial-PP load confirmation and split-preserving effective-map registration."
+    },
+    {
       "path": "experiments/stride_repairability_selection.py",
       "role": "active",
       "purpose": "Outcome-blind topology-balanced state selection with map-level train-validation isolation."
@@ -769,6 +774,11 @@
       "purpose": "CLI entry point for registered topology-balanced repairability state selection."
     },
     {
+      "path": "scripts/analyze_stride_repairability_preflight.py",
+      "role": "active",
+      "purpose": "CLI entry point for outcome-blind repairability map/load confirmation analysis."
+    },
+    {
       "path": "scripts/run_stride_boundary_runtime_optimization.py",
       "role": "active",
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
@@ -1032,6 +1042,11 @@
       "path": "tests/integration/test_stride_repairability.py",
       "role": "active",
       "contract": "Frozen 8+8 paired seeds, exact 124-feature rows, robust-pair filtering, runtime exclusion, and equal state weight."
+    },
+    {
+      "path": "tests/integration/test_stride_repairability_preflight.py",
+      "role": "active",
+      "contract": "Reset-only load confirmation, forbidden-outcome boundary, and split-preserving reserve registration."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

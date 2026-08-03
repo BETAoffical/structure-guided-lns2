@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "role": "repairability_reset_only_load_confirmation",
+  "scientific_status": "outcome_blind_initial_pp_confirmation",
+  "dataset_revision": "stride-repairability-load-confirmation-v1",
+  "source": "https://www.movingai.com/benchmarks/dao/index.html",
+  "master_seed": 20271104,
+  "task_seeds": [47, 59, 71, 83],
+  "solver_seeds": [1, 2],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
+    "sha256": "229393af31caaec732e5f4fd923940845ab056e94dadfb96b8afc24da472d3af"
+  },
+  "expected_map_count": 5,
+  "expected_instance_count": 48,
+  "expected_qualification_job_count": 96,
+  "selection_inputs_allowed": [
+    "map_id", "task_variant", "task_seed", "agent_count",
+    "initial_conflicts", "initial_complete", "initial_pp_wall_seconds"
+  ],
+  "selection_inputs_forbidden": [
+    "candidate_repair_outcome", "selected_candidate", "controller_action",
+    "future_trajectory", "controller_ttf"
+  ],
+  "minimum_conflicting_jobs_per_effective_map": 8,
+  "benchmarks": [
+    {
+      "id": "den206d",
+      "primary_map_id": "arena2",
+      "research_split": "train",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "den206d.map",
+      "member_sha256": "64757e3e8369bf95bab245fe84191d3f7256ef2ebfb1e3dac5e0bcd932b3757a",
+      "agent_counts": [700]
+    },
+    {
+      "id": "brc502d",
+      "primary_map_id": "brc502d",
+      "research_split": "train",
+      "layout_family": "dao_large_game_underload",
+      "member": "brc502d.map",
+      "member_sha256": "fba3294e4725e67662cc452882d3ce038b6f97bdfe375f24ec779fac8c140012",
+      "agent_counts": [1300]
+    },
+    {
+      "id": "brc300d",
+      "primary_map_id": "brc300d",
+      "research_split": "validation",
+      "layout_family": "dao_large_game_underload",
+      "member": "brc300d.map",
+      "member_sha256": "9bf92fe59259d815cde4fc89c54896d79bb8b5b3e7ac440fc87b64c3d0302868",
+      "agent_counts": [600, 900]
+    },
+    {
+      "id": "den011d",
+      "primary_map_id": "den001d",
+      "research_split": "validation",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "den011d.map",
+      "member_sha256": "04963d72d7ced037a734ef24609ce669bc5ffcf29cc5b73368d0604b8b8a54b6",
+      "agent_counts": [1200]
+    },
+    {
+      "id": "den204d",
+      "primary_map_id": "den204d",
+      "research_split": "validation",
+      "layout_family": "dao_mid_game_underload",
+      "member": "den204d.map",
+      "member_sha256": "bd1bcf03b5c8b70bedf2c8223578898f9d5d5da4ba460539a390143e0a8175dd",
+      "agent_counts": [650]
+    }
+  ]
+}

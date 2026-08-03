@@ -63,6 +63,7 @@ def validate_repairability_data_design(config: dict[str, Any]) -> None:
         "arena2",
         "brc300d",
         "brc502d",
+        "den005d",
         "den001d",
         "den204d",
     }:
@@ -71,6 +72,10 @@ def validate_repairability_data_design(config: dict[str, Any]) -> None:
     if (
         load_rule.get("preflight_source_config")
         != "configs/stride_repairability_underload_preflight_source.json"
+        or load_rule.get("confirmation_source_config")
+        != "configs/stride_repairability_load_confirmation_source.json"
+        or load_rule.get("reserve_extension_source_config")
+        != "configs/stride_repairability_den005_reserve_source.json"
         or bool(load_rule.get("uses_candidate_outcomes"))
         or list(load_rule.get("preferred_initial_conflict_interval") or ())
         != [5, 500]
