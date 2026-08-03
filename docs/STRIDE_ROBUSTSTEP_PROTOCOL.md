@@ -321,6 +321,31 @@ Artifact SHA-256 values:
 - confirmation report:
   `da1d67f04aee05136729c032ed068962ecf4175a593cb0ceee5266e342507c5b`.
 
+### Post-hoc failure diagnostic
+
+An explicitly post-hoc inspection used the same completed outcomes only to
+explain the failed gate; it cannot tune or promote a replacement score. Across
+all 16 seeds, adding the 0.10 no-progress penalty changed the selected action
+in only 2/48 states (4.17 percent). Across the two independent eight-seed
+halves it changed 5/96 selections (5.21 percent). It changed no compact-map or
+low-conflict full-sample action; both full-sample changes occurred in the
+ultra-compact/high-conflict subset.
+
+On cross-half evaluation, the penalty reduced mean immediate quality by
+0.00249 while changing mean no-progress probability by exactly zero. Thus the
+failure is not evidence that 0.10 was merely the wrong coefficient. The binary
+no-progress term is usually identical among leading candidates and provides
+too little ranking resolution; in the few states where it changes an action,
+the apparent risk advantage does not transfer across PP seeds. Further tuning
+of this scalar penalty on the confirmation cohort is prohibited.
+
+The next safe investigation must leave V2 active and be diagnostic-only. It
+should measure frozen-V2 action headroom against the 16-seed immediate-quality
+distribution and separate representation error from irreducible PP-seed
+uncertainty. A new learned successor requires a separately registered design
+and new confirmation data; the reserved nine-map training expansion is not
+opened by this failed result.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
