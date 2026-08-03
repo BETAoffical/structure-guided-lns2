@@ -16,6 +16,10 @@ FORBIDDEN_OUTCOME_FIELDS = {
     "controller_action",
     "controller_repair_outcome",
 }
+PREFLIGHT_ROLES = {
+    "stride_robuststep_outcome_blind_load_preflight",
+    "stride_robuststep_outcome_blind_load_extension",
+}
 
 
 def _mean(values: list[float]) -> float:
@@ -29,7 +33,7 @@ def analyze_preflight_rows(
     qualification_report: dict[str, Any],
     formal_ood: dict[str, Any],
 ) -> dict[str, Any]:
-    if source.get("role") != "stride_robuststep_outcome_blind_load_preflight":
+    if source.get("role") not in PREFLIGHT_ROLES:
         raise ValueError("unexpected robust-step preflight source role")
     expected_seeds = set(map(int, source["solver_seeds"]))
     expected_task_ids = {str(row["task_id"]) for row in dataset_rows}

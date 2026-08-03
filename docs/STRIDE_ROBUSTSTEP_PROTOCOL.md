@@ -138,7 +138,21 @@ Artifact SHA-256 values:
 - qualification report:
   `16c8f15c02478a3ea5bebeebc5f262a8534e4a9e909caff0410a2cdf943c9efd`;
 - outcome-blind analysis report:
-  `bff0452ee87994dd8bcdcbbe486ad7d3ece2775a40c0640a717d86bae20b7cb80`.
+  `bff0452ee87994dd8bcdcbe486ad7d3ece2775a40c0640a717d86bae20b7cb80`.
+
+### Registered maximum-prefix load extension
+
+The six underloaded maps receive a final random-scenario load preflight at 750
+and 1,000 agents. Both random scenario files contain exactly 1,000 available
+start/goal pairs, so 1,000 is the largest reproducible prefix and no larger
+agent count is valid for these files. Scenarios 6 and 12 and solver seeds 1--4
+remain unchanged, producing 24 tasks and 96 reset-only jobs.
+
+The same outcome-blind conflict targets and selection rule are retained. If a
+map remains below mean initial conflict 10 at the 1,000-agent prefix, further
+agent-count scaling is stopped for that map. Its next candidate must instead
+use a separately preregistered congestion-oriented scenario construction; it
+must not be admitted to training as a zero-conflict map.
 
 ## Promotion boundary
 
