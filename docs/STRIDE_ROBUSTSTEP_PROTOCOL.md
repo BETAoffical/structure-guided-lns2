@@ -106,6 +106,40 @@ If no task reaches 10, it reports the highest-conflict task as an underloaded
 fallback and requires a higher-load preflight rather than silently accepting
 it. Ties prefer lower agent count, lower scenario index, then task ID.
 
+### Completed map/load preflight result
+
+All 136 registered reset jobs completed with zero errors, timeouts, incomplete
+states, or semantic inconsistencies. The analyzer read no controller action or
+repair outcome, and the only formal-OOD overlap was the preregistered consumed
+development exception `room-64-64-8`. The integrity report therefore passed.
+
+The scientific load result did not permit immediate Pilot construction. Only
+44/136 resets had any initial conflict, and six of eight maps were underloaded:
+`Berlin_1_256`, `Boston_0_256`, `Paris_1_256`, `brc202d`, `ost003d`, and
+`warehouse-20-40-10-2-1`. Most street/game tasks had exactly zero conflicts;
+even the best 600-agent warehouse task averaged only 0.5.
+
+The two useful maps reached the registered moderate/high targets as follows:
+
+- `maze-128-128-2`, random-6: 350 agents averaged 49.75 conflicts (20--118),
+  while 400 averaged 70.75 (24--182);
+- `room-64-64-8`, random-6: 400 agents averaged 52.25 conflicts (36--84),
+  while 500 averaged 170.0 (128--219).
+
+Room random-12 at 600 agents averaged 515 conflicts and is a useful extreme
+stress case, but it is not selected as a target-200 training task. The next
+safe action is a preregistered load/scenario extension for the six underloaded
+maps; they must not enter training merely to increase map count.
+
+Artifact SHA-256 values:
+
+- qualification manifest:
+  `7b5a186462360cd4a356a4e01d091a004fbc41721edbc104a4bddf31d7ca9885`;
+- qualification report:
+  `16c8f15c02478a3ea5bebeebc5f262a8534e4a9e909caff0410a2cdf943c9efd`;
+- outcome-blind analysis report:
+  `bff0452ee87994dd8bcdcbbe486ad7d3ece2775a40c0640a717d86bae20b7cb80`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
