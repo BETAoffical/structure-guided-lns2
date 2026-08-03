@@ -35,6 +35,7 @@ REPORT_SCHEMA = "lns2.stride.topology_anchor_quality_report.v1"
 
 ANCHOR_PROTOCOL = {
     "quality_name": "topology-anchor",
+    "scientific_status": "paired_four_seed_immediate_quality_pilot",
     "trial_schema": TRIAL_SCHEMA,
     "state_schema": STATE_SCHEMA,
     "collection_schema": COLLECTION_SCHEMA,
@@ -51,7 +52,7 @@ ANCHOR_PROTOCOL = {
 def _quality_registered_path(project_root: Path, artifact: dict[str, Any]) -> Path:
     path = (project_root / str(artifact["path"])).resolve()
     if sha256_file(path) != str(artifact["sha256"]):
-        raise ValueError(f"topology-anchor quality input SHA differs: {artifact['path']}")
+        raise ValueError(f"topology quality input SHA differs: {artifact['path']}")
     return path
 
 
@@ -339,6 +340,12 @@ def _collect_topology_quality_pilot(
     augmented_label = protocol["augmented_label"]
     base_and_augmented = f"base_and_{augmented_label}"
     augmented_only = f"{augmented_label}_only"
+    collection_trial_indices = tuple(
+        map(int, config.get("collection_trial_indices", config["trial_indices"]))
+    )
+    expected_collection_outcome_count = int(
+        config.get("expected_collection_outcome_count", config["expected_outcome_count"])
+    )
     project_root, inputs = _quality_inputs(config_path, config)
     if _read_json(inputs["coverage_report"]).get("passed") is not True:
         raise ValueError(f"quality Pilot requires passed {quality_name} coverage")
@@ -385,7 +392,7 @@ def _collect_topology_quality_pilot(
             state_id: [str(row["candidate_id"]) for row in rows]
             for state_id, rows in sorted(candidates_by_state.items())
         },
-        "trial_indices": list(config["trial_indices"]),
+        "trial_indices": list(collection_trial_indices),
     }
     identity = _fingerprint(identity_payload)
     output_root = Path(output).resolve()
@@ -404,7 +411,7 @@ def _collect_topology_quality_pilot(
             {
                 "state_row": row,
                 "candidates": candidates_by_state[state_id],
-                "trial_indices": config["trial_indices"],
+                "trial_indices": list(collection_trial_indices),
                 "dataset_root": str((project_root / str(config["dataset_root"])).resolve()),
                 "dataset_row": dataset_rows[task_id],
                 "environment": runtime["environment"],
@@ -458,7 +465,7 @@ def _collect_topology_quality_pilot(
             identity=identity,
             state_id=state_id,
             candidate_ids=[str(row["candidate_id"]) for row in candidates_by_state[state_id]],
-            trial_indices=tuple(map(int, config["trial_indices"])),
+            trial_indices=collection_trial_indices,
             state_schema=protocol["state_schema"],
         ):
             errors.append({"state_id": state_id, "error": "invalid completed artifact"})
@@ -481,10 +488,10 @@ def _collect_topology_quality_pilot(
         "errors": errors,
         "candidate_count": candidate_count,
         "trial_count": len(all_trials),
-        "expected_trial_count": int(config["expected_outcome_count"]),
+        "expected_trial_count": expected_collection_outcome_count,
         "new_state_count": sum(row["status"] == "ok" for row in results),
         "resumed_state_count": sum(row["status"] == "resumed" for row in results),
-        "complete": complete and len(all_trials) == int(config["expected_outcome_count"]),
+        "complete": complete and len(all_trials) == expected_collection_outcome_count,
     }
     _write_json(output_root / "collection_report.json", report)
     _write_json(
@@ -766,7 +773,7 @@ def _analyze_topology_quality_pilot(
     passed = all(gates.values())
     report = {
         "schema": protocol["report_schema"],
-        "scientific_status": "paired_four_seed_immediate_quality_pilot",
+        "scientific_status": protocol["scientific_status"],
         "formal_speed_claim": False,
         "training_allowed": False,
         "runtime_used_in_label": False,

@@ -968,6 +968,41 @@ diagnostic only. A pass permits an eight-seed confirmation; it does not permit
 training, runtime export, V2 replacement, or a TTF claim. A failure terminates
 this topology-boundary revision line.
 
+### Completed fresh-state topology-boundary quality Pilot
+
+All 18 states and all 1,388 registered candidate/seed outcomes completed with
+zero errors. The boundary additions strictly beat the frozen V2 pool on 13/18
+states (72.22%), achieved mean normalized pool gain 0.2180, entered the Top-3
+on 77.78% of states, and had mean best-boundary normalized regret 0.1304. Every
+gate passed. Strict wins were 7/8 on articulated states, 5/6 on ultra-bottleneck
+states, and 1/4 on controls. Half-versus-half pairwise consistency was 0.8146,
+Top-3 overlap 0.8333, exact winner agreement 0.6111, and cross-half normalized
+regret 0.0794. This is strong current-step evidence but still not a training,
+runtime, or TTF result.
+
+The collection report, repair trials, and analysis report SHA-256 values are
+`2057c75a9fd72b72c5308432dcfeb972069dddace8f9f9b352240855be57f8c7`,
+`bb54473d4306b3d538064d8f82b319407948a6922c6a65ab683b2ea4b4b288fe`,
+and `41486ded4ce598850722c219588ce613b25b4aa356dee0088ce41cfa264c66e3`.
+
+### Registered eight-seed topology-boundary quality confirmation
+
+`stride-topoboundary-quality-confirmation-v1` preserves the same 18 states,
+347 candidates, label, and outcome-free selection. It collects only previously
+unseen trial indices 4--7 (1,388 new outcomes) and combines them with registered
+indices 0--3 for an exact 2,776-outcome product. The unseen half must
+independently pass every original quality gate, so the known first-half result
+cannot hide failure under new PP seeds. The full eight-seed aggregate must also
+pass the original gates.
+
+The two four-seed halves additionally require pairwise consistency at least
+0.75, mean Top-3 overlap at least 0.75, and mean cross-half normalized regret at
+most 0.15. Exact winner agreement remains reported but is not a gate. Runtime,
+future repair rounds, Cost-to-Go, training, runtime export, V2 replacement, and
+TTF claims remain forbidden. Only a complete pass permits registration of the
+boundary-aware training-data design. The frozen confirmation-config SHA-256 is
+`185b6d83b557ba19680a7b2d6cd3d8795b02bdba217291b4bdbff0ad7efad177`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

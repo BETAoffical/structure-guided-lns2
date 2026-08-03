@@ -18,6 +18,7 @@ REPORT_SCHEMA = "lns2.stride.topology_boundary_quality_report.v1"
 
 BOUNDARY_PROTOCOL = {
     "quality_name": "topology-boundary",
+    "scientific_status": "paired_four_seed_immediate_quality_pilot",
     "trial_schema": TRIAL_SCHEMA,
     "state_schema": STATE_SCHEMA,
     "collection_schema": COLLECTION_SCHEMA,
