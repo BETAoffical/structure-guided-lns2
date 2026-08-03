@@ -199,6 +199,16 @@
       "purpose": "Paired four-seed current-step quality Pilot and action-uncertainty analysis for topology-anchor candidates."
     },
     {
+      "path": "experiments/stride_topology_anchor_failure.py",
+      "role": "reproducibility",
+      "purpose": "Read-only post-hoc decomposition of the registered topology-anchor quality failure."
+    },
+    {
+      "path": "experiments/stride_topology_boundary_coverage.py",
+      "role": "active",
+      "purpose": "Proposal-only audit of boundary-oriented size-16 topology candidates after the anchor failure."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -649,6 +659,16 @@
       "purpose": "CLI entry point for the paired STRIDE topology-anchor immediate-quality Pilot."
     },
     {
+      "path": "scripts/run_stride_topology_anchor_failure.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for the read-only topology-anchor failure decomposition."
+    },
+    {
+      "path": "scripts/run_stride_topology_boundary_coverage.py",
+      "role": "active",
+      "purpose": "CLI entry point for the registered proposal-only topology-boundary audit."
+    },
+    {
       "path": "scripts/run_stride_stage4r_high_load.py",
       "role": "active",
       "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
@@ -816,7 +836,7 @@
     {
       "path": "tests/runtime/test_topology_candidates.py",
       "role": "active",
-      "contract": "Deterministic topology-event pair set cover, exact-size fill, and additive deduplication semantics."
+      "contract": "Deterministic topology pair-cover and boundary candidates, exact-size fill, empty-relevance handling, and additive deduplication."
     },
     {
       "path": "tests/solver/test_python_env.py",
@@ -867,6 +887,11 @@
       "path": "tests/integration/test_stride_topology_anchor_quality.py",
       "role": "active",
       "contract": "Paired PP seeds, current-step mean-np100 label, complete candidate products, and non-promotion boundary."
+    },
+    {
+      "path": "tests/integration/test_stride_topology_boundary_coverage.py",
+      "role": "active",
+      "contract": "Post-hoc decomposition boundary plus capped, deterministic, proposal-only topology-boundary revision."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",

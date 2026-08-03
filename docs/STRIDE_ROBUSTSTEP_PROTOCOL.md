@@ -849,6 +849,30 @@ of a fresh topology-balanced cohort; it does not permit repair on these reused
 states, training, runtime export, or a TTF claim. A failure terminates this
 topology-specific proposal line.
 
+### Completed topology-boundary proposal audit
+
+The proposal-only audit passed every frozen gate and reproduced byte-for-byte
+on an independent run. It retained 452 candidates across 24 states (17--20 per
+state), of which 21 were unique boundary additions. Eight states had no relevant
+topology event and correctly received no addition. Every generated boundary
+candidate had size 16; proposal repetitions, state fingerprints, task pairing,
+and candidate caps all passed. No PP repair or controller action was executed.
+
+Mean articulation incident coverage was 0.9793 with boundary ratio 0.9300;
+low-degree incident coverage was 1.0 with boundary ratio 0.9612. On the failed
+ultra-bottleneck group, the two boundary ratios were 0.9086 and 0.9833. Against
+the outcome-free base frontier, the revised candidates increased global event
+incidence by 0.4066, global boundary ratio by 0.1032, and conflict-component
+reach by 0.3066 on average. Thus the revision successfully changes proposal
+shape without sacrificing conflict reach, but repair quality remains unknown.
+
+The deterministic report, state-row, and candidate-row SHA-256 values are
+`dcc8320c02a7769764b683f3d4efcf2fcc861d7500185b5e1ccfd54e8e96f582`,
+`4084e313e4e59cb96f1fbabd7cbbfd01a083376b970e5466508a66aee5d657f9`,
+and `a482eaa598b6563267b3d475084de6b677981eec06e1d3e0b3d9fdc0480b3134`.
+The next permitted step is an outcome-blind fresh-task preflight. The consumed
+24 states may not be used to claim boundary repair quality.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

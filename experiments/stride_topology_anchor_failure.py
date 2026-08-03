@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -9,14 +8,11 @@ from experiments._common import sha256_file
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 from experiments.stride_lns import assign_structure_scores
 from experiments.stride_topology_anchor_quality import TRIAL_SCHEMA
+from experiments.stride_topology_coverage import _mean
 
 
 CONFIG_SCHEMA = "lns2.stride.topology_anchor_failure_config.v1"
 REPORT_SCHEMA = "lns2.stride.topology_anchor_failure_report.v1"
-
-
-def _mean(values: list[float]) -> float:
-    return math.fsum(values) / len(values) if values else 0.0
 
 
 def _registered(project_root: Path, artifact: dict[str, Any]) -> Path:

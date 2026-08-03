@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ from typing import Any
 from experiments.stride_topology_anchor_coverage import _base_config
 from experiments.stride_topology_coverage import (
     _collect_topology_coverage,
+    _mean,
     analyze_topology_coverage_rows,
     validate_topology_coverage_config,
 )
@@ -20,10 +20,6 @@ from lns2_selector.runtime.topology_candidates import (
 
 CONFIG_SCHEMA = "lns2.stride.topology_boundary_coverage_config.v1"
 REPORT_SCHEMA = "lns2.stride.topology_boundary_coverage_report.v1"
-
-
-def _mean(values: list[float]) -> float:
-    return math.fsum(values) / len(values) if values else 0.0
 
 
 def validate_topology_boundary_coverage_config(config: dict[str, Any]) -> None:
