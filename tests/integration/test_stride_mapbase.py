@@ -18,6 +18,7 @@ from experiments.stride_maprank import (
     validate_maprank_training_config,
 )
 from experiments.stride_maprank_evaluation import _training_evidence
+from experiments.stride_maprank_raw_ttf import CONTROLLERS, _schedule
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -203,3 +204,27 @@ def test_maprank_shadow_accepts_only_offline_gated_training_report() -> None:
     assert path == report_path.resolve()
     assert report["controller_id"] == "stride-maprank-v1"
     assert report["fresh_development_eligible"] is True
+
+
+def test_maprank_raw_ttf_schedule_is_strictly_rotated_and_complete() -> None:
+    cohorts = [
+        {"id": "maze300", "tasks": ["maze-a", "maze-b"]},
+        {"id": "room500", "tasks": ["room-a", "room-b"]},
+    ]
+    schedule = _schedule(cohorts, (1, 2, 3, 4))
+    assert len(schedule) == 48
+    assert {row["controller"] for row in schedule} == set(CONTROLLERS)
+    keys = {}
+    for row in schedule:
+        key = (row["cohort_id"], row["task_id"], row["solver_seed"])
+        keys.setdefault(key, []).append(row)
+    assert len(keys) == 16
+    assert all(len(rows) == 3 for rows in keys.values())
+    assert {
+        tuple(row["controller"] for row in rows)
+        for rows in keys.values()
+    } == {
+        CONTROLLERS,
+        CONTROLLERS[1:] + CONTROLLERS[:1],
+        CONTROLLERS[2:] + CONTROLLERS[:2],
+    }

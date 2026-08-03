@@ -11,6 +11,7 @@ from experiments.stride_maprank import (
     TRAINING_REPORT_SCHEMA,
     validate_maprank_evaluation_config,
 )
+from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_stage3 import _project_path
 
 
@@ -62,11 +63,6 @@ def _bundle_paths(root: Path, config: dict[str, Any]) -> dict[str, Path]:
         ):
             raise ValueError("MapRank Shadow requires a diagnostic-only bundle")
     return paths
-
-
-def _dataset_tasks(dataset: Path, split: str) -> dict[str, dict[str, Any]]:
-    rows = _read_jsonl(dataset / split / "manifest.jsonl")
-    return {str(row["task_id"]): row for row in rows}
 
 
 def run_maprank_shadow(
