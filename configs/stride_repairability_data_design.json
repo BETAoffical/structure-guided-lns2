@@ -1,0 +1,160 @@
+{
+  "schema": "lns2.stride.repairability_data_design.v1",
+  "scientific_status": "preregistered_before_new_candidate_repair_outcomes",
+  "controller_id": "stride-augcontrol-v1",
+  "pilot_state_count": 240,
+  "source_policies": ["official_adaptive", "v2-full"],
+  "maximum_states_per_episode": 2,
+  "minimum_states_per_map": 8,
+  "selection_inputs": [
+    "map_id",
+    "source_policy",
+    "decision_stage",
+    "before_conflicts",
+    "agent_count",
+    "static_low_degree_cell_ratio",
+    "before_fingerprint"
+  ],
+  "forbidden_selection_inputs": [
+    "candidate_repair_outcome",
+    "candidate_conflicts_after",
+    "candidate_runtime",
+    "selected_candidate",
+    "future_trajectory",
+    "controller_ttf"
+  ],
+  "topology_boundary_threshold": 0.06,
+  "static_low_degree_cell_ratio_by_map": {
+    "arena2": 0.020607955246596192,
+    "brc300d": 0.07882623705408516,
+    "brc502d": 0.052979011509817195,
+    "den001d": 0.023946037099494097,
+    "den005d": 0.051312717125121018,
+    "den009d": 0.048853439680957129,
+    "den011d": 0.0403970770715566,
+    "den020d": 0.063507414571244356,
+    "den101d": 0.051470588235294115,
+    "den201d": 0.065055762081784388,
+    "den202d": 0.0657672849915683,
+    "den203d": 0.053252187143400534,
+    "den204d": 0.026619964973730297,
+    "den206d": 0.0405018710103456,
+    "den207d": 0.053775743707093822,
+    "den308d": 0.054199683042789222,
+    "den401d": 0.0454783519553073,
+    "den404d": 0.094972067039106142,
+    "den408d": 0.10036496350364964,
+    "den998d": 0.083648138154344312,
+    "hrt002d": 0.12599469496021221,
+    "lak101d": 0.084905660377358486,
+    "lak102d": 0.0770712909441233,
+    "lak108d": 0.1153846153846154,
+    "lak110d": 0.1130952380952381,
+    "ost101d": 0.0557357711589502,
+    "ost102d": 0.076305220883534142
+  },
+  "conflict_bands": ["1_10", "11_100", "101_500", "501_plus"],
+  "required_conflict_band_coverage": ["1_10", "11_100", "101_500"],
+  "minimum_101_plus_state_fraction": 0.10,
+  "balance_gates": {
+    "source_policy_fraction_minimum": 0.45,
+    "source_policy_fraction_maximum": 0.55,
+    "both_source_policies_per_map": true,
+    "topology_group_fraction_minimum": 0.40,
+    "early_middle_late_coverage_required": true,
+    "all_registered_maps_required": true
+  },
+  "map_split": {
+    "train": [
+      "arena2",
+      "brc502d",
+      "den005d",
+      "den009d",
+      "den101d",
+      "den201d",
+      "den203d",
+      "den207d",
+      "den308d",
+      "den404d",
+      "den408d",
+      "den998d",
+      "hrt002d",
+      "lak108d",
+      "lak110d",
+      "ost102d"
+    ],
+    "validation": [
+      "brc300d",
+      "den001d",
+      "den020d",
+      "den202d",
+      "den204d",
+      "lak101d"
+    ]
+  },
+  "qualified_load_rule": {
+    "preflight_source_config": "configs/stride_repairability_underload_preflight_source.json",
+    "uses_candidate_outcomes": false,
+    "preferred_initial_conflict_interval": [5, 500],
+    "minimum_nonzero_solver_seed_fraction": 0.6666666666666666,
+    "selection": "per_map_task_variant_and_task_seed_choose_smallest_agent_count_with_median_initial_conflicts_in_interval_and_nonzero_seed_fraction",
+    "fallback": "registered_count_with_median_initial_conflicts_closest_to_50",
+    "underloaded_maps_require_new_reset_only_preflight": [
+      "arena2",
+      "brc300d",
+      "brc502d",
+      "den001d",
+      "den204d"
+    ],
+    "replacement_rule": "replace_only_if_no_registered_load_supplies_eight_conflicting_source_states_using_the_fixed_same_split_reserve"
+  },
+  "same_split_reserves": {
+    "arena2": {
+      "id": "den206d",
+      "split": "train",
+      "map_sha256": "64757e3e8369bf95bab245fe84191d3f7256ef2ebfb1e3dac5e0bcd932b3757a",
+      "static_low_degree_cell_ratio": 0.0405018710103456
+    },
+    "brc502d": {
+      "id": "ost101d",
+      "split": "train",
+      "map_sha256": "0bacd711463710ceac08e794f2a43e6a4ea3abdc687fb47a5cd1b4678b696d99",
+      "static_low_degree_cell_ratio": 0.0557357711589502
+    },
+    "brc300d": {
+      "id": "lak102d",
+      "split": "validation",
+      "map_sha256": "c6938e3a958375ab212be6db65f41c14fd820ef94b609fb370f04811829e9cfc",
+      "static_low_degree_cell_ratio": 0.0770712909441233
+    },
+    "den001d": {
+      "id": "den011d",
+      "split": "validation",
+      "map_sha256": "04963d72d7ced037a734ef24609ce669bc5ffcf29cc5b73368d0604b8b8a54b6",
+      "static_low_degree_cell_ratio": 0.0403970770715566
+    },
+    "den204d": {
+      "id": "den401d",
+      "split": "validation",
+      "map_sha256": "6f667af84e1403d84463e4af45b1cad3266ce725588e426cb4552c696950216e",
+      "static_low_degree_cell_ratio": 0.0454783519553073
+    }
+  },
+  "formal_ood_maps_excluded": [
+    "den312d",
+    "lak303d",
+    "maze-32-32-4",
+    "maze-128-128-1",
+    "maze-128-128-10",
+    "random-32-32-10",
+    "random-64-64-10",
+    "random-64-64-20",
+    "room-64-64-8",
+    "room-64-64-16",
+    "warehouse-10-20-10-2-2",
+    "warehouse-20-40-10-2-2"
+  ],
+  "map_level_split_required": true,
+  "repair_outcome_blind_selection": true,
+  "formal_speed_claim": false
+}

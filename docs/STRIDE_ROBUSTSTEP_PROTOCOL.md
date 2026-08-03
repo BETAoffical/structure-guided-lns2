@@ -1262,6 +1262,111 @@ next action-preserving feature-cache optimization; failing selects the map-only
 gate. This choice does not replace frozen V2. The frozen config SHA-256 is
 `ffaad8f216c264759e0cb23a1e5d15df418878b4e8d63a49569874a71075eb8d`.
 
+### Completed run-to-completion boundary gate ablation
+
+All 54 executions completed, covering 18 strictly paired states under all three
+controllers with zero execution errors, invalid actions, initial-state
+mismatches, semantic mismatches, or fingerprint mismatches. Every controller
+solved all 18 states. Mean reset-inclusive raw wall TTF was 13.9051 seconds for
+frozen `v2-full`, 14.2713 seconds for the map-only gate, and 13.8851 seconds
+for `stride-boundary-stall-guard-v1`. The stall guard therefore improved raw
+TTF by 2.71% relative to the map-only gate and passed the registered 2% gate;
+it was only 0.14% faster than V2 and is not a replacement result.
+
+Mean repair rounds were 125.72 for V2, 119.44 for the map-only gate, and
+118.94 for the stall guard. The stall guard rejected 21 topology analyses
+after five non-improving rounds while still executing 191 boundary-selected
+repairs. It improved raw TTF relative to the map-only route in every registered
+subgroup: 1.54% on articulated, 3.09% on low-articulation control, and 4.89%
+on ultra-bottleneck states. Its lower PP time and fewer repairs were largely
+offset by controller/topology overhead, explaining why its raw-TTF result was
+essentially tied with V2. The stall guard is retained only as the augmented
+pool collection route. The reproduced report SHA-256 is
+`225de3d0cf0a5795672c0df21645858bebe121c87d00b4e2631d1539cb20f1fd`.
+
+### Completed action-preserving feature-path audit
+
+The audit replayed the first three decisions of all 18 stall-guard episodes,
+for 54 real decision samples. It compared the Python reference 124-feature
+extractor, Python incremental 124-feature extractor, native dense 124-feature
+extractor, and the deployed native dense projection onto V2's 86 required
+features. All four paths produced identical rankings and selected actions;
+the largest feature difference from the reference was
+`1.3322676295501878e-15`, below the registered `1e-12` tolerance.
+
+Median whole-audit times were 5.6547, 6.8508, 0.3020, and 0.2940 seconds,
+respectively. The already deployed native 86-feature projection is the fastest
+equivalent path: approximately 2.6% faster than native full-124 extraction and
+19.2 times faster than the Python reference. Feature extraction accounted for
+8.40% of mean raw TTF in the preceding stall-guard experiment. Consequently,
+the implementation is retained unchanged; there is no candidate/action change
+and no standalone formal speed claim. The audit config SHA-256 is
+`9a0a5d36b2bae96d60aaa13459894db449c1e8a1c5fafb4c32bf4d45e476bbc5`.
+
+### Preregistered augmented-pool repairability label
+
+The successor line is independently named `stride-augcontrol-v1`; it is not a
+new version of V2, V3, or `stride-quality-v1`. Its label schema is
+`lns2.stride.repairability_label.v1`. The frozen candidate pool preserves all
+original Target, Collision, and Random requests at sizes 4, 8, and 16, then
+adds at most two size-16 `stride-topoboundary-v1` candidates with a four-agent
+core. Deduplication may attach topology provenance to an existing base
+candidate, but may neither remove nor mutate a base action. The total pool is
+capped at 20 actions.
+
+Each state/action pair is repaired under exactly 16 deterministic PP seeds.
+The seed for a trial index is paired across all actions in that state, while
+the 16 indices are distinct and split into independent halves 0--7 and 8--15.
+For action `a` and seed `s`, the current-step score is
+
+`q(a,s) = (conflicts_before - conflicts_after) / max(1, conflicts_before)
+           - 0.02 * post_structure_percentile(a,s)`.
+
+The structure term is the mean within-state, within-seed midrank percentile of
+post-repair largest-component ratio, conflict-edge density, conflict-event
+density, and degree concentration; lower is better. A directed pair is kept
+only when one action wins at least 12/16 paired seeds, its absolute mean score
+advantage is at least 0.02, and both eight-seed halves have the same mean
+direction. All other pairs are explicitly uncertain and excluded. The two
+orientations of all retained pairs from one state sum to weight one, preventing
+states with many candidate combinations from dominating training.
+
+The label consumes the exact frozen 124-dimensional realized-feature schema.
+Repair runtime, TTF, future repair rounds, Cost-to-Go, Receding-Q, and any
+controller outcome are forbidden label inputs. Collection is state-resumable,
+stores the complete paired product, and verifies base-pool preservation before
+running PP. This section registers only the label and collection contract; no
+model has yet been trained and no speed or replacement claim is made.
+
+The first registered cohort contains 240 states from equal `official_adaptive`
+and frozen-`v2-full` source policies. Sixteen DAO maps are assigned to train
+and six disjoint DAO maps to validation before any new candidate repair is
+run. State sampling may use only the pre-action map identity, source policy,
+decision stage, initial conflicts, agent count, static low-degree ratio, and a
+hash tie break. Each effective map must contribute at least eight states; both
+sides of the 6% topology threshold must contribute at least 40%, all three
+decision stages must occur, and at most two states may come from one episode.
+
+Earlier reset-only qualification found five nominal maps underloaded. Their
+agent ladders are therefore re-qualified before collection. Each has one
+same-split, checksum-pinned DAO reserve selected from static topology alone;
+replacement is allowed only if the primary cannot provide eight conflicting
+source states. Candidate repairs, selected actions, runtime, future states,
+and TTF cannot influence this resolution. The 12 formal MovingAI/OOD maps
+(`random`, `maze`, `room`, `warehouse`, `den312d`, and `lak303d`) remain
+excluded from selection, label construction, and training.
+
+If the label pilot passes its integrity gates, the only primary trainable model
+is `stride-augcontrol-v1`. It uses the same fixed
+`HistGradientBoostingClassifier` capacity and 124-feature/147-pairwise input
+construction as the controlled Stage-4 comparison, with no hyperparameter
+tuning. Validation is map-held-out. Frozen V2 is rescored on the identical
+augmented pool, while base-pool-only and conflict-only-label variants remain
+named ablations. The primary model must beat the weighted pairwise-majority
+baseline, reduce validation normalized repairability regret versus frozen V2,
+retain exact-best and Top-3 rates, and avoid a topology-group regression. Even
+an offline pass only permits Shadow evaluation; it cannot replace V2.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

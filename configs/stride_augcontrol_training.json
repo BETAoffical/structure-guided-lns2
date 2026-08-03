@@ -1,0 +1,58 @@
+{
+  "schema": "lns2.stride.augcontrol_training_config.v1",
+  "scientific_status": "preregistered_before_repairability_label_outcomes",
+  "controller_id": "stride-augcontrol-v1",
+  "label_schema": "lns2.stride.repairability_label.v1",
+  "feature_schema": "lns2.realized_features.v2",
+  "base_feature_dimension": 124,
+  "pairwise_input": {
+    "candidate_features": "delta",
+    "shared_state_context": "mean",
+    "expected_input_dimension": 147
+  },
+  "model_class": "sklearn.ensemble.HistGradientBoostingClassifier",
+  "model_parameters": {
+    "early_stopping": false,
+    "l2_regularization": 0.1,
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "random_state": 20260714
+  },
+  "training_split": "train",
+  "validation_split": "validation",
+  "split_unit": "map",
+  "sample_weighting": "equal_total_weight_per_state",
+  "hyperparameter_tuning": false,
+  "primary_offline_metrics": [
+    "weighted_pairwise_accuracy",
+    "exact_best_rate",
+    "top3_hit_rate",
+    "mean_normalized_repairability_regret"
+  ],
+  "comparators": [
+    "frozen-v2-full-on-identical-augmented-pool",
+    "stride-augcontrol-v1/base-pool-only-ablation",
+    "stride-augcontrol-v1/conflict-only-label-ablation"
+  ],
+  "offline_gates": {
+    "minimum_validation_maps": 6,
+    "minimum_pairwise_accuracy_gain_over_weighted_majority": 0.03,
+    "minimum_relative_normalized_regret_improvement_over_frozen_v2": 0.05,
+    "absolute_normalized_regret_improvement_alternative": 0.02,
+    "top3_hit_rate_noninferiority_tolerance": 0.01,
+    "exact_best_rate_noninferiority_tolerance": 0.01,
+    "maximum_topology_group_normalized_regret_degradation": 0.03
+  },
+  "forbidden_training_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome"
+  ],
+  "formal_ood_data_allowed": false,
+  "default_replacement_allowed": false
+}

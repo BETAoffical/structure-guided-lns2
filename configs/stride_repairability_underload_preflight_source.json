@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "role": "repairability_reset_only_underload_and_reserve_preflight",
+  "dataset_revision": "stride-repairability-underload-preflight-v1",
+  "source": "https://www.movingai.com/benchmarks/dao/index.html",
+  "master_seed": 20271103,
+  "task_seeds": [31],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "map_archive": {
+    "url": "https://www.movingai.com/benchmarks/dao/dao-map.zip",
+    "sha256": "229393af31caaec732e5f4fd923940845ab056e94dadfb96b8afc24da472d3af"
+  },
+  "expected_map_count": 10,
+  "expected_instance_count": 60,
+  "benchmarks": [
+    {
+      "id": "arena2",
+      "layout_family": "dao_large_game_underload",
+      "member": "arena2.map",
+      "member_sha256": "9c8255e89179fa1b8098f5744d9392ed78de479a08fda8fb170c05a10f22ce2a",
+      "agent_counts": [800, 1200, 1800]
+    },
+    {
+      "id": "brc300d",
+      "layout_family": "dao_large_game_underload",
+      "member": "brc300d.map",
+      "member_sha256": "9bf92fe59259d815cde4fc89c54896d79bb8b5b3e7ac440fc87b64c3d0302868",
+      "agent_counts": [600, 900, 1300]
+    },
+    {
+      "id": "brc502d",
+      "layout_family": "dao_large_game_underload",
+      "member": "brc502d.map",
+      "member_sha256": "fba3294e4725e67662cc452882d3ce038b6f97bdfe375f24ec779fac8c140012",
+      "agent_counts": [600, 900, 1300]
+    },
+    {
+      "id": "den001d",
+      "layout_family": "dao_large_game_underload",
+      "member": "den001d.map",
+      "member_sha256": "90b8eedb8ad09e3a898ee27e7413c0fce88b84193e61b97d0b60740a65ec354a",
+      "agent_counts": [800, 1200, 1800]
+    },
+    {
+      "id": "den204d",
+      "layout_family": "dao_mid_game_underload",
+      "member": "den204d.map",
+      "member_sha256": "bd1bcf03b5c8b70bedf2c8223578898f9d5d5da4ba460539a390143e0a8175dd",
+      "agent_counts": [400, 650, 900]
+    },
+    {
+      "id": "den206d",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "den206d.map",
+      "member_sha256": "64757e3e8369bf95bab245fe84191d3f7256ef2ebfb1e3dac5e0bcd932b3757a",
+      "agent_counts": [400, 700, 1000]
+    },
+    {
+      "id": "ost101d",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "ost101d.map",
+      "member_sha256": "0bacd711463710ceac08e794f2a43e6a4ea3abdc687fb47a5cd1b4678b696d99",
+      "agent_counts": [300, 500, 800]
+    },
+    {
+      "id": "lak102d",
+      "layout_family": "dao_high_topology_reserve",
+      "member": "lak102d.map",
+      "member_sha256": "c6938e3a958375ab212be6db65f41c14fd820ef94b609fb370f04811829e9cfc",
+      "agent_counts": [80, 160, 240]
+    },
+    {
+      "id": "den011d",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "den011d.map",
+      "member_sha256": "04963d72d7ced037a734ef24609ce669bc5ffcf29cc5b73368d0604b8b8a54b6",
+      "agent_counts": [800, 1200, 1800]
+    },
+    {
+      "id": "den401d",
+      "layout_family": "dao_low_topology_reserve",
+      "member": "den401d.map",
+      "member_sha256": "6f667af84e1403d84463e4af45b1cad3266ce725588e426cb4552c696950216e",
+      "agent_counts": [700, 1100, 1600]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schema": "lns2.stride.repairability_label_config.v1",
+  "scientific_status": "preregistered_before_topology_balanced_outcomes",
+  "controller_id": "stride-augcontrol-v1",
+  "label_schema": "lns2.stride.repairability_label.v1",
+  "feature_schema": "lns2.realized_features.v2",
+  "feature_dimension": 124,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+  "candidate_pool": {
+    "base_families": ["target", "collision", "random"],
+    "base_sizes": [4, 8, 16],
+    "augmentation": "stride-topoboundary-v1",
+    "boundary_size": 16,
+    "boundary_core_budget": 4,
+    "maximum_boundary_candidates": 2,
+    "maximum_total_candidates": 20
+  },
+  "current_step_quality": {
+    "conflict_reduction": "normalized_by_before_conflicts",
+    "post_structure_weight": 0.02,
+    "post_structure_normalization": "within_state_trial_midrank"
+  },
+  "robust_pair_rule": {
+    "minimum_paired_win_fraction": 0.75,
+    "minimum_absolute_mean_effect": 0.02,
+    "require_both_half_mean_directions": true,
+    "tie_epsilon": 1e-12
+  },
+  "sample_weighting": "equal_total_weight_per_state",
+  "forbidden_label_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome"
+  ],
+  "runtime_used_in_label": false,
+  "future_trajectory_used_in_label": false,
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}

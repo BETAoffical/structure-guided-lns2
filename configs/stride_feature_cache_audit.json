@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.stride.feature_cache_audit_config.v1",
+  "scientific_status": "action_preserving_runtime_audit",
+  "source_collection": "build/stride-boundary-gate-ablation-rtc-v2/controllers/stride-boundary-stall-guard-v1",
+  "source_report": "build/stride-boundary-gate-ablation-rtc-v2/boundary_gate_ablation_report.json",
+  "source_report_sha256": "225de3d0cf0a5795672c0df21645858bebe121c87d00b4e2631d1539cb20f1fd",
+  "model_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "controller_id": "v2-full",
+  "maximum_decisions_per_episode": 3,
+  "repeats": 3,
+  "floating_tolerance": 1e-12,
+  "registered_paths": [
+    "native-dense-model-projection",
+    "native-dense-full-124",
+    "python-incremental-full-124",
+    "python-reference-full-124"
+  ],
+  "selection_rule": "fastest_action_equivalent_path_with_exact_feature_equivalence",
+  "candidate_actions_may_change": false,
+  "formal_speed_claim": false
+}

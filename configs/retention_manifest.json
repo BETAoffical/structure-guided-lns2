@@ -239,6 +239,26 @@
       "purpose": "Non-promoting run-to-completion paired ablation of map-only and stall-guard topology-boundary activation."
     },
     {
+      "path": "experiments/stride_feature_cache_audit.py",
+      "role": "active",
+      "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
+    },
+    {
+      "path": "experiments/stride_repairability.py",
+      "role": "active",
+      "purpose": "Paired 16-seed robust repairability label construction for the independently named STRIDE augmented-pool successor."
+    },
+    {
+      "path": "experiments/stride_repairability_collection.py",
+      "role": "active",
+      "purpose": "Resumable collection of the frozen base-plus-topology candidate pool under 16 paired PP seeds."
+    },
+    {
+      "path": "experiments/stride_repairability_selection.py",
+      "role": "active",
+      "purpose": "Outcome-blind topology-balanced state selection with map-level train-validation isolation."
+    },
+    {
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
@@ -729,6 +749,26 @@
       "purpose": "CLI entry point for the uncapped paired boundary map-gate versus stall-guard ablation."
     },
     {
+      "path": "scripts/run_stride_feature_cache_audit.py",
+      "role": "active",
+      "purpose": "CLI entry point for the STRIDE action-preserving feature-path audit."
+    },
+    {
+      "path": "scripts/build_stride_repairability_labels.py",
+      "role": "active",
+      "purpose": "CLI entry point for state-balanced 16-seed STRIDE repairability label construction."
+    },
+    {
+      "path": "scripts/collect_stride_repairability.py",
+      "role": "active",
+      "purpose": "CLI entry point for resumable frozen-pool 16-seed repairability collection."
+    },
+    {
+      "path": "scripts/prepare_stride_repairability_selection.py",
+      "role": "active",
+      "purpose": "CLI entry point for registered topology-balanced repairability state selection."
+    },
+    {
       "path": "scripts/run_stride_boundary_runtime_optimization.py",
       "role": "active",
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
@@ -982,6 +1022,16 @@
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",
       "role": "active",
       "contract": "Uncapped runtime, complete three-controller pairing, rotating execution order, frozen stall gate, and non-promotion boundaries."
+    },
+    {
+      "path": "tests/integration/test_stride_feature_cache_audit.py",
+      "role": "active",
+      "contract": "Frozen feature paths, sparse canonicalization, exact projection semantics, and action-preserving audit boundaries."
+    },
+    {
+      "path": "tests/integration/test_stride_repairability.py",
+      "role": "active",
+      "contract": "Frozen 8+8 paired seeds, exact 124-feature rows, robust-pair filtering, runtime exclusion, and equal state weight."
     },
     {
       "path": "tests/integration/test_stride_stage4r_high_load.py",
