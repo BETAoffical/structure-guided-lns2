@@ -266,6 +266,13 @@ def validate_maprank_evaluation_config(config: dict[str, Any]) -> None:
         CONTROLLER_ID,
     ] or config.get("execution_order") != "strict_rotating_triplet_order":
         raise ValueError("STRIDE-MapRank comparator design changed")
+    if dict(config.get("controller_bundles") or {}) != {
+        "v2-full": "artifacts/initlns-closed-loop-controller-v2",
+        CONTROLLER_ID: "build/stride-maprank-training-v1/stride-maprank-v1",
+    } or config.get("training_report") != (
+        "build/stride-maprank-training-v1/maprank_training_report.json"
+    ):
+        raise ValueError("STRIDE-MapRank registered bundle inputs changed")
     if int(config.get("workers", -1)) != 1 or config.get(
         "deterministic_pp_replay_required"
     ) is not True:
@@ -283,10 +290,52 @@ def validate_maprank_evaluation_config(config: dict[str, Any]) -> None:
         "static_grid_cache": True,
     }:
         raise ValueError("STRIDE-MapRank candidate-pool comparator changed")
+    legacy = dict(config.get("legacy_shadow") or {})
+    if legacy != {
+        "evidence_role": "held_out_execution_sanity_not_threshold_calibration",
+        "dataset": "build/stride-repairability-source-dataset-v1",
+        "runtime_config": "configs/stride_repairability_source_runtime.json",
+        "qualification_source": "build/stride-repairability-source-paired-collection-v1",
+        "validation_maps": [
+            "brc300d",
+            "den011d",
+            "den020d",
+            "den202d",
+            "den204d",
+            "lak101d",
+        ],
+        "solver_seeds": [1, 2],
+        "active_comparator": "v2-augmented-pool",
+        "minimum_decisions": 24,
+    }:
+        raise ValueError("STRIDE-MapRank legacy Shadow changed")
     development = dict(config.get("high_load_development") or {})
-    if list(development.get("solver_seeds") or ()) != [1, 2, 3, 4] or [
-        str(row.get("id")) for row in development.get("cohorts") or ()
-    ] != ["maze300", "room500"]:
+    if (
+        list(development.get("solver_seeds") or ()) != [1, 2, 3, 4]
+        or development.get("runtime_config")
+        != "configs/stride_stage4r_high_load_runtime.json"
+        or list(development.get("cohorts") or ())
+        != [
+            {
+                "id": "maze300",
+                "dataset": "build/stride-stage4r-high-load-maze-dataset-v1",
+                "split": "balanced_wall_clock",
+                "tasks": [
+                    "maze-128-128-2__random_11__agents_0300",
+                    "maze-128-128-2__random_17__agents_0300",
+                ],
+            },
+            {
+                "id": "room500",
+                "dataset": "build/stride-stage4r-high-load-room-dataset-v1",
+                "split": "balanced_wall_clock",
+                "tasks": [
+                    "room-64-64-8__random_04__agents_0500",
+                    "room-64-64-8__random_05__agents_0500",
+                ],
+            },
+        ]
+    ):
         raise ValueError("STRIDE-MapRank high-load cohort changed")
     if dict(development.get("gates") or {}) != {
         "minimum_raw_ttf_improvement_vs_v2_full": 0.02,
@@ -297,9 +346,27 @@ def validate_maprank_evaluation_config(config: dict[str, Any]) -> None:
     }:
         raise ValueError("STRIDE-MapRank high-load gates changed")
     fresh = dict(config.get("fresh_map_raw_ttf") or {})
-    if list(fresh.get("solver_seeds") or ()) != [1, 2, 3] or [
-        str(row.get("id")) for row in fresh.get("cohorts") or ()
-    ] != ["maze200", "room400", "random500", "warehouse500", "den300", "lak500"]:
+    if (
+        fresh.get("dataset_config") != "configs/stride_augcontrol_ood_dataset.json"
+        or fresh.get("fetched_dataset") != "build/movingai-ood-dev"
+        or fresh.get("dataset") != "build/stride-augcontrol-ood-dataset-v1"
+        or fresh.get("runtime_config") != "configs/stride_augcontrol_ood_runtime.json"
+        or fresh.get("split") != "movingai_ood"
+        or list(fresh.get("solver_seeds") or ()) != [1, 2, 3]
+        or list(fresh.get("cohorts") or ())
+        != [
+            {"id": "maze200", "map_id": "maze-128-128-10", "agent_count": 200},
+            {"id": "room400", "map_id": "room-64-64-16", "agent_count": 400},
+            {"id": "random500", "map_id": "random-64-64-20", "agent_count": 500},
+            {
+                "id": "warehouse500",
+                "map_id": "warehouse-20-40-10-2-2",
+                "agent_count": 500,
+            },
+            {"id": "den300", "map_id": "den312d", "agent_count": 300},
+            {"id": "lak500", "map_id": "lak303d", "agent_count": 500},
+        ]
+    ):
         raise ValueError("STRIDE-MapRank fresh-map cohort changed")
     if dict(fresh.get("gates") or {}) != {
         "minimum_raw_ttf_improvement_vs_v2_full": 0.05,

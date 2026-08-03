@@ -165,3 +165,11 @@ def test_maprank_evaluation_is_uncapped_paired_and_preregistered() -> None:
     assert config["episode_process_timeout_seconds"] is None
     assert config["high_load_development"]["cohorts"][1]["id"] == "room500"
     assert len(config["fresh_map_raw_ttf"]["cohorts"]) == 6
+    changed = json.loads(MAPRANK_EVALUATION_PATH.read_text(encoding="utf-8"))
+    changed["high_load_development"]["cohorts"][0]["tasks"][0] = "post-hoc-task"
+    try:
+        validate_maprank_evaluation_config(changed)
+    except ValueError as error:
+        assert "high-load cohort changed" in str(error)
+    else:
+        raise AssertionError("MapRank accepted a post-hoc high-load task")
