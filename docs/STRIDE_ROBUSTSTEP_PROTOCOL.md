@@ -64,6 +64,31 @@ than by agent count alone. In particular, the preflight checks 350 and 400
 agents on `maze-128-128-2` because the completed 300-agent diagnostic produced
 too few initial conflicts.
 
+## Completed eight-seed design result
+
+The registered 600-state design analysis completed with all integrity gates
+passing, but no label variant passed the scientific gates. The least strict
+variant, `w625-p125`, retained 0.7823 of all candidate pairs but reached only
+0.7275 half-to-half pairwise consistency and 0.6397 mean robust-good-set
+Jaccard, below the registered 0.80 and 0.70 thresholds. Its robust-good set was
+unique in only 50.0 percent of states. Increasing the paired-win threshold did
+not improve stability: it reduced pair coverage and increased action
+uncertainty.
+
+The deterministic report is
+`build/stride-robuststep-design-v1/robuststep_design_report.json`, SHA-256
+`02fd839c315ce2cc7f41e9d84dc965984ea773a00e4ca8b2a2bfcefcd3649668`.
+Therefore no robust-step label is frozen and no training is allowed from this
+result.
+
+Before changing the pair contract, a consumed seed-depth diagnostic uses the
+96 earlier V2 design and confirmation states that already have 16 paired PP
+outcomes per candidate. Indices 0--7 and 8--15 form independent halves. The
+same four label variants and gates are retained, and a variant must pass both
+48-state cohorts as well as their aggregate. Passing would show only that
+greater PP-seed depth makes the proposed contract plausible; a new result-blind
+confirmation cohort would still be required.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

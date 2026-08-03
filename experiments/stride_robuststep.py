@@ -22,6 +22,8 @@ from experiments.stride_stage3 import _project_path
 
 CONFIG_SCHEMA = "lns2.stride.robuststep_design_config.v1"
 REPORT_SCHEMA = "lns2.stride.robuststep_design_report.v1"
+SEED_DEPTH_CONFIG_SCHEMA = "lns2.stride.robuststep_seed_depth_config.v1"
+SEED_DEPTH_REPORT_SCHEMA = "lns2.stride.robuststep_seed_depth_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -55,6 +57,42 @@ def validate_robuststep_config(config: dict[str, Any]) -> None:
         tolerance = float(row.get("maximum_no_progress_disadvantage", -1.0))
         if not 0.5 < win <= 1.0 or not 0.0 <= tolerance <= 0.125:
             raise ValueError("invalid robust-step design variant")
+    if bool(config.get("runtime_used_in_label")):
+        raise ValueError("runtime cannot enter the robust-step label")
+
+
+def validate_robuststep_seed_depth_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != SEED_DEPTH_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step seed-depth config")
+    if (
+        config.get("scientific_status") != "consumed_seed_depth_diagnostic"
+        or bool(config.get("formal_speed_claim"))
+        or not bool(config.get("fresh_confirmation_required"))
+    ):
+        raise ValueError("seed-depth analysis must remain consumed and non-formal")
+    if config.get("controller_id") != CONTROLLER_ID:
+        raise ValueError("unexpected robust-step controller id")
+    if config.get("label_schema") != LABEL_SCHEMA:
+        raise ValueError("unexpected robust-step label schema")
+    indices = tuple(map(int, config.get("trial_indices") or ()))
+    first = tuple(map(int, config.get("first_half_indices") or ()))
+    second = tuple(map(int, config.get("second_half_indices") or ()))
+    if (
+        indices != tuple(range(16))
+        or first != tuple(range(8))
+        or second != tuple(range(8, 16))
+    ):
+        raise ValueError("seed-depth diagnostic requires registered 8+8 indices")
+    if float(config.get("structure_weight", -1.0)) != 0.02:
+        raise ValueError("robust-step structure weight differs")
+    variants = list(config.get("variants") or [])
+    if len(variants) != 4 or len({str(row.get("id")) for row in variants}) != 4:
+        raise ValueError("seed-depth diagnostic requires four unique variants")
+    if not bool(config.get("require_all_cohorts_pass")):
+        raise ValueError("seed-depth diagnostic must gate every registered cohort")
+    cohorts = list(config.get("cohorts") or [])
+    if len(cohorts) != 2 or len({str(row.get("id")) for row in cohorts}) != 2:
+        raise ValueError("seed-depth diagnostic requires two disjoint cohorts")
     if bool(config.get("runtime_used_in_label")):
         raise ValueError("runtime cannot enter the robust-step label")
 
@@ -427,11 +465,145 @@ def run_robuststep_design(
     return report
 
 
+def _apply_variant_gates(
+    result: dict[str, Any], thresholds: dict[str, Any]
+) -> dict[str, Any]:
+    result["gates"] = {
+        "half_pairwise_consistency": result["half_pairwise_consistency"]
+        >= float(thresholds["minimum_half_pairwise_consistency"]),
+        "mean_good_set_jaccard": result["mean_good_set_jaccard"]
+        >= float(thresholds["minimum_mean_good_set_jaccard"]),
+        "full_pair_coverage": result["full_pair_coverage"]
+        >= float(thresholds["minimum_full_pair_coverage"]),
+        "state_five_pair_coverage": result["state_five_pair_coverage"]
+        >= float(thresholds["minimum_state_five_pair_coverage"]),
+    }
+    result["passed"] = all(result["gates"].values())
+    return result
+
+
+def run_robuststep_seed_depth(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    """Test whether 16 paired seeds stabilize the consumed robust-step contract."""
+
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_seed_depth_config(config)
+    formal_path = _checked_input(project_root, dict(config["formal_ood_config"]))
+    formal = _read_json(formal_path)
+    formal_maps = {str(row["benchmark_id"]) for row in formal.get("cases", [])}
+    metadata, profiles, integrity = _load_seed_profiles(project_root, config)
+    observed_maps = {str(row["map_id"]) for row in metadata.values()}
+    formal_overlap = sorted(observed_maps & formal_maps)
+
+    cohort_profiles: dict[str, dict[str, dict[str, dict[str, list[Any]]]]] = {}
+    cohort_integrity: dict[str, Any] = {}
+    assigned: set[str] = set()
+    for specification in config["cohorts"]:
+        cohort_id = str(specification["id"])
+        source_path = _project_path(project_root, str(specification["membership_source"]))
+        if not source_path.is_file():
+            raise FileNotFoundError(source_path)
+        state_ids = {str(row["state_id"]) for row in _read_jsonl(source_path)}
+        if assigned & state_ids:
+            raise ValueError("seed-depth cohorts overlap")
+        missing = state_ids - set(profiles)
+        if missing:
+            raise ValueError(f"seed-depth cohort has missing states: {cohort_id}")
+        assigned.update(state_ids)
+        cohort_profiles[cohort_id] = {
+            state_id: profiles[state_id] for state_id in sorted(state_ids)
+        }
+        cohort_integrity[cohort_id] = {
+            "state_count": len(state_ids),
+            "expected_state_count": int(specification["expected_state_count"]),
+            "passed": len(state_ids) == int(specification["expected_state_count"]),
+        }
+    integrity_gates = {
+        "state_count": integrity["state_count"] == int(config["expected_state_count"]),
+        "map_count": integrity["map_count"] == int(config["expected_map_count"]),
+        "candidate_count": integrity["candidate_count"]
+        == int(config["expected_candidate_count"]),
+        "outcome_count": integrity["outcome_count"]
+        == int(config["expected_outcome_count"]),
+        "cohort_partition_complete": assigned == set(profiles),
+        "cohort_integrity": all(row["passed"] for row in cohort_integrity.values()),
+        "formal_ood_overlap_zero": not formal_overlap,
+    }
+    thresholds = dict(config["diagnostic_gates"])
+    first = list(map(int, config["first_half_indices"]))
+    second = list(map(int, config["second_half_indices"]))
+    variants = []
+    for specification in config["variants"]:
+        result = _apply_variant_gates(
+            evaluate_robuststep_variant(profiles, dict(specification), first, second),
+            thresholds,
+        )
+        result["cohorts"] = {}
+        for cohort_id, subset in cohort_profiles.items():
+            result["cohorts"][cohort_id] = _apply_variant_gates(
+                evaluate_robuststep_variant(
+                    subset, dict(specification), first, second
+                ),
+                thresholds,
+            )
+        result["all_cohorts_passed"] = all(
+            row["passed"] for row in result["cohorts"].values()
+        )
+        result["passed"] = bool(result["passed"] and result["all_cohorts_passed"])
+        variants.append(result)
+    eligible = [row for row in variants if row["passed"]]
+    selected = max(
+        eligible,
+        key=lambda row: (
+            float(row["full_pair_coverage"]),
+            float(row["half_pairwise_consistency"]),
+            float(row["mean_good_set_jaccard"]),
+            str(row["id"]),
+        ),
+        default=None,
+    )
+    passed = all(integrity_gates.values()) and selected is not None
+    report = {
+        "schema": SEED_DEPTH_REPORT_SCHEMA,
+        "scientific_status": "consumed_seed_depth_diagnostic",
+        "formal_speed_claim": False,
+        "controller_id": CONTROLLER_ID,
+        "label_schema": LABEL_SCHEMA,
+        "runtime_used_in_label": False,
+        "fresh_confirmation_required": True,
+        "integrity": integrity,
+        "cohort_integrity": cohort_integrity,
+        "integrity_gates": integrity_gates,
+        "formal_ood_overlap": formal_overlap,
+        "variants": variants,
+        "selected_variant_id": str(selected["id"]) if selected else None,
+        "seed_depth_passed": passed,
+        "next_decision": (
+            "collect_fresh_sixteen_seed_confirmation_before_training"
+            if passed
+            else "revise_robust_pair_contract_before_new_collection"
+        ),
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "formal_ood_config_sha256": sha256_file(formal_path),
+        },
+    }
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    _write_json(output / "robuststep_seed_depth_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
     "evaluate_robuststep_variant",
     "robust_pair_winner",
     "run_robuststep_design",
+    "run_robuststep_seed_depth",
     "validate_robuststep_config",
+    "validate_robuststep_seed_depth_config",
 ]

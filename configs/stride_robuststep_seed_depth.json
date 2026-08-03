@@ -1,0 +1,45 @@
+{
+  "schema": "lns2.stride.robuststep_seed_depth_config.v1",
+  "scientific_status": "consumed_seed_depth_diagnostic",
+  "formal_speed_claim": false,
+  "controller_id": "stride-robuststep-v1",
+  "label_schema": "lns2.stride.robust_step_label.v1",
+  "formal_ood_config": {
+    "path": "configs/movingai_ood_dataset.json",
+    "sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a"
+  },
+  "trial_sources": [
+    {"path": "build/stride-stage2-pilot-v2/repair_trials.jsonl", "sha256": "9b82158312a5a67572e41013fae389d8b3ac6532c176bd457602304d72407a8d"},
+    {"path": "build/stride-stage2-stability-v1/extra_trials.jsonl", "sha256": "318caa489ca0734d7a8cc35d8eac4b8958bfeebd0429e2ee36a2a1ff03382de3"},
+    {"path": "build/stride-quality-v2-design-extension-v1/extra_trials.jsonl", "sha256": "a0a7e5dfda852eba699e80307ff05d624784e780af05ec5e4c5a8133678e5ea5"},
+    {"path": "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl", "sha256": "64a4a73baa33ebcde266d76082c8afab3b1bbe257ffbae58747df94f6f634af3"}
+  ],
+  "cohorts": [
+    {"id": "quality_v2_design", "membership_source": "build/stride-quality-v2-design-extension-v1/extra_trials.jsonl", "expected_state_count": 48},
+    {"id": "quality_v2_confirmation", "membership_source": "build/stride-quality-v2-confirmation-v1/extra_trials.jsonl", "expected_state_count": 48}
+  ],
+  "expected_state_count": 96,
+  "expected_map_count": 14,
+  "expected_candidate_count": 1700,
+  "expected_outcome_count": 27200,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+  "structure_weight": 0.02,
+  "variants": [
+    {"id": "w625-p125", "minimum_paired_win_fraction": 0.625, "maximum_no_progress_disadvantage": 0.125},
+    {"id": "w750-p125", "minimum_paired_win_fraction": 0.75, "maximum_no_progress_disadvantage": 0.125},
+    {"id": "w750-p000", "minimum_paired_win_fraction": 0.75, "maximum_no_progress_disadvantage": 0.0},
+    {"id": "w875-p000", "minimum_paired_win_fraction": 0.875, "maximum_no_progress_disadvantage": 0.0}
+  ],
+  "diagnostic_gates": {
+    "minimum_half_pairwise_consistency": 0.8,
+    "minimum_mean_good_set_jaccard": 0.7,
+    "minimum_full_pair_coverage": 0.15,
+    "minimum_state_five_pair_coverage": 0.8
+  },
+  "require_all_cohorts_pass": true,
+  "selection_rule": "highest_full_pair_coverage_then_pairwise_consistency_then_good_set_jaccard",
+  "runtime_used_in_label": false,
+  "fresh_confirmation_required": true
+}

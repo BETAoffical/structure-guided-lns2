@@ -9,12 +9,18 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from experiments.stride_robuststep import run_robuststep_design  # noqa: E402
+from experiments.stride_robuststep import (  # noqa: E402
+    run_robuststep_design,
+    run_robuststep_seed_depth,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run the consumed STRIDE robust-step label design analysis."
+    )
+    parser.add_argument(
+        "--analysis", choices=("design", "seed-depth"), default="design"
     )
     parser.add_argument(
         "--config", default="configs/stride_robuststep_design.json"
@@ -23,7 +29,12 @@ def main() -> int:
         "--output", default="build/stride-robuststep-design-v1"
     )
     arguments = parser.parse_args()
-    report = run_robuststep_design(arguments.config, arguments.output)
+    runner = (
+        run_robuststep_seed_depth
+        if arguments.analysis == "seed-depth"
+        else run_robuststep_design
+    )
+    report = runner(arguments.config, arguments.output)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

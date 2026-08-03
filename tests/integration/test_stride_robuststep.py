@@ -5,6 +5,7 @@ import unittest
 from experiments.stride_robuststep import (
     evaluate_robuststep_variant,
     robust_pair_winner,
+    validate_robuststep_seed_depth_config,
 )
 
 
@@ -71,6 +72,33 @@ class StrideRobustStepTest(unittest.TestCase):
         self.assertEqual(report["mean_good_set_jaccard"], 1.0)
         self.assertEqual(report["unique_robust_winner_rate"], 1.0)
         self.assertEqual(report["full_pair_coverage"], 1.0)
+
+    def test_seed_depth_contract_requires_independent_eight_seed_halves(self) -> None:
+        config = {
+            "schema": "lns2.stride.robuststep_seed_depth_config.v1",
+            "scientific_status": "consumed_seed_depth_diagnostic",
+            "formal_speed_claim": False,
+            "fresh_confirmation_required": True,
+            "controller_id": "stride-robuststep-v1",
+            "label_schema": "lns2.stride.robust_step_label.v1",
+            "trial_indices": list(range(16)),
+            "first_half_indices": list(range(8)),
+            "second_half_indices": list(range(8, 16)),
+            "structure_weight": 0.02,
+            "variants": [
+                {"id": f"v{index}"} for index in range(4)
+            ],
+            "cohorts": [
+                {"id": "design"},
+                {"id": "confirmation"},
+            ],
+            "require_all_cohorts_pass": True,
+            "runtime_used_in_label": False,
+        }
+        validate_robuststep_seed_depth_config(config)
+        config["second_half_indices"] = list(range(7, 15))
+        with self.assertRaisesRegex(ValueError, "8\\+8"):
+            validate_robuststep_seed_depth_config(config)
 
 
 if __name__ == "__main__":
