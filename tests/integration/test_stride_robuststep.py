@@ -17,6 +17,7 @@ from experiments.stride_robuststep import (
     evaluate_robuststep_score_variant,
     robust_pair_winner,
     validate_robuststep_confirmation_config,
+    validate_robuststep_feature_probe_config,
     validate_robuststep_seed_depth_config,
     validate_robuststep_v2_headroom_config,
 )
@@ -335,6 +336,63 @@ class StrideRobustStepTest(unittest.TestCase):
         config["training_allowed"] = True
         with self.assertRaisesRegex(ValueError, "diagnostic-only"):
             validate_robuststep_v2_headroom_config(config)
+
+    def test_feature_probe_contract_is_grouped_ephemeral_and_fixed(self) -> None:
+        config = {
+            "schema": "lns2.stride.robuststep_feature_probe_config.v1",
+            "scientific_status": "consumed_feature_sufficiency_diagnostic",
+            "formal_speed_claim": False,
+            "default_replacement_allowed": False,
+            "runtime_export_allowed": False,
+            "formal_ood_allowed": False,
+            "diagnostic_result_may_promote_model": False,
+            "ephemeral_probe_training_allowed": True,
+            "diagnostic_controller_id": "stride-stepdiag-v1",
+            "frozen_anchor_id": "v2-full",
+            "score_schema": "lns2.stride.robust_step_score.v1",
+            "trial_indices": list(range(16)),
+            "first_half_indices": list(range(8)),
+            "second_half_indices": list(range(8, 16)),
+            "structure_weight": 0.02,
+            "oracle_score": {
+                "id": "mean", "mode": "mean", "deviation_weight": 0.0,
+                "no_progress_penalty": 0.0,
+            },
+            "runtime_used_in_oracle": False,
+            "future_repair_rounds_used_in_oracle": False,
+            "cost_to_go_used_in_oracle": False,
+            "expected_feature_dimension": 124,
+            "expected_feature_schema_id": "lns2.realized_features.v2",
+            "fold_protocol": {
+                "mode": "leave_one_whole_map_out",
+                "fold_count": 6,
+                "held_out_maps": [f"map-{index}" for index in range(6)],
+                "state_and_candidate_group_integrity": True,
+            },
+            "pair_contract": {
+                "inclusion": "same_strict_direction_in_both_eight_seed_halves",
+                "direction": "full_sixteen_seed_plain_mean",
+                "weighting": "equal_total_weight_per_state",
+            },
+            "variants": [
+                {"id": "stride-stepdiag-v1/exact-v2-86", "input_profile": "exact_v2_86"},
+                {"id": "stride-stepdiag-v1/full-124-delta", "input_profile": "full_124_delta"},
+                {"id": "stride-stepdiag-v1/full-124-context", "input_profile": "full_124_context"},
+            ],
+            "model_parameters": {
+                "early_stopping": False,
+                "l2_regularization": 0.1,
+                "learning_rate": 0.05,
+                "max_iter": 100,
+                "max_leaf_nodes": 15,
+                "min_samples_leaf": 20,
+                "random_state": 20260714,
+            },
+        }
+        validate_robuststep_feature_probe_config(config)
+        config["runtime_export_allowed"] = True
+        with self.assertRaisesRegex(ValueError, "diagnostic-only"):
+            validate_robuststep_feature_probe_config(config)
 
 
 if __name__ == "__main__":

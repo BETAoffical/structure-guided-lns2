@@ -8,6 +8,7 @@ from typing import Any
 
 from experiments._common import sha256_file
 from experiments.compact_controller_model import load_controller_bundle
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -21,6 +22,7 @@ from experiments.stride_lns import (
     assign_structure_scores,
 )
 from experiments.stride_stage3 import _project_path
+from experiments.v2_factorial_audit import _select_model, pair_vector
 from lns2_selector.runtime.online_selection import score_online_candidates
 
 
@@ -34,6 +36,8 @@ CONFIRMATION_CONFIG_SCHEMA = "lns2.stride.robuststep_confirmation_config.v1"
 CONFIRMATION_REPORT_SCHEMA = "lns2.stride.robuststep_confirmation_report.v1"
 V2_HEADROOM_CONFIG_SCHEMA = "lns2.stride.robuststep_v2_headroom_config.v1"
 V2_HEADROOM_REPORT_SCHEMA = "lns2.stride.robuststep_v2_headroom_report.v1"
+FEATURE_PROBE_CONFIG_SCHEMA = "lns2.stride.robuststep_feature_probe_config.v1"
+FEATURE_PROBE_REPORT_SCHEMA = "lns2.stride.robuststep_feature_probe_report.v1"
 CONTROLLER_ID = "stride-robuststep-v1"
 LABEL_SCHEMA = "lns2.stride.robust_step_label.v1"
 
@@ -266,6 +270,91 @@ def validate_robuststep_v2_headroom_config(config: dict[str, Any]) -> None:
         raise ValueError("V2 headroom feature dimension differs")
     if config.get("expected_feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID:
         raise ValueError("V2 headroom feature schema differs")
+
+
+def validate_robuststep_feature_probe_config(config: dict[str, Any]) -> None:
+    if config.get("schema") != FEATURE_PROBE_CONFIG_SCHEMA:
+        raise ValueError("unexpected robust-step feature-probe config")
+    if (
+        config.get("scientific_status")
+        != "consumed_feature_sufficiency_diagnostic"
+        or bool(config.get("formal_speed_claim"))
+        or bool(config.get("default_replacement_allowed"))
+        or bool(config.get("runtime_export_allowed"))
+        or bool(config.get("formal_ood_allowed"))
+        or bool(config.get("diagnostic_result_may_promote_model"))
+        or not bool(config.get("ephemeral_probe_training_allowed"))
+    ):
+        raise ValueError("feature probe must remain ephemeral and diagnostic-only")
+    if (
+        config.get("diagnostic_controller_id") != "stride-stepdiag-v1"
+        or config.get("frozen_anchor_id") != "v2-full"
+    ):
+        raise ValueError("unexpected feature-probe controller identity")
+    if config.get("score_schema") != "lns2.stride.robust_step_score.v1":
+        raise ValueError("unexpected feature-probe score schema")
+    indices = tuple(map(int, config.get("trial_indices") or ()))
+    first = tuple(map(int, config.get("first_half_indices") or ()))
+    second = tuple(map(int, config.get("second_half_indices") or ()))
+    if (
+        indices != tuple(range(16))
+        or first != tuple(range(8))
+        or second != tuple(range(8, 16))
+    ):
+        raise ValueError("feature probe requires registered 8+8 indices")
+    if float(config.get("structure_weight", -1.0)) != 0.02:
+        raise ValueError("feature-probe structure weight differs")
+    if dict(config.get("oracle_score") or {}) != {
+        "id": "mean",
+        "mode": "mean",
+        "deviation_weight": 0.0,
+        "no_progress_penalty": 0.0,
+    }:
+        raise ValueError("feature-probe oracle must remain the plain immediate mean")
+    if (
+        bool(config.get("runtime_used_in_oracle"))
+        or bool(config.get("future_repair_rounds_used_in_oracle"))
+        or bool(config.get("cost_to_go_used_in_oracle"))
+    ):
+        raise ValueError("feature-probe oracle contains a forbidden field")
+    if int(config.get("expected_feature_dimension", -1)) != FROZEN_FEATURE_DIMENSION:
+        raise ValueError("feature-probe feature dimension differs")
+    if config.get("expected_feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID:
+        raise ValueError("feature-probe feature schema differs")
+    folds = dict(config.get("fold_protocol") or {})
+    maps = tuple(map(str, folds.get("held_out_maps") or ()))
+    if (
+        folds.get("mode") != "leave_one_whole_map_out"
+        or int(folds.get("fold_count", -1)) != 6
+        or len(maps) != 6
+        or len(set(maps)) != 6
+        or not bool(folds.get("state_and_candidate_group_integrity"))
+    ):
+        raise ValueError("feature probe requires six whole-map held-out folds")
+    pair_contract = dict(config.get("pair_contract") or {})
+    if pair_contract != {
+        "inclusion": "same_strict_direction_in_both_eight_seed_halves",
+        "direction": "full_sixteen_seed_plain_mean",
+        "weighting": "equal_total_weight_per_state",
+    }:
+        raise ValueError("feature-probe pair contract was changed")
+    variants = list(config.get("variants") or ())
+    if variants != [
+        {"id": "stride-stepdiag-v1/exact-v2-86", "input_profile": "exact_v2_86"},
+        {"id": "stride-stepdiag-v1/full-124-delta", "input_profile": "full_124_delta"},
+        {"id": "stride-stepdiag-v1/full-124-context", "input_profile": "full_124_context"},
+    ]:
+        raise ValueError("feature-probe variants were changed")
+    if dict(config.get("model_parameters") or {}) != {
+        "early_stopping": False,
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "random_state": 20260714,
+    }:
+        raise ValueError("feature-probe model parameters were changed")
 
 
 def robust_pair_winner(
@@ -1585,6 +1674,466 @@ def run_robuststep_v2_headroom(
     return report
 
 
+def _feature_probe_pairs(
+    states: dict[str, list[dict[str, Any]]],
+    state_ids: list[str],
+    input_specs: tuple[tuple[str, str], ...],
+) -> dict[str, Any]:
+    import numpy as np
+
+    values: list[list[float]] = []
+    labels: list[int] = []
+    weights: list[float] = []
+    stable_pair_count = 0
+    possible_pair_count = 0
+    states_with_pairs = 0
+    for state_id in state_ids:
+        state = states[state_id]
+        state_examples: list[tuple[list[float], int]] = []
+        for left, right in combinations(state, 2):
+            possible_pair_count += 1
+            first_delta = float(left["first_score"]) - float(right["first_score"])
+            second_delta = float(left["second_score"]) - float(right["second_score"])
+            if not (
+                (first_delta > 1e-12 and second_delta > 1e-12)
+                or (first_delta < -1e-12 and second_delta < -1e-12)
+            ):
+                continue
+            stable_pair_count += 1
+            winner, loser = (left, right) if first_delta > 0.0 else (right, left)
+            state_examples.extend(
+                (
+                    (pair_vector(winner["features"], loser["features"], input_specs), 1),
+                    (pair_vector(loser["features"], winner["features"], input_specs), 0),
+                )
+            )
+        if not state_examples:
+            continue
+        states_with_pairs += 1
+        weight = 1.0 / len(state_examples)
+        for vector, label in state_examples:
+            values.append(vector)
+            labels.append(label)
+            weights.append(weight)
+    if set(labels) != {0, 1}:
+        raise ValueError("feature-probe pair split requires both labels")
+    normalized = np.asarray(weights, dtype=np.float64)
+    normalized *= len(normalized) / float(np.sum(normalized))
+    return {
+        "values": np.asarray(values, dtype=np.float32),
+        "labels": np.asarray(labels, dtype=np.int8),
+        "weights": normalized,
+        "state_count": states_with_pairs,
+        "directional_pair_count": len(labels),
+        "stable_pair_count": stable_pair_count,
+        "possible_pair_count": possible_pair_count,
+    }
+
+
+def _fit_feature_probe(pair_rows: dict[str, Any], parameters: dict[str, Any]) -> Any:
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    estimator = HistGradientBoostingClassifier(**parameters)
+    estimator.fit(
+        pair_rows["values"],
+        pair_rows["labels"],
+        sample_weight=pair_rows["weights"],
+    )
+    return estimator
+
+
+def _feature_probe_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    if not records:
+        return {
+            "state_count": 0,
+            "exact_best_rate": None,
+            "top3_hit_rate": None,
+            "mean_normalized_regret": None,
+        }
+    mean = lambda name: statistics.fmean(float(row[name]) for row in records)
+    return {
+        "state_count": len(records),
+        "exact_best_rate": mean("exact_best"),
+        "top3_hit_rate": mean("top3_hit"),
+        "mean_normalized_regret": mean("normalized_regret"),
+        "mean_oracle_score": mean("selected_oracle_score"),
+    }
+
+
+def _feature_probe_record(
+    model_id: str, state_id: str, selected_id: str, state: list[dict[str, Any]]
+) -> dict[str, Any]:
+    by_id = {str(row["candidate_id"]): row for row in state}
+    selected = by_id[selected_id]
+    ranking = sorted(
+        state,
+        key=lambda row: (-float(row["full_score"]), str(row["candidate_id"])),
+    )
+    scores = {str(row["candidate_id"]): float(row["full_score"]) for row in state}
+    return {
+        "model_id": model_id,
+        "state_id": state_id,
+        "map_id": str(selected["map_id"]),
+        "map_group": str(selected["map_group"]),
+        "source_policy": str(selected["source_policy"]),
+        "conflict_band": str(selected["conflict_band"]),
+        "oracle_half_winner_agreement": bool(
+            selected["oracle_half_winner_agreement"]
+        ),
+        "selected_candidate_id": selected_id,
+        "oracle_candidate_id": str(ranking[0]["candidate_id"]),
+        "exact_best": scores[selected_id] >= scores[str(ranking[0]["candidate_id"])] - 1e-12,
+        "top3_hit": selected_id in {str(row["candidate_id"]) for row in ranking[:3]},
+        "normalized_regret": _normalized_selection_regret(scores, selected_id),
+        "selected_oracle_score": scores[selected_id],
+    }
+
+
+def run_robuststep_feature_probe(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    import numpy as np
+
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_robuststep_feature_probe_config(config)
+    headroom_path = _checked_input(project_root, dict(config["headroom_report"]))
+    headroom = _read_json(headroom_path)
+    if (
+        headroom.get("diagnosis")
+        != "frozen_v2_has_stable_model_or_representation_headroom"
+        or headroom.get("diagnostic_complete") is not True
+    ):
+        raise ValueError("feature probe requires the completed stable-headroom diagnosis")
+    selection_path = _checked_input(project_root, dict(config["selection"]))
+    manifest_path = _checked_input(project_root, dict(config["controller_bundle"]))
+    ranker_path = _checked_input(project_root, dict(config["frozen_ranker"]))
+    trial_paths = [
+        _checked_input(project_root, dict(specification))
+        for specification in config["trial_sources"]
+    ]
+    selection = _read_jsonl(selection_path)
+    selection_by_id = {str(row["state_id"]): row for row in selection}
+    state_ids = set(selection_by_id)
+    if len(state_ids) != len(selection):
+        raise ValueError("feature-probe selection repeats state IDs")
+    metadata, profiles, integrity = _load_seed_profiles(
+        project_root, config, state_ids=state_ids
+    )
+    features = _confirmation_candidate_features(
+        trial_paths, state_ids, set(map(int, config["trial_indices"]))
+    )
+    registered_names = tuple(PROFILE_FEATURE_NAMES["realized_dynamic"])
+    if len(registered_names) != int(config["expected_feature_dimension"]):
+        raise ValueError("feature-probe registered feature dimension differs")
+    first = list(map(int, config["first_half_indices"]))
+    second = list(map(int, config["second_half_indices"]))
+    full = list(map(int, config["trial_indices"]))
+    oracle = dict(config["oracle_score"])
+    map_group_by_id = {
+        str(map_id): str(group_id)
+        for group_id, map_ids in dict(config["map_groups"]).items()
+        for map_id in map_ids
+    }
+    states: dict[str, list[dict[str, Any]]] = {}
+    for state_id, candidates in sorted(profiles.items()):
+        source = selection_by_id[state_id]
+        candidate_ids = sorted(candidates)
+        if set(features.get(state_id, {})) != set(candidate_ids):
+            raise ValueError(f"feature-probe feature/candidate mismatch: {state_id}")
+        rows = []
+        first_ranking = []
+        second_ranking = []
+        for candidate_id in candidate_ids:
+            feature_row = features[state_id][candidate_id]
+            if set(feature_row) != set(registered_names):
+                raise ValueError(f"feature-probe schema mismatch: {state_id}/{candidate_id}")
+            first_score = _aggregate_candidate_score(
+                candidates[candidate_id], first, oracle
+            )
+            second_score = _aggregate_candidate_score(
+                candidates[candidate_id], second, oracle
+            )
+            rows.append(
+                {
+                    "candidate_id": candidate_id,
+                    "candidate_key": candidate_id,
+                    "features": feature_row,
+                    "first_score": first_score,
+                    "second_score": second_score,
+                    "full_score": _aggregate_candidate_score(
+                        candidates[candidate_id], full, oracle
+                    ),
+                    "map_id": str(source["map_id"]),
+                    "map_group": map_group_by_id[str(source["map_id"])],
+                    "source_policy": str(source["source_policy"]),
+                    "conflict_band": str(source["conflict_band"]),
+                }
+            )
+            first_ranking.append((candidate_id, first_score))
+            second_ranking.append((candidate_id, second_score))
+        first_winner = min(first_ranking, key=lambda row: (-row[1], row[0]))[0]
+        second_winner = min(second_ranking, key=lambda row: (-row[1], row[0]))[0]
+        for row in rows:
+            row["oracle_half_winner_agreement"] = first_winner == second_winner
+        states[state_id] = rows
+
+    ranker_payload = _read_json(ranker_path)
+    exact_specs = tuple(
+        (str(row["mode"]), str(row["name"]))
+        for row in ranker_payload["input_features"]
+    )
+    delta_specs = tuple(("delta", name) for name in registered_names)
+    context_specs = delta_specs + tuple(
+        ("shared", name)
+        for name in registered_names
+        if name.startswith(("state.", "context."))
+    )
+    specifications = {
+        "exact_v2_86": exact_specs,
+        "full_124_delta": delta_specs,
+        "full_124_context": context_specs,
+    }
+    if len(exact_specs) != 86:
+        raise ValueError("feature-probe frozen input dimension differs")
+
+    bundle = load_controller_bundle(manifest_path.parent)
+    frozen_model = bundle.main_models["realized_dynamic"]
+    frozen_predictions = {}
+    for state_id, state in sorted(states.items()):
+        online_rows = [
+            {
+                "candidate_id": row["candidate_id"],
+                "candidate_key": row["candidate_key"],
+                "features": {"realized_dynamic": row["features"]},
+            }
+            for row in state
+        ]
+        selected_index, _, _ = score_online_candidates(online_rows, frozen_model)
+        frozen_predictions[state_id] = str(state[selected_index]["candidate_id"])
+
+    held_out_maps = list(map(str, dict(config["fold_protocol"])["held_out_maps"]))
+    parameters = dict(config["model_parameters"])
+    predictions: dict[str, dict[str, str]] = {}
+    fold_reports: dict[str, list[dict[str, Any]]] = {}
+    oof_integrity = {}
+    for variant in config["variants"]:
+        model_id = str(variant["id"])
+        input_specs = specifications[str(variant["input_profile"])]
+        variant_predictions = {}
+        variant_folds = []
+        for fold_index, held_out_map in enumerate(held_out_maps):
+            train_ids = sorted(
+                state_id
+                for state_id, state in states.items()
+                if str(state[0]["map_id"]) != held_out_map
+            )
+            test_ids = sorted(
+                state_id
+                for state_id, state in states.items()
+                if str(state[0]["map_id"]) == held_out_map
+            )
+            if not train_ids or not test_ids:
+                raise ValueError(f"empty feature-probe map fold: {held_out_map}")
+            train_pairs = _feature_probe_pairs(states, train_ids, input_specs)
+            test_pairs = _feature_probe_pairs(states, test_ids, input_specs)
+            estimator = _fit_feature_probe(train_pairs, parameters)
+            probabilities = estimator.predict_proba(test_pairs["values"])[:, 1]
+            correct = (probabilities >= 0.5) == (test_pairs["labels"] == 1)
+            pairwise_accuracy = float(
+                np.sum(test_pairs["weights"][correct])
+                / np.sum(test_pairs["weights"])
+            )
+            for state_id in test_ids:
+                chosen = _select_model(states[state_id], estimator, input_specs)
+                variant_predictions[state_id] = str(chosen["candidate_id"])
+            variant_folds.append(
+                {
+                    "fold_index": fold_index,
+                    "held_out_map": held_out_map,
+                    "training_state_count": len(train_ids),
+                    "test_state_count": len(test_ids),
+                    "training_directional_pair_count": train_pairs[
+                        "directional_pair_count"
+                    ],
+                    "test_directional_pair_count": test_pairs[
+                        "directional_pair_count"
+                    ],
+                    "test_pairwise_accuracy": pairwise_accuracy,
+                }
+            )
+        predictions[model_id] = variant_predictions
+        fold_reports[model_id] = variant_folds
+        oof_integrity[model_id] = set(variant_predictions) == state_ids
+
+    records_by_model = {
+        "v2-full": [
+            _feature_probe_record(
+                "v2-full", state_id, frozen_predictions[state_id], states[state_id]
+            )
+            for state_id in sorted(state_ids)
+        ]
+    }
+    for model_id, model_predictions in predictions.items():
+        records_by_model[model_id] = [
+            _feature_probe_record(
+                model_id, state_id, model_predictions[state_id], states[state_id]
+            )
+            for state_id in sorted(state_ids)
+        ]
+
+    summaries = {}
+    for model_id, records in records_by_model.items():
+        summaries[model_id] = {
+            "overall": _feature_probe_summary(records),
+            "stable_states": _feature_probe_summary(
+                [row for row in records if row["oracle_half_winner_agreement"]]
+            ),
+            "unstable_states": _feature_probe_summary(
+                [row for row in records if not row["oracle_half_winner_agreement"]]
+            ),
+            "by_map": {
+                map_id: _feature_probe_summary(
+                    [row for row in records if row["map_id"] == map_id]
+                )
+                for map_id in held_out_maps
+            },
+        }
+
+    thresholds = dict(config["diagnostic_thresholds"])
+    frozen_summary = summaries["v2-full"]
+    evaluations = {}
+    passing_variants = []
+    for variant in config["variants"]:
+        model_id = str(variant["id"])
+        summary = summaries[model_id]
+        stable_regret_improvement = float(
+            frozen_summary["stable_states"]["mean_normalized_regret"]
+        ) - float(summary["stable_states"]["mean_normalized_regret"])
+        overall_regret_improvement = float(
+            frozen_summary["overall"]["mean_normalized_regret"]
+        ) - float(summary["overall"]["mean_normalized_regret"])
+        stable_top3_delta = float(summary["stable_states"]["top3_hit_rate"]) - float(
+            frozen_summary["stable_states"]["top3_hit_rate"]
+        )
+        map_deltas = {
+            map_id: float(summary["by_map"][map_id]["mean_normalized_regret"])
+            - float(frozen_summary["by_map"][map_id]["mean_normalized_regret"])
+            for map_id in held_out_maps
+        }
+        map_win_count = sum(delta < -1e-12 for delta in map_deltas.values())
+        worst_map_degradation = max(map_deltas.values())
+        gates = {
+            "minimum_stable_state_count": int(
+                summary["stable_states"]["state_count"]
+            )
+            >= int(thresholds["minimum_stable_state_count"]),
+            "minimum_stable_regret_improvement": stable_regret_improvement
+            >= float(thresholds["minimum_stable_regret_improvement"]),
+            "minimum_overall_regret_improvement": overall_regret_improvement
+            >= float(thresholds["minimum_overall_regret_improvement"]),
+            "minimum_stable_top3_delta": stable_top3_delta
+            >= float(thresholds["minimum_stable_top3_delta"]),
+            "minimum_map_regret_win_count": map_win_count
+            >= int(thresholds["minimum_map_regret_win_count"]),
+            "maximum_worst_map_regret_degradation": worst_map_degradation
+            <= float(thresholds["maximum_worst_map_regret_degradation"]),
+        }
+        passed = all(gates.values())
+        if passed:
+            passing_variants.append(model_id)
+        evaluations[model_id] = {
+            "stable_regret_improvement": stable_regret_improvement,
+            "overall_regret_improvement": overall_regret_improvement,
+            "stable_top3_delta": stable_top3_delta,
+            "map_regret_deltas": map_deltas,
+            "map_regret_win_count": map_win_count,
+            "worst_map_regret_degradation": worst_map_degradation,
+            "gates": gates,
+            "passed": passed,
+        }
+
+    ordered = [str(row["id"]) for row in config["variants"]]
+    first_passing = next((model_id for model_id in ordered if model_id in passing_variants), None)
+    diagnosis = (
+        "existing_v2_feature_subset_is_sufficient_old_training_objective_or_distribution_mismatch"
+        if first_passing == "stride-stepdiag-v1/exact-v2-86"
+        else "additional_candidate_features_are_needed"
+        if first_passing == "stride-stepdiag-v1/full-124-delta"
+        else "state_conditioning_is_needed"
+        if first_passing == "stride-stepdiag-v1/full-124-context"
+        else "feature_sufficiency_not_demonstrated_on_consumed_cohort"
+    )
+    headroom_frozen = {
+        str(row["state_id"]): str(row["v2_selected_candidate_id"])
+        for row in headroom["records"]
+    }
+    all_pair_rows = _feature_probe_pairs(states, sorted(state_ids), exact_specs)
+    current_maps = {str(state[0]["map_id"]) for state in states.values()}
+    integrity_gates = {
+        "state_count": integrity["state_count"] == int(config["expected_state_count"]),
+        "candidate_count": integrity["candidate_count"]
+        == int(config["expected_candidate_count"]),
+        "outcome_count": integrity["outcome_count"]
+        == int(config["expected_outcome_count"]),
+        "feature_candidate_complete": sum(len(rows) for rows in features.values())
+        == integrity["candidate_count"],
+        "whole_map_fold_partition": current_maps == set(held_out_maps),
+        "frozen_selection_matches_headroom": frozen_predictions == headroom_frozen,
+        "stable_pairs_cover_every_state": all_pair_rows["state_count"] == len(state_ids),
+        "complete_oof_predictions": all(oof_integrity.values()),
+    }
+    report = {
+        "schema": FEATURE_PROBE_REPORT_SCHEMA,
+        "scientific_status": "consumed_feature_sufficiency_diagnostic",
+        "formal_speed_claim": False,
+        "default_replacement_allowed": False,
+        "runtime_model_exported": False,
+        "formal_ood_claim": False,
+        "diagnostic_controller_id": str(config["diagnostic_controller_id"]),
+        "frozen_anchor_id": str(config["frozen_anchor_id"]),
+        "integrity": integrity,
+        "integrity_gates": integrity_gates,
+        "pair_contract": {
+            **dict(config["pair_contract"]),
+            "stable_pair_count": all_pair_rows["stable_pair_count"],
+            "possible_pair_count": all_pair_rows["possible_pair_count"],
+            "stable_pair_fraction": all_pair_rows["stable_pair_count"]
+            / all_pair_rows["possible_pair_count"],
+        },
+        "input_dimensions": {
+            profile: len(specifications[profile]) for profile in specifications
+        },
+        "folds": fold_reports,
+        "summaries": summaries,
+        "evaluations": evaluations,
+        "passing_variants": passing_variants,
+        "diagnosis": diagnosis,
+        "diagnostic_complete": all(integrity_gates.values()),
+        "next_decision": (
+            "register_new_fresh_data_before_any_successor_training"
+            if passing_variants
+            else "retain_v2_and_redesign_features_or_candidate_generation"
+        ),
+        "records": records_by_model,
+        "inputs": {
+            "config_sha256": sha256_file(config_path),
+            "headroom_report_sha256": sha256_file(headroom_path),
+            "selection_sha256": sha256_file(selection_path),
+            "controller_manifest_sha256": sha256_file(manifest_path),
+            "frozen_ranker_sha256": sha256_file(ranker_path),
+            "trial_source_sha256": {
+                str(path): sha256_file(path) for path in trial_paths
+            },
+        },
+    }
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_json(output_root / "robuststep_feature_probe_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLER_ID",
     "LABEL_SCHEMA",
@@ -1595,9 +2144,11 @@ __all__ = [
     "run_robuststep_seed_depth",
     "run_robuststep_score_design",
     "run_robuststep_v2_headroom",
+    "run_robuststep_feature_probe",
     "validate_robuststep_config",
     "validate_robuststep_confirmation_config",
     "validate_robuststep_v2_headroom_config",
+    "validate_robuststep_feature_probe_config",
     "validate_robuststep_seed_depth_config",
     "validate_robuststep_score_config",
     "evaluate_robuststep_score_variant",

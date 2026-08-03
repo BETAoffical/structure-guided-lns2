@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from experiments.stride_robuststep import (  # noqa: E402
     run_robuststep_confirmation,
     run_robuststep_design,
+    run_robuststep_feature_probe,
     run_robuststep_score_design,
     run_robuststep_seed_depth,
     run_robuststep_v2_headroom,
@@ -25,7 +26,12 @@ def main() -> int:
     parser.add_argument(
         "--analysis",
         choices=(
-            "design", "seed-depth", "score-design", "confirmation", "v2-headroom"
+            "design",
+            "seed-depth",
+            "score-design",
+            "confirmation",
+            "v2-headroom",
+            "feature-probe",
         ),
         default="design",
     )
@@ -42,6 +48,7 @@ def main() -> int:
         "score-design": run_robuststep_score_design,
         "confirmation": run_robuststep_confirmation,
         "v2-headroom": run_robuststep_v2_headroom,
+        "feature-probe": run_robuststep_feature_probe,
     }[arguments.analysis]
     report = runner(arguments.config, arguments.output)
     print(json.dumps(report, indent=2, sort_keys=True))

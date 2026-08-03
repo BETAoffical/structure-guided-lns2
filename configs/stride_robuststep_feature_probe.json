@@ -1,0 +1,103 @@
+{
+  "schema": "lns2.stride.robuststep_feature_probe_config.v1",
+  "scientific_status": "consumed_feature_sufficiency_diagnostic",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "diagnostic_result_may_promote_model": false,
+  "ephemeral_probe_training_allowed": true,
+  "diagnostic_controller_id": "stride-stepdiag-v1",
+  "frozen_anchor_id": "v2-full",
+  "score_schema": "lns2.stride.robust_step_score.v1",
+  "headroom_report": {
+    "path": "build/stride-robuststep-v2-headroom-v1/robuststep_v2_headroom_report.json",
+    "sha256": "75b0748d68841bc508a628dfbf7124a540fd7b2d6dc5b78e9d7fc0eeaf5a3165"
+  },
+  "selection": {
+    "path": "build/stride-robuststep-confirmation-selection-v1/state_selection.jsonl",
+    "sha256": "8ba0fb88e9a00c38f58e4ca519bb99bd4d51dd286c01b7ba96c1bb1bc4a472bd"
+  },
+  "trial_sources": [
+    {
+      "path": "build/stride-robuststep-confirmation-base-v1/repair_trials.jsonl",
+      "sha256": "d351ea3be30cdc4e49cfdfba980d1f099ee95bf49ba17e425b26665abfafb6a6"
+    },
+    {
+      "path": "build/stride-robuststep-confirmation-extension-v1/extra_trials.jsonl",
+      "sha256": "cc5db24a8a0dd0fb29846df34968848eec40dec6640e4630b810f9c4fc03a54a"
+    }
+  ],
+  "controller_bundle": {
+    "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+    "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "frozen_ranker": {
+    "path": "artifacts/initlns-closed-loop-controller-v2/main__realized_dynamic.json",
+    "sha256": "b6afff3bf436c8a2acb5571094817ce94aef71b5aa0cb1c2369de1c0e1d3abe2"
+  },
+  "expected_state_count": 48,
+  "expected_candidate_count": 854,
+  "expected_outcome_count": 13664,
+  "expected_feature_schema_id": "lns2.realized_features.v2",
+  "expected_feature_dimension": 124,
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+  "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+  "structure_weight": 0.02,
+  "oracle_score": {
+    "id": "mean",
+    "mode": "mean",
+    "deviation_weight": 0.0,
+    "no_progress_penalty": 0.0
+  },
+  "runtime_used_in_oracle": false,
+  "future_repair_rounds_used_in_oracle": false,
+  "cost_to_go_used_in_oracle": false,
+  "fold_protocol": {
+    "mode": "leave_one_whole_map_out",
+    "fold_count": 6,
+    "held_out_maps": ["den009d", "den101d", "den308d", "den408d", "lak101d", "ost102d"],
+    "state_and_candidate_group_integrity": true
+  },
+  "pair_contract": {
+    "inclusion": "same_strict_direction_in_both_eight_seed_halves",
+    "direction": "full_sixteen_seed_plain_mean",
+    "weighting": "equal_total_weight_per_state"
+  },
+  "variants": [
+    {
+      "id": "stride-stepdiag-v1/exact-v2-86",
+      "input_profile": "exact_v2_86"
+    },
+    {
+      "id": "stride-stepdiag-v1/full-124-delta",
+      "input_profile": "full_124_delta"
+    },
+    {
+      "id": "stride-stepdiag-v1/full-124-context",
+      "input_profile": "full_124_context"
+    }
+  ],
+  "model_parameters": {
+    "early_stopping": false,
+    "l2_regularization": 0.1,
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "random_state": 20260714
+  },
+  "diagnostic_thresholds": {
+    "minimum_stable_state_count": 24,
+    "minimum_stable_regret_improvement": 0.05,
+    "minimum_overall_regret_improvement": 0.03,
+    "minimum_stable_top3_delta": 0.0,
+    "minimum_map_regret_win_count": 4,
+    "maximum_worst_map_regret_degradation": 0.10
+  },
+  "map_groups": {
+    "dao_compact_game": ["den009d", "den101d", "den308d"],
+    "dao_ultra_compact_game": ["den408d", "lak101d", "ost102d"]
+  }
+}

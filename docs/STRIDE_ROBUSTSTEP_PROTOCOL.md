@@ -383,6 +383,39 @@ the frozen V2 remains the only runtime controller. The headroom report
 SHA-256 is
 `75b0748d68841bc508a628dfbf7124a540fd7b2d6dc5b78e9d7fc0eeaf5a3165`.
 
+### Registered consumed feature-sufficiency probe
+
+The next diagnostic reuses only the consumed 48-state confirmation cohort; it
+does not open the nine reserved maps. Six leave-one-whole-map-out folds keep
+every state and all of its candidates in one fold. Training pairs are included
+only when both independent eight-seed halves give the same strict direction,
+and every state receives equal total pair weight. Labels remain the 16-seed
+plain mean immediate-quality score; runtime, future repair rounds, and
+Cost-to-Go remain excluded.
+
+Three fixed, separately named ephemeral probes are evaluated without tuning:
+
+- `stride-stepdiag-v1/exact-v2-86` retrains the exact 86-input frozen-V2
+  representation;
+- `stride-stepdiag-v1/full-124-delta` uses all 124 registered features as
+  candidate-pair differences;
+- `stride-stepdiag-v1/full-124-context` adds shared `state.*` and `context.*`
+  values so candidate quality may depend on the current state.
+
+All use the already registered Stage 4 HistGradientBoosting parameters. A
+probe is diagnostically sufficient only if, relative to frozen V2, it reduces
+stable-state normalized regret by at least 0.05, overall regret by at least
+0.03, does not reduce stable-state Top-3 hit rate, wins at least four of six
+held-out maps, and degrades no map by more than 0.10 regret. Passing the
+86-input probe supports an old-label/training-distribution mismatch; passing
+only the 124-delta probe supports missing candidate features; passing only the
+context probe supports missing state conditioning. Failure of all three means
+feature sufficiency was not demonstrated on this small consumed cohort.
+
+This probe may not export or promote a runtime model. Even a positive result
+requires a separately registered fresh-data design before successor training;
+`v2-full` remains the active controller throughout.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
