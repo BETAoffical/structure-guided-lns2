@@ -19,6 +19,7 @@ class PairwiseV2Selector:
             "mixed-full-v2",
             "stride-control-v1",
             "stride-quality-v1",
+            "stride-augcontrol-v1",
         }:
             raise ValueError("unsupported pairwise V2 controller id")
         models = getattr(bundle, "main_models", None)

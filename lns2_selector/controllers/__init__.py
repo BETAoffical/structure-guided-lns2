@@ -34,6 +34,7 @@ def load_selector(
         "mixed-full-v2",
         "stride-control-v1",
         "stride-quality-v1",
+        "stride-augcontrol-v1",
     }
     if resolved in pairwise_ids:
         loaded = load_controller_bundle(bundle)

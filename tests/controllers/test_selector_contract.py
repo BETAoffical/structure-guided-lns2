@@ -67,7 +67,11 @@ class SelectorContractTests(unittest.TestCase):
         )
         self.assertEqual(
             DIAGNOSTIC_CONTROLLER_IDS,
-            ("stride-control-v1", "stride-quality-v1"),
+            (
+                "stride-control-v1",
+                "stride-quality-v1",
+                "stride-augcontrol-v1",
+            ),
         )
 
     def test_historical_controller_aliases_are_not_executable(self) -> None:
@@ -112,6 +116,7 @@ class SelectorContractTests(unittest.TestCase):
             "mixed-full-v2",
             "stride-control-v1",
             "stride-quality-v1",
+            "stride-augcontrol-v1",
         ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(
@@ -133,6 +138,7 @@ class SelectorContractTests(unittest.TestCase):
             "mixed-full-v2",
             "stride-control-v1",
             "stride-quality-v1",
+            "stride-augcontrol-v1",
         ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(

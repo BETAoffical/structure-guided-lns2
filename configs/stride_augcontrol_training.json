@@ -2,9 +2,20 @@
   "schema": "lns2.stride.augcontrol_training_config.v1",
   "scientific_status": "preregistered_before_repairability_label_outcomes",
   "controller_id": "stride-augcontrol-v1",
+  "conflict_ablation_id": "stride-augcontrol-conflict-v1",
   "label_schema": "lns2.stride.repairability_label.v1",
   "feature_schema": "lns2.realized_features.v2",
   "base_feature_dimension": 124,
+  "labels": "build/stride-repairability-labels-v1",
+  "selection": "build/stride-repairability-selection-v1/state_selection.jsonl",
+  "label_design": "configs/stride_repairability_label_design.json",
+  "label_design_sha256": "3156b33700c0e342741ad4c9bf3dd1e648cbbef1b435cff70e9679984cd27c16",
+  "data_design": "configs/stride_repairability_data_design.json",
+  "data_design_sha256": "d3882d9ad0a5224c3d242e259550202769502e940964c147ff04fac153d658e0",
+  "source_cohort": "configs/stride_repairability_source_cohort.json",
+  "source_cohort_sha256": "1d96bf649360dcf926f865b71f280d9c29463591ee2e3b6eb57bc67a0214bd21",
+  "frozen_v2_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "frozen_v2_manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8",
   "pairwise_input": {
     "candidate_features": "delta",
     "shared_state_context": "mean",
@@ -54,5 +65,7 @@
     "controller_outcome"
   ],
   "formal_ood_data_allowed": false,
-  "default_replacement_allowed": false
+  "test_data_allowed": false,
+  "default_replacement_allowed": false,
+  "formal_speed_claim": false
 }

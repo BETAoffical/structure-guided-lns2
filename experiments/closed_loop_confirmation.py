@@ -136,6 +136,7 @@ PAIRWISE_CONTROLLER_MODES = {
     "mixed-full-v2",
     "stride-control-v1",
     "stride-quality-v1",
+    "stride-augcontrol-v1",
 }
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
@@ -2914,16 +2915,21 @@ def run_closed_loop_collection(
     controller_mode, controller_root, controller_manifest = resolve_controller_mode(
         project_root, controller, controller_bundle
     )
-    if topology_boundary_augmentation is not None and controller_mode != "v2-full":
-        raise ValueError("topology-boundary augmentation requires frozen v2-full")
+    if topology_boundary_augmentation is not None and controller_mode not in {
+        "v2-full",
+        "stride-augcontrol-v1",
+    }:
+        raise ValueError(
+            "topology-boundary augmentation requires v2-full or stride-augcontrol-v1"
+        )
     diagnostic_shadow_roots: dict[str, Path] = {}
     diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}
     if diagnostic_shadow_bundles:
         if controller_mode != "v2-full":
             raise ValueError("diagnostic shadows require v2-full execution")
-        required_shadow_ids = {"stride-control-v1", "stride-quality-v1"}
-        if set(diagnostic_shadow_bundles) != required_shadow_ids:
-            raise ValueError("diagnostic shadow requires both STRIDE bundles")
+        shadow_ids = set(diagnostic_shadow_bundles)
+        if not shadow_ids or not shadow_ids <= set(DIAGNOSTIC_CONTROLLER_IDS):
+            raise ValueError("diagnostic shadow contains an unregistered STRIDE bundle")
         for shadow_id, raw_path in sorted(diagnostic_shadow_bundles.items()):
             shadow_root = Path(str(raw_path))
             if not shadow_root.is_absolute():

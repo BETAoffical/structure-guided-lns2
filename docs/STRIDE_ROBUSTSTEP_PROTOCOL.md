@@ -1429,6 +1429,34 @@ SHA-256 values are respectively
 and `0e51d0ce19065e620e948425faba49850f6c0527d47efc913af102f3dfbe358d`.
 This is a data-source milestone only; it is not a label, model, or speed claim.
 
+### Registered source-state selection and augmented controller training
+
+The two source-policy traces feed a dedicated result-blind selector before any
+new candidate is repaired. It selects exactly 120 states from
+`official_adaptive` and 120 from frozen `v2-full`, with at most two states per
+episode. Each of the 22 effective maps contributes at least eight states and
+both source policies; static-topology control and boundary-relevant groups
+each contribute at least 40%, states with at least 101 conflicts contribute at
+least 10%, and early, middle, and late decisions must all be present. The
+selector admits only pre-action identity, conflict load, static topology, and
+the deterministic replay prefix. It rejects TTF, repair time, selected action,
+candidate outcome, after-state, and future-trajectory fields.
+
+The independent model remains `stride-augcontrol-v1`; its conflict-only
+training ablation is `stride-augcontrol-conflict-v1`. Both use the already
+registered 124 realized features, 147 pairwise inputs, fixed
+`HistGradientBoostingClassifier` capacity, equal state weight, and no
+hyperparameter tuning. Six whole validation maps remain excluded from fitting.
+The primary model is evaluated against frozen V2 on the identical augmented
+pool, the same primary model restricted to base candidates, and the
+conflict-only-label ablation. The earlier committed gates are preserved: at
+least six validation maps, weighted pairwise accuracy at least 0.03 above the
+weighted-majority baseline, normalized regret at least 5% relatively or 0.02
+absolutely below frozen V2, exact-best and Top-3 noninferiority within 0.01,
+and no static-topology group regret degradation above 0.03. A pass authorizes
+only action-preserving Shadow; the exported bundle remains diagnostic-only and
+cannot replace V2 before paired raw-TTF evidence.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

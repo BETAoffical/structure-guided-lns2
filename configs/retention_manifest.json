@@ -239,6 +239,11 @@
       "purpose": "Non-promoting run-to-completion paired ablation of map-only and stall-guard topology-boundary activation."
     },
     {
+      "path": "experiments/stride_augcontrol.py",
+      "role": "active",
+      "purpose": "Map-held-out training, ablation, portable export, and repairability-regret evaluation for stride-augcontrol-v1."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -769,6 +774,11 @@
       "purpose": "CLI entry point for state-balanced 16-seed STRIDE repairability label construction."
     },
     {
+      "path": "scripts/build_stride_repairability_source_selection.py",
+      "role": "active",
+      "purpose": "CLI entry point for result-blind, map- and policy-balanced repairability source-state selection."
+    },
+    {
       "path": "scripts/collect_stride_repairability.py",
       "role": "active",
       "purpose": "CLI entry point for resumable frozen-pool 16-seed repairability collection."
@@ -792,6 +802,11 @@
       "path": "scripts/run_stride_boundary_runtime_optimization.py",
       "role": "active",
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
+    },
+    {
+      "path": "scripts/train_stride_augcontrol.py",
+      "role": "active",
+      "purpose": "CLI entry point for preregistered stride-augcontrol-v1 training and validation."
     },
     {
       "path": "scripts/run_stride_stage4r_high_load.py",
@@ -1037,6 +1052,11 @@
       "path": "tests/integration/test_stride_boundary_ttf_quick.py",
       "role": "active",
       "contract": "Paired alternating schedule, capped-TTF primary metric, boundary activation accounting, and non-promotion gates."
+    },
+    {
+      "path": "tests/integration/test_stride_augcontrol.py",
+      "role": "active",
+      "contract": "Independent controller identity, frozen 147-input capacity, runtime exclusion, repairability regret, and augmented-pool opportunity semantics."
     },
     {
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",
