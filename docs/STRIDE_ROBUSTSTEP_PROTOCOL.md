@@ -1459,6 +1459,39 @@ and no static-topology group regret degradation above 0.03. A pass authorizes
 only action-preserving Shadow; the exported bundle remains diagnostic-only and
 cannot replace V2 before paired raw-TTF evidence.
 
+### Completed paired source traces and result-blind state selection
+
+The unified source run completed 88 reset-only qualifications, 88
+`official_adaptive` episodes, and 88 frozen-`v2-full` episodes over 22 maps,
+44 tasks, and solver seeds 1 and 2. All rows had status `ok`; there were zero
+timeouts, invalid actions, trace-schema errors, or semantic mismatches. Every
+official/V2 row matched the qualification row on initial state fingerprint and
+initial conflict count. Official Adaptive solved 84/88 episodes and V2 solved
+85/88; the remaining seven rows are valid unsolved algorithm outcomes rather
+than collection errors. Qualification, official, V2, collection-summary, and
+run-config SHA-256 values are respectively
+`431c33fa007eb7e9d1f339302b52477a62b2d0ac8e200c8b1559af426c1cb402`,
+`6b6e7b23fbc01d2b868c217233e6eb631c47c43094e3f81828743fa0999ea1f8`,
+`4a9aed6d0f5b5fb913d059967ae61a259857245874fd05bc0d4cbbe364ffed92`,
+`d9861552d15ce81ae287efd74a1805063751d71f00dea742c2490f95f2684c63`,
+and `ea47c5166d272047f2745adea5c6c634e3e624653bb4a1f89132037732df1246`.
+
+The result-blind selector then considered 1,473 active pre-action decisions
+and fixed exactly 240 states: 120 per source policy, 80 per decision stage,
+105 static-topology controls and 135 boundary-relevant states. Conflict bands
+contain 101 states at 1--10 pairs, 85 at 11--100, 52 at 101--500, and two
+above 500. All 22 maps occur, the smallest map contribution is nine states,
+both policies occur on every map, and no episode contributes more than two.
+No candidate outcome, selected action, repair runtime, future trajectory, or
+controller TTF field was present. The annotated selection, selection report,
+source-selection report, and raw result-blind selection SHA-256 values are
+`f523122c62a000274df1250f4bbda9ff7757c73991d26ce33644f4040bfe6bb8`,
+`4f8cd24c517bd763718a1f9e240320b40a5624956af4d709154d8d07e1a484e6`,
+`d0a36f8f4650b66a91fd1379ffbac88bd0daa9070634322e0b59c3be1299ee70`,
+and `f24f7bfb48064791332f046f75db5a4fc9d21227692828dce437bd9b43f4f8eb`.
+This selection remains a data-source artifact; it contains no repairability
+label and reads no formal OOD map.
+
 ### Preregistered staged raw-TTF evaluation
 
 Runtime evaluation separates candidate-pool quality from ranking quality with
