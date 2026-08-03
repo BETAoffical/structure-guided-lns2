@@ -215,3 +215,29 @@ and pass portable selection equivalence on all `600/600` development states.
 - Stage 4R range-contract control/quality manifest SHA-256 values:
   `23cf2c6888f26e9bb9b4bb157f648a11ef0eeb11bf711ae88016decb1ba75cb6`
   and `f6f005bffdf02ac6bf8c7af6e5bbfd743ae6df1f1ddf840a4be35c56f4b348fc`.
+
+## Stage 4R multi-seed tail result
+
+The outcome-informed follow-up ran four registered tasks, four solver seeds,
+and all three controllers in 48 serial schedule entries. All controllers solved
+16/16 episodes and every pairing/integrity gate passed. Mean capped TTF was
+`11.1493` seconds for V2, `13.1622` for control, and `13.0991` for quality, so
+control and quality were respectively 18.0540% and 17.4884% slower than V2.
+Quality also increased mean repair rounds from `11.000` to `21.688` and mean
+no-progress transitions from `2.938` to `13.625`.
+
+The pre-registered persistent-tail rule did not fire: quality was adverse on
+only 2/4 `lt_gallowstemplar_n` seeds, although it was adverse on all 4/4
+`maze-128-128-2` seeds. The mixed TTF signs make the result seed-sensitive.
+V2 remains the anchor and neither candidate is promoted. The next safe
+diagnostic is a same-state, same-neighborhood paired PP-seed replay; it must
+separate repair randomness from neighborhood choice before the one-step label
+is changed. The result remains diagnostic-only because its four tasks were
+selected after reading Quick-v2 outcomes.
+
+- Multi-seed diagnostic report SHA-256:
+  `a42df7995a7b2ab7781118f0f2396ee37f0c8a08e08ddd90d2d8ace0b04968cc`
+- Multi-seed V2/control/quality manifest SHA-256 values:
+  `7bf441ebe234cc8df6ad25cb672eab868b237c46d8d306acb5ab9f4492256dde`,
+  `831d7a0fac2f8b8faf5dfbea12fc34bbd9d3fc163781229bbaa552c32ee8b8ff`,
+  and `590cc3ea40ee98e17307980ec56eb52e76621fcae87d9a3e6ffaad01594c5122`.
