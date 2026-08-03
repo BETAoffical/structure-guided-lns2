@@ -1,0 +1,79 @@
+{
+  "schema": "lns2.stride.topology_probe_config.v1",
+  "scientific_status": "consumed_topology_feature_diagnostic",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "diagnostic_result_may_promote_model": false,
+  "candidate_repair_trials_allowed_during_extraction": false,
+  "diagnostic_controller_id": "stride-topologydiag-v1",
+  "baseline_id": "stride-stepdiag-v1/exact-v2-86",
+  "variant_id": "stride-topologydiag-v1/exact-v2-86+interaction14",
+  "feature_schema": "lns2.stride.topology_interaction_features.v1",
+  "feature_names": [
+    "topology.state.articulation_event_ratio",
+    "topology.state.low_degree_event_ratio",
+    "topology.realized.internal_articulation_event_coverage",
+    "topology.realized.incident_articulation_event_coverage",
+    "topology.realized.boundary_articulation_event_ratio",
+    "topology.realized.internal_low_degree_event_coverage",
+    "topology.realized.incident_low_degree_event_coverage",
+    "topology.realized.boundary_low_degree_event_ratio",
+    "topology.realized.articulation_agent_coverage",
+    "topology.realized.low_degree_agent_coverage",
+    "topology.realized.path_articulation_cell_coverage",
+    "topology.realized.path_low_degree_cell_coverage",
+    "topology.realized.articulation_visit_heat_coverage",
+    "topology.realized.low_degree_visit_heat_coverage"
+  ],
+  "definitions": {
+    "low_degree_cell": "free_grid_degree_at_most_two",
+    "articulation_event": "any_event_cell_is_static_grid_articulation",
+    "low_degree_event": "any_event_cell_has_free_grid_degree_at_most_two",
+    "internal_event": "both_conflicting_agents_are_selected",
+    "incident_event": "at_least_one_conflicting_agent_is_selected",
+    "boundary_event": "exactly_one_conflicting_agent_is_selected",
+    "path_cell_coverage": "unique_selected_path_cells_over_unique_all_path_cells",
+    "visit_heat_coverage": "global_visit_heat_on_unique_selected_cells_over_all_cells"
+  },
+  "feature_probe_config": {
+    "path": "configs/stride_robuststep_feature_probe.json",
+    "sha256": "c30bfdd4987f8de4812903b6b6412cab8705d8dc79e5863e38ea40adde4abe86"
+  },
+  "feature_probe_report": {
+    "path": "build/stride-robuststep-feature-probe-v1/robuststep_feature_probe_report.json",
+    "sha256": "04b39aee19046c5a20936b3ec6b1a54a7a823ff2834ca3d82e9e1817a30b6f08"
+  },
+  "base_collection": {
+    "root": "build/stride-robuststep-confirmation-base-v1",
+    "collection_report": {
+      "path": "build/stride-robuststep-confirmation-base-v1/collection_report.json",
+      "sha256": "76af70749a378717c1073873ae441e1f4126363ee29091e0611d2713cf06e964"
+    },
+    "run_config": {
+      "path": "build/stride-robuststep-confirmation-base-v1/run_config.json",
+      "sha256": "8ee5eec8fbade2a0a0e766bb3c47acc32c90e352add94acd82ea80e8fe9fc75a"
+    },
+    "state_selection": {
+      "path": "build/stride-robuststep-confirmation-base-v1/state_selection.jsonl",
+      "sha256": "8ba0fb88e9a00c38f58e4ca519bb99bd4d51dd286c01b7ba96c1bb1bc4a472bd"
+    }
+  },
+  "expected_state_count": 48,
+  "expected_candidate_count": 854,
+  "fold_protocol": {
+    "mode": "leave_one_whole_map_out",
+    "fold_count": 6,
+    "held_out_maps": ["den009d", "den101d", "den308d", "den408d", "lak101d", "ost102d"]
+  },
+  "diagnostic_gates": {
+    "minimum_stable_state_count": 24,
+    "minimum_overall_regret_improvement_vs_exact86": 0.01,
+    "minimum_stable_regret_improvement_vs_exact86": 0.02,
+    "minimum_stable_top3_delta_vs_exact86": 0.0,
+    "minimum_map_regret_win_count_vs_exact86": 3,
+    "maximum_worst_map_regret_degradation_vs_exact86": 0.05,
+    "maximum_ost102d_regret_degradation_vs_exact86": 0.0
+  }
+}

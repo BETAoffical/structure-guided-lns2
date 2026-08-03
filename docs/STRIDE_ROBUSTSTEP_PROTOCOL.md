@@ -542,6 +542,34 @@ design, followed by a small map-grouped diagnostic before any larger label
 collection. The deterministic report SHA-256 is
 `225bf2af658022b978f78f1ceb765db179aa3d0ed007343f6903bc976982a8f6`.
 
+### Registered candidate-relative topology diagnostic
+
+`stride-topologydiag-v1` tests whether the shared transfer failures reflect
+missing interactions between the proposed neighborhood and map bottlenecks.
+It reuses the consumed 48-state, 854-candidate confirmation cohort and its
+fixed 16-seed immediate-quality labels. Historical prefix actions may be
+replayed only to reconstruct each saved decision state; no candidate is sent
+through a new PP repair trial during feature extraction.
+
+Fourteen preregistered features measure articulation-cell and degree-at-most-
+two conflict prevalence, internal/incident/boundary conflict-event coverage,
+affected-agent coverage, unique path-cell coverage, and visit-heat coverage.
+Unlike the failed static context probe, twelve values are relative to the
+candidate neighborhood; the two state prevalence values are shared context.
+The diagnostic augments only the exact-V2 86-input representation, producing
+a 100-input ephemeral probe with the same fixed model parameters and six
+leave-one-whole-map-out folds.
+
+Relative to the already pinned exact-86 OOF probe, the augmented probe must
+improve overall normalized regret by at least 0.01 and stable-state regret by
+at least 0.02, preserve stable Top-3, win at least three maps, degrade no map
+by more than 0.05, and not degrade `ost102d` at all. The stable cohort must
+still contain at least 24 states. These gates are diagnostic only: a pass
+permits a separately registered fresh, topology-balanced confirmation; a
+failure retains V2 and shifts attention to broader map coverage or candidate
+generation. This consumed-data result cannot export or promote a model and
+cannot support a TTF or formal OOD claim.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,
