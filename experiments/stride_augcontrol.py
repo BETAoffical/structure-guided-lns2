@@ -50,6 +50,59 @@ def _input_specifications() -> tuple[tuple[str, ...], tuple[tuple[str, str], ...
     return names, specifications
 
 
+def _validate_label_audit_provenance(
+    label_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    # Lazy import avoids the collection -> label-config import cycle.
+    from experiments.stride_repairability_audit import AUDIT_SCHEMA
+
+    trial_sources = list(label_summary.get("trial_sources") or ())
+    audit_sources = list(label_summary.get("audit_sources") or ())
+    if not trial_sources or len(trial_sources) != len(audit_sources):
+        raise ValueError("STRIDE augcontrol labels lack complete collection audits")
+    verified = []
+    audited_state_count = 0
+    for trial_source, audit_source in zip(trial_sources, audit_sources):
+        trial_path = Path(str(trial_source.get("path", ""))).resolve()
+        audit_path = Path(str(audit_source.get("path", ""))).resolve()
+        if (
+            not trial_path.is_file()
+            or sha256_file(trial_path) != str(trial_source.get("sha256", ""))
+        ):
+            raise ValueError(f"STRIDE augcontrol raw trial source differs: {trial_path}")
+        if (
+            not audit_path.is_file()
+            or sha256_file(audit_path) != str(audit_source.get("sha256", ""))
+        ):
+            raise ValueError(f"STRIDE augcontrol collection audit differs: {audit_path}")
+        audit = _read_json(audit_path)
+        state_count = int(audit.get("state_count", 0))
+        if (
+            audit.get("schema") != AUDIT_SCHEMA
+            or audit.get("passed") is not True
+            or str(audit.get("run_fingerprint", ""))
+            != str(audit_source.get("run_fingerprint", ""))
+            or state_count != int(audit_source.get("state_count", -1))
+            or str(dict(audit.get("sha256") or {}).get("repair_trials", ""))
+            != str(trial_source.get("sha256", ""))
+        ):
+            raise ValueError(f"STRIDE augcontrol collection audit is invalid: {audit_path}")
+        audited_state_count += state_count
+        verified.append(
+            {
+                "trial_path": str(trial_path),
+                "trial_sha256": str(trial_source["sha256"]),
+                "audit_path": str(audit_path),
+                "audit_sha256": str(audit_source["sha256"]),
+                "run_fingerprint": str(audit["run_fingerprint"]),
+                "state_count": state_count,
+            }
+        )
+    if audited_state_count != int(label_summary.get("state_count", -1)):
+        raise ValueError("STRIDE augcontrol audited state coverage differs")
+    return verified
+
+
 def validate_augcontrol_training_config(config: dict[str, Any]) -> None:
     if (
         config.get("schema") != CONFIG_SCHEMA
@@ -516,6 +569,7 @@ def run_augcontrol_training(
         or bool(label_summary.get("future_trajectory_used_in_label"))
     ):
         raise ValueError("STRIDE augcontrol label summary is invalid")
+    label_audit_provenance = _validate_label_audit_provenance(label_summary)
 
     candidates, grouped = _load_candidates(
         aggregate_path,
@@ -879,6 +933,7 @@ def run_augcontrol_training(
     )
     integrity_gates = {
         "label_summary_identity": True,
+        "passed_collection_audits": True,
         "map_held_out_split": True,
         "feature_schema": len(names) == 124,
         "pairwise_input_dimension": len(input_specs) == 147,
@@ -914,6 +969,7 @@ def run_augcontrol_training(
         "primary_pairwise_validation": pairwise,
         "conflict_pairwise_validation": conflict_pairwise,
         "label_coverage": label_coverage,
+        "label_audit_provenance": label_audit_provenance,
         "metrics": metrics,
         "oracle_pool_opportunity": _oracle_pool_opportunity(validation_grouped),
         "normalized_regret_improvement_vs_v2": regret_improvement,

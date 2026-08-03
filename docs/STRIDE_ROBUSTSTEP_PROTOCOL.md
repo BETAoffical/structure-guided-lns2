@@ -1560,6 +1560,10 @@ python3 scripts/build_stride_repairability_labels.py \
   --output build/stride-repairability-labels-v1
 ```
 
+Training reopens the recorded audit and raw trial source, verifies both stored
+SHA-256 values, the passed audit identity, run fingerprint, and audited state
+count, and refuses to fit if any provenance item has changed.
+
 ### Preregistered staged raw-TTF evaluation
 
 Runtime evaluation separates candidate-pool quality from ranking quality with

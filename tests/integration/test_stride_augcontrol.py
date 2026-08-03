@@ -12,8 +12,11 @@ from experiments.stride_augcontrol import (
     _oracle_pool_opportunity,
     _pair_label_subgroup_coverage,
     _prediction_records,
+    _validate_label_audit_provenance,
     validate_augcontrol_training_config,
 )
+from experiments._common import sha256_file
+from experiments.stride_repairability_audit import AUDIT_SCHEMA
 from experiments.stride_repairability import LABEL_SCHEMA
 
 
@@ -70,6 +73,40 @@ class StrideAugcontrolTest(unittest.TestCase):
         config["label_coverage_gates"]["minimum_validation_pair_maps"] = 5
         with self.assertRaisesRegex(ValueError, "label coverage gates changed"):
             validate_augcontrol_training_config(config)
+
+    def test_training_rechecks_label_collection_audit_and_raw_trials(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trials = root / "repair_trials.jsonl"
+            trials.write_text('{"trial": 1}\n', encoding="utf-8")
+            audit = root / "repairability_audit_report.json"
+            audit_payload = {
+                "schema": AUDIT_SCHEMA,
+                "passed": True,
+                "run_fingerprint": "run-a",
+                "state_count": 240,
+                "sha256": {"repair_trials": sha256_file(trials)},
+            }
+            audit.write_text(json.dumps(audit_payload), encoding="utf-8")
+            summary = {
+                "state_count": 240,
+                "trial_sources": [
+                    {"path": str(trials), "sha256": sha256_file(trials)}
+                ],
+                "audit_sources": [
+                    {
+                        "path": str(audit),
+                        "sha256": sha256_file(audit),
+                        "run_fingerprint": "run-a",
+                        "state_count": 240,
+                    }
+                ],
+            }
+            verified = _validate_label_audit_provenance(summary)
+            self.assertEqual(verified[0]["state_count"], 240)
+            trials.write_text('{"trial": 2}\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "raw trial source differs"):
+                _validate_label_audit_provenance(summary)
 
     def test_pair_table_reports_labeled_state_and_map_coverage(self) -> None:
         rows = []
