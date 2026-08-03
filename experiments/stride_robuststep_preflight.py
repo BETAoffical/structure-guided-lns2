@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import statistics
+import re
 import shutil
+import statistics
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,10 @@ def _scenario_rank(row: dict[str, Any]) -> int:
         return int(row["scenario_index"])
     if "task_seed" in row:
         return int(row["task_seed"])
+    for field in ("task_variant", "task_id"):
+        match = re.search(r"(?:task_)?seed_(\d+)", str(row.get(field, "")))
+        if match:
+            return int(match.group(1))
     return int(str(row["scenario_type"]).rsplit("_", 1)[-1])
 
 

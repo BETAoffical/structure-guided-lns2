@@ -228,7 +228,7 @@ class StrideRobustStepTest(unittest.TestCase):
                 "task_id": f"task-{group}",
                 "map_id": f"map-{group}",
                 "layout_mode": group,
-                "task_seed": 1,
+                "task_variant": "uniform_random_seed_1_agents_20",
                 "agent_count": 20,
             }
             for group in groups
