@@ -30,6 +30,7 @@
   },
   "expected_map_count": 6,
   "expected_task_count": 48,
+  "expected_instance_count": 48,
   "solver_seeds": [1, 2],
   "selection_rule": {
     "minimum_mean_initial_conflicts": 10.0,

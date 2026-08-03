@@ -25,6 +25,23 @@ from experiments.stride_robuststep import (
 
 
 class StrideRobustStepTest(unittest.TestCase):
+    def test_registered_topology_preflight_has_generator_compatible_dimensions(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = json.loads(
+            (root / "configs" / "stride_robuststep_topology_preflight_source.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(source["expected_map_count"], 6)
+        self.assertEqual(source["expected_task_count"], 48)
+        self.assertEqual(
+            source["expected_instance_count"], source["expected_task_count"]
+        )
+        self.assertEqual(source["solver_seeds"], [1, 2])
+        self.assertTrue(
+            {"controller_repair_outcome", "candidate_repair_outcome"}
+            <= set(source["selection_inputs_forbidden"])
+        )
+
     def test_confirmation_resolves_wsl_project_path_on_windows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
