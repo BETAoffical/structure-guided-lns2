@@ -30,6 +30,8 @@ class StrideTopologyBoundaryV2ShadowTest(unittest.TestCase):
         self.assertTrue(config["selection_protocol"]["outcome_blind_before_join"])
         self.assertEqual(config["expected_candidate_count"], 347)
         self.assertEqual(config["expected_outcome_count"], 2776)
+        self.assertEqual(config["expected_generated_feature_dimension"], 124)
+        self.assertEqual(config["expected_model_input_dimension"], 86)
 
     def test_protocol_rejects_gate_or_promotion_drift(self) -> None:
         config = self._config()

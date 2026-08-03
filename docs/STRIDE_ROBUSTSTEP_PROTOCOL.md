@@ -1039,9 +1039,16 @@ boundary-only action at least once, improves at least one state, achieves mean
 normalized selected-action gain at least 0.01, is nonnegative on the unseen
 seed half, and worsens at most 35% of states. Even a pass is only a signal to
 run the Quick; it is not promotion evidence. A failure stops this boundary
-runtime route while preserving the formal confirmation result. The frozen
+runtime route while preserving the formal confirmation result.
+
+The first pre-outcome execution exposed an integrity-specification error: the
+online realized profile correctly contains all 124 schema features, while the
+frozen compact V2 ranker intentionally consumes its registered 86-feature
+subset. The run stopped before an outcome selection file or outcome join was
+created. The corrected registration verifies both dimensions and subset
+identity separately; no action or quality gate changed. The corrected frozen
 Shadow-config SHA-256 is
-`383d8973fb37727bc6c0b7c0488513792e6f69c14652da3ca51b0e28bfb3a74d`.
+`1c12fce619afc33387e59e3257487f17fcac2c27aea3b31a69cb8e9ce37c4e7e`.
 
 ## Promotion boundary
 
