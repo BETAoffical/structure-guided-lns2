@@ -29,6 +29,7 @@ class StrideBoundaryGateAblationTest(unittest.TestCase):
         self.assertIsNone(config["scientific_time_limit_seconds"])
         self.assertIsNone(config["environment_time_limit_seconds"])
         self.assertIsNone(config["episode_process_timeout_seconds"])
+        self.assertEqual(config["verification_profile"], "deployment")
         self.assertFalse(config["formal_speed_claim"])
         self.assertFalse(config["default_replacement_allowed"])
         self.assertFalse(config["training_allowed"])

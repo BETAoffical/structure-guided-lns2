@@ -22,6 +22,7 @@
   ],
   "executed_controller": "v2-full",
   "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "verification_profile": "deployment",
   "expected_state_count": 18,
   "expected_schedule_entry_count": 54,
   "expected_state_count_by_group": {

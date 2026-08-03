@@ -1239,6 +1239,9 @@ reset-inclusive raw wall TTF and runs every episode until feasibility. It has
 no scientific wall limit, native time limit, process timeout, repair-iteration
 limit, or diagnostic decision cap. An unfinished or interrupted episode has no
 raw TTF and prevents selection; it is never converted into a capped score.
+The timed route uses the deployment verification profile so the Python shadow
+extractor is not charged to solver TTF; exact native-versus-reference feature
+equivalence remains covered by the separate audit tests.
 
 The ablation reuses the same outcome-informed 18-state mechanism cohort, so it
 cannot promote a model, support an OOD claim, or become training data. Each
@@ -1257,7 +1260,7 @@ iterations, at most 10% raw-TTF regression in every topology subgroup, and at
 least one executed boundary repair. Passing selects the stall guard for the
 next action-preserving feature-cache optimization; failing selects the map-only
 gate. This choice does not replace frozen V2. The frozen config SHA-256 is
-`a915edc4f13dd817874d36f99ab33a11ef7f9b73ffed404c69e193086965beb0`.
+`ffaad8f216c264759e0cb23a1e5d15df418878b4e8d63a49569874a71075eb8d`.
 
 ## Promotion boundary
 

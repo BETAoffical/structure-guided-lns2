@@ -86,6 +86,7 @@ def validate_boundary_gate_ablation_config(config: dict[str, Any]) -> None:
         or config.get("executed_controller") != "v2-full"
         or config.get("controller_bundle")
         != "artifacts/initlns-closed-loop-controller-v2"
+        or config.get("verification_profile") != "deployment"
         or int(config.get("expected_state_count", -1)) != 18
         or int(config.get("expected_schedule_entry_count", -1)) != 54
         or int(config.get("workers", 0)) != 1
@@ -190,7 +191,7 @@ def _collection_kwargs(
         ),
         "feature_backend": "native",
         "controller_runtime": "optimized",
-        "verification_profile": "audit",
+        "verification_profile": str(config["verification_profile"]),
         "stopping_rule": "run-to-completion",
     }
     if controller != "v2-full":
