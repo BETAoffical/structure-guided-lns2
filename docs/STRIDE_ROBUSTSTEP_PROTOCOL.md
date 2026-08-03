@@ -276,6 +276,51 @@ Nine eligible DAO maps are reserved for later training expansion and are not
 used in this confirmation: `den020d`, `den201d`, `den202d`, `den203d`,
 `den998d`, `hrt002d`, `den404d`, `lak108d`, and `lak110d`.
 
+### Completed fresh score confirmation result
+
+The registered collection completed without execution or integrity errors.
+All 48 selected states passed three replay/candidate-signature repetitions.
+The final cohort contains 854 candidates and exactly 16 paired PP outcomes per
+candidate: 3,416 base rows plus 10,248 extension rows, or 13,664 outcomes in
+total. Every candidate has trial indices 0--15, all candidates within a
+state/index share the same PP seed, and every row retains the frozen
+124-dimensional `lns2.realized_features.v2` representation. The six registered
+maps are complete, old label-map and formal-OOD overlaps are zero, and every
+other integrity gate passed.
+
+The frozen `mean-np100` score did not confirm. Overall pairwise consistency
+was 0.8383 and normalized regret was 0.0640, both within their gates, but
+Top-3 overlap was 0.7083 versus the required 0.75. More importantly, its
+regret was 0.00108 worse than the plain mean instead of improving by at least
+0.005. The plain mean reached 0.8442 pairwise consistency, 0.7361 Top-3
+overlap, and 0.0629 regret, so it also does not independently satisfy the
+registered Top-3 requirement.
+
+The compact-map subgroup passed with 0.8166 pairwise consistency, 0.7719
+Top-3 overlap, and 0.0366 regret. The ultra-compact subgroup failed only its
+Top-3 gate at 0.6667 despite 0.8514 pairwise consistency and 0.0820 regret.
+The Adaptive-source subgroup similarly missed Top-3 at 0.6944, while the
+V2-source subgroup passed its relaxed gates at 0.7222. This pattern says the
+ranking can broadly separate candidates but cannot reproduce a stable best
+three on the tighter maps, and the fixed no-progress penalty does not transfer
+as a selection improvement.
+
+The preregistered decision is therefore
+`retain_v2_actions_and_do_not_train_robuststep`. No robust-step model, small
+Pilot, TTF comparison, or formal Stage 5/OOD run is authorized from this
+score. Any follow-up inspection of conflict band, map, or penalty sensitivity
+is post-hoc diagnostic evidence only and may not retune and promote a score on
+this confirmation cohort.
+
+Artifact SHA-256 values:
+
+- base repair trials:
+  `d351ea3be30cdc4e49cfdfba980d1f099ee95bf49ba17e425b26665abfafb6a6`;
+- extension repair trials:
+  `cc5db24a8a0dd0fb29846df34968848eec40dec6640e4630b810f9c4fc03a54a`;
+- confirmation report:
+  `da1d67f04aee05136729c032ed068962ecf4175a593cb0ceee5266e342507c5b`.
+
 ## Promotion boundary
 
 The next sequence is design, fresh label confirmation, a small balanced Pilot,

@@ -988,8 +988,24 @@ def run_robuststep_score_design(
     return report
 
 
+def _confirmation_local_path(project_root: Path, value: str) -> Path:
+    """Resolve project artifacts recorded by either the Windows or WSL host."""
+
+    raw = Path(value)
+    if raw.exists():
+        return raw.resolve()
+    normalized = str(value).replace("\\", "/")
+    marker = f"/{project_root.name}/"
+    if marker in normalized:
+        relative = normalized.rsplit(marker, 1)[1]
+        candidate = project_root / Path(relative)
+        if candidate.exists():
+            return candidate.resolve()
+    return _project_path(project_root, value)
+
+
 def _confirmation_path(project_root: Path, value: str) -> Path:
-    path = _project_path(project_root, value)
+    path = _confirmation_local_path(project_root, value)
     if not path.is_file():
         raise FileNotFoundError(path)
     return path
@@ -1098,12 +1114,19 @@ def run_robuststep_confirmation(
             if key in row
         }
     )
-    source_roots = {Path(str(row["source_root"])).resolve() for row in selection}
-    dataset_root = _project_path(project_root, str(config["dataset_root"])).resolve()
+    source_roots = {
+        _confirmation_local_path(project_root, str(row["source_root"]))
+        for row in selection
+    }
+    dataset_root = _confirmation_local_path(
+        project_root, str(config["dataset_root"])
+    ).resolve()
     source_dataset_roots = set()
     for root in source_roots:
         run = _read_json(root / "run_config.json")
-        source_dataset_roots.add(Path(str(run["dataset"])).resolve())
+        source_dataset_roots.add(
+            _confirmation_local_path(project_root, str(run["dataset"]))
+        )
     dataset_manifest_path = dataset_root / str(source_config["split"]) / "manifest.jsonl"
     if not dataset_manifest_path.is_file():
         raise FileNotFoundError(dataset_manifest_path)

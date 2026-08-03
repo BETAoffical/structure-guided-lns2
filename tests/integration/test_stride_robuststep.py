@@ -12,6 +12,7 @@ from experiments.stride_robuststep_preflight import (
 )
 
 from experiments.stride_robuststep import (
+    _confirmation_local_path,
     evaluate_robuststep_variant,
     evaluate_robuststep_score_variant,
     robust_pair_winner,
@@ -21,6 +22,17 @@ from experiments.stride_robuststep import (
 
 
 class StrideRobustStepTest(unittest.TestCase):
+    def test_confirmation_resolves_wsl_project_path_on_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact = root / "build" / "artifact.json"
+            artifact.parent.mkdir()
+            artifact.write_text("{}\n", encoding="utf-8")
+            recorded = f"/mnt/c/unrelated/{root.name}/build/artifact.json"
+            self.assertEqual(
+                _confirmation_local_path(root, recorded), artifact.resolve()
+            )
+
     def test_pair_requires_seed_agreement(self) -> None:
         winner = robust_pair_winner(
             [1.0, 1.0, 1.0, 0.0],
