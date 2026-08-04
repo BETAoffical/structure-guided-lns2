@@ -21,6 +21,10 @@ from experiments.stride_maprank_evaluation import _training_evidence
 from experiments.stride_maprank_failure_analysis import (
     _load_config as _load_maprank_failure_analysis_config,
 )
+from experiments.stride_maprank_counterfactual import (
+    _load_config as _load_maprank_counterfactual_config,
+    _selected_states as _select_maprank_counterfactual_states,
+)
 from experiments.stride_maprank_raw_ttf import (
     CONTROLLERS,
     _load_confirmation_config,
@@ -39,6 +43,9 @@ MAPRANK_CONFIRMATION_PATH = (
 )
 MAPRANK_FAILURE_ANALYSIS_PATH = (
     ROOT / "configs" / "stride_maprank_high_load_failure_analysis.json"
+)
+MAPRANK_COUNTERFACTUAL_PATH = (
+    ROOT / "configs" / "stride_maprank_override_counterfactual.json"
 )
 
 
@@ -345,3 +352,35 @@ def test_maprank_failure_analysis_is_frozen_read_only_and_fresh_blind() -> None:
     assert confirmation["integrity_passed"] is True
     assert confirmation["performance_passed"] is False
     assert confirmation["fresh_map_unlocked"] is False
+
+
+def test_maprank_override_counterfactual_is_paired_current_step_only() -> None:
+    path, root, config, source_path, analysis = (
+        _load_maprank_counterfactual_config(MAPRANK_COUNTERFACTUAL_PATH)
+    )
+    assert path == MAPRANK_COUNTERFACTUAL_PATH
+    assert root == ROOT
+    assert source_path == (
+        ROOT
+        / "build"
+        / "stride-maprank-evaluation-v1"
+        / "high-load-v5-failure-analysis"
+        / "maprank_high_load_failure_analysis.json"
+    )
+    assert config["state_selection"] == "all_and_only_first_override_states"
+    assert config["expected_state_count"] == 6
+    assert config["candidate_selection"] == [
+        "v2_augmented_selected",
+        "maprank_selected",
+    ]
+    assert config["trial_indices"] == list(range(16))
+    assert config["paired_pp_seeds_within_state_and_trial_index"] is True
+    assert config["runtime_used_in_label"] is False
+    assert config["future_trajectory_read"] is False
+    assert config["fresh_map_data_allowed"] is False
+    assert analysis["passed"] is True
+    assert sum(row["first_override"] is not None for row in analysis["episodes"]) == 6
+    selected = _select_maprank_counterfactual_states(root, config, analysis)
+    assert len(selected) == 6
+    assert all("recorded_pooled_ttf_delta_seconds" not in row for row in selected)
+    assert all("recorded_repair_iterations_delta" not in row for row in selected)

@@ -279,6 +279,11 @@
       "purpose": "Offline-gated diagnostic Shadow and staged raw-TTF evaluation for STRIDE-MapRank."
     },
     {
+      "path": "experiments/stride_maprank_counterfactual.py",
+      "role": "reproducibility",
+      "purpose": "Paired 16-seed current-step counterfactual for the two selected neighborhoods at each MapRank high-load override."
+    },
+    {
       "path": "experiments/stride_maprank_failure_analysis.py",
       "role": "reproducibility",
       "purpose": "Read-only decision-level decomposition of the failed pooled STRIDE-MapRank high-load ranker gate."
@@ -914,6 +919,11 @@
       "purpose": "CLI entry point for the frozen STRIDE-MapRank high-load decision-level failure analysis."
     },
     {
+      "path": "scripts/run_stride_maprank_counterfactual.py",
+      "role": "reproducibility",
+      "purpose": "CLI entry point for paired-seed collection and analysis of MapRank override counterfactuals."
+    },
+    {
       "path": "scripts/run_stride_maprank_raw_ttf.py",
       "role": "active",
       "purpose": "CLI entry point for paired high-load and fresh-map STRIDE-MapRank raw-TTF evaluation."
@@ -1272,6 +1282,11 @@
       "path": "tests/unit/test_stride_maprank_failure_analysis.py",
       "role": "reproducibility",
       "contract": "Common-prefix state integrity, first-override candidate alignment, and immediate-effect semantics for MapRank failure diagnosis."
+    },
+    {
+      "path": "tests/unit/test_stride_maprank_counterfactual.py",
+      "role": "reproducibility",
+      "contract": "Exact two-candidate by 16-paired-seed artifact coverage and counterfactual resume identity."
     }
   ]
 }

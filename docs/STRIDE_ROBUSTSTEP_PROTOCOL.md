@@ -2253,3 +2253,39 @@ differences. It does not use TTF or future trajectories as a training label,
 does not inspect fresh maps, and cannot promote a model. Its sole purpose is to
 separate a bad ranking decision from residual wall-clock noise and identify a
 bounded next design change.
+
+### Decision-level failure decomposition and paired-seed counterfactual
+
+The registered trace diagnosis passed every integrity gate and read no fresh
+map data. Ten of 16 episodes execute identical V2-augmented and MapRank action
+sequences; only six contain an override. Three overrides occur on maze-300 and
+three on room-500. On room, two first overrides reduce more conflicts and one
+ties; two reduce eventual repair rounds and none increase them. On maze, no
+first override reduces more conflicts, one ties, and two are worse. The
+failure-analysis report SHA-256 is
+`f8bcf676321eacf0e49fbfc59bfc078b1fbe75cc31d8c643e71291b6ce2e9659`.
+
+One early maze override dominates the observed regression. On
+`maze-128-128-2__random_17__agents_0300`, solver seed 3, MapRank replaces the
+V2 `collision:8` candidate with `collision:16` at decision zero. Under the
+recorded PP seeds, conflict reduction falls from six to one, low-level
+generated nodes rise by 225,093, PP time rises by 0.936 seconds, the episode
+needs two extra repair rounds, and its three-run mean TTF rises by 1.578
+seconds. By contrast, room overrides occur late and are generally useful.
+This localizes the failure to rare override quality on maze rather than the
+augmented candidate pool or universal selector overhead.
+
+The recorded runtime repair is only one PP realization per candidate, whereas
+the MapRank label was trained from 16 paired PP seeds. Therefore the evidence
+does not yet distinguish a wrong robust ranking from unlucky repair
+realization. The targeted counterfactual is preregistered in
+`configs/stride_maprank_override_counterfactual.json`, SHA-256
+`3300198a4914360f10508c81a03c1f1b4a6960720c6c3bd27efd13c0e2cae0c7`.
+It takes all and only the six observed first-override states, reconstructs each
+pre-action state without reading the target action outcome, and evaluates only
+the V2-selected and MapRank-selected neighborhoods under trial indices 0--15
+with identical paired PP seeds. The primary comparison is normalized immediate
+conflict reduction under the unchanged robust-pair rule (75% paired wins,
+0.02 mean effect, and consistent half directions). Repair runtime is
+descriptive only; future trajectories, fresh maps, and TTF labels are forbidden.
+This is a post-hoc mechanism diagnosis and cannot promote a controller.
