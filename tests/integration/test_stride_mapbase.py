@@ -270,6 +270,7 @@ def test_maprank_runtime_signature_excludes_only_timing_fields() -> None:
         "controller": {
             "selected_candidate_id": "candidate-a",
             "candidate_generation_seconds": 1.0,
+            "controller_seconds_before_repair": 2.0,
             "proposal": {
                 "topology_boundary_gate_reason": "legacy_unconditional",
                 "topology_boundary_dynamic_seconds": 0.5,
@@ -278,6 +279,7 @@ def test_maprank_runtime_signature_excludes_only_timing_fields() -> None:
     }
     first = _runtime_transition_signature(transition)
     transition["controller"]["candidate_generation_seconds"] = 9.0
+    transition["controller"]["controller_seconds_before_repair"] = 7.0
     transition["controller"]["proposal"]["topology_boundary_dynamic_seconds"] = 4.0
     transition["metrics"]["pp_replan_seconds"] = 8.0
     second = _runtime_transition_signature(transition)

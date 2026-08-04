@@ -177,7 +177,7 @@ def _prerequisites(root: Path, config: dict[str, Any], output: Path, layer: str)
         raise ValueError("MapRank Shadow gate did not pass")
     if layer == "fresh_map_raw_ttf":
         development = _read_json(
-            evaluation_root / "high-load-v3" / "maprank_raw_ttf_report.json"
+            evaluation_root / "high-load-v4" / "maprank_raw_ttf_report.json"
         )
         if development.get("performance_passed") is not True:
             raise ValueError(
@@ -190,7 +190,7 @@ def _without_timing(value: Any) -> Any:
         return {
             str(key): _without_timing(item)
             for key, item in value.items()
-            if not str(key).endswith("_seconds")
+            if "seconds" not in str(key)
         }
     if isinstance(value, list):
         return [_without_timing(item) for item in value]

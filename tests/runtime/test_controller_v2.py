@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import random
 import sys
 import tempfile
 import types
@@ -265,6 +266,56 @@ class ControllerV2Tests(unittest.TestCase):
         _refresh_conflicts(second)
         cache.prepare(second, changed_agents=[0])
         assert_equivalent(second)
+
+    def test_topology_analysis_cache_random_updates_match_full_reconstruction(self) -> None:
+        generator = random.Random(1729)
+
+        def random_path(length: int) -> list[int]:
+            path = [generator.randrange(36)]
+            while len(path) < length:
+                row, column = divmod(path[-1], 6)
+                neighbors = [path[-1]]
+                if row:
+                    neighbors.append(path[-1] - 6)
+                if row < 5:
+                    neighbors.append(path[-1] + 6)
+                if column:
+                    neighbors.append(path[-1] - 1)
+                if column < 5:
+                    neighbors.append(path[-1] + 1)
+                path.append(generator.choice(neighbors))
+            return path
+
+        state = {
+            "rows": 6,
+            "cols": 6,
+            "obstacles": [0] * 36,
+            "agents": [
+                {
+                    "id": agent_id,
+                    "path": random_path(8),
+                }
+                for agent_id in range(24)
+            ],
+        }
+        _refresh_conflicts(state)
+        cache = TopologyAnalysisCache(state)
+        for step in range(30):
+            updated = copy.deepcopy(state)
+            changed = set(generator.sample(range(24), generator.randrange(1, 6)))
+            for agent_id in changed:
+                path_length = generator.randrange(3, 15) if step % 7 == 0 else 8
+                updated["agents"][agent_id]["path"] = random_path(path_length)
+            _refresh_conflicts(updated)
+            cache.prepare(updated, changed_agents=sorted(changed))
+            expected = analyze_state(updated, static_grid=cache.static_grid)
+            self.assertIsNotNone(cache.analysis)
+            assert cache.analysis is not None
+            self.assertEqual(cache.analysis.events, expected.events)
+            self.assertEqual(cache.analysis.pair_set, expected.pair_set)
+            self.assertEqual(cache.analysis.component_id, expected.component_id)
+            self.assertEqual(cache.analysis.component_members, expected.component_members)
+            state = updated
 
     def test_native_batch_engine_matches_reference_when_available(self) -> None:
         if _native_batch_function() is None:

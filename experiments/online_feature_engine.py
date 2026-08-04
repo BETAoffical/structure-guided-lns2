@@ -149,8 +149,9 @@ class TemporalConflictIndex:
                     previous = _position(path, time_index - 1)
                     if previous != current:
                         self.transitions[time_index][(previous, current)].add(agent_id)
+        self._events = set(self._reconstruct_events())
 
-    def all_events(self) -> list[ConflictEvent]:
+    def _reconstruct_events(self) -> list[ConflictEvent]:
         events: list[ConflictEvent] = []
         for time_index in range(self.horizon):
             for cell, occupants in self.occupancy[time_index].items():
@@ -179,6 +180,12 @@ class TemporalConflictIndex:
         events.sort(key=lambda event: (event.time, event.kind, event.left, event.right))
         return events
 
+    def all_events(self) -> list[ConflictEvent]:
+        return sorted(
+            self._events,
+            key=lambda event: (event.time, event.kind, event.left, event.right),
+        )
+
     def update(
         self, paths: dict[int, list[int]], changed_agents: Iterable[int]
     ) -> set[int]:
@@ -198,6 +205,13 @@ class TemporalConflictIndex:
         old_paths = self.paths
         old_horizon = self.horizon
         new_horizon = max(map(len, new_paths.values()))
+        incremental_events = new_horizon == old_horizon
+        if incremental_events:
+            self._events = {
+                event
+                for event in self._events
+                if event.left not in changed and event.right not in changed
+            }
         if new_horizon > old_horizon:
             for time_index in range(old_horizon, new_horizon):
                 occupancy: dict[int, set[int]] = collections.defaultdict(set)
@@ -253,6 +267,47 @@ class TemporalConflictIndex:
             del self.transitions[new_horizon:]
         self.paths = new_paths
         self.horizon = new_horizon
+        if not incremental_events:
+            self._events = set(self._reconstruct_events())
+            return changed
+
+        for agent_id in sorted(changed):
+            path = new_paths[agent_id]
+            for time_index in range(new_horizon):
+                current = _position(path, time_index)
+                for other in self.occupancy[time_index].get(current, ()):
+                    if other == agent_id:
+                        continue
+                    left, right = sorted((agent_id, other))
+                    self._events.add(
+                        ConflictEvent(
+                            time_index,
+                            "vertex",
+                            left,
+                            right,
+                            (current,),
+                        )
+                    )
+                if not time_index:
+                    continue
+                previous = _position(path, time_index - 1)
+                if previous == current:
+                    continue
+                for other in self.transitions[time_index].get(
+                    (current, previous), ()
+                ):
+                    if other == agent_id:
+                        continue
+                    left, right = sorted((agent_id, other))
+                    self._events.add(
+                        ConflictEvent(
+                            time_index,
+                            "edge",
+                            left,
+                            right,
+                            (min(previous, current), max(previous, current)),
+                        )
+                    )
         return changed
 
 

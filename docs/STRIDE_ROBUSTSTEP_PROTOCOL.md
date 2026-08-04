@@ -2093,3 +2093,45 @@ final solver state while excluding only timing fields. A mismatch invalidates
 the optimization. A performance failure retains frozen V2 and keeps fresh
 maps unread; it cannot be hidden by the already observed reduction in repair
 rounds.
+
+### Completed high-load v3 and registered incremental-event v4 rerun
+
+`high-load-v3` completed all 48 schedule entries with all 48 episodes
+successful, zero execution errors, zero invalid actions, zero semantic
+mismatches, matching initial states, and no capped-TTF values. The independent
+runtime-equivalence audit matched all 48 episodes and 735 decisions against
+`high-load-v2`: scientific inputs, candidate pools and scores, selected
+candidate IDs, explicit actions, PP seeds, fingerprints, conflict
+trajectories, repair rounds, and final states were exact. Its report and
+equivalence-report SHA-256 values are
+`d3357f1fd6d7a7cc36305b6afa6dc7f8d74326beb66715187a20dc0f428c58ad`
+and
+`a7a521cb3ae5cf892d14f30689c905b551f83a9d382e2c66161fede51cd55ca5`.
+
+The optimization materially reduced mean MapRank selector time from 2.6151
+to 1.6405 seconds and improved the total regression versus V2 from 11.6723%
+to 4.9035%. It nevertheless failed the preregistered total-method gate, which
+requires at least a 2% improvement. Mean raw TTF was 10.691592 seconds for
+V2, 11.283484 for V2 over the augmented pool, and 11.215851 for MapRank.
+MapRank passed the same-pool ranker gate by improving 0.5994%, and repair
+iterations remained much lower (12.3125 versus 21.125), but the augmented
+pool itself still cost 5.5361% relative to V2. Fresh-map raw TTF therefore
+remains forbidden.
+
+The remaining measured bottleneck is topology dynamic-event reconstruction,
+not feature extraction or model inference. Before another outcome is read,
+`high-load-v4` is registered under the unchanged evaluation config and gates.
+The only permitted implementation change is to retain the exact temporal
+conflict-event set across repairs: when the path horizon is unchanged, remove
+events incident to repaired agents and regenerate only those agents' vertex
+and edge events; when the horizon changes, fall back to a complete event
+reconstruction. Candidate scoring, ordering, tie-breaking, features, models,
+thresholds, controller decisions, PP replay, datasets, and the 48-entry
+schedule remain frozen.
+
+The v4 result is valid only if targeted randomized tests match complete event
+reconstruction across path and horizon changes, the full test and repository
+audits pass, and a post-run exact action-equivalence report matches v3 for all
+48 episodes. The original high-load performance gates remain unchanged. Only
+an integrity, equivalence, and performance pass may unlock the fresh-map
+layer.
