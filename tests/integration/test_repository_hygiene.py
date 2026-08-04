@@ -64,6 +64,8 @@ class RepositoryHygieneTests(unittest.TestCase):
         for relative in (
             "experiments/_common.py",
             "lns2_selector/compatibility/metrics.py",
+            "lns2_selector/controllers/__init__.py",
+            "lns2_selector/controllers/guardrank.py",
             "lns2_selector/controllers/v2.py",
             "lns2_selector/controllers/v3_s3.py",
             "lns2_selector/runtime/contracts.py",

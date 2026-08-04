@@ -8,7 +8,12 @@ from typing import Any
 from experiments._common import sha256_file
 from experiments.balanced_wall_clock import prepare_movingai_dataset
 from experiments.closed_loop_confirmation import run_closed_loop_collection
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
+from experiments.stride_augcontrol_evaluation import (
+    CONTROLLER_ID as AUGCONTROL_CONTROLLER_ID,
+    _dataset_tasks,
+    _metric,
+    _schedule as _augcontrol_schedule,
+)
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -16,8 +21,12 @@ from experiments.repair_collection import (
     _write_json,
     _write_jsonl,
 )
-from experiments.stride_maprank import CONTROLLER_ID, validate_maprank_evaluation_config
-from experiments.stride_maprank_evaluation import _bundle_paths, _training_evidence
+from experiments.stride_maprank import CONTROLLER_ID
+from experiments.stride_maprank_evaluation import (
+    _bundle_paths,
+    _load_config,
+    _training_evidence,
+)
 from experiments.stride_robuststep_preflight import _mean
 from experiments.stride_stage3 import _project_path
 
@@ -27,14 +36,6 @@ STATUS_SCHEMA = "lns2.stride.maprank_raw_ttf_status.v1"
 CONTROLLERS = ("v2-full", "v2-augmented-pool", CONTROLLER_ID)
 TTF_CLOCK_SCHEMA = "lns2.ttf.reset_inclusive_wall.v1"
 LAYER_NAMES = ("high_load_development", "fresh_map_raw_ttf")
-
-
-def _load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
-    path = Path(config_path).resolve()
-    root = path.parents[1]
-    config = _read_json(path)
-    validate_maprank_evaluation_config(config)
-    return path, root, config
 
 
 def _registered_tasks(cohort: dict[str, Any], fresh: bool) -> list[str]:
@@ -80,28 +81,17 @@ def _layer_context(
 def _schedule(
     cohorts: list[dict[str, Any]], seeds: tuple[int, ...]
 ) -> list[dict[str, Any]]:
-    keys = sorted(
-        (str(cohort["id"]), task, seed)
-        for cohort in cohorts
-        for task in cohort["tasks"]
-        for seed in seeds
-    )
-    schedule = []
-    for key_index, (cohort_id, task_id, seed) in enumerate(keys):
-        offset = key_index % len(CONTROLLERS)
-        order = CONTROLLERS[offset:] + CONTROLLERS[:offset]
-        for position, controller in enumerate(order):
-            schedule.append(
-                {
-                    "ordinal": len(schedule),
-                    "cohort_id": cohort_id,
-                    "task_id": task_id,
-                    "solver_seed": seed,
-                    "controller": controller,
-                    "within_key_position": position,
-                }
-            )
-    return schedule
+    return [
+        {
+            **row,
+            "controller": (
+                CONTROLLER_ID
+                if row["controller"] == AUGCONTROL_CONTROLLER_ID
+                else row["controller"]
+            ),
+        }
+        for row in _augcontrol_schedule(cohorts, seeds)
+    ]
 
 
 def _controller_kwargs(
@@ -132,7 +122,7 @@ def _prerequisites(root: Path, config: dict[str, Any], output: Path, layer: str)
     _training_evidence(root, config)
     evaluation_root = output.parent
     shadow = _read_json(
-        evaluation_root / "shadow-fresh-v1" / "maprank_shadow_report.json"
+        evaluation_root / "shadow-audited-v1" / "maprank_shadow_report.json"
     )
     if shadow.get("passed") is not True:
         raise ValueError("MapRank Shadow gate did not pass")
@@ -281,11 +271,6 @@ def run_maprank_raw_ttf_layer(
         },
     )
     return report
-
-
-def _metric(source: dict[str, Any], name: str) -> float:
-    value = source.get(name)
-    return float(value) if isinstance(value, (int, float)) else 0.0
 
 
 def _controller_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:

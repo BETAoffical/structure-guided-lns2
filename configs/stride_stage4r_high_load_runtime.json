@@ -57,6 +57,9 @@
     "registered_controller_bundles": {
       "stride-quality-v1": {
         "controller_manifest_sha256": "f6f005bffdf02ac6bf8c7af6e5bbfd743ae6df1f1ddf840a4be35c56f4b348fc"
+      },
+      "stride-maprank-v1": {
+        "controller_manifest_sha256": "1f367902d21530c531b58859814b28cf48bbfbb861d46c7377867c962e581054"
       }
     }
   },

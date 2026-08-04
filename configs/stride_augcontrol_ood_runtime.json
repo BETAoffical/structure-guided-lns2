@@ -75,6 +75,11 @@
     "model_sha256": {
       "proposal_dynamic": "5e4eaeebf69bf8b660d079d214c50504f9ed5ab4311d9e0c4f58ccc5fee801e4",
       "realized_dynamic": "f765fe2fef80ee692aefd9c34abe8b984aa6dfd1ea0ad1ed8e31bb67985b3ccb"
+    },
+    "registered_controller_bundles": {
+      "stride-maprank-v1": {
+        "controller_manifest_sha256": "1f367902d21530c531b58859814b28cf48bbfbb861d46c7377867c962e581054"
+      }
     }
   },
   "reference_datasets": []

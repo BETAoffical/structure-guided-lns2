@@ -122,6 +122,12 @@ def test_maprank_uses_distinct_identity_with_same_anchor_guard_contract() -> Non
     assert decision.controller_id == "stride-maprank-v1"
     assert decision.candidate_index == 1
     assert decision.diagnostics["route"] == "guard-override"
+    assert decision.diagnostics["scores"] == decision.diagnostics[
+        "challenger_scores"
+    ]
+    assert decision.diagnostics["margin"] == decision.diagnostics[
+        "challenger_margin"
+    ]
 
 
 def test_pairwise_evidence_uses_forward_reverse_symmetry() -> None:

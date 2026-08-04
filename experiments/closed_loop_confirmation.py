@@ -81,6 +81,7 @@ from experiments.v3_s3 import (
     s3_temporal_context,
 )
 from lns2_selector.compatibility.metrics import fixed_budget_conflict_auc
+from lns2_selector.controllers import load_selector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.evaluation.trace_validation import (
@@ -99,6 +100,7 @@ from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
     DIAGNOSTIC_CONTROLLER_IDS,
     SelectionRequest,
+    Selector,
 )
 from lns2_selector.runtime.online_selection import (
     ClosedLoopExecutionError,
@@ -270,6 +272,8 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "experiments/repair_collection.py",
     "experiments/v3_s3.py",
     "lns2_selector/compatibility/metrics.py",
+    "lns2_selector/controllers/__init__.py",
+    "lns2_selector/controllers/guardrank.py",
     "lns2_selector/controllers/v2.py",
     "lns2_selector/controllers/v3_s3.py",
     "lns2_selector/runtime/contracts.py",
@@ -910,7 +914,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             if not bool(job.get("require_finalization_timings", False)):
                 return result
     bundle = None
-    pairwise_selector: PairwiseV2Selector | None = None
+    learned_selector: Selector | None = None
     controller_mode = str(job.get("controller", "official_adaptive"))
     if controller_mode not in EXECUTABLE_CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {controller_mode}")
@@ -935,7 +939,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     runtime_ranges: dict[str, dict[str, tuple[float, float]]] = {}
     source_models: dict[str, Any] = {}
     source_model_provenance: dict[str, dict[str, Any]] = {}
-    diagnostic_shadow_selectors: dict[str, PairwiseV2Selector] = {}
+    diagnostic_shadow_selectors: dict[str, Selector] = {}
     diagnostic_shadow_ranges: dict[
         str, dict[str, dict[str, tuple[float, float]]]
     ] = {}
@@ -983,7 +987,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         ).lower(),
                     }
         if controller_mode in PAIRWISE_CONTROLLER_MODES:
-            pairwise_selector = PairwiseV2Selector(controller_mode, runtime_models)
+            learned_selector = PairwiseV2Selector(controller_mode, runtime_models)
+        elif controller_mode in {"stride-guardrank-v1", "stride-maprank-v1"}:
+            learned_selector = load_selector(controller_mode, controller_path)
         raw_diagnostic_shadows = dict(job.get("diagnostic_shadow_bundles") or {})
         if raw_diagnostic_shadows:
             if controller_mode != "v2-full" or policy != "realized_dynamic":
@@ -1002,8 +1008,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError(
                         f"invalid diagnostic shadow bundle: {shadow_id}"
                     )
-                diagnostic_shadow_selectors[shadow_id] = PairwiseV2Selector(
-                    shadow_id, shadow_bundle
+                diagnostic_shadow_selectors[shadow_id] = load_selector(
+                    shadow_id, shadow_path
                 )
                 diagnostic_shadow_ranges[shadow_id] = shadow_bundle.main_ranges
                 diagnostic_shadow_fallback_thresholds[shadow_id] = float(
@@ -1414,9 +1420,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             scores = [0.0] * len(candidate_rows)
                             margin = 0.0
                             inference_seconds = 0.0
-                        elif pairwise_selector is not None:
+                        elif learned_selector is not None:
                             inference_started = time.perf_counter()
-                            selection = pairwise_selector.select(
+                            selection = learned_selector.select(
                                 SelectionRequest(
                                     candidates=candidates,
                                     candidate_rows=candidate_rows,
@@ -1428,12 +1434,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             if selection.candidate_index is None:
                                 raise ClosedLoopExecutionError(
                                     "controller_no_candidate",
-                                    "pairwise controller did not select a candidate",
+                                    "learned controller did not select a candidate",
                                 )
                             selected_local_index = int(selection.candidate_index)
-                            scores = list(
-                                map(float, selection.diagnostics.get("scores", []))
-                            )
+                            scores = list(map(float, selection.diagnostics["scores"]))
                             margin = float(selection.diagnostics.get("margin", 0.0))
                             inference_seconds = (
                                 time.perf_counter() - inference_started
@@ -2918,9 +2922,11 @@ def run_closed_loop_collection(
     if topology_boundary_augmentation is not None and controller_mode not in {
         "v2-full",
         "stride-augcontrol-v1",
+        "stride-maprank-v1",
     }:
         raise ValueError(
-            "topology-boundary augmentation requires v2-full or stride-augcontrol-v1"
+            "topology-boundary augmentation requires v2-full, "
+            "stride-augcontrol-v1, or stride-maprank-v1"
         )
     diagnostic_shadow_roots: dict[str, Path] = {}
     diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}

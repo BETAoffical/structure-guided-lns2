@@ -195,6 +195,28 @@ def test_maprank_evaluation_is_uncapped_paired_and_preregistered() -> None:
         raise AssertionError("MapRank accepted a post-hoc high-load task")
 
 
+def test_maprank_runtime_registrations_match_exact_bundle() -> None:
+    bundle = (
+        ROOT
+        / "build"
+        / "stride-maprank-training-v1"
+        / "stride-maprank-v1"
+        / "controller_manifest.json"
+    )
+    if not bundle.is_file():
+        return
+    expected = sha256_file(bundle)
+    for name in (
+        "stride_stage4r_high_load_runtime.json",
+        "stride_augcontrol_ood_runtime.json",
+    ):
+        runtime = json.loads((ROOT / "configs" / name).read_text(encoding="utf-8"))
+        registered = runtime["model_registration"][
+            "registered_controller_bundles"
+        ]["stride-maprank-v1"]["controller_manifest_sha256"]
+        assert registered == expected
+
+
 def test_maprank_shadow_accepts_only_offline_gated_training_report() -> None:
     config = json.loads(MAPRANK_EVALUATION_PATH.read_text(encoding="utf-8"))
     report_path = ROOT / config["training_report"]

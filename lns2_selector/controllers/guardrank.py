@@ -115,6 +115,8 @@ class GuardRankSelector:
                 "anchor_margin": anchor_margin,
                 "challenger_scores": challenger_scores,
                 "challenger_margin": challenger_margin,
+                "scores": challenger_scores,
+                "margin": challenger_margin,
             },
         )
 
