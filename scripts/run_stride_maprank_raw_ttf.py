@@ -10,6 +10,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+NATIVE_BUILD = PROJECT_ROOT / "build" / "linux" / "project"
+if NATIVE_BUILD.is_dir() and str(NATIVE_BUILD) not in sys.path:
+    sys.path.insert(0, str(NATIVE_BUILD))
 
 from experiments.stride_maprank_raw_ttf import (  # noqa: E402
     analyze_maprank_raw_ttf_layer,
