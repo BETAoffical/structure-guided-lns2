@@ -2209,3 +2209,34 @@ must satisfy every original `high_load_development` performance threshold;
 thresholds, tasks, seeds, models, candidate pools, and labels remain frozen.
 Only a pooled pass may unlock fresh-map raw TTF. This outcome-informed timing
 confirmation improves wall-clock precision but is not a formal speed claim.
+
+### High-load timing confirmation failed the ranker-effect gate
+
+Both added repetitions completed all 48 schedule entries. Pooling all three
+runs gives 48 strictly paired episodes per controller. Every integrity gate
+passed: all controllers succeeded, the evaluation and schedule hashes are
+identical, initial states and conflicts match, the raw-TTF clock is uncapped,
+and there are zero execution, invalid-action, or semantic errors. Each new
+repetition is exactly equivalent to v5 across 48 controller episodes and 735
+decisions, including candidate scores, actions, PP seeds, conflict
+trajectories, repair rounds, and final states; all implementation fingerprints
+are identical.
+
+Mean raw wall TTF is 11.377811 seconds for frozen V2, 10.761304 seconds for V2
+over the augmented pool, and 10.841746 seconds for MapRank. The augmented pool
+therefore improves 5.4185% over V2, while the complete MapRank method improves
+4.7115% and reduces mean repair iterations from 21.1250 to 12.3125. MapRank is
+faster than V2 on 32/48 paired observations. It nevertheless regresses 0.7475%
+against the same-pool V2 comparator, an 0.08044-second mean gap, despite a
+0.1875-round reduction. The ranker effect is heterogeneous: maze-300 regresses
+2.1962%, while room-500 improves 1.0413%. The three individual same-pool
+ranker effects are -1.1523%, -1.2486%, and +0.1231%, confirming that the gap is
+small but not reliably positive.
+
+Thus four of five performance gates pass, but the unchanged same-pool ranker
+gate fails. The confirmation report SHA-256 is
+`f8ea8c07f80465182af16b1b087ebb0861fcfaf23598b2fb692fdd41c29859fe`.
+Fresh maps remain unread, V2 remains the default, and no formal speed claim is
+authorized. The next permitted work is a read-only decision-level diagnosis of
+the frozen high-load traces, especially maze-300, before any new model design
+or additional outcome run is registered.
