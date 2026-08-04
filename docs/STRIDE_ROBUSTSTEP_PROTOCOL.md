@@ -2289,3 +2289,41 @@ conflict reduction under the unchanged robust-pair rule (75% paired wins,
 0.02 mean effect, and consistent half directions). Repair runtime is
 descriptive only; future trajectories, fresh maps, and TTF labels are forbidden.
 This is a post-hoc mechanism diagnosis and cannot promote a controller.
+
+### Override counterfactual identifies missing uncertainty abstention
+
+The first collection completed all 192 repairs but wrote the report and
+collection identity with their schemas interchanged. That V1 report is rejected
+as evidence and preserved for audit. After the schema correction was fully
+tested and pushed, V2 reran all repairs in a new directory. Removing only
+descriptive PP timing and producer-identity fields, V1 and V2 match on all six
+state artifacts with zero scientific mismatches.
+
+V2 passes every integrity gate: six exact reconstructed states, two selected
+candidates per state, 16 paired PP seeds per candidate, 192 total trials, no
+fresh-map access, no future-trajectory use, and no runtime in the robust label.
+Across the six overrides, MapRank's candidate is the robust winner twice,
+V2's candidate once, and the pair is uncertain three times. Both robust
+MapRank wins are on room-500; the third room override is a robust V2 win. All
+three maze-300 overrides are uncertain under the unchanged 75% paired-win,
+0.02 effect, and two-half-direction rule.
+
+For the dominant maze failure, `collision:16` averages 0.40625 normalized
+conflict reduction versus 0.51042 for V2's `collision:8`, uses 283,620 versus
+219,256 mean generated nodes, and progresses on 68.75% versus 93.75% of
+paired seeds. But it wins four seeds, loses six, and ties six, so the pair is
+not a robust V2 win either. The single runtime seed exposed a real bad tail,
+while the 16-seed result says the correct training target is uncertainty and
+abstention, not a reversed direction label.
+
+The current MapRank direction model trains only on robust oriented pairs; it
+discards uncertain pairs and then treats a high direction score as sufficient
+override evidence. It therefore has no learned mechanism for distinguishing a
+confident robust preference from confident extrapolation on an unstable pair.
+The V2 report, trial, and run-config SHA-256 values are
+`65740040d88bf82f5b353b59469f7acdcfc57bf179e4c57bc9a8e3719fdc98a8`,
+`b905550131d0d40816eb7f5e79e7259df68c8334e84a5015d34a568b685bf3a6`,
+and
+`fd5946e8e99b1ab4c68f43d8418a047c7cc0f06de4c135f7a0b6754dafaca7b8`.
+These are post-hoc mechanism findings, not training data and not a speed claim.
+Fresh maps remain locked.

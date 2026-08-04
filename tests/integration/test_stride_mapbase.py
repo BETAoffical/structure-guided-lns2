@@ -390,7 +390,7 @@ def test_maprank_override_counterfactual_is_paired_current_step_only() -> None:
 def test_completed_maprank_counterfactual_report_schema_when_available(
     tmp_path: Path,
 ) -> None:
-    collection = ROOT / "build" / "stride-maprank-override-counterfactual-v1"
+    collection = ROOT / "build" / "stride-maprank-override-counterfactual-v2"
     if len(list((collection / "states").glob("*.json"))) != 6:
         return
     report = analyze_override_counterfactual(
@@ -401,3 +401,7 @@ def test_completed_maprank_counterfactual_report_schema_when_available(
     )
     assert report["passed"] is True
     assert report["trial_count"] == 192
+    run = json.loads((collection / "run_config.json").read_text(encoding="utf-8"))
+    assert run["schema"] == (
+        "lns2.stride.maprank_override_counterfactual_collection.v1"
+    )
