@@ -17,6 +17,7 @@ from experiments.closed_loop_confirmation import (
     _matching_source_model,
     _native_repair_timing_schema,
     _qualification_reuse_fingerprint,
+    _selector_required_model_features,
     _valid_episode_trace,
     _with_stopping_rule,
     _with_time_budget_overrides,
@@ -283,6 +284,28 @@ class DirectCandidateModel:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_selector_required_features_include_guard_anchor_union(self) -> None:
+        selector = SimpleNamespace(
+            models={
+                "realized_dynamic": SimpleNamespace(
+                    base_feature_names=["state.conflict_count", "realized.actual_size"]
+                )
+            },
+            anchor_models={
+                "realized_dynamic": SimpleNamespace(
+                    base_feature_names=["state.conflict_count", "state.delay_std"]
+                )
+            },
+        )
+        self.assertEqual(
+            _selector_required_model_features(selector, "realized_dynamic"),
+            {
+                "state.conflict_count",
+                "realized.actual_size",
+                "state.delay_std",
+            },
+        )
+
     def test_qualification_reuse_ignores_controller_but_not_reset_inputs(self) -> None:
         base = {
             "dataset_fingerprint": "dataset",

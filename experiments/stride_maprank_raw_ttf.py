@@ -128,7 +128,7 @@ def _prerequisites(root: Path, config: dict[str, Any], output: Path, layer: str)
         raise ValueError("MapRank Shadow gate did not pass")
     if layer == "fresh_map_raw_ttf":
         development = _read_json(
-            evaluation_root / "high-load-v1" / "maprank_raw_ttf_report.json"
+            evaluation_root / "high-load-v2" / "maprank_raw_ttf_report.json"
         )
         if development.get("performance_passed") is not True:
             raise ValueError(

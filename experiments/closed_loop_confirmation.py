@@ -7,6 +7,7 @@ import math
 import os
 import statistics
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -164,6 +165,30 @@ def _ranking_order(
             ),
         )
     ]
+
+
+def _selector_required_model_features(
+    selector: Selector, profile: str
+) -> set[str]:
+    """Return every dense feature consumed by a selector's model layers."""
+
+    main_models = getattr(selector, "models", None)
+    if not isinstance(main_models, Mapping) or profile not in main_models:
+        raise ValueError(f"selector lacks model profile: {profile}")
+    model_groups = [main_models]
+    anchor_models = getattr(selector, "anchor_models", None)
+    if anchor_models is not None:
+        if not isinstance(anchor_models, Mapping) or profile not in anchor_models:
+            raise ValueError(f"selector lacks anchor profile: {profile}")
+        model_groups.append(anchor_models)
+    required = set()
+    for models in model_groups:
+        required.update(
+            map(str, getattr(models[profile], "base_feature_names", ()))
+        )
+    if not required:
+        raise ValueError(f"selector has no model features for profile: {profile}")
+    return required
 
 
 def _score_equivalence_diagnostic(
@@ -1138,15 +1163,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if policy in LEARNED_POLICIES and v3_s3_bundle is None
                 else set()
             )
+            if learned_selector is not None:
+                required_model_features.update(
+                    _selector_required_model_features(learned_selector, policy)
+                )
             if policy in LEARNED_POLICIES:
                 for shadow_selector in diagnostic_shadow_selectors.values():
-                    shadow_model = shadow_selector.models.get(policy)
-                    if shadow_model is None:
-                        raise ValueError(
-                            f"diagnostic shadow lacks profile: {policy}"
-                        )
                     required_model_features.update(
-                        set(shadow_model.base_feature_names)
+                        _selector_required_model_features(shadow_selector, policy)
                     )
             if v3_s3_bundle is not None and policy == "realized_dynamic":
                 required_model_features.update(
