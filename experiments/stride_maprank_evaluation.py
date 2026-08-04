@@ -142,7 +142,9 @@ def analyze_maprank_shadow(
     output = Path(output).resolve()
     manifest = output / "realized_dynamic_manifest.jsonl"
     qualification_path = output / "qualification_report.json"
+    run_config_path = output / "run_config.json"
     qualification = _read_json(qualification_path)
+    run_config = _read_json(run_config_path)
     rows = _read_jsonl(manifest)
     expected = 12 * len(config["legacy_shadow"]["solver_seeds"])
     totals = [
@@ -174,6 +176,10 @@ def analyze_maprank_shadow(
             for row in rows
         )
         == 0,
+        "run_fingerprint_recorded": bool(run_config.get("run_fingerprint")),
+        "controller_implementation_fingerprint_recorded": bool(
+            dict(run_config.get("controller_implementation") or {}).get("sha256")
+        ),
     }
     report = {
         "schema": SHADOW_REPORT_SCHEMA,
@@ -189,6 +195,10 @@ def analyze_maprank_shadow(
         "shadow_disagreement_fraction": (
             disagreement_count / decisions if decisions else 0.0
         ),
+        "run_fingerprint": str(run_config["run_fingerprint"]),
+        "controller_implementation_sha256": str(
+            run_config["controller_implementation"]["sha256"]
+        ),
         "gates": gates,
         "passed": all(gates.values()),
         "inputs": {
@@ -196,6 +206,7 @@ def analyze_maprank_shadow(
             "training_report_sha256": sha256_file(training_path),
             "qualification_report_sha256": sha256_file(qualification_path),
             "manifest_sha256": sha256_file(manifest),
+            "run_config_sha256": sha256_file(run_config_path),
         },
     }
     _write_json(output / "maprank_shadow_report.json", report)

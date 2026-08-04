@@ -2021,3 +2021,33 @@ The training report, controller manifest, and offline-prediction SHA-256 values
 are `496144d4a5dc4ca5c47c5f8b4ba7c67a8f669bee19b8479d42138a35ef7543a4`,
 `1f367902d21530c531b58859814b28cf48bbfbb861d46c7377867c962e581054`,
 and `c14b608e857c2b474d103dd81769678ee9497faf71061753634765412b0ad7bb`.
+
+### Passed the audited STRIDE-MapRank v1 action-preserving Shadow
+
+The legacy held-out Shadow completed all 24 registered episodes after a fresh
+run-to-completion qualification. Frozen V2 with the topology-augmented pool was
+the only active controller; MapRank was diagnostic-only and could not override
+an action. Across 421 paired decisions, MapRank selected a different candidate
+209 times, a disagreement fraction of 0.49644. All nine report gates passed:
+complete episode coverage, fresh qualification, at least 24 Shadow decisions,
+zero execution errors, zero invalid actions, zero semantic mismatches, zero
+action overrides, and recorded run and controller-implementation fingerprints.
+
+The runtime boundary now loads diagnostic and active GuardRank-family selectors
+through the generic selector contract rather than constructing every diagnostic
+bundle as a pairwise-V2 selector. The exact MapRank manifest is registered in
+both later runtime configurations. The audited rerun was produced by pushed
+commit `6f40051`; its run fingerprint is
+`6fa4185f70a2df3cadf6cc2d49c9ff034ec0ffd026b7ecd12ce179e00ffa9f09`,
+and its controller-implementation fingerprint is
+`ac4d4e40624b01fc435302c574bb39afb81fa392bbd5022bcd554aa571c44608`.
+
+The Shadow report, policy manifest, qualification report, and run-config
+SHA-256 values are
+`24691648165ff7de3413012118fb23a991c35cf79046e76599fd9e7944945e89`,
+`515a2f1ae0bb5efbe955edb91ddc231e95b3c84936806db4e343d735a19773af`,
+`acb631288daed0ed0eb9c4cefff35395cad50ce4c3b0e1d2e60215b68a42b5c0`,
+and `69447d404f77a1cd7abf7b8c4a6d27d3ceaaf28aa53c91604c5287ef29ce8d4a`.
+This proves runtime validity and meaningful action disagreement only; it makes
+no TTF improvement claim and leaves V2 as the default. Passing this gate permits
+the preregistered paired high-load raw-TTF layer.
