@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from experiments.stride_maprank_counterfactual import (
+    COLLECTION_SCHEMA,
+    REPORT_SCHEMA,
     STATE_SCHEMA,
+    STATUS_SCHEMA,
     TRIAL_SCHEMA,
     _state_artifact_valid,
 )
+
+
+def test_counterfactual_artifact_schemas_are_distinct() -> None:
+    assert len({COLLECTION_SCHEMA, REPORT_SCHEMA, STATE_SCHEMA, STATUS_SCHEMA}) == 4
+    assert COLLECTION_SCHEMA.endswith("collection.v1")
+    assert REPORT_SCHEMA.endswith("report.v1")
 
 
 def _payload() -> dict:

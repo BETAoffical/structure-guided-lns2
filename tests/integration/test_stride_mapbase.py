@@ -24,6 +24,7 @@ from experiments.stride_maprank_failure_analysis import (
 from experiments.stride_maprank_counterfactual import (
     _load_config as _load_maprank_counterfactual_config,
     _selected_states as _select_maprank_counterfactual_states,
+    analyze_override_counterfactual,
 )
 from experiments.stride_maprank_raw_ttf import (
     CONTROLLERS,
@@ -384,3 +385,19 @@ def test_maprank_override_counterfactual_is_paired_current_step_only() -> None:
     assert len(selected) == 6
     assert all("recorded_pooled_ttf_delta_seconds" not in row for row in selected)
     assert all("recorded_repair_iterations_delta" not in row for row in selected)
+
+
+def test_completed_maprank_counterfactual_report_schema_when_available(
+    tmp_path: Path,
+) -> None:
+    collection = ROOT / "build" / "stride-maprank-override-counterfactual-v1"
+    if len(list((collection / "states").glob("*.json"))) != 6:
+        return
+    report = analyze_override_counterfactual(
+        MAPRANK_COUNTERFACTUAL_PATH, collection, tmp_path
+    )
+    assert report["schema"] == (
+        "lns2.stride.maprank_override_counterfactual_report.v1"
+    )
+    assert report["passed"] is True
+    assert report["trial_count"] == 192

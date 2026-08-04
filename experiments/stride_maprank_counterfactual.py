@@ -536,7 +536,7 @@ def analyze_override_counterfactual(
     }
     passed = not errors and all(integrity.values())
     report = {
-        "schema": COLLECTION_SCHEMA,
+        "schema": REPORT_SCHEMA,
         "experiment_id": config["experiment_id"],
         "scientific_status": "post_hoc_mechanism_diagnostic_only",
         "post_hoc_diagnostic_only": True,
@@ -599,7 +599,7 @@ def collect_override_counterfactual(
         package_names=("numpy",),
     )
     identity = {
-        "schema": REPORT_SCHEMA,
+        "schema": COLLECTION_SCHEMA,
         "experiment_id": config["experiment_id"],
         "config_sha256": sha256_file(path),
         "source_failure_analysis_sha256": sha256_file(source_path),
