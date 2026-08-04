@@ -269,6 +269,11 @@
       "purpose": "Preregistered robust-pair uncertainty labels and independent abstention model for the frozen MapRank direction selector."
     },
     {
+      "path": "experiments/stride_certguard_training.py",
+      "role": "active",
+      "purpose": "Nested train-map OOF fitting and offline gates for the symmetric CertGuard uncertainty classifier."
+    },
+    {
       "path": "experiments/stride_mapbase.py",
       "role": "reproducibility",
       "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
@@ -889,6 +894,11 @@
       "purpose": "CLI entry point for checksum-audited STRIDE-CertGuard robust-versus-uncertain pair labels."
     },
     {
+      "path": "scripts/train_stride_certguard.py",
+      "role": "active",
+      "purpose": "CLI entry point for nested train-map-only STRIDE-CertGuard uncertainty training."
+    },
+    {
       "path": "scripts/run_stride_guardrank_map_coverage.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for the checksum-pinned GuardRank fresh-map candidate coverage audit."
@@ -1297,6 +1307,11 @@
       "path": "tests/unit/test_stride_maprank_failure_analysis.py",
       "role": "reproducibility",
       "contract": "Common-prefix state integrity, first-override candidate alignment, and immediate-effect semantics for MapRank failure diagnosis."
+    },
+    {
+      "path": "tests/unit/test_stride_certguard_training.py",
+      "role": "active",
+      "contract": "Symmetric 248-dimensional uncertainty inputs and abstention-only selection behavior."
     },
     {
       "path": "tests/unit/test_stride_maprank_counterfactual.py",

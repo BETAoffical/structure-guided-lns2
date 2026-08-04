@@ -80,3 +80,45 @@ def test_certguard_validator_rejects_post_hoc_high_load_calibration() -> None:
         assert "evidence boundary changed" in str(error)
     else:
         raise AssertionError("CertGuard accepted high-load threshold calibration")
+
+
+def test_completed_certguard_training_respects_offline_gate_when_available() -> None:
+    report_path = (
+        ROOT
+        / "build"
+        / "stride-certguard-training-v1"
+        / "certguard_training_report.json"
+    )
+    if not report_path.is_file():
+        return
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["schema"] == "lns2.stride.certguard_training.v1"
+    assert report["controller_id"] == "stride-certguard-v1"
+    assert report["offline_passed"] is False
+    assert report["runtime_bundle_exported"] is False
+    assert report["shadow_eligible"] is False
+    assert report["fresh_map_eligible"] is False
+    assert report["high_load_used_for_training_or_calibration"] is False
+    assert report["promotion_gates"]["uncertainty_roc_auc"] is True
+    assert report["promotion_gates"]["uncertainty_accuracy_gain"] is True
+    assert report["promotion_gates"]["directionally_safe_override_precision"] is False
+    assert report["promotion_gates"]["normalized_regret_noninferior_to_maprank"] is False
+    sweep = report["nested_train_oof"]["final_calibration"]["threshold_sweep"]
+    assert [row["certainty_threshold"] for row in sweep] == [
+        0.5,
+        0.55,
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9,
+        0.95,
+        1.01,
+    ]
+    assert all(
+        row["override_diagnostics"]["retained_override_count"] == 0
+        for row in sweep
+        if row["certainty_threshold"] >= 0.75
+    )

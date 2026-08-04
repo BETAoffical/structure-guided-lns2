@@ -2350,3 +2350,34 @@ Fresh-map raw TTF remains locked until nested OOF, runtime equivalence, Shadow a
 high-load development gates pass.  Runtime, TTF, repair rounds, future trajectory,
 Cost-to-Go, Receding-Q, controller outcome, test and formal OOD inputs remain
 forbidden label features.
+
+### CertGuard v1 nested OOF result: rejected before runtime
+
+The checksum-audited label build reproduced all 303 states and 47,471 unordered
+pairs from the frozen MapRank sources: 21,033 robust positives and 26,438
+uncertain negatives.  No high-load, runtime or future-trajectory field was read.
+The label file SHA-256 is
+`2cddea6cc7b03a965b9c1aa706768f81610ae6fc02c0b904368347aeda618eca`.
+
+The symmetric uncertainty task itself was learnable under four outer by three
+inner map-grouped OOF: weighted ROC-AUC was 0.74519 and weighted accuracy gained
+0.11713 over the weighted majority baseline.  This did not make it a safe action
+gate.  The nested controller retained 18 of 76 MapRank overrides; seven were
+robust in the proposed direction, four were robust in the opposite direction,
+and seven were uncertain.  Directionally safe precision was therefore 0.38889,
+below the registered 0.50 gate.
+
+CertGuard normalized regret was 0.26343 versus 0.24846 for the same OOF MapRank
+direction controller and 0.27040 for frozen V2.  It improved V2 by 2.576%, but
+degraded MapRank by 0.01497, exceeding the registered 0.005 limit.  A read-only
+threshold sweep confirmed that 0.50 was the best global regret point; thresholds
+0.55 through 0.70 reduced useful coverage without meeting safe precision, while
+0.75 and above rejected all 76 overrides and collapsed to V2.
+
+The conclusion is label-specific: pair stability is predictable, but it cannot
+distinguish a robust correct MapRank direction from a robust reversed direction.
+`stride-certguard-v1` is rejected before bundle export, Shadow, high-load TTF or
+fresh-map use.  The next separately named design must predict whether the actual
+MapRank challenger is robustly better than the V2 anchor, treating uncertainty
+and a robust V2 win as explicit negative outcomes.  The completed report SHA-256
+is `d15643a5524bbecf7a95edbc2f8dd9cf8f48a38898ac02211e436c59de27f510`.
