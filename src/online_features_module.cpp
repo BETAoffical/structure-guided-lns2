@@ -14,4 +14,6 @@ PYBIND11_MODULE(lns2_features_native, module)
     module.def("batch_online_feature_vectors", &batchOnlineFeatureVectors,
                py::arg("state"), py::arg("candidates"), py::arg("static_grid"),
                py::arg("feature_names"));
+    module.def("topology_conflict_events", &topologyConflictEvents,
+               py::arg("state"), py::arg("static_grid"));
 }

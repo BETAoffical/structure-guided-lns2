@@ -97,6 +97,7 @@ def _runtime_wsl_checks(rows: list[dict[str, Any]]) -> None:
         "PortableTreeEnsemble",
         "batch_online_features",
         "batch_online_feature_vectors",
+        "topology_conflict_events",
     ):
         _check(
             rows,

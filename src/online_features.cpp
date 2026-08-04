@@ -11,6 +11,7 @@
 #include <queue>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -174,6 +175,16 @@ std::string lower(std::string value)
 
 struct Analysis
 {
+    struct EventData
+    {
+        int time = 0;
+        bool vertex = false;
+        int left = 0;
+        int right = 0;
+        int first_cell = 0;
+        int second_cell = -1;
+    };
+
     int rows = 0;
     int cols = 0;
     int cell_count = 0;
@@ -193,13 +204,16 @@ struct Analysis
     std::vector<int> component_sizes;
     std::vector<double> event_times;
     int vertex_event_count = 0;
+    bool capture_events = false;
+    std::vector<EventData> events;
     double input_seconds = 0;
     double conflict_scan_seconds = 0;
     double graph_seconds = 0;
     double path_aggregate_seconds = 0;
 };
 
-void addEvent(Analysis& analysis, int time, bool vertex, int left, int right)
+void addEvent(Analysis& analysis, int time, bool vertex, int left, int right,
+              int first_cell, int second_cell = -1)
 {
     const uint64_t key = pairKey(left, right);
     analysis.conflict_pairs.insert(key);
@@ -212,13 +226,22 @@ void addEvent(Analysis& analysis, int time, bool vertex, int left, int right)
     analysis.incident_event_counts[right_position->second]++;
     analysis.event_times.push_back((double)time);
     if (vertex) analysis.vertex_event_count++;
+    if (analysis.capture_events)
+    {
+        if (left > right) std::swap(left, right);
+        analysis.events.push_back(
+            {time, vertex, left, right, first_cell, second_cell}
+        );
+    }
 }
 
 Analysis analyze(const py::dict& state, const py::dict& static_grid,
-                 bool include_realized, bool fast_conflict_scan)
+                 bool include_realized, bool fast_conflict_scan,
+                 bool capture_events = false)
 {
     const auto input_started = FeatureClock::now();
     Analysis analysis;
+    analysis.capture_events = capture_events;
     analysis.rows = py::cast<int>(state["rows"]);
     analysis.cols = py::cast<int>(state["cols"]);
     analysis.cell_count = analysis.rows * analysis.cols;
@@ -299,7 +322,10 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
                 std::sort(occupants.begin(), occupants.end());
                 for (size_t left = 0; left < occupants.size(); left++)
                     for (size_t right = left + 1; right < occupants.size(); right++)
-                        addEvent(analysis, (int)time, true, occupants[left], occupants[right]);
+                        addEvent(
+                            analysis, (int)time, true,
+                            occupants[left], occupants[right], value.first
+                        );
             }
             if (time)
             {
@@ -312,7 +338,10 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
                     if (reverse == transitions.end()) continue;
                     for (int left : value.second)
                         for (int right : reverse->second)
-                            addEvent(analysis, (int)time, false, left, right);
+                            addEvent(
+                                analysis, (int)time, false, left, right,
+                                from, to
+                            );
                 }
             }
         }
@@ -348,7 +377,9 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
                 );
                 std::vector<int>& occupants = inserted.first->second;
                 for (int other : occupants)
-                    addEvent(analysis, (int)time, true, other, agent.id);
+                    addEvent(
+                        analysis, (int)time, true, other, agent.id, current
+                    );
                 occupants.push_back(agent.id);
             }
             if (!time) continue;
@@ -364,7 +395,11 @@ Analysis analyze(const py::dict& state, const py::dict& static_grid,
                 const auto reverse = transitions.find(directedKey(current, previous));
                 if (reverse != transitions.end())
                     for (int other : reverse->second)
-                        addEvent(analysis, (int)time, false, other, agent.id);
+                        addEvent(
+                            analysis, (int)time, false, other, agent.id,
+                            std::min(previous, current),
+                            std::max(previous, current)
+                        );
                 std::vector<int>& movers = transitions[key];
                 if (movers.empty()) touched_transitions.push_back(key);
                 movers.push_back(agent.id);
@@ -831,5 +866,47 @@ py::dict batchOnlineFeatureVectors(const py::dict& state,
     result["state_graph_seconds"] = analysis.graph_seconds;
     result["state_path_aggregate_seconds"] = analysis.path_aggregate_seconds;
     result["feature_fill_seconds"] = elapsedSeconds(fill_started);
+    return result;
+}
+
+py::dict topologyConflictEvents(const py::dict& state,
+                                const py::dict& static_grid)
+{
+    const auto started = FeatureClock::now();
+    Analysis analysis = analyze(state, static_grid, false, true, true);
+    std::sort(
+        analysis.events.begin(), analysis.events.end(),
+        [](const Analysis::EventData& left, const Analysis::EventData& right) {
+            return std::tie(
+                left.time, left.vertex, left.left, left.right,
+                left.first_cell, left.second_cell
+            ) < std::tie(
+                right.time, right.vertex, right.left, right.right,
+                right.first_cell, right.second_cell
+            );
+        }
+    );
+    py::list events;
+    for (const Analysis::EventData& event : analysis.events)
+    {
+        py::tuple cells(event.vertex ? 1 : 2);
+        cells[0] = event.first_cell;
+        if (!event.vertex) cells[1] = event.second_cell;
+        events.append(py::make_tuple(
+            event.time,
+            event.vertex ? "vertex" : "edge",
+            event.left,
+            event.right,
+            cells
+        ));
+    }
+    py::dict result;
+    result["events"] = events;
+    result["event_count"] = py::len(events);
+    result["conflict_pair_count"] = analysis.conflict_pairs.size();
+    result["state_analysis_seconds"] = elapsedSeconds(started);
+    result["state_input_seconds"] = analysis.input_seconds;
+    result["state_conflict_scan_seconds"] = analysis.conflict_scan_seconds;
+    result["state_graph_seconds"] = analysis.graph_seconds;
     return result;
 }

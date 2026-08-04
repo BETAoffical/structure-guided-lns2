@@ -2135,3 +2135,36 @@ audits pass, and a post-run exact action-equivalence report matches v3 for all
 48 episodes. The original high-load performance gates remain unchanged. Only
 an integrity, equivalence, and performance pass may unlock the fresh-map
 layer.
+
+### Completed high-load v4 and registered native-event v5 rerun
+
+`high-load-v4` again passed every integrity gate and its exact 48-episode,
+735-decision equivalence audit against v3. The raw-TTF and equivalence report
+SHA-256 values are
+`779a10f9668423de8428aba9bf0b21e1c1bbe0d0dae290b38e6e3a3120cb1492`
+and
+`b8cbfa545821f40ea39fb46b1ebe1fccdd204a4887c9816593de2b5d52a7fbfb`.
+MapRank selector time fell again, from 1.6405 to 1.1190 seconds. Mean raw TTF
+was 10.771383 seconds for V2, 11.518072 for the same augmented pool, and
+11.013455 for MapRank. The ranker beat its same-pool comparator by 4.3811%,
+and room-500 beat V2 by 3.3455%, but maze-300 regressed 6.7604%. Overall
+MapRank still regressed 2.2474% rather than meeting the required 2%
+improvement, so the performance gate failed and fresh maps remain unread.
+
+The remaining maze cost is the first full Python temporal-event scan. On a
+stored maze-300 initial state, the Python topology analysis took about 494 ms
+per construction in a local diagnostic, while an exact C++ scan took 17.5 ms;
+the corresponding room-500 values were about 138 ms and 5.76 ms. These are
+microbenchmark timings, not TTF claims.
+
+`high-load-v5` is therefore registered before its outcomes as another
+implementation-only rerun under the unchanged config, schedule, models,
+candidate definitions, and gates. The existing native feature module may
+expose the full sorted topology event sequence `(time, kind, left, right,
+cells)` and the topology cache may consume it. The Python incremental event
+index remains the exact fallback when the native function is unavailable.
+Random valid-path tests, including horizon changes, must match Python full
+reconstruction event-for-event. The environment audit must verify the new
+native callable, and v5 must pass the full suite, all original high-load
+integrity/performance gates, and exact action equivalence against v4 before
+the fresh-map layer can run.

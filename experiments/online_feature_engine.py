@@ -80,6 +80,20 @@ def _native_vector_function() -> Any | None:
     return None
 
 
+@functools.lru_cache(maxsize=1)
+def _native_topology_event_function() -> Any | None:
+    _native_batch_function()
+    for module_name in ("lns2_env", "lns2_features_native"):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        function = getattr(module, "topology_conflict_events", None)
+        if callable(function):
+            return function
+    return None
+
+
 @functools.lru_cache(maxsize=16)
 def _cached_static_grid(
     rows: int, cols: int, obstacles: tuple[int, ...]
@@ -319,8 +333,18 @@ class TopologyAnalysisCache:
         initial_state: dict[str, Any],
         *,
         static_grid: StaticGridAnalysis | None = None,
+        backend: str = "auto",
     ) -> None:
+        if backend not in {"auto", "python", "native"}:
+            raise ValueError("unsupported topology analysis backend")
         self.static_grid = static_grid or static_grid_for_state(initial_state)
+        native_function = (
+            _native_topology_event_function() if backend != "python" else None
+        )
+        if backend == "native" and native_function is None:
+            raise RuntimeError("native topology event extraction is unavailable")
+        self.native_function = native_function
+        self.backend = "native" if native_function is not None else "python"
         self.index: TemporalConflictIndex | None = None
         self.analysis: StateAnalysis | None = None
         self.last_prepare_seconds = 0.0
@@ -334,9 +358,9 @@ class TopologyAnalysisCache:
         ):
             raise ValueError("topology cache grid changed during an episode")
 
-    def _analysis_from_index(self, state: dict[str, Any]) -> StateAnalysis:
-        assert self.index is not None
-        events = self.index.all_events()
+    def _analysis_from_events(
+        self, state: dict[str, Any], events: list[ConflictEvent]
+    ) -> StateAnalysis:
         pair_set = {(event.left, event.right) for event in events}
         expected_pairs = {
             tuple(sorted((int(edge[0]), int(edge[1]))))
@@ -368,6 +392,25 @@ class TopologyAnalysisCache:
             component_members=component_members,
         )
 
+    def _native_events(self, state: dict[str, Any]) -> list[ConflictEvent]:
+        assert self.native_function is not None
+        payload = self.native_function(
+            state, _native_static_payload(self.static_grid)
+        )
+        events = [
+            ConflictEvent(
+                int(row[0]),
+                str(row[1]),
+                int(row[2]),
+                int(row[3]),
+                tuple(map(int, row[4])),
+            )
+            for row in payload["events"]
+        ]
+        if len(events) != int(payload["event_count"]):
+            raise ValueError("native topology event count changed during conversion")
+        return events
+
     def prepare(
         self,
         state: dict[str, Any],
@@ -376,6 +419,12 @@ class TopologyAnalysisCache:
     ) -> StateAnalysis:
         started = time.perf_counter()
         self._validate_grid(state)
+        if self.native_function is not None:
+            self.analysis = self._analysis_from_events(
+                state, self._native_events(state)
+            )
+            self.last_prepare_seconds = time.perf_counter() - started
+            return self.analysis
         paths = {
             int(agent["id"]): list(map(int, agent["path"]))
             for agent in state["agents"]
@@ -384,7 +433,8 @@ class TopologyAnalysisCache:
             self.index = TemporalConflictIndex(paths)
         else:
             self.index.update(paths, changed_agents)
-        self.analysis = self._analysis_from_index(state)
+        assert self.index is not None
+        self.analysis = self._analysis_from_events(state, self.index.all_events())
         self.last_prepare_seconds = time.perf_counter() - started
         return self.analysis
 
@@ -1200,6 +1250,7 @@ __all__ = [
     "OnlineFeatureEngine",
     "TopologyAnalysisCache",
     "_native_vector_function",
+    "_native_topology_event_function",
     "TemporalConflictIndex",
     "optimized_explicit_neighborhood_features",
     "static_grid_for_state",

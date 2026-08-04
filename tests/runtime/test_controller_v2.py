@@ -41,6 +41,7 @@ from experiments.online_feature_engine import (
     OnlineFeatureEngine,
     TopologyAnalysisCache,
     _native_batch_function,
+    _native_topology_event_function,
 )
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.controllers.v2 import PairwiseV2Selector
@@ -299,7 +300,7 @@ class ControllerV2Tests(unittest.TestCase):
             ],
         }
         _refresh_conflicts(state)
-        cache = TopologyAnalysisCache(state)
+        cache = TopologyAnalysisCache(state, backend="python")
         for step in range(30):
             updated = copy.deepcopy(state)
             changed = set(generator.sample(range(24), generator.randrange(1, 6)))
@@ -315,7 +316,28 @@ class ControllerV2Tests(unittest.TestCase):
             self.assertEqual(cache.analysis.pair_set, expected.pair_set)
             self.assertEqual(cache.analysis.component_id, expected.component_id)
             self.assertEqual(cache.analysis.component_members, expected.component_members)
+            if _native_topology_event_function() is not None:
+                native = TopologyAnalysisCache(updated, backend="native")
+                self.assertIsNotNone(native.analysis)
+                assert native.analysis is not None
+                self.assertEqual(native.analysis.events, expected.events)
+                self.assertEqual(native.analysis.pair_set, expected.pair_set)
             state = updated
+
+    def test_native_topology_events_match_full_reconstruction(self) -> None:
+        if _native_topology_event_function() is None:
+            self.skipTest("native topology event extraction is not built")
+        state = make_state()
+        _refresh_conflicts(state)
+        cache = TopologyAnalysisCache(state, backend="native")
+        self.assertEqual(cache.backend, "native")
+        expected = analyze_state(state, static_grid=cache.static_grid)
+        self.assertIsNotNone(cache.analysis)
+        assert cache.analysis is not None
+        self.assertEqual(cache.analysis.events, expected.events)
+        self.assertEqual(cache.analysis.pair_set, expected.pair_set)
+        self.assertEqual(cache.analysis.component_id, expected.component_id)
+        self.assertEqual(cache.analysis.component_members, expected.component_members)
 
     def test_native_batch_engine_matches_reference_when_available(self) -> None:
         if _native_batch_function() is None:

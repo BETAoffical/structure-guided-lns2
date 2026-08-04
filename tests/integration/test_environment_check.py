@@ -47,6 +47,7 @@ class EnvironmentCheckTests(unittest.TestCase):
             PortableTreeEnsemble=lambda: None,
             batch_online_features=lambda *args: None,
             batch_online_feature_vectors=lambda *args: None,
+            topology_conflict_events=lambda *args: None,
         )
         with patch("scripts.check_environment.platform.system", return_value="Linux"), patch(
             "scripts.check_environment.platform.release", return_value="microsoft-standard"

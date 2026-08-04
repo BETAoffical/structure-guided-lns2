@@ -14,3 +14,7 @@ pybind11::dict batchOnlineFeatureVectors(
     const pybind11::list& candidates,
     const pybind11::dict& static_grid,
     const pybind11::list& feature_names);
+
+pybind11::dict topologyConflictEvents(
+    const pybind11::dict& state,
+    const pybind11::dict& static_grid);
