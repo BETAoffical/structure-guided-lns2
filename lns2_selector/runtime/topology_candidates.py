@@ -204,24 +204,42 @@ def _boundary_neighborhood(
     if size <= 0 or core_budget <= 0 or not events:
         raise ValueError("topology boundary candidate requires events and positive budgets")
     selected: set[int] = set()
+    selected_components: set[int] = set()
 
-    def choose(available: set[int], scored_events: list[ConflictEvent]) -> int:
+    def incident_index(
+        scored_events: list[ConflictEvent],
+    ) -> dict[int, tuple[ConflictEvent, ...]]:
+        incident: dict[int, list[ConflictEvent]] = collections.defaultdict(list)
+        for event in scored_events:
+            incident[int(event.left)].append(event)
+            incident[int(event.right)].append(event)
+        return {agent: tuple(rows) for agent, rows in incident.items()}
+
+    relevant_incident = incident_index(events)
+    all_incident = (
+        relevant_incident
+        if events is analysis.events
+        else incident_index(analysis.events)
+    )
+
+    def choose(
+        available: set[int],
+        incident: dict[int, tuple[ConflictEvent, ...]],
+    ) -> int:
         def score(agent: int) -> tuple[int, int, int, int, int, int]:
+            agent_events = incident.get(agent, ())
             newly_incident = sum(
-                agent in {event.left, event.right}
-                and event.left not in selected
+                event.left not in selected
                 and event.right not in selected
-                for event in scored_events
+                for event in agent_events
             )
             newly_internal = sum(
-                agent in {event.left, event.right}
-                and ((event.left in selected) != (event.right in selected))
-                for event in scored_events
+                (event.left in selected) != (event.right in selected)
+                for event in agent_events
             )
             component = analysis.component_id.get(agent)
             component_novel = int(
-                component is not None
-                and all(analysis.component_id.get(current) != component for current in selected)
+                component is not None and component not in selected_components
             )
             return (
                 3 * newly_incident - newly_internal,
@@ -238,16 +256,24 @@ def _boundary_neighborhood(
         agent for event in events for agent in (int(event.left), int(event.right))
     }
     while len(selected) < min(core_budget, size) and relevant_agents - selected:
-        candidate = choose(relevant_agents - selected, events)
+        candidate = choose(relevant_agents - selected, relevant_incident)
         before_coverage = sum(
             event.left in selected or event.right in selected for event in events
         )
         selected.add(candidate)
+        component = analysis.component_id.get(candidate)
+        if component is not None:
+            selected_components.add(component)
         after_coverage = sum(
             event.left in selected or event.right in selected for event in events
         )
         if after_coverage == before_coverage:
             selected.remove(candidate)
+            selected_components = {
+                int(analysis.component_id[agent])
+                for agent in selected
+                if agent in analysis.component_id
+            }
             break
 
     active_agents = {
@@ -257,7 +283,11 @@ def _boundary_neighborhood(
     while len(selected) < limit:
         remaining_active = active_agents - selected
         available = remaining_active if remaining_active else set(agent_rows) - selected
-        selected.add(choose(available, analysis.events))
+        candidate = choose(available, all_incident)
+        selected.add(candidate)
+        component = analysis.component_id.get(candidate)
+        if component is not None:
+            selected_components.add(component)
     return sorted(selected)
 
 

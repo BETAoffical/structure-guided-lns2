@@ -8,6 +8,7 @@ from typing import Any
 from experiments._common import sha256_file
 from experiments.balanced_wall_clock import prepare_movingai_dataset
 from experiments.closed_loop_confirmation import run_closed_loop_collection
+from experiments.closed_loop_trace_storage import read_trace_events
 from experiments.stride_augcontrol_evaluation import (
     CONTROLLER_ID as AUGCONTROL_CONTROLLER_ID,
     _dataset_tasks,
@@ -36,6 +37,54 @@ STATUS_SCHEMA = "lns2.stride.maprank_raw_ttf_status.v1"
 CONTROLLERS = ("v2-full", "v2-augmented-pool", CONTROLLER_ID)
 TTF_CLOCK_SCHEMA = "lns2.ttf.reset_inclusive_wall.v1"
 LAYER_NAMES = ("high_load_development", "fresh_map_raw_ttf")
+RUNTIME_EQUIVALENCE_SCHEMA = "lns2.stride.maprank_runtime_equivalence.v1"
+
+_RUNTIME_SUMMARY_FIELDS = (
+    "success",
+    "repairable",
+    "truncated",
+    "external_timeout",
+    "initial_fingerprint",
+    "initial_conflicts",
+    "final_conflicts",
+    "conflict_trajectory",
+    "repair_iterations",
+    "final_low_level",
+    "final_sum_of_costs",
+    "invalid_action_count",
+    "fingerprint_mismatch_count",
+    "selected_size_counts",
+    "selected_family_counts",
+)
+_RUNTIME_TRANSITION_FIELDS = (
+    "decision_index",
+    "before_fingerprint",
+    "after_fingerprint",
+    "action",
+    "low_level_delta",
+    "terminated",
+    "truncated",
+)
+_RUNTIME_METRIC_FIELDS = (
+    "action_valid",
+    "applied_heuristic",
+    "applied_pp_random_seed",
+    "conflicts_before",
+    "conflicts_after",
+    "conflict_delta",
+    "generated",
+    "iteration",
+    "neighborhood",
+    "repair_order",
+    "replan_success",
+    "requested_heuristic",
+    "requested_mode",
+    "requested_pp_random_seed",
+    "requested_random_seed",
+    "requested_repair_order",
+    "sum_of_costs_before",
+    "sum_of_costs_after",
+)
 
 
 def _registered_tasks(cohort: dict[str, Any], fresh: bool) -> list[str]:
@@ -128,12 +177,194 @@ def _prerequisites(root: Path, config: dict[str, Any], output: Path, layer: str)
         raise ValueError("MapRank Shadow gate did not pass")
     if layer == "fresh_map_raw_ttf":
         development = _read_json(
-            evaluation_root / "high-load-v2" / "maprank_raw_ttf_report.json"
+            evaluation_root / "high-load-v3" / "maprank_raw_ttf_report.json"
         )
         if development.get("performance_passed") is not True:
             raise ValueError(
                 "MapRank high-load gate did not pass; fresh maps remain unread"
             )
+
+
+def _without_timing(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _without_timing(item)
+            for key, item in value.items()
+            if not str(key).endswith("_seconds")
+        }
+    if isinstance(value, list):
+        return [_without_timing(item) for item in value]
+    return value
+
+
+def _runtime_transition_signature(row: dict[str, Any]) -> dict[str, Any]:
+    metrics = dict(row.get("metrics") or {})
+    return {
+        **{name: row.get(name) for name in _RUNTIME_TRANSITION_FIELDS},
+        "metrics": {name: metrics.get(name) for name in _RUNTIME_METRIC_FIELDS},
+        "controller": _without_timing(dict(row.get("controller") or {})),
+    }
+
+
+def _runtime_episode_signature(
+    collection_root: Path, row: dict[str, Any]
+) -> tuple[dict[str, Any], int]:
+    trace = read_trace_events(collection_root / str(row["trace_file"]))
+    transitions = [
+        _runtime_transition_signature(event)
+        for event in trace
+        if event.get("event") == "transition"
+    ]
+    summary = dict(row.get("summary") or {})
+    return (
+        {
+            "summary": {
+                name: summary.get(name) for name in _RUNTIME_SUMMARY_FIELDS
+            },
+            "transitions": transitions,
+        },
+        len(transitions),
+    )
+
+
+def analyze_maprank_runtime_equivalence(
+    reference: str | Path, candidate: str | Path
+) -> dict[str, Any]:
+    """Prove that a runtime-only optimization preserved MapRank decisions."""
+    reference = Path(reference).resolve()
+    candidate = Path(candidate).resolve()
+    reference_cohorts = {
+        path.name for path in (reference / "cohorts").iterdir() if path.is_dir()
+    }
+    candidate_cohorts = {
+        path.name for path in (candidate / "cohorts").iterdir() if path.is_dir()
+    }
+    mismatches: list[dict[str, Any]] = []
+    input_mismatches: list[dict[str, Any]] = []
+    implementation_pairs: dict[str, Any] = {}
+    episode_count = 0
+    decision_count = 0
+    if reference_cohorts != candidate_cohorts:
+        input_mismatches.append(
+            {
+                "kind": "cohort_set",
+                "reference": sorted(reference_cohorts),
+                "candidate": sorted(candidate_cohorts),
+            }
+        )
+    for cohort_id in sorted(reference_cohorts & candidate_cohorts):
+        for controller in CONTROLLERS:
+            reference_root = (
+                reference / "cohorts" / cohort_id / "controllers" / controller
+            )
+            candidate_root = (
+                candidate / "cohorts" / cohort_id / "controllers" / controller
+            )
+            reference_run = _read_json(reference_root / "run_config.json")
+            candidate_run = _read_json(candidate_root / "run_config.json")
+            for field in (
+                "configuration_fingerprint",
+                "dataset_fingerprint",
+                "controller",
+                "controller_bundle",
+            ):
+                if reference_run.get(field) != candidate_run.get(field):
+                    input_mismatches.append(
+                        {
+                            "cohort_id": cohort_id,
+                            "controller": controller,
+                            "kind": field,
+                        }
+                    )
+            implementation_pairs[f"{cohort_id}/{controller}"] = {
+                "reference": _fingerprint(
+                    reference_run.get("controller_implementation")
+                ),
+                "candidate": _fingerprint(
+                    candidate_run.get("controller_implementation")
+                ),
+            }
+            reference_rows = {
+                (str(row["task_id"]), int(row["solver_seed"])): row
+                for row in _read_jsonl(
+                    reference_root / "realized_dynamic_manifest.jsonl"
+                )
+            }
+            candidate_rows = {
+                (str(row["task_id"]), int(row["solver_seed"])): row
+                for row in _read_jsonl(
+                    candidate_root / "realized_dynamic_manifest.jsonl"
+                )
+            }
+            if set(reference_rows) != set(candidate_rows):
+                input_mismatches.append(
+                    {
+                        "cohort_id": cohort_id,
+                        "controller": controller,
+                        "kind": "episode_set",
+                    }
+                )
+            for key in sorted(set(reference_rows) & set(candidate_rows)):
+                left = reference_rows[key]
+                right = candidate_rows[key]
+                episode_count += 1
+                if left.get("status") != "ok" or right.get("status") != "ok":
+                    mismatches.append(
+                        {
+                            "cohort_id": cohort_id,
+                            "controller": controller,
+                            "task_id": key[0],
+                            "solver_seed": key[1],
+                            "kind": "episode_status",
+                        }
+                    )
+                    continue
+                expected, transitions = _runtime_episode_signature(
+                    reference_root, left
+                )
+                actual, _ = _runtime_episode_signature(candidate_root, right)
+                decision_count += transitions
+                if expected != actual:
+                    mismatches.append(
+                        {
+                            "cohort_id": cohort_id,
+                            "controller": controller,
+                            "task_id": key[0],
+                            "solver_seed": key[1],
+                            "kind": "scientific_trace",
+                        }
+                    )
+    report = {
+        "schema": RUNTIME_EQUIVALENCE_SCHEMA,
+        "reference": str(reference),
+        "candidate": str(candidate),
+        "scientific_inputs_equal": not input_mismatches,
+        "exact_action_equivalence": not mismatches,
+        "passed": not input_mismatches and not mismatches,
+        "episode_count": episode_count,
+        "decision_count": decision_count,
+        "input_mismatch_count": len(input_mismatches),
+        "action_mismatch_count": len(mismatches),
+        "input_mismatches": input_mismatches[:100],
+        "action_mismatches": mismatches[:100],
+        "implementation_fingerprints": implementation_pairs,
+        "inputs": {
+            "reference_schedule_sha256": sha256_file(
+                reference / "execution_schedule.jsonl"
+            ),
+            "candidate_schedule_sha256": sha256_file(
+                candidate / "execution_schedule.jsonl"
+            ),
+            "reference_report_sha256": sha256_file(
+                reference / "maprank_raw_ttf_report.json"
+            ),
+            "candidate_report_sha256": sha256_file(
+                candidate / "maprank_raw_ttf_report.json"
+            ),
+        },
+    }
+    _write_json(candidate / "runtime_action_equivalence_report.json", report)
+    return report
 
 
 def prepare_maprank_fresh_dataset(config_path: str | Path) -> dict[str, Any]:
@@ -564,6 +795,7 @@ def analyze_maprank_raw_ttf_layer(
 __all__ = [
     "CONTROLLERS",
     "analyze_maprank_raw_ttf_layer",
+    "analyze_maprank_runtime_equivalence",
     "prepare_maprank_fresh_dataset",
     "run_maprank_raw_ttf_layer",
 ]

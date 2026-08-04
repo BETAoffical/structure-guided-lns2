@@ -36,7 +36,11 @@ from experiments.feature_schema_v2 import (
     unsupported_actual_size,
 )
 from experiments.state_analysis import analyze_state, reconstruct_conflicts
-from experiments.online_feature_engine import OnlineFeatureEngine, _native_batch_function
+from experiments.online_feature_engine import (
+    OnlineFeatureEngine,
+    TopologyAnalysisCache,
+    _native_batch_function,
+)
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
@@ -237,6 +241,30 @@ class ControllerV2Tests(unittest.TestCase):
         )
         unchanged = engine.prepare(second, changed_agents=[])
         self.assertTrue(unchanged["incremental_cache_hit"])
+
+    def test_topology_analysis_cache_preserves_candidate_inputs(self) -> None:
+        first = make_state()
+        _refresh_conflicts(first)
+        cache = TopologyAnalysisCache(first)
+
+        def assert_equivalent(state: dict) -> None:
+            expected = analyze_state(state, static_grid=cache.static_grid)
+            actual = cache.analysis
+            self.assertIsNotNone(actual)
+            assert actual is not None
+            self.assertEqual(actual.events, expected.events)
+            self.assertEqual(actual.pair_set, expected.pair_set)
+            self.assertEqual(actual.component_id, expected.component_id)
+            self.assertEqual(actual.component_members, expected.component_members)
+            self.assertEqual(actual.degrees, expected.degrees)
+            self.assertEqual(actual.articulation, expected.articulation)
+
+        assert_equivalent(first)
+        second = copy.deepcopy(first)
+        second["agents"][0]["path"] = [0, 4, 5, 6, 2]
+        _refresh_conflicts(second)
+        cache.prepare(second, changed_agents=[0])
+        assert_equivalent(second)
 
     def test_native_batch_engine_matches_reference_when_available(self) -> None:
         if _native_batch_function() is None:

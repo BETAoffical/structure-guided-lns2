@@ -2051,3 +2051,45 @@ and `69447d404f77a1cd7abf7b8c4a6d27d3ceaaf28aa53c91604c5287ef29ce8d4a`.
 This proves runtime validity and meaningful action disagreement only; it makes
 no TTF improvement claim and leaves V2 as the default. Passing this gate permits
 the preregistered paired high-load raw-TTF layer.
+
+### Failed STRIDE-MapRank high-load v2 and registered runtime-only v3 rerun
+
+The first complete high-load run-to-completion evaluation (`high-load-v2`)
+passed every integrity gate: 48/48 rotating schedule entries, 16 successful
+episodes per controller, matching initial fingerprints and conflicts, the
+registered raw-TTF clock, no capped values, and zero execution, action, or
+semantic errors. It failed the performance gates. Mean raw wall TTF was
+12.785405 seconds for frozen V2, 14.122425 seconds for V2 over the augmented
+pool, and 14.277750 seconds for MapRank. The total MapRank method therefore
+regressed 11.6723% against V2 and the ranker regressed 1.0998% against the
+same-pool comparator, despite reducing mean repair iterations from 21.125 to
+12.3125. Maze-300 regressed 2.859% and room-500 regressed 23.586%.
+
+The timing decomposition identifies candidate generation, specifically the
+unconditional Topology Boundary analysis, as the dominant avoidable cost.
+Mean topology cost per MapRank decision was about 0.4063 seconds on maze-300
+and 0.1549 seconds on room-500; model inference was much smaller. The
+high-load-v2 report SHA-256 is
+`e88a99b0265159dc55de592223da0d3ed1a899951ba8242b54c388699a8ea696`.
+This result does not authorize reading the fresh-map raw-TTF layer.
+
+Before running another high-load outcome, `high-load-v3` is registered as an
+implementation-only rerun of the same evaluation config (SHA-256
+`e6ef4a6ff50965b733a313141db22a356ec12511c0ce6154d341169ab0e61430`).
+The 48-entry schedule, datasets, tasks, solver seeds, controller bundles,
+candidate definitions, 124 features, model scores, labels, thresholds,
+run-to-completion clock, comparison gates, and deterministic PP replay are
+frozen. Only two behavior-preserving computations may change: Topology
+Boundary candidate scoring may index incident conflict events instead of
+rescanning all events, and topology analysis may incrementally update the
+temporal conflict index for repaired agents.
+
+Promotion to the fresh-map layer requires both the original high-load
+performance gates and a separate exact runtime-equivalence audit against
+high-load-v2. That audit must match all 48 episodes' scientific inputs,
+candidate pools and scores, selected candidate IDs, explicit actions, PP
+seeds, state fingerprints, conflict trajectories, repair iterations, and
+final solver state while excluding only timing fields. A mismatch invalidates
+the optimization. A performance failure retains frozen V2 and keeps fresh
+maps unread; it cannot be hidden by the already observed reduction in repair
+rounds.

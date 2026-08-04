@@ -24,6 +24,7 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.state_analysis import (
+    StateAnalysis,
     StaticGridAnalysis,
     analyze_state,
     analyze_static_grid,
@@ -442,6 +443,8 @@ def generate_online_candidates(
     shadow_validation: bool = False,
     seed_agents_override: Iterable[int] | None = None,
     topology_static_grid: StaticGridAnalysis | None = None,
+    topology_state_analysis: StateAnalysis | None = None,
+    topology_state_analysis_seconds: float = 0.0,
     topology_no_progress_streak: int = 0,
     topology_remaining_wall_seconds: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -754,6 +757,8 @@ def generate_online_candidates(
     )
     if topology_boundary_no_progress_streak < 0:
         raise ValueError("topology no-progress streak must be non-negative")
+    if topology_state_analysis_seconds < 0.0:
+        raise ValueError("topology state-analysis time must be non-negative")
     if (
         topology_boundary_remaining_wall_seconds is not None
         and topology_boundary_remaining_wall_seconds < 0.0
@@ -836,11 +841,17 @@ def generate_online_candidates(
                 time.perf_counter() - topology_phase_started
             )
         if topology_boundary_gate_passed:
-            topology_dynamic_started = time.perf_counter()
-            analysis = analyze_state(state, static_grid=static_grid)
-            topology_boundary_dynamic_seconds = (
-                time.perf_counter() - topology_dynamic_started
-            )
+            if topology_state_analysis is None:
+                topology_dynamic_started = time.perf_counter()
+                analysis = analyze_state(state, static_grid=static_grid)
+                topology_boundary_dynamic_seconds = (
+                    time.perf_counter() - topology_dynamic_started
+                )
+            else:
+                analysis = topology_state_analysis
+                topology_boundary_dynamic_seconds = float(
+                    topology_state_analysis_seconds
+                )
             topology_candidate_started = time.perf_counter()
             topology_candidates = generate_topology_boundary_candidates(
                 state,
@@ -859,7 +870,15 @@ def generate_online_candidates(
             topology_boundary_merge_seconds = (
                 time.perf_counter() - topology_merge_started
             )
-        topology_boundary_analysis_seconds = time.perf_counter() - topology_started
+        topology_boundary_analysis_seconds = (
+            time.perf_counter() - topology_started
+            + (
+                topology_boundary_dynamic_seconds
+                if topology_state_analysis is not None
+                and topology_boundary_gate_passed
+                else 0.0
+            )
+        )
         topology_boundary_added_candidate_count = len(candidates) - base_candidate_count
         if not 0 <= topology_boundary_added_candidate_count <= maximum:
             raise RuntimeError("topology-boundary runtime merge changed the candidate cap")
@@ -872,6 +891,13 @@ def generate_online_candidates(
         request_generation_seconds
         + proposal_seconds
         + candidate_postprocess_seconds
+        + (
+            topology_boundary_dynamic_seconds
+            if topology_state_analysis is not None
+            and topology_boundary is not None
+            and topology_boundary_gate_passed
+            else 0.0
+        )
     )
     return candidates, {
         "proposal_count": proposal_count,

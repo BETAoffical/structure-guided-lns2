@@ -18,7 +18,11 @@ from experiments.stride_maprank import (
     validate_maprank_training_config,
 )
 from experiments.stride_maprank_evaluation import _training_evidence
-from experiments.stride_maprank_raw_ttf import CONTROLLERS, _schedule
+from experiments.stride_maprank_raw_ttf import (
+    CONTROLLERS,
+    _runtime_transition_signature,
+    _schedule,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -250,3 +254,33 @@ def test_maprank_raw_ttf_schedule_is_strictly_rotated_and_complete() -> None:
         CONTROLLERS[1:] + CONTROLLERS[:1],
         CONTROLLERS[2:] + CONTROLLERS[:2],
     }
+
+
+def test_maprank_runtime_signature_excludes_only_timing_fields() -> None:
+    transition = {
+        "decision_index": 3,
+        "before_fingerprint": "before",
+        "after_fingerprint": "after",
+        "action": {"agents": [1, 2], "pp_random_seed": 9},
+        "metrics": {
+            "conflicts_before": 4,
+            "conflicts_after": 2,
+            "pp_replan_seconds": 1.0,
+        },
+        "controller": {
+            "selected_candidate_id": "candidate-a",
+            "candidate_generation_seconds": 1.0,
+            "proposal": {
+                "topology_boundary_gate_reason": "legacy_unconditional",
+                "topology_boundary_dynamic_seconds": 0.5,
+            },
+        },
+    }
+    first = _runtime_transition_signature(transition)
+    transition["controller"]["candidate_generation_seconds"] = 9.0
+    transition["controller"]["proposal"]["topology_boundary_dynamic_seconds"] = 4.0
+    transition["metrics"]["pp_replan_seconds"] = 8.0
+    second = _runtime_transition_signature(transition)
+    assert first == second
+    transition["controller"]["selected_candidate_id"] = "candidate-b"
+    assert first != _runtime_transition_signature(transition)

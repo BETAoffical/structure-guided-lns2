@@ -52,6 +52,7 @@ from experiments.neighborhood_candidates import (
 from experiments.online_feature_engine import (
     FEATURE_BACKENDS,
     OnlineFeatureEngine,
+    TopologyAnalysisCache,
     _native_vector_function,
 )
 from experiments.repair_collection import (
@@ -1194,6 +1195,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 and controller_mode != "official_adaptive"
                 else None
             )
+            topology_analysis_cache: TopologyAnalysisCache | None = None
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
             previous_route: str | None = None
@@ -1336,6 +1338,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             verification_mode == "sampled"
                             and decision_index % 20 == 0
                         )
+                        topology_state_analysis = None
+                        topology_state_analysis_seconds = 0.0
+                        topology_runtime = dict(
+                            effective_proposal.get("topology_boundary") or {}
+                        )
+                        if (
+                            topology_runtime
+                            and not topology_runtime.get("activation_gate")
+                            and not topology_runtime.get("phase_guard")
+                        ):
+                            if topology_analysis_cache is None:
+                                topology_analysis_cache = TopologyAnalysisCache(
+                                    state,
+                                    static_grid=(
+                                        feature_engine.static_grid
+                                        if feature_engine is not None
+                                        else None
+                                    ),
+                                )
+                            else:
+                                topology_analysis_cache.prepare(
+                                    state,
+                                    changed_agents=sorted(pending_changed_agents),
+                                )
+                            topology_state_analysis = topology_analysis_cache.analysis
+                            topology_state_analysis_seconds = (
+                                topology_analysis_cache.last_prepare_seconds
+                            )
                         candidates, proposal_metrics = generate_online_candidates(
                             environment,
                             state,
@@ -1358,6 +1388,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ).get("static_grid_cache")
                                 is True
                                 else None
+                            ),
+                            topology_state_analysis=topology_state_analysis,
+                            topology_state_analysis_seconds=(
+                                topology_state_analysis_seconds
                             ),
                             topology_no_progress_streak=no_progress_streak,
                             topology_remaining_wall_seconds=(

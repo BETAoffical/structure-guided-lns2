@@ -1,17 +1,147 @@
 from __future__ import annotations
 
 import collections
+import random
 import unittest
 
 from experiments.state_analysis import ConflictEvent, StateAnalysis
 from lns2_selector.runtime.topology_candidates import (
+    _boundary_neighborhood,
     generate_topology_anchor_candidates,
     generate_topology_boundary_candidates,
     merge_topology_anchor_candidates,
 )
 
 
+def _reference_boundary_neighborhood(
+    state: dict, analysis: StateAnalysis, events: list[ConflictEvent],
+    *, size: int, core_budget: int,
+) -> list[int]:
+    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    selected: set[int] = set()
+
+    def choose(available: set[int], scored_events: list[ConflictEvent]) -> int:
+        def score(agent: int) -> tuple[int, int, int, int, int, int]:
+            newly_incident = sum(
+                agent in {event.left, event.right}
+                and event.left not in selected
+                and event.right not in selected
+                for event in scored_events
+            )
+            newly_internal = sum(
+                agent in {event.left, event.right}
+                and ((event.left in selected) != (event.right in selected))
+                for event in scored_events
+            )
+            component = analysis.component_id.get(agent)
+            component_novel = int(
+                component is not None
+                and all(
+                    analysis.component_id.get(current) != component
+                    for current in selected
+                )
+            )
+            return (
+                3 * newly_incident - newly_internal,
+                newly_incident,
+                -newly_internal,
+                component_novel,
+                int(agent_rows[agent].get("conflict_degree", 0)),
+                -agent,
+            )
+
+        return max(available, key=score)
+
+    relevant_agents = {
+        agent for event in events for agent in (int(event.left), int(event.right))
+    }
+    while len(selected) < min(core_budget, size) and relevant_agents - selected:
+        candidate = choose(relevant_agents - selected, events)
+        before_coverage = sum(
+            event.left in selected or event.right in selected for event in events
+        )
+        selected.add(candidate)
+        after_coverage = sum(
+            event.left in selected or event.right in selected for event in events
+        )
+        if after_coverage == before_coverage:
+            selected.remove(candidate)
+            break
+
+    active_agents = {
+        agent
+        for event in analysis.events
+        for agent in (int(event.left), int(event.right))
+    }
+    limit = min(size, len(agent_rows))
+    while len(selected) < limit:
+        remaining_active = active_agents - selected
+        available = remaining_active if remaining_active else set(agent_rows) - selected
+        selected.add(choose(available, analysis.events))
+    return sorted(selected)
+
+
 class TopologyCandidatesTest(unittest.TestCase):
+    def test_incident_index_optimization_preserves_reference_actions(self) -> None:
+        for seed in range(12):
+            generator = random.Random(seed)
+            agent_count = 40
+            state = {
+                "agents": [
+                    {
+                        "id": agent,
+                        "path": [agent],
+                        "conflict_degree": generator.randrange(8),
+                    }
+                    for agent in range(agent_count)
+                ]
+            }
+            events = []
+            for index in range(200):
+                left, right = generator.sample(range(agent_count), 2)
+                events.append(
+                    ConflictEvent(
+                        index,
+                        "vertex",
+                        min(left, right),
+                        max(left, right),
+                        (generator.randrange(100),),
+                    )
+                )
+            analysis = StateAnalysis(
+                rows=10,
+                cols=10,
+                free_cells=set(range(100)),
+                degrees={cell: 2 for cell in range(100)},
+                articulation=set(),
+                obstacle_rate_2={},
+                obstacle_rate_4={},
+                visit_heat=collections.Counter(),
+                agent_heat=collections.Counter(),
+                events=events,
+                pair_set={(event.left, event.right) for event in events},
+                component_id={agent: agent % 7 for agent in range(agent_count)},
+                component_members={},
+            )
+            relevant = [event for index, event in enumerate(events) if index % 3]
+            for size in (4, 8, 16):
+                self.assertEqual(
+                    _boundary_neighborhood(
+                        state,
+                        analysis,
+                        relevant,
+                        size=size,
+                        core_budget=4,
+                    ),
+                    _reference_boundary_neighborhood(
+                        state,
+                        analysis,
+                        relevant,
+                        size=size,
+                        core_budget=4,
+                    ),
+                )
+
     def test_pair_set_cover_is_deterministic_and_closes_relevant_pairs(self) -> None:
         state = {
             "agents": [

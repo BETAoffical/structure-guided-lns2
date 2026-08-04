@@ -256,6 +256,84 @@ class TemporalConflictIndex:
         return changed
 
 
+class TopologyAnalysisCache:
+    """Maintain only the dynamic state fields consumed by topology candidates."""
+
+    def __init__(
+        self,
+        initial_state: dict[str, Any],
+        *,
+        static_grid: StaticGridAnalysis | None = None,
+    ) -> None:
+        self.static_grid = static_grid or static_grid_for_state(initial_state)
+        self.index: TemporalConflictIndex | None = None
+        self.analysis: StateAnalysis | None = None
+        self.last_prepare_seconds = 0.0
+        self.prepare(initial_state)
+
+    def _validate_grid(self, state: dict[str, Any]) -> None:
+        if (
+            int(state["rows"]) != self.static_grid.rows
+            or int(state["cols"]) != self.static_grid.cols
+            or tuple(map(int, state["obstacles"])) != self.static_grid.obstacles
+        ):
+            raise ValueError("topology cache grid changed during an episode")
+
+    def _analysis_from_index(self, state: dict[str, Any]) -> StateAnalysis:
+        assert self.index is not None
+        events = self.index.all_events()
+        pair_set = {(event.left, event.right) for event in events}
+        expected_pairs = {
+            tuple(sorted((int(edge[0]), int(edge[1]))))
+            for edge in state.get("conflict_edges", [])
+        }
+        if pair_set != expected_pairs:
+            raise ValueError(
+                "topology cache conflicts disagree with solver conflict edges"
+            )
+        if int(state.get("num_of_colliding_pairs", len(pair_set))) != len(pair_set):
+            raise ValueError(
+                "topology cache conflicts disagree with solver conflict count"
+            )
+        agent_ids = [int(agent["id"]) for agent in state["agents"]]
+        component_id, component_members = _conflict_components(agent_ids, pair_set)
+        return StateAnalysis(
+            rows=self.static_grid.rows,
+            cols=self.static_grid.cols,
+            free_cells=self.static_grid.free_cells,
+            degrees=self.static_grid.degrees,
+            articulation=self.static_grid.articulation,
+            obstacle_rate_2=self.static_grid.obstacle_rate_2,
+            obstacle_rate_4=self.static_grid.obstacle_rate_4,
+            visit_heat=collections.Counter(),
+            agent_heat=collections.Counter(),
+            events=events,
+            pair_set=pair_set,
+            component_id=component_id,
+            component_members=component_members,
+        )
+
+    def prepare(
+        self,
+        state: dict[str, Any],
+        *,
+        changed_agents: Iterable[int] | None = None,
+    ) -> StateAnalysis:
+        started = time.perf_counter()
+        self._validate_grid(state)
+        paths = {
+            int(agent["id"]): list(map(int, agent["path"]))
+            for agent in state["agents"]
+        }
+        if self.index is None or changed_agents is None:
+            self.index = TemporalConflictIndex(paths)
+        else:
+            self.index.update(paths, changed_agents)
+        self.analysis = self._analysis_from_index(state)
+        self.last_prepare_seconds = time.perf_counter() - started
+        return self.analysis
+
+
 @dataclass
 class PathAggregates:
     length: int
@@ -1065,6 +1143,7 @@ class OnlineFeatureEngine:
 __all__ = [
     "FEATURE_BACKENDS",
     "OnlineFeatureEngine",
+    "TopologyAnalysisCache",
     "_native_vector_function",
     "TemporalConflictIndex",
     "optimized_explicit_neighborhood_features",

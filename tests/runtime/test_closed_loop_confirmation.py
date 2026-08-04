@@ -1121,6 +1121,48 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertFalse(uncached_metrics["topology_boundary_static_cache_hit"])
         self.assertTrue(cached_metrics["topology_boundary_static_cache_hit"])
 
+    def test_topology_boundary_dynamic_cache_preserves_candidates_and_time(self) -> None:
+        state = make_state()
+        static_grid = analyze_static_grid(state)
+        config = {
+            "max_seed_agents": 1,
+            "heuristics": ["target", "collision", "random"],
+            "neighborhood_sizes": [4],
+            "trials": 2,
+            "candidates_per_family": 1,
+            "topology_boundary": {
+                "enabled": True,
+                "generator_id": "stride-topoboundary-v1",
+                "neighborhood_size": 16,
+                "core_budget": 4,
+                "maximum_added_candidates": 2,
+            },
+        }
+        reference, _reference_metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config=config,
+            topology_static_grid=static_grid,
+        )
+        cached, metrics = generate_online_candidates(
+            FakeProposalEnvironment(state),
+            state,
+            task_id="task-a",
+            solver_seed=0,
+            decision_index=0,
+            proposal_config=config,
+            topology_static_grid=static_grid,
+            topology_state_analysis=analyze_state(state, static_grid=static_grid),
+            topology_state_analysis_seconds=0.125,
+        )
+        self.assertEqual(cached, reference)
+        self.assertEqual(metrics["topology_boundary_dynamic_seconds"], 0.125)
+        self.assertGreaterEqual(metrics["candidate_generation_seconds"], 0.125)
+        self.assertGreaterEqual(metrics["topology_boundary_analysis_seconds"], 0.125)
+
     def test_topology_boundary_cheap_gate_skips_low_articulation_grid(self) -> None:
         state = make_state()
         state.update(
