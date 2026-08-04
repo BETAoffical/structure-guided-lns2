@@ -15,6 +15,7 @@ if NATIVE_BUILD.is_dir() and str(NATIVE_BUILD) not in sys.path:
     sys.path.insert(0, str(NATIVE_BUILD))
 
 from experiments.stride_maprank_raw_ttf import (  # noqa: E402
+    analyze_maprank_high_load_confirmation,
     analyze_maprank_raw_ttf_layer,
     analyze_maprank_runtime_equivalence,
     prepare_maprank_fresh_dataset,
@@ -31,6 +32,7 @@ def main() -> int:
         choices=(
             "high-load",
             "analyze-high-load",
+            "analyze-high-load-confirmation",
             "analyze-runtime-equivalence",
             "prepare-fresh",
             "fresh",
@@ -52,6 +54,13 @@ def main() -> int:
             arguments.reference, arguments.output
         )
         code = 0 if report["passed"] else 1
+    elif arguments.command == "analyze-high-load-confirmation":
+        if not arguments.output:
+            parser.error("analyze-high-load-confirmation requires --output")
+        report = analyze_maprank_high_load_confirmation(
+            arguments.config, arguments.output
+        )
+        code = 0 if report.get("integrity_passed") else 1
     elif arguments.command == "prepare-fresh":
         report = prepare_maprank_fresh_dataset(arguments.config)
         code = 0

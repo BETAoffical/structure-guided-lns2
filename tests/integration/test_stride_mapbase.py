@@ -20,6 +20,7 @@ from experiments.stride_maprank import (
 from experiments.stride_maprank_evaluation import _training_evidence
 from experiments.stride_maprank_raw_ttf import (
     CONTROLLERS,
+    _load_confirmation_config,
     _runtime_transition_signature,
     _schedule,
 )
@@ -30,6 +31,9 @@ CONFIG_PATH = ROOT / "configs" / "stride_mapbase_collection.json"
 MAPRANK_DESIGN_PATH = ROOT / "configs" / "stride_maprank_design.json"
 MAPRANK_TRAINING_PATH = ROOT / "configs" / "stride_maprank_training.json"
 MAPRANK_EVALUATION_PATH = ROOT / "configs" / "stride_maprank_evaluation.json"
+MAPRANK_CONFIRMATION_PATH = (
+    ROOT / "configs" / "stride_maprank_high_load_confirmation.json"
+)
 
 
 def _config() -> dict:
@@ -286,3 +290,28 @@ def test_maprank_runtime_signature_excludes_only_timing_fields() -> None:
     assert first == second
     transition["controller"]["selected_candidate_id"] = "candidate-b"
     assert first != _runtime_transition_signature(transition)
+
+
+def test_maprank_high_load_confirmation_keeps_original_gates_and_runtime() -> None:
+    path, root, config, evaluation_path, evaluation = _load_confirmation_config(
+        MAPRANK_CONFIRMATION_PATH
+    )
+    assert path == MAPRANK_CONFIRMATION_PATH
+    assert root == ROOT
+    assert evaluation_path == MAPRANK_EVALUATION_PATH
+    assert config["required_replicate_count"] == 3
+    assert [row["id"] for row in config["replicates"]] == ["r1", "r2", "r3"]
+    assert config["aggregation"] == (
+        "pooled_strictly_paired_arithmetic_mean_raw_ttf"
+    )
+    assert config["same_implementation_required"] is True
+    assert config["exact_action_equivalence_required"] is True
+    assert config["fresh_map_unlock_on_pass"] is True
+    assert config["formal_speed_claim"] is False
+    assert evaluation["high_load_development"]["gates"] == {
+        "minimum_raw_ttf_improvement_vs_v2_full": 0.02,
+        "minimum_ranker_raw_ttf_improvement_vs_v2_augmented": 0.0,
+        "maximum_cohort_raw_ttf_regression": 0.10,
+        "repair_iterations_noninferior": True,
+        "success_count_noninferior": True,
+    }

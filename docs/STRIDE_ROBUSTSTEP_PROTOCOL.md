@@ -2168,3 +2168,44 @@ reconstruction event-for-event. The environment audit must verify the new
 native callable, and v5 must pass the full suite, all original high-load
 integrity/performance gates, and exact action equivalence against v4 before
 the fresh-map layer can run.
+
+### Completed high-load v5 and registered three-run timing confirmation
+
+`high-load-v5` completed all 48 schedule entries with every episode
+successful, zero execution, invalid-action, or semantic errors, matched
+initial states, and no capped-TTF values. Its exact action-equivalence audit
+against v4 passed all 48 episodes and 735 decisions. The raw-TTF and
+equivalence-report SHA-256 values are
+`3d2453e68e47bb07d6871d6bc56c4cda76592ced0b2f5db492df924de92f03aa`
+and
+`52f32e46ad34a7731f3289dd40016bb54c6d82262a1001fb557489a5a73887d6`.
+
+The native event extraction reduced mean MapRank selector time from 1.1190
+seconds in v4 to 0.4342 seconds. Mean raw wall TTF was 11.091729 seconds for
+frozen V2, 10.334541 seconds for V2 over the same augmented pool, and
+10.453622 seconds for MapRank. The complete MapRank method beat V2 by 5.7530%
+and reduced mean repair iterations from 21.1250 to 12.3125. Maze-300 improved
+5.1445% and room-500 improved 6.4846%. However, MapRank was 1.1523% slower
+than the same-pool V2 comparator, so the unchanged ranker-effect gate failed
+and this single run does not unlock fresh maps.
+
+The failed same-pool comparison is only 0.1191 seconds in aggregate. The two
+controllers differ by about 0.006 seconds of measured selector time, while
+their initial-solution and PP wall timings vary by more than the observed
+gap. Moreover, v4 and v5 execute identical actions and PP seeds, yet the
+same-pool wall-clock comparison changed from a 4.3811% improvement in v4 to a
+1.1523% regression in v5. This is direct evidence that a single wall-clock run
+is not sufficiently stable for this narrow gate; it is not permission to
+relax or replace the gate.
+
+Before reading two additional outcomes, the fixed three-run confirmation is
+registered in `configs/stride_maprank_high_load_confirmation.json`, SHA-256
+`e5b56b430fb23b925614c774427c860809d513653f4271fd7fc0b6309331eed5`.
+It pools the completed v5 run and two new strictly rotated repetitions of the
+same 48-entry schedule. All three runs must have identical evaluation and
+schedule hashes, the same controller implementation fingerprints, complete
+integrity, and exact action equivalence. The pooled 48 episodes per controller
+must satisfy every original `high_load_development` performance threshold;
+thresholds, tasks, seeds, models, candidate pools, and labels remain frozen.
+Only a pooled pass may unlock fresh-map raw TTF. This outcome-informed timing
+confirmation improves wall-clock precision but is not a formal speed claim.

@@ -1,0 +1,35 @@
+{
+  "schema": "lns2.stride.maprank_high_load_confirmation_config.v1",
+  "scientific_status": "registered_after_high_load_v5_before_confirmation_replicates_2_and_3",
+  "experiment_id": "stride-maprank-high-load-confirmation-v1",
+  "evaluation_config": "configs/stride_maprank_evaluation.json",
+  "evaluation_config_sha256": "e6ef4a6ff50965b733a313141db22a356ec12511c0ce6154d341169ab0e61430",
+  "source_commit": "da292cf8fd6e1831151ca4cab92f9c78ac2db495",
+  "registered_v5_report_sha256": "3d2453e68e47bb07d6871d6bc56c4cda76592ced0b2f5db492df924de92f03aa",
+  "registered_schedule_sha256": "4daac2fc8051eac092f7b799802b5746c36ffb0b6f8e308bdee765a3bd315a14",
+  "replicates": [
+    {
+      "id": "r1",
+      "path": "build/stride-maprank-evaluation-v1/high-load-v5",
+      "status": "completed_before_confirmation_registration"
+    },
+    {
+      "id": "r2",
+      "path": "build/stride-maprank-evaluation-v1/high-load-v5-confirmation-r2",
+      "status": "unread_at_registration"
+    },
+    {
+      "id": "r3",
+      "path": "build/stride-maprank-evaluation-v1/high-load-v5-confirmation-r3",
+      "status": "unread_at_registration"
+    }
+  ],
+  "required_replicate_count": 3,
+  "aggregation": "pooled_strictly_paired_arithmetic_mean_raw_ttf",
+  "same_implementation_required": true,
+  "exact_action_equivalence_required": true,
+  "gate_source": "high_load_development",
+  "fresh_map_unlock_on_pass": true,
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}

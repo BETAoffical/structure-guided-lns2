@@ -38,6 +38,10 @@ CONTROLLERS = ("v2-full", "v2-augmented-pool", CONTROLLER_ID)
 TTF_CLOCK_SCHEMA = "lns2.ttf.reset_inclusive_wall.v1"
 LAYER_NAMES = ("high_load_development", "fresh_map_raw_ttf")
 RUNTIME_EQUIVALENCE_SCHEMA = "lns2.stride.maprank_runtime_equivalence.v1"
+CONFIRMATION_CONFIG_SCHEMA = (
+    "lns2.stride.maprank_high_load_confirmation_config.v1"
+)
+CONFIRMATION_REPORT_SCHEMA = "lns2.stride.maprank_high_load_confirmation.v1"
 
 _RUNTIME_SUMMARY_FIELDS = (
     "success",
@@ -177,11 +181,14 @@ def _prerequisites(root: Path, config: dict[str, Any], output: Path, layer: str)
         raise ValueError("MapRank Shadow gate did not pass")
     if layer == "fresh_map_raw_ttf":
         development = _read_json(
-            evaluation_root / "high-load-v5" / "maprank_raw_ttf_report.json"
+            evaluation_root
+            / "high-load-v5-confirmation"
+            / "maprank_high_load_confirmation_report.json"
         )
         if development.get("performance_passed") is not True:
             raise ValueError(
-                "MapRank high-load gate did not pass; fresh maps remain unread"
+                "MapRank pooled high-load confirmation did not pass; "
+                "fresh maps remain unread"
             )
 
 
@@ -542,9 +549,9 @@ def _controller_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _paired_comparison(
-    baseline: dict[tuple[str, str, int], dict[str, Any]],
-    challenger: dict[tuple[str, str, int], dict[str, Any]],
-    keys: list[tuple[str, str, int]],
+    baseline: dict[tuple[Any, ...], dict[str, Any]],
+    challenger: dict[tuple[Any, ...], dict[str, Any]],
+    keys: list[tuple[Any, ...]],
 ) -> dict[str, Any]:
     pairs = []
     for key in keys:
@@ -792,8 +799,332 @@ def analyze_maprank_raw_ttf_layer(
     return report
 
 
+def _load_confirmation_config(
+    config_path: str | Path,
+) -> tuple[Path, Path, dict[str, Any], Path, dict[str, Any]]:
+    path = Path(config_path).resolve()
+    root = path.parent.parent
+    config = _read_json(path)
+    if config.get("schema") != CONFIRMATION_CONFIG_SCHEMA:
+        raise ValueError("MapRank high-load confirmation schema changed")
+    if config.get("aggregation") != (
+        "pooled_strictly_paired_arithmetic_mean_raw_ttf"
+    ):
+        raise ValueError("MapRank high-load confirmation aggregation changed")
+    if config.get("same_implementation_required") is not True:
+        raise ValueError("MapRank high-load confirmation implementation gate changed")
+    if config.get("exact_action_equivalence_required") is not True:
+        raise ValueError("MapRank high-load confirmation action gate changed")
+    if config.get("gate_source") != "high_load_development":
+        raise ValueError("MapRank high-load confirmation gate source changed")
+    replicates = list(config.get("replicates") or ())
+    required = int(config.get("required_replicate_count", 0))
+    if required != 3 or len(replicates) != required:
+        raise ValueError("MapRank high-load confirmation replicate count changed")
+    if [row.get("id") for row in replicates] != ["r1", "r2", "r3"]:
+        raise ValueError("MapRank high-load confirmation replicate identities changed")
+    evaluation_path = _project_path(root, str(config["evaluation_config"]))
+    if sha256_file(evaluation_path) != config.get("evaluation_config_sha256"):
+        raise ValueError("MapRank evaluation config hash changed")
+    _loaded_path, loaded_root, evaluation = _load_config(evaluation_path)
+    if loaded_root != root:
+        raise ValueError("MapRank confirmation project root changed")
+    return path, root, config, evaluation_path, evaluation
+
+
+def _same_implementation(report: dict[str, Any]) -> bool:
+    pairs = dict(report.get("implementation_fingerprints") or {})
+    return bool(pairs) and all(
+        row.get("reference") == row.get("candidate")
+        for row in pairs.values()
+    )
+
+
+def analyze_maprank_high_load_confirmation(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    """Pool three unchanged high-load repetitions without relaxing any gate."""
+    path, root, config, evaluation_path, evaluation = _load_confirmation_config(
+        config_path
+    )
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    _runtime, cohorts, seeds = _layer_context(
+        root, evaluation, "high_load_development"
+    )
+    base_expected = {
+        (str(cohort["id"]), task, seed)
+        for cohort in cohorts
+        for task in cohort["tasks"]
+        for seed in seeds
+    }
+    reference_root: Path | None = None
+    indexed: dict[str, dict[tuple[Any, ...], dict[str, Any]]] = {
+        name: {} for name in CONTROLLERS
+    }
+    report_hashes: dict[str, str] = {}
+    schedule_hashes: dict[str, str] = {}
+    manifest_hashes: dict[str, dict[str, dict[str, str]]] = {}
+    equivalence_hashes: dict[str, str] = {}
+    equivalence_summaries: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    for replicate in config["replicates"]:
+        replicate_id = str(replicate["id"])
+        replicate_root = _project_path(root, str(replicate["path"]))
+        report_path = replicate_root / "maprank_raw_ttf_report.json"
+        schedule_path = replicate_root / "execution_schedule.jsonl"
+        report = _read_json(report_path)
+        report_hash = sha256_file(report_path)
+        schedule_hash = sha256_file(schedule_path)
+        report_hashes[replicate_id] = report_hash
+        schedule_hashes[replicate_id] = schedule_hash
+        if replicate_id == "r1":
+            reference_root = replicate_root
+            if report_hash != config.get("registered_v5_report_sha256"):
+                errors.append("r1: registered v5 report hash changed")
+        if report.get("layer") != "high_load_development":
+            errors.append(f"{replicate_id}: layer identity changed")
+        if report.get("integrity_passed") is not True:
+            errors.append(f"{replicate_id}: source integrity failed")
+        inputs = dict(report.get("inputs") or {})
+        if inputs.get("config_sha256") != config.get("evaluation_config_sha256"):
+            errors.append(f"{replicate_id}: evaluation config hash changed")
+        if schedule_hash != config.get("registered_schedule_sha256"):
+            errors.append(f"{replicate_id}: schedule hash changed")
+        if inputs.get("schedule_sha256") != schedule_hash:
+            errors.append(f"{replicate_id}: report schedule hash mismatch")
+        if reference_root is None:
+            raise ValueError("confirmation reference replicate must be first")
+        if replicate_id != "r1":
+            equivalence = analyze_maprank_runtime_equivalence(
+                reference_root, replicate_root
+            )
+            equivalence_path = (
+                replicate_root / "runtime_action_equivalence_report.json"
+            )
+            equivalence_hashes[replicate_id] = sha256_file(equivalence_path)
+            same_implementation = _same_implementation(equivalence)
+            equivalence_summaries[replicate_id] = {
+                "passed": equivalence.get("passed") is True,
+                "same_implementation": same_implementation,
+                "episode_count": int(equivalence.get("episode_count", 0)),
+                "decision_count": int(equivalence.get("decision_count", 0)),
+                "input_mismatch_count": int(
+                    equivalence.get("input_mismatch_count", 0)
+                ),
+                "action_mismatch_count": int(
+                    equivalence.get("action_mismatch_count", 0)
+                ),
+            }
+            if equivalence.get("passed") is not True:
+                errors.append(f"{replicate_id}: exact action equivalence failed")
+            if not same_implementation:
+                errors.append(f"{replicate_id}: implementation fingerprint changed")
+        manifest_hashes[replicate_id] = {}
+        for controller in CONTROLLERS:
+            manifest_hashes[replicate_id][controller] = {}
+            rows_by_key: dict[tuple[str, str, int], dict[str, Any]] = {}
+            for cohort in cohorts:
+                cohort_id = str(cohort["id"])
+                manifest = (
+                    replicate_root
+                    / "cohorts"
+                    / cohort_id
+                    / "controllers"
+                    / controller
+                    / "realized_dynamic_manifest.jsonl"
+                )
+                manifest_hashes[replicate_id][controller][cohort_id] = (
+                    sha256_file(manifest)
+                )
+                for row in _read_jsonl(manifest):
+                    base_key = (
+                        cohort_id,
+                        str(row["task_id"]),
+                        int(row["solver_seed"]),
+                    )
+                    if base_key in rows_by_key:
+                        errors.append(
+                            f"{replicate_id}/{controller}: duplicate episode "
+                            f"{base_key}"
+                        )
+                    rows_by_key[base_key] = row
+                    indexed[controller][(replicate_id, *base_key)] = row
+            if set(rows_by_key) != base_expected:
+                errors.append(
+                    f"{replicate_id}/{controller}: incomplete paired coverage"
+                )
+    expected = {
+        (str(replicate["id"]), *key)
+        for replicate in config["replicates"]
+        for key in base_expected
+    }
+    fingerprint_mismatches = 0
+    conflict_mismatches = 0
+    bad_clock = 0
+    capped_values = 0
+    for key in sorted(expected):
+        present = [indexed[name].get(key) for name in CONTROLLERS]
+        if any(row is None or row.get("status") != "ok" for row in present):
+            continue
+        summaries_for_key = [dict(row["summary"]) for row in present]
+        fingerprint_mismatches += (
+            len({str(row.get("initial_fingerprint")) for row in summaries_for_key})
+            != 1
+        )
+        conflict_mismatches += (
+            len({int(row.get("initial_conflicts", -1)) for row in summaries_for_key})
+            != 1
+        )
+        bad_clock += sum(
+            row.get("ttf_clock_schema") != TTF_CLOCK_SCHEMA
+            for row in summaries_for_key
+        )
+        capped_values += sum(
+            row.get("capped_wall_time_to_feasible") is not None
+            for row in summaries_for_key
+        )
+    summaries = {
+        name: _controller_summary(list(indexed[name].values()))
+        for name in CONTROLLERS
+    }
+    all_keys = sorted(expected)
+    total = _paired_comparison(indexed["v2-full"], indexed[CONTROLLER_ID], all_keys)
+    pool = _paired_comparison(
+        indexed["v2-full"], indexed["v2-augmented-pool"], all_keys
+    )
+    ranker = _paired_comparison(
+        indexed["v2-augmented-pool"], indexed[CONTROLLER_ID], all_keys
+    )
+    per_cohort = {}
+    for cohort in cohorts:
+        cohort_id = str(cohort["id"])
+        keys = [key for key in all_keys if key[1] == cohort_id]
+        per_cohort[cohort_id] = {
+            "total_vs_v2_full": _paired_comparison(
+                indexed["v2-full"], indexed[CONTROLLER_ID], keys
+            ),
+            "pool_effect_vs_v2_full": _paired_comparison(
+                indexed["v2-full"], indexed["v2-augmented-pool"], keys
+            ),
+            "ranker_effect_vs_v2_augmented": _paired_comparison(
+                indexed["v2-augmented-pool"], indexed[CONTROLLER_ID], keys
+            ),
+        }
+    integrity = {
+        "required_replicate_count": len(config["replicates"])
+        == int(config["required_replicate_count"]),
+        "complete_paired_coverage": not any("coverage" in value for value in errors),
+        "all_source_integrity_gates_passed": not any(
+            "source integrity" in value for value in errors
+        ),
+        "identical_evaluation_config": not any(
+            "evaluation config" in value for value in errors
+        ),
+        "identical_schedule": len(set(schedule_hashes.values())) == 1
+        and not any("schedule" in value for value in errors),
+        "same_implementation": len(equivalence_summaries) == 2
+        and all(row["same_implementation"] for row in equivalence_summaries.values()),
+        "exact_action_equivalence": len(equivalence_summaries) == 2
+        and all(row["passed"] for row in equivalence_summaries.values()),
+        "zero_execution_errors": all(
+            row.get("status") == "ok"
+            for values in indexed.values()
+            for row in values.values()
+        ),
+        "all_controllers_succeeded": all(
+            summary["success_count"] == len(expected)
+            for summary in summaries.values()
+        ),
+        "paired_initial_fingerprints": fingerprint_mismatches == 0,
+        "paired_initial_conflicts": conflict_mismatches == 0,
+        "raw_ttf_clock_registered": bad_clock == 0,
+        "no_capped_ttf_values": capped_values == 0,
+        "zero_invalid_actions": all(
+            summary["invalid_action_count"] == 0 for summary in summaries.values()
+        ),
+        "zero_semantic_mismatches": all(
+            summary["fingerprint_mismatch_count"] == 0
+            for summary in summaries.values()
+        ),
+    }
+    gates = dict(evaluation["high_load_development"]["gates"])
+    maximum_regression = max(
+        (
+            -float(
+                row["total_vs_v2_full"].get(
+                    "mean_raw_ttf_relative_improvement", 0.0
+                )
+            )
+            for row in per_cohort.values()
+        ),
+        default=0.0,
+    )
+    performance = {
+        "total_raw_ttf_improvement": float(
+            total.get("mean_raw_ttf_relative_improvement", -1.0)
+        )
+        >= float(gates["minimum_raw_ttf_improvement_vs_v2_full"]),
+        "ranker_raw_ttf_improvement": float(
+            ranker.get("mean_raw_ttf_relative_improvement", -1.0)
+        )
+        >= float(gates["minimum_ranker_raw_ttf_improvement_vs_v2_augmented"]),
+        "maximum_group_regression": maximum_regression
+        <= float(gates["maximum_cohort_raw_ttf_regression"]),
+        "repair_iterations_noninferior": float(
+            total.get("mean_repair_iterations_delta", 1.0)
+        )
+        <= 0.0,
+        "success_count_noninferior": summaries[CONTROLLER_ID]["success_count"]
+        >= summaries["v2-full"]["success_count"],
+    }
+    integrity_passed = not errors and all(integrity.values())
+    performance_passed = integrity_passed and all(performance.values())
+    report = {
+        "schema": CONFIRMATION_REPORT_SCHEMA,
+        "controller_id": CONTROLLER_ID,
+        "scientific_status": (
+            "outcome_informed_wall_clock_confirmation_not_formal_speed_claim"
+        ),
+        "default_replacement_allowed": False,
+        "formal_speed_claim": False,
+        "fresh_map_unlocked": performance_passed,
+        "primary_metric": "mean_raw_wall_time_to_feasible",
+        "ttf_clock_schema": TTF_CLOCK_SCHEMA,
+        "aggregation": config["aggregation"],
+        "replicate_count": len(config["replicates"]),
+        "episode_count_per_controller": len(expected),
+        "controller_summaries": summaries,
+        "comparisons": {
+            "total_method_vs_v2_full": total,
+            "pool_effect_vs_v2_full": pool,
+            "ranker_effect_vs_v2_augmented": ranker,
+        },
+        "per_cohort": per_cohort,
+        "runtime_equivalence": equivalence_summaries,
+        "integrity_gates": integrity,
+        "performance_gates": performance,
+        "integrity_passed": integrity_passed,
+        "performance_passed": performance_passed,
+        "fingerprint_mismatch_count": fingerprint_mismatches,
+        "initial_conflict_mismatch_count": conflict_mismatches,
+        "errors": errors,
+        "inputs": {
+            "confirmation_config_sha256": sha256_file(path),
+            "evaluation_config_sha256": sha256_file(evaluation_path),
+            "replicate_report_sha256": report_hashes,
+            "replicate_schedule_sha256": schedule_hashes,
+            "controller_manifest_sha256": manifest_hashes,
+            "runtime_equivalence_report_sha256": equivalence_hashes,
+        },
+    }
+    _write_json(output / "maprank_high_load_confirmation_report.json", report)
+    return report
+
+
 __all__ = [
     "CONTROLLERS",
+    "analyze_maprank_high_load_confirmation",
     "analyze_maprank_raw_ttf_layer",
     "analyze_maprank_runtime_equivalence",
     "prepare_maprank_fresh_dataset",
