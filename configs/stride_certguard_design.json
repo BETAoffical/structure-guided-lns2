@@ -1,0 +1,66 @@
+{
+  "schema": "lns2.stride.certguard_design.v1",
+  "scientific_status": "preregistered_after_maprank_development_failure_before_certainty_label_build",
+  "design_id": "stride-certguard-design-v1",
+  "controller_id": "stride-certguard-v1",
+  "label_artifact_id": "stride-certguard-labels-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "frozen_predecessor": {
+    "controller_id": "stride-maprank-v1",
+    "bundle": "build/stride-maprank-training-v1/stride-maprank-v1",
+    "bundle_manifest_sha256": "1f367902d21530c531b58859814b28cf48bbfbb861d46c7377867c962e581054",
+    "training_report": "build/stride-maprank-training-v1/maprank_training_report.json",
+    "training_report_sha256": "496144d4a5dc4ca5c47c5f8b4ba7c67a8f669bee19b8479d42138a35ef7543a4",
+    "direction_semantics": "paired_current_step_normalized_conflict_reduction"
+  },
+  "architecture": {
+    "anchor": "frozen-v2-full",
+    "candidate_pool": "frozen-maprank-base-plus-optional-topology-boundary",
+    "direction_model": "frozen-maprank-direction-ranker",
+    "uncertainty_model": "independent-symmetric-robust-pair-classifier",
+    "decision_rule": "override_only_if_direction_and_certainty_gates_pass",
+    "uncertainty_role": "abstention_only",
+    "uncertainty_pair_representation": "absolute_candidate_delta_plus_pair_mean",
+    "base_feature_dimension": 124,
+    "uncertainty_input_dimension": 248
+  },
+  "label_design": {
+    "schema": "lns2.stride.certguard_uncertainty_label.v1",
+    "target": "whether_the_unordered_candidate_pair_has_a_robust_current_step_winner",
+    "positive": "robust_winner_exists_under_registered_16_seed_rule",
+    "negative": "winner_is_uncertain_under_registered_16_seed_rule",
+    "score": "conflict_reduction_normalized_by_before_conflicts",
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_pp_seeds_within_state_and_trial_index": true,
+    "robust_pair_rule": {
+      "minimum_paired_win_fraction": 0.75,
+      "minimum_absolute_mean_effect": 0.02,
+      "require_both_half_mean_directions": true,
+      "tie_epsilon": 1e-12
+    },
+    "sample_weighting": "equal_total_weight_per_state",
+    "runtime_used_in_label": false,
+    "future_trajectory_used_in_label": false
+  },
+  "evaluation_order": [
+    "nested_train_map_oof",
+    "legacy_validation_descriptive",
+    "paired_high_load_development_raw_ttf",
+    "paired_fresh_map_raw_ttf_only_after_development_pass"
+  ],
+  "high_load_role": "post_hoc_development_only_because_it_motivated_the_architecture",
+  "fresh_map_role": "first_unseen_end_to_end_evidence",
+  "forbidden_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome",
+    "high_load_labels_for_training_or_threshold_calibration",
+    "legacy_validation_labels_for_threshold_calibration",
+    "test_data",
+    "formal_ood_data"
+  ]
+}

@@ -2327,3 +2327,26 @@ and
 `fd5946e8e99b1ab4c68f43d8418a047c7cc0f06de4c135f7a0b6754dafaca7b8`.
 These are post-hoc mechanism findings, not training data and not a speed claim.
 Fresh maps remain locked.
+## 2026-08-04: STRIDE-CertGuard v1 preregistration
+
+The three-replicate MapRank high-load result failed only the ranker-versus-same-pool
+gate.  Its paired 16-seed first-override counterfactual then showed that the
+direction ranker is not the same thing as an override-confidence estimator:
+MapRank training keeps only robust oriented pairs and drops every uncertain pair,
+while runtime had no independently learned way to abstain on those dropped cases.
+
+`stride-certguard-v1` is therefore registered as a separately named successor.
+It freezes the V2 anchor, MapRank candidate pool, MapRank direction semantics and
+deployed direction bundle.  It adds one symmetric binary classifier whose target
+is whether an unordered pair has a robust current-step winner under the original
+16 paired-PP-seed rule.  Its input is the 124-dimensional absolute candidate
+difference plus the 124-dimensional pair mean.  The model may only veto a
+MapRank override; it cannot invent an action or bypass V2.
+
+All fitting and certainty-threshold calibration are map-grouped and train-only.
+Legacy validation is descriptive.  The already inspected maze300/room500 cohort
+is post-hoc development evidence and is forbidden for labels or thresholds.
+Fresh-map raw TTF remains locked until nested OOF, runtime equivalence, Shadow and
+high-load development gates pass.  Runtime, TTF, repair rounds, future trajectory,
+Cost-to-Go, Receding-Q, controller outcome, test and formal OOD inputs remain
+forbidden label features.

@@ -264,6 +264,11 @@
       "purpose": "Input-only all-state topology relevance scan after the fresh-map candidate-coverage failure."
     },
     {
+      "path": "experiments/stride_certguard.py",
+      "role": "active",
+      "purpose": "Preregistered robust-pair uncertainty labels and independent abstention model for the frozen MapRank direction selector."
+    },
+    {
       "path": "experiments/stride_mapbase.py",
       "role": "reproducibility",
       "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
@@ -879,6 +884,11 @@
       "purpose": "CLI entry point for train-only nested GuardRank training and diagnostic export."
     },
     {
+      "path": "scripts/build_stride_certguard_labels.py",
+      "role": "active",
+      "purpose": "CLI entry point for checksum-audited STRIDE-CertGuard robust-versus-uncertain pair labels."
+    },
+    {
       "path": "scripts/run_stride_guardrank_map_coverage.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for the checksum-pinned GuardRank fresh-map candidate coverage audit."
@@ -1262,6 +1272,11 @@
       "path": "tests/integration/test_stride_stage4r_pp_replay.py",
       "role": "active",
       "contract": "Same-state paired PP seed generation, registered replay thresholds, identical-action determinism, and winner-flip diagnosis contracts."
+    },
+    {
+      "path": "tests/integration/test_stride_certguard.py",
+      "role": "active",
+      "contract": "Distinct CertGuard identity, symmetric uncertainty labels, train-map-only calibration, and frozen MapRank direction contracts."
     },
     {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",
