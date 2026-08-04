@@ -1,0 +1,28 @@
+{
+  "schema": "lns2.stride.maprank_high_load_failure_analysis_config.v1",
+  "scientific_status": "registered_after_failed_confirmation_before_decision_level_trace_analysis",
+  "analysis_id": "stride-maprank-high-load-failure-analysis-v1",
+  "confirmation_report": "build/stride-maprank-evaluation-v1/high-load-v5-confirmation/maprank_high_load_confirmation_report.json",
+  "confirmation_report_sha256": "f8ea8c07f80465182af16b1b087ebb0861fcfaf23598b2fb692fdd41c29859fe",
+  "trace_replicate": "build/stride-maprank-evaluation-v1/high-load-v5",
+  "timing_replicates": [
+    "build/stride-maprank-evaluation-v1/high-load-v5",
+    "build/stride-maprank-evaluation-v1/high-load-v5-confirmation-r2",
+    "build/stride-maprank-evaluation-v1/high-load-v5-confirmation-r3"
+  ],
+  "baseline_controller": "v2-augmented-pool",
+  "challenger_controller": "stride-maprank-v1",
+  "registered_cohorts": ["maze300", "room500"],
+  "registered_episode_count": 16,
+  "analysis_questions": [
+    "first_shared_state_action_override_frequency",
+    "first_override_immediate_conflict_and_low_level_effect",
+    "episode_repair_round_and_pooled_raw_ttf_effect"
+  ],
+  "wall_ttf_used_as_training_label": false,
+  "future_trajectory_used_as_training_label": false,
+  "post_hoc_diagnostic_only": true,
+  "fresh_map_data_allowed": false,
+  "default_replacement_allowed": false,
+  "formal_speed_claim": false
+}

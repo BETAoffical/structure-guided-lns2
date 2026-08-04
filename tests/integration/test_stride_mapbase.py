@@ -18,6 +18,9 @@ from experiments.stride_maprank import (
     validate_maprank_training_config,
 )
 from experiments.stride_maprank_evaluation import _training_evidence
+from experiments.stride_maprank_failure_analysis import (
+    _load_config as _load_maprank_failure_analysis_config,
+)
 from experiments.stride_maprank_raw_ttf import (
     CONTROLLERS,
     _load_confirmation_config,
@@ -33,6 +36,9 @@ MAPRANK_TRAINING_PATH = ROOT / "configs" / "stride_maprank_training.json"
 MAPRANK_EVALUATION_PATH = ROOT / "configs" / "stride_maprank_evaluation.json"
 MAPRANK_CONFIRMATION_PATH = (
     ROOT / "configs" / "stride_maprank_high_load_confirmation.json"
+)
+MAPRANK_FAILURE_ANALYSIS_PATH = (
+    ROOT / "configs" / "stride_maprank_high_load_failure_analysis.json"
 )
 
 
@@ -315,3 +321,27 @@ def test_maprank_high_load_confirmation_keeps_original_gates_and_runtime() -> No
         "repair_iterations_noninferior": True,
         "success_count_noninferior": True,
     }
+
+
+def test_maprank_failure_analysis_is_frozen_read_only_and_fresh_blind() -> None:
+    path, root, config, confirmation_path, confirmation = (
+        _load_maprank_failure_analysis_config(MAPRANK_FAILURE_ANALYSIS_PATH)
+    )
+    assert path == MAPRANK_FAILURE_ANALYSIS_PATH
+    assert root == ROOT
+    assert confirmation_path == (
+        ROOT
+        / "build"
+        / "stride-maprank-evaluation-v1"
+        / "high-load-v5-confirmation"
+        / "maprank_high_load_confirmation_report.json"
+    )
+    assert config["registered_episode_count"] == 16
+    assert config["registered_cohorts"] == ["maze300", "room500"]
+    assert config["post_hoc_diagnostic_only"] is True
+    assert config["fresh_map_data_allowed"] is False
+    assert config["wall_ttf_used_as_training_label"] is False
+    assert config["future_trajectory_used_as_training_label"] is False
+    assert confirmation["integrity_passed"] is True
+    assert confirmation["performance_passed"] is False
+    assert confirmation["fresh_map_unlocked"] is False

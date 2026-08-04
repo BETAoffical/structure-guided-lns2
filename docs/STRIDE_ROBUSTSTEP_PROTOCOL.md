@@ -2240,3 +2240,16 @@ Fresh maps remain unread, V2 remains the default, and no formal speed claim is
 authorized. The next permitted work is a read-only decision-level diagnosis of
 the frozen high-load traces, especially maze-300, before any new model design
 or additional outcome run is registered.
+
+The diagnosis is registered before inspecting decision-level differences in
+`configs/stride_maprank_high_load_failure_analysis.json`. It uses v5 only as
+the canonical trace copy because the two confirmation repetitions are exactly
+action-equivalent, and uses all three repetitions only to average episode TTF.
+For each of the 16 task/seed episodes it records the common action prefix and
+first shared-state override, the two selected candidates' family, size, and
+cross-model scores, immediate conflict reduction, repair success, and
+deterministic low-level effort, plus eventual repair-round and pooled-TTF
+differences. It does not use TTF or future trajectories as a training label,
+does not inspect fresh maps, and cannot promote a model. Its sole purpose is to
+separate a bad ranking decision from residual wall-clock noise and identify a
+bounded next design change.
