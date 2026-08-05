@@ -58,6 +58,7 @@
     "require_exact_base_preservation": true,
     "require_exact_incumbent_boundary_preservation": true,
     "require_candidate_cap": true,
+    "require_native_explicit_action_legality": true,
     "require_state_fingerprint_preservation": true
   },
   "next_decision_on_pass": "run_small_paired_16_seed_structpool_headroom_pilot_without_timing",

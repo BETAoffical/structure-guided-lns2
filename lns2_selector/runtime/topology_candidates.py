@@ -462,6 +462,23 @@ def _path_overlap_neighborhood(
     seeds = [agent for agent, score in priority.items() if score > 0.0]
     if not seeds:
         return None
+    # Explicit native repair actions must touch the current conflict graph.
+    # Path overlap is broader than collision incidence, so reserve one active
+    # anchor before ranking the remaining overlap-heavy agents.
+    event_weight = _event_weights(analysis.events)
+    active_agents = set(event_weight)
+    if not active_agents:
+        return None
+    anchor = min(
+        active_agents,
+        key=lambda agent: (
+            -float(priority.get(agent, 0.0)),
+            -int(event_weight[agent]),
+            agent,
+        ),
+    )
+    priority[anchor] = max(priority.values(), default=0.0) + 1.0
+    seeds.append(anchor)
     return _ranked_seed_neighborhood(
         state, analysis, seeds, size=size, priority=priority
     )

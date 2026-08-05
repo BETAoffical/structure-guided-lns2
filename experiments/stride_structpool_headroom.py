@@ -73,6 +73,23 @@ def validate_structpool_headroom_config(config: dict[str, Any]) -> None:
         or bool(config.get("timing_fields_allowed"))
     ):
         raise ValueError("StructPool headroom evidence boundary changed")
+    if list(config.get("implementation_amendments") or ()) != [
+        {
+            "parent_commit": "5b09f15",
+            "reason": (
+                "path_overlap_candidate_must_touch_current_conflict_graph_for_"
+                "native_explicit_action"
+            ),
+            "change": (
+                "reserve_one_currently_conflicting_agent_as_path_overlap_anchor_"
+                "and_add_proposal_legality_gate"
+            ),
+            "completed_scientific_state_count_before_stop": 0,
+            "repair_quality_outcomes_used_for_change": False,
+            "cohort_label_and_thresholds_changed": False,
+        }
+    ]:
+        raise ValueError("StructPool headroom implementation amendment changed")
     if set(config.get("inputs") or {}) != {
         "design",
         "coverage_report",

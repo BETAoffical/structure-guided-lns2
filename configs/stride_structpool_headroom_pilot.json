@@ -4,6 +4,16 @@
   "pilot_id": "stride-structpool-headroom-v1",
   "candidate_generator_id": "stride-structpool-v1",
   "incumbent_pool_id": "v2-plus-stride-topoboundary-v1",
+  "implementation_amendments": [
+    {
+      "parent_commit": "5b09f15",
+      "reason": "path_overlap_candidate_must_touch_current_conflict_graph_for_native_explicit_action",
+      "change": "reserve_one_currently_conflicting_agent_as_path_overlap_anchor_and_add_proposal_legality_gate",
+      "completed_scientific_state_count_before_stop": 0,
+      "repair_quality_outcomes_used_for_change": false,
+      "cohort_label_and_thresholds_changed": false
+    }
+  ],
   "formal_speed_claim": false,
   "default_replacement_allowed": false,
   "runtime_export_allowed": false,
@@ -17,12 +27,12 @@
       "sha256": "44b6dcc66e7730e82e5e669913784526f817ec0445717f6b46fad8ebfe760f5b"
     },
     "coverage_report": {
-      "path": "build/stride-structpool-coverage-v1/structpool_coverage_report.json",
-      "sha256": "2ccefef8e0dba8e13c703fd6ac498d4455a5c8ffefb937d74a9e0312a2af580c"
+      "path": "build/stride-structpool-coverage-v3/structpool_coverage_report.json",
+      "sha256": "7eebceb22cdefab8eabdd72d1236befe074bad2329e3b386b1a91dadd77fc1dc"
     },
     "coverage_states": {
-      "path": "build/stride-structpool-coverage-v1/structpool_coverage_states.jsonl",
-      "sha256": "518c77a190044341be98c1e9c09cfbb8a98fcb7c9e1ba04e4c6d75c3f67b9481"
+      "path": "build/stride-structpool-coverage-v3/structpool_coverage_states.jsonl",
+      "sha256": "11453f072982cc357acedf872451a2bbc9c0435444f92d5effcdec4d858466ff"
     },
     "repairability_run_config": {
       "path": "build/stride-repairability-collection-v2/run_config.json",

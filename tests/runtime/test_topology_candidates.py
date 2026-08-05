@@ -382,6 +382,15 @@ class TopologyCandidatesTest(unittest.TestCase):
             },
         )
         self.assertEqual({row["actual_size"] for row in first}, {8, 16, 24, 32})
+        active_agents = {
+            agent
+            for event in analysis.events
+            for agent in (event.left, event.right)
+        }
+        self.assertTrue(
+            all(set(row["agents"]) & active_agents for row in first),
+            "every explicit StructPool action must touch the conflict graph",
+        )
 
     def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
         state, analysis = self._structpool_state()

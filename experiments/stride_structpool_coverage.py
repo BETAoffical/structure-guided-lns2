@@ -102,6 +102,7 @@ def validate_structpool_coverage_config(config: dict[str, Any]) -> None:
         "require_exact_base_preservation": True,
         "require_exact_incumbent_boundary_preservation": True,
         "require_candidate_cap": True,
+        "require_native_explicit_action_legality": True,
         "require_state_fingerprint_preservation": True,
     }:
         raise ValueError("StructPool proposal gates changed")
@@ -194,6 +195,9 @@ def analyze_structpool_coverage_rows(
             bool(row["incumbent_boundary_preserved"]) for row in rows
         ),
         "candidate_cap": all(bool(row["candidate_cap_preserved"]) for row in rows),
+        "native_explicit_action_legality": all(
+            bool(row["native_explicit_action_legal"]) for row in rows
+        ),
         "state_fingerprint_preservation": all(
             bool(row["state_fingerprint_preserved"]) for row in rows
         ),
@@ -320,6 +324,11 @@ def collect_structpool_coverage(
                 similarities.append(
                     len(left_set & right_set) / len(left_set | right_set)
                 )
+        active_agents = {
+            int(agent)
+            for event in analysis.events
+            for agent in (event.left, event.right)
+        }
         after_fingerprint = state_fingerprint(state)
         restored_after = repair_structure_fingerprint(environment.get_state())
         state_rows.append(
@@ -357,6 +366,8 @@ def collect_structpool_coverage(
                 and len(merged) <= len(base) + int(
                     candidate_space["maximum_added_candidates"]
                 ),
+                "native_explicit_action_legal": bool(active_agents)
+                and all(set(map(int, row["agents"])) & active_agents for row in additions),
                 "maximum_novel_jaccard_similarity": max(similarities, default=0.0),
                 "state_fingerprint_preserved": after_fingerprint
                 == before_fingerprint

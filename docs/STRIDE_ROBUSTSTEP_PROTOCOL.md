@@ -2686,7 +2686,7 @@ Shadow, paired high-load raw TTF and fresh-OOD raw TTF remain blocked until the
 user reports comparable performance has returned; no extra charger benchmark
 is introduced.
 
-### StructPool v1 proposal-only result: passed
+### StructPool v1 proposal-only result and native-action amendment
 
 The generator was implemented without changing `stride-topoboundary-v1` or the
 frozen V2 proposal path.  It keeps the exact incumbent size-16 articulation and
@@ -2697,7 +2697,7 @@ registered sizes before deterministic reduction; preferred 8/24/16/32 scales
 give each mechanism one first-round representative.  Jaccard filtering applies
 only among novel additions, so it cannot remove an incumbent action.
 
-The proposal-only audit selected 48 train states outcome-blind from the frozen
+The first proposal-only audit selected 48 train states outcome-blind from the frozen
 repairability selection manifest using only split, agent count, conflict count,
 map, source policy and state id.  It covered 13 maps and both official-Adaptive
 and V2 source policies.  All 48 states passed the cheap high-stress gate, and
@@ -2707,12 +2707,24 @@ incumbent-boundary preservation, duplicate generation replay, the six-action
 cap, novel-candidate Jaccard limit and before/after state fingerprints all
 passed.
 
+The first headroom execution then stopped before completing any scientific
+state: one path-overlap action contained no currently conflicting agent, so the
+native explicit-action contract rejected it and returned an official fallback
+neighborhood.  This was an interface-validity failure, not an observed repair-
+quality comparison.  No completed state, expected-gain label, TTF or future
+outcome was read before the change.  The failed output remains in
+`build/stride-structpool-headroom-v1`.
+
+The implementation now reserves one current conflict-graph agent as the
+path-overlap anchor.  The proposal audit was also strengthened with an explicit
+gate requiring every generated action to touch the current conflict graph; the
+original coverage report is retained as incomplete with respect to that newly
+identified contract.  The amended 48-state audit again passes every original
+gate and the new native-action gate.  Its report SHA-256 is
+`7eebceb22cdefab8eabdd72d1236befe074bad2329e3b386b1a91dadd77fc1dc`
+and its row artifact SHA-256 is
+`11453f072982cc357acedf872451a2bbc9c0435444f92d5effcdec4d858466ff`.
 No candidate repair, controller action, controller outcome, wall-clock TTF or
-formal OOD input was used.  This result establishes deterministic proposal
-coverage only; it does not establish that any new action repairs better.  The
-report SHA-256 is
-`2ccefef8e0dba8e13c703fd6ac498d4455a5c8ffefb937d74a9e0312a2af580c`
-and the 48-row artifact SHA-256 is
-`518c77a190044341be98c1e9c09cfbb8a98fcb7c9e1ba04e4c6d75c3f67b9481`.
-The registered next step is the small 16-paired-seed, current-step headroom
-pilot; timing fields remain excluded.
+formal OOD input was used by that audit.  The same frozen 16-state cohort,
+paired seeds, label and thresholds may therefore restart in a new output
+directory; timing fields remain excluded.

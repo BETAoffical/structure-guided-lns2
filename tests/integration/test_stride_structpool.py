@@ -144,6 +144,7 @@ class StrideStructPoolCoverageTest(unittest.TestCase):
                     "base_preserved": True,
                     "incumbent_boundary_preserved": True,
                     "candidate_cap_preserved": True,
+                    "native_explicit_action_legal": True,
                     "state_fingerprint_preserved": True,
                     "maximum_novel_jaccard_similarity": 0.75,
                 }
