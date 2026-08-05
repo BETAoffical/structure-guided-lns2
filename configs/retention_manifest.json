@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/selector-hardening-00-pre-fix",
+  "checkpoint": "backup/selector-hardening-02-before-redundancy-pruning",
   "allowed_executable_roles": [
     "active",
     "shared",
@@ -269,16 +269,6 @@
       "purpose": "Input-only all-state topology relevance scan after the fresh-map candidate-coverage failure."
     },
     {
-      "path": "experiments/stride_certguard.py",
-      "role": "active",
-      "purpose": "Preregistered robust-pair uncertainty labels and independent abstention model for the frozen MapRank direction selector."
-    },
-    {
-      "path": "experiments/stride_certguard_training.py",
-      "role": "active",
-      "purpose": "Nested train-map OOF fitting and offline gates for the symmetric CertGuard uncertainty classifier."
-    },
-    {
       "path": "experiments/stride_mapbase.py",
       "role": "reproducibility",
       "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
@@ -307,36 +297,6 @@
       "path": "experiments/stride_maprank_raw_ttf.py",
       "role": "active",
       "purpose": "Strictly rotated three-controller high-load and fresh-map run-to-completion raw-TTF evaluation for STRIDE-MapRank."
-    },
-    {
-      "path": "experiments/stride_overrideguard.py",
-      "role": "active",
-      "purpose": "Preregistered V2-anchor-relative current-step action-safety labels for the independently named OverrideGuard successor."
-    },
-    {
-      "path": "experiments/stride_overrideguard_training.py",
-      "role": "active",
-      "purpose": "Nested map-grouped offline training and gating for the action-conditioned OverrideGuard successor."
-    },
-    {
-      "path": "experiments/stride_anchorchoice.py",
-      "role": "active",
-      "purpose": "Preregistered direct V2-relative candidate scan that removes the rejected single-MapRank-proposal bottleneck."
-    },
-    {
-      "path": "experiments/stride_anchorchoice_training.py",
-      "role": "active",
-      "purpose": "Nested map-grouped direct-action selection training and offline promotion gating for AnchorChoice."
-    },
-    {
-      "path": "experiments/stride_marginchoice.py",
-      "role": "active",
-      "purpose": "Preregistered signed seed-half-stable margin labels and protocol for direct V2-relative candidate choice."
-    },
-    {
-      "path": "experiments/stride_marginchoice_training.py",
-      "role": "active",
-      "purpose": "Nested map-grouped conservative-margin regression and offline selection gates for MarginChoice."
     },
     {
       "path": "experiments/stride_feature_cache_audit.py",
@@ -939,16 +899,6 @@
       "purpose": "CLI entry point for train-only nested GuardRank training and diagnostic export."
     },
     {
-      "path": "scripts/build_stride_certguard_labels.py",
-      "role": "active",
-      "purpose": "CLI entry point for checksum-audited STRIDE-CertGuard robust-versus-uncertain pair labels."
-    },
-    {
-      "path": "scripts/train_stride_certguard.py",
-      "role": "active",
-      "purpose": "CLI entry point for nested train-map-only STRIDE-CertGuard uncertainty training."
-    },
-    {
       "path": "scripts/run_stride_guardrank_map_coverage.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for the checksum-pinned GuardRank fresh-map candidate coverage audit."
@@ -997,31 +947,6 @@
       "path": "scripts/run_stride_maprank_raw_ttf.py",
       "role": "active",
       "purpose": "CLI entry point for paired high-load and fresh-map STRIDE-MapRank raw-TTF evaluation."
-    },
-    {
-      "path": "scripts/build_stride_overrideguard_labels.py",
-      "role": "active",
-      "purpose": "CLI entry point for checksum-pinned OverrideGuard candidate-versus-V2 action labels."
-    },
-    {
-      "path": "scripts/build_stride_marginchoice_labels.py",
-      "role": "active",
-      "purpose": "CLI entry point for conservative signed seed-half MarginChoice labels."
-    },
-    {
-      "path": "scripts/train_stride_overrideguard.py",
-      "role": "active",
-      "purpose": "CLI entry point for preregistered nested OverrideGuard offline training."
-    },
-    {
-      "path": "scripts/train_stride_anchorchoice.py",
-      "role": "active",
-      "purpose": "CLI entry point for preregistered nested direct AnchorChoice training."
-    },
-    {
-      "path": "scripts/train_stride_marginchoice.py",
-      "role": "active",
-      "purpose": "CLI entry point for preregistered conservative-margin regression training."
     },
     {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
@@ -1364,41 +1289,6 @@
       "contract": "Same-state paired PP seed generation, registered replay thresholds, identical-action determinism, and winner-flip diagnosis contracts."
     },
     {
-      "path": "tests/integration/test_stride_certguard.py",
-      "role": "active",
-      "contract": "Distinct CertGuard identity, symmetric uncertainty labels, train-map-only calibration, and frozen MapRank direction contracts."
-    },
-    {
-      "path": "tests/integration/test_stride_overrideguard.py",
-      "role": "active",
-      "contract": "Distinct OverrideGuard identity, oriented candidate-versus-anchor labels, nested calibration, safety gates, and power-comparability contracts."
-    },
-    {
-      "path": "tests/integration/test_stride_anchorchoice.py",
-      "role": "active",
-      "contract": "Distinct direct-action selector identity, nested train-map calibration, frozen-label safety gates, and user-reported power boundary."
-    },
-    {
-      "path": "tests/integration/test_stride_marginchoice.py",
-      "role": "active",
-      "contract": "Distinct signed-margin target, all-candidate selection, nested map calibration, and unchanged safety and evidence boundaries."
-    },
-    {
-      "path": "tests/unit/test_stride_overrideguard_training.py",
-      "role": "active",
-      "contract": "Oriented action representation and abstention-only OverrideGuard decision semantics."
-    },
-    {
-      "path": "tests/unit/test_stride_anchorchoice_training.py",
-      "role": "active",
-      "contract": "Direct all-candidate probability selection, deterministic tie breaking, and V2 fallback semantics."
-    },
-    {
-      "path": "tests/unit/test_stride_marginchoice_training.py",
-      "role": "active",
-      "contract": "Weighted signed-margin regression metrics used by the MarginChoice OOF gate."
-    },
-    {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",
       "role": "active",
       "contract": "Multi-seed schedule registration, non-formal evidence boundary, paired runtime integrity, and persistent-tail-versus-seed-sensitive decision contracts."
@@ -1417,11 +1307,6 @@
       "path": "tests/unit/test_stride_maprank_failure_analysis.py",
       "role": "reproducibility",
       "contract": "Common-prefix state integrity, first-override candidate alignment, and immediate-effect semantics for MapRank failure diagnosis."
-    },
-    {
-      "path": "tests/unit/test_stride_certguard_training.py",
-      "role": "active",
-      "contract": "Symmetric 248-dimensional uncertainty inputs and abstention-only selection behavior."
     },
     {
       "path": "tests/unit/test_stride_maprank_counterfactual.py",

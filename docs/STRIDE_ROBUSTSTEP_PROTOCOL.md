@@ -2447,6 +2447,9 @@ Shadow, high-load raw TTF, or fresh-map evaluation. This is an offline quality
 failure independent of the currently reported slow-charger condition; no
 wall-clock evidence was collected.
 
+The frozen OverrideGuard training report SHA-256 is
+`db243e4a5bc7b4eea9e4be07d7014b183f7dd1f9f0ed5eff06e3f8d218890d07`.
+
 ### STRIDE-AnchorChoice v1 preregistration
 
 `stride-anchorchoice-v1` is registered as a distinct post-OverrideGuard
@@ -2551,6 +2554,13 @@ After CertGuard, OverrideGuard, AnchorChoice and MarginChoice, further target
 variants on the same 303 states are stopped to avoid development-set
 overfitting. The next model step requires more independent training states and
 maps with audited robust-action opportunity; formal fresh maps remain untouched.
+
+The active branch therefore retains these four studies as evidence only:
+their preregistered configs, conclusions, label hashes, and report hashes stay
+in this protocol, while their builders, trainers, thin CLIs, and implementation-
+detail tests were removed. Their exact executable state remains recoverable from
+Git tag `backup/selector-hardening-02-before-redundancy-pruning` (commit
+`844b078c9ef4b5ee01a2c00fb0460c4edd955f32`).
 
 ### STRIDE-RobustAction data v1 preregistration and static audit
 
