@@ -2471,3 +2471,27 @@ oriented representation and all source checksums are frozen. Runtime, future
 trajectory, high-load, legacy-validation, test and formal-OOD data remain
 forbidden for fitting or calibration. The current slow-charger state still
 allows only offline and semantic work; no extra charger preflight is added.
+
+### AnchorChoice v1 nested OOF result: rejected before runtime
+
+Directly scanning the full candidate pool improved the useful frontier but did
+not satisfy the preregistered joint gate. The action classifier reproduced
+weighted ROC-AUC 0.69691. At threshold 0.55 it selected 14 of 237 states,
+nine of them robust wins: safe precision was 64.29%, but state coverage was
+5.91% rather than the required 8%. Its normalized regret was 0.25713, a 4.91%
+relative improvement over V2's 0.27040, just below the registered 5% gate, and
+it remained 0.00867 worse than OOF MapRank's 0.24846 versus a 0.005 allowance.
+
+At threshold 0.40 coverage rose to 9.70% and regret was 0.25796, but safe
+precision fell to 56.52%. No threshold simultaneously met precision, coverage,
+exact-best, Top-3 and regret constraints; all four outer folds were infeasible
+and used the registered 1.01 V2 fallback. The reported controller therefore
+equals V2 with regret 0.27040 and is rejected before runtime export, Shadow or
+TTF. The report SHA-256 is
+`56d6a3283ebf4d346dab51054ef17dac90b6d510fa9ffd93bb2863c7eb0927d6`.
+
+The mechanism conclusion is narrower than a general rejection of direct
+selection: removing the MapRank proposal filter helped, but a rare binary
+robust-win target still did not rank enough safe actions. A subsequent model
+must improve the target or representation rather than post-hoc relaxing these
+gates.

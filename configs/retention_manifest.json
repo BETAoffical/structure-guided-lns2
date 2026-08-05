@@ -319,6 +319,11 @@
       "purpose": "Preregistered direct V2-relative candidate scan that removes the rejected single-MapRank-proposal bottleneck."
     },
     {
+      "path": "experiments/stride_anchorchoice_training.py",
+      "role": "active",
+      "purpose": "Nested map-grouped direct-action selection training and offline promotion gating for AnchorChoice."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -974,6 +979,11 @@
       "purpose": "CLI entry point for preregistered nested OverrideGuard offline training."
     },
     {
+      "path": "scripts/train_stride_anchorchoice.py",
+      "role": "active",
+      "purpose": "CLI entry point for preregistered nested direct AnchorChoice training."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
@@ -1327,6 +1337,11 @@
       "path": "tests/unit/test_stride_overrideguard_training.py",
       "role": "active",
       "contract": "Oriented action representation and abstention-only OverrideGuard decision semantics."
+    },
+    {
+      "path": "tests/unit/test_stride_anchorchoice_training.py",
+      "role": "active",
+      "contract": "Direct all-candidate probability selection, deterministic tie breaking, and V2 fallback semantics."
     },
     {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",
