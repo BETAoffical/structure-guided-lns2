@@ -329,6 +329,11 @@
       "purpose": "Preregistered signed seed-half-stable margin labels and protocol for direct V2-relative candidate choice."
     },
     {
+      "path": "experiments/stride_marginchoice_training.py",
+      "role": "active",
+      "purpose": "Nested map-grouped conservative-margin regression and offline selection gates for MarginChoice."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -994,6 +999,11 @@
       "purpose": "CLI entry point for preregistered nested direct AnchorChoice training."
     },
     {
+      "path": "scripts/train_stride_marginchoice.py",
+      "role": "active",
+      "purpose": "CLI entry point for preregistered conservative-margin regression training."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
@@ -1357,6 +1367,11 @@
       "path": "tests/unit/test_stride_anchorchoice_training.py",
       "role": "active",
       "contract": "Direct all-candidate probability selection, deterministic tie breaking, and V2 fallback semantics."
+    },
+    {
+      "path": "tests/unit/test_stride_marginchoice_training.py",
+      "role": "active",
+      "contract": "Weighted signed-margin regression metrics used by the MarginChoice OOF gate."
     },
     {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",

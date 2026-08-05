@@ -2521,3 +2521,33 @@ weighted OOF margin-correlation gate are preregistered. Legacy validation and
 high load remain outside fitting and calibration. No wall-clock stage is
 permitted until the user reports that the slow-charger performance condition
 has ended; no extra charger benchmark is introduced.
+
+### MarginChoice v1 nested OOF result: rejected before runtime
+
+The derived label build reproduced all 303 states and 5,210 non-anchor actions.
+There were 643 actions whose two seed-half mean effects were both positive,
+compared with only 276 strict robust candidate wins. The target ranged from
+-1.0 to 0.625 with mean -0.22453, and the label SHA-256 is
+`5ebe2aff2776fec878bf0765cfc96b3c6a0cd4a7611e13a175da9b184194d240`.
+
+The continuous target was learnable across held-out maps: weighted OOF margin
+correlation was 0.46092, and weighted MAE was 0.16635 versus 0.20348 for the
+constant-mean baseline. It did not identify strict robust wins. At threshold
+-0.01 the selector covered 57 of 237 states but only 17 were strict robust
+wins (29.82% safe precision), with normalized regret 0.26330. At threshold
+0.05 precision was still only 44.44% at 18 selections. No registered threshold
+reached 60% safe precision together with 8% coverage and the quality gates.
+
+All four outer calibrations were infeasible and used the 1.01 V2 fallback, so
+the reported regret is V2's 0.27040 rather than the exploratory sweep values.
+MarginChoice is rejected before runtime export, Shadow or TTF. The report
+SHA-256 is
+`d8e5ecd8fe0b262639e3bb1f0e1f66b1f05464474bb09f726c6a12febd956597`.
+
+This separates two questions: the 124-dimensional action representation can
+predict a coarse seed-half conflict-reduction margin, but that margin is not a
+reliable proxy for the stricter 75%-win, 0.02-effect, two-half robust action.
+After CertGuard, OverrideGuard, AnchorChoice and MarginChoice, further target
+variants on the same 303 states are stopped to avoid development-set
+overfitting. The next model step requires more independent training states and
+maps with audited robust-action opportunity; formal fresh maps remain untouched.
