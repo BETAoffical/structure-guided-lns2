@@ -24,6 +24,11 @@ LOAD_EXTENSION_CONFIG = (
     / "configs"
     / "stride_robustaction_structpool_load_extension_design.json"
 )
+MAP_REPLACEMENT_CONFIG = (
+    ROOT
+    / "configs"
+    / "stride_robustaction_structpool_map_replacement_design.json"
+)
 
 
 class RobustActionExpansionTests(unittest.TestCase):
@@ -85,6 +90,23 @@ class RobustActionExpansionTests(unittest.TestCase):
                 "lak308d", "lak526d", "lgt600d", "lgt604d", "orz601d",
                 "ost001d", "oth000d",
             },
+        )
+
+    def test_structpool_map_replacement_is_static_and_dimensioned(self) -> None:
+        replacement = json.loads(
+            MAP_REPLACEMENT_CONFIG.read_text(encoding="utf-8")
+        )
+        validate_robustaction_expansion_design(replacement)
+        adapter = robustaction_source_adapter(replacement)
+        self.assertEqual(adapter["expected_map_count"], 4)
+        self.assertEqual(adapter["expected_instance_count"], 24)
+        self.assertEqual(
+            adapter["dataset_revision"],
+            "stride-robustaction-structpool-map-replacement-v3",
+        )
+        self.assertEqual(
+            {row["id"] for row in adapter["benchmarks"]},
+            {"orz201d", "lak203d", "ost101d", "rmtst"},
         )
 
     def test_structpool_design_rejects_impossible_low_group_gate(self) -> None:

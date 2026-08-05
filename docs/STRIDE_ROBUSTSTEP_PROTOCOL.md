@@ -2941,3 +2941,23 @@ and the combined analysis report SHA-256 is
 The next action is the preregistered outcome-blind replacement of two high-,
 one mid- and one low-topology map; replacement ranking may use only static map
 metrics and locked-evidence exclusions.
+
+### RobustAction StructPool map replacement v3 preregistration
+
+The replacement registry is selected before any new reset from the pinned DAO
+archive after excluding every existing-label, formal-OOD, fresh-evidence and
+current 20-map id.  Candidates must have a largest connected component between
+700 and 10,000 cells.  Within each required topology group they are ranked by
+descending static low-degree-cell ratio and then map id.  This deterministically
+selects high-topology `orz201d` and `lak203d`, mid-topology `ost101d`, and the
+low-topology control `rmtst`; no solver, repair or timing outcome participates.
+
+Each replacement map receives three even loads at 10%, 15% and 20% of its
+largest connected component.  The resulting ranges are 76--150, 226--450,
+340--680 and 560--1,118 agents respectively.  Keeping all loads below or equal
+to 20% addresses the empty-path failure observed at the aggressive v2 loads
+while still testing denser states than the original 2%/4%/7% registry.  The OD
+generator remains unchanged.  The registry contains four maps times three
+loads times two OD variants, or 24 tasks and 48 reset-only jobs.  Its design
+SHA-256 is
+`388f2ded484232de1fabfd198af5b6214ab1bae00c84a7bd916df1f686594371`.
