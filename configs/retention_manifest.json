@@ -324,6 +324,11 @@
       "purpose": "Nested map-grouped direct-action selection training and offline promotion gating for AnchorChoice."
     },
     {
+      "path": "experiments/stride_marginchoice.py",
+      "role": "active",
+      "purpose": "Preregistered signed seed-half-stable margin labels and protocol for direct V2-relative candidate choice."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -974,6 +979,11 @@
       "purpose": "CLI entry point for checksum-pinned OverrideGuard candidate-versus-V2 action labels."
     },
     {
+      "path": "scripts/build_stride_marginchoice_labels.py",
+      "role": "active",
+      "purpose": "CLI entry point for conservative signed seed-half MarginChoice labels."
+    },
+    {
       "path": "scripts/train_stride_overrideguard.py",
       "role": "active",
       "purpose": "CLI entry point for preregistered nested OverrideGuard offline training."
@@ -1332,6 +1342,11 @@
       "path": "tests/integration/test_stride_anchorchoice.py",
       "role": "active",
       "contract": "Distinct direct-action selector identity, nested train-map calibration, frozen-label safety gates, and user-reported power boundary."
+    },
+    {
+      "path": "tests/integration/test_stride_marginchoice.py",
+      "role": "active",
+      "contract": "Distinct signed-margin target, all-candidate selection, nested map calibration, and unchanged safety and evidence boundaries."
     },
     {
       "path": "tests/unit/test_stride_overrideguard_training.py",

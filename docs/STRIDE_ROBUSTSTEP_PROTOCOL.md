@@ -2495,3 +2495,29 @@ selection: removing the MapRank proposal filter helped, but a rare binary
 robust-win target still did not rank enough safe actions. A subsequent model
 must improve the target or representation rather than post-hoc relaxing these
 gates.
+
+### STRIDE-MarginChoice v1 preregistration
+
+`stride-marginchoice-v1` is registered as a distinct successor before building
+its derived labels or running its OOF model. It keeps the frozen V2 anchor,
+candidate pool, 124-dimensional features, 248-dimensional oriented action
+representation, 16 paired PP seeds and direct all-candidate scan. It changes
+only the learning target and model family; AnchorChoice's failed thresholds are
+not relaxed.
+
+For each candidate versus V2, the 16 seed outcomes are retained as two fixed
+eight-seed halves. Effects are oriented as candidate minus V2, and the target
+is the smaller of the two half means. A consistently useful candidate therefore
+has a positive margin, a consistently worse candidate has a negative margin,
+and a seed-unstable candidate is penalized by its weaker half. This target keeps
+direction and magnitude while remaining a one-step normalized conflict-
+reduction label; it contains no runtime or future trajectory.
+
+A fixed-capacity histogram gradient-boosting regressor replaces the rare-event
+classifier. Four outer and three inner map folds, 60% safe precision, 8% state
+coverage, V2 exact-best and Top-3 noninferiority, 5% relative regret
+improvement, MapRank regret tolerance 0.005, topology tolerance 0.03 and a 0.15
+weighted OOF margin-correlation gate are preregistered. Legacy validation and
+high load remain outside fitting and calibration. No wall-clock stage is
+permitted until the user reports that the slow-charger performance condition
+has ended; no extra charger benchmark is introduced.

@@ -1,0 +1,67 @@
+{
+  "schema": "lns2.stride.marginchoice_design.v1",
+  "scientific_status": "post_anchorchoice_rejection_preregistered_before_margin_label_build",
+  "design_id": "stride-marginchoice-design-v1",
+  "controller_id": "stride-marginchoice-v1",
+  "label_artifact_id": "stride-marginchoice-labels-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "motivation": "replace_rare_binary_action_target_with_signed_seed_half_stable_current_step_margin",
+  "architecture": {
+    "anchor": "frozen-v2-full",
+    "candidate_pool": "frozen-maprank-base-plus-optional-topology-boundary",
+    "candidate_actions": "all_non_anchor_candidates",
+    "selection_model": "independent_action_conditioned_conservative_margin_regressor",
+    "decision_rule": "select_highest_predicted_conservative_margin_if_threshold_passes_else_v2_anchor",
+    "maprank_role": "offline_comparator_only_not_proposal_filter",
+    "pair_representation": "oriented_candidate_minus_anchor_plus_pair_mean",
+    "base_feature_dimension": 124,
+    "action_input_dimension": 248,
+    "deterministic_tie_break": "candidate_id_ascending"
+  },
+  "label_design": {
+    "schema": "lns2.stride.conservative_margin_label.v1",
+    "unit": "candidate_action_against_frozen_v2_anchor_within_state",
+    "source_measure": "current_step_normalized_conflict_reduction",
+    "orientation": "candidate_minus_v2_anchor",
+    "target": "minimum_of_first_and_second_eight_seed_mean_effects",
+    "purpose": "preserve_direction_magnitude_and_seed_half_stability",
+    "candidate_actions": "all_non_anchor_candidates",
+    "sample_weighting": "equal_total_weight_per_state",
+    "runtime_used_in_label": false,
+    "future_trajectory_used_in_label": false
+  },
+  "evaluation_order": [
+    "nested_train_map_oof",
+    "legacy_validation_descriptive",
+    "runtime_semantic_equivalence_only_if_offline_passes",
+    "legacy_shadow_only_if_offline_passes",
+    "paired_high_load_development_raw_ttf_only_after_power_state_restored",
+    "paired_fresh_map_raw_ttf_only_after_development_pass"
+  ],
+  "performance_environment_policy": {
+    "power_state_source": "user_reported",
+    "wall_clock_allowed_only_after_user_reports_comparable_performance_state": true,
+    "additional_performance_preflight_required": false,
+    "same_reported_power_state_all_comparators_rerun_required": true,
+    "pool_timing_across_unmatched_power_states": false,
+    "slow_charger_action": "allow_non_timing_work_only"
+  },
+  "evidence_roles": {
+    "legacy_validation": "descriptive_only",
+    "high_load": "post_hoc_development_only",
+    "fresh_map": "first_unseen_end_to_end_evidence"
+  },
+  "forbidden_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome",
+    "high_load_labels_for_training_or_threshold_calibration",
+    "legacy_validation_labels_for_threshold_calibration",
+    "test_data",
+    "formal_ood_data"
+  ]
+}

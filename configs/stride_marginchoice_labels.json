@@ -1,0 +1,39 @@
+{
+  "schema": "lns2.stride.marginchoice_label_config.v1",
+  "scientific_status": "preregistered_before_conservative_margin_label_build",
+  "controller_id": "stride-marginchoice-v1",
+  "label_artifact_id": "stride-marginchoice-labels-v1",
+  "label_schema": "lns2.stride.conservative_margin_label.v1",
+  "registered_output": "build/stride-marginchoice-labels-v1",
+  "target": "minimum_oriented_first_and_second_seed_half_mean_effect",
+  "candidate_actions": "all_non_anchor_candidates",
+  "sample_weighting": "equal_total_weight_per_state",
+  "feature_schema": "lns2.realized_features.v2",
+  "base_feature_dimension": 124,
+  "expected_state_count": 303,
+  "expected_candidate_action_count": 5210,
+  "runtime_used_in_label": false,
+  "future_trajectory_used_in_label": false,
+  "sources": {
+    "certainty_pairs": {
+      "path": "build/stride-certguard-labels-v1/uncertainty_pairs.jsonl",
+      "sha256": "2cddea6cc7b03a965b9c1aa706768f81610ae6fc02c0b904368347aeda618eca"
+    },
+    "certainty_report": {
+      "path": "build/stride-certguard-labels-v1/certguard_label_report.json",
+      "sha256": "10a07477802d4b6dab8d2880948618aa8f5d3ef25b5712f78b944d66d6011cf3"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-maprank-labels-v1/candidate_aggregates.jsonl",
+      "sha256": "1a72ab8b0c9df89995ec0cc18f8e9f04ab8bae0261aa6ea0895a540ae688da12"
+    },
+    "selection": {
+      "path": "build/stride-maprank-selection-v1/state_selection.jsonl",
+      "sha256": "14644c37c85b16796c053a1a001a8f0e52bb59b07d6a1beba2fa7a0302e263c3"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  }
+}
