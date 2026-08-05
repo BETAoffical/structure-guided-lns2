@@ -2416,3 +2416,33 @@ offline-model, functional, and semantic work only; it does not permit new
 wall-clock evidence. Timing work resumes when the user reports comparable
 performance has returned. High load remains post-hoc development evidence and
 fresh maps remain the first unseen end-to-end evidence.
+
+### OverrideGuard v1 nested OOF result: rejected before runtime
+
+The checksum-pinned label build covered the registered 303 states and 5,210
+non-anchor actions. Only 276 actions (5.30%) robustly beat the V2 anchor; 2,688
+were robust anchor wins and 2,246 were uncertain. The action-label SHA-256 is
+`fbeacd55ff18966635b27e19714c37e4a8ccea509689a9595f4d903d3f4c675c`.
+No runtime, future trajectory, high-load, test, or formal-OOD field was read.
+
+The four-by-three map-grouped action classifier reached weighted ROC-AUC
+0.69691, above its 0.65 gate, but its 0.94059 accuracy was 0.00099 below the
+weighted majority baseline because robust candidate wins were rare. More
+importantly, no registered threshold met the joint action gate in any outer
+fold. At 0.50 the global OOF sweep retained 13 of 76 MapRank overrides, seven
+of them safe (53.85% precision, 17.11% retention). At 0.55 it retained ten,
+seven safe (70.00% precision, 13.16% retention). The required 60% safe
+precision and 20% retention were never simultaneous.
+
+The underlying proposal set was itself difficult: only 20 of the 76 MapRank
+overrides (26.32%) were robust candidate wins, while 48 were uncertain and
+eight were robust V2 wins. The gate therefore had to enrich a low-precision
+proposal stream substantially, and the available action features could not do
+so without rejecting too much useful coverage.
+
+All folds therefore used the preregistered 1.01 V2 fallback. OverrideGuard
+regret was 0.27040, identical to V2 and worse than the same OOF MapRank value
+0.24846 by 0.02194. OverrideGuard is rejected before runtime bundle export,
+Shadow, high-load raw TTF, or fresh-map evaluation. This is an offline quality
+failure independent of the currently reported slow-charger condition; no
+wall-clock evidence was collected.
