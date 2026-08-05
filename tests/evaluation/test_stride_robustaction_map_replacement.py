@@ -18,6 +18,9 @@ CONFIG = (
     / "configs"
     / "stride_robustaction_structpool_map_replacement_qualification_design.json"
 )
+SOURCE_RUNTIME = (
+    ROOT / "configs" / "stride_robustaction_structpool_source_runtime.json"
+)
 
 
 class RobustActionMapReplacementTests(unittest.TestCase):
@@ -47,6 +50,32 @@ class RobustActionMapReplacementTests(unittest.TestCase):
             validate_map_replacement_qualification_design(
                 changed, project_root=ROOT
             )
+
+    def test_registered_source_runtime_is_frozen(self) -> None:
+        runtime = json.loads(SOURCE_RUNTIME.read_text(encoding="utf-8"))
+        self.assertFalse(runtime["formal"])
+        self.assertEqual(runtime["solver_seeds"], [1, 2])
+        self.assertEqual(
+            runtime["policies"], ["official_adaptive", "realized_dynamic"]
+        )
+        self.assertEqual(runtime["environment"]["time_limit"], 600.0)
+        self.assertEqual(runtime["environment"]["max_repair_iterations"], 12)
+        self.assertEqual(runtime["max_decisions"], 12)
+        self.assertEqual(runtime["metric_iteration_budget"], 12)
+        self.assertEqual(runtime["episode_process_timeout_seconds"], 660.0)
+        self.assertTrue(runtime["deterministic_pp_replay"])
+        self.assertEqual(runtime["dataset_design"]["map_count"], 20)
+        self.assertEqual(runtime["dataset_design"]["instance_count"], 40)
+        self.assertEqual(
+            runtime["dataset_design"]["layout_counts"],
+            {
+                "dao_high_topology": 24,
+                "dao_mid_topology": 12,
+                "dao_low_topology_control": 4,
+            },
+        )
+        self.assertEqual(runtime["qualification"]["minimum_active_maps"], 20)
+        self.assertEqual(runtime["qualification"]["minimum_nonzero_states"], 40)
 
 
 if __name__ == "__main__":

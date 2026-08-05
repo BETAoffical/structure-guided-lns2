@@ -2995,7 +2995,27 @@ the native qualification report SHA-256 is
 `9de03df209d35300e1c962c5290e647c716a151e30d892df36fa31fd79766d09`,
 the registered runtime-config SHA-256 is
 `9ca091565b66f0ac4a7ee2acef7200cfe7b1a4f0ea5d1ebae23d623393221a77`,
-and the final dataset manifest remains
-`273af17e38038e98cbb26d6b304d9f6129bf25ea6468e3c6618ba24eff201bc4`.
+the assembled source-dataset manifest SHA-256 is
+`8e9e8d826acc5462b2c917daf368c1efb01284c6c5674864c100f2287b6c8d83`,
+and its qualification-report copy SHA-256 is
+`f3e58eb601eb3acf4930ea39e112cbbcbaf73d58fc412f1fb1333fb9dbe61267`.
 The next registered step is collection of 40 tasks times two solver seeds
 times the two frozen source policies, for 160 source episodes.
+
+### RobustAction StructPool source collection preregistration
+
+Before any source episode, the two policies are frozen as
+`official_adaptive` and `realized_dynamic`, with solver seeds 1/2 and
+deterministic paired PP replay.  Each episode is limited to 12 repair decisions
+under a 600-second environment budget and 660-second process timeout.  The
+registered product contains 160 independent episode ids; later state sampling
+may retain no more than two decision states per episode, so repeated states or
+candidate PP trials cannot be counted as independent episodes.
+
+The source cohort is the complete qualified 20-map/40-task dataset; the runtime
+requires all 20 maps to remain active and at least 40 nonzero initial states.
+The run is a training-data collection, not a formal speed comparison.  It may
+not be reduced to successful episodes after observing repairs.  The source
+runtime SHA-256, registered at parent commit
+`f70f236259c99131546dc1acf01fdb0810ec66c2`, is
+`0ec7701a01d477c8a0d9331cb89e300c8d2af39ae5e3b213899aa44524206f5e`.
