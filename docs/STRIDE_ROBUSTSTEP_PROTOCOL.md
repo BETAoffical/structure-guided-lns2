@@ -2817,3 +2817,23 @@ dataset-v1`, is retained as an incomplete process-timeout attempt and is not
 an input to later stages.  Before initial-PP qualification begins, its task
 acceptance and termination contract must be audited to ensure the reported
 slow-power state cannot change cohort selection through a wall-clock cutoff.
+
+On 2026-08-06 the user reported that comparable power performance had returned
+and authorized the remaining stages to run in order unless a registered gate
+fails.  Before any new initialization outcome, the StructPool qualification is
+registered at parent commit `ed35f347acff94d38d829b016df7736a8b8b8895`.
+It contains all 124 tasks times solver seeds 1 and 2, or 248 reset-only jobs.
+Each reset has a 600-second environment limit and a 660-second process limit;
+no controller action or repair candidate is executed.  Every reset must be
+complete and consistent, both solver-seed streams must remain distinct, and
+all 20 maps must expose a nonzero-conflict state.
+
+For each map, only task identity, variant, agent count, current initialization
+conflicts, completion, feasibility, fingerprint and solver seed may be read.
+Two tasks are selected by log-distance to mean initial-conflict targets 25 and
+100, preferring distinct OD variants when available and requiring at least one
+of the two solver seeds to be nonzero.  The highest registered load is already
+in every map's pool; if two repairable tasks are unavailable, the data design
+fails instead of adding a post-hoc load or replacement map.  Candidate repair
+outcomes, future trajectory, controller choices and all timing outcomes remain
+forbidden selection inputs.

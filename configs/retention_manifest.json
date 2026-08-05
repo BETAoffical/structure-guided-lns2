@@ -184,6 +184,11 @@
       "purpose": "Preregistered outcome-blind RobustAction map expansion and deterministic preflight dataset adapter."
     },
     {
+      "path": "experiments/stride_robustaction_qualification.py",
+      "role": "active",
+      "purpose": "Reset-only StructPool load qualification, outcome-blind two-task-per-map selection, and selected dataset integrity."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -347,6 +352,11 @@
       "path": "scripts/audit_stride_robustaction_expansion.py",
       "role": "active",
       "purpose": "Command-line entry point for the checksum-pinned RobustAction static expansion audit."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_qualification.py",
+      "role": "active",
+      "purpose": "Command-line entry point for reset-only StructPool qualification analysis and source-task selection."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1157,6 +1167,11 @@
       "path": "tests/evaluation/test_stride_robustaction_expansion.py",
       "role": "active",
       "contract": "RobustAction static registration, even-agent amendment, v2 dataset identity, and no-mutation failure behavior."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_qualification.py",
+      "role": "active",
+      "contract": "Qualification preregistration, reset-only input boundary, distinct-variant selection, and underload failure behavior."
     },
     {
       "path": "experiments/stride_structpool.py",

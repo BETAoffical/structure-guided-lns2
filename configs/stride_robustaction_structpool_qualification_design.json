@@ -1,0 +1,53 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_qualification_design.v1",
+  "scientific_status": "preregistered_before_structpool_initial_pp_qualification",
+  "data_line_id": "stride-robustaction-structpool-data-v1",
+  "pre_registration_git_commit": "ed35f347acff94d38d829b016df7736a8b8b8895",
+  "inputs": {
+    "data_design": {
+      "path": "configs/stride_robustaction_structpool_data_design.json",
+      "sha256": "94381e62bd24d34454b21f6e11f879f4d74e61b02c6f2755eaffd961fde1ad64"
+    },
+    "runtime": {
+      "path": "configs/stride_robustaction_structpool_qualification_runtime.json",
+      "sha256": "e6287659345b8d60bbc7314e43ee93d8867b62e4ac5969049879630b2cb576d6"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-robustaction-structpool-preflight-dataset-v2/balanced_wall_clock/manifest.jsonl",
+      "sha256": "961b8c5a46423a2d0296492135e9e0e5660641b946f090f3b0d115231226279d"
+    },
+    "dataset_summary": {
+      "path": "build/stride-robustaction-structpool-preflight-dataset-v2/dataset_summary.json",
+      "sha256": "65dbf3234c34702a06834824558e5006d3934db81af6cffa1e775d7d0d2977ae"
+    }
+  },
+  "expected_map_count": 20,
+  "expected_task_count": 124,
+  "solver_seeds": [1, 2],
+  "expected_qualification_job_count": 248,
+  "tasks_selected_per_map": 2,
+  "expected_selected_task_count": 40,
+  "target_mean_initial_conflicts": [25, 100],
+  "minimum_nonzero_solver_seed_fraction": 0.5,
+  "minimum_mean_initial_conflicts": 1.0,
+  "prefer_distinct_task_variants": true,
+  "underloaded_rule": "registered_highest_agent_count_is_already_in_pool_then_fail_if_two_repairable_tasks_are_unavailable",
+  "allowed_selection_inputs": [
+    "map_id", "task_id", "task_variant", "agent_count", "layout_mode",
+    "solver_seed", "initial_conflicts", "initial_complete",
+    "initial_feasible", "state_fingerprint"
+  ],
+  "forbidden_selection_inputs": [
+    "candidate_repair_outcome", "candidate_conflicts_after",
+    "candidate_runtime", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory", "repair_runtime"
+  ],
+  "qualification_must_pass": true,
+  "all_resets_must_be_complete": true,
+  "all_maps_must_have_nonzero_state": true,
+  "candidate_outcomes_read": false,
+  "controller_outcomes_read": false,
+  "formal_speed_claim": false,
+  "next_decision_on_pass": "collect_40_tasks_times_2_seeds_times_2_frozen_source_policies",
+  "next_decision_on_failure": "stop_structpool_data_expansion_and_report_exact_underloaded_or_incomplete_maps"
+}
