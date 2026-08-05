@@ -686,6 +686,15 @@ def closed_loop_qualification_report(
     )
     active_maps = sorted({str(row["map_id"]) for row in nonzero})
     by_solver_seed = collections.Counter(int(row["solver_seed"]) for row in nonzero)
+    registered_layouts = tuple(
+        sorted(
+            map(
+                str,
+                dict(design.get("layout_counts") or {}).keys()
+                or {str(row["layout_mode"]) for row in rows},
+            )
+        )
+    )
     fingerprints_by_seed = {
         seed: tuple(
             str(row["state_fingerprint"])
@@ -748,7 +757,7 @@ def closed_loop_qualification_report(
             "minimum_nonzero_states": len(nonzero) >= int(settings["minimum_nonzero_states"]),
             "minimum_nonzero_per_layout": all(
                 by_layout.get(layout, 0) >= int(settings["minimum_nonzero_states_per_layout"])
-                for layout in ("regular_beltway", "compartmentalized", "dead_end_aisles")
+                for layout in registered_layouts
             ),
             "minimum_active_maps": len(active_maps) >= int(settings["minimum_active_maps"]),
             "minimum_nonzero_per_solver_seed": all(
@@ -826,6 +835,7 @@ def closed_loop_qualification_report(
         "inconsistent_initial_state_count": len(inconsistent_initial_states),
         "inconsistent_initial_state_job_keys": inconsistent_initial_states,
         "nonzero_state_count": len(nonzero),
+        "registered_layout_modes": list(registered_layouts),
         "nonzero_by_layout": dict(sorted(by_layout.items())),
         "nonzero_by_solver_seed": {
             str(seed): by_solver_seed.get(seed, 0) for seed in solver_seeds

@@ -870,6 +870,7 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                     "error": None,
                 }
             )
+
         report = closed_loop_qualification_report(
             rows,
             qualification,
@@ -931,6 +932,55 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 {"passed": True},
                 formal=False,
             )
+
+    def test_structured_qualification_uses_registered_layout_modes(self) -> None:
+        layouts = (
+            "dao_high_topology",
+            "dao_mid_topology",
+            "dao_low_topology_control",
+        )
+        rows = [
+            {
+                "task_id": f"task-{index}",
+                "map_id": f"map-{index}",
+                "agent_count": 400,
+                "layout_mode": layout,
+                "task_variant": "fixture",
+            }
+            for index, layout in enumerate(layouts)
+        ]
+        qualification = [
+            {
+                **row,
+                "solver_seed": 1,
+                "status": "ok",
+                "initial_conflicts": 1,
+                "initial_feasible": False,
+                "initial_complete": True,
+                "state_fingerprint": f"state-{index}",
+            }
+            for index, row in enumerate(rows)
+        ]
+        report = closed_loop_qualification_report(
+            rows,
+            qualification,
+            {
+                "solver_seeds": [1],
+                "qualification": {
+                    "enforce_registered_thresholds": True,
+                    "minimum_nonzero_states": 3,
+                    "minimum_nonzero_states_per_layout": 1,
+                    "minimum_active_maps": 3,
+                },
+                "severity_thresholds": {"low_max": 0.001, "medium_max": 0.01},
+            },
+            {"passed": True, "layout_counts": {name: 1 for name in layouts}},
+            {"passed": True},
+            formal=False,
+        )
+        self.assertTrue(report["passed"])
+        self.assertTrue(report["gates"]["minimum_nonzero_per_layout"])
+        self.assertEqual(report["registered_layout_modes"], sorted(layouts))
 
     def test_qualification_rejects_duplicate_solver_seed_streams(self) -> None:
         rows = make_dataset_rows()

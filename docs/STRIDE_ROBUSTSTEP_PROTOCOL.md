@@ -3019,3 +3019,22 @@ not be reduced to successful episodes after observing repairs.  The source
 runtime SHA-256, registered at parent commit
 `f70f236259c99131546dc1acf01fdb0810ec66c2`, is
 `0ec7701a01d477c8a0d9331cb89e300c8d2af39ae5e3b213899aa44524206f5e`.
+
+The first source qualification invocation completed all 80 reset jobs with
+zero errors and zero timeouts before policy execution.  It observed 77 nonzero
+states on all 20 maps: 46 high-, 24 mid- and seven low-topology states, split
+40/37 across solver seeds 1/2.  Policy execution was correctly stopped because
+the generic qualification helper reported `minimum_nonzero_per_layout=false`.
+Inspection showed that helper still checked the historical generated-layout
+names (`regular_beltway`, `compartmentalized`, `dead_end_aisles`) instead of the
+layout keys in the registered dataset design.  Thus this was an implementation
+contract mismatch, not a failed StructPool yield gate; no source episode or
+repair outcome existed when it was diagnosed.
+
+The helper is corrected to derive required layout modes from the already
+validated `design.layout_counts`, with the input rows as a compatibility
+fallback.  This preserves the old generated-dataset behavior while making the
+same scalar per-layout threshold apply to the registered DAO high/mid/low
+groups.  A DAO-layout regression test freezes the behavior.  The original 80
+reset artifacts remain immutable and may be reused to recompute the report;
+the correction does not authorize resampling or outcome-based task filtering.
