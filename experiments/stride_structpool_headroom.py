@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
 import statistics
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import mean, sha256_file
 from experiments.repair_collection import (
     _fingerprint,
     _plain,
@@ -43,10 +42,6 @@ CONFIG_SCHEMA = "lns2.stride.structpool_headroom_config.v1"
 STATE_SCHEMA = "lns2.stride.structpool_headroom_state.v1"
 TRIAL_SCHEMA = "lns2.stride.structpool_headroom_trial.v1"
 REPORT_SCHEMA = "lns2.stride.structpool_headroom_report.v1"
-
-
-def _mean(values: list[float]) -> float:
-    return math.fsum(values) / len(values) if values else 0.0
 
 
 def _registered_path(project_root: Path, spec: dict[str, Any]) -> Path:
@@ -212,11 +207,11 @@ def _aggregate_candidate(
             map(str, candidate.get("structpool_family_groups") or ())
         ),
         "trial_count": len(values),
-        "mean_normalized_conflict_reduction": _mean(values),
+        "mean_normalized_conflict_reduction": mean(values),
         "standard_deviation_normalized_conflict_reduction": (
             statistics.pstdev(values) if len(values) > 1 else 0.0
         ),
-        "lower_half_mean_normalized_conflict_reduction": _mean(lower_half),
+        "lower_half_mean_normalized_conflict_reduction": mean(lower_half),
         "minimum_normalized_conflict_reduction": min(values, default=0.0),
         "maximum_normalized_conflict_reduction": max(values, default=0.0),
     }
@@ -481,7 +476,7 @@ def collect_structpool_headroom(
         == int(config["selection"]["expected_state_count"]),
         "minimum_state_fraction_with_novel_expected_gain": opportunity_fraction
         >= float(config["gates"]["minimum_state_fraction_with_novel_expected_gain"]),
-        "minimum_mean_best_expected_gain_over_incumbent_pool": _mean(gains)
+        "minimum_mean_best_expected_gain_over_incumbent_pool": mean(gains)
         >= float(config["gates"]["minimum_mean_best_expected_gain_over_incumbent_pool"]),
         "complete_16_seed_product": all(_state_output_valid(row, config) for row in state_payloads),
         "exact_incumbent_artifact_reproduction": all(
@@ -507,7 +502,7 @@ def collect_structpool_headroom(
         "state_count": len(state_payloads),
         "map_count": len({str(row["map_id"]) for row in state_payloads}),
         "novel_trial_count": len(trial_rows),
-        "mean_best_expected_gain_over_incumbent_pool": _mean(gains),
+        "mean_best_expected_gain_over_incumbent_pool": mean(gains),
         "state_fraction_with_novel_expected_gain": opportunity_fraction,
         "state_opportunity_count": sum(
             gain >= opportunity_threshold for gain in gains
@@ -573,11 +568,11 @@ def analyze_structpool_headroom(
         == int(config["selection"]["expected_state_count"]),
         "minimum_state_fraction_with_novel_expected_gain": fraction
         >= float(config["gates"]["minimum_state_fraction_with_novel_expected_gain"]),
-        "minimum_mean_best_expected_gain_over_incumbent_pool": _mean(gains)
+        "minimum_mean_best_expected_gain_over_incumbent_pool": mean(gains)
         >= float(config["gates"]["minimum_mean_best_expected_gain_over_incumbent_pool"]),
     }
     return {
-        "mean_gain": _mean(gains),
+        "mean_gain": mean(gains),
         "opportunity_fraction": fraction,
         "gates": gates,
         "passed": all(gates.values()),

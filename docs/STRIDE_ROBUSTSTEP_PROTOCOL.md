@@ -2728,3 +2728,36 @@ No candidate repair, controller action, controller outcome, wall-clock TTF or
 formal OOD input was used by that audit.  The same frozen 16-state cohort,
 paired seeds, label and thresholds may therefore restart in a new output
 directory; timing fields remain excluded.
+
+### StructPool v1 paired headroom result
+
+The amended headroom pilot completed all 16 preregistered train states from 13
+maps with zero errors.  Each novel action used the same 16 paired PP seed
+indices as the incumbent actions, producing 1,344 novel repair trials.  The
+incumbent artifacts were reproduced exactly and all paired-seed identity,
+cohort-completeness and integrity gates passed.
+
+The mean, across states, of the best novel action's seed-mean normalized
+one-step conflict reduction minus the best incumbent-pool value was
+`0.06927822856309367`.  Nine of 16 states (`0.5625`) had a novel action exceed
+the incumbent best by at least the preregistered `0.02` opportunity margin.
+These values pass the respective `0.01` mean-gain and `0.20` opportunity-rate
+gates.  The maximum observed state gain was `0.25`; the minimum was zero.
+
+This result establishes candidate-pool headroom on a small train-only current-
+step pilot.  The `0.0693` value is an absolute increase in normalized immediate
+conflict reduction, not a 6.93% TTF improvement.  The pilot did not execute a
+controller, read future rounds, use candidate repair time, measure TTF or read
+formal OOD inputs.  It therefore authorizes only the registered
+`stride-robustaction-v1` data rebalancing and label collection; it does not
+promote StructPool into the runtime controller or make a speed claim.
+
+The immutable output is `build/stride-structpool-headroom-v2`.  The report
+SHA-256 is
+`a063be4f7837fbe0f60b9db363ed01a2b2002ed19deafd6146f20610b4001a56`,
+the candidate-aggregate SHA-256 is
+`780c069056dab4f05a9892445f3a39c50b5ae6d14756e291a6dc283d8bca552b`,
+and the novel-trial SHA-256 is
+`6fbb7daabf4eb56152c889b6692eaf26a560df6d16b5da7e682713576221242d`.
+The next safe step is a new, outcome-blind static 20-map registry with 12 high-,
+six mid- and two low-topology maps before any new repair-label collection.

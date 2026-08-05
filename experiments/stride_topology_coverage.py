@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import mean, sha256_file
 from experiments.repair_collection import (
     _plain,
     _read_json,
@@ -22,10 +21,6 @@ from lns2_selector.runtime.online_selection import generate_online_candidates
 CONFIG_SCHEMA = "lns2.stride.topology_coverage_config.v1"
 ROW_SCHEMA = "lns2.stride.topology_coverage_candidate.v1"
 REPORT_SCHEMA = "lns2.stride.topology_coverage_report.v1"
-
-
-def _mean(values: list[float]) -> float:
-    return math.fsum(values) / len(values) if values else 0.0
 
 
 def _fraction(values: list[float], threshold: float) -> float:
@@ -123,9 +118,9 @@ def _coverage_summary(rows: list[dict[str, Any]], kind: str) -> dict[str, Any]:
     values = [float(row[f"max_incident_{kind}_coverage"]) for row in relevant]
     return {
         "relevant_state_count": len(relevant),
-        "mean_max_incident_coverage": _mean(values),
+        "mean_max_incident_coverage": mean(values),
         "state_fraction_at_half_coverage": _fraction(values, 0.5),
-        "mean_max_internal_coverage": _mean(
+        "mean_max_internal_coverage": mean(
             [float(row[f"max_internal_{kind}_coverage"]) for row in relevant]
         ),
     }
@@ -240,7 +235,7 @@ def analyze_topology_coverage_rows(
         "candidate_count": sum(candidate_counts),
         "candidate_count_per_state": {
             "minimum": min(candidate_counts, default=0),
-            "mean": _mean(list(map(float, candidate_counts))),
+            "mean": mean(list(map(float, candidate_counts))),
             "maximum": max(candidate_counts, default=0),
         },
         "articulation": articulation,

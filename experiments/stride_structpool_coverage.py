@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import collections
 import copy
-import math
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import mean, sha256_file
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -34,10 +33,6 @@ from lns2_selector.runtime.topology_candidates import (
 CONFIG_SCHEMA = "lns2.stride.structpool_coverage_config.v1"
 ROW_SCHEMA = "lns2.stride.structpool_coverage_state.v1"
 REPORT_SCHEMA = "lns2.stride.structpool_coverage_report.v1"
-
-
-def _mean(values: list[float]) -> float:
-    return math.fsum(values) / len(values) if values else 0.0
 
 
 def _registered_path(project_root: Path, spec: dict[str, Any]) -> Path:
@@ -216,7 +211,7 @@ def analyze_structpool_coverage_rows(
         "map_count": len({str(row["map_id"]) for row in rows}),
         "source_policies": sorted({str(row["source_policy"]) for row in rows}),
         "added_candidate_count": sum(int(row["added_candidate_count"]) for row in rows),
-        "mean_added_candidate_count": _mean(
+        "mean_added_candidate_count": mean(
             [float(row["added_candidate_count"]) for row in rows]
         ),
         "fraction_with_three_added_candidates": (
