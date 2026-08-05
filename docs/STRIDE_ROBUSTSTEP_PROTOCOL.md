@@ -2892,3 +2892,25 @@ per underloaded map, the next revision must replace maps using an outcome-blind
 registry; it may not outcome-filter individual tasks.  The preregistered design
 SHA-256 is
 `174a38100fa39d88f4b800d0cc7c1591fd212cec1a2b1533a0624427eb8c7487`.
+
+The deterministic extension dataset then completed with 12 maps and 48 tasks.
+No solver, controller or performance measurement ran.  Its manifest SHA-256 is
+`8cc35c73b1d8d31515dad511199392e57a6d3383347212f418a9afd6c4d79572`,
+its dataset-summary SHA-256 is
+`e91e2c21c3f2c9c33be4fee338c747d73cabfe5029c7e980e9031fde169fe2ce`,
+and its source-adapter SHA-256 is
+`adca6107da87e7bd25169d28021df4acf30b2ef578ccafd56dc5d8721d5d323a`.
+The first generation attempt was terminated by the orchestration command's
+120-second limit and is retained separately; it produced no summary and is not
+an input.
+
+Before extension initialization begins, the 96 reset-only jobs are registered
+with the same solver seeds 1/2, 600-second environment limit, 660-second
+process limit and zero controller decisions as v1.  The extension must provide
+at least 24 nonzero states, cover all 12 extension maps and pass its complete
+reset product.  The old v1 report remains frozen; final task selection combines
+its 124 task summaries with the 48 extension summaries and must yield exactly
+two tasks on every one of the original 20 maps.  On failure, the registered
+next action is a separate outcome-blind map-replacement revision, not keeping
+only successful observed tasks.  The qualification design SHA-256 is
+`cf7da3ef3e815ca9408eee67b0ca640f0b0c01484a973630cfe112d0a2cbb09f`.

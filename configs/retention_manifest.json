@@ -189,6 +189,11 @@
       "purpose": "Reset-only StructPool load qualification, outcome-blind two-task-per-map selection, and selected dataset integrity."
     },
     {
+      "path": "experiments/stride_robustaction_load_extension.py",
+      "role": "active",
+      "purpose": "Outcome-blind high-load extension qualification and frozen v1 plus extension source-dataset assembly."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -357,6 +362,11 @@
       "path": "scripts/analyze_stride_robustaction_qualification.py",
       "role": "active",
       "purpose": "Command-line entry point for reset-only StructPool qualification analysis and source-task selection."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_load_extension.py",
+      "role": "active",
+      "purpose": "Command-line entry point for reset-only RobustAction load-extension analysis and final source-task assembly."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1172,6 +1182,11 @@
       "path": "tests/evaluation/test_stride_robustaction_qualification.py",
       "role": "active",
       "contract": "Qualification preregistration, reset-only input boundary, distinct-variant selection, and underload failure behavior."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_load_extension.py",
+      "role": "active",
+      "contract": "Load-extension qualification registration, outcome boundary, and map-replacement failure action."
     },
     {
       "path": "experiments/stride_structpool.py",
