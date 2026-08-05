@@ -4,10 +4,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from experiments._common import mean as _mean
 from experiments.stride_topology_anchor_coverage import _base_config
 from experiments.stride_topology_coverage import (
     _collect_topology_coverage,
-    _mean,
     analyze_topology_coverage_rows,
     validate_topology_coverage_config,
 )

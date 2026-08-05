@@ -1159,14 +1159,9 @@
       "contract": "RobustAction static registration, even-agent amendment, v2 dataset identity, and no-mutation failure behavior."
     },
     {
-      "path": "configs/stride_structpool_design.json",
-      "role": "active",
-      "contract": "StructPool high-stress scope, incumbent preservation, outcome-free candidate families, headroom gates, evidence isolation, and power-state timing boundary."
-    },
-    {
       "path": "experiments/stride_structpool.py",
       "role": "active",
-      "contract": "Checksum-pinned StructPool design validation and current-state-only high-stress activation gate."
+      "purpose": "Checksum-pinned StructPool design validation and current-state-only high-stress activation gate."
     },
     {
       "path": "tests/integration/test_stride_structpool.py",
@@ -1174,34 +1169,24 @@
       "contract": "StructPool preregistration identity, exact frozen incumbents, no outcome gate inputs, and deferred raw-TTF contract."
     },
     {
-      "path": "configs/stride_structpool_coverage.json",
-      "role": "active",
-      "contract": "Checksum-pinned 48-state train-only StructPool proposal audit with no repairs, controller actions, runtime, or OOD access."
-    },
-    {
       "path": "experiments/stride_structpool_coverage.py",
       "role": "active",
-      "contract": "Outcome-blind state selection, deterministic proposal replay, incumbent preservation, diversity, family, size, and candidate-cap gates."
+      "purpose": "Outcome-blind state selection, deterministic proposal replay, incumbent preservation, diversity, family, size, and candidate-cap gates."
     },
     {
       "path": "scripts/run_stride_structpool_coverage.py",
       "role": "active",
-      "contract": "Thin CLI for the proposal-only StructPool coverage audit."
-    },
-    {
-      "path": "configs/stride_structpool_headroom_pilot.json",
-      "role": "active",
-      "contract": "Outcome-blind 16-state cohort, 16 paired PP seeds, expected current-step quality label, frozen gates, and no timing or future trajectory."
+      "purpose": "Thin CLI for the proposal-only StructPool coverage audit."
     },
     {
       "path": "experiments/stride_structpool_headroom.py",
       "role": "active",
-      "contract": "Exact incumbent artifact reproduction, paired novel-action repair collection, resumable state products, and expected-gain analysis."
+      "purpose": "Exact incumbent artifact reproduction, paired novel-action repair collection, resumable state products, and expected-gain analysis."
     },
     {
       "path": "scripts/run_stride_structpool_headroom.py",
       "role": "active",
-      "contract": "Thin CLI for the no-timing StructPool headroom pilot."
+      "purpose": "Thin CLI for the no-timing StructPool headroom pilot."
     },
     {
       "path": "tests/integration/test_stride_robuststep.py",

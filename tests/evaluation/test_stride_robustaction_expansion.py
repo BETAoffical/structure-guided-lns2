@@ -16,6 +16,9 @@ from experiments.stride_robustaction_expansion import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_robustaction_expansion_design.json"
+STRUCTPOOL_CONFIG = (
+    ROOT / "configs" / "stride_robustaction_structpool_data_design.json"
+)
 
 
 class RobustActionExpansionTests(unittest.TestCase):
@@ -24,6 +27,48 @@ class RobustActionExpansionTests(unittest.TestCase):
 
     def test_registered_design_is_valid(self) -> None:
         validate_robustaction_expansion_design(self.config)
+
+    def test_structpool_rebalance_is_valid_and_keeps_legacy_design_frozen(self) -> None:
+        structpool = json.loads(STRUCTPOOL_CONFIG.read_text(encoding="utf-8"))
+        validate_robustaction_expansion_design(structpool)
+        self.assertEqual(
+            structpool["topology_group_targets"],
+            {
+                "dao_high_topology": 12,
+                "dao_mid_topology": 6,
+                "dao_low_topology_control": 2,
+            },
+        )
+        self.assertEqual(self.config["topology_group_targets"], {
+            "dao_high_topology": 7,
+            "dao_mid_topology": 7,
+            "dao_low_topology_control": 6,
+        })
+        self.assertEqual(
+            structpool["post_collection_opportunity_gates"]
+            ["minimum_positive_opportunity_maps_by_topology_group"]
+            ["dao_low_topology_control"],
+            2,
+        )
+
+    def test_structpool_source_adapter_has_rebalanced_dimensions(self) -> None:
+        structpool = json.loads(STRUCTPOOL_CONFIG.read_text(encoding="utf-8"))
+        adapter = robustaction_source_adapter(structpool)
+        self.assertEqual(
+            adapter["dataset_revision"],
+            "stride-robustaction-structpool-preflight-v1",
+        )
+        self.assertEqual(adapter["expected_map_count"], 20)
+        self.assertEqual(adapter["expected_instance_count"], 124)
+
+    def test_structpool_design_rejects_impossible_low_group_gate(self) -> None:
+        structpool = json.loads(STRUCTPOOL_CONFIG.read_text(encoding="utf-8"))
+        changed = copy.deepcopy(structpool)
+        changed["post_collection_opportunity_gates"][
+            "minimum_positive_opportunity_maps_by_topology_group"
+        ]["dao_low_topology_control"] = 3
+        with self.assertRaisesRegex(ValueError, "opportunity gates"):
+            validate_robustaction_expansion_design(changed)
 
     def test_topology_boundaries_are_deterministic(self) -> None:
         thresholds = [0.035, 0.06]

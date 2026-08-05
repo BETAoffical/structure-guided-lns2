@@ -2761,3 +2761,41 @@ and the novel-trial SHA-256 is
 `6fbb7daabf4eb56152c889b6692eaf26a560df6d16b5da7e682713576221242d`.
 The next safe step is a new, outcome-blind static 20-map registry with 12 high-,
 six mid- and two low-topology maps before any new repair-label collection.
+
+### RobustAction StructPool 12/6/2 static data registration
+
+The post-headroom data line is registered separately as
+`stride-robustaction-structpool-data-v1`; the historical 7/7/6 design remains
+unchanged.  Map selection used only the checksum-pinned DAO archive, map id and
+family, free-cell count, obstacle ratio and static low-degree-cell ratio.  It
+did not read initial PP conflicts, candidate repairs, controller actions,
+future states or timing.  All existing-label, formal-OOD and fresh-evidence
+map registries remain disjoint.
+
+The 12 high-topology maps are `orz200d`, `lak526d`, `orz301d`, `brc201d`,
+`lak506d`, `lak250d`, `lak504d`, `lak304d`, `orz601d`, `oth001d`, `ost001d`
+and `lak308d`.  The six mid-topology maps are `hrt001d`, `lak106d`, `den900d`,
+`lgt604d`, `oth000d` and `brc200d`.  The two low-topology controls are
+`lgt600d` and `den901d`.  The registry spans eight map families.
+
+The design preserves 20 maps times two selected tasks times two solver seeds
+times two source policies, or 160 independent episodes.  At no more than two
+states per episode it registers up to 320 new states and a projected combined
+623-state corpus.  Candidate PP seeds remain 16 paired repeated outcomes, not
+independent samples.  The preflight task registry contains 124 map/load/task
+instances and 248 solver-seed jobs.
+
+The earlier generic gate requiring positive opportunities on at least three
+maps in every topology group is impossible when the low-control group contains
+only two maps.  Before collecting any new solver outcome, it is replaced by an
+explicit achievable map-group gate of three high, three mid and two low maps.
+All other state-count and robust-opportunity thresholds remain unchanged.
+
+The static audit passed every archive, member checksum, recomputed metric,
+group-balance, family-count, locked-evidence and predecessor-evidence gate, and
+ran no solver or performance measurement.  The registered config SHA-256 is
+`94381e62bd24d34454b21f6e11f879f4d74e61b02c6f2755eaffd961fde1ad64`;
+the local static-audit report SHA-256 is
+`54ce0cd58a63016908c5e07b0dfe0e6e3bcbdedc8d05fea5b5e2918487611f28`.
+The next allowed action is deterministic dataset generation without PP,
+controller execution or timing.

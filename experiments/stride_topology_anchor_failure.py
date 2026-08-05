@@ -4,11 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from experiments._common import mean as _mean
 from experiments._common import sha256_file
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 from experiments.stride_lns import assign_structure_scores
 from experiments.stride_topology_anchor_quality import TRIAL_SCHEMA
-from experiments.stride_topology_coverage import _mean
 
 
 CONFIG_SCHEMA = "lns2.stride.topology_anchor_failure_config.v1"

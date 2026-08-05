@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from experiments._common import mean as _mean
 from experiments._common import sha256_file
 from experiments.repair_collection import (
     _plain,
@@ -14,7 +15,6 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.state_analysis import analyze_state
-from experiments.stride_topology_coverage import _mean
 from experiments.trace_replay import replay_prefix
 
 
