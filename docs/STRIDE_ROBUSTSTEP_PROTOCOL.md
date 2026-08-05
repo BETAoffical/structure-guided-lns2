@@ -2799,3 +2799,21 @@ the local static-audit report SHA-256 is
 `54ce0cd58a63016908c5e07b0dfe0e6e3bcbdedc8d05fea5b5e2918487611f28`.
 The next allowed action is deterministic dataset generation without PP,
 controller execution or timing.
+
+The deterministic dataset generation subsequently completed in
+`build/stride-robustaction-structpool-preflight-dataset-v2`.  It contains 124
+unique tasks on all 20 registered maps: 72 high-topology, 36 mid-topology and
+16 low-topology-control tasks.  Uniform-random and opposite-exchange each
+contribute 62 tasks; every registered agent count is even and the observed
+range is 20 through 1,500 agents.  No PP, controller or performance
+measurement ran.  The manifest SHA-256 is
+`961b8c5a46423a2d0296492135e9e0e5660641b946f090f3b0d115231226279d`,
+the dataset-summary SHA-256 is
+`65dbf3234c34702a06834824558e5006d3934db81af6cffa1e775d7d0d2977ae`,
+and the source-adapter SHA-256 is
+`5516091a777f4b6bd80aae2a8a894ced8cd310fbc655930ef1c6aab3e4755e74`.
+The first output directory, `build/stride-robustaction-structpool-preflight-
+dataset-v1`, is retained as an incomplete process-timeout attempt and is not
+an input to later stages.  Before initial-PP qualification begins, its task
+acceptance and termination contract must be audited to ensure the reported
+slow-power state cannot change cohort selection through a wall-clock cutoff.
