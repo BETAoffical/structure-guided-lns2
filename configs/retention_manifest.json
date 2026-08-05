@@ -1159,6 +1159,21 @@
       "contract": "RobustAction static registration, even-agent amendment, v2 dataset identity, and no-mutation failure behavior."
     },
     {
+      "path": "configs/stride_structpool_design.json",
+      "role": "active",
+      "contract": "StructPool high-stress scope, incumbent preservation, outcome-free candidate families, headroom gates, evidence isolation, and power-state timing boundary."
+    },
+    {
+      "path": "experiments/stride_structpool.py",
+      "role": "active",
+      "contract": "Checksum-pinned StructPool design validation and current-state-only high-stress activation gate."
+    },
+    {
+      "path": "tests/integration/test_stride_structpool.py",
+      "role": "active",
+      "contract": "StructPool preregistration identity, exact frozen incumbents, no outcome gate inputs, and deferred raw-TTF contract."
+    },
+    {
       "path": "tests/integration/test_stride_robuststep.py",
       "role": "active",
       "contract": "Robust paired-seed dominance, seed-depth stability, outcome-blind map/load selection, OOD isolation, and uncertainty contracts."

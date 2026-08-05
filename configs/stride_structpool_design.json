@@ -1,0 +1,174 @@
+{
+  "schema": "lns2.stride.structpool_design.v1",
+  "scientific_status": "preregistered_before_structpool_proposal_audit_or_repair_outcomes",
+  "pool_id": "stride-structpool-v1",
+  "planned_ranker_id": "stride-robustaction-v1",
+  "pre_registration_parent_commit": "429163b213ffb4ecc564a5f8d7c6362abcac6252",
+  "research_scope": {
+    "target": "high_load_topology_constrained_mapf",
+    "ordinary_state_policy": "exact_frozen_v2_full_fallback",
+    "formal_speed_claim": false,
+    "development_only_map_loads": ["maze-300", "room-500"],
+    "development_evidence_may_train_or_calibrate": false
+  },
+  "incumbent": {
+    "controller": "v2-augmented-pool",
+    "semantics": "frozen_v2_ranking_over_base_v2_plus_two_stride_topoboundary_v1_actions",
+    "report": {
+      "path": "build/stride-maprank-evaluation-v1/high-load-v5-confirmation/maprank_high_load_confirmation_report.json",
+      "sha256": "f8ea8c07f80465182af16b1b087ebb0861fcfaf23598b2fb692fdd41c29859fe"
+    },
+    "development_mean_raw_wall_ttf_seconds": 10.76130391727085,
+    "frozen_v2_mean_raw_wall_ttf_seconds": 11.37781146202083,
+    "development_relative_improvement_over_v2": 0.0541850730088018,
+    "promotion_status": "development_incumbent_not_default_or_formal_ood_proof"
+  },
+  "candidate_space": {
+    "base_pool": {
+      "generator": "frozen_v2",
+      "heuristics": ["target", "collision", "random"],
+      "neighborhood_sizes": [4, 8, 16],
+      "preservation": "every_base_candidate_agent_set_and_provenance_must_be_exact"
+    },
+    "incumbent_additions": {
+      "generator": "stride-topoboundary-v1",
+      "variants": ["articulation", "low_degree"],
+      "neighborhood_size": 16,
+      "core_budget": 4,
+      "preservation": "both_generated_incumbent_actions_must_be_retained_before_novel_candidates"
+    },
+    "novel_family_groups": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity_between_novel_additions": 0.8,
+    "reduction_rule": "retain_incumbent_boundaries_then_deterministic_family_round_robin_then_global_structural_score",
+    "outcome_used_for_generation_or_reduction": false
+  },
+  "high_stress_gate": {
+    "gate_id": "stride-highstress-state-v1",
+    "evaluation_boundary": "before_static_or_dynamic_topology_analysis",
+    "minimum_conflict_pair_count": 16,
+    "any_of": {
+      "minimum_agent_count": 96,
+      "minimum_active_conflict_agent_count": 32,
+      "minimum_largest_conflict_component_size": 16
+    },
+    "allowed_inputs": [
+      "agent_count",
+      "conflict_pair_count",
+      "active_conflict_agent_count",
+      "largest_conflict_component_size"
+    ],
+    "forbidden_inputs": [
+      "candidate_repair_outcome",
+      "candidate_conflicts_after",
+      "candidate_runtime",
+      "controller_action",
+      "controller_ttf",
+      "future_trajectory",
+      "repair_runtime"
+    ],
+    "failure_action": "exact_frozen_v2_full_fallback"
+  },
+  "proposal_only_stage": {
+    "repair_or_controller_step_allowed": false,
+    "minimum_eligible_state_count": 48,
+    "minimum_fraction_with_three_added_candidates": 0.9,
+    "minimum_aggregate_novel_family_coverage": 5,
+    "minimum_aggregate_neighborhood_size_coverage": 4,
+    "require_deterministic_replay": true,
+    "require_exact_base_preservation": true,
+    "require_exact_incumbent_boundary_preservation": true,
+    "require_candidate_cap": true
+  },
+  "headroom_pilot": {
+    "allowed_only_after_proposal_stage_passes": true,
+    "paired_pp_seed_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "label": "mean_current_step_normalized_conflict_reduction",
+    "formula": "mean_seed((conflicts_before-conflicts_after)/max(conflicts_before,1))",
+    "timing_fields_used": false,
+    "future_state_or_round_fields_used": false,
+    "minimum_state_fraction_with_novel_expected_gain": 0.2,
+    "minimum_mean_best_expected_gain_over_incumbent_pool": 0.01,
+    "minimum_gain_for_state_opportunity": 0.02,
+    "failure_action": "retain_two_boundary_plus_v2_incumbent_and_do_not_train_new_ranker"
+  },
+  "data_stage_after_headroom": {
+    "allowed_only_after_headroom_pilot_passes": true,
+    "map_group_target_counts": {
+      "dao_high_topology": 12,
+      "dao_mid_topology": 6,
+      "dao_low_topology_control": 2
+    },
+    "minimum_independent_episode_count": 160,
+    "maximum_selected_state_count": 320,
+    "maximum_states_per_episode": 2,
+    "paired_pp_trials_per_candidate": 16,
+    "independent_unit": "episode_not_candidate_outcome_or_pp_seed"
+  },
+  "training_stage": {
+    "ranker_id": "stride-robustaction-v1",
+    "target": "seed_aggregated_expected_current_step_normalized_conflict_reduction",
+    "risk_inputs": ["seed_mean", "seed_standard_deviation", "lower_half_mean"],
+    "anchor": "same_pool_frozen_v2_ranking",
+    "grouping": "map_grouped_nested_cross_validation",
+    "forbidden_targets": [
+      "single_seed_winner",
+      "repair_time",
+      "ttf",
+      "remaining_repair_rounds",
+      "cost_to_go",
+      "receding_q",
+      "future_trajectory"
+    ]
+  },
+  "evidence_isolation": {
+    "training_design": "configs/stride_robustaction_expansion_design.json",
+    "training_design_sha256": "6a1a870ea061c233abd570c83ad523b7cbc7e1b4ced46ef8a625128d690519ea",
+    "formal_ood_config": "configs/movingai_ood_dataset.json",
+    "formal_ood_config_sha256": "81e1d38506e6abf878011a07420a03e15ffe8631577766ce2b66af574392900a",
+    "fresh_evidence_config": "configs/stride_topology_boundary_fresh_preflight_source.json",
+    "fresh_evidence_config_sha256": "853b1c6766abc17ef85c311c5ad11669c46e71eaa939e52c349432156ff1a1a8",
+    "formal_ood_locked_until_final_stage": true,
+    "development_high_load_forbidden_for_fit_or_threshold": true
+  },
+  "runtime_stage": {
+    "allowed_only_after_user_reports_comparable_performance_restored": true,
+    "sequence": [
+      "runtime_action_equivalence",
+      "shadow_semantic_validation",
+      "paired_high_load_run_to_completion_raw_ttf",
+      "fresh_ood_run_to_completion_raw_ttf"
+    ],
+    "primary_metric": "mean_run_to_completion_raw_wall_ttf",
+    "required_secondary_metrics": [
+      "success_count",
+      "repair_iterations",
+      "raw_wall_auc",
+      "pp_time",
+      "controller_and_selection_overhead",
+      "invalid_action_count",
+      "state_fingerprint_mismatch_count"
+    ],
+    "timing_pooling_across_user_reported_power_states": false
+  },
+  "power_state_policy": {
+    "source": "user_reported_only",
+    "additional_performance_preflight": false,
+    "slow_power_allowed_work": [
+      "static_design",
+      "proposal_only_audit",
+      "non_timing_paired_repair_labels",
+      "offline_training",
+      "functional_and_semantic_tests"
+    ],
+    "slow_power_forbidden_work": ["wall_clock_ttf", "shadow_timing"],
+    "timing_pooling_across_power_states": false
+  }
+}

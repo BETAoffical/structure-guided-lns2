@@ -2630,3 +2630,58 @@ functional or semantic tests may proceed in the reported slow-power state;
 Shadow timing and wall-clock TTF remain deferred until the user reports that
 comparable performance has returned.  Timing from different reported power
 states may not be pooled.
+
+### STRIDE-StructPool v1 preregistration
+
+The next active intervention is candidate-pool quality rather than a fifth
+target fitted to the same two topology additions.  `stride-structpool-v1` is
+registered at parent commit `429163b213ffb4ecc564a5f8d7c6362abcac6252`, before
+its proposal-only audit or any repair outcome.  The development incumbent is
+frozen V2 ranking over the base V2 pool plus the two size-16
+`stride-topoboundary-v1` actions.  Its three-replicate high-load development
+mean raw TTF was 10.761304 seconds versus 11.377811 for unaugmented V2, a
+5.4185% improvement, but the cohort contains only maze-300 and room-500 and is
+not formal OOD proof.
+
+Every base Target/Collision/Random action and both incumbent boundary actions
+must remain exact.  The augmented generator may contain at most six additions
+in total and explores five outcome-free structural family groups: bottleneck
+crossing, conflict component, topology boundary, spatiotemporal hotspot and
+path overlap, at sizes 8, 16, 24 and 32.  After retaining the incumbent
+boundaries, deterministic family-round-robin reduction and a maximum 0.8
+Jaccard similarity among novel additions control redundancy.  Candidate repair
+outcomes, runtime, controller actions and future trajectory are forbidden from
+generation and reduction.
+
+The topology path is active only when the current state has at least 16
+conflicting pairs and also has at least 96 agents, 32 conflict-active agents or
+a conflict component of size 16.  This gate is evaluated before static or
+dynamic topology analysis; all other states use exact frozen V2.  The first
+stage is proposal-only and requires deterministic replay, exact preservation,
+the six-action cap, at least three additions on 90% of 48 eligible states, and
+aggregate coverage of all five families and all four sizes.  It may not repair
+a candidate or step a controller.
+
+Only after that audit passes may a small paired 16-PP-seed headroom pilot read
+one-step outcomes.  Its target is the seed mean of
+`(conflicts_before-conflicts_after)/max(conflicts_before,1)`; it contains no
+repair time, TTF, later rounds, Cost-to-Go or Receding-Q.  At least 20% of
+states must expose a novel action whose expected score exceeds the incumbent
+pool by 0.02, and the mean best expected gain must be at least 0.01.  Failure
+keeps the current 2-Boundary-plus-V2 incumbent and forbids new ranker training.
+
+If the pool passes, the separately named `stride-robustaction-v1` data stage
+will rebalance the 20-map development registry toward 12 high-, six mid- and
+two low-topology controls, with at least 160 independent episodes, at most two
+states per episode and at most 320 selected states.  PP seeds are repeated
+outcomes, not independent samples.  The planned ranker predicts seed-aggregated
+expected one-step quality with mean, variability and lower-half risk, and is
+compared against frozen V2 ranking over exactly the same pool.
+
+Maze-300/room-500 remain post-hoc development evidence and may not fit or
+calibrate this line; the registered MovingAI formal OOD and fresh-evidence maps
+remain locked.  The reported slow-power state permits static, proposal-only,
+non-timing repair-label, offline and semantic work only.  Runtime equivalence,
+Shadow, paired high-load raw TTF and fresh-OOD raw TTF remain blocked until the
+user reports comparable performance has returned; no extra charger benchmark
+is introduced.
