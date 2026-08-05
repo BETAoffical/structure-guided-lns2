@@ -7,6 +7,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import (
     _fingerprint,
     _plain,
@@ -25,6 +26,7 @@ from experiments.stride_collection import (
     load_stride_selection,
 )
 from experiments.stride_lns import (
+    FROZEN_FEATURE_SCHEMA_ID,
     STRIDE_TRIAL_SCHEMA,
     aggregate_stride_candidate,
     assign_structure_scores,
@@ -32,6 +34,11 @@ from experiments.stride_lns import (
     stride_dominates,
 )
 from experiments.trace_replay import replay_prefix
+from lns2_selector.runtime.artifact_validation import (
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
@@ -96,12 +103,19 @@ def select_stride_stability_states(
 def _source_state_files(collection: Path) -> dict[str, Path]:
     run = _read_json(collection / "run_config.json")
     fingerprint = str(run["run_fingerprint"])
+    selected = {
+        str(row["state_id"]): row
+        for row in _read_jsonl(collection / "state_selection.jsonl")
+    }
     result: dict[str, Path] = {}
     for path in sorted((collection / "states").glob("*.json")):
         payload = _read_json(path)
         state_id = str(payload.get("state_id", ""))
         if not _state_artifact_valid(
-            payload, run_fingerprint=fingerprint, state_id=state_id
+            payload,
+            run_fingerprint=fingerprint,
+            state_id=state_id,
+            decision=selected.get(state_id),
         ):
             raise ValueError(f"invalid source STRIDE state artifact: {path}")
         result[state_id] = path
@@ -111,6 +125,8 @@ def _source_state_files(collection: Path) -> dict[str, Path]:
 def _extension_artifact_valid(
     payload: dict[str, Any], *, identity: str, state_id: str,
     schema: str, trial_indices: tuple[int, ...],
+    decision: dict[str, Any] | None = None,
+    source_payload: dict[str, Any] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != schema
@@ -119,30 +135,92 @@ def _extension_artifact_valid(
         or payload.get("complete") is not True
     ):
         return False
+    embedded_decision = payload.get("decision")
+    if not isinstance(embedded_decision, dict):
+        return False
+    if decision is not None and embedded_decision != decision:
+        return False
+    expected_decision = decision if decision is not None else embedded_decision
+    if expected_decision.get("state_id") != state_id:
+        return False
+    if source_payload is None:
+        return False
+    source_candidates = source_payload.get("candidates")
+    source_trials = source_payload.get("trials")
+    if not isinstance(source_candidates, list) or not isinstance(source_trials, list):
+        return False
+    source_candidate_ids = [str(row.get("candidate_id")) for row in source_candidates]
     candidates = payload.get("candidate_ids")
     trials = payload.get("trials")
-    if not isinstance(candidates, list) or not isinstance(trials, list):
+    if candidates != source_candidate_ids or not isinstance(trials, list):
         return False
-    expected = {
-        (str(candidate_id), trial_index)
-        for candidate_id in candidates
-        for trial_index in trial_indices
+    if not trial_product_matches(
+        trials, candidate_ids=candidates, trial_indices=trial_indices
+    ):
+        return False
+    before_fingerprint = expected_decision.get("before_fingerprint")
+    before_repair_fingerprint = source_payload.get("before_repair_fingerprint")
+    before_conflicts = source_payload.get("before_conflicts")
+    if (
+        not isinstance(before_fingerprint, str)
+        or not isinstance(before_repair_fingerprint, str)
+        or not strict_integer(before_conflicts, minimum=1)
+    ):
+        return False
+    source_features: dict[str, dict[str, Any]] = {}
+    for row in source_trials:
+        if not isinstance(row, dict) or not isinstance(row.get("features"), dict):
+            return False
+        candidate_id = str(row.get("candidate_id"))
+        current = dict(row["features"])
+        previous = source_features.setdefault(candidate_id, current)
+        if previous != current:
+            return False
+    metadata = {
+        name: expected_decision.get(name)
+        for name in (
+            "map_id",
+            "split",
+            "source_policy",
+            "decision_stage",
+            "agent_count",
+        )
     }
-    observed = {
-        (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
+    return all(
+        repair_trial_semantics_valid(
+            row,
+            schema=STRIDE_TRIAL_SCHEMA,
+            state_id=state_id,
+            candidate_id=str(row["candidate_id"]),
+            trial_index=int(row["trial_index"]),
+            pp_seed=stride_extended_pp_seed(
+                before_repair_fingerprint, int(row["trial_index"])
+            ),
+            before_conflicts=before_conflicts,
+            before_fingerprint=before_fingerprint,
+            before_repair_fingerprint=before_repair_fingerprint,
+            feature_schema_id=FROZEN_FEATURE_SCHEMA_ID,
+            required_feature_names=PROFILE_FEATURE_NAMES["realized_dynamic"],
+            expected_metadata=metadata,
+        )
+        and row["features"] == source_features.get(str(row["candidate_id"]))
         for row in trials
-        if isinstance(row, dict)
-    }
-    return observed == expected and len(trials) == len(expected)
+    )
 
 
-def _extra_artifact_valid(payload: dict[str, Any], *, identity: str, state_id: str) -> bool:
+def _extra_artifact_valid(
+    payload: dict[str, Any], *, identity: str, state_id: str,
+    source_payload: dict[str, Any] | None = None,
+    decision: dict[str, Any] | None = None,
+) -> bool:
     return _extension_artifact_valid(
         payload,
         identity=identity,
         state_id=state_id,
         schema=STRIDE_STABILITY_COLLECTION_SCHEMA,
         trial_indices=EXTRA_TRIAL_INDICES,
+        source_payload=source_payload,
+        decision=decision,
     )
 
 
@@ -162,6 +240,8 @@ def _collect_extension_state(job: dict[str, Any]) -> dict[str, Any]:
             state_id=state_id,
             schema=artifact_schema,
             trial_indices=trial_indices,
+            decision=decision,
+            source_payload=source_payload,
         ):
             return {
                 "state_id": state_id,
@@ -323,14 +403,20 @@ def collect_stride_extension_trials(
                 },
             )
     all_trials: list[dict[str, Any]] = []
+    jobs_by_state = {
+        str(job["decision"]["state_id"]): job for job in jobs
+    }
     for result in sorted(results, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["output_file"])))
+        job = jobs_by_state[str(result["state_id"])]
         if not _extension_artifact_valid(
             payload,
             identity=identity,
             state_id=str(result["state_id"]),
             schema=artifact_schema,
             trial_indices=normalized_indices,
+            decision=dict(job["decision"]),
+            source_payload=_read_json(Path(str(job["source_file"]))),
         ):
             errors.append({"state_id": str(result["state_id"]), "error": "invalid artifact"})
         else:

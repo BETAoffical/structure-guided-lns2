@@ -39,6 +39,12 @@ from experiments.trace_replay import (
     restore_repair_state,
     target_state_from_trace,
 )
+from lns2_selector.runtime.artifact_validation import (
+    candidate_records as validate_candidate_records,
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.online_selection import generate_online_candidates
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -65,6 +71,7 @@ PRODUCER_FILES = (
     "experiments/stride_repairability.py",
     "experiments/stride_repairability_collection.py",
     "experiments/trace_replay.py",
+    "lns2_selector/runtime/artifact_validation.py",
     "lns2_selector/runtime/online_selection.py",
     "lns2_selector/runtime/topology_candidates.py",
     "src/python_bindings.cpp",
@@ -150,6 +157,7 @@ def _artifact_valid(
     run_fingerprint: str,
     state_id: str,
     trial_indices: tuple[int, ...],
+    decision: dict[str, Any] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != STATE_SCHEMA
@@ -158,61 +166,92 @@ def _artifact_valid(
         or payload.get("complete") is not True
     ):
         return False
+    embedded_decision = payload.get("decision")
+    if not isinstance(embedded_decision, dict):
+        return False
+    if decision is not None and embedded_decision != decision:
+        return False
+    expected_decision = decision if decision is not None else embedded_decision
+    if expected_decision.get("state_id") != state_id:
+        return False
     candidates = payload.get("candidates")
     trials = payload.get("trials")
-    if not isinstance(candidates, list) or not candidates or not isinstance(trials, list):
+    indexed_candidates = validate_candidate_records(candidates)
+    if indexed_candidates is None or not isinstance(trials, list):
         return False
-    if any(
-        not isinstance(candidate, dict) or candidate.get("candidate_id") is None
-        for candidate in candidates
+    candidate_ids = list(indexed_candidates)
+    before_fingerprint = expected_decision.get("before_fingerprint")
+    before_repair = payload.get("before_repair_fingerprint")
+    before_conflicts = payload.get("before_conflicts")
+    state_restore = payload.get("state_restore")
+    if (
+        not isinstance(before_fingerprint, str)
+        or payload.get("before_fingerprint") != before_fingerprint
+        or expected_decision.get("before_conflicts") != before_conflicts
+        or not strict_integer(before_conflicts, minimum=1)
+        or not isinstance(before_repair, str)
+        or not before_repair
+        or not isinstance(state_restore, dict)
+        or state_restore.get("contract") != TARGET_STATE_RESTORE_CONTRACT
+        or state_restore.get("restore_seed")
+        != repairability_restore_seed(before_repair)
+        or state_restore.get("repair_structure_fingerprint") != before_repair
     ):
         return False
-    candidate_ids = [str(candidate["candidate_id"]) for candidate in candidates]
-    if len(candidate_ids) != len(set(candidate_ids)):
-        return False
     required_names = set(PROFILE_FEATURE_NAMES["realized_dynamic"])
-    allowed_indices = set(trial_indices)
+    if not trial_product_matches(
+        trials, candidate_ids=candidate_ids, trial_indices=trial_indices
+    ):
+        return False
+    metadata = {
+        "layout_family": str(expected_decision.get("layout_mode", "unknown")),
+        "map_id": expected_decision.get("map_id"),
+        "task_id": expected_decision.get("task_id"),
+        "split": expected_decision.get("research_split"),
+        "source_split": expected_decision.get("split"),
+        "source_policy": expected_decision.get("source_policy"),
+        "decision_stage": expected_decision.get("decision_stage"),
+        "solver_seed": expected_decision.get("solver_seed"),
+        "agent_count": expected_decision.get("agent_count"),
+    }
+    features_by_candidate: dict[str, dict[str, Any]] = {}
     for row in trials:
-        if not isinstance(row, dict):
-            return False
-        try:
-            trial_index = int(row.get("trial_index", -1))
-        except (TypeError, ValueError):
-            return False
-        if (
-            row.get("schema") != STRIDE_TRIAL_SCHEMA
-            or row.get("feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID
-            or str(row.get("candidate_id")) not in candidate_ids
-            or trial_index not in allowed_indices
-            or type(row.get("pp_seed")) is not int
-            or not isinstance(row.get("features"), dict)
-            or set(row["features"]) != required_names
+        candidate_id = str(row["candidate_id"])
+        candidate = indexed_candidates[candidate_id]
+        trial_index = int(row["trial_index"])
+        candidate_metadata = {
+            **metadata,
+            "candidate_kind": candidate.get("candidate_kind"),
+            "actual_size": candidate.get("actual_size"),
+            "selection_families": candidate.get("selection_families"),
+            "agents": candidate.get("agents"),
+        }
+        if not repair_trial_semantics_valid(
+            row,
+            schema=STRIDE_TRIAL_SCHEMA,
+            state_id=state_id,
+            candidate_id=candidate_id,
+            trial_index=trial_index,
+            pp_seed=repairability_pp_seed(before_repair, trial_index),
+            before_conflicts=before_conflicts,
+            before_fingerprint=before_fingerprint,
+            before_repair_fingerprint=before_repair,
+            feature_schema_id=FROZEN_FEATURE_SCHEMA_ID,
+            required_feature_names=required_names,
+            expected_metadata=candidate_metadata,
         ):
             return False
-    expected = {
-        (candidate_id, trial_index)
-        for candidate_id in candidate_ids
-        for trial_index in trial_indices
-    }
-    observed = {
-        (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
-        for row in trials
-        if isinstance(row, dict)
-    }
-    if observed != expected or len(trials) != len(expected):
-        return False
-    seeds_by_trial = {
-        trial_index: {
-            int(row["pp_seed"])
-            for row in trials
-            if int(row["trial_index"]) == trial_index
-        }
-        for trial_index in trial_indices
-    }
+        features = dict(row["features"])
+        previous = features_by_candidate.setdefault(candidate_id, features)
+        if previous != features:
+            return False
+    boundary_count = sum(
+        candidate.get("candidate_kind") == "boundary_only"
+        for candidate in indexed_candidates.values()
+    )
     return (
-        all(len(seeds) == 1 for seeds in seeds_by_trial.values())
-        and len({next(iter(seeds)) for seeds in seeds_by_trial.values()})
-        == len(trial_indices)
+        payload.get("boundary_candidate_count") == boundary_count
+        and payload.get("base_candidate_count") == len(candidates) - boundary_count
     )
 
 
@@ -228,6 +267,7 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
             run_fingerprint=run_fingerprint,
             state_id=str(decision["state_id"]),
             trial_indices=trial_indices,
+            decision=decision,
         ):
             return {
                 "state_id": str(decision["state_id"]),
@@ -628,6 +668,7 @@ def collect_repairability_trials(
     all_trials: list[dict[str, Any]] = []
     candidate_counts: Counter[int] = Counter()
     boundary_counts: Counter[int] = Counter()
+    selected_by_id = {str(row["state_id"]): row for row in selected}
     for result in sorted(results, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["state_file"])))
         if not _artifact_valid(
@@ -635,6 +676,7 @@ def collect_repairability_trials(
             run_fingerprint=run_fingerprint,
             state_id=str(result["state_id"]),
             trial_indices=trial_indices,
+            decision=selected_by_id.get(str(result["state_id"])),
         ):
             errors.append(
                 {"state_id": str(result["state_id"]), "error": "invalid state artifact"}

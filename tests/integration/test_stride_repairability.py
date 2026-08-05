@@ -25,7 +25,7 @@ from experiments.stride_repairability_collection import (
     repairability_pp_seed,
     repairability_restore_seed,
 )
-from experiments.trace_replay import state_before_decision
+from experiments.trace_replay import TARGET_STATE_RESTORE_CONTRACT, state_before_decision
 from experiments.stride_repairability_selection import (
     prepare_repairability_selection,
     validate_repairability_data_design,
@@ -440,7 +440,30 @@ class StrideRepairabilityTest(unittest.TestCase):
         )
 
     def test_collection_resume_artifact_requires_complete_candidate_product(self) -> None:
-        candidates = [{"candidate_id": "a"}, {"candidate_id": "b"}]
+        decision = {
+            "state_id": "state-a",
+            "before_fingerprint": "before-state",
+            "before_conflicts": 5,
+            "layout_mode": "family",
+            "map_id": "map",
+            "task_id": "task",
+            "research_split": "research",
+            "split": "source",
+            "source_policy": "v2-full",
+            "decision_stage": "middle",
+            "solver_seed": 1,
+            "agent_count": 10,
+        }
+        candidates = [
+            {
+                "candidate_id": candidate_id,
+                "agents": [position],
+                "candidate_kind": "base",
+                "actual_size": 1,
+                "selection_families": ["target:4"],
+            }
+            for position, candidate_id in enumerate(("a", "b"))
+        ]
         features = {
             name: 0.0 for name in PROFILE_FEATURE_NAMES["realized_dynamic"]
         }
@@ -448,10 +471,40 @@ class StrideRepairabilityTest(unittest.TestCase):
             {
                 "schema": STRIDE_TRIAL_SCHEMA,
                 "feature_schema_id": FROZEN_FEATURE_SCHEMA_ID,
+                "state_id": "state-a",
                 "candidate_id": candidate["candidate_id"],
+                "candidate_kind": "base",
+                "actual_size": 1,
+                "selection_families": ["target:4"],
+                "agents": candidate["agents"],
+                "layout_family": "family",
+                "map_id": "map",
+                "task_id": "task",
+                "split": "research",
+                "source_split": "source",
+                "source_policy": "v2-full",
+                "decision_stage": "middle",
+                "solver_seed": 1,
+                "agent_count": 10,
+                "before_conflicts": 5,
+                "before_fingerprint": "before-state",
+                "before_repair_fingerprint": "before-repair",
                 "trial_index": index,
-                "pp_seed": 1000 + index,
-                "features": features,
+                "pp_seed": repairability_pp_seed("before-repair", index),
+                "features": dict(features),
+                "feasible": False,
+                "replan_success": True,
+                "repair_outcome": "conflict_reduced",
+                "conflicts_after": 4,
+                "after_fingerprint": f"after-{candidate['candidate_id']}-{index}",
+                "after_repair_fingerprint": (
+                    f"after-repair-{candidate['candidate_id']}-{index}"
+                ),
+                "post_structure": {
+                    name: 0.1 for name in REQUIRED_POST_STRUCTURE_FIELDS
+                },
+                "native_step_seconds": 0.1,
+                "pp_replan_seconds": 0.05,
             }
             for candidate in candidates
             for index in range(16)
@@ -461,6 +514,17 @@ class StrideRepairabilityTest(unittest.TestCase):
             "run_fingerprint": "run-a",
             "state_id": "state-a",
             "complete": True,
+            "decision": decision,
+            "before_fingerprint": "before-state",
+            "before_repair_fingerprint": "before-repair",
+            "before_conflicts": 5,
+            "state_restore": {
+                "contract": TARGET_STATE_RESTORE_CONTRACT,
+                "restore_seed": repairability_restore_seed("before-repair"),
+                "repair_structure_fingerprint": "before-repair",
+            },
+            "base_candidate_count": 2,
+            "boundary_candidate_count": 0,
             "candidates": candidates,
             "trials": trials,
         }
@@ -470,6 +534,7 @@ class StrideRepairabilityTest(unittest.TestCase):
                 run_fingerprint="run-a",
                 state_id="state-a",
                 trial_indices=tuple(range(16)),
+                decision=decision,
             )
         )
         payload["trials"] = trials[:-1]
@@ -479,6 +544,7 @@ class StrideRepairabilityTest(unittest.TestCase):
                 run_fingerprint="run-a",
                 state_id="state-a",
                 trial_indices=tuple(range(16)),
+                decision=decision,
             )
         )
 

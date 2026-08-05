@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -16,15 +17,16 @@ from experiments.stride_quality_v2 import (
     STRIDE_QUALITY_V2_CANDIDATE_SCHEMA,
     STRIDE_QUALITY_V2_CONTROLLER_ID,
     STRIDE_QUALITY_V2_LABEL_SCHEMA,
+    STRIDE_QUALITY_V2_STRUCTURE_WEIGHT,
 )
+from experiments.stride_lns import validate_post_structure_metrics
+from lns2_selector.runtime.artifact_validation import finite_number
 
 
 STRIDE_STAGE3_LABEL_AUDIT_CONFIG_SCHEMA = (
     "lns2.stride.stage3_label_audit_config.v1"
 )
 STRIDE_STAGE3_LABEL_AUDIT_SCHEMA = "lns2.stride.stage3_label_audit.v1"
-
-
 def _project_path(project_root: Path, value: str) -> Path:
     path = Path(value)
     return path.resolve() if path.is_absolute() else (project_root / path).resolve()
@@ -121,6 +123,9 @@ def run_stride_stage3_label_audit(
     aggregate_row_count = 0
     duplicate_candidate_row_count = 0
     feature_dimension_errors = 0
+    feature_schema_errors = 0
+    nonfinite_feature_errors = 0
+    aggregate_scientific_errors = 0
     aggregate_schema_errors = 0
     aggregate_metadata_errors = 0
     for row in _read_jsonl(aggregate_path):
@@ -138,6 +143,69 @@ def run_stride_stage3_label_audit(
         features = row.get("features")
         if not isinstance(features, dict) or len(features) != expected_feature_dimension:
             feature_dimension_errors += 1
+        if not isinstance(features, dict) or set(features) != set(
+            PROFILE_FEATURE_NAMES["realized_dynamic"]
+        ):
+            feature_schema_errors += 1
+        if not isinstance(features, dict) or any(
+            not finite_number(value) for value in features.values()
+        ):
+            nonfinite_feature_errors += 1
+        scientific_valid = (
+            type(row.get("before_conflicts")) is int
+            and int(row["before_conflicts"]) > 0
+            and type(row.get("trial_count")) is int
+            and int(row["trial_count"]) == int(config["expected_trials_per_candidate"])
+            and isinstance(row.get("pp_seeds"), list)
+            and len(row["pp_seeds"]) == int(config["expected_trials_per_candidate"])
+            and all(type(seed) is int for seed in row["pp_seeds"])
+            and len(set(row["pp_seeds"])) == len(row["pp_seeds"])
+            and all(
+                finite_number(row.get(name))
+                for name in (
+                    "feasible_rate",
+                    "progress_rate",
+                    "mean_conflict_reduction",
+                    "mean_reduction_ratio",
+                    "reduction_std",
+                    "quality_score",
+                    "structural_score",
+                )
+            )
+            and 0.0 <= float(row.get("feasible_rate", -1.0)) <= 1.0
+            and 0.0 <= float(row.get("progress_rate", -1.0)) <= 1.0
+            and float(row.get("reduction_std", -1.0)) >= 0.0
+            and 0.0 <= float(row.get("structural_score", -1.0)) <= 1.0
+        )
+        try:
+            validate_post_structure_metrics(row.get("mean_post_structure"))
+        except ValueError:
+            scientific_valid = False
+        if scientific_valid:
+            expected_ratio = float(row["mean_conflict_reduction"]) / int(
+                row["before_conflicts"]
+            )
+            expected_quality = expected_ratio - (
+                STRIDE_QUALITY_V2_STRUCTURE_WEIGHT
+                * float(row["structural_score"])
+            )
+            scientific_valid = (
+                row["pp_seeds"] == sorted(row["pp_seeds"])
+                and math.isclose(
+                    float(row["mean_reduction_ratio"]),
+                    expected_ratio,
+                    rel_tol=0.0,
+                    abs_tol=1e-15,
+                )
+                and math.isclose(
+                    float(row["quality_score"]),
+                    expected_quality,
+                    rel_tol=0.0,
+                    abs_tol=1e-15,
+                )
+            )
+        if not scientific_valid:
+            aggregate_scientific_errors += 1
         current = {
             "map_id": str(row["map_id"]),
             "split": str(row["split"]),
@@ -196,8 +264,10 @@ def run_stride_stage3_label_audit(
         state_id = str(row["state_id"])
         left = str(row["left_candidate_id"])
         right = str(row["right_candidate_id"])
-        label = int(row["label"])
-        weight = float(row["sample_weight"])
+        raw_label = row.get("label")
+        label = raw_label if type(raw_label) is int else -1
+        raw_weight = row.get("sample_weight")
+        weight = float(raw_weight) if finite_number(raw_weight) else math.nan
         if row.get("schema") != STRIDE_QUALITY_V2_LABEL_SCHEMA:
             pair_schema_errors += 1
         if state_id not in state_metadata or (
@@ -273,6 +343,13 @@ def run_stride_stage3_label_audit(
         "aggregate_schema_valid": aggregate_schema_errors == 0,
         "aggregate_metadata_valid": aggregate_metadata_errors == 0,
         "feature_dimension_valid": feature_dimension_errors == 0,
+        "feature_schema_registered": (
+            expected_feature_dimension
+            == len(PROFILE_FEATURE_NAMES["realized_dynamic"])
+            and feature_schema_errors == 0
+        ),
+        "aggregate_features_finite": nonfinite_feature_errors == 0,
+        "aggregate_scientific_fields_valid": aggregate_scientific_errors == 0,
         "all_states_have_pairs": set(state_weight) == labelled_ids,
         "state_sample_weight_one": bad_state_weight_count == 0,
         "pair_schema_valid": pair_schema_errors == 0,
@@ -345,6 +422,9 @@ def run_stride_stage3_label_audit(
             "missing_extension_episode_id_count": missing_episode_id_count,
             "duplicate_candidate_row_count": duplicate_candidate_row_count,
             "feature_dimension_error_count": feature_dimension_errors,
+            "feature_schema_error_count": feature_schema_errors,
+            "nonfinite_feature_error_count": nonfinite_feature_errors,
+            "aggregate_scientific_error_count": aggregate_scientific_errors,
             "aggregate_schema_error_count": aggregate_schema_errors,
             "aggregate_metadata_error_count": aggregate_metadata_errors,
             "bad_state_weight_count": bad_state_weight_count,

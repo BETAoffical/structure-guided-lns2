@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -12,7 +11,7 @@ from experiments.balanced_wall_clock import (
     _map_metrics,
     prepare_movingai_map_derived_dataset,
 )
-from experiments.repair_collection import _read_json, _write_json
+from experiments.repair_collection import _fingerprint, _read_json, _write_json
 
 
 DESIGN_SCHEMA = "lns2.stride.robustaction_expansion_design.v1"
@@ -66,7 +65,7 @@ def robustaction_source_adapter(config: dict[str, Any]) -> dict[str, Any]:
     task_design = dict(config["task_design"])
     return {
         "schema_version": 1,
-        "dataset_revision": "stride-robustaction-preflight-v1",
+        "dataset_revision": "stride-robustaction-preflight-v2",
         "source": str(config["map_archive"]["source"]),
         "task_semantics": str(task_design["semantics"]),
         "master_seed": int(task_design["master_seed"]),
@@ -388,6 +387,16 @@ def prepare_robustaction_preflight_dataset(
     config = _read_json(config_path)
     adapter = robustaction_source_adapter(config)
     adapter_path = output.parent / f"{output.name}.source_adapter.json"
+    summary_path = output / "dataset_summary.json"
+    adapter_fingerprint = _fingerprint(adapter)
+    if summary_path.is_file():
+        summary = _read_json(summary_path)
+        if summary.get("configuration_fingerprint") != adapter_fingerprint:
+            raise ValueError("robust-action output belongs to another source adapter")
+    elif output.is_dir() and any(output.iterdir()):
+        raise ValueError("robust-action output is non-empty but incomplete")
+    if adapter_path.is_file() and _read_json(adapter_path) != adapter:
+        raise ValueError("robust-action source adapter path belongs to another run")
     _write_json(adapter_path, adapter)
     summary = prepare_movingai_map_derived_dataset(
         Path(fetched).resolve(), adapter_path, output

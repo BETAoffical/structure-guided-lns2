@@ -25,7 +25,7 @@ def main() -> int:
         "--fetched", default="build/movingai-dao-compact-source-v1"
     )
     parser.add_argument(
-        "--output", default="build/stride-robustaction-preflight-dataset-v1"
+        "--output", default="build/stride-robustaction-preflight-dataset-v2"
     )
     args = parser.parse_args()
     report = prepare_robustaction_preflight_dataset(

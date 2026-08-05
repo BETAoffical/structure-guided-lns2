@@ -85,7 +85,8 @@ def _synthetic_collection(root: Path) -> tuple[Path, Path]:
             seed = stage4r_paired_pp_seed(
                 selected["before_repair_fingerprint"], trial_index
             )
-            for label in ACTION_LABELS:
+            order = ACTION_LABELS if trial_index % 2 == 0 else ACTION_LABELS[::-1]
+            for action_position, label in enumerate(order):
                 if selected["same_action"]:
                     reduction = 4 + trial_index % 2
                     after_fingerprint = f"same-{state_index}-{trial_index}"
@@ -100,7 +101,7 @@ def _synthetic_collection(root: Path) -> tuple[Path, Path]:
                 trials.append(
                     {
                         "ordinal": len(trials),
-                        "action_position": 0,
+                        "action_position": action_position,
                         "action_label": label,
                         "action_id": selected["actions"][label]["action_id"],
                         "trial_index": trial_index,
@@ -109,7 +110,7 @@ def _synthetic_collection(root: Path) -> tuple[Path, Path]:
                             "before_repair_fingerprint"
                         ],
                         "replan_success": True,
-                        "repair_outcome": "progress",
+                        "repair_outcome": "conflict_reduced",
                         "feasible": False,
                         "conflicts_before": 10,
                         "conflicts_after": 10 - reduction,
@@ -117,7 +118,12 @@ def _synthetic_collection(root: Path) -> tuple[Path, Path]:
                         "no_progress": False,
                         "after_repair_fingerprint": after_fingerprint,
                         "repair_order": repair_order,
-                        "post_structure": {},
+                        "post_structure": {
+                            "post_largest_component_ratio": 0.1,
+                            "post_conflict_edge_density": 0.1,
+                            "post_event_density": 0.1,
+                            "post_degree_concentration": 0.1,
+                        },
                         "pp_replan_seconds": 0.1,
                         "native_step_seconds": 0.11,
                         "low_level": low_level,
@@ -197,6 +203,7 @@ class StrideStage4RPPReplayTest(unittest.TestCase):
                 and row["trial_index"] == 0
             )
             quality["conflicts_after"] += 1
+            quality["conflict_reduction"] -= 1
             path.write_text(
                 json.dumps(payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",

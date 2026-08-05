@@ -417,6 +417,8 @@ def _load_candidates(
         features = {str(name): float(value) for name, value in dict(source["features"]).items()}
         if set(features) != registered_features:
             raise ValueError(f"candidate has the wrong feature schema: {key}")
+        if any(not math.isfinite(value) for value in features.values()):
+            raise ValueError(f"candidate has non-finite features: {key}")
         row = {
             "candidate_index": len(candidates),
             "state_id": state_id,
@@ -432,6 +434,24 @@ def _load_candidates(
             "before_conflicts": int(source["before_conflicts"]),
             **metadata[state_id],
         }
+        finite_fields = (
+            "quality_score",
+            "feasible_rate",
+            "progress_rate",
+            "mean_conflict_reduction",
+            "mean_reduction_ratio",
+            "structural_score",
+        )
+        if any(not math.isfinite(float(row[name])) for name in finite_fields):
+            raise ValueError(f"candidate has non-finite quality fields: {key}")
+        if not 0.0 <= row["feasible_rate"] <= 1.0:
+            raise ValueError(f"candidate has invalid feasible_rate: {key}")
+        if not 0.0 <= row["progress_rate"] <= 1.0:
+            raise ValueError(f"candidate has invalid progress_rate: {key}")
+        if not 0.0 <= row["structural_score"] <= 1.0:
+            raise ValueError(f"candidate has invalid structural_score: {key}")
+        if type(source.get("before_conflicts")) is not int or row["before_conflicts"] <= 0:
+            raise ValueError(f"candidate has invalid before_conflicts: {key}")
         candidates.append(row)
         grouped[state_id].append(row)
     if set(grouped) != set(metadata):
@@ -439,6 +459,30 @@ def _load_candidates(
     if any(len(rows) < 2 for rows in grouped.values()):
         raise ValueError("every Stage 4 state must have at least two candidates")
     return candidates, dict(grouped)
+
+
+def _validate_stage3_label_artifacts(
+    *, config: dict[str, Any], project_root: Path, labels: Path
+) -> dict[str, str]:
+    """Bind Stage 4 inputs to the exact label files accepted by Stage 3."""
+
+    audit_path = _project_path(project_root, str(config["stage3_audit_report"]))
+    if sha256_file(audit_path) != str(config["stage3_audit_sha256"]):
+        raise ValueError("Stage 3 audit report SHA256 mismatch")
+    audit = _read_json(audit_path)
+    if audit.get("passed") is not True:
+        raise ValueError("Stage 3 label audit did not pass")
+    registered = audit.get("artifact_sha256")
+    if not isinstance(registered, dict):
+        raise ValueError("Stage 3 audit is missing registered label hashes")
+    current = {
+        "candidate_aggregates": sha256_file(labels / "candidate_aggregates.jsonl"),
+        "dominance_pairs": sha256_file(labels / "dominance_pairs.jsonl"),
+        "label_build_summary": sha256_file(labels / "label_build_summary.json"),
+    }
+    if registered != current:
+        raise ValueError("Stage 3 label artifacts changed after audit")
+    return current
 
 
 def _pair_table_from_quality(
@@ -991,6 +1035,9 @@ def run_stride_stage4_training(
     labels = _project_path(project_root, str(config["labels"]))
     aggregate_path = labels / "candidate_aggregates.jsonl"
     quality_pair_path = labels / "dominance_pairs.jsonl"
+    _validate_stage3_label_artifacts(
+        config=config, project_root=project_root, labels=labels
+    )
     manifest_path = protocol_report_path.parent / "fold_manifest.jsonl"
     if sha256_file(manifest_path) != str(protocol_report["fold_manifest_sha256"]):
         raise ValueError("Stage 4 fold-manifest SHA256 mismatch")

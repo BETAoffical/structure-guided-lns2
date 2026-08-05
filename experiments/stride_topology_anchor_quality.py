@@ -22,6 +22,12 @@ from experiments.stride_collection import _paired_action, _validate_native_repai
 from experiments.stride_lns import assign_structure_scores, post_structure_metrics
 from experiments.stride_stability import stride_extended_pp_seed
 from experiments.trace_replay import replay_prefix
+from lns2_selector.runtime.artifact_validation import (
+    candidate_records,
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
@@ -130,6 +136,9 @@ def _pilot_artifact_valid(
     payload: dict[str, Any], *, identity: str, state_id: str,
     candidate_ids: list[str], trial_indices: tuple[int, ...],
     state_schema: str = STATE_SCHEMA,
+    trial_schema: str = TRIAL_SCHEMA,
+    state_row: dict[str, Any] | None = None,
+    candidates: list[dict[str, Any]] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != state_schema
@@ -139,20 +148,63 @@ def _pilot_artifact_valid(
         or list(payload.get("candidate_ids") or []) != candidate_ids
     ):
         return False
-    trials = payload.get("trials")
-    if not isinstance(trials, list):
+    if state_row is None or payload.get("state") != state_row:
         return False
-    expected = {
-        (candidate_id, trial_index)
-        for candidate_id in candidate_ids
-        for trial_index in trial_indices
-    }
-    observed = {
-        (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
+    indexed_candidates = candidate_records(candidates)
+    if indexed_candidates is None or list(indexed_candidates) != candidate_ids:
+        return False
+    trials = payload.get("trials")
+    if not trial_product_matches(
+        trials, candidate_ids=candidate_ids, trial_indices=trial_indices
+    ):
+        return False
+    before_fingerprint = state_row.get("state_fingerprint")
+    before_conflicts = state_row.get("initial_conflicts")
+    if (
+        not isinstance(before_fingerprint, str)
+        or not before_fingerprint
+        or not strict_integer(before_conflicts, minimum=1)
+    ):
+        return False
+    before_repair_values = {
+        row.get("before_repair_fingerprint")
         for row in trials
         if isinstance(row, dict)
     }
-    return observed == expected and len(trials) == len(expected)
+    if (
+        len(before_repair_values) != 1
+        or not isinstance(next(iter(before_repair_values)), str)
+        or not next(iter(before_repair_values))
+    ):
+        return False
+    before_repair = str(next(iter(before_repair_values)))
+    state_metadata = {
+        name: state_row.get(name)
+        for name in ("task_id", "map_id", "layout_family", "solver_seed")
+    }
+    for row in trials:
+        candidate = indexed_candidates[str(row["candidate_id"])]
+        metadata = {
+            **state_metadata,
+            "candidate_kind": candidate.get("candidate_kind"),
+            "selection_families": candidate.get("selection_families"),
+            "actual_size": candidate.get("actual_size"),
+        }
+        trial_index = int(row["trial_index"])
+        if not repair_trial_semantics_valid(
+            row,
+            schema=trial_schema,
+            state_id=state_id,
+            candidate_id=str(row["candidate_id"]),
+            trial_index=trial_index,
+            pp_seed=stride_extended_pp_seed(before_repair, trial_index),
+            before_conflicts=before_conflicts,
+            before_fingerprint=before_fingerprint,
+            before_repair_fingerprint=before_repair,
+            expected_metadata=metadata,
+        ):
+            return False
+    return True
 
 
 def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
@@ -175,6 +227,9 @@ def _collect_topoanchor_quality_state(job: dict[str, Any]) -> dict[str, Any]:
             candidate_ids=candidate_ids,
             trial_indices=trial_indices,
             state_schema=state_schema,
+            trial_schema=trial_schema,
+            state_row=state_row,
+            candidates=candidates,
         ):
             return {
                 "state_id": state_id,
@@ -467,6 +522,11 @@ def _collect_topology_quality_pilot(
             candidate_ids=[str(row["candidate_id"]) for row in candidates_by_state[state_id]],
             trial_indices=collection_trial_indices,
             state_schema=protocol["state_schema"],
+            trial_schema=protocol["trial_schema"],
+            state_row=next(
+                row for row in state_rows if str(row["state_id"]) == state_id
+            ),
+            candidates=candidates_by_state[state_id],
         ):
             errors.append({"state_id": state_id, "error": "invalid completed artifact"})
         else:

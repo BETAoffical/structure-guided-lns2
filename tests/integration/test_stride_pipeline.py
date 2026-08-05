@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.stride_lns import (
+    FROZEN_FEATURE_SCHEMA_ID,
     STRIDE_STAGE1_CONFIG_SCHEMA,
     STRIDE_TRIAL_SCHEMA,
     aggregate_stride_candidate,
@@ -45,6 +48,7 @@ from experiments.stride_stage4 import (
     _control_dominates,
     _mean_metrics,
     _selection_records,
+    _validate_stage3_label_artifacts,
     _variant_specifications,
     prepare_stride_stage4_protocol,
 )
@@ -54,6 +58,88 @@ from experiments.stride_stage4r import (
     run_stride_stage4r_shadow_audit,
 )
 from scripts.collect_closed_loop_confirmation import _diagnostic_shadow_bundles
+
+
+REALIZED_FEATURES = {
+    name: 0.0 for name in PROFILE_FEATURE_NAMES["realized_dynamic"]
+}
+POST_STRUCTURE = {
+    "post_largest_component_ratio": 0.1,
+    "post_conflict_edge_density": 0.1,
+    "post_event_density": 0.1,
+    "post_degree_concentration": 0.1,
+}
+
+
+def _test_decision() -> dict:
+    return {
+        "state_id": "state",
+        "before_fingerprint": "before-state",
+        "before_conflicts": 5,
+        "map_id": "map",
+        "split": "split",
+        "source_policy": "v2-full",
+        "decision_stage": "middle",
+        "agent_count": 10,
+    }
+
+
+def _test_repair_trial(candidate_id: str, trial_index: int, pp_seed: int) -> dict:
+    return {
+        "schema": STRIDE_TRIAL_SCHEMA,
+        "feature_schema_id": FROZEN_FEATURE_SCHEMA_ID,
+        "state_id": "state",
+        "candidate_id": candidate_id,
+        "map_id": "map",
+        "split": "split",
+        "source_policy": "v2-full",
+        "decision_stage": "middle",
+        "agent_count": 10,
+        "before_conflicts": 5,
+        "before_fingerprint": "before-state",
+        "before_repair_fingerprint": "before-repair",
+        "features": dict(REALIZED_FEATURES),
+        "trial_index": trial_index,
+        "pp_seed": pp_seed,
+        "feasible": False,
+        "replan_success": True,
+        "repair_outcome": "conflict_reduced",
+        "conflicts_after": 4,
+        "after_fingerprint": f"after-{candidate_id}-{trial_index}",
+        "after_repair_fingerprint": f"after-repair-{candidate_id}-{trial_index}",
+        "post_structure": dict(POST_STRUCTURE),
+        "native_step_seconds": 0.1,
+        "pp_replan_seconds": 0.05,
+    }
+
+
+def _test_collection_payload() -> dict:
+    decision = _test_decision()
+    candidates = [
+        {"candidate_id": "a", "agents": [0]},
+        {"candidate_id": "b", "agents": [1]},
+    ]
+    return {
+        "schema": STRIDE_COLLECTION_SCHEMA,
+        "schema_version": 1,
+        "run_fingerprint": "run",
+        "state_id": "state",
+        "complete": True,
+        "decision": decision,
+        "before_fingerprint": "before-state",
+        "before_repair_fingerprint": "before-repair",
+        "before_conflicts": 5,
+        "candidates": candidates,
+        "trials": [
+            _test_repair_trial(
+                candidate["candidate_id"],
+                trial,
+                stride_pp_seed("before-repair", trial),
+            )
+            for candidate in candidates
+            for trial in range(4)
+        ],
+    }
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -320,6 +406,26 @@ class StrideQualityLabelTest(unittest.TestCase):
         self.assertAlmostEqual(first["mean_conflict_reduction"], 3.5)
         self.assertEqual(STRIDE_QUALITY_V2_STRUCTURE_WEIGHT, 0.02)
         self.assertGreater(first["quality_score"], second["quality_score"])
+
+    def test_quality_aggregates_reject_nonfinite_post_structure(self) -> None:
+        outcomes = [
+            {
+                "pp_seed": index,
+                "feasible": False,
+                "conflicts_after": 4,
+                "post_structure": dict(POST_STRUCTURE),
+            }
+            for index in range(8)
+        ]
+        outcomes[0]["post_structure"]["post_degree_concentration"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "finite and nonnegative"):
+            aggregate_stride_quality_v2_candidate(
+                before_conflicts=5, outcomes=outcomes
+            )
+        with self.assertRaisesRegex(ValueError, "finite and nonnegative"):
+            aggregate_stride_candidate(
+                before_conflicts=5, outcomes=outcomes[:4]
+            )
 
     def test_single_conflict_pair_is_normalized_by_all_agents(self) -> None:
         agents = []
@@ -591,21 +697,44 @@ class StrideCollectionContractTest(unittest.TestCase):
         self.assertEqual(len(set(first)), 16)
 
     def test_stability_artifact_requires_all_extra_seed_pairs(self) -> None:
+        decision = _test_decision()
+        source_payload = _test_collection_payload()
         payload = {
             "schema": "lns2.stride.stability_collection.v1",
             "identity": "run",
             "state_id": "state",
             "complete": True,
+            "decision": decision,
             "candidate_ids": ["a", "b"],
             "trials": [
-                {"candidate_id": candidate, "trial_index": trial}
+                _test_repair_trial(
+                    candidate,
+                    trial,
+                    stride_extended_pp_seed("before-repair", trial),
+                )
                 for candidate in ("a", "b")
                 for trial in range(4, 8)
             ],
         }
-        self.assertTrue(_extra_artifact_valid(payload, identity="run", state_id="state"))
+        self.assertTrue(
+            _extra_artifact_valid(
+                payload,
+                identity="run",
+                state_id="state",
+                decision=decision,
+                source_payload=source_payload,
+            )
+        )
         payload["trials"].pop()
-        self.assertFalse(_extra_artifact_valid(payload, identity="run", state_id="state"))
+        self.assertFalse(
+            _extra_artifact_valid(
+                payload,
+                identity="run",
+                state_id="state",
+                decision=decision,
+                source_payload=source_payload,
+            )
+        )
 
 
     def test_selection_v2_loads_explicit_instability_exclusions(self) -> None:
@@ -734,43 +863,70 @@ class StrideCollectionContractTest(unittest.TestCase):
                 load_stride_selection(path)
 
     def test_state_artifact_requires_every_candidate_seed_pair(self) -> None:
-        payload = {
-            "schema": STRIDE_COLLECTION_SCHEMA,
-            "run_fingerprint": "run",
-            "state_id": "state",
-            "complete": True,
-            "candidates": [{"candidate_id": "a"}, {"candidate_id": "b"}],
-            "trials": [
-                {"candidate_id": candidate, "trial_index": trial}
-                for candidate in ("a", "b")
-                for trial in range(4)
-            ],
-        }
+        payload = _test_collection_payload()
         self.assertTrue(
-            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+            _state_artifact_valid(
+                payload,
+                run_fingerprint="run",
+                state_id="state",
+                decision=_test_decision(),
+            )
         )
         payload["trials"].pop()
         self.assertFalse(
-            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+            _state_artifact_valid(
+                payload,
+                run_fingerprint="run",
+                state_id="state",
+                decision=_test_decision(),
+            )
         )
 
     def test_state_artifact_rejects_duplicate_trial_rows(self) -> None:
-        trials = [
-            {"candidate_id": "candidate", "trial_index": trial}
-            for trial in range(4)
-        ]
+        payload = _test_collection_payload()
+        payload["candidates"] = [payload["candidates"][0]]
+        payload["trials"] = payload["trials"][:4]
+        trials = payload["trials"]
         trials[-1] = dict(trials[0])
-        payload = {
-            "schema": STRIDE_COLLECTION_SCHEMA,
-            "run_fingerprint": "run",
-            "state_id": "state",
-            "complete": True,
-            "candidates": [{"candidate_id": "candidate"}],
-            "trials": trials,
-        }
         self.assertFalse(
-            _state_artifact_valid(payload, run_fingerprint="run", state_id="state")
+            _state_artifact_valid(
+                payload,
+                run_fingerprint="run",
+                state_id="state",
+                decision=_test_decision(),
+            )
         )
+
+    def test_state_artifact_rejects_semantic_tampering(self) -> None:
+        mutations = {
+            "nonfinite timing": lambda payload: payload["trials"][0].__setitem__(
+                "native_step_seconds", float("nan")
+            ),
+            "wrong pp seed": lambda payload: payload["trials"][0].__setitem__(
+                "pp_seed", payload["trials"][0]["pp_seed"] + 1
+            ),
+            "foreign state": lambda payload: payload["trials"][0].__setitem__(
+                "state_id", "foreign"
+            ),
+            "empty candidate": lambda payload: payload["candidates"][0].__setitem__(
+                "agents", []
+            ),
+            "nonfinite feature": lambda payload: payload["trials"][0][
+                "features"
+            ].__setitem__(next(iter(REALIZED_FEATURES)), float("inf")),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                payload = copy.deepcopy(_test_collection_payload())
+                mutate(payload)
+                self.assertFalse(
+                    _state_artifact_valid(
+                        payload,
+                        run_fingerprint="run",
+                        state_id="state",
+                        decision=_test_decision(),
+                    )
+                )
 
 
 class StrideStage3LabelAuditTest(unittest.TestCase):
@@ -808,12 +964,23 @@ class StrideStage3LabelAuditTest(unittest.TestCase):
             pairs = []
             for state in states:
                 for candidate_id in ("candidate-a", "candidate-b"):
+                    reduction_ratio = 1.0 / int(state["before_conflicts"])
                     aggregates.append(
                         {
                             "schema": "lns2.stride.candidate_aggregate.v2",
                             "label_schema": "lns2.stride.quality_label.v2",
                             "candidate_id": candidate_id,
-                            "features": {"f0": 0.0, "f1": 1.0},
+                            "features": dict(REALIZED_FEATURES),
+                            "trial_count": 8,
+                            "pp_seeds": list(range(8)),
+                            "feasible_rate": 0.0,
+                            "progress_rate": 1.0,
+                            "mean_conflict_reduction": 1.0,
+                            "mean_reduction_ratio": reduction_ratio,
+                            "reduction_std": 0.0,
+                            "mean_post_structure": dict(POST_STRUCTURE),
+                            "quality_score": reduction_ratio,
+                            "structural_score": 0.0,
                             **{key: state[key] for key in (
                                 "state_id", "map_id", "split", "source_policy",
                                 "decision_stage", "agent_count", "before_conflicts",
@@ -876,7 +1043,7 @@ class StrideStage3LabelAuditTest(unittest.TestCase):
                     "official_adaptive": 1,
                     "v2-full": 1,
                 },
-                "expected_feature_dimension": 2,
+                "expected_feature_dimension": len(REALIZED_FEATURES),
                 "expected_trials_per_candidate": 8,
                 "min_map_count": 2,
                 "required_split_map_counts": {"extension": 1, "recovery": 1},
@@ -894,6 +1061,24 @@ class StrideStage3LabelAuditTest(unittest.TestCase):
                 "v2-full": 1,
             })
 
+            corrupted = [dict(row) for row in aggregates]
+            corrupted[0] = {
+                **corrupted[0],
+                "features": {
+                    **corrupted[0]["features"],
+                    next(iter(REALIZED_FEATURES)): float("nan"),
+                },
+            }
+            _write_jsonl(labels / "candidate_aggregates.jsonl", corrupted)
+            nonfinite = run_stride_stage3_label_audit(
+                config_path=root / "config.json",
+                output=root / "audit-nonfinite",
+                project_root=root,
+            )
+            self.assertFalse(nonfinite["passed"])
+            self.assertFalse(nonfinite["gates"]["aggregate_features_finite"])
+            _write_jsonl(labels / "candidate_aggregates.jsonl", aggregates)
+
             _write_json(root / "ood.json", {"cases": [{"benchmark_id": "map-a"}]})
             failed = run_stride_stage3_label_audit(
                 config_path=root / "config.json",
@@ -902,6 +1087,49 @@ class StrideStage3LabelAuditTest(unittest.TestCase):
             )
             self.assertFalse(failed["passed"])
             self.assertFalse(failed["gates"]["formal_ood_overlap_zero"])
+
+    def test_stage4_rejects_labels_changed_after_stage3_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            labels = root / "labels"
+            aggregates = labels / "candidate_aggregates.jsonl"
+            pairs = labels / "dominance_pairs.jsonl"
+            summary = labels / "label_build_summary.json"
+            _write_jsonl(aggregates, [{"candidate": 1}])
+            _write_jsonl(pairs, [{"pair": 1}])
+            _write_json(summary, {"summary": 1})
+            artifact_hashes = {
+                "candidate_aggregates": hashlib.sha256(
+                    aggregates.read_bytes()
+                ).hexdigest(),
+                "dominance_pairs": hashlib.sha256(pairs.read_bytes()).hexdigest(),
+                "label_build_summary": hashlib.sha256(
+                    summary.read_bytes()
+                ).hexdigest(),
+            }
+            audit_path = root / "audit.json"
+            _write_json(
+                audit_path,
+                {"passed": True, "artifact_sha256": artifact_hashes},
+            )
+            config = {
+                "stage3_audit_report": "audit.json",
+                "stage3_audit_sha256": hashlib.sha256(
+                    audit_path.read_bytes()
+                ).hexdigest(),
+            }
+
+            self.assertEqual(
+                _validate_stage3_label_artifacts(
+                    config=config, project_root=root, labels=labels
+                ),
+                artifact_hashes,
+            )
+            _write_jsonl(aggregates, [{"candidate": 2}])
+            with self.assertRaisesRegex(ValueError, "changed after audit"):
+                _validate_stage3_label_artifacts(
+                    config=config, project_root=root, labels=labels
+                )
 
 
 class StrideStage4ProtocolTest(unittest.TestCase):

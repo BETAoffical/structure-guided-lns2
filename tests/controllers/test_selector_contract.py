@@ -105,6 +105,20 @@ class SelectorContractTests(unittest.TestCase):
                 before_fingerprint="state",
             )
 
+    def test_request_rejects_swapped_candidate_feature_rows(self) -> None:
+        with self.assertRaisesRegex(ValueError, "identities differ at index 0"):
+            SelectionRequest(
+                candidates=(
+                    {"candidate_id": "candidate-a"},
+                    {"candidate_id": "candidate-b"},
+                ),
+                candidate_rows=(
+                    {"candidate_key": "candidate-b"},
+                    {"candidate_key": "candidate-a"},
+                ),
+                before_fingerprint="state",
+            )
+
     def test_official_selector_routes_to_native_policy(self) -> None:
         selector = OfficialAdaptiveSelector()
         self.assertIsInstance(selector, Selector)

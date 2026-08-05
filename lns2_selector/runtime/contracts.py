@@ -34,6 +34,19 @@ class SelectionRequest:
     def __post_init__(self) -> None:
         if len(self.candidates) != len(self.candidate_rows):
             raise ValueError("candidates and candidate_rows differ in length")
+        for index, (candidate, row) in enumerate(
+            zip(self.candidates, self.candidate_rows)
+        ):
+            candidate_id = candidate.get("candidate_id", candidate.get("candidate_key"))
+            row_id = row.get("candidate_id", row.get("candidate_key"))
+            if (
+                candidate_id is not None
+                and row_id is not None
+                and str(candidate_id) != str(row_id)
+            ):
+                raise ValueError(
+                    f"candidate and feature row identities differ at index {index}"
+                )
         if self.agent_count is not None and int(self.agent_count) <= 0:
             raise ValueError("agent_count must be positive")
         if not str(self.profile):

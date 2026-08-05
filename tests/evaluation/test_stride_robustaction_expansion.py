@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 from experiments.stride_robustaction_expansion import (
+    prepare_robustaction_preflight_dataset,
     robustaction_source_adapter,
     topology_group,
     validate_robustaction_expansion_design,
@@ -36,6 +38,9 @@ class RobustActionExpansionTests(unittest.TestCase):
         adapter = robustaction_source_adapter(self.config)
         self.assertEqual(adapter["expected_map_count"], 20)
         self.assertEqual(adapter["expected_instance_count"], 132)
+        self.assertEqual(
+            adapter["dataset_revision"], "stride-robustaction-preflight-v2"
+        )
         self.assertEqual(adapter["task_seeds"], [307])
         self.assertEqual(
             sum(
@@ -65,6 +70,25 @@ class RobustActionExpansionTests(unittest.TestCase):
         changed["formal_ood_map_ids"][0] = changed["benchmarks"][0]["id"]
         with self.assertRaisesRegex(ValueError, "locked evidence"):
             validate_robustaction_expansion_design(changed)
+
+    def test_incomplete_destination_is_rejected_before_adapter_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "dataset-v2"
+            output.mkdir()
+            marker = output / "partial.txt"
+            marker.write_text("preserve", encoding="utf-8")
+            adapter = root / "dataset-v2.source_adapter.json"
+
+            with self.assertRaisesRegex(ValueError, "non-empty but incomplete"):
+                prepare_robustaction_preflight_dataset(
+                    config_path=CONFIG,
+                    fetched=root / "unused-source",
+                    output=output,
+                )
+
+            self.assertFalse(adapter.exists())
+            self.assertEqual(marker.read_text(encoding="utf-8"), "preserve")
 
 
 if __name__ == "__main__":

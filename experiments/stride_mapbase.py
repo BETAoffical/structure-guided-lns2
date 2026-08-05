@@ -39,6 +39,12 @@ from experiments.stride_repairability_collection import (
     repairability_restore_seed,
 )
 from experiments.trace_replay import restore_repair_state, replay_prefix
+from lns2_selector.runtime.artifact_validation import (
+    candidate_records as validate_candidate_records,
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.online_selection import generate_online_candidates
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -57,6 +63,7 @@ PRODUCER_FILES = (
     "experiments/stride_mapbase.py",
     "experiments/stride_repairability_collection.py",
     "experiments/trace_replay.py",
+    "lns2_selector/runtime/artifact_validation.py",
     "lns2_selector/runtime/online_selection.py",
     "src/python_bindings.cpp",
     "third_party/mapf_lns2/inc/RepairPolicy.h",
@@ -202,6 +209,7 @@ def _artifact_valid(
     run_fingerprint: str,
     state_id: str,
     trial_indices: tuple[int, ...],
+    selection: dict[str, Any] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != STATE_SCHEMA
@@ -210,51 +218,97 @@ def _artifact_valid(
         or payload.get("complete") is not True
     ):
         return False
+    embedded_selection = payload.get("selection")
+    if not isinstance(embedded_selection, dict):
+        return False
+    if selection is not None and embedded_selection != selection:
+        return False
+    expected_selection = selection if selection is not None else embedded_selection
+    if expected_selection.get("state_id") != state_id:
+        return False
     candidates = payload.get("candidates")
     trials = payload.get("trials")
-    if not isinstance(candidates, list) or not candidates or not isinstance(trials, list):
+    indexed_candidates = validate_candidate_records(candidates)
+    if indexed_candidates is None or not isinstance(trials, list):
         return False
-    candidate_ids = [str(row.get("candidate_id")) for row in candidates]
-    if len(candidate_ids) != len(set(candidate_ids)):
-        return False
+    candidate_ids = list(indexed_candidates)
     if any(
         row.get("candidate_kind") != "base"
         or any(
             str(family).startswith("topology-")
             for family in row.get("selection_families") or ()
         )
-        for row in candidates
+        for row in indexed_candidates.values()
     ):
         return False
-    expected = {
-        (candidate_id, trial_index)
-        for candidate_id in candidate_ids
-        for trial_index in trial_indices
-    }
+    before_fingerprint = expected_selection.get("before_fingerprint")
+    before_repair = payload.get("before_repair_fingerprint")
+    before_conflicts = expected_selection.get("before_conflicts")
+    state_restore = payload.get("state_restore")
+    if (
+        not isinstance(before_fingerprint, str)
+        or payload.get("before_fingerprint") != before_fingerprint
+        or payload.get("before_conflicts") != before_conflicts
+        or not strict_integer(before_conflicts, minimum=1)
+        or not isinstance(before_repair, str)
+        or not before_repair
+        or not isinstance(state_restore, dict)
+        or state_restore.get("restore_seed")
+        != repairability_restore_seed(before_repair)
+        or state_restore.get("repair_structure_fingerprint") != before_repair
+    ):
+        return False
     required_names = set(PROFILE_FEATURE_NAMES["realized_dynamic"])
-    observed = set()
-    seeds_by_trial: dict[int, set[int]] = {
-        trial_index: set() for trial_index in trial_indices
+    if not trial_product_matches(
+        trials, candidate_ids=candidate_ids, trial_indices=trial_indices
+    ):
+        return False
+    shared_metadata = {
+        "layout_family": expected_selection.get("layout_family"),
+        "map_id": expected_selection.get("map_id"),
+        "task_id": expected_selection.get("task_id"),
+        "split": "train",
+        "source_split": expected_selection.get("source_split"),
+        "source_policy": "initial_state_map_expansion",
+        "decision_stage": "initial",
+        "solver_seed": expected_selection.get("solver_seed"),
+        "agent_count": expected_selection.get("agent_count"),
+        "input_topology_relevance": expected_selection.get(
+            "input_topology_relevance"
+        ),
     }
+    features_by_candidate: dict[str, dict[str, Any]] = {}
     for row in trials:
-        if not isinstance(row, dict):
-            return False
-        trial_index = int(row.get("trial_index", -1))
-        candidate_id = str(row.get("candidate_id"))
-        if (
-            row.get("schema") != STRIDE_TRIAL_SCHEMA
-            or row.get("feature_schema_id") != FROZEN_FEATURE_SCHEMA_ID
-            or row.get("candidate_kind") != "base"
-            or (candidate_id, trial_index) not in expected
-            or set(row.get("features") or {}) != required_names
-            or type(row.get("pp_seed")) is not int
+        candidate_id = str(row["candidate_id"])
+        candidate = indexed_candidates[candidate_id]
+        trial_index = int(row["trial_index"])
+        metadata = {
+            **shared_metadata,
+            "candidate_kind": "base",
+            "actual_size": candidate.get("actual_size"),
+            "selection_families": candidate.get("selection_families"),
+            "agents": candidate.get("agents"),
+        }
+        if not repair_trial_semantics_valid(
+            row,
+            schema=STRIDE_TRIAL_SCHEMA,
+            state_id=state_id,
+            candidate_id=candidate_id,
+            trial_index=trial_index,
+            pp_seed=repairability_pp_seed(before_repair, trial_index),
+            before_conflicts=before_conflicts,
+            before_fingerprint=before_fingerprint,
+            before_repair_fingerprint=before_repair,
+            feature_schema_id=FROZEN_FEATURE_SCHEMA_ID,
+            required_feature_names=required_names,
+            expected_metadata=metadata,
         ):
             return False
-        observed.add((candidate_id, trial_index))
-        seeds_by_trial[trial_index].add(int(row["pp_seed"]))
-    return observed == expected and all(
-        len(seeds) == 1 for seeds in seeds_by_trial.values()
-    )
+        features = dict(row["features"])
+        previous = features_by_candidate.setdefault(candidate_id, features)
+        if previous != features:
+            return False
+    return True
 
 
 def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
@@ -269,6 +323,7 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
             run_fingerprint=run_fingerprint,
             state_id=str(selection["state_id"]),
             trial_indices=trial_indices,
+            selection=selection,
         ):
             return {
                 "state_id": str(selection["state_id"]),
@@ -621,6 +676,7 @@ def collect_mapbase_trials(
     all_trials = []
     candidate_counts: Counter[int] = Counter()
     trial_indices = tuple(map(int, config["trial_indices"]))
+    selected_by_id = {str(row["state_id"]): row for row in selection}
     for result in sorted(results, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["state_file"])))
         if not _artifact_valid(
@@ -628,6 +684,7 @@ def collect_mapbase_trials(
             run_fingerprint=run_fingerprint,
             state_id=str(result["state_id"]),
             trial_indices=trial_indices,
+            selection=selected_by_id.get(str(result["state_id"])),
         ):
             errors.append(
                 {"state_id": str(result["state_id"]), "error": "invalid state artifact"}
@@ -680,6 +737,7 @@ def audit_mapbase_collection(
     state_rows = []
     errors = []
     trial_indices = tuple(map(int, config["trial_indices"]))
+    selected_by_id = {str(row["state_id"]): row for row in selection}
     for state_file in state_files:
         payload = _read_json(state_file)
         state_id = str(payload.get("state_id", ""))
@@ -688,6 +746,7 @@ def audit_mapbase_collection(
             run_fingerprint=str(run["run_fingerprint"]),
             state_id=state_id,
             trial_indices=trial_indices,
+            selection=selected_by_id.get(state_id),
         ):
             errors.append(f"invalid state artifact: {state_file.name}")
             continue

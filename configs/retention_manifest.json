@@ -179,6 +179,11 @@
       "purpose": "Paired-seed robust current-step label design with explicit action uncertainty and fresh-confirmation boundary."
     },
     {
+      "path": "experiments/stride_robustaction_expansion.py",
+      "role": "active",
+      "purpose": "Preregistered outcome-blind RobustAction map expansion and deterministic preflight dataset adapter."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -372,6 +377,16 @@
       "path": "experiments/stride_robuststep_preflight.py",
       "role": "active",
       "purpose": "Outcome-blind MovingAI map/load qualification, OOD isolation audit, and conflict-targeted Pilot recommendation."
+    },
+    {
+      "path": "scripts/prepare_stride_robustaction_preflight.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the outcome-blind RobustAction v2 preflight dataset."
+    },
+    {
+      "path": "scripts/audit_stride_robustaction_expansion.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the checksum-pinned RobustAction static expansion audit."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -582,6 +597,11 @@
       "path": "lns2_selector/runtime/contracts.py",
       "role": "shared",
       "purpose": "Shared selector runtime contract: contracts."
+    },
+    {
+      "path": "lns2_selector/runtime/artifact_validation.py",
+      "role": "shared",
+      "purpose": "Shared strict finite-value, candidate-product, and native repair artifact validation primitives."
     },
     {
       "path": "lns2_selector/runtime/fingerprints.py",
@@ -1207,6 +1227,11 @@
       "path": "tests/integration/test_stride_pipeline.py",
       "role": "active",
       "contract": "STRIDE-LNS frozen baseline, post-structure metrics, paired outcome aggregation, and dominance-label contracts."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_expansion.py",
+      "role": "active",
+      "contract": "RobustAction static registration, even-agent amendment, v2 dataset identity, and no-mutation failure behavior."
     },
     {
       "path": "tests/integration/test_stride_robuststep.py",

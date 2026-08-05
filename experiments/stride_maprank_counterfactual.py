@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import statistics
 from collections import Counter
 from pathlib import Path
@@ -27,6 +28,12 @@ from experiments.stride_repairability_collection import (
 from experiments.stride_robuststep_preflight import _mean
 from experiments.stride_stage3 import _project_path
 from experiments.trace_replay import restore_repair_state, target_state_from_trace
+from lns2_selector.runtime.artifact_validation import (
+    candidate_records,
+    finite_number,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
@@ -44,6 +51,7 @@ PRODUCER_FILES = (
     "experiments/stride_repairability.py",
     "experiments/stride_repairability_collection.py",
     "experiments/trace_replay.py",
+    "lns2_selector/runtime/artifact_validation.py",
     "lns2_selector/runtime/fingerprints.py",
     "src/python_bindings.cpp",
     "third_party/mapf_lns2/inc/RepairPolicy.h",
@@ -238,7 +246,8 @@ def _target_candidates(
 
 
 def _state_artifact_valid(
-    payload: dict[str, Any], *, run_fingerprint: str, state_id: str
+    payload: dict[str, Any], *, run_fingerprint: str, state_id: str,
+    selection: dict[str, Any] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != STATE_SCHEMA
@@ -247,23 +256,74 @@ def _state_artifact_valid(
         or payload.get("complete") is not True
     ):
         return False
-    candidates = list(payload.get("candidates") or ())
-    trials = list(payload.get("trials") or ())
-    expected = {
-        (str(candidate["candidate_id"]), trial_index)
-        for candidate in candidates
-        for trial_index in range(16)
-    }
-    observed = {
-        (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
-        for row in trials
-    }
-    return (
-        len(candidates) == 2
-        and len(trials) == 32
-        and observed == expected
-        and all(row.get("schema") == TRIAL_SCHEMA for row in trials)
+    embedded_selection = payload.get("selection")
+    if not isinstance(embedded_selection, dict):
+        return False
+    if selection is not None and embedded_selection != selection:
+        return False
+    expected_selection = selection if selection is not None else embedded_selection
+    if expected_selection.get("state_id") != state_id:
+        return False
+    candidates = candidate_records(payload.get("candidates"))
+    trials = payload.get("trials")
+    if candidates is None or len(candidates) != 2:
+        return False
+    expected_ids = (
+        str(expected_selection.get("baseline_candidate_id")),
+        str(expected_selection.get("challenger_candidate_id")),
     )
+    if tuple(candidates) != expected_ids or not trial_product_matches(
+        trials, candidate_ids=expected_ids, trial_indices=tuple(range(16))
+    ):
+        return False
+    expected_roles = {
+        expected_ids[0]: "v2_augmented_selected",
+        expected_ids[1]: "maprank_selected",
+    }
+    if any(candidates[candidate_id].get("role") != expected_roles[candidate_id] for candidate_id in expected_ids):
+        return False
+    before_fingerprint = expected_selection.get("before_fingerprint")
+    before_repair = payload.get("before_repair_fingerprint")
+    before_conflicts = expected_selection.get("before_conflicts")
+    if (
+        not isinstance(before_fingerprint, str)
+        or payload.get("before_fingerprint") != before_fingerprint
+        or not isinstance(before_repair, str)
+        or not before_repair
+        or not strict_integer(before_conflicts, minimum=1)
+        or payload.get("before_conflicts") != before_conflicts
+        or payload.get("restore_seed") != repairability_restore_seed(before_repair)
+    ):
+        return False
+    for row in trials:
+        candidate_id = str(row["candidate_id"])
+        trial_index = int(row["trial_index"])
+        conflicts_after = row.get("conflicts_after")
+        expected_reduction = (before_conflicts - conflicts_after) / before_conflicts if strict_integer(conflicts_after, minimum=0) else math.nan
+        if (
+            row.get("schema") != TRIAL_SCHEMA
+            or row.get("state_id") != state_id
+            or row.get("candidate_role") != expected_roles[candidate_id]
+            or row.get("pp_seed") != repairability_pp_seed(before_repair, trial_index)
+            or row.get("before_conflicts") != before_conflicts
+            or not strict_integer(conflicts_after, minimum=0)
+            or type(row.get("progress")) is not bool
+            or row["progress"] != (conflicts_after < before_conflicts)
+            or type(row.get("feasible")) is not bool
+            or type(row.get("replan_success")) is not bool
+            or not finite_number(row.get("normalized_conflict_reduction"))
+            or not math.isclose(
+                float(row["normalized_conflict_reduction"]),
+                expected_reduction,
+                rel_tol=0.0,
+                abs_tol=1e-15,
+            )
+            or not strict_integer(row.get("low_level_generated"), minimum=0)
+            or not strict_integer(row.get("low_level_expanded"), minimum=0)
+            or not finite_number(row.get("pp_replan_seconds"), minimum=0.0)
+        ):
+            return False
+    return True
 
 
 def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
@@ -276,6 +336,7 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
             payload,
             run_fingerprint=run_fingerprint,
             state_id=str(selection["state_id"]),
+            selection=selection,
         ):
             return {
                 "job_id": str(selection["state_id"]),
@@ -420,11 +481,27 @@ def analyze_override_counterfactual(
     output.mkdir(parents=True, exist_ok=True)
     states = [_read_json(path) for path in sorted((collection / "states").glob("*.json"))]
     selected = _selected_states(root, config, analysis)
+    selected_by_id = {str(row["state_id"]): row for row in selected}
+    run = _read_json(collection / "run_config.json")
     expected_ids = {str(row["state_id"]) for row in selected}
     observed_ids = {str(row.get("state_id")) for row in states}
     errors = []
     if observed_ids != expected_ids:
         errors.append("counterfactual state coverage differs")
+    invalid_state_ids = [
+        str(state.get("state_id"))
+        for state in states
+        if not _state_artifact_valid(
+            state,
+            run_fingerprint=str(run.get("run_fingerprint", "")),
+            state_id=str(state.get("state_id", "")),
+            selection=selected_by_id.get(str(state.get("state_id", ""))),
+        )
+    ]
+    if invalid_state_ids:
+        raise ValueError(
+            f"invalid MapRank counterfactual state artifacts: {invalid_state_ids}"
+        )
     trial_rows = [row for state in states for row in state.get("trials", ())]
     state_reports = []
     robust = dict(config["robust_pair_rule"])

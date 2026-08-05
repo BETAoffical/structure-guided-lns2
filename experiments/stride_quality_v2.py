@@ -17,6 +17,7 @@ from experiments.stride_lns import (
     REQUIRED_POST_STRUCTURE_FIELDS,
     STRIDE_TRIAL_SCHEMA,
     assign_structure_scores,
+    validate_post_structure_metrics,
 )
 from experiments.stride_stability import collect_stride_extension_trials
 
@@ -194,6 +195,8 @@ def select_stride_quality_v2_confirmation_states(
 def aggregate_stride_quality_v2_candidate(
     *, before_conflicts: int, outcomes: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    if type(before_conflicts) is not int or before_conflicts <= 0:
+        raise ValueError("STRIDE quality V2 before_conflicts must be a positive integer")
     if len(outcomes) != STRIDE_QUALITY_V2_TRIALS_PER_HALF:
         raise ValueError("STRIDE quality V2 requires exactly eight paired PP outcomes")
     seeds: set[int] = set()
@@ -210,21 +213,19 @@ def aggregate_stride_quality_v2_candidate(
         seeds.add(seed)
         if type(outcome.get("feasible")) is not bool:
             raise ValueError("each STRIDE quality V2 outcome requires strict feasible")
+        if type(outcome.get("conflicts_after")) is not int:
+            raise ValueError(
+                "each STRIDE quality V2 outcome requires integer conflicts_after"
+            )
         conflicts_after = int(outcome["conflicts_after"])
+        if conflicts_after < 0:
+            raise ValueError("conflicts_after must be nonnegative")
         reductions.append(float(before_conflicts - conflicts_after))
         feasible_count += int(outcome["feasible"])
         progress_count += int(conflicts_after < before_conflicts)
-        structure = outcome.get("post_structure")
-        if not isinstance(structure, dict) or not REQUIRED_POST_STRUCTURE_FIELDS.issubset(
-            structure
-        ):
-            raise ValueError("STRIDE quality V2 requires complete post structure")
-        values = {
-            name: float(structure[name]) for name in REQUIRED_POST_STRUCTURE_FIELDS
-        }
-        if any(value < 0.0 for value in values.values()):
-            raise ValueError("post-structure metrics must be nonnegative")
-        structures.append(values)
+        structures.append(
+            validate_post_structure_metrics(outcome.get("post_structure"))
+        )
     mean_reduction = statistics.fmean(reductions)
     return {
         "trial_count": STRIDE_QUALITY_V2_TRIALS_PER_HALF,

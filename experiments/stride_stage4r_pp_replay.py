@@ -23,6 +23,12 @@ from experiments.stride_collection import (
 from experiments.stride_lns import post_structure_metrics
 from experiments.stride_stage4r_quick import _mean, _project_path
 from experiments.trace_replay import decision_rows, replay_prefix
+from lns2_selector.runtime.artifact_validation import (
+    finite_number,
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
@@ -298,31 +304,75 @@ def _artifact_valid(
         or payload.get("identity") != identity
         or payload.get("state_id") != selection["state_id"]
         or payload.get("complete") is not True
+        or payload.get("task_id") != selection.get("task_id")
+        or payload.get("map_id") != selection.get("map_id")
+        or payload.get("solver_seed") != selection.get("solver_seed")
+        or payload.get("before_fingerprint") != selection.get("before_fingerprint")
+        or payload.get("before_repair_fingerprint")
+        != selection.get("before_repair_fingerprint")
+        or payload.get("before_conflicts") != selection.get("before_conflicts")
+        or payload.get("actions") != selection.get("actions")
+        or payload.get("same_action") != selection.get("same_action")
     ):
         return False
     trials = payload.get("trials")
-    if not isinstance(trials, list):
+    if not trial_product_matches(
+        trials,
+        candidate_ids=ACTION_LABELS,
+        trial_indices=PP_TRIAL_INDICES,
+        candidate_field="action_label",
+    ):
         return False
-    expected = {
-        (label, trial_index)
-        for label in ACTION_LABELS
-        for trial_index in PP_TRIAL_INDICES
-    }
-    observed = {
-        (str(row.get("action_label")), int(row.get("trial_index", -1)))
-        for row in trials
-        if isinstance(row, dict)
-    }
-    if observed != expected or len(trials) != len(expected):
+    before_conflicts = selection.get("before_conflicts")
+    if not strict_integer(before_conflicts, minimum=1):
         return False
     repair_fingerprint = str(selection["before_repair_fingerprint"])
-    return all(
-        int(row.get("pp_seed", -1))
-        == stage4r_paired_pp_seed(repair_fingerprint, int(row["trial_index"]))
-        and str(row.get("action_id"))
-        == str(selection["actions"][str(row["action_label"])]["action_id"])
-        for row in trials
-    )
+    ordinals: set[int] = set()
+    for row in trials:
+        label = str(row["action_label"])
+        trial_index = int(row["trial_index"])
+        conflicts_after = row.get("conflicts_after")
+        ordinal = row.get("ordinal")
+        expected_order = ACTION_LABELS if trial_index % 2 == 0 else ACTION_LABELS[::-1]
+        if (
+            not repair_trial_semantics_valid(
+                row,
+                schema=None,
+                state_id=None,
+                candidate_id=None,
+                trial_index=trial_index,
+                pp_seed=stage4r_paired_pp_seed(
+                    repair_fingerprint, trial_index
+                ),
+                before_conflicts=before_conflicts,
+                before_repair_fingerprint=repair_fingerprint,
+                conflicts_before_field="conflicts_before",
+                require_after_fingerprint=False,
+            )
+            or str(row.get("action_id"))
+            != str(selection["actions"][label]["action_id"])
+            or not strict_integer(ordinal, minimum=0)
+            or ordinal in ordinals
+            or row.get("action_position") != expected_order.index(label)
+            or not strict_integer(conflicts_after, minimum=0)
+            or row.get("conflict_reduction")
+            != before_conflicts - conflicts_after
+            or type(row.get("no_progress")) is not bool
+            or row["no_progress"] != (conflicts_after >= before_conflicts)
+            or not isinstance(row.get("repair_order"), list)
+            or any(
+                not strict_integer(agent, minimum=0)
+                for agent in row["repair_order"]
+            )
+            or not isinstance(row.get("low_level"), dict)
+            or any(
+                not finite_number(value, minimum=0.0)
+                for value in row["low_level"].values()
+            )
+        ):
+            return False
+        ordinals.add(ordinal)
+    return ordinals == set(range(len(trials)))
 
 
 def _collect_state(

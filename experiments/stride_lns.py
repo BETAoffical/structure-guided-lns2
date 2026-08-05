@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import statistics
 from collections import Counter, defaultdict
 from itertools import combinations
@@ -33,6 +34,23 @@ REQUIRED_POST_STRUCTURE_FIELDS = frozenset(
 )
 
 
+def validate_post_structure_metrics(value: Any) -> dict[str, float]:
+    """Return canonical finite, nonnegative STRIDE post-structure metrics."""
+
+    if not isinstance(value, dict) or set(value) != REQUIRED_POST_STRUCTURE_FIELDS:
+        raise ValueError("STRIDE requires the exact post-structure metric schema")
+    metrics: dict[str, float] = {}
+    for name in REQUIRED_POST_STRUCTURE_FIELDS:
+        raw = value[name]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise ValueError("post-structure metrics must be numeric")
+        metric = float(raw)
+        if not math.isfinite(metric) or metric < 0.0:
+            raise ValueError("post-structure metrics must be finite and nonnegative")
+        metrics[name] = metric
+    return metrics
+
+
 def post_structure_metrics(state: dict[str, Any]) -> dict[str, float]:
     """Compute STRIDE post-repair difficulty metrics normalized by all agents."""
 
@@ -61,6 +79,8 @@ def aggregate_stride_candidate(
 ) -> dict[str, Any]:
     """Aggregate exactly four paired PP outcomes for one candidate."""
 
+    if type(before_conflicts) is not int or before_conflicts <= 0:
+        raise ValueError("STRIDE before_conflicts must be a positive integer")
     if len(outcomes) != 4:
         raise ValueError("STRIDE Pilot requires exactly four paired PP outcomes")
     seeds: set[int] = set()
@@ -77,20 +97,18 @@ def aggregate_stride_candidate(
         seeds.add(seed)
         if type(outcome.get("feasible")) is not bool:
             raise ValueError("each STRIDE outcome requires a strict feasible boolean")
+        if type(outcome.get("conflicts_after")) is not int:
+            raise ValueError("each STRIDE outcome requires integer conflicts_after")
         conflicts_after = int(outcome["conflicts_after"])
+        if conflicts_after < 0:
+            raise ValueError("conflicts_after must be nonnegative")
         reduction = float(before_conflicts - conflicts_after)
         reductions.append(reduction)
         feasible_count += int(outcome["feasible"])
         progress_count += int(conflicts_after < before_conflicts)
-        structure = outcome.get("post_structure")
-        if not isinstance(structure, dict) or not REQUIRED_POST_STRUCTURE_FIELDS.issubset(
-            structure
-        ):
-            raise ValueError("each STRIDE outcome requires all post-structure metrics")
-        values = {name: float(structure[name]) for name in REQUIRED_POST_STRUCTURE_FIELDS}
-        if any(value < 0.0 for value in values.values()):
-            raise ValueError("post-structure metrics must be nonnegative")
-        structures.append(values)
+        structures.append(
+            validate_post_structure_metrics(outcome.get("post_structure"))
+        )
 
     two_worst = sorted(reductions)[:2]
     return {
@@ -116,26 +134,22 @@ def assign_structure_scores(candidates: list[dict[str, Any]]) -> None:
     if not candidates:
         raise ValueError("cannot score an empty candidate pool")
     count = len(candidates)
-    for candidate in candidates:
-        structure = candidate.get("mean_post_structure")
-        if not isinstance(structure, dict) or not REQUIRED_POST_STRUCTURE_FIELDS.issubset(
-            structure
-        ):
-            raise ValueError("candidate is missing mean_post_structure")
-    for candidate in candidates:
+    validated = [
+        validate_post_structure_metrics(candidate.get("mean_post_structure"))
+        for candidate in candidates
+    ]
+    for candidate_index, candidate in enumerate(candidates):
         percentiles: list[float] = []
         for name in sorted(REQUIRED_POST_STRUCTURE_FIELDS):
-            current = float(candidate["mean_post_structure"][name])
+            current = validated[candidate_index][name]
             if count == 1:
                 percentile = 0.0
             else:
                 lower = sum(
-                    float(other["mean_post_structure"][name]) < current
-                    for other in candidates
+                    other[name] < current for other in validated
                 )
                 equal_other = sum(
-                    float(other["mean_post_structure"][name]) == current
-                    for other in candidates
+                    other[name] == current for other in validated
                 ) - 1
                 percentile = (lower + 0.5 * equal_other) / (count - 1)
             percentiles.append(percentile)

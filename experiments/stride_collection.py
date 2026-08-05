@@ -29,6 +29,12 @@ from experiments.stride_lns import (
     post_structure_metrics,
 )
 from experiments.trace_replay import replay_prefix, result_blind_decision_rows
+from lns2_selector.runtime.artifact_validation import (
+    candidate_records,
+    repair_trial_semantics_valid,
+    strict_integer,
+    trial_product_matches,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 from lns2_selector.runtime.online_selection import generate_online_candidates
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -45,6 +51,7 @@ STRIDE_COLLECTION_PRODUCER_FILES = (
     "experiments/stride_collection.py",
     "experiments/stride_lns.py",
     "experiments/trace_replay.py",
+    "lns2_selector/runtime/artifact_validation.py",
     "lns2_selector/runtime/online_selection.py",
     "src/python_bindings.cpp",
     "third_party/mapf_lns2/inc/RepairPolicy.h",
@@ -581,30 +588,87 @@ def _validate_native_repair(
 
 
 def _state_artifact_valid(
-    payload: dict[str, Any], *, run_fingerprint: str, state_id: str
+    payload: dict[str, Any], *, run_fingerprint: str, state_id: str,
+    decision: dict[str, Any] | None = None,
 ) -> bool:
     if (
         payload.get("schema") != STRIDE_COLLECTION_SCHEMA
         or payload.get("run_fingerprint") != run_fingerprint
         or payload.get("state_id") != state_id
         or payload.get("complete") is not True
+        or payload.get("schema_version") != 1
     ):
         return False
-    candidates = payload.get("candidates")
-    trials = payload.get("trials")
-    if not isinstance(candidates, list) or not candidates or not isinstance(trials, list):
+    embedded_decision = payload.get("decision")
+    if not isinstance(embedded_decision, dict):
         return False
-    expected = {
-        (str(candidate["candidate_id"]), trial_index)
-        for candidate in candidates
-        for trial_index in PP_TRIAL_INDICES
+    if decision is not None and embedded_decision != decision:
+        return False
+    expected_decision = decision if decision is not None else embedded_decision
+    if expected_decision.get("state_id") != state_id:
+        return False
+    before_fingerprint = expected_decision.get("before_fingerprint")
+    before_repair_fingerprint = payload.get("before_repair_fingerprint")
+    before_conflicts = payload.get("before_conflicts")
+    if (
+        not isinstance(before_fingerprint, str)
+        or not before_fingerprint
+        or payload.get("before_fingerprint") != before_fingerprint
+        or not isinstance(before_repair_fingerprint, str)
+        or not before_repair_fingerprint
+        or not strict_integer(before_conflicts, minimum=1)
+        or expected_decision.get("before_conflicts") != before_conflicts
+    ):
+        return False
+    candidates = candidate_records(payload.get("candidates"))
+    trials = payload.get("trials")
+    if candidates is None or not isinstance(trials, list):
+        return False
+    if any(
+        any(agent >= int(expected_decision["agent_count"]) for agent in row["agents"])
+        for row in candidates.values()
+    ):
+        return False
+    if not trial_product_matches(
+        trials,
+        candidate_ids=tuple(candidates),
+        trial_indices=PP_TRIAL_INDICES,
+    ):
+        return False
+    metadata = {
+        name: expected_decision[name]
+        for name in (
+            "map_id",
+            "split",
+            "source_policy",
+            "decision_stage",
+            "agent_count",
+        )
     }
-    observed = {
-        (str(row.get("candidate_id")), int(row.get("trial_index", -1)))
-        for row in trials
-        if isinstance(row, dict)
-    }
-    return observed == expected and len(trials) == len(expected)
+    features_by_candidate: dict[str, dict[str, Any]] = {}
+    for row in trials:
+        candidate_id = str(row["candidate_id"])
+        trial_index = int(row["trial_index"])
+        if not repair_trial_semantics_valid(
+            row,
+            schema=STRIDE_TRIAL_SCHEMA,
+            state_id=state_id,
+            candidate_id=candidate_id,
+            trial_index=trial_index,
+            pp_seed=stride_pp_seed(before_repair_fingerprint, trial_index),
+            before_conflicts=before_conflicts,
+            before_fingerprint=before_fingerprint,
+            before_repair_fingerprint=before_repair_fingerprint,
+            feature_schema_id=FROZEN_FEATURE_SCHEMA_ID,
+            required_feature_names=PROFILE_FEATURE_NAMES["realized_dynamic"],
+            expected_metadata=metadata,
+        ):
+            return False
+        features = dict(row["features"])
+        previous = features_by_candidate.setdefault(candidate_id, features)
+        if previous != features:
+            return False
+    return True
 
 
 def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
@@ -614,7 +678,10 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
     if bool(job["resume"]) and output_path.is_file():
         existing = _read_json(output_path)
         if _state_artifact_valid(
-            existing, run_fingerprint=run_fingerprint, state_id=str(decision["state_id"])
+            existing,
+            run_fingerprint=run_fingerprint,
+            state_id=str(decision["state_id"]),
+            decision=decision,
         ):
             return {
                 "state_id": str(decision["state_id"]),
@@ -859,12 +926,15 @@ def collect_stride_repairs(
     state_files = [Path(row["state_file"]) for row in results]
     all_trials: list[dict[str, Any]] = []
     candidate_counts: Counter[int] = Counter()
+    selected_by_id = {str(row["state_id"]): row for row in selected}
     for state_file in sorted(state_files):
         payload = _read_json(state_file)
+        state_id = str(payload.get("state_id", ""))
         if not _state_artifact_valid(
             payload,
             run_fingerprint=run_fingerprint,
-            state_id=str(payload.get("state_id", "")),
+            state_id=state_id,
+            decision=selected_by_id.get(state_id),
         ):
             errors.append(
                 {"state_id": str(payload.get("state_id", "")), "error": "invalid state artifact"}
