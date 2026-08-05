@@ -2381,3 +2381,38 @@ fresh-map use.  The next separately named design must predict whether the actual
 MapRank challenger is robustly better than the V2 anchor, treating uncertainty
 and a robust V2 win as explicit negative outcomes.  The completed report SHA-256
 is `d15643a5524bbecf7a95edbc2f8dd9cf8f48a38898ac02211e436c59de27f510`.
+
+### STRIDE-OverrideGuard v1 preregistration
+
+After rejecting symmetric CertGuard, `stride-overrideguard-v1` is registered as
+a distinct action-conditioned successor before building or inspecting its
+labels. Frozen V2 remains the anchor and the deployed MapRank direction model,
+thresholds, and candidate pool remain unchanged. The added classifier can only
+retain a MapRank override or abstain to the V2 action.
+
+Each training row is one non-anchor candidate against the frozen V2-selected
+candidate in the same state. A positive means that candidate is the robust
+winner under the unchanged 16 paired-PP-seed, 75% win, 0.02 effect and
+two-half-direction rule. Both an uncertain pair and a robust V2-anchor win are
+negative. All non-anchor candidates are included and rows from each state sum
+to unit weight. The 248-dimensional input preserves direction with 124
+candidate-minus-anchor features and adds the 124-dimensional pair mean.
+
+Four outer and three inner map folds are required. Inner threshold selection
+must retain at least 20% of MapRank overrides with at least 60% directionally
+safe precision while remaining noninferior to V2 on exact-best and Top-3. A
+fold with no feasible threshold falls back to V2 and makes the offline gate
+fail; thresholds may not be relaxed after observing results. Runtime, TTF,
+future rounds, Cost-to-Go, Receding-Q, controller outcomes, legacy validation,
+the already observed high-load cohort, test, and formal-OOD data are forbidden
+for fitting or calibration.
+
+Wall-clock evaluation follows the user-reported power state; no additional
+charger-performance benchmark or preflight is introduced. Every comparator
+must still be rerun under the same reported power state and strict rotating
+schedule, and timing from unmatched charger or power states may not be pooled.
+Consequently, the currently reported slow-charger condition permits label,
+offline-model, functional, and semantic work only; it does not permit new
+wall-clock evidence. Timing work resumes when the user reports comparable
+performance has returned. High load remains post-hoc development evidence and
+fresh maps remain the first unseen end-to-end evidence.

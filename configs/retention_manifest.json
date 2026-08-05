@@ -304,6 +304,11 @@
       "purpose": "Strictly rotated three-controller high-load and fresh-map run-to-completion raw-TTF evaluation for STRIDE-MapRank."
     },
     {
+      "path": "experiments/stride_overrideguard.py",
+      "role": "active",
+      "purpose": "Preregistered V2-anchor-relative current-step action-safety labels for the independently named OverrideGuard successor."
+    },
+    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -949,6 +954,11 @@
       "purpose": "CLI entry point for paired high-load and fresh-map STRIDE-MapRank raw-TTF evaluation."
     },
     {
+      "path": "scripts/build_stride_overrideguard_labels.py",
+      "role": "active",
+      "purpose": "CLI entry point for checksum-pinned OverrideGuard candidate-versus-V2 action labels."
+    },
+    {
       "path": "scripts/run_stride_augcontrol_evaluation.py",
       "role": "reproducibility",
       "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
@@ -1287,6 +1297,11 @@
       "path": "tests/integration/test_stride_certguard.py",
       "role": "active",
       "contract": "Distinct CertGuard identity, symmetric uncertainty labels, train-map-only calibration, and frozen MapRank direction contracts."
+    },
+    {
+      "path": "tests/integration/test_stride_overrideguard.py",
+      "role": "active",
+      "contract": "Distinct OverrideGuard identity, oriented candidate-versus-anchor labels, nested calibration, safety gates, and power-comparability contracts."
     },
     {
       "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",
