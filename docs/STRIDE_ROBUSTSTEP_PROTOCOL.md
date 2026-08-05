@@ -2978,3 +2978,24 @@ selector must produce 40 tasks on 20 maps after removing `brc201d`, `lgt600d`,
 If this gate fails, map expansion stops for a task-generator reassessment; no
 successful subset is permitted to train.  The qualification design SHA-256 is
 `568dc0ae74192dcb01d89aeece6ac104b9f5d9700a3d983693e70e460b54a12f`.
+
+### RobustAction StructPool map replacement v3 result
+
+All 48 registered reset-only jobs completed with zero row errors and zero
+timeouts.  Every replacement map exposed at least one nonzero-conflict reset,
+so `lak203d`, `orz201d`, `ost101d` and `rmtst` all passed the active-map gate.
+The combined selector produced exactly 40 tasks on 20 maps, with two tasks per
+map and the preregistered 12 high-/6 mid-/2 low-topology balance.  No candidate
+repair outcome or controller outcome was read, and the forbidden-field audit
+was empty.  This qualifies the frozen source cohort but is not a speed claim.
+
+The replacement qualification manifest SHA-256 is
+`106a05335bf9f374a967947484dad070a06d2a7b2f5483b0cd9efea03682ddba`,
+the native qualification report SHA-256 is
+`9de03df209d35300e1c962c5290e647c716a151e30d892df36fa31fd79766d09`,
+the registered runtime-config SHA-256 is
+`9ca091565b66f0ac4a7ee2acef7200cfe7b1a4f0ea5d1ebae23d623393221a77`,
+and the final dataset manifest remains
+`273af17e38038e98cbb26d6b304d9f6129bf25ea6468e3c6618ba24eff201bc4`.
+The next registered step is collection of 40 tasks times two solver seeds
+times the two frozen source policies, for 160 source episodes.
