@@ -2551,3 +2551,62 @@ After CertGuard, OverrideGuard, AnchorChoice and MarginChoice, further target
 variants on the same 303 states are stopped to avoid development-set
 overfitting. The next model step requires more independent training states and
 maps with audited robust-action opportunity; formal fresh maps remain untouched.
+
+### STRIDE-RobustAction data v1 preregistration and static audit
+
+The next line is named `stride-robustaction-data-v1`, with the eventual model
+name reserved as `stride-robustaction-v1`; neither name reuses V2, MapRank,
+GuardRank, AnchorChoice or MarginChoice artifacts.  The expansion was
+registered at parent commit
+`63346bd6c9d8b48ed3f42bf55012d604cf93dba3`, before running any new initial PP
+or candidate-repair outcome.  It changes the data layer rather than trying a
+fifth target on the same 303 states.
+
+Twenty checksum-pinned DAO maps that were absent from the pre-registration
+configs and protocol were selected using map identity, static topology and map
+family only.  They are disjoint from all 30 current label maps, the 12 formal
+OOD maps, and the six registered fresh-evidence map ids.  The groups are:
+
+- high topology (7): `orz200d`, `lak526d`, `orz301d`, `brc201d`, `lak506d`,
+  `oth001d`, `ost001d`;
+- mid topology (7): `hrt001d`, `lak106d`, `orz101d`, `den900d`, `lgt604d`,
+  `oth000d`, `brc200d`;
+- low-topology controls (6): `lak507d`, `orz704d`, `den901d`, `lgt600d`,
+  `brc999d`, `orz000d`.
+
+The split covers eight map prefixes (`brc`, `den`, `hrt`, `lak`, `lgt`, `orz`,
+`ost`, and `oth`).  Low-degree-cell ratio boundaries are frozen at 0.035 and
+0.06.  Static audit verified every extracted map and archive member checksum,
+every registered obstacle and low-degree ratio, exact 7/7/6 group balance,
+and all evidence-isolation gates.  No solver or performance measurement was
+run during this audit.  The design SHA-256 is
+`08a014018ea90517678e28adc742906227166d3e644ca5342b5d16fdd5e5398d` and the
+completed static-audit report SHA-256 is
+`d7ca8c842ed128310a0f7c244c2e6e36cee47938b7a22fc9dd0635de5d7d72d0`.
+
+After power comparability is reported by the user, an outcome-blind initial-PP
+qualification may choose two tasks per map near 25 and 100 mean initial
+conflicts from the registered agent loads and the two derived task variants.
+Candidate-repair outcomes, controller choices, future trajectory, repair time,
+and TTF are forbidden selection inputs.  Low-topology maps receive a fourth,
+higher registered agent load so underload can be addressed without changing
+the rule after observing repair outcomes.
+
+The selected cohort has 20 maps x 2 tasks x 2 solver seeds x 2 source policies
+= 160 independent episode units.  At no more than two states per episode it
+adds 320 state rows, taking the 303-row corpus to a projected 623 rows.  The
+distinction is mandatory: two states from one episode are correlated, and the
+16 paired PP repair seeds per candidate reduce label noise but are outcomes,
+not additional independent states.  Post-collection gates require all 320
+unique state ids, all 160 episode ids, no more than two states per episode,
+robust non-anchor opportunities in at least 25% of states, at least 4% robust
+positive actions, and positive-opportunity coverage on at least three maps in
+each topology group.  Failure registers another outcome-blind cohort; it may
+not filter the collected states using their repair outcomes.
+
+Power state remains user-reported only.  No charger benchmark or performance
+preflight is added.  Static design, label processing, offline training, and
+functional or semantic tests may proceed in the reported slow-power state;
+Shadow timing and wall-clock TTF remain deferred until the user reports that
+comparable performance has returned.  Timing from different reported power
+states may not be pooled.
