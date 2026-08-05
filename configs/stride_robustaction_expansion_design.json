@@ -4,6 +4,14 @@
   "data_line_id": "stride-robustaction-data-v1",
   "planned_model_id": "stride-robustaction-v1",
   "pre_registration_git_commit": "63346bd6c9d8b48ed3f42bf55012d604cf93dba3",
+  "design_amendments": [
+    {
+      "parent_commit": "f550c6e",
+      "reason": "deterministic_opposite_exchange_requires_even_agent_counts",
+      "change": "round_each_odd_registered_agent_count_up_by_one",
+      "initial_pp_or_repair_outcomes_read": false
+    }
+  ],
   "predecessor_reports": {
     "marginchoice_training": {
       "path": "build/stride-marginchoice-training-v1/marginchoice_training_report.json",
@@ -129,37 +137,37 @@
       "id": "orz200d", "map_family": "orz", "topology_group": "dao_high_topology",
       "member": "orz200d.map", "member_sha256": "96c3cab6a2bdd82d6f50a3be97e6ed53ae2baff16f9ec674b769663c084d73af",
       "free_cell_count": 5129, "static_low_degree_cell_ratio": 0.11210762331838565,
-      "static_obstacle_ratio": 0.9274745475113122, "agent_counts": [105, 205, 360]
+      "static_obstacle_ratio": 0.9274745475113122, "agent_counts": [106, 206, 360]
     },
     {
       "id": "lak526d", "map_family": "lak", "topology_group": "dao_high_topology",
       "member": "lak526d.map", "member_sha256": "8b2be918d4f4415f0e3b02b1992b3bb308d2f22c5ddef29c055c6fbd27753d17",
       "free_cell_count": 954, "static_low_degree_cell_ratio": 0.10377358490566038,
-      "static_obstacle_ratio": 0.9403600900225056, "agent_counts": [20, 40, 65]
+      "static_obstacle_ratio": 0.9403600900225056, "agent_counts": [20, 40, 66]
     },
     {
       "id": "orz301d", "map_family": "orz", "topology_group": "dao_high_topology",
       "member": "orz301d.map", "member_sha256": "c221ef4ac457c06a8f88e71e4c3b9ac009da9d1ca5e74ec94a54bb8cfc9b3988",
       "free_cell_count": 4529, "static_low_degree_cell_ratio": 0.08611172444248179,
-      "static_obstacle_ratio": 0.7903240740740741, "agent_counts": [90, 180, 315]
+      "static_obstacle_ratio": 0.7903240740740741, "agent_counts": [90, 180, 316]
     },
     {
       "id": "brc201d", "map_family": "brc", "topology_group": "dao_high_topology",
       "member": "brc201d.map", "member_sha256": "7a5d352eaf59db18950b6fabe2f0e11e8b11dfdf4dc9e8956c7efdb43012901b",
       "free_cell_count": 25645, "static_low_degree_cell_ratio": 0.08052251900955353,
-      "static_obstacle_ratio": 0.8309581564584597, "agent_counts": [515, 750, 1000]
+      "static_obstacle_ratio": 0.8309581564584597, "agent_counts": [516, 750, 1000]
     },
     {
       "id": "lak506d", "map_family": "lak", "topology_group": "dao_high_topology",
       "member": "lak506d.map", "member_sha256": "a41d8d08f2f4dcbb8b84aaa9be358f63af07e5101edd506ffbe41798951179c6",
       "free_cell_count": 13894, "static_low_degree_cell_ratio": 0.0790988916078883,
-      "static_obstacle_ratio": 0.6506411868242393, "agent_counts": [280, 555, 975]
+      "static_obstacle_ratio": 0.6506411868242393, "agent_counts": [280, 556, 976]
     },
     {
       "id": "oth001d", "map_family": "oth", "topology_group": "dao_high_topology",
       "member": "oth001d.map", "member_sha256": "e7771a8cdab6d723913a8d0e17528a2a3e59017bf64aae7855da89a30fef328d",
       "free_cell_count": 14400, "static_low_degree_cell_ratio": 0.0675,
-      "static_obstacle_ratio": 0.9018324607329843, "agent_counts": [290, 575, 1000]
+      "static_obstacle_ratio": 0.9018324607329843, "agent_counts": [290, 576, 1000]
     },
     {
       "id": "ost001d", "map_family": "ost", "topology_group": "dao_high_topology",
@@ -177,55 +185,55 @@
       "id": "lak106d", "map_family": "lak", "topology_group": "dao_mid_topology",
       "member": "lak106d.map", "member_sha256": "bc5dcc5e299ee4f5380ee1ec976682255da9f627b1a548a4cf5e4e34b6ba428e",
       "free_cell_count": 1909, "static_low_degree_cell_ratio": 0.05238344683080147,
-      "static_obstacle_ratio": 0.8258370586625308, "agent_counts": [55, 115, 190]
+      "static_obstacle_ratio": 0.8258370586625308, "agent_counts": [56, 116, 190]
     },
     {
       "id": "orz101d", "map_family": "orz", "topology_group": "dao_mid_topology",
       "member": "orz101d.map", "member_sha256": "5ded2a0e4f3f7562bd92519d1b7472ceab61055b2e03068a19accd7b21c7154a",
       "free_cell_count": 1765, "static_low_degree_cell_ratio": 0.05212464589235127,
-      "static_obstacle_ratio": 0.6129385964912281, "agent_counts": [55, 105, 175]
+      "static_obstacle_ratio": 0.6129385964912281, "agent_counts": [56, 106, 176]
     },
     {
       "id": "den900d", "map_family": "den", "topology_group": "dao_mid_topology",
       "member": "den900d.map", "member_sha256": "01a232dc6435e62b3923e453cc571b00ddbd1d7ff084124030a795fd07a3726a",
       "free_cell_count": 5258, "static_low_degree_cell_ratio": 0.04260174971472043,
-      "static_obstacle_ratio": 0.6790771484375, "agent_counts": [160, 315, 525]
+      "static_obstacle_ratio": 0.6790771484375, "agent_counts": [160, 316, 526]
     },
     {
       "id": "lgt604d", "map_family": "lgt", "topology_group": "dao_mid_topology",
       "member": "lgt604d.map", "member_sha256": "75c473407395eb536461815dc97b81e937600a8b16cfb676f4efeb38447d74e7",
       "free_cell_count": 11254, "static_low_degree_cell_ratio": 0.04496179136307091,
-      "static_obstacle_ratio": 0.8269041466715885, "agent_counts": [340, 675, 1000]
+      "static_obstacle_ratio": 0.8269041466715885, "agent_counts": [340, 676, 1000]
     },
     {
       "id": "oth000d", "map_family": "oth", "topology_group": "dao_mid_topology",
       "member": "oth000d.map", "member_sha256": "06b67378f1ee8be0bf9784122ee94e2d0f1853edd2a75a91eac075f240bd5fb1",
       "free_cell_count": 17601, "static_low_degree_cell_ratio": 0.04170217601272655,
-      "static_obstacle_ratio": 0.8806355794270834, "agent_counts": [530, 765, 1000]
+      "static_obstacle_ratio": 0.8806355794270834, "agent_counts": [530, 766, 1000]
     },
     {
       "id": "brc200d", "map_family": "brc", "topology_group": "dao_mid_topology",
       "member": "brc200d.map", "member_sha256": "558fcdc9cf71d34ffc9b1a6f5256e864757aecd31a591541e6bb2d8563134e4b",
       "free_cell_count": 15788, "static_low_degree_cell_ratio": 0.03800354699771979,
-      "static_obstacle_ratio": 0.8569305495142816, "agent_counts": [475, 745, 1000]
+      "static_obstacle_ratio": 0.8569305495142816, "agent_counts": [476, 746, 1000]
     },
     {
       "id": "lak507d", "map_family": "lak", "topology_group": "dao_low_topology_control",
       "member": "lak507d.map", "member_sha256": "bc12a5c7cb3dd61d800188f16aa655ff7593471877772005cf74193d1d72367e",
       "free_cell_count": 4360, "static_low_degree_cell_ratio": 0.0323394495412844,
-      "static_obstacle_ratio": 0.3820861678004535, "agent_counts": [175, 350, 525, 700]
+      "static_obstacle_ratio": 0.3820861678004535, "agent_counts": [176, 350, 526, 700]
     },
     {
       "id": "orz704d", "map_family": "orz", "topology_group": "dao_low_topology_control",
       "member": "orz704d.map", "member_sha256": "b9ca9c90de962a14c67570b7b12cda2361b969bcda2cfa386667ff4d79ad07a4",
       "free_cell_count": 2097, "static_low_degree_cell_ratio": 0.03195040534096328,
-      "static_obstacle_ratio": 0.45729813664596275, "agent_counts": [85, 170, 250, 335]
+      "static_obstacle_ratio": 0.45729813664596275, "agent_counts": [86, 170, 250, 336]
     },
     {
       "id": "den901d", "map_family": "den", "topology_group": "dao_low_topology_control",
       "member": "den901d.map", "member_sha256": "8d7778c98d87ee5a1639948e6fbc12e6ebd6a42a57f4c6541bd2582c0cae5a10",
       "free_cell_count": 8189, "static_low_degree_cell_ratio": 0.02283551105141043,
-      "static_obstacle_ratio": 0.5040576550387597, "agent_counts": [330, 655, 985, 1300]
+      "static_obstacle_ratio": 0.5040576550387597, "agent_counts": [330, 656, 986, 1300]
     },
     {
       "id": "lgt600d", "map_family": "lgt", "topology_group": "dao_low_topology_control",
@@ -237,13 +245,13 @@
       "id": "brc999d", "map_family": "brc", "topology_group": "dao_low_topology_control",
       "member": "brc999d.map", "member_sha256": "4917c34dd3108b822160111361f52bcef1bdf03f16e778b12ca96a467e9b3281",
       "free_cell_count": 12847, "static_low_degree_cell_ratio": 0.02693235774889079,
-      "static_obstacle_ratio": 0.9515602376930502, "agent_counts": [515, 750, 1000, 1500]
+      "static_obstacle_ratio": 0.9515602376930502, "agent_counts": [516, 750, 1000, 1500]
     },
     {
       "id": "orz000d", "map_family": "orz", "topology_group": "dao_low_topology_control",
       "member": "orz000d.map", "member_sha256": "add7c5e8e9d790f39f4f575e838c06de165215761959858f723edd37dd3946aa",
       "free_cell_count": 4057, "static_low_degree_cell_ratio": 0.029085531180675375,
-      "static_obstacle_ratio": 0.6251501432135268, "agent_counts": [160, 325, 485, 650]
+      "static_obstacle_ratio": 0.6251501432135268, "agent_counts": [160, 326, 486, 650]
     }
   ]
 }

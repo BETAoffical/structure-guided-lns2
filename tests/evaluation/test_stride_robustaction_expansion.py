@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.stride_robustaction_expansion import (
+    robustaction_source_adapter,
     topology_group,
     validate_robustaction_expansion_design,
 )
@@ -29,6 +30,26 @@ class RobustActionExpansionTests(unittest.TestCase):
         self.assertEqual(
             topology_group(0.034999999, thresholds),
             "dao_low_topology_control",
+        )
+
+    def test_generic_source_adapter_has_registered_dimensions(self) -> None:
+        adapter = robustaction_source_adapter(self.config)
+        self.assertEqual(adapter["expected_map_count"], 20)
+        self.assertEqual(adapter["expected_instance_count"], 132)
+        self.assertEqual(adapter["task_seeds"], [307])
+        self.assertEqual(
+            sum(
+                len(row["agent_counts"]) * len(adapter["task_variants"])
+                for row in adapter["benchmarks"]
+            ),
+            132,
+        )
+        self.assertTrue(
+            all(
+                value % 2 == 0
+                for row in adapter["benchmarks"]
+                for value in row["agent_counts"]
+            )
         )
 
     def test_forbidden_outcome_input_is_rejected(self) -> None:

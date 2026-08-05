@@ -2580,9 +2580,19 @@ The split covers eight map prefixes (`brc`, `den`, `hrt`, `lak`, `lgt`, `orz`,
 every registered obstacle and low-degree ratio, exact 7/7/6 group balance,
 and all evidence-isolation gates.  No solver or performance measurement was
 run during this audit.  The design SHA-256 is
-`08a014018ea90517678e28adc742906227166d3e644ca5342b5d16fdd5e5398d` and the
+`6a1a870ea061c233abd570c83ad523b7cbc7e1b4ced46ef8a625128d690519ea` and the
 completed static-audit report SHA-256 is
-`d7ca8c842ed128310a0f7c244c2e6e36cee47938b7a22fc9dd0635de5d7d72d0`.
+`ad49597d9bd81e93dc14c5f38eb39a6d37292d0bcd8a763b362b70e92c5b3ee9`.
+
+The first deterministic task-generation attempt stopped before PP on
+`orz200d` because an odd agent count cannot be deranged by the registered
+reverse-and-rotate `opposite_exchange` generator.  This was a generator-domain
+error, not an observed load or repair result.  At parent commit `f550c6e`, all
+odd registered loads were therefore rounded upward by one and the validator
+now requires every load to be even.  No initial-PP, candidate-repair,
+controller, or timing outcome was read before this amendment; the failed v1
+directory is retained as diagnostic evidence; the corrected generation will
+use a new v2 output directory after work resumes.
 
 After power comparability is reported by the user, an outcome-blind initial-PP
 qualification may choose two tasks per map near 25 and 100 mean initial

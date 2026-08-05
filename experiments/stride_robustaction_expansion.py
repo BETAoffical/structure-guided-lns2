@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from experiments._common import sha256_file
-from experiments.balanced_wall_clock import _map_metrics
+from experiments.balanced_wall_clock import (
+    _map_metrics,
+    prepare_movingai_map_derived_dataset,
+)
 from experiments.repair_collection import _read_json, _write_json
 
 
@@ -56,6 +59,38 @@ def topology_group(low_degree_cell_ratio: float, thresholds: list[float]) -> str
     return TOPOLOGY_GROUPS[2]
 
 
+def robustaction_source_adapter(config: dict[str, Any]) -> dict[str, Any]:
+    """Return the frozen generic map-derived dataset input for this design."""
+
+    validate_robustaction_expansion_design(config)
+    task_design = dict(config["task_design"])
+    return {
+        "schema_version": 1,
+        "dataset_revision": "stride-robustaction-preflight-v1",
+        "source": str(config["map_archive"]["source"]),
+        "task_semantics": str(task_design["semantics"]),
+        "master_seed": int(task_design["master_seed"]),
+        "task_seeds": list(map(int, task_design["task_seeds"])),
+        "task_variants": list(map(str, task_design["task_variants"])),
+        "map_archive": {
+            "url": str(config["map_archive"]["url"]),
+            "sha256": str(config["map_archive"]["sha256"]),
+        },
+        "expected_map_count": len(config["benchmarks"]),
+        "expected_instance_count": int(config["expected_preflight_task_count"]),
+        "benchmarks": [
+            {
+                "id": str(row["id"]),
+                "layout_family": str(row["topology_group"]),
+                "member": str(row["member"]),
+                "member_sha256": str(row["member_sha256"]),
+                "agent_counts": list(map(int, row["agent_counts"])),
+            }
+            for row in config["benchmarks"]
+        ],
+    }
+
+
 def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
     if config.get("schema") != DESIGN_SCHEMA:
         raise ValueError("unexpected robust-action expansion design")
@@ -68,6 +103,15 @@ def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
         != "63346bd6c9d8b48ed3f42bf55012d604cf93dba3"
     ):
         raise ValueError("robust-action expansion identity changed")
+    if list(config.get("design_amendments") or ()) != [
+        {
+            "parent_commit": "f550c6e",
+            "reason": "deterministic_opposite_exchange_requires_even_agent_counts",
+            "change": "round_each_odd_registered_agent_count_up_by_one",
+            "initial_pp_or_repair_outcomes_read": False,
+        }
+    ]:
+        raise ValueError("robust-action deterministic design amendment changed")
 
     if (
         int(config.get("existing_state_count", -1)) != 303
@@ -131,6 +175,7 @@ def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
             or len(str(row.get("member_sha256", ""))) != 64
             or str(row.get("member")) != f"{row['id']}.map"
             or counts != sorted(set(counts))
+            or any(value % 2 for value in counts)
             or len(counts) != (4 if group == TOPOLOGY_GROUPS[2] else 3)
             or counts[0] <= 0
             or counts[-1] > min(1500, int(row["free_cell_count"]))
@@ -333,11 +378,44 @@ def audit_robustaction_expansion(
     return report
 
 
+def prepare_robustaction_preflight_dataset(
+    *, config_path: str | Path, fetched: str | Path, output: str | Path,
+) -> dict[str, Any]:
+    """Prepare deterministic map/OD tasks without running PP or a controller."""
+
+    config_path = Path(config_path).resolve()
+    output = Path(output).resolve()
+    config = _read_json(config_path)
+    adapter = robustaction_source_adapter(config)
+    adapter_path = output.parent / f"{output.name}.source_adapter.json"
+    _write_json(adapter_path, adapter)
+    summary = prepare_movingai_map_derived_dataset(
+        Path(fetched).resolve(), adapter_path, output
+    )
+    manifest = output / "balanced_wall_clock" / "manifest.jsonl"
+    return {
+        "schema": "lns2.stride.robustaction_preflight_dataset.v1",
+        "data_line_id": str(config["data_line_id"]),
+        "design_sha256": sha256_file(config_path),
+        "source_adapter_sha256": sha256_file(adapter_path),
+        "manifest_sha256": sha256_file(manifest),
+        "map_count": int(summary["splits"]["balanced_wall_clock"]["map_count"]),
+        "task_count": int(
+            summary["splits"]["balanced_wall_clock"]["instance_count"]
+        ),
+        "solver_or_controller_run": False,
+        "performance_measurement_run": False,
+        "summary": summary,
+    }
+
+
 __all__ = [
     "DESIGN_SCHEMA",
     "REPORT_SCHEMA",
     "TOPOLOGY_GROUPS",
     "audit_robustaction_expansion",
+    "prepare_robustaction_preflight_dataset",
+    "robustaction_source_adapter",
     "topology_group",
     "validate_robustaction_expansion_design",
 ]
