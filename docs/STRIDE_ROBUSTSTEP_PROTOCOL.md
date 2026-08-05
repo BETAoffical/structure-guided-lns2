@@ -2837,3 +2837,36 @@ in every map's pool; if two repairable tasks are unavailable, the data design
 fails instead of adding a post-hoc load or replacement map.  Candidate repair
 outcomes, future trajectory, controller choices and all timing outcomes remain
 forbidden selection inputs.
+
+### RobustAction StructPool v1 qualification result
+
+The reset-only qualification completed all 248 registered jobs with zero
+errors, zero timeouts and no incomplete reset.  It produced 46 nonzero initial
+states, evenly split across solver seeds (23/23), but 202/248 resets were
+already conflict-free.  Only 13/20 maps exposed any nonzero state and all 46
+nonzero states fell in the registered `high` agent band; the `low_mid` band
+contributed zero.  Consequently the registered `minimum_active_maps` and
+`minimum_nonzero_per_agent_band` gates failed.
+
+The outcome-blind task selector could retain only 16/40 tasks, covering eight
+maps.  Seven maps never produced an initial conflict: `brc200d`, `lak106d`,
+`lak526d`, `lgt600d`, `orz601d`, `ost001d` and `oth000d`.  Five additional
+maps produced at least one nonzero reset but fewer than two eligible tasks:
+`brc201d`, `den900d`, `hrt001d`, `lak308d` and `lgt604d`.  The remaining eight
+maps supplied two eligible tasks each.  All dataset dimensions, reset rows,
+seed isolation, forbidden-outcome checks and stored runtime semantics passed.
+No candidate repair, controller action, future state or performance outcome
+was read.
+
+The v1 data line therefore fails its preregistered qualification and must not
+be used as a 40-task training cohort.  The overall six-stage investigation is
+not abandoned: the next separate data revision is an outcome-blind load
+calibration restricted to the 12 underloaded maps.  It may use only the
+current reset statistics above and static map capacity to register higher
+agent counts before any additional reset is run; it may not filter on repair
+quality or TTF.  The completed qualification manifest SHA-256 is
+`13e44ec298c7e0fd61c6e786f7e2ba5dd5e3436a250f04f1647ec3fb2b52c20a`,
+the qualification report SHA-256 is
+`55b3dc11379e529377d9e06513d09de2f2706f0c7c1ab83ea4b1ffa793b30edf`,
+and the selection report SHA-256 is
+`04cbba29717353c45667622a65188df48770b1c6c13073eb8558f6a14231c898`.

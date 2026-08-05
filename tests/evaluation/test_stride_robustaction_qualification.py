@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.stride_robustaction_qualification import (
+    registered_runtime_matches,
     select_qualified_tasks,
     validate_robustaction_qualification_design,
 )
@@ -80,6 +81,25 @@ class RobustActionQualificationTests(unittest.TestCase):
         )
         self.assertFalse(selected)
         self.assertEqual(underloaded, ["map-a"])
+
+    def test_resolved_runtime_defaults_do_not_create_a_false_mismatch(self) -> None:
+        registered = {
+            "solver_seeds": [1, 2],
+            "environment": {"time_limit": 600.0, "max_repair_iterations": 0},
+            "metric_iteration_budget": 100,
+        }
+        observed = {
+            "configuration": {
+                **copy.deepcopy(registered),
+                "metric_iteration_budget": None,
+                "stopping_rule": "wall-clock",
+                "controller": "v2-full",
+                "feature_backend": "auto",
+            }
+        }
+        self.assertTrue(registered_runtime_matches(observed, registered))
+        observed["configuration"]["environment"]["time_limit"] = 599.0
+        self.assertFalse(registered_runtime_matches(observed, registered))
 
 
 if __name__ == "__main__":

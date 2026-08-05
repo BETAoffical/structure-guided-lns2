@@ -38,6 +38,35 @@ FORBIDDEN_FIELDS = {
 }
 
 
+def registered_runtime_matches(
+    run_config: dict[str, Any], registered_runtime: dict[str, Any]
+) -> bool:
+    """Match the registered runtime after the collector's documented defaults.
+
+    The collector records a resolved configuration, so it contains CLI defaults
+    that are intentionally absent from the preregistered JSON.  Wall-clock
+    qualification also clears the fixed-iteration metric budget because no
+    controller decision is executed.  Compare every registered field after
+    that deterministic normalization while allowing only additional resolved
+    fields in the stored run configuration.
+    """
+
+    observed = dict(run_config.get("configuration") or {})
+    expected = dict(registered_runtime)
+    expected["stopping_rule"] = "wall-clock"
+    expected["metric_iteration_budget"] = None
+
+    def contains(actual: Any, wanted: Any) -> bool:
+        if isinstance(wanted, dict):
+            return isinstance(actual, dict) and all(
+                key in actual and contains(actual[key], value)
+                for key, value in wanted.items()
+            )
+        return actual == wanted
+
+    return contains(observed, expected)
+
+
 def _registered(project_root: Path, spec: dict[str, Any]) -> Path:
     path = (project_root / str(spec["path"])).resolve()
     if not path.is_file() or sha256_file(path) != str(spec["sha256"]):
@@ -267,8 +296,9 @@ def analyze_robustaction_qualification(
         "complete_qualification_product": set(indexed) == expected,
         "all_rows_valid": not errors,
         "forbidden_outcomes_absent": not forbidden_hits,
-        "registered_runtime_exact": dict(run_config.get("configuration") or {})
-        == registered_runtime,
+        "registered_runtime_exact": registered_runtime_matches(
+            run_config, registered_runtime
+        ),
         "qualification_passed": bool(qualification_report.get("passed")),
         "all_maps_have_nonzero_state": len(active_maps) == 20,
         "two_tasks_selected_per_map": len(selected) == 40 and not underloaded,
