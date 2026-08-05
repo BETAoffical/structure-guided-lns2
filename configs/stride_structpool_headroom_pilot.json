@@ -1,0 +1,76 @@
+{
+  "schema": "lns2.stride.structpool_headroom_config.v1",
+  "scientific_status": "paired_current_step_quality_pilot_no_timing",
+  "pilot_id": "stride-structpool-headroom-v1",
+  "candidate_generator_id": "stride-structpool-v1",
+  "incumbent_pool_id": "v2-plus-stride-topoboundary-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "runtime_export_allowed": false,
+  "formal_ood_allowed": false,
+  "controller_actions_allowed": false,
+  "future_trajectory_allowed": false,
+  "timing_fields_allowed": false,
+  "inputs": {
+    "design": {
+      "path": "configs/stride_structpool_design.json",
+      "sha256": "44b6dcc66e7730e82e5e669913784526f817ec0445717f6b46fad8ebfe760f5b"
+    },
+    "coverage_report": {
+      "path": "build/stride-structpool-coverage-v1/structpool_coverage_report.json",
+      "sha256": "2ccefef8e0dba8e13c703fd6ac498d4455a5c8ffefb937d74a9e0312a2af580c"
+    },
+    "coverage_states": {
+      "path": "build/stride-structpool-coverage-v1/structpool_coverage_states.jsonl",
+      "sha256": "518c77a190044341be98c1e9c09cfbb8a98fcb7c9e1ba04e4c6d75c3f67b9481"
+    },
+    "repairability_run_config": {
+      "path": "build/stride-repairability-collection-v2/run_config.json",
+      "sha256": "f8315ad4ad14cdc87dd72de5d3a763038955bdd2cc20f5d3cf89a8e457f509ff"
+    },
+    "repairability_report": {
+      "path": "build/stride-repairability-collection-v2/collection_report.json",
+      "sha256": "6e4e4c5afa80a64eefede2b6e41de29eeaaff39b379bdf9e82abda75c693c45e"
+    },
+    "state_selection": {
+      "path": "build/stride-repairability-collection-v2/state_selection.jsonl",
+      "sha256": "f523122c62a000274df1250f4bbda9ff7757c73991d26ce33644f4040bfe6bb8"
+    }
+  },
+  "state_artifact_root": "build/stride-repairability-collection-v2/states",
+  "selection": {
+    "rule": "one_per_map_with_alternating_source_policy_then_map_round_robin",
+    "expected_state_count": 16,
+    "minimum_distinct_map_count": 13,
+    "required_source_policies": ["official_adaptive", "v2-full"],
+    "selection_fields": ["state_id", "map_id", "source_policy"],
+    "repair_outcome_used_for_selection": false
+  },
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "label": {
+    "id": "mean_current_step_normalized_conflict_reduction",
+    "formula": "mean_seed((conflicts_before-conflicts_after)/max(conflicts_before,1))",
+    "aggregation_unit": "candidate_within_state",
+    "paired_seed_rule": "same_repair_state_fingerprint_and_trial_index",
+    "single_seed_winner_used": false,
+    "timing_used": false,
+    "future_state_used": false
+  },
+  "candidate_space": {
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "minimum_novel_candidates_per_state": 4
+  },
+  "gates": {
+    "minimum_state_fraction_with_novel_expected_gain": 0.2,
+    "minimum_mean_best_expected_gain_over_incumbent_pool": 0.01,
+    "minimum_gain_for_state_opportunity": 0.02,
+    "require_complete_16_seed_product": true,
+    "require_exact_incumbent_artifact_reproduction": true,
+    "require_paired_seed_identity": true,
+    "require_zero_errors": true
+  },
+  "next_decision_on_pass": "rebalance_robustaction_data_to_12_high_6_mid_2_low_then_collect_new_labels",
+  "next_decision_on_failure": "retain_two_boundary_plus_v2_incumbent_and_stop_new_ranker_training"
+}

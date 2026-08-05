@@ -15,11 +15,17 @@ from experiments.stride_structpool_coverage import (
     select_structpool_states,
     validate_structpool_coverage_config,
 )
+from experiments.stride_structpool_headroom import (
+    analyze_structpool_headroom,
+    select_headroom_states,
+    validate_structpool_headroom_config,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_structpool_design.json"
 COVERAGE_CONFIG = ROOT / "configs" / "stride_structpool_coverage.json"
+HEADROOM_CONFIG = ROOT / "configs" / "stride_structpool_headroom_pilot.json"
 
 
 class StrideStructPoolDesignTest(unittest.TestCase):
@@ -158,6 +164,61 @@ class StrideStructPoolCoverageTest(unittest.TestCase):
         mutated["candidate_repair_trials_allowed"] = True
         with self.assertRaisesRegex(ValueError, "proposal-only"):
             validate_structpool_coverage_config(mutated)
+
+
+class StrideStructPoolHeadroomTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.config = json.loads(HEADROOM_CONFIG.read_text(encoding="utf-8"))
+        validate_structpool_headroom_config(cls.config)
+
+    def test_pilot_cohort_is_fixed_without_repair_outcomes(self) -> None:
+        rows = []
+        for map_index in range(13):
+            for policy in ("official_adaptive", "v2-full"):
+                rows.append(
+                    {
+                        "state_id": f"state-{map_index:02d}-{policy}",
+                        "map_id": f"map-{map_index:02d}",
+                        "source_policy": policy,
+                        "repair_outcome_that_must_not_be_read": map_index,
+                    }
+                )
+        first = select_headroom_states(rows, self.config)
+        second = select_headroom_states(list(reversed(rows)), self.config)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 16)
+        self.assertEqual(len({row["map_id"] for row in first}), 13)
+        self.assertEqual(
+            {row["source_policy"] for row in first},
+            {"official_adaptive", "v2-full"},
+        )
+
+    def test_headroom_gates_use_expected_one_step_gain(self) -> None:
+        passing = [
+            {"best_expected_gain_over_incumbent": 0.02 if index < 4 else 0.01}
+            for index in range(16)
+        ]
+        report = analyze_structpool_headroom(self.config, passing)
+        self.assertTrue(report["passed"])
+        self.assertAlmostEqual(report["opportunity_fraction"], 0.25)
+        self.assertGreaterEqual(report["mean_gain"], 0.01)
+
+        failing = [
+            {"best_expected_gain_over_incumbent": 0.0} for _ in range(16)
+        ]
+        failed = analyze_structpool_headroom(self.config, failing)
+        self.assertFalse(failed["passed"])
+
+    def test_headroom_validator_rejects_timing_or_future_labels(self) -> None:
+        timing = copy.deepcopy(self.config)
+        timing["timing_fields_allowed"] = True
+        with self.assertRaisesRegex(ValueError, "evidence boundary"):
+            validate_structpool_headroom_config(timing)
+        future = copy.deepcopy(self.config)
+        future["label"]["future_state_used"] = True
+        with self.assertRaisesRegex(ValueError, "label changed"):
+            validate_structpool_headroom_config(future)
 
 
 if __name__ == "__main__":
