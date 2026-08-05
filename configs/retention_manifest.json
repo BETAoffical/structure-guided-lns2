@@ -1174,6 +1174,21 @@
       "contract": "StructPool preregistration identity, exact frozen incumbents, no outcome gate inputs, and deferred raw-TTF contract."
     },
     {
+      "path": "configs/stride_structpool_coverage.json",
+      "role": "active",
+      "contract": "Checksum-pinned 48-state train-only StructPool proposal audit with no repairs, controller actions, runtime, or OOD access."
+    },
+    {
+      "path": "experiments/stride_structpool_coverage.py",
+      "role": "active",
+      "contract": "Outcome-blind state selection, deterministic proposal replay, incumbent preservation, diversity, family, size, and candidate-cap gates."
+    },
+    {
+      "path": "scripts/run_stride_structpool_coverage.py",
+      "role": "active",
+      "contract": "Thin CLI for the proposal-only StructPool coverage audit."
+    },
+    {
       "path": "tests/integration/test_stride_robuststep.py",
       "role": "active",
       "contract": "Robust paired-seed dominance, seed-depth stability, outcome-blind map/load selection, OOD isolation, and uncertainty contracts."

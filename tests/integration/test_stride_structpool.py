@@ -10,10 +10,16 @@ from experiments.stride_structpool import (
     load_structpool_design,
     validate_structpool_design,
 )
+from experiments.stride_structpool_coverage import (
+    analyze_structpool_coverage_rows,
+    select_structpool_states,
+    validate_structpool_coverage_config,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_structpool_design.json"
+COVERAGE_CONFIG = ROOT / "configs" / "stride_structpool_coverage.json"
 
 
 class StrideStructPoolDesignTest(unittest.TestCase):
@@ -77,6 +83,81 @@ class StrideStructPoolDesignTest(unittest.TestCase):
     def test_json_contains_no_unregistered_nan_values(self) -> None:
         payload = json.dumps(self.config, allow_nan=False, sort_keys=True)
         self.assertIn("stride-structpool-v1", payload)
+
+
+class StrideStructPoolCoverageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.config = json.loads(COVERAGE_CONFIG.read_text(encoding="utf-8"))
+        validate_structpool_coverage_config(cls.config)
+
+    def test_selection_is_outcome_blind_deterministic_and_map_balanced(self) -> None:
+        rows = []
+        for map_index in range(12):
+            for policy in ("official_adaptive", "v2-full"):
+                for index in range(3):
+                    rows.append(
+                        {
+                            "state_id": f"state-{map_index:02d}-{policy}-{index}",
+                            "map_id": f"map-{map_index:02d}",
+                            "source_policy": policy,
+                            "research_split": "train",
+                            "agent_count": 120,
+                            "before_conflicts": 20,
+                            "candidate_outcome_that_must_not_be_read": index,
+                        }
+                    )
+        first = select_structpool_states(rows, self.config)
+        second = select_structpool_states(list(reversed(rows)), self.config)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 48)
+        self.assertEqual(len({row["map_id"] for row in first}), 12)
+
+    def test_proposal_only_report_passes_only_complete_contract(self) -> None:
+        rows = []
+        families = [
+            "bottleneck_crossing",
+            "conflict_component",
+            "topology_boundary",
+            "spatiotemporal_hotspot",
+            "path_overlap",
+        ]
+        for index in range(48):
+            rows.append(
+                {
+                    "state_id": f"state-{index}",
+                    "map_id": f"map-{index % 12}",
+                    "source_policy": (
+                        "official_adaptive" if index % 2 == 0 else "v2-full"
+                    ),
+                    "added_candidate_count": 6,
+                    "added_family_groups": families,
+                    "added_sizes": [8, 16, 24, 32],
+                    "high_stress_gate_passed": True,
+                    "deterministic": True,
+                    "base_preserved": True,
+                    "incumbent_boundary_preserved": True,
+                    "candidate_cap_preserved": True,
+                    "state_fingerprint_preserved": True,
+                    "maximum_novel_jaccard_similarity": 0.75,
+                }
+            )
+        report = analyze_structpool_coverage_rows(self.config, rows)
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["candidate_repair_trials_executed"])
+        self.assertFalse(report["controller_actions_executed"])
+        self.assertFalse(report["selection_outcome_fields_read"])
+
+        rows[0]["base_preserved"] = False
+        failed = analyze_structpool_coverage_rows(self.config, rows)
+        self.assertFalse(failed["passed"])
+        self.assertFalse(failed["gates"]["exact_base_preservation"])
+
+    def test_coverage_validator_rejects_repair_permission(self) -> None:
+        mutated = copy.deepcopy(self.config)
+        mutated["candidate_repair_trials_allowed"] = True
+        with self.assertRaisesRegex(ValueError, "proposal-only"):
+            validate_structpool_coverage_config(mutated)
 
 
 if __name__ == "__main__":

@@ -7,8 +7,10 @@ import unittest
 from experiments.state_analysis import ConflictEvent, StateAnalysis
 from lns2_selector.runtime.topology_candidates import (
     _boundary_neighborhood,
+    generate_structpool_candidates,
     generate_topology_anchor_candidates,
     generate_topology_boundary_candidates,
+    merge_structpool_candidates,
     merge_topology_anchor_candidates,
 )
 
@@ -82,6 +84,81 @@ def _reference_boundary_neighborhood(
 
 
 class TopologyCandidatesTest(unittest.TestCase):
+    @staticmethod
+    def _structpool_state() -> tuple[dict, StateAnalysis]:
+        agent_count = 40
+        agents = []
+        events = []
+        pair_set = set()
+        for agent in range(agent_count):
+            path = [
+                agent % 20,
+                20 + (agent % 10),
+                40 + ((agent * 3) % 20),
+                60 + ((agent * 7) % 20),
+            ]
+            agents.append(
+                {
+                    "id": agent,
+                    "path": path,
+                    "conflict_degree": 2 + (agent % 6),
+                }
+            )
+        for index in range(32):
+            left = index
+            right = (index + 1) % 32
+            pair = (min(left, right), max(left, right))
+            pair_set.add(pair)
+            events.append(
+                ConflictEvent(
+                    time=index % 8,
+                    kind="vertex",
+                    left=pair[0],
+                    right=pair[1],
+                    cells=(20 + (index % 10),),
+                )
+            )
+        for index in range(8):
+            left, right = index, 32 + index
+            pair_set.add((left, right))
+            events.append(
+                ConflictEvent(
+                    time=2 + (index % 3),
+                    kind="vertex",
+                    left=left,
+                    right=right,
+                    cells=(40 + index,),
+                )
+            )
+        state = {
+            "agents": agents,
+            "conflict_edges": [list(pair) for pair in sorted(pair_set)],
+        }
+        visit_heat: collections.Counter[int] = collections.Counter()
+        agent_heat: collections.Counter[int] = collections.Counter()
+        for agent in agents:
+            visit_heat.update(agent["path"])
+            agent_heat.update(set(agent["path"]))
+        component_id = {agent: 0 if agent < 32 else agent - 31 for agent in range(40)}
+        component_members = {0: set(range(32))}
+        component_members.update({index + 1: {index, index + 32} for index in range(8)})
+        analysis = StateAnalysis(
+            rows=5,
+            cols=20,
+            free_cells=set(range(100)),
+            degrees={cell: (2 if 20 <= cell < 30 else 3) for cell in range(100)},
+            articulation={40, 41, 42, 43},
+            obstacle_rate_2={},
+            obstacle_rate_4={},
+            visit_heat=visit_heat,
+            agent_heat=agent_heat,
+            events=events,
+            pair_set=pair_set,
+            component_id=component_id,
+            component_members=component_members,
+        )
+        return state, analysis
+
     def test_incident_index_optimization_preserves_reference_actions(self) -> None:
         for seed in range(12):
             generator = random.Random(seed)
@@ -275,6 +352,91 @@ class TopologyCandidatesTest(unittest.TestCase):
             ),
             [],
         )
+
+    def test_structpool_is_deterministic_capped_and_preserves_incumbent(self) -> None:
+        state, analysis = self._structpool_state()
+        first = generate_structpool_candidates(state, analysis)
+        second = generate_structpool_candidates(state, analysis)
+        self.assertEqual(first, second)
+        self.assertLessEqual(len(first), 6)
+        self.assertGreaterEqual(len(first), 5)
+
+        incumbent = generate_topology_boundary_candidates(
+            state, analysis, neighborhood_size=16, core_budget=4
+        )
+        incumbent_sets = {tuple(row["agents"]) for row in incumbent}
+        structpool_sets = {tuple(row["agents"]) for row in first}
+        self.assertTrue(incumbent_sets <= structpool_sets)
+
+        family_groups = {
+            group for row in first for group in row["structpool_family_groups"]
+        }
+        self.assertEqual(
+            family_groups,
+            {
+                "bottleneck_crossing",
+                "conflict_component",
+                "topology_boundary",
+                "spatiotemporal_hotspot",
+                "path_overlap",
+            },
+        )
+        self.assertEqual({row["actual_size"] for row in first}, {8, 16, 24, 32})
+
+    def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
+        state, analysis = self._structpool_state()
+        rows = generate_structpool_candidates(state, analysis)
+        incumbent = {
+            tuple(row["agents"])
+            for row in generate_topology_boundary_candidates(
+                state, analysis, neighborhood_size=16, core_budget=4
+            )
+        }
+        novel = [row for row in rows if tuple(row["agents"]) not in incumbent]
+        for index, left in enumerate(novel):
+            for right in novel[index + 1 :]:
+                left_agents = set(left["agents"])
+                right_agents = set(right["agents"])
+                similarity = len(left_agents & right_agents) / len(
+                    left_agents | right_agents
+                )
+                self.assertLessEqual(similarity, 0.8)
+
+    def test_structpool_merge_keeps_frozen_base_rows_exact(self) -> None:
+        base = [
+            {
+                "candidate_id": "base-a",
+                "agents": [0, 1],
+                "actual_size": 2,
+                "selection_families": ["target:4"],
+                "selection_rank_by_family": {"target:4": 0},
+                "proposal_count_by_family": {"target:4": 1},
+                "proposal_seeds": [5],
+                "seed_agents": [0],
+            }
+        ]
+        duplicate = {**base[0], "selection_families": ["structpool-path-overlap:8"]}
+        addition = {
+            **base[0],
+            "candidate_id": "added",
+            "agents": [2, 3],
+            "selection_families": ["structpool-conflict-component:8"],
+        }
+        merged = merge_structpool_candidates(base, [duplicate, addition])
+        self.assertEqual(merged[0], base[0])
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged[1]["agents"], [2, 3])
+
+    def test_structpool_rejects_protocol_drift(self) -> None:
+        state, analysis = self._structpool_state()
+        with self.assertRaisesRegex(ValueError, "requires sizes"):
+            generate_structpool_candidates(
+                state, analysis, neighborhood_sizes=(8, 16)
+            )
+        with self.assertRaisesRegex(ValueError, "six-candidate"):
+            generate_structpool_candidates(
+                state, analysis, maximum_added_candidates=7
+            )
 
 
 if __name__ == "__main__":

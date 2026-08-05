@@ -2685,3 +2685,34 @@ non-timing repair-label, offline and semantic work only.  Runtime equivalence,
 Shadow, paired high-load raw TTF and fresh-OOD raw TTF remain blocked until the
 user reports comparable performance has returned; no extra charger benchmark
 is introduced.
+
+### StructPool v1 proposal-only result: passed
+
+The generator was implemented without changing `stride-topoboundary-v1` or the
+frozen V2 proposal path.  It keeps the exact incumbent size-16 articulation and
+low-degree boundary actions first, then fills the remaining cap with compact
+bottleneck crossing, medium conflict-component, spatiotemporal hotspot and
+broad path-overlap candidates.  All four families are generated over all four
+registered sizes before deterministic reduction; preferred 8/24/16/32 scales
+give each mechanism one first-round representative.  Jaccard filtering applies
+only among novel additions, so it cannot remove an incumbent action.
+
+The proposal-only audit selected 48 train states outcome-blind from the frozen
+repairability selection manifest using only split, agent count, conflict count,
+map, source policy and state id.  It covered 13 maps and both official-Adaptive
+and V2 source policies.  All 48 states passed the cheap high-stress gate, and
+each produced six unique additions.  Across the cohort all five registered
+family groups and sizes 8, 16, 24 and 32 were present.  Exact base-pool and
+incumbent-boundary preservation, duplicate generation replay, the six-action
+cap, novel-candidate Jaccard limit and before/after state fingerprints all
+passed.
+
+No candidate repair, controller action, controller outcome, wall-clock TTF or
+formal OOD input was used.  This result establishes deterministic proposal
+coverage only; it does not establish that any new action repairs better.  The
+report SHA-256 is
+`2ccefef8e0dba8e13c703fd6ac498d4455a5c8ffefb937d74a9e0312a2af580c`
+and the 48-row artifact SHA-256 is
+`518c77a190044341be98c1e9c09cfbb8a98fcb7c9e1ba04e4c6d75c3f67b9481`.
+The registered next step is the small 16-paired-seed, current-step headroom
+pilot; timing fields remain excluded.
