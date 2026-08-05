@@ -2446,3 +2446,28 @@ regret was 0.27040, identical to V2 and worse than the same OOF MapRank value
 Shadow, high-load raw TTF, or fresh-map evaluation. This is an offline quality
 failure independent of the currently reported slow-charger condition; no
 wall-clock evidence was collected.
+
+### STRIDE-AnchorChoice v1 preregistration
+
+`stride-anchorchoice-v1` is registered as a distinct post-OverrideGuard
+successor before its direct-selection OOF outcomes are computed. It addresses
+the measured proposal bottleneck rather than relaxing any label or safety
+threshold: the same classifier scores every non-anchor candidate in the frozen
+V2-plus-Topology-Boundary pool against the frozen V2 action, then selects the
+highest probability only when the registered gate passes. MapRank is retained
+as an offline comparator but is no longer allowed to filter the single action
+seen by the safety model.
+
+The frozen train labels contain a robust non-anchor opportunity in 77 of 237
+states (32.49%), so the registered minimum direct-override coverage is 8% of
+all states, while directionally safe precision remains 60%. Calibration also
+requires V2 exact-best and Top-3 noninferiority. The final offline gate requires
+at least 5% relative normalized-regret improvement over V2, no more than 0.005
+absolute regret degradation versus OOF MapRank, and topology-group
+noninferiority. Four outer and three inner map-grouped folds remain mandatory.
+
+The label set, candidate pool, V2 anchor, model capacity, 248-dimensional
+oriented representation and all source checksums are frozen. Runtime, future
+trajectory, high-load, legacy-validation, test and formal-OOD data remain
+forbidden for fitting or calibration. The current slow-charger state still
+allows only offline and semantic work; no extra charger preflight is added.

@@ -1,0 +1,62 @@
+{
+  "schema": "lns2.stride.anchorchoice_design.v1",
+  "scientific_status": "post_overrideguard_rejection_preregistered_before_direct_action_oof",
+  "design_id": "stride-anchorchoice-design-v1",
+  "controller_id": "stride-anchorchoice-v1",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false,
+  "motivation": "remove_the_low_quality_single_maprank_proposal_bottleneck_without_relaxing_safety_labels",
+  "architecture": {
+    "anchor": "frozen-v2-full",
+    "candidate_pool": "frozen-maprank-base-plus-optional-topology-boundary",
+    "candidate_actions": "all_non_anchor_candidates",
+    "selection_model": "independent-action-conditioned-current-step-classifier",
+    "decision_rule": "select_highest_predicted_robust_candidate_win_if_threshold_passes_else_v2_anchor",
+    "maprank_role": "offline_comparator_only_not_proposal_filter",
+    "pair_representation": "oriented_candidate_minus_anchor_plus_pair_mean",
+    "base_feature_dimension": 124,
+    "action_input_dimension": 248,
+    "deterministic_tie_break": "candidate_id_ascending"
+  },
+  "label_contract": {
+    "schema": "lns2.stride.override_safety_label.v1",
+    "positive": "candidate_is_registered_robust_winner_against_anchor",
+    "negative": "pair_is_uncertain_or_anchor_is_registered_robust_winner",
+    "source": "frozen_stride_overrideguard_labels_v1",
+    "runtime_used_in_label": false,
+    "future_trajectory_used_in_label": false
+  },
+  "evaluation_order": [
+    "nested_train_map_oof",
+    "legacy_validation_descriptive",
+    "runtime_semantic_equivalence_only_if_offline_passes",
+    "legacy_shadow_only_if_offline_passes",
+    "paired_high_load_development_raw_ttf_only_after_power_state_restored",
+    "paired_fresh_map_raw_ttf_only_after_development_pass"
+  ],
+  "performance_environment_policy": {
+    "power_state_source": "user_reported",
+    "wall_clock_allowed_only_after_user_reports_comparable_performance_state": true,
+    "additional_performance_preflight_required": false,
+    "same_reported_power_state_all_comparators_rerun_required": true,
+    "pool_timing_across_unmatched_power_states": false,
+    "slow_charger_action": "allow_non_timing_work_only"
+  },
+  "evidence_roles": {
+    "legacy_validation": "descriptive_only",
+    "high_load": "post_hoc_development_only",
+    "fresh_map": "first_unseen_end_to_end_evidence"
+  },
+  "forbidden_inputs": [
+    "repair_runtime",
+    "time_to_feasible",
+    "future_repair_rounds",
+    "cost_to_go",
+    "receding_q",
+    "controller_outcome",
+    "high_load_labels_for_training_or_threshold_calibration",
+    "legacy_validation_labels_for_threshold_calibration",
+    "test_data",
+    "formal_ood_data"
+  ]
+}
