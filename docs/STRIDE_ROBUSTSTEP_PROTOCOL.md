@@ -2914,3 +2914,30 @@ two tasks on every one of the original 20 maps.  On failure, the registered
 next action is a separate outcome-blind map-replacement revision, not keeping
 only successful observed tasks.  The qualification design SHA-256 is
 `cf7da3ef3e815ca9408eee67b0ca640f0b0c01484a973630cfe112d0a2cbb09f`.
+
+### RobustAction StructPool load extension v2 result
+
+All 96 extension reset jobs completed with zero process timeout and zero
+collector stderr, but 31 rows were invalid because initial PP left at least one
+agent path empty.  The failure occurred on six maps and was load/OD specific:
+four rows on `brc200d`, eight on `brc201d`, four on `lak308d`, one on
+`lgt604d`, six on `ost001d` and eight on `oth000d`.  This is an initialization
+incompleteness result, not a controller, repair or TTF result.
+
+Among 65 valid resets, 52 had nonzero conflicts and ten of the twelve extension
+maps were active.  Combining valid current-state summaries with the frozen v1
+summaries yielded 32 eligible tasks on 16 maps.  The extension successfully
+recovered eight of the twelve previously underloaded maps; `brc201d`,
+`lgt600d`, `ost001d` and `oth000d` still lacked two eligible tasks.  Therefore
+the registered all-valid-reset, all-extension-map and final 20-map/40-task
+gates failed.  No successful subset may be promoted to training.
+
+The qualification manifest SHA-256 is
+`c8596c7eae0b9dd65e1d33081a12c75c617b844777a9868b98e3492535ab5078`,
+the native qualification report SHA-256 is
+`dc0fa11ba74f97253d029d3f3ae3c942bd9c7571b2c39e62f27f8f8b24fd6bdd`,
+and the combined analysis report SHA-256 is
+`ee32d47275d232321d07eb4c22713941a6522f1ac1d80e0190a5a2d2674fc5a4`.
+The next action is the preregistered outcome-blind replacement of two high-,
+one mid- and one low-topology map; replacement ranking may use only static map
+metrics and locked-evidence exclusions.

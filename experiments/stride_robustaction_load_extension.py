@@ -156,7 +156,12 @@ def _summaries(
     summaries = []
     for task_id, source in sorted(source_index.items()):
         values = [indexed.get((task_id, seed)) for seed in map(int, solver_seeds)]
-        if any(value is None for value in values):
+        if any(
+            value is None
+            or str(value.get("status")) != "ok"
+            or "initial_conflicts" not in value
+            for value in values
+        ):
             continue
         conflicts = [int(value["initial_conflicts"]) for value in values if value is not None]
         summaries.append(

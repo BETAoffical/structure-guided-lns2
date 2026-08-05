@@ -7,6 +7,7 @@ from pathlib import Path
 
 from experiments.stride_robustaction_load_extension import (
     UNDERLOADED_MAPS,
+    _summaries,
     validate_load_extension_qualification_design,
 )
 
@@ -44,6 +45,31 @@ class RobustActionLoadExtensionTests(unittest.TestCase):
             validate_load_extension_qualification_design(
                 changed, project_root=ROOT
             )
+
+    def test_error_rows_are_reported_without_reading_missing_conflicts(self) -> None:
+        manifest = [
+            {
+                "task_id": "map__derived_uniform_random__task_seed_0311__agents_0100",
+                "map_id": "map",
+                "layout_mode": "dao_high_topology",
+                "agent_count": 100,
+            }
+        ]
+        results = [
+            {
+                "task_id": manifest[0]["task_id"],
+                "map_id": "map",
+                "agent_count": 100,
+                "solver_seed": seed,
+                "status": "error",
+                "error": "RuntimeError: initial planning failed",
+            }
+            for seed in (1, 2)
+        ]
+        summaries, errors, forbidden = _summaries(manifest, results, [1, 2])
+        self.assertFalse(summaries)
+        self.assertEqual(len(errors), 2)
+        self.assertFalse(forbidden)
 
 
 if __name__ == "__main__":
