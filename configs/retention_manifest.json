@@ -194,6 +194,11 @@
       "purpose": "Outcome-blind high-load extension qualification and frozen v1 plus extension source-dataset assembly."
     },
     {
+      "path": "experiments/stride_robustaction_map_replacement.py",
+      "role": "active",
+      "purpose": "Outcome-blind replacement-map qualification and final 20-map RobustAction source-dataset assembly."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -367,6 +372,11 @@
       "path": "scripts/analyze_stride_robustaction_load_extension.py",
       "role": "active",
       "purpose": "Command-line entry point for reset-only RobustAction load-extension analysis and final source-task assembly."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_map_replacement.py",
+      "role": "active",
+      "purpose": "Command-line entry point for reset-only RobustAction replacement-map analysis and source-task assembly."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1187,6 +1197,11 @@
       "path": "tests/evaluation/test_stride_robustaction_load_extension.py",
       "role": "active",
       "contract": "Load-extension qualification registration, outcome boundary, and map-replacement failure action."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_map_replacement.py",
+      "role": "active",
+      "contract": "Replacement-map qualification registration, disjoint replacement identities, and outcome boundary."
     },
     {
       "path": "experiments/stride_structpool.py",

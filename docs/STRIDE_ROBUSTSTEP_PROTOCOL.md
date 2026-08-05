@@ -2961,3 +2961,20 @@ generator remains unchanged.  The registry contains four maps times three
 loads times two OD variants, or 24 tasks and 48 reset-only jobs.  Its design
 SHA-256 is
 `388f2ded484232de1fabfd198af5b6214ab1bae00c84a7bd916df1f686594371`.
+
+The deterministic replacement dataset completed with four maps and 24 tasks;
+no solver or controller ran.  Its manifest SHA-256 is
+`273af17e38038e98cbb26d6b304d9f6129bf25ea6468e3c6618ba24eff201bc4`,
+the dataset-summary SHA-256 is
+`c6984e4e04cebd72a8b1c6e2387cb66c163e2482ba8c35312f3cebc1a92f6c3e`,
+and the source-adapter SHA-256 is
+`7e0a0e3631b5791051628bf8043afa611cf8a0bd56e871daabde58bcc66c1cf1`.
+
+Before replacement initialization, 48 reset-only jobs are registered under
+the same 600/660-second limits and solver seeds 1/2.  All rows must be valid,
+all four maps must expose a nonzero state and the combined current-state-only
+selector must produce 40 tasks on 20 maps after removing `brc201d`, `lgt600d`,
+`ost001d` and `oth000d`.  The final 12/6/2 topology balance must remain exact.
+If this gate fails, map expansion stops for a task-generator reassessment; no
+successful subset is permitted to train.  The qualification design SHA-256 is
+`568dc0ae74192dcb01d89aeece6ac104b9f5d9700a3d983693e70e460b54a12f`.

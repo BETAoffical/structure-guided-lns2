@@ -1,0 +1,59 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_map_replacement_qualification_design.v1",
+  "scientific_status": "preregistered_before_structpool_map_replacement_initial_pp",
+  "data_line_id": "stride-robustaction-structpool-data-v3",
+  "pre_registration_git_commit": "5d451383834988e428a0fefd0b03f614c5360711",
+  "inputs": {
+    "replacement_design": {
+      "path": "configs/stride_robustaction_structpool_map_replacement_design.json",
+      "sha256": "388f2ded484232de1fabfd198af5b6214ab1bae00c84a7bd916df1f686594371"
+    },
+    "runtime": {
+      "path": "configs/stride_robustaction_structpool_map_replacement_runtime.json",
+      "sha256": "391710eb152d8c03c174c7306dd107106a3f6f8c65ffab2ca662669cbfc1fb16"
+    },
+    "replacement_dataset_manifest": {
+      "path": "build/stride-robustaction-structpool-map-replacement-dataset-v3/balanced_wall_clock/manifest.jsonl",
+      "sha256": "273af17e38038e98cbb26d6b304d9f6129bf25ea6468e3c6618ba24eff201bc4"
+    },
+    "replacement_dataset_summary": {
+      "path": "build/stride-robustaction-structpool-map-replacement-dataset-v3/dataset_summary.json",
+      "sha256": "c6984e4e04cebd72a8b1c6e2387cb66c163e2482ba8c35312f3cebc1a92f6c3e"
+    },
+    "v1_selection_report": {
+      "path": "build/stride-robustaction-structpool-source-dataset-v1/qualification_selection_report.json",
+      "sha256": "04cbba29717353c45667622a65188df48770b1c6c13073eb8558f6a14231c898"
+    },
+    "v2_analysis_report": {
+      "path": "build/stride-robustaction-structpool-source-dataset-v2/load_extension_qualification_report.json",
+      "sha256": "ee32d47275d232321d07eb4c22713941a6522f1ac1d80e0190a5a2d2674fc5a4"
+    }
+  },
+  "expected_replacement_map_count": 4,
+  "expected_replacement_task_count": 24,
+  "solver_seeds": [1, 2],
+  "expected_replacement_qualification_job_count": 48,
+  "replaced_map_ids": ["brc201d", "lgt600d", "ost001d", "oth000d"],
+  "replacement_map_ids": ["lak203d", "orz201d", "ost101d", "rmtst"],
+  "expected_final_map_count": 20,
+  "tasks_selected_per_map": 2,
+  "expected_final_selected_task_count": 40,
+  "target_mean_initial_conflicts": [25, 100],
+  "minimum_nonzero_solver_seed_fraction": 0.5,
+  "minimum_mean_initial_conflicts": 1.0,
+  "prefer_distinct_task_variants": true,
+  "forbidden_selection_inputs": [
+    "candidate_repair_outcome", "candidate_conflicts_after",
+    "candidate_runtime", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory", "repair_runtime"
+  ],
+  "replacement_qualification_must_pass": true,
+  "all_replacement_resets_must_be_complete": true,
+  "all_replacement_maps_must_have_nonzero_state": true,
+  "final_selection_must_cover_twenty_maps": true,
+  "candidate_outcomes_read": false,
+  "controller_outcomes_read": false,
+  "formal_speed_claim": false,
+  "next_decision_on_pass": "collect_40_tasks_times_2_seeds_times_2_frozen_source_policies",
+  "next_decision_on_failure": "stop_map_expansion_and_reassess_task_generator_before_training"
+}
