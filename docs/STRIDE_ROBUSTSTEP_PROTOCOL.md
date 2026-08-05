@@ -2870,3 +2870,25 @@ the qualification report SHA-256 is
 `55b3dc11379e529377d9e06513d09de2f2706f0c7c1ab83ea4b1ffa793b30edf`,
 and the selection report SHA-256 is
 `04cbba29717353c45667622a65188df48770b1c6c13073eb8558f6a14231c898`.
+
+### RobustAction StructPool load extension v2 preregistration
+
+The v2 data revision changes only agent load on the 12 v1-underloaded maps.
+Map membership, topology groups, the two deterministic OD variants, task seed,
+solver seeds, frozen initializer and all downstream candidate/repair semantics
+remain unchanged.  Before any extension reset, two new even agent counts are
+registered per map from the largest connected component: 15% capped at 2,500
+and 25% capped at 3,000.  These loads range from 144/240 on `lak526d` to
+2,500/3,000 on the largest maps and are strictly above every map's v1 maximum.
+
+This creates 12 maps times two loads times two OD variants, or 48 tasks and 96
+reset-only solver-seed jobs.  The higher loads were derived only from static
+component capacity and the v1 fact that each map lacked two repairable current
+states.  Candidate outcomes, controller actions, future states, repair time and
+TTF remain forbidden.  The OD generator is deliberately unchanged so this
+revision isolates load insufficiency rather than confounding it with a new
+traffic generator.  If the extension still cannot supply two eligible tasks
+per underloaded map, the next revision must replace maps using an outcome-blind
+registry; it may not outcome-filter individual tasks.  The preregistered design
+SHA-256 is
+`174a38100fa39d88f4b800d0cc7c1591fd212cec1a2b1533a0624427eb8c7487`.

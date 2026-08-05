@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -16,6 +17,9 @@ from experiments.repair_collection import _fingerprint, _read_json, _write_json
 
 DESIGN_SCHEMA = "lns2.stride.robustaction_expansion_design.v1"
 STRUCTPOOL_DESIGN_SCHEMA = "lns2.stride.robustaction_structpool_data_design.v1"
+LOAD_EXTENSION_SCHEMA = (
+    "lns2.stride.robustaction_structpool_load_extension_design.v1"
+)
 REPORT_SCHEMA = "lns2.stride.robustaction_static_audit.v1"
 TOPOLOGY_GROUPS = (
     "dao_high_topology",
@@ -436,6 +440,105 @@ def _validate_structpool_data_design(config: dict[str, Any]) -> None:
         raise ValueError("StructPool robust-action power-state policy changed")
 
 
+def _ceil_even(value: float) -> int:
+    rounded = int(math.ceil(value))
+    return rounded if rounded % 2 == 0 else rounded + 1
+
+
+def _validate_structpool_load_extension(config: dict[str, Any]) -> None:
+    if (
+        config.get("scientific_status")
+        != "preregistered_after_v1_load_qualification_failure_before_extension_resets"
+        or config.get("data_line_id")
+        != "stride-robustaction-structpool-data-v2"
+        or config.get("planned_model_id") != "stride-robustaction-v1"
+        or config.get("candidate_pool_id") != "v2-plus-stride-structpool-v1"
+        or config.get("pre_registration_git_commit")
+        != "b8f72404949488369285b02cb826d141e547d115"
+        or bool(config.get("formal_speed_claim"))
+    ):
+        raise ValueError("StructPool load-extension identity changed")
+
+    predecessor = dict(config.get("predecessor_evidence") or {})
+    if predecessor != {
+        "v1_data_design": {
+            "path": "configs/stride_robustaction_structpool_data_design.json",
+            "sha256": "94381e62bd24d34454b21f6e11f879f4d74e61b02c6f2755eaffd961fde1ad64",
+        },
+        "v1_qualification_manifest": {
+            "path": "build/stride-robustaction-structpool-qualification-v2/qualification_manifest.jsonl",
+            "sha256": "13e44ec298c7e0fd61c6e786f7e2ba5dd5e3436a250f04f1647ec3fb2b52c20a",
+        },
+        "v1_qualification_report": {
+            "path": "build/stride-robustaction-structpool-qualification-v2/qualification_report.json",
+            "sha256": "55b3dc11379e529377d9e06513d09de2f2706f0c7c1ab83ea4b1ffa793b30edf",
+        },
+        "v1_selection_report": {
+            "path": "build/stride-robustaction-structpool-source-dataset-v1/qualification_selection_report.json",
+            "sha256": "04cbba29717353c45667622a65188df48770b1c6c13073eb8558f6a14231c898",
+        },
+    }:
+        raise ValueError("StructPool load-extension predecessor registry changed")
+
+    task_design = dict(config.get("task_design") or {})
+    if (
+        int(task_design.get("master_seed", -1)) != 20260809
+        or list(task_design.get("task_seeds") or ()) != [311]
+        or list(task_design.get("task_variants") or ())
+        != ["uniform_random", "opposite_exchange"]
+        or task_design.get("load_rule")
+        != "ceil_even_component_fractions_0.15_cap2500_and_0.25_cap3000"
+        or bool(task_design.get("uses_official_scenarios"))
+        or bool(task_design.get("changes_od_generator"))
+    ):
+        raise ValueError("StructPool load-extension task design changed")
+
+    selection = dict(config.get("selection_boundary") or {})
+    allowed = set(map(str, selection.get("allowed_inputs") or ()))
+    forbidden = set(map(str, selection.get("forbidden_inputs") or ()))
+    if (
+        not bool(selection.get("outcome_blind"))
+        or forbidden != FORBIDDEN_SELECTION_FIELDS
+        or allowed & forbidden
+        or selection.get("failure_action")
+        != "register_map_replacement_revision_without_outcome_filtering"
+    ):
+        raise ValueError("StructPool load-extension outcome boundary changed")
+
+    expected_ids = {
+        "brc200d", "brc201d", "den900d", "hrt001d", "lak106d", "lak308d",
+        "lak526d", "lgt600d", "lgt604d", "orz601d", "ost001d", "oth000d",
+    }
+    benchmarks = [dict(row) for row in config.get("benchmarks") or ()]
+    if len(benchmarks) != 12 or {str(row.get("id")) for row in benchmarks} != expected_ids:
+        raise ValueError("StructPool load-extension map registry changed")
+    for row in benchmarks:
+        component = int(row.get("largest_four_connected_component", 0))
+        counts = list(map(int, row.get("agent_counts") or ()))
+        expected_counts = [
+            _ceil_even(min(0.15 * component, 2500.0)),
+            _ceil_even(min(0.25 * component, 3000.0)),
+        ]
+        if (
+            component <= 0
+            or counts != expected_counts
+            or counts != sorted(set(counts))
+            or any(value <= int(row.get("v1_max_agent_count", -1)) for value in counts)
+            or counts[-1] > component
+            or len(str(row.get("member_sha256", ""))) != 64
+            or str(row.get("member")) != f"{row['id']}.map"
+        ):
+            raise ValueError(
+                f"invalid StructPool load-extension map registration: {row.get('id')}"
+            )
+    if (
+        int(config.get("expected_map_count", -1)) != 12
+        or int(config.get("expected_preflight_task_count", -1)) != 48
+        or int(config.get("expected_preflight_job_count", -1)) != 96
+    ):
+        raise ValueError("StructPool load-extension dimensions changed")
+
+
 def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
     schema = config.get("schema")
     if schema == DESIGN_SCHEMA:
@@ -443,6 +546,9 @@ def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
         return
     if schema == STRUCTPOOL_DESIGN_SCHEMA:
         _validate_structpool_data_design(config)
+        return
+    if schema == LOAD_EXTENSION_SCHEMA:
+        _validate_structpool_load_extension(config)
         return
     raise ValueError("unexpected robust-action expansion design")
 
@@ -640,6 +746,7 @@ def prepare_robustaction_preflight_dataset(
 
 __all__ = [
     "DESIGN_SCHEMA",
+    "LOAD_EXTENSION_SCHEMA",
     "REPORT_SCHEMA",
     "STRUCTPOOL_DESIGN_SCHEMA",
     "TOPOLOGY_GROUPS",

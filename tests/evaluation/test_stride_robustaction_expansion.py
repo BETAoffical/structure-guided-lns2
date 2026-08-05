@@ -19,6 +19,11 @@ CONFIG = ROOT / "configs" / "stride_robustaction_expansion_design.json"
 STRUCTPOOL_CONFIG = (
     ROOT / "configs" / "stride_robustaction_structpool_data_design.json"
 )
+LOAD_EXTENSION_CONFIG = (
+    ROOT
+    / "configs"
+    / "stride_robustaction_structpool_load_extension_design.json"
+)
 
 
 class RobustActionExpansionTests(unittest.TestCase):
@@ -60,6 +65,27 @@ class RobustActionExpansionTests(unittest.TestCase):
         )
         self.assertEqual(adapter["expected_map_count"], 20)
         self.assertEqual(adapter["expected_instance_count"], 124)
+
+    def test_structpool_load_extension_is_static_and_dimensioned(self) -> None:
+        extension = json.loads(
+            LOAD_EXTENSION_CONFIG.read_text(encoding="utf-8")
+        )
+        validate_robustaction_expansion_design(extension)
+        adapter = robustaction_source_adapter(extension)
+        self.assertEqual(adapter["expected_map_count"], 12)
+        self.assertEqual(adapter["expected_instance_count"], 48)
+        self.assertEqual(
+            adapter["dataset_revision"],
+            "stride-robustaction-structpool-load-extension-v2",
+        )
+        self.assertEqual(
+            {row["id"] for row in adapter["benchmarks"]},
+            {
+                "brc200d", "brc201d", "den900d", "hrt001d", "lak106d",
+                "lak308d", "lak526d", "lgt600d", "lgt604d", "orz601d",
+                "ost001d", "oth000d",
+            },
+        )
 
     def test_structpool_design_rejects_impossible_low_group_gate(self) -> None:
         structpool = json.loads(STRUCTPOOL_CONFIG.read_text(encoding="utf-8"))
