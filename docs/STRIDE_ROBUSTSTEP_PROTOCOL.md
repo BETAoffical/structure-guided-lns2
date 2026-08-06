@@ -3067,3 +3067,41 @@ candidate generation, controller models, timeouts and source-runtime SHA-256
 remain unchanged.  The v4 run-config must record `historical`, 12, 12 and 12;
 every episode must use at most 12 repairs.  Failure again forbids sampling or
 training and cannot be repaired by retaining only compliant v3 episodes.
+
+### RobustAction StructPool source v4 result and capacity gate
+
+Source v4 completed the registered 80 qualification resets followed by 80
+`official_adaptive` and 80 `realized_dynamic` episodes.  The run config records
+`historical`, `max_decisions=12`, `max_repair_iterations=12` and
+`metric_iteration_budget=12`; the observed maximum was exactly 12 and no row
+exceeded it.  All 160 rows were valid with zero errors, timeouts, invalid
+actions or initial-fingerprint mismatches, and all 80 task/seed keys were
+paired.  The 12-step source budget was solved by 47 Adaptive and 71 V2-policy
+episodes; these success counts are descriptive outcomes and are not state-
+selection inputs.
+
+Before any candidate repair label, a result-blind trace-capacity audit found
+1,054 positive-conflict pre-action states.  With the registered maximum of two
+states per episode, however, the absolute capacity is only 297 states from 154
+episode ids: six policy episodes begin conflict-free, eleven contain exactly
+one decision state and 143 contain at least two.  Adaptive contributes capacity
+152 (three zero-, two one- and 75 two-plus-state episodes); V2 contributes 145
+(three zero-, nine one- and 68 two-plus-state episodes).  No choice of eligible
+states can meet the simultaneous minimums of 320 unique states and 160 episode
+ids.
+
+The state-count and episode-count gates therefore fail before 16-seed candidate
+repair collection.  Robust non-anchor opportunity, robust-positive fraction
+and topology opportunity coverage are not evaluated.  Source v4 remains valid
+source evidence but cannot be outcome-filtered or promoted to training by
+lowering the registered gates.  The registered failure action is a second,
+outcome-blind map/task expansion sufficient to cover the missing independent
+episodes and state capacity.
+
+The immutable qualification, Adaptive, V2, run-config and collection-summary
+SHA-256 values are respectively
+`52b833959df198718639601ee671a5be8699e41ce2e69cb0a6a688cdd557a1ed`,
+`fac89f3ffc81c364ff3c35ddfdc571cb0c62a3f62febdfc8e03ea583e0b566db`,
+`1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96`,
+`c6dc8cf99557d82957d9b0a6e0e7ab08e34b366b14a472d23421227f7635e173`
+and `9631127d0e21739f12072a7c80c8289c33479b401e9a0655004ad0f7a2151d69`.
