@@ -1,0 +1,61 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_da2_recovery_qualification_design.v1",
+  "scientific_status": "preregistered_before_primary_da2_recovery_initial_pp",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v1",
+  "recovery_mode": "primary_repair",
+  "pre_registration_git_commit": "036d06bc8946be3ea448a84adc11980065322f7f",
+  "inputs": {
+    "recovery_design": {
+      "path": "configs/stride_robustaction_structpool_da2_recovery_design.json",
+      "sha256": "82086e986bd5bd147244f6fa3c97241e78cd80476e5751fed02aedaae16ac098"
+    },
+    "runtime": {
+      "path": "configs/stride_robustaction_structpool_da2_recovery_primary_runtime.json",
+      "sha256": "4d8c5a1ba7dc8be5f2344fdc2e6e46ab0d94149cf2854cb42f6c952b61a5b19a"
+    },
+    "recovery_dataset_manifest": {
+      "path": "build/stride-robustaction-da2-ca-caverns2-repair-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "bb8036a8fdd35b9ce6962cdd05cc8c3795e3f6a56e3d8d4d1ad068eaffef343c"
+    },
+    "recovery_dataset_summary": {
+      "path": "build/stride-robustaction-da2-ca-caverns2-repair-dataset-v1/dataset_summary.json",
+      "sha256": "bc0c03bc12c6eac759895b865996b756eb85e3e342295f7ddab960445a69aecc"
+    },
+    "recovery_source_adapter": {
+      "path": "build/stride-robustaction-da2-ca-caverns2-repair-dataset-v1.source_adapter.json",
+      "sha256": "db8f1213edff7d1029deff2609be50f72f0e9318d31f4aebb2296eef403556ab"
+    }
+  },
+  "expected_map_count": 1,
+  "expected_task_count": 8,
+  "solver_seeds": [1, 2],
+  "expected_reset_count": 16,
+  "recovery_map_id": "ca_caverns2",
+  "tasks_selected_per_map": 2,
+  "expected_recovery_selected_task_count": 2,
+  "target_mean_initial_conflicts": [25, 100],
+  "minimum_nonzero_solver_seed_fraction": 0.5,
+  "minimum_mean_initial_conflicts": 1.0,
+  "prefer_distinct_task_variants": true,
+  "all_registered_resets_must_be_terminal": true,
+  "candidate_ladder_errors_or_timeouts_allowed": true,
+  "selected_tasks_must_have_both_solver_seeds_ok": true,
+  "collector_qualification_pass_not_required": true,
+  "forbidden_selection_inputs": [
+    "candidate_repair_outcome", "candidate_conflicts_after",
+    "candidate_runtime", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory", "repair_runtime"
+  ],
+  "final_map_count": 8,
+  "final_task_count": 16,
+  "final_layout_counts": {
+    "dao_high_topology": 6,
+    "dao_mid_topology": 6,
+    "dao_low_topology_control": 4
+  },
+  "candidate_repair_outcomes_read": false,
+  "controller_outcomes_read": false,
+  "formal_speed_claim": false,
+  "next_decision_on_pass": "merge_retained_14_with_primary_2_then_reaudit_combined_source_capacity",
+  "next_decision_on_failure": "activate_preregistered_w_encounter1_replacement"
+}

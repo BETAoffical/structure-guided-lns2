@@ -3259,3 +3259,23 @@ yielding six tasks and 12 reset attempts under the same seeds and selection
 rule.  No further map search is allowed after a fallback failure.  Either path
 must produce a final eight-map, 16-task cohort with exact topology counts
 6/6/4 before source collection can be reconsidered.
+
+### DA2 primary recovery reset registration
+
+The recovery design was committed as `036d06b` before task generation.  The
+eight `ca_caverns2` repair tasks were then generated without a solver.  Their
+manifest, dataset-summary and source-adapter SHA-256 values are respectively
+`bb8036a8fdd35b9ce6962cdd05cc8c3795e3f6a56e3d8d4d1ad068eaffef343c`,
+`bc0c03bc12c6eac759895b865996b756eb85e3e342295f7ddab960445a69aecc`
+and `db8f1213edff7d1029deff2609be50f72f0e9318d31f4aebb2296eef403556ab`.
+
+Before the 16 registered resets, recovery qualification is defined separately
+from the original zero-error qualification.  All eight tasks under solver
+seeds 1/2 must produce terminal rows and no repair/controller/TTF fields.
+Individual ladder attempts may end in an initialization error or timeout and
+remain recorded.  A task enters the selector only when both seed rows are
+`ok`, initial-complete and fingerprinted.  At least two paired tasks must meet
+the registered conflict floor and the targets 25/100.  Only those two are
+merged with the pinned 14 retained tasks; the resulting 8-map/16-task 6/6/4
+cohort is checked again before any source episode.  A primary failure activates
+only the already registered `w_encounter1` fallback.
