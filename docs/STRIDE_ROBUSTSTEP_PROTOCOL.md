@@ -3279,3 +3279,43 @@ the registered conflict floor and the targets 25/100.  Only those two are
 merged with the pinned 14 retained tasks; the resulting 8-map/16-task 6/6/4
 cohort is checked again before any source episode.  A primary failure activates
 only the already registered `w_encounter1` fallback.
+
+### DA2 primary recovery result
+
+All 16 registered `ca_caverns2` reset attempts reached a terminal row.  Eleven
+are valid, five end with `ValueError: state contains an empty agent path` and
+none time out.  The generic collector zero-error qualification therefore stays
+false, as expected for this recovery ladder, while the separately registered
+recovery gates all pass: dimensions and runtime are exact, no forbidden
+repair/controller/TTF fields occur, five tasks have both solver seeds, and two
+eligible paired tasks can be selected.  Failed attempts remain in the raw
+qualification product and are not deleted or relabelled.
+
+The selected repair tasks are the 686-agent `opposite_exchange` task, whose
+paired initial-conflict counts are 1 and 3 (mean 2), and the 960-agent
+`uniform_random` task, whose counts are 40 and 56 (mean 48).  Both have complete
+initial paths and nonzero conflicts under solver seeds 1/2.  The 1,236-agent
+attempts remain too aggressive: both `opposite_exchange` seeds and one
+`uniform_random` seed fail initialization.  Because the primary repair supplies
+the required two complete pairs, the registered `w_encounter1` fallback is not
+activated.
+
+The two repaired tasks are merged with the pinned 14 retained tasks.  The
+resulting recovery source cohort contains eight maps and 16 tasks with exact
+high/mid/low topology counts 6/6/4, two solver seeds and two source policies,
+for 64 projected independent episodes and at most 128 sampled states.  This is
+still user-authorized, outcome-informed recovery training data; it is not clean
+outcome-blind evaluation evidence and makes no TTF or model-improvement claim.
+The next permitted step is to collect the paired source episodes and re-audit
+combined source capacity before any candidate labels or training.
+
+The qualification manifest, collector qualification report, run config,
+collection summary, recovery analysis report, final cohort manifest and final
+dataset summary SHA-256 values are respectively
+`83b11f096f09b0c96e3549a0e680cbc9d347f7ba71ac10300a7569a4a3d58730`,
+`9f87a34d19ff8942527a69bf42b06e71528c918c3359196fc434b691a4fcbc7d`,
+`4a2789313bbc34a9507d64f66014ddb2c81ac3f037da3308352a8ef6eace6098`,
+`6204f1895401c9f2b69c3ae91c0c97f59e9158e6a3099c99274b1b0defc28bec`,
+`530612390216b18f076302890bc49b0fe630a3c4f87a1e0a0b678f0e33f769d5`,
+`98e1bb6f5cdf6d469f8297133f56ba7cb5e9690e6046d71f2e6075da935699ef`
+and `aee6109074a67fc83216504af2a6e533b921729ccedd1280bd7d1dcb726a35df`.
