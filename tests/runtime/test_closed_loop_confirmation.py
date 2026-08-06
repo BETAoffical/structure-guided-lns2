@@ -620,6 +620,19 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertIsNone(updated["metric_iteration_budget"])
         self.assertEqual(source["environment"]["max_repair_iterations"], 100)
 
+    def test_historical_stopping_rule_preserves_registered_repair_limits(self) -> None:
+        source = {
+            "environment": {"time_limit": 600.0, "max_repair_iterations": 12},
+            "max_decisions": 12,
+            "metric_iteration_budget": 12,
+        }
+        updated = _with_stopping_rule(source, "historical")
+        self.assertEqual(updated["stopping_rule"], "historical")
+        self.assertEqual(updated["environment"]["max_repair_iterations"], 12)
+        self.assertEqual(updated["max_decisions"], 12)
+        self.assertEqual(updated["metric_iteration_budget"], 12)
+        self.assertNotIn("stopping_rule", source)
+
     def test_wall_clock_fixed_metric_keeps_only_the_metric_window(self) -> None:
         source = {
             "environment": {"time_limit": 300.0, "max_repair_iterations": 100},

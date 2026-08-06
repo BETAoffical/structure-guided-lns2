@@ -3038,3 +3038,32 @@ same scalar per-layout threshold apply to the registered DAO high/mid/low
 groups.  A DAO-layout regression test freezes the behavior.  The original 80
 reset artifacts remain immutable and may be reused to recompute the report;
 the correction does not authorize resampling or outcome-based task filtering.
+
+### RobustAction StructPool source v3 result and v4 preregistration
+
+After the layout-gate correction, source v3 completed 80/80 qualification
+resets and both 80-episode policy products.  All 160 policy rows were `ok`;
+the 80 task/seed keys were completely paired, initial fingerprints matched
+between both policies and qualification, and there were zero errors, timeouts,
+invalid actions or fingerprint mismatches.  Qualification retained 77 nonzero
+states on all 20 maps.
+
+The product nevertheless fails its registered 12-decision source contract.
+The command-line entry point accepted only `wall-clock` and supplied that value
+by default, so runtime normalization replaced `max_decisions=12`,
+`max_repair_iterations=12` and `metric_iteration_budget=12` with `0`, `0` and
+`null`.  Forty-two of 160 episodes consequently exceeded 12 repairs and the
+maximum was 90.  Source v3 is retained as diagnostic evidence but is forbidden
+from state sampling, repair-label construction and training.
+
+Before source v4 outcomes, at parent commit
+`ffaf03d767c9caccab4d1522a494c926e5044ac0`, the CLI is amended to expose
+every already-supported stopping rule while retaining `wall-clock` as the
+default for TTF experiments.
+Source v4 alone will pass `--stopping-rule historical`, which preserves the
+registered 12/12 repair and decision limits and the 12-iteration metric window.
+Dataset, 20 maps, 40 tasks, solver seeds 1/2, frozen source policies, PP replay,
+candidate generation, controller models, timeouts and source-runtime SHA-256
+remain unchanged.  The v4 run-config must record `historical`, 12, 12 and 12;
+every episode must use at most 12 repairs.  Failure again forbids sampling or
+training and cannot be repaired by retaining only compliant v3 episodes.

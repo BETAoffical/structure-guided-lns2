@@ -14,6 +14,7 @@ if NATIVE_BUILD.is_dir():
 from experiments.closed_loop_confirmation import (  # noqa: E402
     CONTROLLER_RUNTIMES,
     EXECUTABLE_CONTROLLER_MODES,
+    STOPPING_RULES,
     VERIFICATION_PROFILES,
     CollectionLockError,
     run_closed_loop_collection,
@@ -142,7 +143,7 @@ def main() -> int:
     parser.add_argument("--environment-time-limit-seconds", type=float)
     parser.add_argument(
         "--stopping-rule",
-        choices=("wall-clock",),
+        choices=STOPPING_RULES,
         default="wall-clock",
     )
     arguments = parser.parse_args()
