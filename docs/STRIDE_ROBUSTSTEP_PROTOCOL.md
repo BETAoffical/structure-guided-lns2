@@ -3105,3 +3105,61 @@ SHA-256 values are respectively
 `1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96`,
 `c6dc8cf99557d82957d9b0a6e0e7ab08e34b366b14a472d23421227f7635e173`
 and `9631127d0e21739f12072a7c80c8289c33479b401e9a0655004ad0f7a2151d69`.
+
+### RobustAction StructPool DA2 supplement preregistration
+
+Source v4 is not discarded or filtered.  Its result-blind capacity audit can
+produce at most 297 unique states from 154 episode ids, short of the registered
+320-state and 160-episode minima.  The next action is therefore registered as a
+second outcome-blind expansion.  It adds independent map/task episodes; it does
+not lower the gates and does not retain only source-v4 successes.
+
+The supplement uses the public MovingAI Dragon Age 2 map archive, pinned as
+`da2-map.zip` with SHA-256
+`76bcbbe7956bcdf6de579bfc1335bc0937365125305b2ada8ec4f20e4befe4e0`.
+All selection precedes initial PP.  Every scene sharing the prefixes
+`ht_chantry`, `ht_mansion`, `lt_gallowstemplar` or `w_woundedcoast` with an
+already used map is excluded.  Maps whose largest four-connected component is
+outside 3,000--30,000 cells are excluded.  The remaining maps are assigned to
+the frozen topology groups at low-degree-cell ratios 0.035 and 0.06.  Within
+each group and map family, the representative is the map closest to an
+8,000-cell component, then the higher low-degree ratio, then map id.  Family
+representatives are ranked by the same rule.  This fixes three high-, three
+mid- and two low-topology maps without using conflicts, repair outcomes,
+controller actions or timing:
+
+| group | map | largest component | agents at 10/15/20% load |
+|---|---|---:|---:|
+| high | `w_encounter3` | 6,336 | 634 / 952 / 1,268 |
+| high | `ca_caverns2` | 13,714 | 1,372 / 2,058 / 2,744 |
+| high | `lt_hangedman` | 4,601 | 462 / 692 / 922 |
+| mid | `ht_bartrand_n` | 8,793 | 880 / 1,320 / 1,760 |
+| mid | `ca_cave` | 5,305 | 532 / 796 / 1,062 |
+| mid | `lt_undercityserialkiller` | 9,076 | 908 / 1,362 / 1,816 |
+| low | `dr_primevalentrance` | 7,097 | 710 / 1,066 / 1,420 |
+| low | `lt_undercitydungeon` | 8,935 | 894 / 1,342 / 1,788 |
+
+The load is `ceil-even(min(component * fraction, 3000))`.  Task seed 331 and
+master seed 20260811 generate both deterministic `uniform_random` and
+`opposite_exchange` tasks.  This yields six tasks per map, 48 tasks in total
+and 96 reset-only jobs under solver seeds 1/2.  No repair is allowed during
+qualification.  After complete reset coverage, initial conflicts alone select
+two tasks per map against the registered targets 25 and 100, requiring at least
+half of paired seeds to be nonzero and mean initial conflicts at least one.
+
+If all eight maps qualify, the supplement can contribute 64 independent source
+episodes under the unchanged two policies and at most 128 states under the
+two-state-per-episode rule.  Together with source v4, the absolute capacity is
+425 states from 218 episodes, which is sufficient but is not a claim that the
+eventual opportunity or TTF gates will pass.  Candidate repair outcomes remain
+forbidden until the complete supplement source product is collected and the
+combined capacity gate is re-audited.
+
+The preregistered static audit then passed before any supplement initial PP.
+It verified all 67 archive members and extracted checksums, reproduced the 45
+eligible maps and 9/12/24 candidate topology counts, and reproduced the exact
+eight-map 3/3/2 selection above with five distinct families.  Its immutable
+report SHA-256 is
+`f391848e061e07551fa22537cbe763252230d1b2e931145d4564b5aeaa2450ef`;
+the report records both `solver_or_controller_run=false` and
+`performance_measurements_run=false`.

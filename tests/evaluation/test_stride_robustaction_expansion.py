@@ -29,6 +29,11 @@ MAP_REPLACEMENT_CONFIG = (
     / "configs"
     / "stride_robustaction_structpool_map_replacement_design.json"
 )
+DA2_SUPPLEMENT_CONFIG = (
+    ROOT
+    / "configs"
+    / "stride_robustaction_structpool_da2_supplement_design.json"
+)
 
 
 class RobustActionExpansionTests(unittest.TestCase):
@@ -108,6 +113,43 @@ class RobustActionExpansionTests(unittest.TestCase):
             {row["id"] for row in adapter["benchmarks"]},
             {"orz201d", "lak203d", "ost101d", "rmtst"},
         )
+
+    def test_structpool_da2_supplement_is_static_and_dimensioned(self) -> None:
+        supplement = json.loads(
+            DA2_SUPPLEMENT_CONFIG.read_text(encoding="utf-8")
+        )
+        validate_robustaction_expansion_design(supplement)
+        adapter = robustaction_source_adapter(supplement)
+        self.assertEqual(adapter["expected_map_count"], 8)
+        self.assertEqual(adapter["expected_instance_count"], 48)
+        self.assertEqual(
+            adapter["dataset_revision"],
+            "stride-robustaction-structpool-da2-supplement-v1",
+        )
+        self.assertEqual(
+            {row["id"] for row in adapter["benchmarks"]},
+            {
+                "ca_cave",
+                "ca_caverns2",
+                "dr_primevalentrance",
+                "ht_bartrand_n",
+                "lt_hangedman",
+                "lt_undercitydungeon",
+                "lt_undercityserialkiller",
+                "w_encounter3",
+            },
+        )
+
+    def test_structpool_da2_supplement_rejects_outcome_selection(self) -> None:
+        supplement = json.loads(
+            DA2_SUPPLEMENT_CONFIG.read_text(encoding="utf-8")
+        )
+        changed = copy.deepcopy(supplement)
+        changed["selection_boundary"]["allowed_inputs"].append(
+            "candidate_runtime"
+        )
+        with self.assertRaisesRegex(ValueError, "outcome boundary"):
+            validate_robustaction_expansion_design(changed)
 
     def test_structpool_design_rejects_impossible_low_group_gate(self) -> None:
         structpool = json.loads(STRUCTPOOL_CONFIG.read_text(encoding="utf-8"))

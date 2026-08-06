@@ -23,6 +23,9 @@ LOAD_EXTENSION_SCHEMA = (
 MAP_REPLACEMENT_SCHEMA = (
     "lns2.stride.robustaction_structpool_map_replacement_design.v1"
 )
+DA2_SUPPLEMENT_SCHEMA = (
+    "lns2.stride.robustaction_structpool_da2_supplement_design.v1"
+)
 REPORT_SCHEMA = "lns2.stride.robustaction_static_audit.v1"
 TOPOLOGY_GROUPS = (
     "dao_high_topology",
@@ -448,6 +451,217 @@ def _ceil_even(value: float) -> int:
     return rounded if rounded % 2 == 0 else rounded + 1
 
 
+def _validate_structpool_da2_supplement(config: dict[str, Any]) -> None:
+    if (
+        config.get("scientific_status")
+        != "preregistered_static_da2_supplement_after_source_v4_capacity_failure"
+        or config.get("data_line_id")
+        != "stride-robustaction-structpool-data-v4"
+        or config.get("planned_model_id") != "stride-robustaction-v1"
+        or config.get("candidate_pool_id") != "v2-plus-stride-structpool-v1"
+        or config.get("pre_registration_git_commit")
+        != "f469fe2cc25ed6223138c862907925744633aeb7"
+        or bool(config.get("formal_speed_claim"))
+    ):
+        raise ValueError("StructPool DA2 supplement identity changed")
+
+    predecessor = dict(config.get("predecessor_evidence") or {})
+    if predecessor != {
+        "source_data_design": {
+            "path": "configs/stride_robustaction_structpool_data_design.json",
+            "sha256": "94381e62bd24d34454b21f6e11f879f4d74e61b02c6f2755eaffd961fde1ad64",
+        },
+        "source_v4_qualification_manifest": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/qualification_manifest.jsonl",
+            "sha256": "52b833959df198718639601ee671a5be8699e41ce2e69cb0a6a688cdd557a1ed",
+        },
+        "source_v4_official_adaptive_manifest": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/official_adaptive_manifest.jsonl",
+            "sha256": "fac89f3ffc81c364ff3c35ddfdc571cb0c62a3f62febdfc8e03ea583e0b566db",
+        },
+        "source_v4_realized_dynamic_manifest": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/realized_dynamic_manifest.jsonl",
+            "sha256": "1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96",
+        },
+        "source_v4_run_config": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/run_config.json",
+            "sha256": "c6dc8cf99557d82957d9b0a6e0e7ab08e34b366b14a472d23421227f7635e173",
+        },
+        "source_v4_collection_summary": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/collection_summary.json",
+            "sha256": "9631127d0e21739f12072a7c80c8289c33479b401e9a0655004ad0f7a2151d69",
+        },
+    }:
+        raise ValueError("StructPool DA2 supplement predecessor registry changed")
+
+    capacity = dict(config.get("source_v4_capacity_failure") or {})
+    if capacity != {
+        "minimum_unique_state_ids": 320,
+        "maximum_obtainable_unique_state_ids": 297,
+        "missing_unique_state_capacity": 23,
+        "minimum_unique_episode_ids": 160,
+        "maximum_obtainable_unique_episode_ids": 154,
+        "missing_unique_episode_capacity": 6,
+        "maximum_states_per_episode": 2,
+        "candidate_repair_outcomes_read_for_capacity_audit": False,
+        "registered_failure_action": (
+            "second_outcome_blind_map_task_expansion_without_filtering_source_v4"
+        ),
+    }:
+        raise ValueError("StructPool DA2 supplement source-capacity evidence changed")
+
+    archive = dict(config.get("map_archive") or {})
+    if archive != {
+        "source": "https://www.movingai.com/benchmarks/da2/index.html",
+        "url": "https://www.movingai.com/benchmarks/da2/da2-map.zip",
+        "sha256": "76bcbbe7956bcdf6de579bfc1335bc0937365125305b2ada8ec4f20e4befe4e0",
+        "expected_member_count": 67,
+    }:
+        raise ValueError("StructPool DA2 supplement archive registration changed")
+
+    static = dict(config.get("static_selection") or {})
+    if static != {
+        "tracked_da2_map_ids": [
+            "ht_chantry", "ht_mansion_n", "lt_gallowstemplar",
+            "lt_gallowstemplar_n", "w_woundedcoast",
+        ],
+        "blocked_scene_prefixes": [
+            "ht_chantry", "ht_mansion", "lt_gallowstemplar", "w_woundedcoast",
+        ],
+        "minimum_largest_component": 3000,
+        "maximum_largest_component": 30000,
+        "target_largest_component": 8000,
+        "topology_thresholds": [0.035, 0.06],
+        "candidate_map_count_after_static_filter": 45,
+        "candidate_group_counts": {
+            TOPOLOGY_GROUPS[0]: 9,
+            TOPOLOGY_GROUPS[1]: 12,
+            TOPOLOGY_GROUPS[2]: 24,
+        },
+        "selected_group_counts": {
+            TOPOLOGY_GROUPS[0]: 3,
+            TOPOLOGY_GROUPS[1]: 3,
+            TOPOLOGY_GROUPS[2]: 2,
+        },
+        "ranking": (
+            "per_group_per_family_nearest_component_8000_then_higher_"
+            "low_degree_ratio_then_map_id;select_family_representatives_by_same_order"
+        ),
+        "solver_or_repair_outcomes_read": False,
+    }:
+        raise ValueError("StructPool DA2 supplement static-selection rule changed")
+
+    task_design = dict(config.get("task_design") or {})
+    if task_design != {
+        "master_seed": 20260811,
+        "task_seeds": [331],
+        "task_variants": ["uniform_random", "opposite_exchange"],
+        "candidate_tasks_per_map": 6,
+        "load_rule": "ceil_even_min_component_fractions_0.10_0.15_0.20_cap3000",
+        "uses_official_scenarios": False,
+        "changes_od_generator": False,
+        "semantics": (
+            "project_derived_uniform_and_opposite_exchange_on_checksum_pinned_da2_maps"
+        ),
+    }:
+        raise ValueError("StructPool DA2 supplement task design changed")
+
+    if (
+        list(config.get("source_policies") or ())
+        != ["official_adaptive", "realized_dynamic"]
+        or list(config.get("solver_seeds") or ()) != [1, 2]
+        or int(config.get("expected_map_count", -1)) != 8
+        or int(config.get("expected_preflight_task_count", -1)) != 48
+        or int(config.get("expected_preflight_job_count", -1)) != 96
+        or int(config.get("tasks_selected_per_map", -1)) != 2
+        or int(config.get("projected_selected_task_count", -1)) != 16
+        or int(config.get("projected_independent_episode_count", -1)) != 64
+        or int(config.get("maximum_states_per_episode", -1)) != 2
+        or int(config.get("projected_state_capacity", -1)) != 128
+        or int(config.get("projected_combined_episode_capacity", -1)) != 218
+        or int(config.get("projected_combined_state_capacity", -1)) != 425
+        or int(config.get("minimum_distinct_map_families", -1)) != 5
+    ):
+        raise ValueError("StructPool DA2 supplement dimensions changed")
+
+    selection = dict(config.get("selection_boundary") or {})
+    allowed = set(map(str, selection.get("allowed_inputs") or ()))
+    forbidden = set(map(str, selection.get("forbidden_inputs") or ()))
+    if (
+        not bool(selection.get("outcome_blind"))
+        or forbidden != FORBIDDEN_SELECTION_FIELDS
+        or allowed & forbidden
+        or selection.get("map_selection_phase") != "static_only_before_initial_pp"
+        or selection.get("task_selection_phase")
+        != "initial_conflicts_only_before_candidate_repairs"
+    ):
+        raise ValueError("StructPool DA2 supplement outcome boundary changed")
+
+    thresholds = list(map(float, static["topology_thresholds"]))
+    expected_ids = {
+        "w_encounter3": TOPOLOGY_GROUPS[0],
+        "ca_caverns2": TOPOLOGY_GROUPS[0],
+        "lt_hangedman": TOPOLOGY_GROUPS[0],
+        "ht_bartrand_n": TOPOLOGY_GROUPS[1],
+        "ca_cave": TOPOLOGY_GROUPS[1],
+        "lt_undercityserialkiller": TOPOLOGY_GROUPS[1],
+        "dr_primevalentrance": TOPOLOGY_GROUPS[2],
+        "lt_undercitydungeon": TOPOLOGY_GROUPS[2],
+    }
+    benchmarks = [dict(row) for row in config.get("benchmarks") or ()]
+    observed = {
+        str(row.get("id")): str(row.get("topology_group")) for row in benchmarks
+    }
+    if len(benchmarks) != 8 or observed != expected_ids:
+        raise ValueError("StructPool DA2 supplement map registry changed")
+    group_counts: Counter[str] = Counter()
+    families: set[str] = set()
+    for row in benchmarks:
+        map_id = str(row["id"])
+        family = str(row.get("map_family"))
+        component = int(row.get("largest_four_connected_component", 0))
+        ratio = float(row.get("static_low_degree_cell_ratio", -1.0))
+        counts = list(map(int, row.get("agent_counts") or ()))
+        expected_counts = [
+            _ceil_even(min(component * fraction, 3000.0))
+            for fraction in (0.10, 0.15, 0.20)
+        ]
+        if (
+            family != map_id.split("_", 1)[0]
+            or any(map_id.startswith(prefix) for prefix in static["blocked_scene_prefixes"])
+            or not 3000 <= component <= 30000
+            or str(row["topology_group"]) != topology_group(ratio, thresholds)
+            or int(row.get("free_cell_count", 0)) < component
+            or not 0.0 <= float(row.get("static_obstacle_ratio", -1.0)) <= 1.0
+            or str(row.get("member")) != f"{map_id}.map"
+            or len(str(row.get("member_sha256", ""))) != 64
+            or counts != expected_counts
+            or any(value % 2 for value in counts)
+        ):
+            raise ValueError(
+                f"invalid StructPool DA2 supplement map registration: {map_id}"
+            )
+        group_counts[str(row["topology_group"])] += 1
+        families.add(family)
+    if (
+        dict(group_counts) != static["selected_group_counts"]
+        or len(families) < int(config["minimum_distinct_map_families"])
+    ):
+        raise ValueError("StructPool DA2 supplement topology balance changed")
+
+    post = dict(config.get("post_source_capacity_gate") or {})
+    if post != {
+        "minimum_combined_unique_state_ids": 320,
+        "minimum_combined_unique_episode_ids": 160,
+        "maximum_states_per_episode": 2,
+        "source_v4_must_remain_unfiltered": True,
+        "failure_action": (
+            "report_exact_capacity_and_reassess_task_generator_without_outcome_filtering"
+        ),
+    }:
+        raise ValueError("StructPool DA2 supplement post-source gate changed")
+
+
 def _validate_structpool_load_extension(config: dict[str, Any]) -> None:
     if (
         config.get("scientific_status")
@@ -658,6 +872,9 @@ def validate_robustaction_expansion_design(config: dict[str, Any]) -> None:
     if schema == MAP_REPLACEMENT_SCHEMA:
         _validate_structpool_map_replacement(config)
         return
+    if schema == DA2_SUPPLEMENT_SCHEMA:
+        _validate_structpool_da2_supplement(config)
+        return
     raise ValueError("unexpected robust-action expansion design")
 
 
@@ -854,6 +1071,7 @@ def prepare_robustaction_preflight_dataset(
 
 __all__ = [
     "DESIGN_SCHEMA",
+    "DA2_SUPPLEMENT_SCHEMA",
     "LOAD_EXTENSION_SCHEMA",
     "MAP_REPLACEMENT_SCHEMA",
     "REPORT_SCHEMA",
