@@ -3355,3 +3355,69 @@ state sampling before candidate labels; it is not a TTF or improvement claim.
 The source-design and source-runtime SHA-256 values are respectively
 `1cdabd64f5a4307baaafc60abb06ad5bfd43fe0a0289094bba66f9ccea06f597`
 and `f52e709d68f2a3c19a000ed490f3c64965db23550a5ca87d3ec34fccf24d0f77`.
+
+### DA2 recovery source-v1 qualification failure
+
+The source-v1 qualification terminated before either source policy ran.  All
+32 registered reset jobs reached a terminal row: 29 are valid, three are
+errors and none time out.  Both solver seeds fail for the 1,788-agent
+`lt_undercitydungeon` opposite-exchange task; solver seed 1 fails for the
+1,816-agent `lt_undercityserialkiller` uniform-random task.  Every error is
+`ValueError: state contains an empty agent path`.  No Adaptive or
+realized-dynamic episode was collected, so there is no source-capacity,
+candidate-quality or TTF result to retain selectively.
+
+The native reset path seeds the process-global stream before constructing the
+official InitLNS solver.  `InitLNS::getInitialSolution` builds agent paths in
+the seeded PP order and stops when its total native time exceeds 600 seconds.
+An unfinished suffix therefore appears as empty agent paths in the exported
+state.  Native `max_repair_iterations=12` is consulted only after
+initialization and cannot explain or repair this failure.  Twenty-five repeated
+task/seed rows and all four newly recovered `ca_caverns2` rows remain valid;
+the three changes are confined to the two highest-load tasks above.  This is a
+load/headroom failure at the initialization boundary, not a learned selector
+or topology-candidate failure.
+
+The immutable failed qualification manifest, collector report, run config and
+collection summary SHA-256 values are respectively
+`34611a4ece9711d53ef72bc0aed80f53b602e6c044f0383f9d80c331bbb3d74f`,
+`e6b96e08cb6ac61a7f571b8c56782d79a218006840c3268e0699eea759d39252`,
+`f1d050cedf98a402c23a2e8d231f6d276995fe0f385cf2169f7460bf9a9c4f9d`
+and `3185ea6a874f1082382a2c32f7024b42f25a5e275d3f19ef45a934d275b18db7`.
+
+### DA2 source stability-v2 preregistration
+
+The stability revision does not raise the 600-second limit or rerun the same
+borderline tasks until they happen to pass.  It applies one deterministic
+rule: replace each unstable task by the same map and task variant at the next
+lower load whose two registered reset seeds are complete and fingerprinted.
+The dungeon opposite-exchange task changes from 1,788 to 1,342 agents; its
+registered conflicts are 1/1.  The serial-killer uniform-random task changes
+from 1,816 to 1,362 agents; its registered conflicts are 5/0.  The other 14
+tasks are unchanged.  The cohort therefore remains eight maps, 16 tasks and
+high/mid/low topology counts 6/6/4.
+
+The single zero-conflict seed is retained rather than hidden.  Qualification
+now requires all 32 resets to be valid, exactly 31 nonzero states, at least 15
+nonzero states per solver seed, and all three topology groups.  Both reset and
+source collection use one worker because these products provide training
+states rather than performance measurements; removing CPU contention does not
+support a speed claim.  Historical stopping, the 12-decision/native-repair
+limit, deterministic PP replay, both source policies and the 600-second safety
+budget remain unchanged.  A pass authorizes all 64 episodes; any error stops
+the line without selecting successful episodes.
+
+With at most two sampled states per episode, the honest projected recovery
+capacity is 124 states and 62 episode ids rather than 128/64.  The full pinned
+source-v4 product must still reproduce 1,054 raw states, capped capacity 297
+and 154 eligible episode ids.  Only a complete stability-v2 product may be
+added, after which the unchanged combined gates are at least 320 states and
+160 episode ids.  Candidate repair outcomes and TTF remain unread for task
+selection and capacity; this is outcome-informed source-training recovery, not
+clean evaluation evidence.
+
+The stability-v2 design, runtime and prepared dataset manifest SHA-256 values
+are respectively
+`66135162437bbb58e88cb1ffecbea2b3b71d037f465a5f55814085f2bb98fff8`,
+`de66c1a43957ce12147afcb49c3fde3c2f0d42d02a3a495ffa0d52bd1a9aa0ab`
+and `a225b616ac1c70c1204ad58adea8c430b2f76e15f08826c2c8c70863baa90f7f`.

@@ -1,0 +1,170 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_da2_source_stability_design.v1",
+  "scientific_status": "preregistered_after_source_v1_qualification_failure_before_stability_v2_resets",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v2",
+  "pre_registration_git_commit": "f5f7ccde2d6a49dbfb8f3bef630d35fda0466f4a",
+  "inputs": {
+    "failed_source_qualification_manifest": {
+      "path": "build/stride-robustaction-da2-recovery-source-episodes-v1/qualification_manifest.jsonl",
+      "sha256": "34611a4ece9711d53ef72bc0aed80f53b602e6c044f0383f9d80c331bbb3d74f"
+    },
+    "failed_source_qualification_report": {
+      "path": "build/stride-robustaction-da2-recovery-source-episodes-v1/qualification_report.json",
+      "sha256": "e6b96e08cb6ac61a7f571b8c56782d79a218006840c3268e0699eea759d39252"
+    },
+    "failed_source_run_config": {
+      "path": "build/stride-robustaction-da2-recovery-source-episodes-v1/run_config.json",
+      "sha256": "f1d050cedf98a402c23a2e8d231f6d276995fe0f385cf2169f7460bf9a9c4f9d"
+    },
+    "failed_source_collection_summary": {
+      "path": "build/stride-robustaction-da2-recovery-source-episodes-v1/collection_summary.json",
+      "sha256": "3185ea6a874f1082382a2c32f7024b42f25a5e275d3f19ef45a934d275b18db7"
+    },
+    "source_v1_manifest": {
+      "path": "build/stride-robustaction-da2-recovery-source-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "98e1bb6f5cdf6d469f8297133f56ba7cb5e9690e6046d71f2e6075da935699ef"
+    },
+    "source_v1_summary": {
+      "path": "build/stride-robustaction-da2-recovery-source-dataset-v1/dataset_summary.json",
+      "sha256": "aee6109074a67fc83216504af2a6e533b921729ccedd1280bd7d1dcb726a35df"
+    },
+    "supplement_manifest": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "2e2ab496bceda9a5720ceea5ce12f1700bf40ead28cecd52bfd427e5bc75dece"
+    },
+    "supplement_qualification_manifest": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "3eb8a80ae260d298cf327fd511326d10414008b53929a69a617f82e253b0dbeb"
+    },
+    "stability_runtime": {
+      "path": "configs/stride_robustaction_structpool_da2_source_stability_runtime.json",
+      "sha256": "de66c1a43957ce12147afcb49c3fde3c2f0d42d02a3a495ffa0d52bd1a9aa0ab"
+    },
+    "source_v4_qualification_manifest": {
+      "path": "build/stride-robustaction-structpool-source-episodes-v4/qualification_manifest.jsonl",
+      "sha256": "52b833959df198718639601ee671a5be8699e41ce2e69cb0a6a688cdd557a1ed"
+    },
+    "source_v4_official_adaptive_manifest": {
+      "path": "build/stride-robustaction-structpool-source-episodes-v4/official_adaptive_manifest.jsonl",
+      "sha256": "fac89f3ffc81c364ff3c35ddfdc571cb0c62a3f62febdfc8e03ea583e0b566db"
+    },
+    "source_v4_realized_dynamic_manifest": {
+      "path": "build/stride-robustaction-structpool-source-episodes-v4/realized_dynamic_manifest.jsonl",
+      "sha256": "1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96"
+    },
+    "source_v4_run_config": {
+      "path": "build/stride-robustaction-structpool-source-episodes-v4/run_config.json",
+      "sha256": "c6dc8cf99557d82957d9b0a6e0e7ab08e34b366b14a472d23421227f7635e173"
+    },
+    "source_v4_collection_summary": {
+      "path": "build/stride-robustaction-structpool-source-episodes-v4/collection_summary.json",
+      "sha256": "9631127d0e21739f12072a7c80c8289c33479b401e9a0655004ad0f7a2151d69"
+    }
+  },
+  "observed_failure": {
+    "expected_reset_count": 32,
+    "valid_reset_count": 29,
+    "error_reset_count": 3,
+    "timeout_reset_count": 0,
+    "policy_episode_count": 0,
+    "error": "ValueError: state contains an empty agent path",
+    "failed_job_keys": [
+      ["lt_undercitydungeon__derived_opposite_exchange__task_seed_0331__agents_1788", 1],
+      ["lt_undercitydungeon__derived_opposite_exchange__task_seed_0331__agents_1788", 2],
+      ["lt_undercityserialkiller__derived_uniform_random__task_seed_0331__agents_1816", 1]
+    ],
+    "mechanism": "initial_pp_exceeded_native_600_second_budget_before_all_agent_paths_were_built",
+    "max_repair_iterations_affects_initialization": false
+  },
+  "replacement_rule": {
+    "mode": "same_map_same_task_variant_next_lower_complete_registered_load",
+    "reason": "remove_initial_pp_time_boundary_tasks_without_changing_map_or_topology_membership",
+    "use_existing_complete_paired_reset_evidence": true,
+    "require_both_solver_seeds_complete": true,
+    "require_all_replacement_rows_fingerprinted": true,
+    "require_distinct_task_ids": true,
+    "allow_one_registered_zero_conflict_state": true,
+    "failed_source_product_remains_immutable": true
+  },
+  "replacements": [
+    {
+      "map_id": "lt_undercitydungeon",
+      "layout_mode": "dao_low_topology_control",
+      "task_variant": "opposite_exchange",
+      "removed_task_id": "lt_undercitydungeon__derived_opposite_exchange__task_seed_0331__agents_1788",
+      "removed_agent_count": 1788,
+      "replacement_task_id": "lt_undercitydungeon__derived_opposite_exchange__task_seed_0331__agents_1342",
+      "replacement_agent_count": 1342,
+      "registered_initial_conflicts_by_seed": {"1": 1, "2": 1}
+    },
+    {
+      "map_id": "lt_undercityserialkiller",
+      "layout_mode": "dao_mid_topology",
+      "task_variant": "uniform_random",
+      "removed_task_id": "lt_undercityserialkiller__derived_uniform_random__task_seed_0331__agents_1816",
+      "removed_agent_count": 1816,
+      "replacement_task_id": "lt_undercityserialkiller__derived_uniform_random__task_seed_0331__agents_1362",
+      "replacement_agent_count": 1362,
+      "registered_initial_conflicts_by_seed": {"1": 5, "2": 0}
+    }
+  ],
+  "outcome_boundary": {
+    "outcome_informed_initial_pp_recovery": true,
+    "allowed_selection_fields": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_state_fingerprint", "map_id", "task_id", "task_variant",
+      "agent_count", "layout_mode"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "initial_pp_runtime_used_to_rank_replacements": false,
+    "claim_boundary": "source_training_stability_only_not_clean_evaluation_or_ttf"
+  },
+  "source_contract": {
+    "map_count": 8,
+    "task_count": 16,
+    "layout_counts": {
+      "dao_high_topology": 6,
+      "dao_mid_topology": 6,
+      "dao_low_topology_control": 4
+    },
+    "solver_seeds": [1, 2],
+    "source_policies": ["official_adaptive", "realized_dynamic"],
+    "expected_qualification_rows": 32,
+    "expected_nonzero_qualification_rows": 31,
+    "expected_nonzero_by_solver_seed": {"1": 16, "2": 15},
+    "expected_episode_rows_per_policy": 32,
+    "expected_total_episode_rows": 64,
+    "stopping_rule": "historical",
+    "max_decisions": 12,
+    "max_repair_iterations": 12,
+    "metric_iteration_budget": 12,
+    "workers": 1,
+    "deterministic_pp_replay": true,
+    "require_zero_qualification_errors": true,
+    "require_zero_episode_errors": true,
+    "require_zero_timeouts": true,
+    "require_zero_invalid_actions": true,
+    "failure_action": "preserve_complete_product_and_stop_without_success_filtering"
+  },
+  "capacity_contract": {
+    "maximum_states_per_episode": 2,
+    "projected_recovery_state_capacity": 124,
+    "projected_recovery_episode_id_capacity": 62,
+    "minimum_combined_unique_state_ids": 320,
+    "minimum_combined_unique_episode_ids": 160,
+    "must_be_recomputed_from_all_source_v4_and_stability_v2_traces": true
+  },
+  "source_v4_frozen_capacity": {
+    "raw_positive_pre_action_state_count": 1054,
+    "maximum_obtainable_unique_state_ids": 297,
+    "maximum_obtainable_unique_episode_ids": 154,
+    "maximum_states_per_episode": 2,
+    "must_remain_unfiltered": true
+  },
+  "next_decision_on_qualification_pass": "collect_all_64_stability_v2_source_episodes",
+  "next_decision_on_qualification_failure": "stop_before_source_episodes_and_report_exact_failed_jobs",
+  "next_decision_on_source_pass": "recompute_combined_result_blind_state_capacity_before_candidate_labels",
+  "formal_speed_claim": false
+}
