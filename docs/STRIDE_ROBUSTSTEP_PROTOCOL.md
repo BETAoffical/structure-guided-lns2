@@ -3563,3 +3563,23 @@ current agent count; candidate and future outcomes remain forbidden.
 The frozen v1 code path was rebuilt after adding v2 support and reproduced both
 v1 hashes exactly.  The v2 design SHA-256 is
 `47926382fa85afaddad53c33a6dcbe20e793dc7afc018f53f24d669766b1ce61`.
+
+### RobustAction combined state-selection-v2 result
+
+Selection-v2 passes all eleven registered gates.  It retains 320 unique states,
+all 216 eligible episode ids, the 160/160 source-policy balance and the
+one-/two-state episode counts 112/104.  Ninety-eight selected states satisfy
+the exact StructPool high-stress gate using current conflict count and agent
+count, for 30.625% coverage.  Adaptive contributes 51 and V2 contributes 47,
+so both exceed the registered per-policy floor of 40.  The source-v4/DA2 split
+remains 226/94, with the same 28 maps and 56 tasks.
+
+The amendment replaces 28 selected state ids relative to v1 while leaving the
+independent episodes, policy allocation and label budget unchanged.  It reads
+no candidate repair, runtime or TTF outcome.  An independent second run is
+byte-identical.  The v2 state-selection and report SHA-256 values are
+respectively
+`17e54f13f2c026daee2cf65967c9960092ecfd24493b53972407c33bd0b460fb`
+and `8619c5b8b3be36574f31e737db8c4a65c6649235d6474db112a4b3a7167f2d07`.
+This product replaces v1 for subsequent candidate-label work but still makes
+no repair-quality, ranker or TTF claim.
