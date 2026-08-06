@@ -3319,3 +3319,39 @@ dataset summary SHA-256 values are respectively
 `530612390216b18f076302890bc49b0fe630a3c4f87a1e0a0b678f0e33f769d5`,
 `98e1bb6f5cdf6d469f8297133f56ba7cb5e9690e6046d71f2e6075da935699ef`
 and `aee6109074a67fc83216504af2a6e533b921729ccedd1280bd7d1dcb726a35df`.
+
+### DA2 recovery source collection preregistration
+
+Before any recovery source episode, parent commit
+`1851facd5f33b6de211f501b153054d3b6c49c88` freezes the final cohort and
+the separate source design.  The complete 8-map/16-task dataset is run under
+solver seeds 1/2 and the unchanged `official_adaptive` and `realized_dynamic`
+source policies.  The stopping rule is `historical`; `max_decisions`, native
+`max_repair_iterations` and `metric_iteration_budget` are all 12.  PP replay
+remains deterministic.  The expected product is 32 qualification reset rows,
+32 rows per policy and 64 policy episodes in total.
+
+All 32 selected task/seed resets were already complete and nonzero in the
+recovery inputs, so the source qualification freezes 32 total nonzero states,
+16 under each solver seed, all eight maps and all three topology groups.  Every
+selected task has 532--1,816 agents and is therefore in the project's `high`
+agent band (`low_mid` ends at 200); the gate requires all 32 high-band states
+and does not invent a low/mid requirement for this intentionally high-load
+cohort.  The source product must have zero errors, timeouts, invalid actions,
+over-12-step episodes or qualification/policy initial-fingerprint mismatches.
+Any failure preserves the full product and stops the line; successful source
+episodes may not be selected as a replacement subset.
+
+The capacity audit reads source status and pre-action trace identity only for
+integrity and capacity.  It does not read candidate-repair outcomes or TTF and
+does not use source outcomes to filter tasks or episodes.  Before registration,
+the new analyzer recomputed every pinned source-v4 trace and exactly reproduced
+1,054 positive-conflict pre-action states, capacity 297 at two states per
+episode, 154 eligible episode ids and zero trace errors.  The recovery source
+will be added in full and the unchanged combined gates remain at least 320
+state ids and 160 episode ids.  Passing only authorizes deterministic combined
+state sampling before candidate labels; it is not a TTF or improvement claim.
+
+The source-design and source-runtime SHA-256 values are respectively
+`1cdabd64f5a4307baaafc60abb06ad5bfd43fe0a0289094bba66f9ccea06f597`
+and `f52e709d68f2a3c19a000ed490f3c64965db23550a5ca87d3ec34fccf24d0f77`.
