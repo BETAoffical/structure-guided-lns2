@@ -3615,3 +3615,35 @@ a repair-quality or TTF result.
 
 The preregistered label-preflight config SHA-256 is
 `85ac6af41daa09572a113a736c181c5f0d1496e43472ab20de1c15a7eccce5a7`.
+
+### RobustAction StructPool label-preflight result
+
+All 320 registered states complete with zero errors and zero timeouts.  The
+exact high-stress cohort is reproduced: 98 active states, split 51/47 between
+Adaptive and V2.  Every active state receives at least five genuinely new
+StructPool actions (94 receive six and four receive five), so 98 states overall
+and both policy counts 51/47 exceed the registered 80 and 40/40 gates.  The
+fraction of active states with at least three additions is therefore 1.0.
+
+The additions cover all five registered family groups and sizes 8, 16, 24 and
+32.  Maps with additions cover 8 high-topology, six mid-topology and two
+low-topology-control maps, passing the 3/3/2 floor.  All proposal repetitions
+are deterministic; every frozen V2 prefix and incumbent boundary is preserved;
+candidate caps, native explicit-action legality, the 0.8 Jaccard filter and
+state fingerprints pass.  All 222 inactive states perform no topology analysis
+and retain their exact generated V2 pool.
+
+An independent file-by-file audit validates 320 state artifacts and 6,285
+candidate feature rows.  Every row has exactly 124 finite
+`realized_dynamic` values.  It also confirms that candidate repair trials and
+controller actions were never executed and that candidate outcomes and TTF
+were not read.  Consequently this result authorizes the separately registered
+16-paired-seed label collection, but says nothing yet about which candidate is
+better or whether `stride-robustaction-v1` will reduce TTF.
+
+Reproducibility SHA-256 values are:
+
+- run config: `12dcf1f028a1c348eca9ec937904d9a268bfe78f0d30953db43c780177ac229d`;
+- preflight rows: `fd17fb5272da1155e88949c8df4814a48d9b6181726b20ad79b3dddee1cf4eab`;
+- preflight report: `30a6e340a2e0a2eeecc3ff300312d8860a75db2ce3bc5d63512509ed72549c13`;
+- sorted state-artifact tree: `6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2`.
