@@ -3163,3 +3163,33 @@ report SHA-256 is
 `f391848e061e07551fa22537cbe763252230d1b2e931145d4564b5aeaa2450ef`;
 the report records both `solver_or_controller_run=false` and
 `performance_measurements_run=false`.
+
+### RobustAction StructPool DA2 reset-only qualification registration
+
+After the static-only milestone was committed as `486515c`, the registered
+generator materialized the 48 deterministic tasks without running a solver.
+The dataset manifest and summary SHA-256 values are respectively
+`2e2ab496bceda9a5720ceea5ce12f1700bf40ead28cecd52bfd427e5bc75dece`
+and `7b7c6cf8c56e5112028aef0d4c7be3b3479ad7af5bb9330779d9ad26c2e42b80`;
+the source-adapter SHA-256 is
+`d24b0b945e98692a374d36cd0346df380103cfb7d5deb8020f53e42608ce5812`.
+The product contains exactly eight maps and 48 tasks and records
+`solver_or_controller_run=false` and `performance_measurement_run=false`.
+
+Before any supplement reset, the qualification is separately registered as 96
+complete jobs: all 48 tasks under solver seeds 1 and 2.  The environment has
+zero repair iterations and zero controller decisions.  Every row must be
+complete, contain an initial state fingerprint and contain none of the repair,
+candidate, controller, future-trajectory or TTF fields.  All eight maps must
+have at least one nonzero-conflict state.  Initial conflicts are the only
+outcome allowed for task selection: two tasks per map are selected nearest to
+mean-conflict targets 25 and 100, with nonzero conflicts on at least half the
+paired seeds, mean conflicts at least one and a preference for distinct OD
+variants.  The selected set must contain 16 tasks with exact high/mid/low
+topology counts 6/6/4.
+
+A failed map or selection gate stops this expansion and reports the exact
+underloaded maps; it cannot retain only successful tasks.  A passing result
+only authorizes the 64 supplement source episodes under the unchanged paired
+policies, solver seeds and historical 12-step rule.  It still does not
+authorize candidate-label collection, training, promotion or a TTF claim.
