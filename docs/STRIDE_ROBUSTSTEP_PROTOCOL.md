@@ -3421,3 +3421,28 @@ are respectively
 `66135162437bbb58e88cb1ffecbea2b3b71d037f465a5f55814085f2bb98fff8`,
 `de66c1a43957ce12147afcb49c3fde3c2f0d42d02a3a495ffa0d52bd1a9aa0ab`
 and `a225b616ac1c70c1204ad58adea8c430b2f76e15f08826c2c8c70863baa90f7f`.
+
+### DA2 source stability-v2 qualification result
+
+The complete single-worker reset product passes every registered gate.  All
+32 task/seed jobs are valid, with zero errors and zero timeouts.  Thirty-one
+states have nonzero conflicts: solver seed 1 contributes 16 and solver seed 2
+contributes 15.  The only zero-conflict state is the preregistered
+1,362-agent `lt_undercityserialkiller` uniform-random seed-2 case; it remains
+in the cohort.  All eight maps, 16 tasks and the 6/6/4 topology balance are
+exact.
+
+Every reset exactly reproduces its pinned initial-conflict count and state
+fingerprint.  The stored runtime also matches one worker, historical stopping,
+600 seconds, 12 decisions, 12 native repair iterations and metric budget 12.
+No candidate-repair, controller or TTF field occurs in the qualification
+product.  This result therefore authorizes all 64 source episodes under the
+two registered policies, but still makes no model-quality or speed claim.
+
+The qualification manifest, collector report, run config, collection summary
+and independent qualification-audit SHA-256 values are respectively
+`5ae32dc8d36d21c40ec561b33170a192ee7c5b98339151d7e2c52e38a95e67c4`,
+`37569c773a7cd7859c3b787256bbdcca76fc85b498d8f2388af39233dfca858a`,
+`f38a59caff19570a1243c6f94137486efff505098d3b49dab3ba12cb92358d2e`,
+`7736ca4eeb60908256cedcadc1d5fee537f7fd998bfee0f540794bc3c2a37512`
+and `ae5a22cc5861121d41c144e976a2e2e4516d7981b873e0ccfad2111a5d921a24`.
