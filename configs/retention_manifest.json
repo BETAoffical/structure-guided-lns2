@@ -199,6 +199,41 @@
       "purpose": "Outcome-blind replacement-map qualification and final 20-map RobustAction source-dataset assembly."
     },
     {
+      "path": "experiments/stride_robustaction_da2_qualification.py",
+      "role": "active",
+      "purpose": "Reset-only DA2 supplement qualification with frozen outcome-blind selection boundaries."
+    },
+    {
+      "path": "experiments/stride_robustaction_da2_recovery.py",
+      "role": "active",
+      "purpose": "Preregistered DA2 recovery cohort construction for initialization-stable source data."
+    },
+    {
+      "path": "experiments/stride_robustaction_da2_recovery_qualification.py",
+      "role": "active",
+      "purpose": "Complete-pair DA2 recovery qualification without candidate-repair filtering."
+    },
+    {
+      "path": "experiments/stride_robustaction_da2_recovery_source.py",
+      "role": "active",
+      "purpose": "Complete DA2 source-product integrity and result-blind state-capacity audit."
+    },
+    {
+      "path": "experiments/stride_robustaction_da2_source_stability.py",
+      "role": "active",
+      "purpose": "Single-worker DA2 source-stability recovery, qualification, and combined capacity audit."
+    },
+    {
+      "path": "experiments/stride_robustaction_da2_supplement.py",
+      "role": "active",
+      "purpose": "Static DA2 map-supplement audit and outcome-blind source-cohort extension."
+    },
+    {
+      "path": "experiments/stride_robustaction_state_selection.py",
+      "role": "active",
+      "purpose": "Result-blind combined RobustAction source-state selection that maximizes independent episode coverage under the frozen label budget."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -377,6 +412,41 @@
       "path": "scripts/analyze_stride_robustaction_map_replacement.py",
       "role": "active",
       "purpose": "Command-line entry point for reset-only RobustAction replacement-map analysis and source-task assembly."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_da2_recovery.py",
+      "role": "active",
+      "purpose": "Command-line entry point for DA2 primary recovery qualification analysis."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_da2_recovery_source.py",
+      "role": "active",
+      "purpose": "Command-line entry point for complete DA2 recovery source-capacity analysis."
+    },
+    {
+      "path": "scripts/analyze_stride_robustaction_da2_supplement.py",
+      "role": "active",
+      "purpose": "Command-line entry point for reset-only DA2 supplement qualification analysis."
+    },
+    {
+      "path": "scripts/audit_stride_robustaction_da2_supplement.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the static DA2 supplement design audit."
+    },
+    {
+      "path": "scripts/prepare_stride_robustaction_da2_recovery.py",
+      "role": "active",
+      "purpose": "Command-line entry point for deterministic DA2 recovery dataset preparation."
+    },
+    {
+      "path": "scripts/run_stride_robustaction_da2_source_stability.py",
+      "role": "active",
+      "purpose": "Command-line entry point for DA2 stability-v2 preparation and complete product audits."
+    },
+    {
+      "path": "scripts/build_stride_robustaction_state_selection.py",
+      "role": "active",
+      "purpose": "Command-line entry point for preregistered result-blind combined RobustAction state selection."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1202,6 +1272,41 @@
       "path": "tests/evaluation/test_stride_robustaction_map_replacement.py",
       "role": "active",
       "contract": "Replacement-map qualification registration, disjoint replacement identities, and outcome boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_qualification.py",
+      "role": "active",
+      "contract": "DA2 supplement qualification dimensions, failure action, and candidate-outcome boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_recovery.py",
+      "role": "active",
+      "contract": "DA2 recovery identity, retained cohort, adapter dimensions, and outcome-informed boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_recovery_qualification.py",
+      "role": "active",
+      "contract": "DA2 recovery qualification complete-pair retention and candidate-outcome exclusion."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_recovery_source.py",
+      "role": "active",
+      "contract": "Complete source-capacity counting, duplicate identity rejection, runtime, and outcome boundaries."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_source_stability.py",
+      "role": "active",
+      "contract": "DA2 stability replacement identity, frozen capacity, and source-outcome boundaries."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_da2_supplement.py",
+      "role": "active",
+      "contract": "Static DA2 supplement selection determinism, scene filtering, and map-family diversity."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_state_selection.py",
+      "role": "active",
+      "contract": "Frozen 320-state budget, complete eligible-episode coverage, deterministic hash ranking, and outcome-blind selection boundary."
     },
     {
       "path": "experiments/stride_structpool.py",

@@ -3479,3 +3479,28 @@ collection summary and capacity-report SHA-256 values are respectively
 `f38a59caff19570a1243c6f94137486efff505098d3b49dab3ba12cb92358d2e`,
 `890d7910921221e2cbcb43bcb17a69e42d445d054e8b664ab8ab2657b059697c`
 and `2cafe9c7c2c2297773827d2e78f517f331a3d624f68f43f856f4c4d3437b562f`.
+
+### RobustAction combined state-selection preregistration
+
+Before materializing a combined state selection, parent commit
+`408751c1bdc5800a50c1a69430eed5a2e05ae5a1` freezes the complete source-v4
+and stability-v2 capacity evidence.  The label budget remains the original 320
+states rather than expanding to all 415 available capped states.  Both source
+policies receive exactly 160 states.  Within each policy, the selector first
+keeps one state from every eligible source episode, then assigns the remaining
+52 second-state slots by a deterministic hash.  This covers all 108 eligible
+episodes per policy and all 216 overall; 104 episodes contribute two states
+and 112 contribute one.  No episode can contribute more than two states.
+
+Both the within-episode state rank and the second-slot episode rank are limited
+to source namespace, source policy, episode id, decision index, current-state
+fingerprint and current conflict count.  The selector may reconstruct the
+recorded prefix needed to identify a current state, but it may not inspect the
+target decision's action or outcome, candidate-repair outcomes, controller
+success, runtime or TTF.  Every complete source manifest row remains mandatory;
+a missing, invalid or hash-mismatched input stops before candidate labels.
+
+This rule maximizes independent episode coverage while preserving the frozen
+multi-PP-seed labeling budget.  It is training-state selection only and is not
+a candidate-quality, controller or speed result.  The design SHA-256 is
+`95571da0aec7efbed89463bb355a9b3d393301dc3315d32daa1c5fb8552b8b28`.

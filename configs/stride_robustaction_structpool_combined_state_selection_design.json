@@ -1,0 +1,145 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_combined_state_selection_design.v1",
+  "scientific_status": "preregistered_after_combined_capacity_pass_before_state_sampling",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v2",
+  "selection_id": "stride-robustaction-structpool-combined-selection-v1",
+  "planned_model_id": "stride-robustaction-v1",
+  "pre_registration_git_commit": "408751c1bdc5800a50c1a69430eed5a2e05ae5a1",
+  "inputs": {
+    "capacity_report": {
+      "path": "build/stride-robustaction-da2-source-stability-analysis-v2/source_capacity_report.json",
+      "sha256": "2cafe9c7c2c2297773827d2e78f517f331a3d624f68f43f856f4c4d3437b562f"
+    },
+    "sources": [
+      {
+        "namespace": "source-v4",
+        "root": "build/stride-robustaction-structpool-source-episodes-v4",
+        "run_config": {
+          "path": "build/stride-robustaction-structpool-source-episodes-v4/run_config.json",
+          "sha256": "c6dc8cf99557d82957d9b0a6e0e7ab08e34b366b14a472d23421227f7635e173"
+        },
+        "dataset_manifest": {
+          "path": "build/stride-robustaction-structpool-source-dataset-v3/balanced_wall_clock/manifest.jsonl",
+          "sha256": "8e9e8d826acc5462b2c917daf368c1efb01284c6c5674864c100f2287b6c8d83"
+        },
+        "dataset_summary": {
+          "path": "build/stride-robustaction-structpool-source-dataset-v3/dataset_summary.json",
+          "sha256": "9b2a02be800b239bae74b633cc6a72ba876a2e447f1820db8bd8d34086f8755c"
+        },
+        "policy_manifests": {
+          "official_adaptive": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/official_adaptive_manifest.jsonl",
+            "sha256": "fac89f3ffc81c364ff3c35ddfdc571cb0c62a3f62febdfc8e03ea583e0b566db",
+            "selection_policy": "official_adaptive",
+            "expected_episode_count": 80
+          },
+          "realized_dynamic": {
+            "path": "build/stride-robustaction-structpool-source-episodes-v4/realized_dynamic_manifest.jsonl",
+            "sha256": "1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96",
+            "selection_policy": "v2-full",
+            "expected_episode_count": 80
+          }
+        },
+        "expected_raw_positive_state_count": 1054,
+        "expected_capped_state_count": 297,
+        "expected_eligible_episode_count": 154
+      },
+      {
+        "namespace": "da2-stability-v2",
+        "root": "build/stride-robustaction-da2-source-stability-episodes-v2",
+        "run_config": {
+          "path": "build/stride-robustaction-da2-source-stability-episodes-v2/run_config.json",
+          "sha256": "f38a59caff19570a1243c6f94137486efff505098d3b49dab3ba12cb92358d2e"
+        },
+        "dataset_manifest": {
+          "path": "build/stride-robustaction-da2-source-stability-dataset-v2/balanced_wall_clock/manifest.jsonl",
+          "sha256": "a225b616ac1c70c1204ad58adea8c430b2f76e15f08826c2c8c70863baa90f7f"
+        },
+        "dataset_summary": {
+          "path": "build/stride-robustaction-da2-source-stability-dataset-v2/dataset_summary.json",
+          "sha256": "8c93aea86f3644960b938953fd600b39107a35a65049483ba05cf97ce45b01cc"
+        },
+        "policy_manifests": {
+          "official_adaptive": {
+            "path": "build/stride-robustaction-da2-source-stability-episodes-v2/official_adaptive_manifest.jsonl",
+            "sha256": "93b17db5def913681dd986b46abf312ed7e06e69af41bbc49a279e7be7306326",
+            "selection_policy": "official_adaptive",
+            "expected_episode_count": 32
+          },
+          "realized_dynamic": {
+            "path": "build/stride-robustaction-da2-source-stability-episodes-v2/realized_dynamic_manifest.jsonl",
+            "sha256": "ec811e15db5db62055c1be28ac9c48e8caa3eea3dd30f28fd3e3642ef0778ff4",
+            "selection_policy": "v2-full",
+            "expected_episode_count": 32
+          }
+        },
+        "expected_raw_positive_state_count": 505,
+        "expected_capped_state_count": 118,
+        "expected_eligible_episode_count": 62
+      }
+    ]
+  },
+  "source_contract": {
+    "registered_split": "balanced_wall_clock",
+    "source_manifest_policies": ["official_adaptive", "realized_dynamic"],
+    "selection_policies": ["official_adaptive", "v2-full"],
+    "stopping_rule": "historical",
+    "max_decisions": 12,
+    "max_repair_iterations": 12,
+    "metric_iteration_budget": 12,
+    "deterministic_pp_replay": true,
+    "expected_total_episode_rows": 224,
+    "expected_raw_positive_state_count": 1559,
+    "expected_capped_state_capacity": 415,
+    "expected_eligible_episode_count": 216
+  },
+  "selection_contract": {
+    "target_state_count": 320,
+    "target_states_per_policy": 160,
+    "maximum_states_per_episode": 2,
+    "require_every_eligible_episode": true,
+    "expected_selected_episode_count": 216,
+    "selection_rule": "one_hash_ranked_state_from_every_eligible_episode_then_hash_ranked_second_state_until_policy_target",
+    "state_rank_fields": [
+      "source_namespace",
+      "source_policy",
+      "episode_id",
+      "decision_index",
+      "before_fingerprint",
+      "before_conflicts"
+    ],
+    "episode_rank_fields": ["source_namespace", "source_policy", "episode_id"],
+    "permitted_selection_inputs": [
+      "source_namespace",
+      "source_policy",
+      "episode_id",
+      "decision_index",
+      "before_fingerprint",
+      "before_conflicts"
+    ],
+    "forbidden_selection_inputs": [
+      "actual_action",
+      "after_conflicts",
+      "after_fingerprint",
+      "candidate_repair_outcome",
+      "candidate_runtime",
+      "controller_success",
+      "controller_ttf",
+      "future_trajectory",
+      "repair_runtime",
+      "source_success",
+      "ttf"
+    ],
+    "failure_action": "preserve_complete_product_and_stop_before_candidate_labels_without_filtering"
+  },
+  "claim_boundary": {
+    "candidate_repair_outcomes_read": false,
+    "target_decision_outcomes_read": false,
+    "ttf_read": false,
+    "source_episode_outcomes_used_to_filter": false,
+    "formal_speed_claim": false,
+    "meaning": "result_blind_training_state_selection_only"
+  },
+  "next_decision_on_pass": "freeze_selection_then_collect_registered_multi_pp_seed_candidate_labels",
+  "next_decision_on_failure": "stop_before_candidate_labels_and_report_exact_selection_gate"
+}

@@ -11,7 +11,11 @@ from experiments.repair_collection import (
     _write_json,
     _write_jsonl,
 )
-from experiments.stride_robustaction_da2_recovery_source import _trace_capacity
+from experiments.stride_robustaction_da2_recovery_source import (
+    _contains,
+    _job_key,
+    _trace_capacity,
+)
 from experiments.stride_robustaction_load_extension import _copy
 from experiments.stride_robustaction_qualification import FORBIDDEN_FIELDS
 
@@ -64,19 +68,6 @@ def _registered(project_root: Path, spec: dict[str, Any]) -> Path:
     if not path.is_file() or sha256_file(path) != str(spec["sha256"]):
         raise ValueError(f"DA2 source stability input changed: {spec['path']}")
     return path
-
-
-def _contains(actual: Any, expected: Any) -> bool:
-    if isinstance(expected, dict):
-        return isinstance(actual, dict) and all(
-            key in actual and _contains(actual[key], value)
-            for key, value in expected.items()
-        )
-    return actual == expected
-
-
-def _job_key(row: dict[str, Any]) -> tuple[str, int]:
-    return str(row.get("task_id", "")), int(row.get("solver_seed", -1))
 
 
 def _input_paths(
