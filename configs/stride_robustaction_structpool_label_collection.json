@@ -1,0 +1,152 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_label_collection_config.v1",
+  "scientific_status": "preregistered_16_paired_pp_seed_current_step_labels_before_candidate_repairs",
+  "collection_id": "stride-robustaction-structpool-label-collection-v1",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v2",
+  "planned_model_id": "stride-robustaction-v1",
+  "candidate_pool_id": "v2-plus-stride-structpool-v1",
+  "pre_registration_git_commit": "702b66d2e0f993aebd9123aec1afab9889bbf3d4",
+  "inputs": {
+    "selection": {
+      "path": "build/stride-robustaction-combined-state-selection-v2/state_selection.jsonl",
+      "sha256": "17e54f13f2c026daee2cf65967c9960092ecfd24493b53972407c33bd0b460fb"
+    },
+    "preflight_config": {
+      "path": "configs/stride_robustaction_structpool_label_preflight.json",
+      "sha256": "85ac6af41daa09572a113a736c181c5f0d1496e43472ab20de1c15a7eccce5a7"
+    },
+    "preflight_run_config": {
+      "path": "build/stride-robustaction-label-preflight-v1/run_config.json",
+      "sha256": "12dcf1f028a1c348eca9ec937904d9a268bfe78f0d30953db43c780177ac229d"
+    },
+    "preflight_report": {
+      "path": "build/stride-robustaction-label-preflight-v1/preflight_report.json",
+      "sha256": "30a6e340a2e0a2eeecc3ff300312d8860a75db2ce3bc5d63512509ed72549c13"
+    },
+    "preflight_rows": {
+      "path": "build/stride-robustaction-label-preflight-v1/preflight_states.jsonl",
+      "sha256": "fd17fb5272da1155e88949c8df4814a48d9b6181726b20ad79b3dddee1cf4eab"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "preflight_state_artifact_root": "build/stride-robustaction-label-preflight-v1/states",
+  "preflight_state_artifact_tree_sha256": "6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2",
+  "cohort_contract": {
+    "research_split": "train",
+    "state_count": 320,
+    "episode_count": 216,
+    "states_per_source_policy": {
+      "official_adaptive": 160,
+      "v2-full": 160
+    },
+    "map_count": 28,
+    "task_count": 56,
+    "maximum_states_per_episode": 2,
+    "active_structpool_state_count": 98,
+    "active_structpool_states_per_source_policy": {
+      "official_adaptive": 51,
+      "v2-full": 47
+    }
+  },
+  "candidate_contract": {
+    "candidate_count": 6285,
+    "candidate_count_distribution": {
+      "16": 15,
+      "17": 24,
+      "18": 183,
+      "22": 1,
+      "23": 7,
+      "24": 90
+    },
+    "added_candidate_count_distribution": {
+      "0": 222,
+      "5": 4,
+      "6": 94
+    },
+    "feature_schema": "lns2.realized_features.v2",
+    "feature_profile": "realized_dynamic",
+    "feature_dimension": 124,
+    "exact_preflight_candidate_and_feature_reuse": true
+  },
+  "paired_repair_contract": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "trials_per_candidate": 16,
+    "expected_trial_count": 100560,
+    "seed_namespace": "stride-repairability-paired-pp-v1",
+    "seed_pairing_unit": "same_state_repair_fingerprint_and_trial_index_across_all_candidates",
+    "restore_contract": "lns2.trace_replay.target-path-restore.v1",
+    "replan_algorithm": "PP",
+    "runtime_or_pp_time_stored": false,
+    "future_trajectory_stored": false
+  },
+  "label_contract": {
+    "schema": "lns2.stride.robustaction_current_step_label.v1",
+    "per_seed_target": "normalized_current_step_conflict_reduction",
+    "formula": "(conflicts_before-conflicts_after)/max(1,conflicts_before)",
+    "candidate_aggregates": [
+      "seed_mean",
+      "seed_standard_deviation",
+      "lower_half_mean",
+      "first_fixed_half_mean",
+      "second_fixed_half_mean",
+      "progress_rate",
+      "replan_success_rate",
+      "feasible_rate"
+    ],
+    "single_seed_winner_used": false,
+    "post_structure_penalty_used": false,
+    "repair_runtime_used": false,
+    "future_repair_rounds_used": false,
+    "cost_to_go_used": false,
+    "receding_q_used": false,
+    "ttf_used": false
+  },
+  "post_collection_opportunity_audit": {
+    "anchor": "frozen_v2_ranking_over_the_exact_same_candidate_pool",
+    "minimum_paired_win_fraction": 0.75,
+    "minimum_absolute_mean_effect": 0.02,
+    "require_both_fixed_half_mean_directions": true,
+    "tie_epsilon": 1e-12,
+    "minimum_states_with_nonanchor_robust_win_fraction": 0.25,
+    "minimum_robust_positive_action_fraction": 0.04,
+    "minimum_positive_opportunity_maps_by_topology_group": {
+      "dao_high_topology": 3,
+      "dao_mid_topology": 3,
+      "dao_low_topology_control": 2
+    },
+    "action_uncertainty_outputs": [
+      "fixed_half_exact_winner_agreement",
+      "fixed_half_top3_overlap",
+      "fixed_half_pairwise_direction_agreement",
+      "candidate_seed_standard_deviation"
+    ]
+  },
+  "integrity_gates": {
+    "require_all_320_states": true,
+    "require_exact_6285_candidates": true,
+    "require_exact_100560_trial_product": true,
+    "require_paired_and_distinct_pp_seeds": true,
+    "require_exact_preflight_candidates_and_features": true,
+    "require_state_and_repair_fingerprint_identity": true,
+    "require_native_action_semantics": true,
+    "require_zero_errors": true,
+    "require_zero_timeouts": true,
+    "require_no_runtime_or_future_fields": true
+  },
+  "execution": {
+    "recommended_workers": 2,
+    "per_state_timeout_seconds": 7200,
+    "resume_required_for_existing_output": true,
+    "preserve_complete_failed_product": true,
+    "monitor_interval_minutes": 30
+  },
+  "next_decision_on_pass": "build_robustaction_aggregate_labels_and_action_uncertainty_then_train_map_grouped_model",
+  "next_decision_on_failure": "stop_before_training_and_report_exact_integrity_or_opportunity_gate_without_outcome_filtering",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}

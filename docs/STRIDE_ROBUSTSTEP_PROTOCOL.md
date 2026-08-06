@@ -3647,3 +3647,46 @@ Reproducibility SHA-256 values are:
 - preflight rows: `fd17fb5272da1155e88949c8df4814a48d9b6181726b20ad79b3dddee1cf4eab`;
 - preflight report: `30a6e340a2e0a2eeecc3ff300312d8860a75db2ce3bc5d63512509ed72549c13`;
 - sorted state-artifact tree: `6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2`.
+
+### RobustAction 16-seed label-collection preregistration
+
+Parent commit `702b66d2e0f993aebd9123aec1afab9889bbf3d4` freezes the complete
+preflight before any of its candidates is repaired.  The collection must reuse
+the exact 320 states, 6,285 candidate records and native 124-feature rows; it
+may neither regenerate a different candidate pool nor filter states after an
+outcome.  The frozen candidate-count distribution is 15/24/183/1/7/90 states
+with 16/17/18/22/23/24 actions.  This produces exactly 100,560 state-action-
+seed trials.
+
+Every action in one state uses the same deterministic PP seed for a given
+trial index.  Indices 0--15 are distinct and are retained as fixed halves 0--7
+and 8--15.  The only per-seed target is current-step normalized conflict
+reduction,
+
+`(conflicts_before - conflicts_after) / max(1, conflicts_before)`.
+
+The collection stores the seed mean, population standard deviation, worst
+eight-outcome mean, both fixed-half means, progress rate, PP success rate and
+feasible rate for every candidate.  These outcome aggregates are future
+training targets and uncertainty evidence; they are not available as runtime
+selector inputs.  A single-seed winner, post-structure penalty, repair time,
+PP time, future rounds, Cost-to-Go, Receding-Q and TTF are all excluded.
+
+Integrity requires all 320 state files, all 6,285 candidates, all 100,560
+trials, exact preflight candidate/feature identity, paired and distinct seeds,
+native explicit-action semantics, state/repair fingerprint identity, zero
+errors and zero timeouts.  Two workers are registered; the two-hour per-state
+process timeout is a safety boundary, not an outcome filter.  Any failure
+preserves the full attempted product and stops the model line without retaining
+only successful states.
+
+Only after collection integrity passes may a separate audit score the frozen
+V2 anchor on the identical pool.  A robust non-anchor win still requires 75%
+paired wins, mean effect at least 0.02 and the same direction in both fixed
+halves.  The preregistered opportunity floors remain 25% of states, 4% of
+non-anchor actions and positive-map coverage 3/3/2 in high/mid/low topology
+groups.  Passing permits aggregate-label analysis and map-grouped training;
+it is not a TTF or promotion result.
+
+The label-collection config SHA-256 is
+`6c7f5414cb0c354a37fcbe0b465d556eb092642f5b2b6e4e66449814c20c7b12`.

@@ -239,6 +239,11 @@
       "purpose": "Preregistered StructPool proposal determinism, frozen V2 fallback, native 124-feature completeness, and pre-repair integrity gates for RobustAction labels."
     },
     {
+      "path": "experiments/stride_robustaction_label_collection.py",
+      "role": "active",
+      "purpose": "Resumable 16-paired-PP-seed RobustAction current-step label collection over the exact frozen StructPool preflight candidate product."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -457,6 +462,11 @@
       "path": "scripts/run_stride_robustaction_label_preflight.py",
       "role": "active",
       "purpose": "Command-line entry point for the preregistered RobustAction proposal and native-feature preflight without candidate repairs."
+    },
+    {
+      "path": "scripts/collect_stride_robustaction_labels.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered 16-paired-seed RobustAction current-step label collection."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1322,6 +1332,11 @@
       "path": "tests/evaluation/test_stride_robustaction_preflight.py",
       "role": "active",
       "contract": "Complete 320-state proposal coverage, exact 98-state StructPool gate identity, native 124-feature rows, and no-repair outcome boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_label_collection.py",
+      "role": "active",
+      "contract": "Exact preflight artifact reuse, 16 paired PP seeds, mean/risk aggregate separation, complete trial products, and runtime/future exclusion."
     },
     {
       "path": "experiments/stride_structpool.py",
