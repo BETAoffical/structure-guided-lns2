@@ -24,7 +24,11 @@ from experiments.trace_replay import result_blind_decision_rows
 CONFIG_SCHEMA = (
     "lns2.stride.robustaction_structpool_combined_state_selection_design.v1"
 )
+CONFIG_SCHEMA_V2 = (
+    "lns2.stride.robustaction_structpool_combined_state_selection_design.v2"
+)
 REPORT_SCHEMA = "lns2.stride.robustaction_combined_state_selection_report.v1"
+REPORT_SCHEMA_V2 = "lns2.stride.robustaction_combined_state_selection_report.v2"
 SOURCE_POLICIES = ("official_adaptive", "realized_dynamic")
 SELECTION_POLICIES = ("official_adaptive", "v2-full")
 
@@ -148,6 +152,112 @@ def validate_robustaction_state_selection_design(
             )
 
 
+def validate_robustaction_state_selection_v2_design(
+    config: dict[str, Any], *, project_root: Path | None = None
+) -> None:
+    if config.get("schema") != CONFIG_SCHEMA_V2:
+        raise ValueError("robust-action state-selection-v2 schema changed")
+    if (
+        config.get("selection_id")
+        != "stride-robustaction-structpool-combined-selection-v2"
+        or config.get("planned_model_id") != "stride-robustaction-v1"
+        or config.get("pre_registration_git_commit")
+        != "16e4225e4e692ef135565e822721b98b9da032ca"
+    ):
+        raise ValueError("robust-action state-selection-v2 identity changed")
+
+    observed = dict(config.get("observed_prelabel_feasibility") or {})
+    if (
+        int(observed.get("v1_selected_state_count", -1)) != 320
+        or int(observed.get("v1_structpool_eligible_state_count", -1)) != 70
+        or float(observed.get("v1_structpool_eligible_fraction", -1.0))
+        != 0.21875
+        or int(observed.get("required_state_count", -1)) != 80
+        or observed.get("candidate_repair_outcomes_read") is not False
+        or observed.get("ttf_read") is not False
+    ):
+        raise ValueError("robust-action state-selection-v2 diagnosis changed")
+
+    source_contract = dict(config.get("source_contract") or {})
+    if (
+        source_contract.get("registered_split") != "balanced_wall_clock"
+        or tuple(source_contract.get("source_manifest_policies") or ())
+        != SOURCE_POLICIES
+        or tuple(source_contract.get("selection_policies") or ())
+        != SELECTION_POLICIES
+        or source_contract.get("stopping_rule") != "historical"
+        or int(source_contract.get("max_decisions", -1)) != 12
+        or int(source_contract.get("max_repair_iterations", -1)) != 12
+        or int(source_contract.get("metric_iteration_budget", -1)) != 12
+        or source_contract.get("deterministic_pp_replay") is not True
+        or int(source_contract.get("expected_total_episode_rows", -1)) != 224
+        or int(source_contract.get("expected_raw_positive_state_count", -1))
+        != 1559
+        or int(source_contract.get("expected_capped_state_capacity", -1)) != 415
+        or int(source_contract.get("expected_eligible_episode_count", -1)) != 216
+    ):
+        raise ValueError("robust-action state-selection-v2 source contract changed")
+
+    selection = dict(config.get("selection_contract") or {})
+    state_fields = (
+        "source_namespace",
+        "source_policy",
+        "episode_id",
+        "decision_index",
+        "before_fingerprint",
+        "before_conflicts",
+        "agent_count",
+    )
+    if (
+        int(selection.get("target_state_count", -1)) != 320
+        or int(selection.get("target_states_per_policy", -1)) != 160
+        or int(selection.get("maximum_states_per_episode", -1)) != 2
+        or selection.get("require_every_eligible_episode") is not True
+        or int(selection.get("expected_selected_episode_count", -1)) != 216
+        or int(selection.get("minimum_structpool_eligible_states", -1)) != 80
+        or int(selection.get("minimum_structpool_eligible_states_per_policy", -1))
+        != 40
+        or int(selection.get("structpool_minimum_conflicts", -1)) != 16
+        or int(selection.get("structpool_minimum_agents", -1)) != 96
+        or tuple(selection.get("permitted_selection_inputs") or ()) != state_fields
+        or tuple(selection.get("episode_rank_fields") or ()) != state_fields[:3]
+        or selection.get("failure_action")
+        != "preserve_complete_product_and_stop_before_candidate_labels_without_filtering"
+    ):
+        raise ValueError("robust-action state-selection-v2 sampling contract changed")
+
+    boundary = dict(config.get("claim_boundary") or {})
+    if (
+        boundary.get("candidate_repair_outcomes_read") is not False
+        or boundary.get("target_decision_outcomes_used_for_ranking") is not False
+        or boundary.get("ttf_read") is not False
+        or boundary.get("source_episode_outcomes_used_to_filter") is not False
+        or boundary.get("formal_speed_claim") is not False
+    ):
+        raise ValueError("robust-action state-selection-v2 outcome boundary changed")
+
+    inputs = dict(config.get("inputs") or {})
+    if inputs.get("reuse_predecessor_source_registry") is not True:
+        raise ValueError("robust-action state-selection-v2 source registry changed")
+
+    if project_root is None:
+        return
+    project_root = project_root.resolve()
+    for name in (
+        "capacity_report",
+        "predecessor_design",
+        "predecessor_selection",
+        "predecessor_selection_report",
+    ):
+        _registered(project_root, dict(inputs[name]))
+    predecessor = _read_json(
+        _registered(project_root, dict(inputs["predecessor_design"]))
+    )
+    validate_robustaction_state_selection_design(
+        predecessor, project_root=project_root
+    )
+
+
 def _state_rank(row: dict[str, Any]) -> int:
     identity = {
         "source_namespace": str(row["source_namespace"]),
@@ -182,8 +292,11 @@ def _episode_rank(key: tuple[str, str, str]) -> int:
     )
 
 
-def select_episode_first_states(
-    pool: list[dict[str, Any]], *, target_per_policy: int
+def _select_episode_first_states(
+    pool: list[dict[str, Any]],
+    *,
+    target_per_policy: int,
+    prefer_structpool_eligible_primary: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Maximize independent episodes, then add one hash-ranked second state.
 
@@ -209,26 +322,46 @@ def select_episode_first_states(
             raise ValueError(
                 f"policy target would discard eligible episodes: {policy}"
             )
-        ordered_states = {
+        hash_ordered_states = {
             key: sorted(rows, key=lambda row: (_state_rank(row), str(row["state_id"])))
             for key, rows in episodes.items()
         }
-        chosen = [rows[0] for rows in ordered_states.values()]
+        primary_by_episode: dict[tuple[str, str, str], dict[str, Any]] = {}
+        remaining_by_episode: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        for key, rows in hash_ordered_states.items():
+            preferred = (
+                [
+                    row
+                    for row in rows
+                    if int(row["before_conflicts"]) >= 16
+                    and int(row["agent_count"]) >= 96
+                ]
+                if prefer_structpool_eligible_primary
+                else []
+            )
+            primary = (
+                preferred[0]
+                if prefer_structpool_eligible_primary and preferred
+                else rows[0]
+            )
+            primary_by_episode[key] = primary
+            remaining_by_episode[key] = [row for row in rows if row is not primary]
+        chosen = list(primary_by_episode.values())
         extra_required = target_per_policy - len(chosen)
         second_eligible = sorted(
-            (key for key, rows in ordered_states.items() if len(rows) >= 2),
+            (key for key, rows in remaining_by_episode.items() if rows),
             key=lambda key: (_episode_rank(key), key),
         )
         if extra_required > len(second_eligible):
             raise ValueError(f"policy lacks capped state capacity: {policy}")
         second_keys = set(second_eligible[:extra_required])
-        chosen.extend(ordered_states[key][1] for key in second_keys)
+        chosen.extend(remaining_by_episode[key][0] for key in second_keys)
         chosen.sort(key=lambda row: str(row["state_id"]))
         selected.extend(chosen)
 
         namespace_counts = Counter(str(row["source_namespace"]) for row in chosen)
         episode_counts = Counter(_episode_key(row) for row in chosen)
-        reports[policy] = {
+        policy_report = {
             "available_state_count": sum(len(rows) for rows in episodes.values()),
             "available_episode_count": len(episodes),
             "capped_state_capacity": sum(min(2, len(rows)) for rows in episodes.values()),
@@ -245,8 +378,35 @@ def select_episode_first_states(
                 sorted(Counter(str(row["conflict_band"]) for row in chosen).items())
             ),
         }
+        if prefer_structpool_eligible_primary:
+            policy_report["selected_structpool_eligible_state_count"] = sum(
+                int(row["before_conflicts"]) >= 16
+                and int(row["agent_count"]) >= 96
+                for row in chosen
+            )
+        reports[policy] = policy_report
     selected.sort(key=lambda row: (str(row["source_policy"]), str(row["state_id"])))
     return selected, reports
+
+
+def select_episode_first_states(
+    pool: list[dict[str, Any]], *, target_per_policy: int
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return _select_episode_first_states(
+        pool,
+        target_per_policy=target_per_policy,
+        prefer_structpool_eligible_primary=False,
+    )
+
+
+def select_episode_first_structpool_states(
+    pool: list[dict[str, Any]], *, target_per_policy: int
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return _select_episode_first_states(
+        pool,
+        target_per_policy=target_per_policy,
+        prefer_structpool_eligible_primary=True,
+    )
 
 
 def _runtime_matches(run: dict[str, Any], contract: dict[str, Any]) -> bool:
@@ -271,9 +431,24 @@ def build_robustaction_combined_state_selection(
     project_root = config_path.parents[1]
     output = Path(output).resolve()
     config = _read_json(config_path)
-    validate_robustaction_state_selection_design(config, project_root=project_root)
+    is_v2 = config.get("schema") == CONFIG_SCHEMA_V2
+    if is_v2:
+        validate_robustaction_state_selection_v2_design(
+            config, project_root=project_root
+        )
+    else:
+        validate_robustaction_state_selection_design(
+            config, project_root=project_root
+        )
 
     inputs = dict(config["inputs"])
+    if is_v2:
+        predecessor_design = _read_json(
+            _registered(project_root, dict(inputs["predecessor_design"]))
+        )
+        inputs["sources"] = list(
+            dict(predecessor_design["inputs"])["sources"]
+        )
     capacity_report = _read_json(_registered(project_root, dict(inputs["capacity_report"])))
     source_contract = dict(config["source_contract"])
     selection_contract = dict(config["selection_contract"])
@@ -287,6 +462,15 @@ def build_robustaction_combined_state_selection(
         ),
         "sources": {},
     }
+    if is_v2:
+        input_hashes["predecessor"] = {
+            name: sha256_file(_registered(project_root, dict(inputs[name])))
+            for name in (
+                "predecessor_design",
+                "predecessor_selection",
+                "predecessor_selection_report",
+            )
+        }
     source_reports: dict[str, Any] = {}
     episode_row_count = 0
     for source in list(inputs["sources"]):
@@ -452,12 +636,21 @@ def build_robustaction_combined_state_selection(
     ):
         raise ValueError("combined source capacity differs from registration")
 
-    selected, policy_reports = select_episode_first_states(
-        pool,
-        target_per_policy=int(selection_contract["target_states_per_policy"]),
+    selector = (
+        select_episode_first_structpool_states
+        if is_v2
+        else select_episode_first_states
+    )
+    selected, policy_reports = selector(
+        pool, target_per_policy=int(selection_contract["target_states_per_policy"])
     )
     selected_episode_counts = Counter(_episode_key(row) for row in selected)
     selected_policy_counts = Counter(str(row["source_policy"]) for row in selected)
+    structpool_eligible_by_policy = Counter(
+        str(row["source_policy"])
+        for row in selected
+        if int(row["before_conflicts"]) >= 16 and int(row["agent_count"]) >= 96
+    )
     gates = {
         "capacity_report_passed": bool(capacity_report.get("passed")),
         "source_episode_rows_exact": episode_row_count
@@ -481,13 +674,26 @@ def build_robustaction_combined_state_selection(
         "state_ids_unique": len({str(row["state_id"]) for row in selected})
         == len(selected),
     }
+    if is_v2:
+        gates["minimum_structpool_eligible_states"] = sum(
+            structpool_eligible_by_policy.values()
+        ) >= int(selection_contract["minimum_structpool_eligible_states"])
+        gates["minimum_structpool_eligible_states_per_policy"] = all(
+            structpool_eligible_by_policy[policy]
+            >= int(selection_contract["minimum_structpool_eligible_states_per_policy"])
+            for policy in SELECTION_POLICIES
+        )
     passed = all(gates.values())
     output.mkdir(parents=True, exist_ok=True)
     selection_path = output / "state_selection.jsonl"
     _write_jsonl(selection_path, selected)
     report = {
-        "schema": REPORT_SCHEMA,
-        "scientific_status": "result_blind_training_state_selection",
+        "schema": REPORT_SCHEMA_V2 if is_v2 else REPORT_SCHEMA,
+        "scientific_status": (
+            "result_blind_structpool_eligible_training_state_selection"
+            if is_v2
+            else "result_blind_training_state_selection"
+        ),
         "data_line_id": str(config["data_line_id"]),
         "selection_id": str(config["selection_id"]),
         "planned_model_id": str(config["planned_model_id"]),
@@ -524,14 +730,30 @@ def build_robustaction_combined_state_selection(
             "next_decision_on_pass" if passed else "next_decision_on_failure"
         ],
     }
+    if is_v2:
+        report["selected_structpool_eligible_state_count"] = sum(
+            structpool_eligible_by_policy.values()
+        )
+        report["selected_structpool_eligible_fraction"] = (
+            sum(structpool_eligible_by_policy.values()) / len(selected)
+            if selected
+            else 0.0
+        )
+        report["selected_structpool_eligible_by_policy"] = dict(
+            sorted(structpool_eligible_by_policy.items())
+        )
     _write_json(output / "state_selection_report.json", report)
     return report
 
 
 __all__ = [
     "CONFIG_SCHEMA",
+    "CONFIG_SCHEMA_V2",
     "REPORT_SCHEMA",
+    "REPORT_SCHEMA_V2",
     "build_robustaction_combined_state_selection",
     "select_episode_first_states",
+    "select_episode_first_structpool_states",
     "validate_robustaction_state_selection_design",
+    "validate_robustaction_state_selection_v2_design",
 ]

@@ -3529,3 +3529,37 @@ respectively
 and `eaac98a82dc4728e9ebced574652bf14cb688c8f5f141b694452171cb3d85cf4`.
 This pass authorizes a separately preregistered 16-paired-PP-seed candidate
 label product; it still provides no selector-quality or TTF result.
+
+### RobustAction selection-v1 pre-label feasibility failure and v2 amendment
+
+Before any candidate repair was run, the StructPool activation contract was
+applied to the 320 selected current states.  Only 70 states have at least 16
+conflicting pairs; every selected task has at least 150 agents, so the agent
+side of the registered high-stress gate is already satisfied.  The resulting
+70/320 fraction is 21.875%, below the later requirement that at least 25% of
+all selected states expose a robust non-anchor opportunity.  Because an
+inactive state contains no StructPool addition, the downstream opportunity
+gate would be mathematically impossible even under perfect repairs.  Selection
+v1 remains a deterministic result-blind diagnostic, but it is retired before
+candidate labels.
+
+This is a pre-action selection failure, not a map, PP or learned-ranker result.
+No candidate outcome, repair runtime, source success or TTF was read.  A
+result-blind source-pool audit found adequate headroom: each source policy has
+40 eligible episodes containing at least one state with 16 or more conflicts;
+the two policies can supply at most 79 and 67 such states respectively under
+the two-state episode cap.
+
+Selection-v2 is therefore registered at parent commit
+`16e4225e4e692ef135565e822721b98b9da032ca`.  It preserves the 320-state
+budget, 160/160 policy balance, all 216 eligible episode ids and the two-state
+cap.  For each episode, its first state is hash-ranked among StructPool-eligible
+states when one exists; otherwise it uses the unchanged all-state hash rank.
+The 104 second-state slots retain the original episode hash and unconditioned
+state hash.  V2 requires at least 80 eligible states overall and at least 40
+per policy.  The only new ranking input is the registered high-stress gate's
+current agent count; candidate and future outcomes remain forbidden.
+
+The frozen v1 code path was rebuilt after adding v2 support and reproduced both
+v1 hashes exactly.  The v2 design SHA-256 is
+`47926382fa85afaddad53c33a6dcbe20e793dc7afc018f53f24d669766b1ce61`.

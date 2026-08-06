@@ -1,0 +1,104 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_combined_state_selection_design.v2",
+  "scientific_status": "preregistered_prelabel_amendment_after_result_blind_structpool_activation_feasibility_failure",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v2",
+  "selection_id": "stride-robustaction-structpool-combined-selection-v2",
+  "planned_model_id": "stride-robustaction-v1",
+  "pre_registration_git_commit": "16e4225e4e692ef135565e822721b98b9da032ca",
+  "inputs": {
+    "reuse_predecessor_source_registry": true,
+    "capacity_report": {
+      "path": "build/stride-robustaction-da2-source-stability-analysis-v2/source_capacity_report.json",
+      "sha256": "2cafe9c7c2c2297773827d2e78f517f331a3d624f68f43f856f4c4d3437b562f"
+    },
+    "predecessor_design": {
+      "path": "configs/stride_robustaction_structpool_combined_state_selection_design.json",
+      "sha256": "95571da0aec7efbed89463bb355a9b3d393301dc3315d32daa1c5fb8552b8b28"
+    },
+    "predecessor_selection": {
+      "path": "build/stride-robustaction-combined-state-selection-v1/state_selection.jsonl",
+      "sha256": "d3885ea73df633e4550a378870fd7f048bb53da18d8dd8d23d892f5e86370111"
+    },
+    "predecessor_selection_report": {
+      "path": "build/stride-robustaction-combined-state-selection-v1/state_selection_report.json",
+      "sha256": "eaac98a82dc4728e9ebced574652bf14cb688c8f5f141b694452171cb3d85cf4"
+    }
+  },
+  "observed_prelabel_feasibility": {
+    "v1_selected_state_count": 320,
+    "v1_structpool_eligible_state_count": 70,
+    "v1_structpool_eligible_fraction": 0.21875,
+    "required_state_count": 80,
+    "required_fraction": 0.25,
+    "eligibility_rule": "before_conflicts_at_least_16_and_agent_count_at_least_96",
+    "official_adaptive_source_episodes_with_eligible_state": 40,
+    "v2_full_source_episodes_with_eligible_state": 40,
+    "official_adaptive_maximum_selectable_eligible_states": 79,
+    "v2_full_maximum_selectable_eligible_states": 67,
+    "candidate_repair_outcomes_read": false,
+    "ttf_read": false,
+    "diagnosis": "v1_hash_primary_did_not_preserve_enough_states_where_structpool_can_activate"
+  },
+  "source_contract": {
+    "registered_split": "balanced_wall_clock",
+    "source_manifest_policies": ["official_adaptive", "realized_dynamic"],
+    "selection_policies": ["official_adaptive", "v2-full"],
+    "stopping_rule": "historical",
+    "max_decisions": 12,
+    "max_repair_iterations": 12,
+    "metric_iteration_budget": 12,
+    "deterministic_pp_replay": true,
+    "expected_total_episode_rows": 224,
+    "expected_raw_positive_state_count": 1559,
+    "expected_capped_state_capacity": 415,
+    "expected_eligible_episode_count": 216
+  },
+  "selection_contract": {
+    "target_state_count": 320,
+    "target_states_per_policy": 160,
+    "maximum_states_per_episode": 2,
+    "require_every_eligible_episode": true,
+    "expected_selected_episode_count": 216,
+    "minimum_structpool_eligible_states": 80,
+    "minimum_structpool_eligible_states_per_policy": 40,
+    "structpool_minimum_conflicts": 16,
+    "structpool_minimum_agents": 96,
+    "selection_rule": "one_state_from_every_episode_with_structpool_eligible_primary_when_available_then_hash_ranked_second_state_until_policy_target",
+    "primary_state_rule": "hash_rank_structpool_eligible_states_first_else_hash_rank_all_episode_states",
+    "second_state_rule": "episode_hash_slot_then_unconditioned_remaining_state_hash",
+    "episode_rank_fields": ["source_namespace", "source_policy", "episode_id"],
+    "permitted_selection_inputs": [
+      "source_namespace",
+      "source_policy",
+      "episode_id",
+      "decision_index",
+      "before_fingerprint",
+      "before_conflicts",
+      "agent_count"
+    ],
+    "forbidden_selection_inputs": [
+      "actual_action",
+      "after_conflicts",
+      "after_fingerprint",
+      "candidate_repair_outcome",
+      "candidate_runtime",
+      "controller_success",
+      "controller_ttf",
+      "future_trajectory",
+      "repair_runtime",
+      "source_success",
+      "ttf"
+    ],
+    "failure_action": "preserve_complete_product_and_stop_before_candidate_labels_without_filtering"
+  },
+  "claim_boundary": {
+    "candidate_repair_outcomes_read": false,
+    "target_decision_outcomes_used_for_ranking": false,
+    "ttf_read": false,
+    "source_episode_outcomes_used_to_filter": false,
+    "formal_speed_claim": false,
+    "meaning": "result_blind_structpool_activation_feasible_training_state_selection_only"
+  },
+  "next_decision_on_pass": "freeze_selection_then_collect_registered_multi_pp_seed_candidate_labels",
+  "next_decision_on_failure": "stop_before_candidate_labels_and_report_exact_selection_gate"
+}

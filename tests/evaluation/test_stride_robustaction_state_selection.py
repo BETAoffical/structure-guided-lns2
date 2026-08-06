@@ -9,7 +9,9 @@ from pathlib import Path
 
 from experiments.stride_robustaction_state_selection import (
     select_episode_first_states,
+    select_episode_first_structpool_states,
     validate_robustaction_state_selection_design,
+    validate_robustaction_state_selection_v2_design,
 )
 
 
@@ -19,9 +21,16 @@ CONFIG = (
     / "configs"
     / "stride_robustaction_structpool_combined_state_selection_design.json"
 )
+CONFIG_V2 = (
+    ROOT
+    / "configs"
+    / "stride_robustaction_structpool_combined_state_selection_design_v2.json"
+)
 
 
-def _row(policy: str, episode: int, decision: int) -> dict[str, object]:
+def _row(
+    policy: str, episode: int, decision: int, *, conflicts: int | None = None
+) -> dict[str, object]:
     return {
         "state_id": f"{policy}-{episode}-{decision}",
         "source_namespace": "source-v4" if episode < 2 else "da2-stability-v2",
@@ -29,7 +38,8 @@ def _row(policy: str, episode: int, decision: int) -> dict[str, object]:
         "episode_id": f"episode-{episode}",
         "decision_index": decision,
         "before_fingerprint": f"fingerprint-{policy}-{episode}-{decision}",
-        "before_conflicts": 10 + decision,
+        "before_conflicts": 10 + decision if conflicts is None else conflicts,
+        "agent_count": 150,
         "decision_stage": "early" if decision < 4 else "late",
         "conflict_band": "low_1_10" if decision == 0 else "medium_11_100",
     }
@@ -38,6 +48,7 @@ def _row(policy: str, episode: int, decision: int) -> dict[str, object]:
 class RobustActionStateSelectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = json.loads(CONFIG.read_text(encoding="utf-8"))
+        self.config_v2 = json.loads(CONFIG_V2.read_text(encoding="utf-8"))
 
     def test_registered_design_and_inputs_are_valid(self) -> None:
         validate_robustaction_state_selection_design(
@@ -89,6 +100,53 @@ class RobustActionStateSelectionTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(ValueError, "discard eligible episodes"):
             select_episode_first_states(pool, target_per_policy=2)
+
+    def test_v2_prefers_one_structpool_eligible_primary_per_episode(self) -> None:
+        pool: list[dict[str, object]] = []
+        for policy in ("official_adaptive", "v2-full"):
+            for episode in range(3):
+                pool.append(_row(policy, episode, 0, conflicts=2))
+                pool.append(_row(policy, episode, 1, conflicts=20))
+                pool.append(_row(policy, episode, 2, conflicts=3))
+        selected, reports = select_episode_first_structpool_states(
+            pool, target_per_policy=4
+        )
+        selected_by_episode: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in selected:
+            selected_by_episode.setdefault(
+                (str(row["source_policy"]), str(row["episode_id"])), []
+            ).append(row)
+        self.assertEqual(len(selected), 8)
+        self.assertEqual(len(selected_by_episode), 6)
+        self.assertTrue(
+            all(
+                any(int(row["before_conflicts"]) >= 16 for row in rows)
+                for rows in selected_by_episode.values()
+            )
+        )
+        self.assertTrue(
+            all(
+                report["selected_structpool_eligible_state_count"] >= 3
+                for report in reports.values()
+            )
+        )
+
+    def test_registered_v2_amendment_is_valid(self) -> None:
+        validate_robustaction_state_selection_v2_design(
+            self.config_v2, project_root=ROOT
+        )
+        self.assertEqual(
+            self.config_v2["observed_prelabel_feasibility"][
+                "v1_structpool_eligible_state_count"
+            ],
+            70,
+        )
+        self.assertEqual(
+            self.config_v2["selection_contract"][
+                "minimum_structpool_eligible_states"
+            ],
+            80,
+        )
 
     def test_outcome_boundary_cannot_be_enabled(self) -> None:
         changed = copy.deepcopy(self.config)
