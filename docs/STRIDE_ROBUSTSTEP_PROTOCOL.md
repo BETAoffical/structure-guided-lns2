@@ -3193,3 +3193,34 @@ underloaded maps; it cannot retain only successful tasks.  A passing result
 only authorizes the 64 supplement source episodes under the unchanged paired
 policies, solver seeds and historical 12-step rule.  It still does not
 authorize candidate-label collection, training, promotion or a TTF claim.
+
+### RobustAction StructPool DA2 qualification result
+
+The complete reset-only product contains all 96 registered jobs.  Seventy-eight
+are valid, 18 are errors and none time out.  Every error is
+`ValueError: state contains an empty agent path`, meaning initialization PP did
+not produce a path for at least one agent before any repair or controller
+decision.  The errors are concentrated as follows: `ca_caverns2` 11/12 resets,
+`ht_bartrand_n` 4/12, `dr_primevalentrance` 2/12 and
+`lt_undercityserialkiller` 1/12.  The other four maps have no reset errors.
+
+The registered runtime, 8-map/48-task/96-job dimensions, seed isolation and
+absence of forbidden repair/controller fields all pass.  The complete-valid-
+reset and collector qualification gates fail.  Only seven maps have a complete
+paired repairable task summary, so the outcome-blind selector can form 14
+tasks rather than 16; its high/mid/low topology counts are 4/6/4 rather than
+6/6/4.  Consequently the all-eight-maps, two-tasks-per-map and topology gates
+also fail.  This is a task-load/initialization feasibility failure, not a TTF,
+candidate-ranking or repair-performance result.
+
+The qualification manifest, collector qualification report, run config,
+collection summary and analysis report SHA-256 values are respectively
+`3eb8a80ae260d298cf327fd511326d10414008b53929a69a617f82e253b0dbeb`,
+`d31df9f653f322c62c0440bc9129b203b36443ab6da46581fc0d1326f8ef046a`,
+`4196a4a319aaadfd477b3ce47107beeea6b9205ea3f4271aac8a1b7a713aedd2`,
+`6ecb94e222dfe7e2250e058d7fad195e9a2a384e546fde4cce12c84b40b7bf7d`
+and `ee077c38ec7e53903524097dcaf3b2394feaecc8b440a265586a93507f0d1b39`.
+No successful-map or successful-task subset is promoted.  The registered 64
+supplement source episodes, candidate labels and training are cancelled.  The
+next permitted step is a separately preregistered task-generator/load
+reassessment that cannot use candidate repair outcomes to select a subset.
