@@ -234,6 +234,11 @@
       "purpose": "Result-blind combined RobustAction source-state selection that maximizes independent episode coverage under the frozen label budget."
     },
     {
+      "path": "experiments/stride_robustaction_preflight.py",
+      "role": "active",
+      "purpose": "Preregistered StructPool proposal determinism, frozen V2 fallback, native 124-feature completeness, and pre-repair integrity gates for RobustAction labels."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -447,6 +452,11 @@
       "path": "scripts/build_stride_robustaction_state_selection.py",
       "role": "active",
       "purpose": "Command-line entry point for preregistered result-blind combined RobustAction state selection."
+    },
+    {
+      "path": "scripts/run_stride_robustaction_label_preflight.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered RobustAction proposal and native-feature preflight without candidate repairs."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1307,6 +1317,11 @@
       "path": "tests/evaluation/test_stride_robustaction_state_selection.py",
       "role": "active",
       "contract": "Frozen 320-state budget, complete eligible-episode coverage, deterministic hash ranking, and outcome-blind selection boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_preflight.py",
+      "role": "active",
+      "contract": "Complete 320-state proposal coverage, exact 98-state StructPool gate identity, native 124-feature rows, and no-repair outcome boundary."
     },
     {
       "path": "experiments/stride_structpool.py",

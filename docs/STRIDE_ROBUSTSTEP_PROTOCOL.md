@@ -3583,3 +3583,35 @@ respectively
 and `8619c5b8b3be36574f31e737db8c4a65c6649235d6474db112a4b3a7167f2d07`.
 This product replaces v1 for subsequent candidate-label work but still makes
 no repair-quality, ranker or TTF claim.
+
+### RobustAction StructPool label-preflight preregistration
+
+Before spending the registered 16 paired PP seeds on candidate repairs,
+parent commit `0dd04d896ae31c8b211b16e4f782d0f72517909e` freezes a proposal-and-feature
+preflight over all 320 selection-v2 states.  This stage restores each recorded
+current state, generates the exact frozen V2 full candidate pool, and invokes
+the StructPool generator only when the preregistered high-stress gate is
+active.  An inactive state must perform no topology analysis and must remain
+the exact frozen V2 pool.  An active state may add at most six unique
+StructPool actions, with no more than 24 total actions.
+
+Every generated pool is repeated to check determinism, must preserve the V2
+prefix and incumbent size-16 topology-boundary actions, must obey the native
+explicit-action and Jaccard contracts, and must leave the current-state and
+repair-structure fingerprints unchanged.  The native sparse feature backend
+then materializes a complete finite 124-value `realized_dynamic` row for every
+candidate.  No candidate repair step, controller action, candidate outcome,
+future trajectory, runtime or TTF is executed or read.
+
+The gate expects the exact 98 active states selected by selection-v2 (51
+Adaptive and 47 V2).  At least 80 states and at least 40 per source policy must
+receive a genuinely new candidate; at least 90% of active states must receive
+three additions.  Aggregate additions must cover all five StructPool family
+groups, all four neighborhood sizes, and at least 3/3/2 maps from the
+high/mid/low topology groups.  Any error, timeout, nondeterminism, feature
+omission or integrity mismatch preserves the product and stops before PP
+labels.  Passing authorizes a separate 16-seed label preregistration; it is not
+a repair-quality or TTF result.
+
+The preregistered label-preflight config SHA-256 is
+`85ac6af41daa09572a113a736c181c5f0d1496e43472ab20de1c15a7eccce5a7`.
