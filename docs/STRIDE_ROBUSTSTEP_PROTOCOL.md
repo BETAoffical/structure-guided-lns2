@@ -3446,3 +3446,36 @@ and independent qualification-audit SHA-256 values are respectively
 `f38a59caff19570a1243c6f94137486efff505098d3b49dab3ba12cb92358d2e`,
 `7736ca4eeb60908256cedcadc1d5fee537f7fd998bfee0f540794bc3c2a37512`
 and `ae5a22cc5861121d41c144e976a2e2e4516d7981b873e0ccfad2111a5d921a24`.
+
+### DA2 source stability-v2 capacity result
+
+Both registered source policies complete all 32 task/seed episodes.  The final
+64-row product has zero errors, external timeouts, invalid actions,
+qualification/policy fingerprint mismatches or episodes above the historical
+12-repair limit.  No successful episode or task is filtered.  The
+`official_adaptive` and `realized_dynamic` manifests contain 32 rows each and
+retain the one preregistered zero-conflict episode per policy.
+
+The complete source-v4 product is recomputed from trace data and exactly
+reproduces 1,054 raw positive pre-action states, capped capacity 297 and 154
+eligible episode ids.  Stability-v2 contributes 505 raw states, capped
+capacity 118 and 62 eligible episode ids.  Its cap is six below the projected
+124 because, beyond the two zero-conflict episodes, six policy episodes supply
+only one eligible pre-action state rather than two.  This is an observed
+capacity count, not an outcome-based filter.
+
+The unfiltered combined product therefore contains 1,559 raw state identities,
+capped capacity 415 and 216 eligible episode ids.  It passes the registered
+320-state and 160-episode gates with margins of 95 and 56.  Candidate-repair
+outcomes and TTF are not read for this audit.  Passing authorizes deterministic
+sampling of at most two states per episode before any candidate labels; it does
+not establish a selector or TTF improvement.
+
+The qualification, Adaptive and realized-dynamic manifests, run config,
+collection summary and capacity-report SHA-256 values are respectively
+`5ae32dc8d36d21c40ec561b33170a192ee7c5b98339151d7e2c52e38a95e67c4`,
+`93b17db5def913681dd986b46abf312ed7e06e69af41bbc49a279e7be7306326`,
+`ec811e15db5db62055c1be28ac9c48e8caa3eea3dd30f28fd3e3642ef0778ff4`,
+`f38a59caff19570a1243c6f94137486efff505098d3b49dab3ba12cb92358d2e`,
+`890d7910921221e2cbcb43bcb17a69e42d445d054e8b664ab8ab2657b059697c`
+and `2cafe9c7c2c2297773827d2e78f517f331a3d624f68f43f856f4c4d3437b562f`.
