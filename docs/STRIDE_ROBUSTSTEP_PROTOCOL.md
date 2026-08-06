@@ -3504,3 +3504,28 @@ This rule maximizes independent episode coverage while preserving the frozen
 multi-PP-seed labeling budget.  It is training-state selection only and is not
 a candidate-quality, controller or speed result.  The design SHA-256 is
 `95571da0aec7efbed89463bb355a9b3d393301dc3315d32daa1c5fb8552b8b28`.
+
+### RobustAction combined state-selection result
+
+The result-blind selector passes all registered gates.  It reads all 224
+source-policy episode rows and exactly reproduces 1,559 positive-conflict
+pre-action identities, capped capacity 415 and 216 eligible episode ids.  The
+selected product contains 320 unique states: 160 from `official_adaptive` and
+160 from `v2-full`.  All 216 eligible episode ids are represented; 112 supply
+one state and 104 supply two.  The rows cover 28 maps and 56 task ids, with 226
+states from source-v4 and 94 from DA2 stability-v2.
+
+The selected decision-stage counts are 203 early, 70 middle and 47 late.  The
+current-conflict bands contain 229 states at 1--10 conflicts, 78 at 11--100,
+seven at 101--500 and six above 500.  These are descriptive pre-action counts,
+not label or performance outcomes.  Candidate repair outcomes, the selected
+decision's outcome, source success and TTF did not influence the ranking or
+episode coverage.
+
+An independent second materialization produced byte-identical selection and
+report files.  The state-selection and selection-report SHA-256 values are
+respectively
+`d3885ea73df633e4550a378870fd7f048bb53da18d8dd8d23d892f5e86370111`
+and `eaac98a82dc4728e9ebced574652bf14cb688c8f5f141b694452171cb3d85cf4`.
+This pass authorizes a separately preregistered 16-paired-PP-seed candidate
+label product; it still provides no selector-quality or TTF result.
