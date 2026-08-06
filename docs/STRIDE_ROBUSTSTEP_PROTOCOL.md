@@ -3224,3 +3224,38 @@ No successful-map or successful-task subset is promoted.  The registered 64
 supplement source episodes, candidate labels and training are cancelled.  The
 next permitted step is a separately preregistered task-generator/load
 reassessment that cannot use candidate repair outcomes to select a subset.
+
+### User-authorized DA2 recovery amendment
+
+After the failed qualification was fully recorded at `ecfecc5`, the user
+explicitly authorized retaining successful tasks and repairing or replacing
+the failed map.  This creates the separately named
+`stride-robustaction-structpool-recovery-data-v1` line.  It is intentionally
+classified as post-hoc and outcome-informed because reset status and initial
+conflicts have already been observed.  It is eligible as recovery training
+data only and cannot be presented as clean outcome-blind evaluation evidence.
+Candidate repair outcomes, controller outcomes and TTF remain unread.
+
+The 14 selected tasks from the seven maps that already have complete paired
+solver-seed results are checksum-pinned and retained.  Their high/mid/low
+topology counts are 4/6/4.  Failed attempts remain in the original 96-row
+product and are not deleted or relabelled.  Although three retained maps had
+other failed candidate tasks, each retained task itself has both solver seeds,
+a complete initial state and nonzero mean conflicts.  Only `ca_caverns2` lacks
+two complete paired tasks and therefore needs recovery.
+
+The primary repair keeps `ca_caverns2` but replaces its infeasible 10/15/20%
+loads with a preregistered 3/5/7/9% ladder: 412, 686, 960 and 1,236 agents.
+Task seed 337, master seed 20260813 and both deterministic OD variants produce
+eight tasks and 16 reset attempts.  Candidate-ladder errors may remain, but a
+task is selectable only when both solver seeds 1/2 are complete; at least two
+such tasks with mean conflicts at least one are required, selected against
+targets 25 and 100.  Candidate repair results cannot influence selection.
+
+If the primary ladder cannot supply two tasks, the only registered fallback is
+`w_encounter1`, the next unused high-topology map under the frozen static
+distance/ratio/id ranking.  Its 12/18/24% loads are 726, 1,088 and 1,450 agents,
+yielding six tasks and 12 reset attempts under the same seeds and selection
+rule.  No further map search is allowed after a fallback failure.  Either path
+must produce a final eight-map, 16-task cohort with exact topology counts
+6/6/4 before source collection can be reconsidered.

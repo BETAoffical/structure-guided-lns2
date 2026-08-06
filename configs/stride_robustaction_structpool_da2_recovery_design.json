@@ -1,0 +1,150 @@
+{
+  "schema": "lns2.stride.robustaction_structpool_da2_recovery_design.v1",
+  "scientific_status": "user_authorized_posthoc_initial_pp_recovery_after_da2_qualification_failure",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v1",
+  "pre_registration_git_commit": "ecfecc5b0ce9e8909262e307bcfb50863b46f163",
+  "outcome_boundary": {
+    "outcome_informed": true,
+    "allowed_observed_fields": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "claim_boundary": "recovery_training_data_only_not_clean_outcome_blind_evidence"
+  },
+  "inputs": {
+    "failed_qualification_design": {
+      "path": "configs/stride_robustaction_structpool_da2_supplement_qualification_design.json",
+      "sha256": "6f75abb3252fd499562c16ba524b3319d83be89e65801f23933b870316ac8b84"
+    },
+    "failed_qualification_manifest": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "3eb8a80ae260d298cf327fd511326d10414008b53929a69a617f82e253b0dbeb"
+    },
+    "failed_qualification_report": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-qualification-v1/qualification_report.json",
+      "sha256": "d31df9f653f322c62c0440bc9129b203b36443ab6da46581fc0d1326f8ef046a"
+    },
+    "failed_analysis_report": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-source-dataset-v1/da2_supplement_qualification_report.json",
+      "sha256": "ee077c38ec7e53903524097dcaf3b2394feaecc8b440a265586a93507f0d1b39"
+    },
+    "source_dataset_manifest": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "2e2ab496bceda9a5720ceea5ce12f1700bf40ead28cecd52bfd427e5bc75dece"
+    },
+    "source_dataset_summary": {
+      "path": "build/stride-robustaction-structpool-da2-supplement-dataset-v1/dataset_summary.json",
+      "sha256": "7b7c6cf8c56e5112028aef0d4c7be3b3479ad7af5bb9330779d9ad26c2e42b80"
+    }
+  },
+  "retained": {
+    "map_count": 7,
+    "task_count": 14,
+    "map_ids": [
+      "ca_cave", "dr_primevalentrance", "ht_bartrand_n", "lt_hangedman",
+      "lt_undercitydungeon", "lt_undercityserialkiller", "w_encounter3"
+    ],
+    "task_ids": [
+      "ca_cave__derived_opposite_exchange__task_seed_0331__agents_1062",
+      "ca_cave__derived_uniform_random__task_seed_0331__agents_0532",
+      "dr_primevalentrance__derived_opposite_exchange__task_seed_0331__agents_1066",
+      "dr_primevalentrance__derived_uniform_random__task_seed_0331__agents_1420",
+      "ht_bartrand_n__derived_opposite_exchange__task_seed_0331__agents_0880",
+      "ht_bartrand_n__derived_uniform_random__task_seed_0331__agents_1320",
+      "lt_hangedman__derived_opposite_exchange__task_seed_0331__agents_0692",
+      "lt_hangedman__derived_uniform_random__task_seed_0331__agents_0922",
+      "lt_undercitydungeon__derived_opposite_exchange__task_seed_0331__agents_1788",
+      "lt_undercitydungeon__derived_uniform_random__task_seed_0331__agents_0894",
+      "lt_undercityserialkiller__derived_opposite_exchange__task_seed_0331__agents_1362",
+      "lt_undercityserialkiller__derived_uniform_random__task_seed_0331__agents_1816",
+      "w_encounter3__derived_opposite_exchange__task_seed_0331__agents_0952",
+      "w_encounter3__derived_uniform_random__task_seed_0331__agents_1268"
+    ],
+    "layout_counts": {
+      "dao_high_topology": 4,
+      "dao_mid_topology": 6,
+      "dao_low_topology_control": 4
+    },
+    "selection_source": "failed_analysis_report.selected_tasks",
+    "failed_attempts_remain_preserved": true
+  },
+  "primary_repair": {
+    "dataset_revision": "stride-robustaction-da2-ca-caverns2-repair-v1",
+    "map_id": "ca_caverns2",
+    "map_family": "ca",
+    "topology_group": "dao_high_topology",
+    "member": "ca_caverns2.map",
+    "member_sha256": "28b2345a79145fde0e5751a142fe8bc1e3c210d2875d4a673814424699679dba",
+    "free_cell_count": 13714,
+    "largest_four_connected_component": 13714,
+    "static_low_degree_cell_ratio": 0.06511593991541491,
+    "static_obstacle_ratio": 0.9245085680628417,
+    "master_seed": 20260813,
+    "task_seeds": [337],
+    "task_variants": ["uniform_random", "opposite_exchange"],
+    "load_fractions": [0.03, 0.05, 0.07, 0.09],
+    "agent_counts": [412, 686, 960, 1236],
+    "expected_task_count": 8,
+    "solver_seeds": [1, 2],
+    "expected_reset_count": 16,
+    "minimum_complete_paired_tasks": 2,
+    "target_mean_initial_conflicts": [25, 100],
+    "minimum_mean_initial_conflicts": 1.0,
+    "require_zero_errors_across_candidate_ladder": false,
+    "selection_uses_only_complete_paired_tasks": true
+  },
+  "fallback_replacement": {
+    "activation": "only_if_primary_repair_has_fewer_than_two_complete_paired_tasks",
+    "dataset_revision": "stride-robustaction-da2-w-encounter1-replacement-v1",
+    "map_id": "w_encounter1",
+    "map_family": "w",
+    "topology_group": "dao_high_topology",
+    "static_selection_reason": "next_unused_high_topology_map_by_frozen_distance_ratio_id_ranking_after_exclusions",
+    "member": "w_encounter1.map",
+    "member_sha256": "fc306932cd53bc57b5d812dd13e5aa3ffe6aa2a21a8ce9201507cd6b8300a42d",
+    "free_cell_count": 6043,
+    "largest_four_connected_component": 6041,
+    "static_low_degree_cell_ratio": 0.06404103921893099,
+    "static_obstacle_ratio": 0.9544309715561186,
+    "master_seed": 20260813,
+    "task_seeds": [337],
+    "task_variants": ["uniform_random", "opposite_exchange"],
+    "load_fractions": [0.12, 0.18, 0.24],
+    "agent_counts": [726, 1088, 1450],
+    "expected_task_count": 6,
+    "solver_seeds": [1, 2],
+    "expected_reset_count": 12,
+    "minimum_complete_paired_tasks": 2,
+    "target_mean_initial_conflicts": [25, 100],
+    "minimum_mean_initial_conflicts": 1.0,
+    "require_zero_errors_across_candidate_ladder": false,
+    "selection_uses_only_complete_paired_tasks": true
+  },
+  "map_archive": {
+    "source": "https://www.movingai.com/benchmarks/da2/index.html",
+    "url": "https://www.movingai.com/benchmarks/da2/da2-map.zip",
+    "sha256": "76bcbbe7956bcdf6de579bfc1335bc0937365125305b2ada8ec4f20e4befe4e0"
+  },
+  "final_dataset_gate": {
+    "map_count": 8,
+    "task_count": 16,
+    "layout_counts": {
+      "dao_high_topology": 6,
+      "dao_mid_topology": 6,
+      "dao_low_topology_control": 4
+    },
+    "solver_seed_count": 2,
+    "source_policy_count": 2,
+    "projected_episode_count": 64,
+    "maximum_states_per_episode": 2,
+    "projected_state_capacity": 128,
+    "candidate_repair_outcomes_may_not_select_tasks": true
+  },
+  "next_decision_on_primary_pass": "merge_retained_14_with_primary_2_then_reaudit_combined_source_capacity",
+  "next_decision_on_primary_failure": "activate_preregistered_w_encounter1_replacement",
+  "next_decision_on_fallback_failure": "stop_recovery_and_report_without_additional_outcome_search",
+  "formal_speed_claim": false
+}
