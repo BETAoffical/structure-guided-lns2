@@ -1552,6 +1552,21 @@
       "path": "tests/unit/test_stride_maprank_counterfactual.py",
       "role": "reproducibility",
       "contract": "Exact two-candidate by 16-paired-seed artifact coverage and counterfactual resume identity."
+    },
+    {
+      "path": "experiments/stride_structpool_ttf_quick.py",
+      "role": "active",
+      "purpose": "Alternating paired raw-TTF collection and integrity, overhead, repair-round, AUC, and performance-gate analysis for StructPool."
+    },
+    {
+      "path": "scripts/run_stride_structpool_ttf_quick.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered StructPool paired raw-TTF Quick."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_ttf_quick.py",
+      "role": "active",
+      "contract": "Frozen same-ranker comparison, complete alternating pair schedule, uncapped raw-TTF clock, and non-formal claim boundary."
     }
   ]
 }

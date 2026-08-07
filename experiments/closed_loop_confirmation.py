@@ -114,6 +114,8 @@ from lns2_selector.runtime.online_selection import (
     proposal_random_seeds,
     repair_random_seed,
     score_online_candidates,
+    structpool_high_stress_gate,
+    validate_structpool_augmentation,
     validate_topology_boundary_augmentation,
 )
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
@@ -1206,6 +1208,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
             topology_analysis_cache: TopologyAnalysisCache | None = None
+            topology_pending_changed_agents: set[int] = set()
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
             previous_route: str | None = None
@@ -1353,11 +1356,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         topology_runtime = dict(
                             effective_proposal.get("topology_boundary") or {}
                         )
+                        structpool_runtime = dict(
+                            effective_proposal.get("structpool") or {}
+                        )
+                        structpool_gate_result = (
+                            structpool_high_stress_gate(state, structpool_runtime)
+                            if structpool_runtime
+                            else None
+                        )
+                        structpool_gate_passed = bool(
+                            structpool_gate_result
+                            and structpool_gate_result["passed"]
+                        )
                         if (
                             topology_runtime
                             and not topology_runtime.get("activation_gate")
                             and not topology_runtime.get("phase_guard")
-                        ):
+                        ) or structpool_gate_passed:
                             if topology_analysis_cache is None:
                                 topology_analysis_cache = TopologyAnalysisCache(
                                     state,
@@ -1370,8 +1385,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             else:
                                 topology_analysis_cache.prepare(
                                     state,
-                                    changed_agents=sorted(pending_changed_agents),
+                                    changed_agents=sorted(
+                                        topology_pending_changed_agents
+                                    ),
                                 )
+                            topology_pending_changed_agents.clear()
                             topology_state_analysis = topology_analysis_cache.analysis
                             topology_state_analysis_seconds = (
                                 topology_analysis_cache.last_prepare_seconds
@@ -1413,6 +1431,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 if wall_budget is not None
                                 else None
                             ),
+                            structpool_gate_result=structpool_gate_result,
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
                         if controller_mode == "official_adaptive":
@@ -2083,6 +2102,39 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         f"topology_boundary_gate_reason={gate_reason}"
                     ] += 1
+                    controller_totals["structpool_generated_count"] += int(
+                        proposal_metrics.get("structpool_generated_count", 0)
+                    )
+                    controller_totals["structpool_added_candidate_count"] += int(
+                        proposal_metrics.get("structpool_added_candidate_count", 0)
+                    )
+                    for structpool_metric in (
+                        "structpool_analysis_seconds",
+                        "structpool_static_seconds",
+                        "structpool_dynamic_seconds",
+                        "structpool_candidate_seconds",
+                        "structpool_merge_seconds",
+                        "structpool_gate_seconds",
+                    ):
+                        controller_totals[structpool_metric] += float(
+                            proposal_metrics.get(structpool_metric, 0.0)
+                        )
+                    controller_totals["structpool_static_cache_hit_count"] += int(
+                        bool(proposal_metrics.get("structpool_static_cache_hit", False))
+                    )
+                    controller_totals["structpool_gate_evaluated_count"] += int(
+                        bool(proposal_metrics.get("structpool_gate_evaluated", False))
+                    )
+                    controller_totals["structpool_gate_passed_count"] += int(
+                        bool(proposal_metrics.get("structpool_gate_evaluated", False))
+                        and bool(proposal_metrics.get("structpool_gate_passed", False))
+                    )
+                    structpool_reason = str(
+                        proposal_metrics.get("structpool_gate_reason", "not_enabled")
+                    )
+                    controller_totals[
+                        f"structpool_gate_reason={structpool_reason}"
+                    ] += 1
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
                     )
@@ -2249,6 +2301,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "invalid_action", "official closed-loop action was rejected"
                     )
                 pending_changed_agents.update(actual)
+                topology_pending_changed_agents.update(actual)
                 if policy == "realized_dynamic":
                     route_prefix = "official" if route == "official_adaptive" else "model"
                     route_controller_seconds = float(
@@ -2949,6 +3002,7 @@ def run_closed_loop_collection(
     qualification_source: str | Path | None = None,
     use_global_collection_lock: bool = True,
     topology_boundary_augmentation: dict[str, Any] | None = None,
+    structpool_augmentation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -2961,12 +3015,25 @@ def run_closed_loop_collection(
     topology_boundary_augmentation = validate_topology_boundary_augmentation(
         topology_boundary_augmentation
     )
+    structpool_augmentation = validate_structpool_augmentation(
+        structpool_augmentation
+    )
+    if topology_boundary_augmentation is not None and structpool_augmentation is not None:
+        raise ValueError("topology-boundary and StructPool augmentations are exclusive")
     if topology_boundary_augmentation is not None:
         config = {
             **config,
             "proposal": {
                 **dict(config["proposal"]),
                 "topology_boundary": topology_boundary_augmentation,
+            },
+        }
+    if structpool_augmentation is not None:
+        config = {
+            **config,
+            "proposal": {
+                **dict(config["proposal"]),
+                "structpool": structpool_augmentation,
             },
         }
     config = _with_time_budget_overrides(
@@ -2996,6 +3063,8 @@ def run_closed_loop_collection(
             "topology-boundary augmentation requires v2-full, "
             "stride-augcontrol-v1, or stride-maprank-v1"
         )
+    if structpool_augmentation is not None and controller_mode != "v2-full":
+        raise ValueError("StructPool augmentation requires frozen v2-full")
     diagnostic_shadow_roots: dict[str, Path] = {}
     diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}
     if diagnostic_shadow_bundles:

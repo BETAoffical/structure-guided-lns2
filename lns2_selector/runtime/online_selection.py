@@ -30,7 +30,9 @@ from experiments.state_analysis import (
     analyze_static_grid,
 )
 from lns2_selector.runtime.topology_candidates import (
+    generate_structpool_candidates,
     generate_topology_boundary_candidates,
+    merge_structpool_candidates,
     merge_topology_anchor_candidates,
 )
 
@@ -87,6 +89,26 @@ _TOPOLOGY_BOUNDARY_PHASE_GUARD_CONFIG = {
     },
 }
 
+_STRUCTPOOL_RUNTIME_CONFIG = {
+    "enabled": True,
+    "pool_id": "stride-structpool-v1",
+    "runtime_id": "stride-structpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": True,
+    "activation_gate": {
+        "gate_id": "stride-highstress-state-v1",
+        "minimum_conflict_pair_count": 16,
+        "any_of": {
+            "minimum_agent_count": 96,
+            "minimum_active_conflict_agent_count": 32,
+            "minimum_largest_conflict_component_size": 16,
+        },
+    },
+}
+
 
 def validate_topology_boundary_augmentation(
     value: dict[str, Any] | None,
@@ -104,6 +126,75 @@ def validate_topology_boundary_augmentation(
     ):
         raise ValueError("unsupported topology-boundary runtime augmentation")
     return result
+
+
+def validate_structpool_augmentation(
+    value: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    result = dict(value)
+    if result != _STRUCTPOOL_RUNTIME_CONFIG:
+        raise ValueError("unsupported StructPool runtime augmentation")
+    return result
+
+
+def structpool_high_stress_gate(
+    state: dict[str, Any], value: dict[str, Any]
+) -> dict[str, Any]:
+    """Evaluate the frozen current-state gate without topology analysis."""
+
+    config = validate_structpool_augmentation(value)
+    assert config is not None
+    started = time.perf_counter()
+    agent_ids = {int(agent["id"]) for agent in state.get("agents", [])}
+    if not agent_ids:
+        raise ValueError("StructPool gate requires at least one agent")
+    edges = {
+        tuple(sorted((int(edge[0]), int(edge[1]))))
+        for edge in state.get("conflict_edges", [])
+    }
+    if any(left == right or left not in agent_ids or right not in agent_ids for left, right in edges):
+        raise ValueError("StructPool gate received an invalid conflict edge")
+    conflict_pairs = int(state.get("num_of_colliding_pairs", -1))
+    if conflict_pairs != len(edges):
+        raise ValueError("StructPool gate conflict count differs from conflict edges")
+    active = {agent for edge in edges for agent in edge}
+    adjacency = {agent: set() for agent in active}
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    largest = 0
+    remaining = set(active)
+    while remaining:
+        root = min(remaining)
+        component = {root}
+        frontier = [root]
+        remaining.remove(root)
+        while frontier:
+            current = frontier.pop()
+            unseen = adjacency[current] & remaining
+            if unseen:
+                remaining.difference_update(unseen)
+                component.update(unseen)
+                frontier.extend(sorted(unseen, reverse=True))
+        largest = max(largest, len(component))
+    gate = dict(config["activation_gate"])
+    any_of = dict(gate["any_of"])
+    passed = conflict_pairs >= int(gate["minimum_conflict_pair_count"]) and (
+        len(agent_ids) >= int(any_of["minimum_agent_count"])
+        or len(active) >= int(any_of["minimum_active_conflict_agent_count"])
+        or largest >= int(any_of["minimum_largest_conflict_component_size"])
+    )
+    return {
+        "passed": passed,
+        "reason": "high_stress_passed" if passed else "high_stress_not_met",
+        "seconds": time.perf_counter() - started,
+        "agent_count": len(agent_ids),
+        "conflict_pair_count": conflict_pairs,
+        "active_conflict_agent_count": len(active),
+        "largest_conflict_component_size": largest,
+    }
 
 
 class ClosedLoopExecutionError(RuntimeError):
@@ -447,6 +538,7 @@ def generate_online_candidates(
     topology_state_analysis_seconds: float = 0.0,
     topology_no_progress_streak: int = 0,
     topology_remaining_wall_seconds: float | None = None,
+    structpool_gate_result: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if proposal_backend not in CONTROLLER_RUNTIMES:
         raise ValueError(f"unsupported proposal backend: {proposal_backend}")
@@ -769,6 +861,9 @@ def generate_online_candidates(
     topology_boundary = validate_topology_boundary_augmentation(
         proposal_config.get("topology_boundary")
     )
+    structpool = validate_structpool_augmentation(proposal_config.get("structpool"))
+    if topology_boundary is not None and structpool is not None:
+        raise ValueError("topology-boundary and StructPool augmentations are exclusive")
     if topology_boundary is not None:
         topology_started = time.perf_counter()
         topology_static_started = time.perf_counter()
@@ -882,6 +977,90 @@ def generate_online_candidates(
         topology_boundary_added_candidate_count = len(candidates) - base_candidate_count
         if not 0 <= topology_boundary_added_candidate_count <= maximum:
             raise RuntimeError("topology-boundary runtime merge changed the candidate cap")
+    structpool_generated_count = 0
+    structpool_added_candidate_count = 0
+    structpool_analysis_seconds = 0.0
+    structpool_static_seconds = 0.0
+    structpool_dynamic_seconds = 0.0
+    structpool_candidate_seconds = 0.0
+    structpool_merge_seconds = 0.0
+    structpool_static_cache_hit = False
+    structpool_gate_evaluated = structpool is not None
+    structpool_gate_passed = False
+    structpool_gate_reason = "not_enabled"
+    structpool_gate_seconds = 0.0
+    structpool_gate_summary: dict[str, Any] = {}
+    structpool_gate_precomputed = False
+    if structpool is None and structpool_gate_result is not None:
+        raise ValueError("StructPool gate result requires StructPool augmentation")
+    if structpool is not None:
+        structpool_started = time.perf_counter()
+        if structpool_gate_result is None:
+            structpool_gate_summary = structpool_high_stress_gate(state, structpool)
+        else:
+            structpool_gate_summary = dict(structpool_gate_result)
+            expected_gate_fields = {
+                "passed",
+                "reason",
+                "seconds",
+                "agent_count",
+                "conflict_pair_count",
+                "active_conflict_agent_count",
+                "largest_conflict_component_size",
+            }
+            if set(structpool_gate_summary) != expected_gate_fields:
+                raise ValueError("StructPool precomputed gate schema changed")
+            structpool_gate_precomputed = True
+        structpool_gate_passed = bool(structpool_gate_summary["passed"])
+        structpool_gate_reason = str(structpool_gate_summary["reason"])
+        structpool_gate_seconds = float(structpool_gate_summary["seconds"])
+        if structpool_gate_passed:
+            static_started = time.perf_counter()
+            structpool_static = topology_static_grid
+            if structpool_static is None:
+                structpool_static = analyze_static_grid(state)
+            else:
+                structpool_static_cache_hit = True
+            structpool_static_seconds = time.perf_counter() - static_started
+            if topology_state_analysis is None:
+                dynamic_started = time.perf_counter()
+                structpool_analysis = analyze_state(state, static_grid=structpool_static)
+                structpool_dynamic_seconds = time.perf_counter() - dynamic_started
+            else:
+                structpool_analysis = topology_state_analysis
+                structpool_dynamic_seconds = float(topology_state_analysis_seconds)
+            candidate_started = time.perf_counter()
+            additions = generate_structpool_candidates(
+                state,
+                structpool_analysis,
+                neighborhood_sizes=structpool["neighborhood_sizes"],
+                maximum_added_candidates=int(structpool["maximum_added_candidates"]),
+                maximum_jaccard_similarity=float(
+                    structpool["maximum_jaccard_similarity"]
+                ),
+            )
+            structpool_candidate_seconds = time.perf_counter() - candidate_started
+            if len(additions) > int(structpool["maximum_added_candidates"]):
+                raise RuntimeError("StructPool runtime candidate cap exceeded")
+            structpool_generated_count = len(additions)
+            merge_started = time.perf_counter()
+            candidates = merge_structpool_candidates(candidates, additions)
+            structpool_merge_seconds = time.perf_counter() - merge_started
+            structpool_added_candidate_count = len(candidates) - base_candidate_count
+            if not 0 <= structpool_added_candidate_count <= int(
+                structpool["maximum_added_candidates"]
+            ):
+                raise RuntimeError("StructPool runtime merge changed the addition cap")
+            if len(candidates) > int(structpool["maximum_total_candidates"]):
+                raise RuntimeError("StructPool runtime total candidate cap exceeded")
+        structpool_analysis_seconds = (
+            time.perf_counter() - structpool_started
+            + (
+                structpool_dynamic_seconds
+                if topology_state_analysis is not None and structpool_gate_passed
+                else 0.0
+            )
+        )
     if not candidates:
         raise RuntimeError("online proposal stage produced no explicit candidates")
     candidate_postprocess_seconds = (
@@ -898,6 +1077,14 @@ def generate_online_candidates(
             and topology_boundary_gate_passed
             else 0.0
         )
+        + (
+            structpool_dynamic_seconds
+            if topology_state_analysis is not None
+            and structpool is not None
+            and structpool_gate_passed
+            else 0.0
+        )
+        + (structpool_gate_seconds if structpool_gate_precomputed else 0.0)
     )
     return candidates, {
         "proposal_count": proposal_count,
@@ -924,6 +1111,25 @@ def generate_online_candidates(
         "topology_boundary_remaining_wall_seconds": (
             topology_boundary_remaining_wall_seconds
         ),
+        "structpool_enabled": structpool is not None,
+        "structpool_generated_count": structpool_generated_count,
+        "structpool_added_candidate_count": structpool_added_candidate_count,
+        "structpool_analysis_seconds": structpool_analysis_seconds,
+        "structpool_static_seconds": structpool_static_seconds,
+        "structpool_dynamic_seconds": structpool_dynamic_seconds,
+        "structpool_candidate_seconds": structpool_candidate_seconds,
+        "structpool_merge_seconds": structpool_merge_seconds,
+        "structpool_static_cache_hit": structpool_static_cache_hit,
+        "structpool_gate_evaluated": structpool_gate_evaluated,
+        "structpool_gate_passed": structpool_gate_passed,
+        "structpool_gate_reason": structpool_gate_reason,
+        "structpool_gate_seconds": structpool_gate_seconds,
+        "structpool_gate_precomputed": structpool_gate_precomputed,
+        "structpool_gate_summary": {
+            key: value
+            for key, value in structpool_gate_summary.items()
+            if key not in {"passed", "reason", "seconds"}
+        },
         "seed_agents": list(seed_agents),
         "seed_agent_count": len(seed_agents),
         "seed_agents_overridden": seed_agents_override is not None,
@@ -957,4 +1163,6 @@ __all__ = [
     "repair_random_seed",
     "score_online_candidates",
     "validate_topology_boundary_augmentation",
+    "validate_structpool_augmentation",
+    "structpool_high_stress_gate",
 ]

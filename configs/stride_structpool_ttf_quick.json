@@ -1,0 +1,130 @@
+{
+  "schema": "lns2.stride.structpool_ttf_quick_config.v1",
+  "scientific_status": "preregistered_development_quick_before_closed_loop_timing",
+  "experiment_id": "stride-structpool-ttf-quick-v1",
+  "pre_registration_parent_commit": "88413bfe8311b03268a09cb93cbb5a21f7cd1603",
+  "controllers": ["v2-full", "v2-plus-structpool"],
+  "comparison": {
+    "baseline": "frozen_v2_ranking_over_exact_base_pool",
+    "challenger": "same_frozen_v2_ranking_over_base_plus_structpool",
+    "ranker_changed": false,
+    "paired_solver_seed_required": true,
+    "deterministic_pp_seed_contract": "candidate_bound_native_replay",
+    "execution_order": "alternating_pair_order",
+    "workers": 1
+  },
+  "runtime": {
+    "config": "configs/stride_stage4r_high_load_runtime.json",
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "feature_backend": "native",
+    "controller_runtime": "optimized",
+    "verification_profile": "deployment",
+    "deterministic_pp_replay": true
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "structpool_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-structpool-v1",
+    "runtime_id": "stride-structpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "cohort": {
+    "role": "development_quick_not_formal_ood",
+    "solver_seeds": [1, 2],
+    "episode_count_per_controller": 8,
+    "groups": [
+      {
+        "id": "maze300",
+        "dataset": "build/stride-stage4r-high-load-maze-dataset-v1",
+        "split": "balanced_wall_clock",
+        "tasks": [
+          "maze-128-128-2__random_11__agents_0300",
+          "maze-128-128-2__random_17__agents_0300"
+        ]
+      },
+      {
+        "id": "room500",
+        "dataset": "build/stride-stage4r-high-load-room-dataset-v1",
+        "split": "balanced_wall_clock",
+        "tasks": [
+          "room-64-64-8__random_04__agents_0500",
+          "room-64-64-8__random_05__agents_0500"
+        ]
+      }
+    ]
+  },
+  "performance_gates": {
+    "minimum_mean_raw_ttf_improvement_vs_v2": 0.02,
+    "maximum_group_raw_ttf_regression": 0.10,
+    "minimum_paired_faster_fraction": 0.50,
+    "repair_iterations_noninferior": true,
+    "success_count_noninferior": true
+  },
+  "required_metrics": [
+    "success_count",
+    "raw_wall_time_to_feasible",
+    "repair_iterations",
+    "normalized_wall_clock_conflict_auc",
+    "pp_replan_seconds",
+    "candidate_generation_seconds",
+    "structpool_analysis_seconds",
+    "controller_seconds_before_repair",
+    "neighborhood_selection_seconds",
+    "invalid_action_count",
+    "fingerprint_mismatch_count"
+  ],
+  "inputs": {
+    "structpool_design": {
+      "path": "configs/stride_structpool_design.json",
+      "sha256": "44b6dcc66e7730e82e5e669913784526f817ec0445717f6b46fad8ebfe760f5b"
+    },
+    "pool_effect_report": {
+      "path": "build/stride-robustaction-pool-effect-v1/pool_effect_report.json",
+      "sha256": "d89e01aab421f99c3dfa0ed2fdc3b4da6ab8869d0a7a4569defd4f283f4f6031"
+    },
+    "source_evaluation_config": {
+      "path": "configs/stride_maprank_evaluation.json",
+      "sha256": "e6ef4a6ff50965b733a313141db22a356ec12511c0ce6154d341169ab0e61430"
+    },
+    "runtime_config": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "maze_dataset_summary": {
+      "path": "build/stride-stage4r-high-load-maze-dataset-v1/dataset_summary.json",
+      "sha256": "5fc8bdd608fe89a4a241958bfa36315319e344f832c7c359278c3d56b98a84ac"
+    },
+    "room_dataset_summary": {
+      "path": "build/stride-stage4r-high-load-room-dataset-v1/dataset_summary.json",
+      "sha256": "ed526c49297ee806eca2daa95d55035c99e0b8707891d6d2bbf06434fc7e6a12"
+    }
+  },
+  "claim_boundary": {
+    "development_quick_only": true,
+    "new_ranker_trained": false,
+    "formal_speed_claim": false,
+    "default_replacement_allowed": false,
+    "pass_authorizes_only_full_four_seed_development_confirmation": true,
+    "failure_stops_ttf_expansion": true
+  }
+}

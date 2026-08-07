@@ -376,6 +376,14 @@ class TopologyAnalysisCache:
             )
         agent_ids = [int(agent["id"]) for agent in state["agents"]]
         component_id, component_members = _conflict_components(agent_ids, pair_set)
+        visit_heat: collections.Counter[int] = collections.Counter()
+        agent_heat: collections.Counter[int] = collections.Counter()
+        for agent in state["agents"]:
+            path = list(map(int, agent.get("path", [])))
+            if not path:
+                raise ValueError("topology cache requires non-empty agent paths")
+            visit_heat.update(path)
+            agent_heat.update(set(path))
         return StateAnalysis(
             rows=self.static_grid.rows,
             cols=self.static_grid.cols,
@@ -384,8 +392,8 @@ class TopologyAnalysisCache:
             articulation=self.static_grid.articulation,
             obstacle_rate_2=self.static_grid.obstacle_rate_2,
             obstacle_rate_4=self.static_grid.obstacle_rate_4,
-            visit_heat=collections.Counter(),
-            agent_heat=collections.Counter(),
+            visit_heat=visit_heat,
+            agent_heat=agent_heat,
             events=events,
             pair_set=pair_set,
             component_id=component_id,

@@ -260,6 +260,8 @@ class ControllerV2Tests(unittest.TestCase):
             self.assertEqual(actual.component_members, expected.component_members)
             self.assertEqual(actual.degrees, expected.degrees)
             self.assertEqual(actual.articulation, expected.articulation)
+            self.assertEqual(actual.visit_heat, expected.visit_heat)
+            self.assertEqual(actual.agent_heat, expected.agent_heat)
 
         assert_equivalent(first)
         second = copy.deepcopy(first)
@@ -316,6 +318,8 @@ class ControllerV2Tests(unittest.TestCase):
             self.assertEqual(cache.analysis.pair_set, expected.pair_set)
             self.assertEqual(cache.analysis.component_id, expected.component_id)
             self.assertEqual(cache.analysis.component_members, expected.component_members)
+            self.assertEqual(cache.analysis.visit_heat, expected.visit_heat)
+            self.assertEqual(cache.analysis.agent_heat, expected.agent_heat)
             if _native_topology_event_function() is not None:
                 native = TopologyAnalysisCache(updated, backend="native")
                 self.assertIsNotNone(native.analysis)
