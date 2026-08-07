@@ -1582,6 +1582,21 @@
       "path": "tests/evaluation/test_stride_structpool_ttf_confirmation.py",
       "role": "active",
       "contract": "Seed-disjoint extension, pooled four-seed coverage, unchanged method, uncapped TTF, and non-formal promotion boundary."
+    },
+    {
+      "path": "experiments/stride_structpool_ttf_fresh.py",
+      "role": "active",
+      "purpose": "Strictly paired six-map MovingAI cross-layout raw-TTF evaluation for the unchanged frozen-V2 plus StructPool method."
+    },
+    {
+      "path": "scripts/run_stride_structpool_ttf_fresh.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered StructPool fresh-map raw-TTF evaluation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_ttf_fresh.py",
+      "role": "active",
+      "contract": "Unseen-map disjointness, three-seed complete alternating pairs, strict cross-layout gates, and non-default claim boundary."
     }
   ]
 }
