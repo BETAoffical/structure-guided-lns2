@@ -1677,6 +1677,16 @@
       "path": "tests/evaluation/test_stride_structpool_game_map_swap_v2.py",
       "role": "active",
       "contract": "Only the failed Game map changes; task product and reset-only selection gates remain fixed."
+    },
+    {
+      "path": "scripts/materialize_stride_structpool_revised_six_map.py",
+      "role": "active",
+      "purpose": "Checksum-validated exact-task materialization of the qualification-conditioned revised six-map reset cohort."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_revised_six_map.py",
+      "role": "active",
+      "contract": "Six registered maps, two immutable tasks per map, no task regeneration, and no repair/controller/TTF selection fields."
     }
   ]
 }

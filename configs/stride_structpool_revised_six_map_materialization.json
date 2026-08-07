@@ -1,0 +1,74 @@
+{
+  "schema": "lns2.stride.structpool_revised_six_map_materialization.v1",
+  "scientific_status": "qualification_conditioned_exact_task_reuse_before_revised_reset_qualification",
+  "experiment_id": "stride-structpool-revised-six-map-reset-v1",
+  "pre_registration_parent_commit": "75e39c9",
+  "output": "build/stride-structpool-revised-six-map-dataset-v1",
+  "split": "balanced_wall_clock",
+  "expected_map_count": 6,
+  "expected_task_count": 12,
+  "sources": [
+    {
+      "id": "retained_original",
+      "dataset": "build/stride-augcontrol-ood-dataset-v1",
+      "manifest_sha256": "cd8ed3e643c0412573e0427be8f1d29c4240ba5ee41904cf18bcf3bcf2bc3947",
+      "evidence": "build/stride-structpool-ttf-fresh-v1/qualification/qualification_report.json",
+      "evidence_sha256": "ba094daf2598f9150e5b6cf52a6a2f597c21d6df1688ff9082d761fcc6014dd0",
+      "task_ids": [
+        "den312d__random_04__agents_0300",
+        "den312d__random_05__agents_0300",
+        "random-64-64-20__random_04__agents_0500",
+        "random-64-64-20__random_05__agents_0500",
+        "room-64-64-16__random_04__agents_0400",
+        "room-64-64-16__random_05__agents_0400"
+      ]
+    },
+    {
+      "id": "maze_replacement",
+      "dataset": "build/stride-structpool-maze-map-swap-dataset-v1",
+      "manifest_sha256": "76230ca14f9c408428ae2d42cbed3bc8ea88faa2ab4aba0e3e2e36e5d70d45ba",
+      "evidence": "build/stride-structpool-maze-map-swap-analysis-v1/maze_map_swap_report.json",
+      "evidence_sha256": "b3196fb1f5748f200fd8afca73af86429e6572c789f28e6e690b5425a73195bb",
+      "task_ids": [
+        "maze-128-128-1__derived_opposite_exchange__task_seed_0233__agents_0100",
+        "maze-128-128-1__derived_opposite_exchange__task_seed_0277__agents_0100"
+      ]
+    },
+    {
+      "id": "warehouse_replacement",
+      "dataset": "build/stride-structpool-warehouse-game-map-swap-dataset-v1",
+      "manifest_sha256": "99e567d337738e57ae8e30034c4c9c10672ae7b85a1bee8dc0bd88fdfecee383",
+      "evidence": "build/stride-structpool-warehouse-game-map-swap-analysis-v1/warehouse_game_map_swap_report.json",
+      "evidence_sha256": "c32d0b39195e3eaa440b789abbdd68a1f45d66d459b870a46c04cc6b65bd11fa",
+      "task_ids": [
+        "warehouse-10-20-10-2-1__derived_opposite_exchange__task_seed_0233__agents_0600",
+        "warehouse-10-20-10-2-1__derived_opposite_exchange__task_seed_0277__agents_0600"
+      ]
+    },
+    {
+      "id": "game_replacement",
+      "dataset": "build/stride-structpool-game-map-swap-v2-dataset",
+      "manifest_sha256": "aed48cc9fe961a18bf86602f9faa39aa59441607138d38bc2b869615fc78d6f1",
+      "evidence": "build/stride-structpool-game-map-swap-v2-analysis-v2/game_map_swap_v2_report.json",
+      "evidence_sha256": "489b605985bd97befd5453951bc8e08a9f9eead33c623ad3d3b309e051de0185",
+      "task_ids": [
+        "orz200d__derived_opposite_exchange__task_seed_0233__agents_0600",
+        "orz200d__derived_opposite_exchange__task_seed_0277__agents_0600"
+      ]
+    }
+  ],
+  "expected_maps": [
+    {"map_id": "den312d", "layout_mode": "game", "agent_count": 300},
+    {"map_id": "maze-128-128-1", "layout_mode": "maze", "agent_count": 100},
+    {"map_id": "orz200d", "layout_mode": "game", "agent_count": 600},
+    {"map_id": "random-64-64-20", "layout_mode": "random", "agent_count": 500},
+    {"map_id": "room-64-64-16", "layout_mode": "room", "agent_count": 400},
+    {"map_id": "warehouse-10-20-10-2-1", "layout_mode": "warehouse", "agent_count": 600}
+  ],
+  "task_generation_changed": false,
+  "task_selection_uses_reset_outcomes": true,
+  "repair_outcomes_read": false,
+  "controller_outcomes_read": false,
+  "ttf_outcomes_read": false,
+  "claim_boundary": "qualification_conditioned_mixed_task_semantics_not_fresh_ood_or_speed_evidence"
+}

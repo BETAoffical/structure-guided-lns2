@@ -4220,3 +4220,24 @@ Reproducibility SHA-256 values are:
 - qualification report: `79120ba34bcdd5b49dde32593cdf5b6865913d025f16b9dfba61d082c4a503d8`;
 - run config: `6762a01562a31d9411fe3247e8902d2d3582faf90e0479e379d1362906caf462`;
 - second Game map-swap report: `489b605985bd97befd5453951bc8e08a9f9eead33c623ad3d3b309e051de0185`.
+
+### StructPool revised six-map cohort materialization preregistration
+
+The three active original maps retain their exact two registered tasks:
+`den312d` at 300 agents, `random-64-64-20` at 500 agents and
+`room-64-64-16` at 400 agents.  The three failed original maps are replaced by
+the lowest loads selected by the map-only diagnostics: `maze-128-128-1` at
+100 agents, `warehouse-10-20-10-2-1` at 600 agents and `orz200d` at 600
+agents.  Each replacement also reuses its exact task-seed 233/277 task files.
+
+The resulting cohort is therefore six maps and 12 immutable tasks.  No task is
+regenerated and no start/goal pair is modified.  Selection is explicitly
+qualification-conditioned, so the cohort is not untouched fresh OOD evidence.
+Repair, controller and TTF outcomes remain unread.  Materialization verifies
+the four source manifests and their reset-only evidence reports, copies every
+referenced artifact with collision checks, and emits a checksum registry.
+
+The materialization config SHA-256 is
+`29b4a96bd065c7727e72a20a99e1cf15bf8efd65a811ad3e8e17148a25e8b8ea`.
+After materialization, its manifest and artifact registry must be pinned in a
+separate reset-qualification registration before any new reset is run.
