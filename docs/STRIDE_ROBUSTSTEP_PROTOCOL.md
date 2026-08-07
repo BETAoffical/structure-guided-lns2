@@ -3690,3 +3690,35 @@ it is not a TTF or promotion result.
 
 The label-collection config SHA-256 is
 `6c7f5414cb0c354a37fcbe0b465d556eb092642f5b2b6e4e66449814c20c7b12`.
+
+### RobustAction 16-seed label-collection result
+
+The complete registered product finishes all 320 states with zero errors and
+zero timeouts.  It contains exactly 6,285 candidate aggregates and 100,560
+state-action-seed trials.  The observed 16/17/18/22/23/24-candidate state
+distribution is exactly 15/24/183/1/7/90, matching the frozen preflight.
+
+All 5,120 state/trial-index groups use one PP seed across every candidate in
+that state, and every state has 16 distinct seeds with fixed halves 0--7 and
+8--15.  Independent recomputation reproduces every candidate's seed mean,
+population standard deviation, lower-eight mean, both fixed-half means,
+minimum, maximum, progress rate, replan-success rate and feasible rate from
+the raw trials.  Every aggregate retains exactly 124 finite native feature
+values.  State files, aggregate identities, native action semantics, source
+and repair fingerprints and the normalized current-step target all pass.
+
+An independent product audit also confirms that repair time, PP time, runtime,
+future trajectory, future repair rounds, Cost-to-Go, Receding-Q and TTF fields
+are absent.  This product is therefore a valid current-step quality and action-
+uncertainty source, not a runtime result.  It does not yet establish that a
+non-anchor action robustly beats the frozen V2 anchor, authorize training, or
+support a TTF claim.  The next step remains the separately registered robust
+opportunity and action-uncertainty audit using the unchanged 75%, 0.02,
+25%, 4% and 3/3/2 gates.
+
+Reproducibility SHA-256 values are:
+
+- raw repair trials: `d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691`;
+- candidate aggregates: `067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628`;
+- state manifest: `ce7452e0731375f21c524601ad4472cbc9b3a6420c2d1eb5cfb1cf00fd854361`;
+- sorted state-artifact tree: `2ca1f3d14ec1fadedb0b39d4fab91352f36541ccf5ff60ea879ecec763ce9a90`.
