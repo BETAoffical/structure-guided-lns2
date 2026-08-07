@@ -4330,3 +4330,57 @@ the TTF registration SHA-256 is
 `87ab36c279dcabbc8c4ea827c640faa8c32f4727b6880367f5ff88626ff6bd00`;
 and the preregistered schedule SHA-256 is
 `1913746fdb45e32db124d615e130adbcda410e7eadd6ff67ef2eb99d34f3a8d6`.
+
+### StructPool revised six-map paired raw-TTF result
+
+All 72 alternating schedule entries completed.  Both controllers solved all
+36 episodes with zero execution errors, invalid actions, semantic mismatches,
+initial-fingerprint mismatches, capped-TTF values or clock-schema violations.
+StructPool passed its gate on 343 decisions, added 2,057 candidates and was
+selected 278 times.  The experiment therefore has valid paired evidence, but
+it fails the preregistered performance decision.
+
+Mean reset-inclusive raw TTF increases from `9.762557` seconds for `v2-full`
+to `13.818173` seconds for `v2-plus-structpool`: a `4.055615` second increase
+or `41.5426%` regression.  The challenger is individually faster on 23/36
+pairs (`63.8889%`), showing that the failure is heavy-tailed rather than a
+uniform slowdown.  Mean repair iterations increase from `14.75` to
+`18.333333` (`+3.583333`), and mean normalized wall-clock conflict AUC worsens
+by `0.031165`.
+
+Per-map raw-TTF changes, expressed as challenger improvement over V2, are:
+
+- `den312d`/300: `-4.4817%`, with `-0.666667` repair iterations;
+- `maze-128-128-1`/100: `-308.3655%`, with `+46.833333` iterations;
+- `orz200d`/600: `+4.1019%`, with `-3.166667` iterations;
+- `random-64-64-20`/500: `-0.1616%`, with equal iterations;
+- `room-64-64-16`/400: `+10.3955%`, with `-3.833333` iterations;
+- `warehouse-10-20-10-2-1`/600: `+8.3265%`, with `-17.666667` iterations.
+
+The decisive failure is one Maze task/solver-seed state: V2 requires 15
+repairs and `5.601127` seconds, whereas StructPool requires 301 repairs and
+`169.735909` seconds.  Four of six Maze pairs are faster under StructPool, but
+this unstable trajectory and a second slower Maze pair dominate the mean.
+The added topology computation is also material: mean candidate generation
+rises from `0.171808` to `2.125009` seconds, neighborhood selection from
+`0.437302` to `2.540343` seconds, and StructPool analysis itself contributes
+`1.913492` seconds.  Extra repair rounds raise mean PP replanning time from
+`3.903820` to `5.881397` seconds.  Thus both topology overhead and an unstable
+Maze action trajectory cause the TTF regression; PP runtime alone is not the
+explanation.
+
+Only paired-faster fraction and success-count noninferiority pass.  Mean TTF,
+maximum-group regression and repair-iteration noninferiority fail.  In
+accordance with the preregistration, the current StructPool method is not
+promoted and no fresh-OOD, generalization or default-replacement claim is
+made.  Any future work must first diagnose or redesign the Maze-sensitive
+candidate activation/selection path under a new registration rather than
+post-hoc excluding the failed pair.
+
+Reproducibility SHA-256 values are:
+
+- result report: `be307ea639f5d7a0544821e308aa08508d3bb45713e53c427a183b42808f08be`;
+- execution schedule file: `a6eb3ff2fc3dc124b63bf10a851b2b0ea57277c7b62183fbee2debb6cca236c0`;
+- `v2-full` manifest: `6da276296f6d7d2af5d3273e20907072fd6d8d5af60333c8668a7b08eec5df7c`;
+- `v2-plus-structpool` manifest: `21a03e8488fc384b32e54f4658452c608d79317aa64ed2f3964222a13230caa6`;
+- evaluation status: `73b76094a485004bf56201acb73879930e8aae136ecb1bfd2795f0634d322f24`.
