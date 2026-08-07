@@ -1597,6 +1597,21 @@
       "path": "tests/evaluation/test_stride_structpool_ttf_fresh.py",
       "role": "active",
       "contract": "Unseen-map disjointness, three-seed complete alternating pairs, strict cross-layout gates, and non-default claim boundary."
+    },
+    {
+      "path": "experiments/stride_structpool_fresh_load_recovery.py",
+      "role": "active",
+      "purpose": "Outcome-informed but reset-only deterministic load recovery for the three underloaded StructPool fresh-map families."
+    },
+    {
+      "path": "scripts/analyze_stride_structpool_fresh_load_recovery.py",
+      "role": "active",
+      "purpose": "Command-line audit for preregistered StructPool fresh-map load recovery."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_fresh_load_recovery.py",
+      "role": "active",
+      "contract": "Fixed load ladders, reset-only outcome boundary, lowest qualifying load selection, and no TTF access."
     }
   ]
 }

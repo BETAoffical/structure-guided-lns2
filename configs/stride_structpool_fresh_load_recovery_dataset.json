@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "allow_fetched_superset": true,
+  "scenario_indices": [4, 5],
+  "benchmarks": [
+    {
+      "id": "maze-128-128-10",
+      "layout_family": "maze",
+      "agent_counts": [400, 600, 800]
+    },
+    {
+      "id": "warehouse-20-40-10-2-2",
+      "layout_family": "warehouse",
+      "agent_counts": [600, 800, 1000]
+    },
+    {
+      "id": "lak303d",
+      "layout_family": "game",
+      "agent_counts": [600, 800, 1000]
+    }
+  ]
+}

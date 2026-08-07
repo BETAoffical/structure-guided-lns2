@@ -1,0 +1,105 @@
+{
+  "schema": "lns2.stride.structpool_fresh_load_recovery_design.v1",
+  "scientific_status": "outcome_informed_reset_only_recovery_preregistered_before_candidate_load_resets",
+  "experiment_id": "stride-structpool-fresh-load-recovery-v1",
+  "pre_registration_parent_commit": "872ed104bbaf47149ab5c7160cf747a9b016cac4",
+  "failed_fresh_experiment_id": "stride-structpool-ttf-fresh-v1",
+  "outcome_boundary": {
+    "outcome_informed": true,
+    "allowed_observed_fields": [
+      "reset_status",
+      "initial_complete",
+      "initial_conflicts",
+      "initial_complexity",
+      "initial_state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "claim_boundary": "qualification_conditioned_fresh_map_evidence_not_untouched_formal_ood"
+  },
+  "dataset": "build/stride-structpool-fresh-load-recovery-dataset-v1",
+  "split": "balanced_wall_clock",
+  "runtime": "configs/stride_structpool_fresh_load_recovery_runtime.json",
+  "solver_seeds": [1, 2, 3],
+  "expected_map_count": 3,
+  "expected_task_count": 18,
+  "expected_reset_count": 54,
+  "candidate_ladders": [
+    {
+      "map_id": "maze-128-128-10",
+      "layout_family": "maze",
+      "agent_counts": [400, 600, 800]
+    },
+    {
+      "map_id": "warehouse-20-40-10-2-2",
+      "layout_family": "warehouse",
+      "agent_counts": [600, 800, 1000]
+    },
+    {
+      "map_id": "lak303d",
+      "layout_family": "game",
+      "agent_counts": [600, 800, 1000]
+    }
+  ],
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_scenario_index_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true,
+    "scenario_indices": [4, 5]
+  },
+  "forbidden_selection_inputs": [
+    "conflicts_after",
+    "repair_iterations",
+    "repair_runtime",
+    "pp_replan_seconds",
+    "selected_candidate",
+    "controller_action",
+    "controller_ttf",
+    "future_trajectory"
+  ],
+  "inputs": {
+    "failed_fresh_config": {
+      "path": "configs/stride_structpool_ttf_fresh.json",
+      "sha256": "5f45385dc6c799349115d1c4789d8fd5b314a49d1b795ff7629cfcaf0ba40793"
+    },
+    "failed_qualification_manifest": {
+      "path": "build/stride-structpool-ttf-fresh-v1/qualification/qualification_manifest.jsonl",
+      "sha256": "e6004902ba50f5c685e537707fb3dae8b69f7e796a280f37c6029b7650456aa8"
+    },
+    "failed_qualification_report": {
+      "path": "build/stride-structpool-ttf-fresh-v1/qualification/qualification_report.json",
+      "sha256": "ba094daf2598f9150e5b6cf52a6a2f597c21d6df1688ff9082d761fcc6014dd0"
+    },
+    "recovery_dataset_config": {
+      "path": "configs/stride_structpool_fresh_load_recovery_dataset.json",
+      "sha256": "1cb5dca8d94e940fb5f0c53f66532dc870a33d418da5b138db7dd3344d30f9cc"
+    },
+    "recovery_runtime": {
+      "path": "configs/stride_structpool_fresh_load_recovery_runtime.json",
+      "sha256": "57d3eac4b7d6d3a2fe47a69fed268dca6ec72de8356efd41094580fc045fed15"
+    },
+    "recovery_dataset_summary": {
+      "path": "build/stride-structpool-fresh-load-recovery-dataset-v1/dataset_summary.json",
+      "sha256": "059923cbffe1443b51a3f8ba6d472d4539a095d30206f5fa57353e8716da0688"
+    },
+    "recovery_dataset_manifest": {
+      "path": "build/stride-structpool-fresh-load-recovery-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "e2a575e1a6613615d866b41c0723397ed8e07a4138c30804fbd1b9bb5aa777d5"
+    },
+    "fetched_manifest": {
+      "path": "build/movingai-ood-dev/manifest.jsonl",
+      "sha256": "6c75ddb60c9c7c4eda3259a53ba715586b088d3e45673ad371e8895601378489"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "next_step_on_pass": "materialize_six_map_recovered_cohort_then_repeat_formal_reset_qualification",
+  "next_step_on_failure": "preregister_derived_congestion_task_recovery_without_ttf",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}
