@@ -4033,3 +4033,36 @@ Reproducibility SHA-256 values are:
 - qualification report: `a6e9331206217d759c1b5ab339cafbefe82b8708d5054de5910857e95a713d0f`;
 - run config: `972d025160431b0cfba6aa4049cce6a5cd53786bb33ca2314a88f0ded855f108`;
 - dedicated recovery report: `4763f5b6b58a687f2e184824d322c0b15b4bd5b21f7f167f7fadad7be17825ad`.
+
+### StructPool Maze map-only swap preregistration
+
+The failed derived-congestion recovery leaves two competing explanations for
+the Maze zero-conflict result: the unchanged opposite-exchange generator may
+be insufficient, or `maze-128-128-10` may be too open for the fixed
+initialization.  This diagnostic isolates the map factor before changing the
+task generator.  It replaces only `maze-128-128-10` with the checksum-pinned
+MovingAI `maze-128-128-1` layout.  Task generator `opposite_exchange`, task
+seeds 233/277, agent loads 100/200/300, master seed 20260808, solver seeds
+1/2/3, PP+SIPP initialization and the 300-second initialization limit remain
+unchanged.
+
+The resulting dataset contains one map, six tasks and 18 reset states.  A load
+qualifies only when all six states are complete, at least three states have at
+least 16 initial conflict pairs and both task seeds contribute a qualifying
+state.  The lowest qualifying load is selected.  Only reset status,
+completeness, initial conflicts, initial complexity and fingerprints may be
+read; repair, controller, future-trajectory and TTF outcomes remain forbidden.
+
+This is an outcome-informed map-factor diagnostic, not a fresh-OOD or speed
+claim.  A pass shows only that map topology can restore the required conflict
+regime under the unchanged task generator.  It permits separately registering
+warehouse and game map swaps; it does not authorize controller timing or a
+default replacement.
+
+Registration SHA-256 values are:
+
+- map-swap design: `ddce0a1cfcf9597bfd17cf7f2987e0bcb53f54a374bc367129ae5b1ddc916f3b`;
+- source config: `f0bdf329a6538761ff02fa1057aa51e3bf58238d99e3f2ade70d0c5e9ad42bc9`;
+- dataset manifest: `76230ca14f9c408428ae2d42cbed3bc8ea88faa2ab4aba0e3e2e36e5d70d45ba`;
+- replacement map: `9ef42dc6c43a2b07364c9678b7501a6a7ff1fc7e61215abae6d34000ba8e70c9`;
+- runtime config: `a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6`.

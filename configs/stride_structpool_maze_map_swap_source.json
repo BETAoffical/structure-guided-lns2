@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_congestion_preflight",
+  "scientific_status": "preregistered_single_variable_maze_map_swap",
+  "dataset_revision": "stride-structpool-maze-map-swap-v1",
+  "source": "checksum_pinned_movingai_map_with_unchanged_project_derived_od",
+  "task_semantics": "unchanged_derived_opposite_exchange_not_official_movingai_scenario",
+  "pre_registration_parent_commit": "3f01a5b2f1384156018c390fbcb29532b1e4e123",
+  "predecessor_report": {
+    "path": "build/stride-structpool-fresh-congestion-recovery-analysis-v1/fresh_congestion_recovery_report.json",
+    "sha256": "4763f5b6b58a687f2e184824d322c0b15b4bd5b21f7f167f7fadad7be17825ad"
+  },
+  "fetched_manifest_sha256": "6c75ddb60c9c7c4eda3259a53ba715586b088d3e45673ad371e8895601378489",
+  "master_seed": 20260808,
+  "task_seeds": [233, 277],
+  "task_variants": ["opposite_exchange"],
+  "expected_map_count": 1,
+  "expected_task_count": 6,
+  "expected_instance_count": 6,
+  "solver_seeds": [1, 2, 3],
+  "benchmarks": [
+    {
+      "id": "maze-128-128-1",
+      "layout_family": "maze",
+      "map_sha256": "9ef42dc6c43a2b07364c9678b7501a6a7ff1fc7e61215abae6d34000ba8e70c9",
+      "agent_counts": [100, 200, 300]
+    }
+  ],
+  "single_variable_contract": {
+    "replaced_map": "maze-128-128-10",
+    "replacement_map": "maze-128-128-1",
+    "unchanged_task_generator": "opposite_exchange",
+    "unchanged_task_seeds": [233, 277],
+    "unchanged_agent_counts": [100, 200, 300],
+    "unchanged_solver_seeds": [1, 2, 3],
+    "unchanged_master_seed": 20260808
+  },
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "repair_outcomes": false,
+    "controller_outcomes": false,
+    "ttf_outcomes": false
+  }
+}

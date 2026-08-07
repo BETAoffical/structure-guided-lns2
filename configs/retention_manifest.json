@@ -1627,6 +1627,21 @@
       "path": "tests/evaluation/test_stride_structpool_fresh_congestion_recovery.py",
       "role": "active",
       "contract": "Frozen derived-task semantics, reset-only outcome boundary, both-task-seed coverage, and lowest qualifying load selection."
+    },
+    {
+      "path": "experiments/stride_structpool_maze_map_swap.py",
+      "role": "active",
+      "purpose": "Reset-only single-variable diagnostic replacing Maze width 10 with width 1 while preserving the task generator, loads, seeds, and solver initialization."
+    },
+    {
+      "path": "scripts/analyze_stride_structpool_maze_map_swap.py",
+      "role": "active",
+      "purpose": "Command-line audit for the preregistered StructPool Maze map-only swap."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_maze_map_swap.py",
+      "role": "active",
+      "contract": "Map-only change, unchanged opposite-exchange task product, reset-only evidence, and lowest qualifying load selection."
     }
   ]
 }
