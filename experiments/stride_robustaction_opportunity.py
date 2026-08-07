@@ -306,6 +306,7 @@ def _score_outcome_blind_anchors(
     project_root: Path,
     config: dict[str, Any],
     controller_manifest_path: Path,
+    preflight_rows_path: Path,
 ) -> list[dict[str, Any]]:
     anchor_contract = dict(config["outcome_blind_anchor_contract"])
     state_root = (
@@ -315,6 +316,12 @@ def _score_outcome_blind_anchors(
     if bundle.manifest.get("default_controller") != "v2-full":
         raise ValueError("RobustAction anchor bundle is not frozen v2-full")
     model = bundle.main_models["realized_dynamic"]
+    metadata_rows = _read_jsonl(preflight_rows_path)
+    metadata_by_state = {
+        str(row["state_id"]): row for row in metadata_rows
+    }
+    if len(metadata_by_state) != len(metadata_rows):
+        raise ValueError("duplicate RobustAction preflight metadata state")
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for state_path in sorted(state_root.glob("*.json")):
@@ -323,6 +330,9 @@ def _score_outcome_blind_anchors(
         if state_id in seen:
             raise ValueError(f"duplicate RobustAction preflight state: {state_id}")
         seen.add(state_id)
+        if state_id not in metadata_by_state:
+            raise ValueError(f"missing RobustAction preflight metadata: {state_id}")
+        metadata = metadata_by_state[state_id]
         candidates = list(payload["candidates"])
         online_rows = []
         for candidate in candidates:
@@ -345,10 +355,10 @@ def _score_outcome_blind_anchors(
             {
                 "schema": ANCHOR_SCHEMA,
                 "state_id": state_id,
-                "map_id": str(payload["map_id"]),
-                "task_id": str(payload["task_id"]),
-                "source_policy": str(payload["source_policy"]),
-                "layout_mode": str(payload["layout_mode"]),
+                "map_id": str(metadata["map_id"]),
+                "task_id": str(metadata["task_id"]),
+                "source_policy": str(metadata["source_policy"]),
+                "layout_mode": str(metadata["layout_mode"]),
                 "before_conflicts": int(payload["before_conflicts"]),
                 "candidate_count": len(candidates),
                 "candidate_signature": str(payload["candidate_signature"]),
@@ -360,6 +370,8 @@ def _score_outcome_blind_anchors(
                 "candidate_repair_outcomes_read": False,
             }
         )
+    if seen != set(metadata_by_state):
+        raise ValueError("RobustAction preflight artifact and metadata sets differ")
     return sorted(rows, key=lambda row: str(row["state_id"]))
 
 
@@ -448,6 +460,10 @@ def audit_robustaction_opportunity(
         project_root=project_root,
         config=config,
         controller_manifest_path=inputs["frozen_v2_manifest"],
+        preflight_rows_path=(
+            project_root
+            / str(label_config["inputs"]["preflight_rows"]["path"])
+        ).resolve(),
     )
     anchor_path = output_root / str(outputs["outcome_blind_anchor_selections"])
     _write_jsonl(anchor_path, anchor_rows)
