@@ -1,0 +1,114 @@
+{
+  "schema": "lns2.stride.robustaction_pool_effect_config.v1",
+  "scientific_status": "preregistered_candidate_pool_effect_before_base_selection_outcome_join",
+  "experiment_id": "stride-robustaction-structpool-pool-effect-v1",
+  "candidate_pool_id": "v2-plus-stride-structpool-v1",
+  "pre_registration_git_commit": "4a1dcf9a350dffa6cd94713d496b5728cd968459",
+  "comparison": {
+    "baseline": "frozen_v2_ranking_over_exact_base_candidates_only",
+    "augmented": "same_frozen_v2_ranking_over_exact_base_plus_structpool_pool",
+    "selection_must_be_persisted_before_outcomes": true,
+    "feature_profile": "realized_dynamic",
+    "feature_dimension": 124,
+    "score_tie_round_digits": 12,
+    "tie_break": "ascending_candidate_id"
+  },
+  "cohort": {
+    "all_state_count": 320,
+    "active_structpool_state_count": 98,
+    "inactive_fallback_state_count": 222,
+    "candidate_count": 6285,
+    "base_candidate_count": 5701,
+    "structpool_candidate_count": 584,
+    "trial_count": 100560,
+    "map_count": 28,
+    "active_state_definition": "candidate_pool_contains_at_least_one_structpool_candidate",
+    "primary_summary_scope": "98_active_structpool_states",
+    "inactive_state_role": "exact_selection_and_zero_gain_integrity_control"
+  },
+  "paired_quality": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "target": "normalized_current_step_conflict_reduction",
+    "raw_selected_gain": "augmented_seed_mean_minus_baseline_seed_mean",
+    "normalized_selected_gain": "raw_selected_gain_divided_by_full_pool_seed_mean_span",
+    "paired_win_rule": "augmented_score_gt_baseline_score_plus_tie_epsilon",
+    "tie_epsilon": 1e-12,
+    "robust_improvement": {
+      "minimum_paired_win_fraction": 0.75,
+      "minimum_mean_effect": 0.02,
+      "require_positive_effect_in_both_fixed_halves": true
+    },
+    "robust_regression": {
+      "minimum_paired_loss_fraction": 0.75,
+      "minimum_mean_loss": 0.02,
+      "require_negative_effect_in_both_fixed_halves": true
+    }
+  },
+  "paired_ttf_quick_gates": {
+    "scope": "active_structpool_states_only",
+    "source": "unchanged_stride_topology_boundary_v2_shadow_exploratory_quick_gates",
+    "minimum_structpool_selected_state_count": 1,
+    "minimum_improved_state_count": 1,
+    "minimum_mean_normalized_selected_gain": 0.01,
+    "minimum_second_half_mean_normalized_selected_gain": 0.0,
+    "maximum_worsened_state_rate": 0.35
+  },
+  "inputs": {
+    "label_collection_config": {
+      "path": "configs/stride_robustaction_structpool_label_collection.json",
+      "sha256": "6c7f5414cb0c354a37fcbe0b465d556eb092642f5b2b6e4e66449814c20c7b12"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-robustaction-label-collection-v1/candidate_aggregates.jsonl",
+      "sha256": "067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628"
+    },
+    "repair_trials": {
+      "path": "build/stride-robustaction-label-collection-v1/repair_trials.jsonl",
+      "sha256": "d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691"
+    },
+    "state_manifest": {
+      "path": "build/stride-robustaction-label-collection-v1/state_manifest.jsonl",
+      "sha256": "ce7452e0731375f21c524601ad4472cbc9b3a6420c2d1eb5cfb1cf00fd854361"
+    },
+    "preflight_rows": {
+      "path": "build/stride-robustaction-label-preflight-v1/preflight_states.jsonl",
+      "sha256": "fd17fb5272da1155e88949c8df4814a48d9b6181726b20ad79b3dddee1cf4eab"
+    },
+    "opportunity_audit_config": {
+      "path": "configs/stride_robustaction_structpool_opportunity_audit.json",
+      "sha256": "95d450971ca1a922eb3cb0a10422cb32641ff95c3022f07490f4e8601598d41d"
+    },
+    "augmented_anchor_selections": {
+      "path": "build/stride-robustaction-opportunity-audit-v1/outcome_blind_anchor_selections.jsonl",
+      "sha256": "72c028b423c425727c0c939558cfc31f302c907ab7ae996d1020d15e11ae84e7"
+    },
+    "opportunity_report": {
+      "path": "build/stride-robustaction-opportunity-audit-v1/opportunity_report.json",
+      "sha256": "66684e48fca0deae2dd21956d70fa4cdf6413a09770320bba6bcfead668e6651"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "preflight_state_artifact_root": "build/stride-robustaction-label-preflight-v1/states",
+  "preflight_state_artifact_tree_sha256": "6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2",
+  "outputs": {
+    "outcome_blind_pool_selections": "outcome_blind_pool_selections.jsonl",
+    "paired_pool_effects": "paired_pool_effects.jsonl",
+    "report": "pool_effect_report.json"
+  },
+  "claim_boundary": {
+    "new_ranker_trained": false,
+    "training_allowed": false,
+    "runtime_read": false,
+    "ttf_read": false,
+    "formal_speed_claim": false,
+    "default_replacement_allowed": false,
+    "pass_authorizes_only_paired_closed_loop_ttf_quick": true
+  },
+  "next_decision_on_pass": "preregister_original_v2_vs_v2_plus_structpool_paired_closed_loop_raw_ttf_quick",
+  "next_decision_on_failure": "revise_outcome_blind_structpool_generation_or_activation_without_training_a_new_ranker"
+}

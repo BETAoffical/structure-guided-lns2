@@ -249,6 +249,11 @@
       "purpose": "Preregistered frozen-V2 anchored RobustAction opportunity and paired-seed action-uncertainty audit before model training."
     },
     {
+      "path": "experiments/stride_robustaction_pool_effect.py",
+      "role": "active",
+      "purpose": "Outcome-blind base-only versus augmented frozen-V2 candidate-pool selection and paired current-step effect audit."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -477,6 +482,11 @@
       "path": "scripts/audit_stride_robustaction_opportunity.py",
       "role": "active",
       "purpose": "Command-line entry point for the frozen-V2 anchored RobustAction opportunity and paired-seed uncertainty audit."
+    },
+    {
+      "path": "scripts/audit_stride_robustaction_pool_effect.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the original-V2 versus V2-plus-StructPool paired candidate-pool effect audit."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1352,6 +1362,11 @@
       "path": "tests/evaluation/test_stride_robustaction_opportunity.py",
       "role": "active",
       "contract": "Frozen-V2 outcome-blind anchor selection, paired-win effect gates, both-half direction, uncertainty metrics, and no-TTF boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_pool_effect.py",
+      "role": "active",
+      "contract": "Separate frozen-V2 base and augmented pool selections, paired 16-seed quality effects, active-state gates, and no-training boundary."
     },
     {
       "path": "experiments/stride_structpool.py",
