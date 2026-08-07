@@ -1,0 +1,27 @@
+{
+  "schema": "lns2.stride.structpool_map_swap_raw_source.v1",
+  "scientific_status": "input_only_map_selection_before_new_resets",
+  "pre_registration_parent_commit": "82f59d3",
+  "selection_basis": "static_map_scale_and_topology_only",
+  "maps": [
+    {
+      "id": "warehouse-10-20-10-2-1",
+      "layout_family": "warehouse",
+      "source_path": "build/movingai-dev/maps/warehouse-10-20-10-2-1.map",
+      "sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0",
+      "agent_counts": [200, 400, 600],
+      "input_only_reason": "smaller footprint and higher low-degree-cell ratio than warehouse-20-40-10-2-2"
+    },
+    {
+      "id": "lt_hangedman",
+      "layout_family": "game",
+      "source_path": "build/movingai-da2-source-v1/maps-all/lt_hangedman.map",
+      "sha256": "03b5419fa222ab1b9a259006afa6704ea4fe6e04a43203a3139c23291d9a1c80",
+      "agent_counts": [200, 400, 600],
+      "input_only_reason": "smaller footprint and registered DA2 high-topology group"
+    }
+  ],
+  "forbidden_selection_inputs": [
+    "initial_conflicts", "repair_outcomes", "controller_outcomes", "ttf"
+  ]
+}

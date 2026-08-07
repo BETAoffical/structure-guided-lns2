@@ -1642,6 +1642,26 @@
       "path": "tests/evaluation/test_stride_structpool_maze_map_swap.py",
       "role": "active",
       "contract": "Map-only change, unchanged opposite-exchange task product, reset-only evidence, and lowest qualifying load selection."
+    },
+    {
+      "path": "scripts/materialize_stride_structpool_map_swap_source.py",
+      "role": "active",
+      "purpose": "Checksum-validated input-only materialization of the Warehouse/Game map-swap raw source without solver outcomes."
+    },
+    {
+      "path": "experiments/stride_structpool_warehouse_game_map_swap.py",
+      "role": "active",
+      "purpose": "Reset-only map-factor diagnostic for Warehouse and Game replacements with unchanged task generation and solver inputs."
+    },
+    {
+      "path": "scripts/analyze_stride_structpool_warehouse_game_map_swap.py",
+      "role": "active",
+      "purpose": "Command-line audit for preregistered StructPool Warehouse/Game map-only swaps."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_warehouse_game_map_swap.py",
+      "role": "active",
+      "contract": "Map-only replacements, unchanged task product, reset-only evidence, and lowest qualifying load per map."
     }
   ]
 }

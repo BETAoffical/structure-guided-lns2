@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_congestion_preflight",
+  "scientific_status": "preregistered_warehouse_game_map_only_swaps",
+  "dataset_revision": "stride-structpool-warehouse-game-map-swap-v1",
+  "source": "checksum_pinned_movingai_maps_with_unchanged_project_derived_od",
+  "task_semantics": "unchanged_derived_opposite_exchange_not_official_movingai_scenario",
+  "pre_registration_parent_commit": "82f59d3",
+  "predecessor_report": {
+    "path": "build/stride-structpool-maze-map-swap-analysis-v1/maze_map_swap_report.json",
+    "sha256": "b3196fb1f5748f200fd8afca73af86429e6572c789f28e6e690b5425a73195bb"
+  },
+  "fetched_manifest_sha256": "f9c09df4e89f5848523d552c97e5d8af0a3bc0cfb00e3b53083a8975fbb46a2f",
+  "master_seed": 20260808,
+  "task_seeds": [233, 277],
+  "task_variants": ["opposite_exchange"],
+  "expected_map_count": 2,
+  "expected_task_count": 12,
+  "expected_instance_count": 12,
+  "solver_seeds": [1, 2, 3],
+  "benchmarks": [
+    {
+      "id": "warehouse-10-20-10-2-1",
+      "layout_family": "warehouse",
+      "map_sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0",
+      "agent_counts": [200, 400, 600]
+    },
+    {
+      "id": "lt_hangedman",
+      "layout_family": "game",
+      "map_sha256": "03b5419fa222ab1b9a259006afa6704ea4fe6e04a43203a3139c23291d9a1c80",
+      "agent_counts": [200, 400, 600]
+    }
+  ],
+  "single_variable_contract": {
+    "replaced_maps": {
+      "warehouse-20-40-10-2-2": "warehouse-10-20-10-2-1",
+      "lak303d": "lt_hangedman"
+    },
+    "unchanged_task_generator": "opposite_exchange",
+    "unchanged_task_seeds": [233, 277],
+    "unchanged_agent_counts": [200, 400, 600],
+    "unchanged_solver_seeds": [1, 2, 3],
+    "unchanged_master_seed": 20260808
+  },
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "repair_outcomes": false,
+    "controller_outcomes": false,
+    "ttf_outcomes": false
+  }
+}

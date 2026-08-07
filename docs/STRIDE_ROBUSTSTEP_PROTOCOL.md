@@ -4095,3 +4095,36 @@ Reproducibility SHA-256 values are:
 - qualification report: `5302fb0e6319ea06c3fc28a54949ae3ce5f7370e0d64c1e36e9af3c82f5a9bd2`;
 - run config: `d9bc87cd16931fe3006929aec63d047dd66e4982dc9307a813f10d60572387ad`;
 - map-swap report: `b3196fb1f5748f200fd8afca73af86429e6572c789f28e6e690b5425a73195bb`.
+
+### StructPool Warehouse and Game map-only swap preregistration
+
+After the Maze map-only pass, the remaining inactive families are tested with
+the same isolation principle.  `warehouse-20-40-10-2-2` is replaced by
+`warehouse-10-20-10-2-1`; its free-cell count falls from 38,756 to 5,699 and
+its low-degree-cell ratio rises from approximately `0.0001` to `0.4324`.
+`lak303d` is replaced by the DA2 high-topology `lt_hangedman`; its free-cell
+count is 4,601 rather than 14,784.  These choices use only map scale and static
+topology before new resets, not initialization, repair, controller or TTF
+outcomes.
+
+Task generator `opposite_exchange`, task seeds 233/277, agent loads
+200/400/600, master seed 20260808, solver seeds 1/2/3, PP+SIPP initialization
+and the 300-second initialization limit remain unchanged.  The dataset has two
+maps, 12 tasks and 36 resets.  Each map independently selects the lowest load
+whose six states are complete, at least three reach 16 conflict pairs and both
+task seeds contribute a qualifying state.
+
+Only reset fields are accessible.  A two-map pass permits materializing the
+revised six-map cohort and repeating its reset qualification; it does not
+permit controller timing, a fresh-OOD claim or a default change.  If one map
+fails, the passing replacement is retained and only the failed layout family
+may receive another separately registered map replacement.
+
+Registration SHA-256 values are:
+
+- raw-source config: `29df87cbeb574b4ce365543d5ea21a9ea14a77966ae3d69abee5d130b740a75b`;
+- raw-source manifest: `f9c09df4e89f5848523d552c97e5d8af0a3bc0cfb00e3b53083a8975fbb46a2f`;
+- task-source config: `bfcb85a7c63f395c881a210bcb6c324f14070428827960d36333d3d581016baa`;
+- generated dataset manifest: `99e567d337738e57ae8e30034c4c9c10672ae7b85a1bee8dc0bd88fdfecee383`;
+- runtime config: `6c91d275e6203b8654a61f1b669abeffddb6555ce2c6a809b1745c6c71e5811d`;
+- experiment design: `6011ff5b95a789848a544c097bbbf632163b350e6909ae0f8a6ea5e6da8f7b93`.

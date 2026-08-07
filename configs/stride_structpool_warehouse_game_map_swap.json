@@ -1,0 +1,107 @@
+{
+  "schema": "lns2.stride.structpool_warehouse_game_map_swap_design.v1",
+  "scientific_status": "outcome_informed_map_only_diagnostic_preregistered_before_resets",
+  "experiment_id": "stride-structpool-warehouse-game-map-swap-v1",
+  "pre_registration_parent_commit": "82f59d3",
+  "dataset": "build/stride-structpool-warehouse-game-map-swap-dataset-v1",
+  "runtime": "configs/stride_structpool_warehouse_game_map_swap_runtime.json",
+  "split": "balanced_wall_clock",
+  "solver_seeds": [1, 2, 3],
+  "expected_map_count": 2,
+  "expected_task_count": 12,
+  "expected_reset_count": 36,
+  "map_swaps": [
+    {
+      "layout_family": "warehouse",
+      "replaced_map": "warehouse-20-40-10-2-2",
+      "replacement_map": "warehouse-10-20-10-2-1"
+    },
+    {
+      "layout_family": "game",
+      "replaced_map": "lak303d",
+      "replacement_map": "lt_hangedman"
+    }
+  ],
+  "unchanged_inputs": {
+    "task_generator": "opposite_exchange",
+    "task_seeds": [233, 277],
+    "agent_counts": [200, 400, 600],
+    "solver_seeds": [1, 2, 3],
+    "master_seed": 20260808,
+    "initialization_time_limit_seconds": 300.0,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "candidate_ladders": [
+    {
+      "map_id": "warehouse-10-20-10-2-1",
+      "layout_family": "warehouse",
+      "agent_counts": [200, 400, 600]
+    },
+    {
+      "map_id": "lt_hangedman",
+      "layout_family": "game",
+      "agent_counts": [200, 400, 600]
+    }
+  ],
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed_observed_fields": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "claim_boundary": "map_factor_diagnostic_not_fresh_ood_or_speed_evidence"
+  },
+  "forbidden_selection_inputs": [
+    "conflicts_after", "repair_iterations", "repair_runtime",
+    "pp_replan_seconds", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory"
+  ],
+  "inputs": {
+    "raw_source_config": {
+      "path": "configs/stride_structpool_warehouse_game_map_swap_raw_source.json",
+      "sha256": "29df87cbeb574b4ce365543d5ea21a9ea14a77966ae3d69abee5d130b740a75b"
+    },
+    "raw_source_manifest": {
+      "path": "build/stride-structpool-warehouse-game-map-swap-raw-v1/manifest.jsonl",
+      "sha256": "f9c09df4e89f5848523d552c97e5d8af0a3bc0cfb00e3b53083a8975fbb46a2f"
+    },
+    "source_config": {
+      "path": "configs/stride_structpool_warehouse_game_map_swap_source.json",
+      "sha256": "bfcb85a7c63f395c881a210bcb6c324f14070428827960d36333d3d581016baa"
+    },
+    "predecessor_report": {
+      "path": "build/stride-structpool-maze-map-swap-analysis-v1/maze_map_swap_report.json",
+      "sha256": "b3196fb1f5748f200fd8afca73af86429e6572c789f28e6e690b5425a73195bb"
+    },
+    "original_failure_report": {
+      "path": "build/stride-structpool-fresh-congestion-recovery-analysis-v1/fresh_congestion_recovery_report.json",
+      "sha256": "4763f5b6b58a687f2e184824d322c0b15b4bd5b21f7f167f7fadad7be17825ad"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-warehouse-game-map-swap-dataset-v1/dataset_summary.json",
+      "sha256": "feae513f71881587291287c51e0fff6a99997818186807a98a8850cb0d3c1964"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-warehouse-game-map-swap-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "99e567d337738e57ae8e30034c4c9c10672ae7b85a1bee8dc0bd88fdfecee383"
+    },
+    "runtime": {
+      "path": "configs/stride_structpool_warehouse_game_map_swap_runtime.json",
+      "sha256": "6c91d275e6203b8654a61f1b669abeffddb6555ce2c6a809b1745c6c71e5811d"
+    }
+  },
+  "next_step_on_pass": "materialize_revised_six_map_cohort_then_repeat_formal_reset_qualification",
+  "next_step_on_failure": "retain_passing_map_swaps_and_reassess_only_failed_layout_family",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}
