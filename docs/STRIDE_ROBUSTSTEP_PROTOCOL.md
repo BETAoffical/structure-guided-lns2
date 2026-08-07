@@ -4241,3 +4241,31 @@ The materialization config SHA-256 is
 `29b4a96bd065c7727e72a20a99e1cf15bf8efd65a811ad3e8e17148a25e8b8ea`.
 After materialization, its manifest and artifact registry must be pinned in a
 separate reset-qualification registration before any new reset is run.
+
+### StructPool revised six-map materialization result and reset preregistration
+
+Materialization produced exactly six maps and 12 tasks, with two tasks per map
+and no task generation.  The six retained/selected map-load cells are:
+`den312d`/300, `random-64-64-20`/500, `room-64-64-16`/400,
+`maze-128-128-1`/100, `warehouse-10-20-10-2-1`/600 and `orz200d`/600.
+The dataset manifest SHA-256 is
+`6d34f1274d2d270f85018dfa27b4d066061d351d37a764c7fed557137b979aaf`;
+the artifact registry SHA-256 is
+`9387862ddf78cba70e97e7dbe1255a23e7c874b4b10a8c0067a561d54f211781`;
+and the dataset summary SHA-256 is
+`282706a2a7658e720852be3ed8e72809d0eb3dc6f5c9f8e3aafc904366a0ec03`.
+
+The formal reset confirmation registers 12 tasks by solver seeds 1/2/3 for 36
+states.  It requires at least 24 nonzero states, at least one nonzero state in
+each layout family, all six maps active and at least six nonzero states per
+solver seed.  More strictly, every reset must exactly reproduce the status,
+completeness, conflicts, feasibility, initial complexity and fingerprint from
+the four pinned source qualification manifests.  Errors, timeouts, incomplete
+resets and repair/controller/TTF fields are forbidden.
+
+The runtime config SHA-256 is
+`c44d1d9a2ef425101e2b75c009afc6647db5ee6ba47a8059a81f35e7788baf96`;
+the qualification design SHA-256 is
+`d5c3df1f0b2a17026b6ec3a49cb0534f556335aed87371988b2efa48a33dcfe1`.
+A pass authorizes only preregistration of a paired raw-TTF comparison; a failure
+stops before any controller timing.

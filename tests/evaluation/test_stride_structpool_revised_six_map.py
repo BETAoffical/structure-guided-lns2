@@ -6,6 +6,9 @@ from pathlib import Path
 
 from experiments.repair_collection import _read_json, _read_jsonl
 from scripts.materialize_stride_structpool_revised_six_map import materialize
+from experiments.stride_structpool_revised_six_map import (
+    validate_revised_six_map_design,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,6 +16,16 @@ CONFIG = ROOT / "configs" / "stride_structpool_revised_six_map_materialization.j
 
 
 class StructPoolRevisedSixMapTest(unittest.TestCase):
+    def test_qualification_registration_is_valid(self) -> None:
+        config = _read_json(
+            ROOT / "configs" / "stride_structpool_revised_six_map_qualification.json"
+        )
+        paths = validate_revised_six_map_design(config, project_root=ROOT)
+        self.assertEqual(config["expected_reset_count"], 36)
+        self.assertEqual(len([name for name in paths if name.startswith("source:")]), 4)
+        self.assertTrue(config["qualification_gates"]["require_exact_source_state_reproduction"])
+        self.assertFalse(config["outcome_boundary"]["ttf_outcomes_read"])
+
     def test_registration_reuses_exact_tasks_without_generation(self) -> None:
         config = _read_json(CONFIG)
         tasks = [

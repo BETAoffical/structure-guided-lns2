@@ -1687,6 +1687,16 @@
       "path": "tests/evaluation/test_stride_structpool_revised_six_map.py",
       "role": "active",
       "contract": "Six registered maps, two immutable tasks per map, no task regeneration, and no repair/controller/TTF selection fields."
+    },
+    {
+      "path": "experiments/stride_structpool_revised_six_map.py",
+      "role": "active",
+      "purpose": "Formal reset-only analyzer for the qualification-conditioned revised six-map cohort with exact source-state reproduction."
+    },
+    {
+      "path": "scripts/analyze_stride_structpool_revised_six_map.py",
+      "role": "active",
+      "purpose": "Command-line entry point for revised six-map reset qualification analysis."
     }
   ]
 }

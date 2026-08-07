@@ -1,0 +1,78 @@
+{
+  "schema": "lns2.stride.structpool_revised_six_map_qualification_design.v1",
+  "scientific_status": "qualification_conditioned_formal_reset_confirmation_preregistered_before_combined_resets",
+  "experiment_id": "stride-structpool-revised-six-map-reset-v1",
+  "pre_registration_parent_commit": "1b8a1be",
+  "dataset": "build/stride-structpool-revised-six-map-dataset-v1",
+  "runtime": "configs/stride_structpool_revised_six_map_runtime.json",
+  "split": "balanced_wall_clock",
+  "solver_seeds": [1, 2, 3],
+  "expected_map_count": 6,
+  "expected_task_count": 12,
+  "expected_reset_count": 36,
+  "qualification_gates": {
+    "minimum_nonzero_states": 24,
+    "minimum_nonzero_states_per_layout": 1,
+    "minimum_active_maps": 6,
+    "minimum_nonzero_states_per_solver_seed": 6,
+    "require_exact_source_state_reproduction": true,
+    "require_zero_errors_and_timeouts": true
+  },
+  "inputs": {
+    "materialization_config": {
+      "path": "configs/stride_structpool_revised_six_map_materialization.json",
+      "sha256": "29b4a96bd065c7727e72a20a99e1cf15bf8efd65a811ad3e8e17148a25e8b8ea"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/dataset_summary.json",
+      "sha256": "282706a2a7658e720852be3ed8e72809d0eb3dc6f5c9f8e3aafc904366a0ec03"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "6d34f1274d2d270f85018dfa27b4d066061d351d37a764c7fed557137b979aaf"
+    },
+    "artifact_registry": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/artifact_registry.jsonl",
+      "sha256": "9387862ddf78cba70e97e7dbe1255a23e7c874b4b10a8c0067a561d54f211781"
+    },
+    "runtime": {
+      "path": "configs/stride_structpool_revised_six_map_runtime.json",
+      "sha256": "c44d1d9a2ef425101e2b75c009afc6647db5ee6ba47a8059a81f35e7788baf96"
+    }
+  },
+  "source_qualification_manifests": [
+    {
+      "id": "retained_original",
+      "path": "build/stride-structpool-ttf-fresh-v1/qualification/qualification_manifest.jsonl",
+      "sha256": "e6004902ba50f5c685e537707fb3dae8b69f7e796a280f37c6029b7650456aa8"
+    },
+    {
+      "id": "maze_replacement",
+      "path": "build/stride-structpool-maze-map-swap-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "2ad97970f1d9a1292cd14cb874059d82062c68f7e314938577a6ed7164e39dd8"
+    },
+    {
+      "id": "warehouse_replacement",
+      "path": "build/stride-structpool-warehouse-game-map-swap-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "5fce6a08d52c12517809baaa7014b717272b247b03fb647538f55567246d4451"
+    },
+    {
+      "id": "game_replacement",
+      "path": "build/stride-structpool-game-map-swap-v2-qualification-v2/qualification_manifest.jsonl",
+      "sha256": "4c12d043a01a2cfd85e2226f85b70f99a2e68e88b09fda5429b9b68f940ef8af"
+    }
+  ],
+  "outcome_boundary": {
+    "allowed_observed_fields": [
+      "status", "error", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint", "initial_feasible"
+    ],
+    "repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false
+  },
+  "next_step_on_pass": "preregister_revised_six_map_paired_raw_ttf",
+  "next_step_on_failure": "stop_before_controller_timing_and_report_exact_reset_mismatch",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}
