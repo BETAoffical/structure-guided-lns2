@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "experiment_runtime_id": "stride-structpool-game-map-swap-v2",
   "formal": false,
   "split": "balanced_wall_clock",
   "solver_seeds": [1, 2, 3],

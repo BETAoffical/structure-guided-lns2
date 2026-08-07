@@ -85,7 +85,7 @@
     },
     "runtime": {
       "path": "configs/stride_structpool_game_map_swap_v2_runtime.json",
-      "sha256": "a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6"
+      "sha256": "6f32edc3292b18a9defbc83a39941198a202de3ac49b523a021932929d9e2508"
     }
   },
   "next_step_on_pass": "materialize_revised_six_map_cohort_then_repeat_formal_reset_qualification",

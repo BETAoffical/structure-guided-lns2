@@ -4190,5 +4190,5 @@ Registration SHA-256 values are:
 - raw-source manifest: `ce1c2d7622fdd38d12cca6e74f166c68ad7da2aaad3c6e679a33fc0c9b62b4ec`;
 - task-source config: `693d12d2b55193b4c991504ae2c6b20052b680f1bf39653f60041152e7e755a6`;
 - generated dataset manifest: `aed48cc9fe961a18bf86602f9faa39aa59441607138d38bc2b869615fc78d6f1`;
-- runtime config: `a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6`;
-- experiment design: `772474837f09f7db119321e768346a2ecec4122c1bc39e09dbb614e35976b9fe`.
+- runtime config: `6f32edc3292b18a9defbc83a39941198a202de3ac49b523a021932929d9e2508`;
+- experiment design: `4b007cf77b75e3f1bb9fdc1cb791ea66a7ce6dd9c976c793331641f1509e313d`.
