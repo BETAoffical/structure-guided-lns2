@@ -129,6 +129,15 @@ from lns2_selector.training.policy_bundle import (
 )
 
 
+def _proposal_uses_static_grid_cache(proposal_config: Mapping[str, Any]) -> bool:
+    """Return whether any enabled topology augmentation requests map caching."""
+
+    return any(
+        dict(proposal_config.get(name) or {}).get("static_grid_cache") is True
+        for name in ("topology_boundary", "structpool")
+    )
+
+
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
 EPISODE_SCHEMA = EPISODE_SCHEMA_V1
 FIXED_POLICIES = ("fixed_target", "fixed_collision", "fixed_random")
@@ -1411,10 +1420,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             topology_static_grid=(
                                 feature_engine.static_grid
                                 if feature_engine is not None
-                                and dict(
-                                    effective_proposal.get("topology_boundary") or {}
-                                ).get("static_grid_cache")
-                                is True
+                                and _proposal_uses_static_grid_cache(
+                                    effective_proposal
+                                )
                                 else None
                             ),
                             topology_state_analysis=topology_state_analysis,

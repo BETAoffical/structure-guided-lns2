@@ -16,6 +16,7 @@ from experiments.closed_loop_confirmation import (
     _closed_loop_episode_worker,
     _matching_source_model,
     _native_repair_timing_schema,
+    _proposal_uses_static_grid_cache,
     _qualification_reuse_fingerprint,
     _selector_required_model_features,
     _valid_episode_trace,
@@ -309,6 +310,17 @@ class DirectCandidateModel:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_static_grid_cache_is_enabled_for_structpool_or_boundary(self) -> None:
+        self.assertTrue(
+            _proposal_uses_static_grid_cache({"structpool": STRUCTPOOL_RUNTIME})
+        )
+        self.assertTrue(
+            _proposal_uses_static_grid_cache(
+                {"topology_boundary": {"static_grid_cache": True}}
+            )
+        )
+        self.assertFalse(_proposal_uses_static_grid_cache({}))
+
     def test_selector_required_features_include_guard_anchor_union(self) -> None:
         selector = SimpleNamespace(
             models={
@@ -1629,6 +1641,7 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 },
                 state_hash=state_fingerprint(state),
                 verify_full_state=False,
+                topology_static_grid=analyze_static_grid(state),
                 topology_state_analysis=analyze_state(make_state()),
                 topology_state_analysis_seconds=0.125,
             )
@@ -1636,6 +1649,7 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(metrics["structpool_generated_count"], 1)
         self.assertEqual(metrics["structpool_added_candidate_count"], 1)
         self.assertEqual(metrics["structpool_dynamic_seconds"], 0.125)
+        self.assertTrue(metrics["structpool_static_cache_hit"])
         self.assertEqual(candidates[-1]["candidate_id"], "structpool-added")
 
     def test_proposal_full_check_allows_live_runtime_to_advance(self) -> None:

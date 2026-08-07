@@ -2,10 +2,34 @@ from __future__ import annotations
 
 import collections
 import copy
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 from experiments.neighborhood_candidates import candidate_id
 from experiments.state_analysis import ConflictEvent, StateAnalysis
+
+
+@dataclass(frozen=True)
+class _NeighborhoodContext:
+    agent_rows: dict[int, dict[str, Any]]
+    agent_ids: frozenset[int]
+    adjacency: dict[int, frozenset[int]]
+
+
+def _neighborhood_context(state: dict[str, Any]) -> _NeighborhoodContext:
+    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    adjacency: dict[int, set[int]] = {
+        agent: set() for agent in agent_rows
+    }
+    for edge in state.get("conflict_edges", []):
+        left, right = map(int, edge)
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    return _NeighborhoodContext(
+        agent_rows=agent_rows,
+        agent_ids=frozenset(agent_rows),
+        adjacency={agent: frozenset(peers) for agent, peers in adjacency.items()},
+    )
 
 
 def _relevant_events(
@@ -32,22 +56,23 @@ def _relevant_events(
 
 
 def _fill_neighborhood(
-    selected: set[int], state: dict[str, Any], event_weight: collections.Counter[int], size: int
+    selected: set[int],
+    state: dict[str, Any],
+    event_weight: collections.Counter[int],
+    size: int,
+    *,
+    context: _NeighborhoodContext | None = None,
 ) -> list[int]:
-    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
-    if not selected <= set(agent_rows):
+    context = context or _neighborhood_context(state)
+    agent_rows = context.agent_rows
+    if not selected <= context.agent_ids:
         raise ValueError("topology anchor selected an unknown agent")
-    adjacency: dict[int, set[int]] = collections.defaultdict(set)
-    for edge in state.get("conflict_edges", []):
-        left, right = map(int, edge)
-        adjacency[left].add(right)
-        adjacency[right].add(left)
     while len(selected) < min(size, len(agent_rows)):
-        remaining = set(agent_rows) - selected
+        remaining = context.agent_ids - selected
         chosen = min(
             remaining,
             key=lambda agent: (
-                -len(adjacency[agent] & selected),
+                -len(context.adjacency[agent] & selected),
                 -int(agent_rows[agent].get("conflict_degree", 0)),
                 -int(event_weight[agent]),
                 agent,
@@ -58,7 +83,11 @@ def _fill_neighborhood(
 
 
 def _anchor_neighborhood(
-    state: dict[str, Any], events: list[ConflictEvent], size: int
+    state: dict[str, Any],
+    events: list[ConflictEvent],
+    size: int,
+    *,
+    context: _NeighborhoodContext | None = None,
 ) -> list[int]:
     if size <= 0 or not events:
         raise ValueError("topology anchor requires events and a positive size")
@@ -106,7 +135,9 @@ def _anchor_neighborhood(
             for index in uncovered
             if events[index].left not in selected and events[index].right not in selected
         }
-    return _fill_neighborhood(selected, state, event_weight, size)
+    return _fill_neighborhood(
+        selected, state, event_weight, size, context=context
+    )
 
 
 def generate_topology_anchor_candidates(
@@ -196,12 +227,18 @@ def topology_candidate_audit(
 
 
 def _boundary_neighborhood(
-    state: dict[str, Any], analysis: StateAnalysis, events: list[ConflictEvent],
-    *, size: int, core_budget: int,
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    events: list[ConflictEvent],
+    *,
+    size: int,
+    core_budget: int,
+    context: _NeighborhoodContext | None = None,
 ) -> list[int]:
     """Select incident endpoints while discouraging closure of covered conflicts."""
 
-    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    context = context or _neighborhood_context(state)
+    agent_rows = context.agent_rows
     if size <= 0 or core_budget <= 0 or not events:
         raise ValueError("topology boundary candidate requires events and positive budgets")
     selected: set[int] = set()
@@ -293,19 +330,33 @@ def _boundary_neighborhood(
 
 
 def generate_topology_boundary_candidates(
-    state: dict[str, Any], analysis: StateAnalysis, *, neighborhood_size: int,
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    neighborhood_size: int,
     core_budget: int,
+    context: _NeighborhoodContext | None = None,
+    relevant_events_by_kind: dict[str, list[ConflictEvent]] | None = None,
 ) -> list[dict[str, Any]]:
     """Generate at most one boundary-oriented size-16 candidate per topology kind."""
 
     by_agents: dict[tuple[int, ...], dict[str, Any]] = {}
     for kind in ("articulation", "low_degree"):
-        events = _relevant_events(analysis, kind)
+        events = (
+            relevant_events_by_kind[kind]
+            if relevant_events_by_kind is not None
+            else _relevant_events(analysis, kind)
+        )
         if not events:
             continue
         agents = tuple(
             _boundary_neighborhood(
-                state, analysis, events, size=neighborhood_size, core_budget=core_budget
+                state,
+                analysis,
+                events,
+                size=neighborhood_size,
+                core_budget=core_budget,
+                context=context,
             )
         )
         family = f"topology-boundary-{kind}:{neighborhood_size}"
@@ -368,10 +419,12 @@ def _event_weights(events: Iterable[ConflictEvent]) -> collections.Counter[int]:
 def _ranked_seed_neighborhood(
     state: dict[str, Any], analysis: StateAnalysis, seeds: Iterable[int], *, size: int,
     priority: dict[int, float] | collections.Counter[int] | None = None,
+    context: _NeighborhoodContext | None = None,
 ) -> list[int]:
     """Build a deterministic candidate from a ranked structural seed set."""
 
-    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    context = context or _neighborhood_context(state)
+    agent_rows = context.agent_rows
     if size <= 0 or not agent_rows:
         raise ValueError("structural neighborhood requires agents and a positive size")
     priority = priority or {}
@@ -392,12 +445,34 @@ def _ranked_seed_neighborhood(
             {agent: int(round(1000.0 * float(priority.get(agent, 0.0)))) for agent in agent_rows}
         ),
         size,
+        context=context,
     )
 
 
 def _conflict_component_neighborhood(
     state: dict[str, Any], analysis: StateAnalysis, *, size: int,
+    context: _NeighborhoodContext | None = None,
+    seed_data: tuple[set[int], collections.Counter[int]] | None = None,
 ) -> list[int] | None:
+    if seed_data is None:
+        seed_data = _conflict_component_seed_data(analysis)
+    if seed_data is None:
+        return None
+    members, event_weight = seed_data
+
+    return _ranked_seed_neighborhood(
+        state,
+        analysis,
+        members,
+        size=size,
+        priority=event_weight,
+        context=context,
+    )
+
+
+def _conflict_component_seed_data(
+    analysis: StateAnalysis,
+) -> tuple[set[int], collections.Counter[int]] | None:
     if not analysis.component_members:
         return None
     event_weight = _event_weights(analysis.events)
@@ -412,14 +487,32 @@ def _conflict_component_neighborhood(
     _component, members = max(
         analysis.component_members.items(), key=component_score
     )
-    return _ranked_seed_neighborhood(
-        state, analysis, members, size=size, priority=event_weight
-    )
+    return members, event_weight
 
 
 def _hotspot_neighborhood(
     state: dict[str, Any], analysis: StateAnalysis, *, size: int,
+    context: _NeighborhoodContext | None = None,
+    seed_data: tuple[set[int], collections.Counter[int]] | None = None,
 ) -> list[int] | None:
+    if seed_data is None:
+        seed_data = _hotspot_seed_data(analysis)
+    if seed_data is None:
+        return None
+    seeds, priority = seed_data
+    return _ranked_seed_neighborhood(
+        state,
+        analysis,
+        seeds,
+        size=size,
+        priority=priority,
+        context=context,
+    )
+
+
+def _hotspot_seed_data(
+    analysis: StateAnalysis,
+) -> tuple[set[int], collections.Counter[int]] | None:
     if not analysis.events:
         return None
     buckets: dict[tuple[int, int], list[ConflictEvent]] = collections.defaultdict(list)
@@ -435,14 +528,32 @@ def _hotspot_neighborhood(
     del key
     priority = _event_weights(events)
     seeds = {agent for event in events for agent in (event.left, event.right)}
-    return _ranked_seed_neighborhood(
-        state, analysis, seeds, size=size, priority=priority
-    )
+    return seeds, priority
 
 
 def _path_overlap_neighborhood(
     state: dict[str, Any], analysis: StateAnalysis, *, size: int,
+    context: _NeighborhoodContext | None = None,
+    seed_data: tuple[list[int], dict[int, float]] | None = None,
 ) -> list[int] | None:
+    if seed_data is None:
+        seed_data = _path_overlap_seed_data(state, analysis)
+    if seed_data is None:
+        return None
+    seeds, priority = seed_data
+    return _ranked_seed_neighborhood(
+        state,
+        analysis,
+        seeds,
+        size=size,
+        priority=priority,
+        context=context,
+    )
+
+
+def _path_overlap_seed_data(
+    state: dict[str, Any], analysis: StateAnalysis,
+) -> tuple[list[int], dict[int, float]] | None:
     overlapping_cells = {
         int(cell)
         for cell, agent_visits in analysis.agent_heat.items()
@@ -479,15 +590,12 @@ def _path_overlap_neighborhood(
     )
     priority[anchor] = max(priority.values(), default=0.0) + 1.0
     seeds.append(anchor)
-    return _ranked_seed_neighborhood(
-        state, analysis, seeds, size=size, priority=priority
-    )
+    return seeds, priority
 
 
 def _structpool_score(
-    analysis: StateAnalysis, agents: Iterable[int], *, family_group: str,
+    audit: dict[str, float], *, family_group: str,
 ) -> float:
-    audit = topology_candidate_audit(analysis, agents)
     family_signal = {
         "bottleneck_crossing": audit["global_pair_internal_coverage"],
         "conflict_component": audit["conflict_component_reach"],
@@ -505,11 +613,15 @@ def _structpool_score(
 
 def _structpool_row(
     analysis: StateAnalysis, agents: Iterable[int], *, family_group: str,
-    family: str,
+    family: str, audit_cache: dict[tuple[int, ...], dict[str, float]],
 ) -> dict[str, Any]:
     ordered = tuple(sorted(set(map(int, agents))))
     if not ordered:
         raise ValueError("StructPool candidate must be non-empty")
+    audit = audit_cache.get(ordered)
+    if audit is None:
+        audit = topology_candidate_audit(analysis, ordered)
+        audit_cache[ordered] = audit
     return {
         "candidate_id": candidate_id(ordered),
         "agents": list(ordered),
@@ -519,11 +631,9 @@ def _structpool_row(
         "proposal_count_by_family": {family: 1},
         "proposal_seeds": [],
         "seed_agents": [],
-        "proposal_audit": topology_candidate_audit(analysis, ordered),
+        "proposal_audit": audit,
         "structpool_family_groups": [family_group],
-        "structpool_score": _structpool_score(
-            analysis, ordered, family_group=family_group
-        ),
+        "structpool_score": _structpool_score(audit, family_group=family_group),
     }
 
 
@@ -596,28 +706,49 @@ def generate_structpool_candidates(
         return []
 
     raw: list[dict[str, Any]] = []
+    context = _neighborhood_context(state)
+    audit_cache: dict[tuple[int, ...], dict[str, float]] = {}
+    boundary_by_size: dict[int, list[dict[str, Any]]] = {}
+    relevant_events_by_kind = {
+        kind: _relevant_events(analysis, kind)
+        for kind in ("articulation", "low_degree")
+    }
     bottleneck_events = sorted(
         {
             event
             for kind in ("articulation", "low_degree")
-            for event in _relevant_events(analysis, kind)
+            for event in relevant_events_by_kind[kind]
         },
         key=lambda event: (event.time, event.kind, event.left, event.right, event.cells),
     )
+    component_seed_data = _conflict_component_seed_data(analysis)
+    hotspot_seed_data = _hotspot_seed_data(analysis)
+    overlap_seed_data = _path_overlap_seed_data(state, analysis)
     for size in sizes:
         if bottleneck_events:
-            agents = _anchor_neighborhood(state, bottleneck_events, size)
+            agents = _anchor_neighborhood(
+                state, bottleneck_events, size, context=context
+            )
             raw.append(
                 _structpool_row(
                     analysis,
                     agents,
                     family_group="bottleneck_crossing",
                     family=f"structpool-bottleneck-crossing:{size}",
+                    audit_cache=audit_cache,
                 )
             )
 
-        component = _conflict_component_neighborhood(
-            state, analysis, size=size
+        component = (
+            _conflict_component_neighborhood(
+                state,
+                analysis,
+                size=size,
+                context=context,
+                seed_data=component_seed_data,
+            )
+            if component_seed_data is not None
+            else None
         )
         if component:
             raw.append(
@@ -626,10 +757,21 @@ def generate_structpool_candidates(
                     component,
                     family_group="conflict_component",
                     family=f"structpool-conflict-component:{size}",
+                    audit_cache=audit_cache,
                 )
             )
 
-        hotspot = _hotspot_neighborhood(state, analysis, size=size)
+        hotspot = (
+            _hotspot_neighborhood(
+                state,
+                analysis,
+                size=size,
+                context=context,
+                seed_data=hotspot_seed_data,
+            )
+            if hotspot_seed_data is not None
+            else None
+        )
         if hotspot:
             raw.append(
                 _structpool_row(
@@ -637,10 +779,21 @@ def generate_structpool_candidates(
                     hotspot,
                     family_group="spatiotemporal_hotspot",
                     family=f"structpool-spatiotemporal-hotspot:{size}",
+                    audit_cache=audit_cache,
                 )
             )
 
-        overlap = _path_overlap_neighborhood(state, analysis, size=size)
+        overlap = (
+            _path_overlap_neighborhood(
+                state,
+                analysis,
+                size=size,
+                context=context,
+                seed_data=overlap_seed_data,
+            )
+            if overlap_seed_data is not None
+            else None
+        )
         if overlap:
             raw.append(
                 _structpool_row(
@@ -648,15 +801,22 @@ def generate_structpool_candidates(
                     overlap,
                     family_group="path_overlap",
                     family=f"structpool-path-overlap:{size}",
+                    audit_cache=audit_cache,
                 )
             )
 
-        for boundary in generate_topology_boundary_candidates(
+        boundaries = generate_topology_boundary_candidates(
             state,
             analysis,
             neighborhood_size=size,
             core_budget=min(4, size),
-        ):
+            context=context,
+            relevant_events_by_kind=relevant_events_by_kind,
+        )
+        boundary_by_size[size] = boundaries
+        for boundary in boundaries:
+            boundary_key = tuple(map(int, boundary["agents"]))
+            audit_cache.setdefault(boundary_key, boundary["proposal_audit"])
             for family in boundary["selection_families"]:
                 raw.append(
                     _structpool_row(
@@ -664,13 +824,12 @@ def generate_structpool_candidates(
                         boundary["agents"],
                         family_group="topology_boundary",
                         family=family.replace("topology-boundary", "structpool-boundary"),
+                        audit_cache=audit_cache,
                     )
                 )
 
     raw_rows = _merge_structpool_raw_rows(raw)
-    incumbent = generate_topology_boundary_candidates(
-        state, analysis, neighborhood_size=16, core_budget=4
-    )
+    incumbent = boundary_by_size[16]
     incumbent_keys = {tuple(map(int, row["agents"])) for row in incumbent}
     by_key = {tuple(map(int, row["agents"])): row for row in raw_rows}
     selected = [copy.deepcopy(by_key[key]) for key in sorted(incumbent_keys) if key in by_key]

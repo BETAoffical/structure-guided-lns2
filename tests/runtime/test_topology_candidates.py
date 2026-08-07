@@ -3,8 +3,10 @@ from __future__ import annotations
 import collections
 import random
 import unittest
+from unittest.mock import patch
 
 from experiments.state_analysis import ConflictEvent, StateAnalysis
+import lns2_selector.runtime.topology_candidates as topology_candidates
 from lns2_selector.runtime.topology_candidates import (
     _boundary_neighborhood,
     generate_structpool_candidates,
@@ -391,6 +393,36 @@ class TopologyCandidatesTest(unittest.TestCase):
             all(set(row["agents"]) & active_agents for row in first),
             "every explicit StructPool action must touch the conflict graph",
         )
+
+    def test_structpool_reuses_state_level_candidate_inputs(self) -> None:
+        state, analysis = self._structpool_state()
+        with (
+            patch.object(
+                topology_candidates,
+                "_conflict_component_seed_data",
+                wraps=topology_candidates._conflict_component_seed_data,
+            ) as component,
+            patch.object(
+                topology_candidates,
+                "_hotspot_seed_data",
+                wraps=topology_candidates._hotspot_seed_data,
+            ) as hotspot,
+            patch.object(
+                topology_candidates,
+                "_path_overlap_seed_data",
+                wraps=topology_candidates._path_overlap_seed_data,
+            ) as overlap,
+            patch.object(
+                topology_candidates,
+                "generate_topology_boundary_candidates",
+                wraps=topology_candidates.generate_topology_boundary_candidates,
+            ) as boundary,
+        ):
+            generate_structpool_candidates(state, analysis)
+        self.assertEqual(component.call_count, 1)
+        self.assertEqual(hotspot.call_count, 1)
+        self.assertEqual(overlap.call_count, 1)
+        self.assertEqual(boundary.call_count, 4)
 
     def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
         state, analysis = self._structpool_state()

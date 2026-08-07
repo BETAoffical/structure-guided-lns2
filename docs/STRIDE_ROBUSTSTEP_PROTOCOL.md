@@ -4384,3 +4384,67 @@ Reproducibility SHA-256 values are:
 - `v2-full` manifest: `6da276296f6d7d2af5d3273e20907072fd6d8d5af60333c8668a7b08eec5df7c`;
 - `v2-plus-structpool` manifest: `21a03e8488fc384b32e54f4658452c608d79317aa64ed2f3964222a13230caa6`;
 - evaluation status: `73b76094a485004bf56201acb73879930e8aae136ecb1bfd2795f0634d322f24`.
+
+### StructPool semantics-preserving runtime optimization result
+
+The optimization milestone was started from clean commit `75ff08f`.  A local
+recovery branch, `codex/backup-before-structpool-speed-20260808`, points to
+that commit, and the independently verified complete-history bundle is
+`../../backups/structure-guided-lns2-before-structpool-speed-20260808.bundle`
+with SHA-256
+`9d0b59ed403fd4d6add55d8b34b1b6f0ed10f440511cfd831ee1d7ef755ab889`.
+
+This milestone changes no candidate family, neighborhood size, activation
+gate, frozen V2 model, score, label, PP seed or repair operation.  It repairs
+the runtime cache wiring so that `structpool.static_grid_cache=true` reuses
+the feature engine's map analysis, instead of checking only the unrelated
+`topology_boundary` configuration.  Candidate construction now reuses one
+agent/conflict context per state, one set of family seed inputs per state,
+one audit per unique agent set and the already generated size-16 boundary
+rows.  These are implementation optimizations only.
+
+The optimized generator was compared directly with the implementation loaded
+from the backup branch on all 36 initial states in the revised six-map run.
+All 36 candidate JSON arrays, including ordering, IDs, audit fields and
+scores, were identical.  Median generation time over the same 36-state batch
+fell from `3.171702` to `1.816879` seconds, a `42.71%` reduction.  The focused
+unit fixture reduced topology-audit calls from 58 to 23 and boundary-generator
+calls from five to four.
+
+The registered 8-pair development Quick was then rerun at
+`build/stride-structpool-speed-codeopt-quick-v1`.  Relative to the earlier
+unoptimized Quick artifacts, all eight StructPool conflict trajectories,
+repair counts, selected-family counts, selected-size counts and success flags
+are identical.  The runtime-only differences are:
+
+| Eight StructPool episodes | Before (s) | After (s) | Reduction |
+| --- | ---: | ---: | ---: |
+| Static topology analysis | 2.095501 | 0.000008 | 99.9996% |
+| StructPool candidate construction | 4.438847 | 2.742477 | 38.2164% |
+| Total StructPool analysis | 7.119069 | 3.322957 | 53.3232% |
+| Candidate generation | 7.926779 | 4.087448 | 48.4349% |
+| Neighborhood selection | 9.796414 | 5.940142 | 39.3641% |
+
+All 44 activated decisions now report a static-grid cache hit, compared with
+zero before the fix.  In the new paired run, `v2-full` solves 8/8 with mean
+raw TTF `12.593588` seconds, while `v2-plus-structpool` solves 8/8 with mean
+raw TTF `11.594709` seconds.  The challenger is faster on 5/8 pairs, improves
+mean raw TTF by `7.9316%`, and reduces mean repair iterations from `20.75` to
+`11.625`.  Maze300 improves by `10.4770%` and Room500 by `4.0681%`.  All
+integrity and Quick performance gates pass with zero execution errors,
+invalid actions, fingerprint mismatches or semantic mismatches.
+
+Validation completed with 611 Python tests passing and 34 registered skips,
+the Windows native test binary passing, and Linux CTest passing 11/11.  The
+independently regenerated Quick report has SHA-256
+`da05d950ba537bece7b5caf4f96ffb4dfc6b13cfef282a3cdf7f0c22e98e9f86`;
+its schedule SHA-256 is
+`87161bb6b6f625d9ea9f22134151ee84eab9b75ed98c687315398d96884b2b76`.
+
+This is development timing evidence, not a formal speed, fresh-map,
+generalization or default-replacement claim.  Because the candidate and
+repair trajectories are exactly unchanged and the optimized Quick now passes,
+the next safe step is the registered four-seed development confirmation.
+Candidate-size removal, progressive generation and a new activation gate
+remain separate behavior-changing experiments and are not mixed into this
+runtime milestone.
