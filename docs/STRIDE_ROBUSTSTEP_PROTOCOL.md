@@ -4192,3 +4192,31 @@ Registration SHA-256 values are:
 - generated dataset manifest: `aed48cc9fe961a18bf86602f9faa39aa59441607138d38bc2b869615fc78d6f1`;
 - runtime config: `6f32edc3292b18a9defbc83a39941198a202de3ac49b523a021932929d9e2508`;
 - experiment design: `4b007cf77b75e3f1bb9fdc1cb791ea66a7ce6dd9c976c793331641f1509e313d`.
+
+### StructPool second Game map-only swap result
+
+All 18 registered `orz200d` resets completed with zero errors and zero
+timeouts.  The 200-agent load has zero conflicts in all six states.  At 400
+agents the range is 5--154 and mean is `57.5`; three states reach 16 conflicts,
+but they come only from task seed 277, so this load does not pass.  At 600
+agents all six states qualify, both task seeds are represented, and the range
+is 23--170 with mean `71.166667`.  The preregistered lowest-load rule therefore
+selects `orz200d` at 600 agents.
+
+Together with the retained `warehouse-10-20-10-2-1` selection at 600 agents
+and `maze-128-128-1` at 100 agents, all three previously inactive layout
+families now reach the fixed reset threshold without changing the task
+generator.  This supports map topology and scale as the immediate cause of the
+zero/underloaded reset states.  It does not show that the new candidate pool or
+controller is faster: no repair, controller or TTF outcome was read.
+
+All registered integrity and selection gates pass.  The next authorized step
+is to materialize the revised six-map cohort and repeat its formal reset
+qualification before any controller timing.
+
+Reproducibility SHA-256 values are:
+
+- qualification manifest: `4c12d043a01a2cfd85e2226f85b70f99a2e68e88b09fda5429b9b68f940ef8af`;
+- qualification report: `79120ba34bcdd5b49dde32593cdf5b6865913d025f16b9dfba61d082c4a503d8`;
+- run config: `6762a01562a31d9411fe3247e8902d2d3582faf90e0479e379d1362906caf462`;
+- second Game map-swap report: `489b605985bd97befd5453951bc8e08a9f9eead33c623ad3d3b309e051de0185`.
