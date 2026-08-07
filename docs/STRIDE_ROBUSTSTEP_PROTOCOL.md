@@ -4160,3 +4160,35 @@ Reproducibility SHA-256 values are:
 - qualification report: `51f7f8c9e4be07895b10501ba85b664376f9c939a0430dfbec0f31e32234a169`;
 - run config: `81521f7164d98245663adc95e7926b9bfaf224f68920c8685b0390149ad5723f`;
 - map-swap report: `c32d0b39195e3eaa440b789abbdd68a1f45d66d459b870a46c04cc6b65bd11fa`.
+
+### StructPool second Game map-only swap preregistration
+
+The passing Warehouse replacement remains fixed at
+`warehouse-10-20-10-2-1`, 600 agents.  Only the failed Game replacement is
+changed: `lt_hangedman` is replaced by checksum-pinned MovingAI/DAO
+`orz200d`.  This choice is input-only.  `orz200d` has 5,129 free cells, a
+static low-degree-cell ratio of approximately `0.1121` and obstacle ratio
+`0.9275`; compared with 4,601, `0.0680` and `0.7358` for `lt_hangedman`, it
+keeps a similar scale while increasing narrow-topology exposure.
+
+The task generator remains `opposite_exchange`; task seeds 233/277, agent
+loads 200/400/600, master seed 20260808, solver seeds 1/2/3, PP+SIPP and the
+300-second initialization limit are unchanged.  The new dataset contains one
+map, six tasks and 18 reset states.  The same threshold selects the lowest load
+whose six resets are complete, at least three states have at least 16 conflict
+pairs and both task seeds contribute a qualifying state.
+
+Only reset status, completeness, initial conflicts, initial complexity and
+fingerprints may be read.  Repair, controller, future-trajectory and TTF
+outcomes remain forbidden.  A pass permits rebuilding the revised six-map
+cohort and repeating formal reset qualification; a failure ends map-only
+replacement attempts and requires reassessing the Game task flow separately.
+
+Registration SHA-256 values are:
+
+- raw-source config: `19bf51355633d35bd704f5a3b244cdb7bc92f00ab31e520730587dd508d9ebee`;
+- raw-source manifest: `ce1c2d7622fdd38d12cca6e74f166c68ad7da2aaad3c6e679a33fc0c9b62b4ec`;
+- task-source config: `693d12d2b55193b4c991504ae2c6b20052b680f1bf39653f60041152e7e755a6`;
+- generated dataset manifest: `aed48cc9fe961a18bf86602f9faa39aa59441607138d38bc2b869615fc78d6f1`;
+- runtime config: `a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6`;
+- experiment design: `772474837f09f7db119321e768346a2ecec4122c1bc39e09dbb614e35976b9fe`.

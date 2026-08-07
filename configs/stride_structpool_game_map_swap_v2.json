@@ -1,0 +1,95 @@
+{
+  "schema": "lns2.stride.structpool_game_map_swap_design.v2",
+  "scientific_status": "outcome_informed_second_game_map_only_diagnostic_preregistered_before_resets",
+  "experiment_id": "stride-structpool-game-map-swap-v2",
+  "pre_registration_parent_commit": "695eb7a",
+  "dataset": "build/stride-structpool-game-map-swap-v2-dataset",
+  "runtime": "configs/stride_structpool_game_map_swap_v2_runtime.json",
+  "split": "balanced_wall_clock",
+  "solver_seeds": [1, 2, 3],
+  "expected_map_count": 1,
+  "expected_task_count": 6,
+  "expected_reset_count": 18,
+  "map_swap": {
+    "layout_family": "game",
+    "replaced_map": "lt_hangedman",
+    "replacement_map": "orz200d"
+  },
+  "retained_selection": {
+    "map_id": "warehouse-10-20-10-2-1",
+    "agent_count": 600
+  },
+  "unchanged_inputs": {
+    "task_generator": "opposite_exchange",
+    "task_seeds": [233, 277],
+    "agent_counts": [200, 400, 600],
+    "solver_seeds": [1, 2, 3],
+    "master_seed": 20260808,
+    "initialization_time_limit_seconds": 300.0,
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "candidate_ladders": [
+    {
+      "map_id": "orz200d",
+      "layout_family": "game",
+      "agent_counts": [200, 400, 600]
+    }
+  ],
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed_observed_fields": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "claim_boundary": "second_game_map_factor_diagnostic_not_fresh_ood_or_speed_evidence"
+  },
+  "forbidden_selection_inputs": [
+    "conflicts_after", "repair_iterations", "repair_runtime",
+    "pp_replan_seconds", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory"
+  ],
+  "inputs": {
+    "raw_source_config": {
+      "path": "configs/stride_structpool_game_map_swap_v2_raw_source.json",
+      "sha256": "19bf51355633d35bd704f5a3b244cdb7bc92f00ab31e520730587dd508d9ebee"
+    },
+    "raw_source_manifest": {
+      "path": "build/stride-structpool-game-map-swap-v2-raw/manifest.jsonl",
+      "sha256": "ce1c2d7622fdd38d12cca6e74f166c68ad7da2aaad3c6e679a33fc0c9b62b4ec"
+    },
+    "source_config": {
+      "path": "configs/stride_structpool_game_map_swap_v2_source.json",
+      "sha256": "693d12d2b55193b4c991504ae2c6b20052b680f1bf39653f60041152e7e755a6"
+    },
+    "predecessor_report": {
+      "path": "build/stride-structpool-warehouse-game-map-swap-analysis-v1/warehouse_game_map_swap_report.json",
+      "sha256": "c32d0b39195e3eaa440b789abbdd68a1f45d66d459b870a46c04cc6b65bd11fa"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-game-map-swap-v2-dataset/dataset_summary.json",
+      "sha256": "4b3af6d60969c723f0ef482afa4e1dc5c9e5154a0c11d07942101d75e21f4b81"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-game-map-swap-v2-dataset/balanced_wall_clock/manifest.jsonl",
+      "sha256": "aed48cc9fe961a18bf86602f9faa39aa59441607138d38bc2b869615fc78d6f1"
+    },
+    "runtime": {
+      "path": "configs/stride_structpool_game_map_swap_v2_runtime.json",
+      "sha256": "a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6"
+    }
+  },
+  "next_step_on_pass": "materialize_revised_six_map_cohort_then_repeat_formal_reset_qualification",
+  "next_step_on_failure": "stop_map_only_replacements_and_reassess_game_task_flow",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}

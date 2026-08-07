@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_congestion_preflight",
+  "scientific_status": "preregistered_second_game_map_only_swap",
+  "dataset_revision": "stride-structpool-game-map-swap-v2",
+  "source": "checksum_pinned_movingai_map_with_unchanged_project_derived_od",
+  "task_semantics": "unchanged_derived_opposite_exchange_not_official_movingai_scenario",
+  "pre_registration_parent_commit": "695eb7a",
+  "predecessor_report": {
+    "path": "build/stride-structpool-warehouse-game-map-swap-analysis-v1/warehouse_game_map_swap_report.json",
+    "sha256": "c32d0b39195e3eaa440b789abbdd68a1f45d66d459b870a46c04cc6b65bd11fa"
+  },
+  "fetched_manifest_sha256": "ce1c2d7622fdd38d12cca6e74f166c68ad7da2aaad3c6e679a33fc0c9b62b4ec",
+  "master_seed": 20260808,
+  "task_seeds": [233, 277],
+  "task_variants": ["opposite_exchange"],
+  "expected_map_count": 1,
+  "expected_task_count": 6,
+  "expected_instance_count": 6,
+  "solver_seeds": [1, 2, 3],
+  "benchmarks": [
+    {
+      "id": "orz200d",
+      "layout_family": "game",
+      "map_sha256": "96c3cab6a2bdd82d6f50a3be97e6ed53ae2baff16f9ec674b769663c084d73af",
+      "agent_counts": [200, 400, 600]
+    }
+  ],
+  "single_variable_contract": {
+    "replaced_map": "lt_hangedman",
+    "replacement_map": "orz200d",
+    "retained_warehouse_map": "warehouse-10-20-10-2-1",
+    "unchanged_task_generator": "opposite_exchange",
+    "unchanged_task_seeds": [233, 277],
+    "unchanged_agent_counts": [200, 400, 600],
+    "unchanged_solver_seeds": [1, 2, 3],
+    "unchanged_master_seed": 20260808
+  },
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "repair_outcomes": false,
+    "controller_outcomes": false,
+    "ttf_outcomes": false
+  }
+}

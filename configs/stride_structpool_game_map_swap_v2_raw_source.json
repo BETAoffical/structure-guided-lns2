@@ -1,0 +1,19 @@
+{
+  "schema": "lns2.stride.structpool_map_swap_raw_source.v1",
+  "scientific_status": "input_only_map_selection_before_new_resets",
+  "pre_registration_parent_commit": "695eb7a",
+  "selection_basis": "static_map_scale_and_topology_only",
+  "maps": [
+    {
+      "id": "orz200d",
+      "layout_family": "game",
+      "source_path": "build/movingai-dao-compact-source-v1/maps-all/orz200d.map",
+      "sha256": "96c3cab6a2bdd82d6f50a3be97e6ed53ae2baff16f9ec674b769663c084d73af",
+      "agent_counts": [200, 400, 600],
+      "input_only_reason": "similar scale to lt_hangedman with a higher registered static low-degree-cell ratio"
+    }
+  ],
+  "forbidden_selection_inputs": [
+    "initial_conflicts", "repair_outcomes", "controller_outcomes", "ttf"
+  ]
+}
