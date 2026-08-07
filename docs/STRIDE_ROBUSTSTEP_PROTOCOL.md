@@ -3864,3 +3864,52 @@ Reproducibility SHA-256 values are:
 - Quick config: `1edeeb339907c598d9ade844ef996678f8e584a28e4a35e98b1a8d7717994f7d`;
 - execution schedule: `ee50fe6c0cbf639ea8b419e7ac237710ac3d066d3c0bbad07b931c0cc2e60e79`;
 - Quick report: `7ef2bf3052b7128a1c532654cdd14e9f5c90b6eff06843347aa230d4bbd40bf8`.
+
+### StructPool four-seed development confirmation result
+
+Commit `efb7267` registers the unchanged seed-3/4 extension before those
+episodes are timed.  It preserves the Quick tasks, candidate generator,
+activation gate, frozen V2 ranker, native feature backend, deterministic PP
+replay and reset-inclusive run-to-completion raw-TTF clock.  The extension is
+then pooled with the checksum-pinned seed-1/2 Quick; no task, controller or
+performance threshold is changed after observing either result.
+
+The seed-3/4 extension contains eight paired keys and 16 episodes.  Mean raw
+TTF falls from `10.662764` to `9.822809` seconds, a `7.8775%` improvement, and
+the StructPool controller is faster on 6/8 pairs.  Mean repair iterations fall
+by `12.375`.  Maze-300 improves by `1.0349%`, while room-500 improves by
+`15.0348%`; all extension gates pass.
+
+The pooled seed-1/2/3/4 result contains 16 paired keys and 32 episodes.  Every
+episode succeeds with zero execution errors, invalid actions, fingerprint
+mismatches, initial-state differences or capped-TTF values.  Mean raw TTF
+falls from `11.731915` to `11.077881` seconds, a `5.5748%` improvement.  The
+challenger is faster on 11/16 pairs and slower on 5/16.  Mean repair
+iterations fall from `21.125` to `10.375`, a delta of `-10.75`, and mean PP
+replan time falls from `3.907824` to `2.975537` seconds.
+
+The added analysis remains material: mean pre-repair controller time rises
+from `0.505150` to `1.063272` seconds, candidate-generation time rises from
+`0.174659` to `0.850615` seconds and StructPool analysis contributes
+`0.759171` seconds per episode.  Mean normalized wall-clock conflict AUC also
+worsens by `0.026950`.  The TTF improvement therefore comes specifically from
+fewer repair rounds and less PP work outweighing the topology overhead, not
+from uniformly better intermediate conflict trajectories.
+
+Both registered groups are positive after pooling.  Maze-300 improves from
+`13.250438` to `12.370958` seconds (`6.6374%`) and is faster on 5/8 pairs.
+Room-500 improves from `10.213392` to `9.784804` seconds (`4.1963%`) and is
+faster on 6/8 pairs, so the room regression seen in the two-seed Quick does
+not persist across four seeds.  StructPool passes the gate on 80 pooled
+decisions, adds 479 candidates and supplies 79 selected actions.
+
+All integrity, extension-performance and pooled-performance gates pass.  This
+is still a four-seed development confirmation, not a formal speed claim and
+not permission to replace the default.  It authorizes only a separately
+preregistered raw-TTF evaluation on the untouched six-map MovingAI cohort.
+
+Reproducibility SHA-256 values are:
+
+- confirmation config: `b04972d6ff71045d48541903ddc8be983a3703c11a07ef94388215e5e582febe`;
+- extension execution schedule: `cb1a23c1d111118369f22b77c3c20011f4ef143c61239196ba8a0469c593cb95`;
+- confirmation report: `3ad04aa4ded027d54b19bbb47012ae3921e6794f1e0a6c23cacb408b4abc1fd4`.
