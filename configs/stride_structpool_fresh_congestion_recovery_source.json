@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "role": "stride_robuststep_outcome_blind_congestion_preflight",
+  "scientific_status": "preregistered_derived_congestion_recovery_after_random_od_load_failure",
+  "dataset_revision": "stride-structpool-fresh-congestion-recovery-v1",
+  "source": "checksum_pinned_movingai_maps_with_project_derived_od",
+  "task_semantics": "derived_opposite_exchange_not_official_movingai_scenario",
+  "pre_registration_parent_commit": "f5653f4585e5f42abc933d0f70d7ea8e0551167b",
+  "predecessor_report": {
+    "path": "build/stride-structpool-fresh-load-recovery-analysis-v1/fresh_load_recovery_report.json",
+    "sha256": "b4dd69875ea83e5afab7cbdc18bd70543df0b70839c9519cd9be2bb24f02653e"
+  },
+  "fetched_manifest_sha256": "6c75ddb60c9c7c4eda3259a53ba715586b088d3e45673ad371e8895601378489",
+  "master_seed": 20260808,
+  "task_seeds": [233, 277],
+  "task_variants": ["opposite_exchange"],
+  "expected_map_count": 3,
+  "expected_task_count": 18,
+  "expected_instance_count": 18,
+  "solver_seeds": [1, 2, 3],
+  "benchmarks": [
+    {
+      "id": "maze-128-128-10",
+      "layout_family": "maze",
+      "map_sha256": "2281ef15df0c94efc79b7c62f0c60ce4cb22c43c2cc584226d307c7676d53986",
+      "agent_counts": [100, 200, 300]
+    },
+    {
+      "id": "warehouse-20-40-10-2-2",
+      "layout_family": "warehouse",
+      "map_sha256": "eae2a3f5298b1e113bfc32b5b4404f5de5105365d237df63cc9dc9e2d1c73713",
+      "agent_counts": [200, 400, 600]
+    },
+    {
+      "id": "lak303d",
+      "layout_family": "game",
+      "map_sha256": "8f4bc6c57aff59ff9650683bbfc91e0c618e30f96ef72323369cb7a055a33b26",
+      "agent_counts": [200, 400, 600]
+    }
+  ],
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed": ["reset_status", "initial_complete", "initial_conflicts", "initial_complexity", "state_fingerprint"],
+    "repair_outcomes": false,
+    "controller_outcomes": false,
+    "ttf_outcomes": false
+  }
+}

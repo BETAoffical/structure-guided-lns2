@@ -3949,3 +3949,54 @@ Reproducibility SHA-256 values are:
 - execution schedule file: `b3399156bfa7e9cdade49ac914235b0f677584abf463e68eebc17a63e206d5a9`;
 - qualification manifest: `e6004902ba50f5c685e537707fb3dae8b69f7e796a280f37c6029b7650456aa8`;
 - qualification report: `ba094daf2598f9150e5b6cf52a6a2f597c21d6df1688ff9082d761fcc6014dd0`.
+
+### StructPool fresh-map load-recovery result
+
+Commit `f5653f4` registers a reset-only agent-load ladder for the three inactive
+families before any new initialization is observed.  It retains the official
+MovingAI random scenario indices 4 and 5, tests maze loads 400/600/800 and
+warehouse/game loads 600/800/1000, and permits only reset status, initial
+completeness, initial conflicts, initial complexity and state fingerprints.
+No repair, controller or TTF outcome is read.
+
+All 54 reset jobs complete with zero errors and zero timeouts.  Nevertheless,
+the maze and warehouse ladders have exactly zero initial conflicts at every
+load.  `lak303d` also has zero conflicts at load 600; load 800 has maximum 4
+and mean `0.833333`, while load 1000 has maximum 3 and mean `1.166667`.
+No reset reaches the fixed StructPool activation threshold of 16 conflicts,
+so no load qualifies and the recovery fails its one-load-per-map gate.
+
+This rules out agent count alone as the immediate repair for these scenario
+indices.  It does not reject the map layouts: the observed OD pairs remain too
+dispersed even at high population.  The next design therefore keeps the exact
+MovingAI maps but preregisters deterministic opposite-exchange task flows.
+That task flow is project-derived and must never be described as an untouched
+official MovingAI scenario or as formal OOD evidence.
+
+Reproducibility SHA-256 values are:
+
+- load-recovery config: `74278e06fe47d53971a30e670a34b75924a584d686c37d0330d648584fb8f1fe`;
+- qualification manifest: `070031d3061a180430656a099bf8a183f47afd95588becde0a85125c0fa47c44`;
+- load-recovery report: `b4dd69875ea83e5afab7cbdc18bd70543df0b70839c9519cd9be2bb24f02653e`.
+
+### StructPool derived-congestion fresh-map recovery preregistration
+
+The next reset-only recovery preserves checksum-pinned
+`maze-128-128-10`, `warehouse-20-40-10-2-2` and `lak303d` maps, but replaces
+their ineffective random OD pairs with deterministic opposite-exchange tasks
+at task seeds 233 and 277.  It tests maze loads 100/200/300 and warehouse/game
+loads 200/400/600 with solver seeds 1/2/3, producing 54 reset states.
+
+For each map, the lowest load qualifies only when all six reset states are
+complete, at least three reach 16 initial conflict pairs, and both task seeds
+contribute at least one qualifying state.  Selection is limited to reset
+fields; repair results, chosen actions, future trajectories and TTF remain
+forbidden.  A pass permits only materializing a six-map recovered cohort and
+repeating its formal reset qualification.  It does not permit a speed claim or
+default-controller change.
+
+Registration SHA-256 values are:
+
+- recovery design: `a75b8dc7792d0e30c58c8ddf3d944b2656f749b726b85362a8390e3aa742d39c`;
+- derived-task source: `9e204a7cbe714a3d9f8976fce182cbc990734d529381e1abba4673138e612b7d`;
+- generated dataset summary: `2dbfa1f35c5f5c1934f22021084df50ba48b5086947524188ebddae903c23426`.

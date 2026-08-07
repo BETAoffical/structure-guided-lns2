@@ -1,0 +1,68 @@
+{
+  "schema": "lns2.stride.structpool_fresh_congestion_recovery_design.v1",
+  "scientific_status": "preregistered_before_derived_congestion_reset_qualification",
+  "experiment_id": "stride-structpool-fresh-congestion-recovery-v1",
+  "pre_registration_parent_commit": "f5653f4585e5f42abc933d0f70d7ea8e0551167b",
+  "dataset": "build/stride-structpool-fresh-congestion-recovery-dataset-v1",
+  "split": "balanced_wall_clock",
+  "runtime": "configs/stride_structpool_fresh_load_recovery_runtime.json",
+  "solver_seeds": [1, 2, 3],
+  "expected_map_count": 3,
+  "expected_task_count": 18,
+  "expected_reset_count": 54,
+  "candidate_ladders": [
+    {"map_id": "maze-128-128-10", "layout_family": "maze", "agent_counts": [100, 200, 300]},
+    {"map_id": "warehouse-20-40-10-2-2", "layout_family": "warehouse", "agent_counts": [200, 400, 600]},
+    {"map_id": "lak303d", "layout_family": "game", "agent_counts": [200, 400, 600]}
+  ],
+  "task_seeds": [233, 277],
+  "task_semantics": "derived_opposite_exchange_not_official_movingai_scenario",
+  "selection_rule": {
+    "structpool_minimum_conflict_pair_count": 16,
+    "minimum_gate_eligible_resets_per_selected_load": 3,
+    "require_each_task_seed_gate_eligible": true,
+    "require_all_six_selected_load_resets_ok_and_complete": true,
+    "choose_lowest_qualifying_agent_count": true
+  },
+  "outcome_boundary": {
+    "allowed_observed_fields": [
+      "reset_status", "initial_complete", "initial_conflicts",
+      "initial_complexity", "state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "claim_boundary": "qualification_conditioned_project_derived_od_not_untouched_movingai_ood"
+  },
+  "forbidden_selection_inputs": [
+    "conflicts_after", "repair_iterations", "repair_runtime",
+    "pp_replan_seconds", "selected_candidate", "controller_action",
+    "controller_ttf", "future_trajectory"
+  ],
+  "inputs": {
+    "source_config": {
+      "path": "configs/stride_structpool_fresh_congestion_recovery_source.json",
+      "sha256": "9e204a7cbe714a3d9f8976fce182cbc990734d529381e1abba4673138e612b7d"
+    },
+    "predecessor_report": {
+      "path": "build/stride-structpool-fresh-load-recovery-analysis-v1/fresh_load_recovery_report.json",
+      "sha256": "b4dd69875ea83e5afab7cbdc18bd70543df0b70839c9519cd9be2bb24f02653e"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-fresh-congestion-recovery-dataset-v1/dataset_summary.json",
+      "sha256": "2dbfa1f35c5f5c1934f22021084df50ba48b5086947524188ebddae903c23426"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-fresh-congestion-recovery-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "73214e4b582f4ea490db91b36afcfe0e730f98d67925845e00fbd2ee613cd01d"
+    },
+    "runtime": {
+      "path": "configs/stride_structpool_fresh_load_recovery_runtime.json",
+      "sha256": "57d3eac4b7d6d3a2fe47a69fed268dca6ec72de8356efd41094580fc045fed15"
+    }
+  },
+  "next_step_on_pass": "materialize_six_map_recovered_cohort_then_repeat_formal_reset_qualification",
+  "next_step_on_failure": "stop_fresh_map_recovery_and_report_task_generator_failure",
+  "formal_speed_claim": false,
+  "default_replacement_allowed": false
+}

@@ -1612,6 +1612,21 @@
       "path": "tests/evaluation/test_stride_structpool_fresh_load_recovery.py",
       "role": "active",
       "contract": "Fixed load ladders, reset-only outcome boundary, lowest qualifying load selection, and no TTF access."
+    },
+    {
+      "path": "experiments/stride_structpool_fresh_congestion_recovery.py",
+      "role": "active",
+      "purpose": "Reset-only recovery for underloaded fresh maps using checksum-pinned MovingAI layouts and deterministic project-derived opposite-exchange task flows."
+    },
+    {
+      "path": "scripts/analyze_stride_structpool_fresh_congestion_recovery.py",
+      "role": "active",
+      "purpose": "Command-line audit for preregistered StructPool derived-congestion fresh-map recovery."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_fresh_congestion_recovery.py",
+      "role": "active",
+      "contract": "Frozen derived-task semantics, reset-only outcome boundary, both-task-seed coverage, and lowest qualifying load selection."
     }
   ]
 }
