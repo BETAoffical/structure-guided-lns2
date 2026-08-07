@@ -3913,3 +3913,39 @@ Reproducibility SHA-256 values are:
 - confirmation config: `b04972d6ff71045d48541903ddc8be983a3703c11a07ef94388215e5e582febe`;
 - extension execution schedule: `cb1a23c1d111118369f22b77c3c20011f4ef143c61239196ba8a0469c593cb95`;
 - confirmation report: `3ad04aa4ded027d54b19bbb47012ae3921e6794f1e0a6c23cacb408b4abc1fd4`.
+
+### StructPool fresh-map raw-TTF qualification result
+
+Commit `2473b84` registers the six-map, 12-task, three-seed cross-layout layer
+before its reset qualification is read.  The frozen layer contains 36 paired
+task-seed keys and a 72-episode alternating controller schedule.  Performance
+timing is permitted only if at least eight reset states have nonzero conflicts,
+at least four maps are active and all registered maze, room, random, warehouse
+and game layout families are active.
+
+All 36 reset jobs complete with zero errors, zero timeouts, complete initial
+plans and consistent fingerprints.  Fifteen states have nonzero conflicts, so
+the state-count gate passes.  The natural conflict count ranges from zero to
+97 with mean `12.611111`; 21/36 states are initially feasible.
+
+Only three maps are active: `den312d`, `random-64-64-20` and
+`room-64-64-16`.  The two maze-200 tasks, two warehouse-500 tasks and two
+`lak303d`-500 tasks have zero conflicts under all three solver seeds.  Thus the
+minimum-four-active-maps and required-layout-families gates fail.  The
+qualification decision is `inconclusive_do_not_resample`, and the runner
+correctly stops at 0/72 timed episodes.
+
+This is a fresh-cohort load/OD qualification failure, not a measured
+StructPool TTF regression and not evidence against cross-layout transfer.  No
+performance result exists because neither controller was timed.  The frozen
+gate must not be weakened and the 15 conflicting states must not be selected
+post hoc.  A later revision must preregister higher loads or outcome-blind
+congestion tasks for the three inactive map families, retain the three valid
+families, and repeat reset-only qualification before any raw-TTF access.
+
+Reproducibility SHA-256 values are:
+
+- fresh evaluation config: `5f45385dc6c799349115d1c4789d8fd5b314a49d1b795ff7629cfcaf0ba40793`;
+- execution schedule file: `b3399156bfa7e9cdade49ac914235b0f677584abf463e68eebc17a63e206d5a9`;
+- qualification manifest: `e6004902ba50f5c685e537707fb3dae8b69f7e796a280f37c6029b7650456aa8`;
+- qualification report: `ba094daf2598f9150e5b6cf52a6a2f597c21d6df1688ff9082d761fcc6014dd0`.
