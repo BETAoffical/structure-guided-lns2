@@ -1,0 +1,107 @@
+{
+  "schema": "lns2.stride.robustaction_opportunity_audit_config.v1",
+  "scientific_status": "preregistered_post_collection_audit_before_outcome_scan",
+  "audit_id": "stride-robustaction-structpool-opportunity-audit-v1",
+  "data_line_id": "stride-robustaction-structpool-recovery-data-v2",
+  "planned_model_id": "stride-robustaction-v1",
+  "candidate_pool_id": "v2-plus-stride-structpool-v1",
+  "pre_registration_git_commit": "843e3e64e3187250d5ad2cd971b7840491fc5baa",
+  "inputs": {
+    "label_collection_config": {
+      "path": "configs/stride_robustaction_structpool_label_collection.json",
+      "sha256": "6c7f5414cb0c354a37fcbe0b465d556eb092642f5b2b6e4e66449814c20c7b12"
+    },
+    "collection_report": {
+      "path": "build/stride-robustaction-label-collection-v1/collection_report.json",
+      "sha256": "f61871737ec7b14fd4abccbd14502b1cbbd93a4ab542850edc6f518c565aeea7"
+    },
+    "collection_status": {
+      "path": "build/stride-robustaction-label-collection-v1/collection_status.json",
+      "sha256": "4a804103436af7a6374d5f1e1dc2d11e4f108d23bffd26d425a62ce1556cb69d"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-robustaction-label-collection-v1/candidate_aggregates.jsonl",
+      "sha256": "067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628"
+    },
+    "repair_trials": {
+      "path": "build/stride-robustaction-label-collection-v1/repair_trials.jsonl",
+      "sha256": "d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691"
+    },
+    "state_manifest": {
+      "path": "build/stride-robustaction-label-collection-v1/state_manifest.jsonl",
+      "sha256": "ce7452e0731375f21c524601ad4472cbc9b3a6420c2d1eb5cfb1cf00fd854361"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "outcome_blind_anchor_contract": {
+    "selector": "v2-full",
+    "feature_profile": "realized_dynamic",
+    "feature_schema": "lns2.realized_features.v2",
+    "feature_dimension": 124,
+    "pool": "exact_preflight_candidate_pool",
+    "preflight_state_artifact_root": "build/stride-robustaction-label-preflight-v1/states",
+    "preflight_state_artifact_tree_sha256": "6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2",
+    "score_tie_round_digits": 12,
+    "tie_break": "ascending_candidate_id",
+    "persist_anchor_selection_before_parsing_outcomes": true
+  },
+  "robust_action_contract": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "per_seed_target": "normalized_current_step_conflict_reduction",
+    "paired_win_rule": "challenger_score_gt_anchor_score_plus_tie_epsilon",
+    "minimum_paired_win_fraction": 0.75,
+    "minimum_absolute_mean_effect": 0.02,
+    "fixed_half_rule": "challenger_minus_anchor_gt_tie_epsilon_in_each_fixed_half",
+    "tie_epsilon": 1e-12,
+    "state_opportunity_rule": "at_least_one_robust_positive_nonanchor_action",
+    "action_fraction_denominator": "all_nonanchor_actions_in_all_320_states"
+  },
+  "action_uncertainty_contract": {
+    "fixed_half_winner": "maximum_fixed_half_mean_then_ascending_candidate_id",
+    "fixed_half_top3_overlap": "intersection_size_divided_by_3",
+    "pairwise_direction": "sign_of_left_minus_right_with_tie_epsilon",
+    "pairwise_direction_agreement": "same_direction_in_both_fixed_halves_over_all_unordered_candidate_pairs",
+    "candidate_seed_standard_deviation": "population_standard_deviation_over_16_paired_scores"
+  },
+  "expected_product": {
+    "state_count": 320,
+    "candidate_count": 6285,
+    "trial_count": 100560,
+    "trial_count_per_candidate": 16,
+    "map_count": 28,
+    "topology_groups": [
+      "dao_high_topology",
+      "dao_mid_topology",
+      "dao_low_topology_control"
+    ]
+  },
+  "opportunity_gates": {
+    "minimum_states_with_nonanchor_robust_win_fraction": 0.25,
+    "minimum_robust_positive_action_fraction": 0.04,
+    "minimum_positive_opportunity_maps_by_topology_group": {
+      "dao_high_topology": 3,
+      "dao_mid_topology": 3,
+      "dao_low_topology_control": 2
+    }
+  },
+  "outputs": {
+    "outcome_blind_anchor_selections": "outcome_blind_anchor_selections.jsonl",
+    "action_comparisons": "action_comparisons.jsonl",
+    "state_opportunities": "state_opportunities.jsonl",
+    "report": "opportunity_report.json"
+  },
+  "claim_boundary": {
+    "training_allowed_only_if_all_opportunity_gates_pass": true,
+    "ttf_read": false,
+    "runtime_read": false,
+    "future_trajectory_read": false,
+    "formal_speed_claim": false,
+    "default_replacement_allowed": false,
+    "outcome_filtering_allowed": false
+  }
+}

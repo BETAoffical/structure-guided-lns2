@@ -244,6 +244,11 @@
       "purpose": "Resumable 16-paired-PP-seed RobustAction current-step label collection over the exact frozen StructPool preflight candidate product."
     },
     {
+      "path": "experiments/stride_robustaction_opportunity.py",
+      "role": "active",
+      "purpose": "Preregistered frozen-V2 anchored RobustAction opportunity and paired-seed action-uncertainty audit before model training."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -467,6 +472,11 @@
       "path": "scripts/collect_stride_robustaction_labels.py",
       "role": "active",
       "purpose": "Command-line entry point for the preregistered 16-paired-seed RobustAction current-step label collection."
+    },
+    {
+      "path": "scripts/audit_stride_robustaction_opportunity.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the frozen-V2 anchored RobustAction opportunity and paired-seed uncertainty audit."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1337,6 +1347,11 @@
       "path": "tests/evaluation/test_stride_robustaction_label_collection.py",
       "role": "active",
       "contract": "Exact preflight artifact reuse, 16 paired PP seeds, mean/risk aggregate separation, complete trial products, and runtime/future exclusion."
+    },
+    {
+      "path": "tests/evaluation/test_stride_robustaction_opportunity.py",
+      "role": "active",
+      "contract": "Frozen-V2 outcome-blind anchor selection, paired-win effect gates, both-half direction, uncertainty metrics, and no-TTF boundary."
     },
     {
       "path": "experiments/stride_structpool.py",
