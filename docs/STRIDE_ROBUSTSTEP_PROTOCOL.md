@@ -4128,3 +4128,35 @@ Registration SHA-256 values are:
 - generated dataset manifest: `99e567d337738e57ae8e30034c4c9c10672ae7b85a1bee8dc0bd88fdfecee383`;
 - runtime config: `6c91d275e6203b8654a61f1b669abeffddb6555ce2c6a809b1745c6c71e5811d`;
 - experiment design: `6011ff5b95a789848a544c097bbbf632163b350e6909ae0f8a6ea5e6da8f7b93`.
+
+### StructPool Warehouse and Game map-only swap result
+
+All 36 registered resets completed with zero errors and zero timeouts.  The
+Warehouse replacement passes the fixed threshold at 600 agents: all six
+solver/task-seed states have at least 16 initial conflict pairs, with range
+17--272 and mean `129.333333`.  The lower Warehouse loads do not pass: 200
+agents has range 0--4 and mean `1.833333`, while 400 agents has range 2--18
+and mean `9.0`.  The preregistered lowest-load rule therefore retains
+`warehouse-10-20-10-2-1` at 600 agents.
+
+The first Game replacement does not pass.  At 200 agents `lt_hangedman` has
+zero conflicts in all six states.  At 400 agents it has range 0--64 and mean
+`27.166667`; three states reach 16 conflicts, but all three belong to task seed
+277, so the required two-task-seed coverage is absent.  At 600 agents it has
+range 0--23 and mean `6.833333`, with only one qualifying state.  This is a
+map/task-flow interaction under the unchanged generator, not evidence that the
+map file is corrupt.
+
+The two-map gate therefore fails only for the Game family.  Per the registered
+decision rule, the passing Warehouse replacement is retained and only the Game
+layout may receive another separately registered map-only replacement.  The
+task generator, task seeds, agent loads, solver seeds and PP+SIPP initialization
+must remain unchanged.  No repair, controller or TTF outcome was read, so this
+result is not a speed or generalization claim.
+
+Reproducibility SHA-256 values are:
+
+- qualification manifest: `5fce6a08d52c12517809baaa7014b717272b247b03fb647538f55567246d4451`;
+- qualification report: `51f7f8c9e4be07895b10501ba85b664376f9c939a0430dfbec0f31e32234a169`;
+- run config: `81521f7164d98245663adc95e7926b9bfaf224f68920c8685b0390149ad5723f`;
+- map-swap report: `c32d0b39195e3eaa440b789abbdd68a1f45d66d459b870a46c04cc6b65bd11fa`.
