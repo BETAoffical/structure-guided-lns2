@@ -4269,3 +4269,31 @@ the qualification design SHA-256 is
 `d5c3df1f0b2a17026b6ec3a49cb0534f556335aed87371988b2efa48a33dcfe1`.
 A pass authorizes only preregistration of a paired raw-TTF comparison; a failure
 stops before any controller timing.
+
+### StructPool revised six-map reset qualification result
+
+All 36 registered resets completed with zero errors, zero timeouts and complete
+initial plans.  All six maps are active and 33/36 states have nonzero conflicts.
+Every combined state exactly reproduces its pinned source state, including
+status, feasibility, conflict count, initial complexity and fingerprint; there
+are zero reproduction mismatches.
+
+Per-map initial conflict-pair ranges and means are:
+
+- `den312d`: 0--22, mean `9.0`;
+- `maze-128-128-1`: 44--156, mean `87.333333`;
+- `orz200d`: 23--170, mean `71.166667`;
+- `random-64-64-20`: 1--7, mean `3.666667`;
+- `room-64-64-16`: 23--97, mean `63.0`;
+- `warehouse-10-20-10-2-1`: 17--272, mean `129.333333`.
+
+All registered gates pass.  No repair, controller or TTF outcome was read, so
+this is a cohort-integrity and repairability result rather than a speed claim.
+It authorizes preregistration of the paired run-to-completion raw-TTF test.
+
+Reproducibility SHA-256 values are:
+
+- qualification manifest: `85f47bcd7abd98a97826d5e76cefb8c08b6641279a2631a16ec4650806a8c5f6`;
+- qualification report: `e3f043096998f47e1c7bbfd63d0f7bed49d919cf526ca35dfd19f3a8755d0ecd`;
+- run config: `4a261911828a2ee3cab951caf2e06a79ecbd9c276bb0c99db9e03e2aab8da631`;
+- dedicated analysis report: `0ea3626502b709ac6408d1c9130386d8e8bf6593c32708753ef9cfee03837cb1`.
