@@ -4000,3 +4000,36 @@ Registration SHA-256 values are:
 - recovery design: `a75b8dc7792d0e30c58c8ddf3d944b2656f749b726b85362a8390e3aa742d39c`;
 - derived-task source: `9e204a7cbe714a3d9f8976fce182cbc990734d529381e1abba4673138e612b7d`;
 - generated dataset summary: `2dbfa1f35c5f5c1934f22021084df50ba48b5086947524188ebddae903c23426`.
+
+### StructPool derived-congestion fresh-map recovery result
+
+All 54 registered resets complete with zero execution errors, zero timeouts,
+complete initial plans and no forbidden outcome fields.  The dedicated
+preregistered analysis nevertheless fails the one-qualifying-load-per-map
+gate.  Neither maze nor warehouse produces any initial conflict at any tested
+load.  `lak303d` also remains at zero through 400 agents; at 600 agents its
+maximum is only 2 and its mean is `0.5` conflict pairs.  Consequently, none of
+the nine map-load cells has a state at the fixed threshold of 16, and no load
+is selected.
+
+The generic collection qualification reports two nonzero states and is useful
+only as a collection-health check; its permissive nonzero-conflict threshold
+does not replace the frozen StructPool recovery gate.  No repair action,
+controller outcome or TTF value was produced or inspected.
+
+The failure identifies the project task generator rather than the map files
+or agent count as the current blocker.  Its deterministic opposite-exchange
+pairing does not guarantee that independently planned paths share a small
+cutset on these large layouts.  Per the preregistration, fresh-map recovery
+stops here: no successful state may be selected post hoc and no further load
+or task-flow revision may be run under this experiment identity.  A future
+design must first implement and unit-test an explicit map-cut or narrow-channel
+crossing generator, then register new maps/tasks independently before reading
+their reset outcomes.
+
+Reproducibility SHA-256 values are:
+
+- qualification manifest: `1beb18016388dc6c6ce5016d84fefa1d057b693bdc407c220688ffbc5dc3f6eb`;
+- qualification report: `a6e9331206217d759c1b5ab339cafbefe82b8708d5054de5910857e95a713d0f`;
+- run config: `972d025160431b0cfba6aa4049cce6a5cd53786bb33ca2314a88f0ded855f108`;
+- dedicated recovery report: `4763f5b6b58a687f2e184824d322c0b15b4bd5b21f7f167f7fadad7be17825ad`.
