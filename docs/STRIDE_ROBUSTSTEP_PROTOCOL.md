@@ -3764,3 +3764,53 @@ Reproducibility SHA-256 values are:
 - frozen V2 anchor selections: `72c028b423c425727c0c939558cfc31f302c907ab7ae996d1020d15e11ae84e7`;
 - all non-anchor comparisons: `fc3c75c2a777df9a9485739c1507df521426eae1e04fe7a5e77ea713a1dec9d1`;
 - state opportunity rows: `e24a11a41023b5b58fd945b7578bbecf0760a3e258798b48d202f1d18a8f60f8`.
+
+### Frozen-V2 StructPool candidate-pool effect
+
+The primary candidate-pool comparison is registered separately from the
+rejected new-ranker audit.  Frozen `v2-full` first selects from the exact base
+`target`/`collision`/`random` pool and then, independently, from the exact base
+plus StructPool pool.  Both choices are persisted before the 16 paired PP-seed
+outcomes are joined.  No new ranker, runtime, TTF or future trajectory is used.
+
+All 320 states, 6,285 candidates and 100,560 trials pass integrity.  The 222
+inactive states reproduce the exact base selection and exactly zero quality
+gain.  On all 98 high-stress active states, the augmented frozen-V2 choice is a
+StructPool candidate and differs from the base-only choice.
+
+The augmented choice improves current-step mean normalized conflict reduction
+on 82/98 active states (`83.6735%`) and worsens it on 16/98 (`16.3265%`).  It
+meets the strict 75%-paired-win, `0.02` mean-effect and both-half requirement on
+67/98 states (`68.3673%`), while only 5/98 (`5.1020%`) meet the symmetric robust
+regression rule.  The pooled paired win/loss rates are `76.3393%` and
+`20.0255%`.
+
+Mean raw selected gain is `+0.263694`; the first and second fixed halves are
+`+0.266263` and `+0.261126`.  Mean state-span-normalized selected gain is
+`+0.405314`, with fixed-half values `+0.407628` and `+0.398863`.  Mean
+normalized regret falls from `0.552434` for the base-only choice to `0.147120`
+for the augmented choice.  Exact-best rate rises from `5.1020%` to `42.8571%`,
+and quality Top-3 membership rises from `12.2449%` to `76.5306%`.
+
+The effect remains positive in every topology group.  High-topology states
+improve on 34/47 with mean raw gain `+0.197227`, but contain all five robust
+regressions.  Mid-topology states improve on 38/41 with mean raw gain
+`+0.343723` and no robust regression.  Low-topology controls improve on 10/10
+with mean raw gain `+0.247973` and no robust regression.  The main localized
+failure is `ca_caverns2`, where 3/4 states worsen and mean raw gain is
+`-0.105560`; `lak250d` also has two robust improvements and two robust
+regressions across four states.
+
+All five preregistered candidate-pool gates pass: a StructPool action is
+selected, at least one state improves, active-state mean normalized gain is at
+least `0.01`, the second-half mean is non-negative, and the worsened-state rate
+is below `35%`.  This authorizes only a paired run-to-completion closed-loop
+raw-TTF Quick comparing original V2 with V2 plus StructPool.  It does not train
+or authorize a new ranker and is not yet a TTF claim.
+
+Reproducibility SHA-256 values are:
+
+- pool-effect config: `a77b3b73cab593ef5a8d127a0955169f0a97615a5c0fa83914f998cc3aa83dc3`;
+- outcome-blind base/augmented selections: `a3900062f91f6520992c1b8f4c46d427d856a605fb3c937cde247ddf8d865303`;
+- paired state effects: `9292d1a0e8b761a5dd3880c612d41408c3806acbe5bdfb76681ca871152047a2`;
+- pool-effect report: `d89e01aab421f99c3dfa0ed2fdc3b4da6ab8869d0a7a4569defd4f283f4f6031`.
