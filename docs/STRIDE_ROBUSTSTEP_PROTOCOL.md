@@ -4297,3 +4297,36 @@ Reproducibility SHA-256 values are:
 - qualification report: `e3f043096998f47e1c7bbfd63d0f7bed49d919cf526ca35dfd19f3a8755d0ecd`;
 - run config: `4a261911828a2ee3cab951caf2e06a79ecbd9c276bb0c99db9e03e2aab8da631`;
 - dedicated analysis report: `0ea3626502b709ac6408d1c9130386d8e8bf6593c32708753ef9cfee03837cb1`.
+
+### StructPool revised six-map paired raw-TTF preregistration
+
+The passed 36-state reset product is frozen before timing.  The paired
+comparison contains the same 12 exact tasks and solver seeds 1/2/3, giving 36
+task-seed keys and 72 alternating execution entries.  `v2-full` ranks the
+unchanged base pool; `v2-plus-structpool` uses the same frozen V2 controller
+and ranking model over the base pool plus at most six registered StructPool
+candidates.  The ranker, feature backend, controller runtime, task files,
+solver seeds and candidate-bound native PP replay are shared.  Candidate-pool
+augmentation is the only treatment difference.
+
+Execution is single-worker and run-to-completion.  Scientific, environment and
+episode-process time limits are all absent.  The primary endpoint is reset-
+inclusive raw wall TTF.  Integrity requires complete 36-key pairing, identical
+initial fingerprints and conflict counts, the registered TTF clock, no capped
+values, zero errors, invalid actions or semantic mismatches, and actual
+StructPool activation and selection.
+
+The preregistered performance gates require at least 5% mean raw-TTF
+improvement, no map group worse by more than 10%, at least 50% of pairs faster,
+noninferior repair iterations and noninferior success count.  The maps were
+selected through reset-only qualification, so even a pass is not fresh-OOD or
+generalization evidence and does not authorize default replacement.  A pass
+authorizes only an independent replication design; a failure stops the current
+StructPool promotion and triggers per-map diagnosis.
+
+The runtime config SHA-256 is
+`2bed775459f137c0222af783c4404b90b2c35b04d107c03fdf241470f459e6ae`;
+the TTF registration SHA-256 is
+`87ab36c279dcabbc8c4ea827c640faa8c32f4727b6880367f5ff88626ff6bd00`;
+and the preregistered schedule SHA-256 is
+`1913746fdb45e32db124d615e130adbcda410e7eadd6ff67ef2eb99d34f3a8d6`.

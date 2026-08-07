@@ -1697,6 +1697,26 @@
       "path": "scripts/analyze_stride_structpool_revised_six_map.py",
       "role": "active",
       "purpose": "Command-line entry point for revised six-map reset qualification analysis."
+    },
+    {
+      "path": "experiments/stride_structpool_paired_ttf.py",
+      "role": "active",
+      "purpose": "Shared strictly paired StructPool raw-TTF execution and analysis kernel used without changing frozen V2 ranking semantics."
+    },
+    {
+      "path": "experiments/stride_structpool_revised_six_map_ttf.py",
+      "role": "active",
+      "purpose": "Checksum-pinned qualification-conditioned six-map raw-TTF diagnostic comparing the base pool with the StructPool-augmented pool under one frozen V2 ranker."
+    },
+    {
+      "path": "scripts/run_stride_structpool_revised_six_map_ttf.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered revised six-map paired run-to-completion raw-TTF diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_revised_six_map_ttf.py",
+      "role": "active",
+      "contract": "Seventy-two alternating schedule entries, exact paired task/seed coverage, candidate-pool-only treatment, no time cap, and qualification-conditioned claim boundary."
     }
   ]
 }
