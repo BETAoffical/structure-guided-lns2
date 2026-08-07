@@ -3722,3 +3722,45 @@ Reproducibility SHA-256 values are:
 - candidate aggregates: `067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628`;
 - state manifest: `ce7452e0731375f21c524601ad4472cbc9b3a6420c2d1eb5cfb1cf00fd854361`;
 - sorted state-artifact tree: `2ca1f3d14ec1fadedb0b39d4fab91352f36541ccf5ff60ea879ecec763ce9a90`.
+
+### RobustAction opportunity and action-uncertainty audit result
+
+The separately registered audit first persists the frozen `v2-full` selection
+over each exact preflight pool, then parses the candidate outcomes.  All 320
+states, 6,285 candidates, 100,560 paired trials, 5,965 non-anchor comparisons
+and 28 maps pass identity and completeness checks.  No runtime, TTF or future
+trajectory is read.
+
+Only 38/320 states (`11.875%`) contain a non-anchor action that wins at least
+12/16 paired seeds, improves the 16-seed mean by at least `0.02`, and improves
+in both fixed halves.  This fails the registered `25%` state-opportunity floor.
+There are 107/5,965 robust-positive non-anchor actions (`1.793797%`), which
+also fails the `4%` action floor.  Of those 107 actions, 81 are frozen V2 base
+candidates and 26 are StructPool candidates.
+
+Positive opportunity spans 11 high-topology, seven mid-topology and two
+low-topology-control maps, passing the `3/3/2` map-coverage gate.  The source
+policies are exactly balanced: `official_adaptive` and `v2-full` each expose
+19/160 opportunity states.  By topology group, the opportunity rates are
+26/168 (`15.4762%`) high, 10/106 (`9.4340%`) mid and 2/46 (`4.3478%`) low.
+
+The two fixed PP-seed halves select the exact same winner in `78.125%` of
+states.  Their mean Top-3 overlap is `83.125%`, and pooled pairwise direction
+agreement is `87.9459%` across 59,905 candidate pairs.  Candidate outcome
+standard deviation has mean `0.109655`, median `0.036268`, nearest-rank P90
+`0.390312` and maximum `0.5`.  Thus candidate quality is broadly ordered but
+still materially seed-sensitive in the upper tail.
+
+The audit passes integrity but fails two of three scientific opportunity
+gates.  Consequently `stride-robustaction-v1` training is not authorized and
+the current line stops before model fitting.  This is an opportunity-gate
+rejection, not evidence of a TTF regression or improvement.  A later revision
+must change the outcome-blind pool or problem scope and preregister a new
+cohort; it must not filter these 320 states by observed success.
+
+Reproducibility SHA-256 values are:
+
+- audit config: `95d450971ca1a922eb3cb0a10422cb32641ff95c3022f07490f4e8601598d41d`;
+- frozen V2 anchor selections: `72c028b423c425727c0c939558cfc31f302c907ab7ae996d1020d15e11ae84e7`;
+- all non-anchor comparisons: `fc3c75c2a777df9a9485739c1507df521426eae1e04fe7a5e77ea713a1dec9d1`;
+- state opportunity rows: `e24a11a41023b5b58fd945b7578bbecf0760a3e258798b48d202f1d18a8f60f8`.
