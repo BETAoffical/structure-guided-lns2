@@ -4448,3 +4448,71 @@ the next safe step is the registered four-seed development confirmation.
 Candidate-size removal, progressive generation and a new activation gate
 remain separate behavior-changing experiments and are not mixed into this
 runtime milestone.
+
+### Official LNS2, V2 and optimized StructPool three-controller Quick
+
+An independent three-controller development diagnostic was preregistered at
+commit `51a3516`.  It adds the native `official_adaptive` path as the official
+LNS2 reference: Adaptive chooses one native neighborhood and PP+SIPPS repairs
+it, without V2 candidate enumeration or learned ranking.  The other two
+controllers are frozen `v2-full` over the exact base pool and the same frozen
+V2 ranker over the base pool plus the semantics-preserving optimized
+StructPool.  The eight unchanged task/solver-seed keys comprise two
+Maze300 tasks and two Room500 tasks, each with solver seeds 1 and 2.  Each key
+is run under all three controllers, with the controller order strictly rotated
+over 24 schedule entries.  Execution is single-worker, deterministic-PP and
+run-to-completion with no scientific, environment or process time limit.
+
+All 24 entries completed.  Each controller solved 8/8 episodes with zero
+execution errors, invalid actions, semantic mismatches, initial-fingerprint or
+initial-conflict mismatches, capped-TTF values or TTF-clock violations.
+StructPool passed its activation gate on 44 decisions, added 263 candidates
+and selected a StructPool candidate 43 times.  The four Maze300 keys started
+with 3, 6, 19 and 13 conflicting pairs; the four Room500 keys started with
+500, 346, 336 and 293.
+
+| Controller | Mean raw TTF (s) | Median raw TTF (s) | Mean repairs | Mean PP (s) | Mean selection (s) | Mean normalized wall AUC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Official LNS2 / Adaptive | 14.122473 | 12.489056 | 57.500 | 5.762980 | 0.004270 | 0.677003 |
+| `v2-full` | 12.442292 | 9.921652 | 20.750 | 4.266370 | 0.502609 | 0.718134 |
+| Optimized `v2-plus-structpool` | 11.638586 | 8.751022 | 11.625 | 3.428400 | 0.754489 | 0.752941 |
+
+Against official LNS2, V2 improves mean reset-inclusive raw wall TTF by
+`11.8972%`, is faster on 6/8 paired keys and uses `36.75` fewer repairs on
+average.  Optimized StructPool improves mean TTF over official LNS2 by
+`17.5882%`, is faster on 7/8 keys and uses `45.875` fewer repairs.  Relative
+to V2 within this same interleaved run, StructPool improves mean TTF by
+`6.4595%`, is faster on 5/8 keys and reduces repairs by `9.125`.  These
+within-run comparisons are the valid timing evidence; the small difference
+from the preceding two-controller Quick is normal wall-clock variation and is
+not pooled across runs.
+
+The map groups are heterogeneous.  On Maze300, mean TTF is `14.692047`
+seconds for official LNS2, `14.962708` for V2 and `13.213344` for StructPool;
+StructPool improves over LNS2 by `10.0646%` and over V2 by `11.6915%`.  On
+Room500, the corresponding means are `13.552899`, `9.921875` and `10.063827`
+seconds.  V2 is best there: StructPool is `1.4307%` slower than V2, although it
+is still `25.7441%` faster than official LNS2.  Thus the result supports a
+promising high-stress candidate-pool effect but not uniform superiority.
+
+The mechanism is also mixed.  StructPool's extra analysis raises mean
+selection time to `0.754489` seconds, versus `0.502609` for V2 and `0.004270`
+for official Adaptive.  Its much lower repair count reduces mean PP time enough
+to more than recover that cost in the overall eight-key mean.  However, mean
+normalized wall-clock conflict AUC is higher, and therefore worse, for both V2
+and StructPool than for official LNS2.  This normalization uses each successful
+run's own TTF as its horizon, so it says that conflicts occupy a larger fraction
+of the shorter run; it does not overturn the primary raw-TTF result.
+
+The result report SHA-256 is
+`a63c033f17b49c9ff8ae174852395fd1fa78d0cb3339c124316fd0d1af0deed3`;
+the execution schedule file SHA-256 is
+`95aa05a5c23df47fed548e5bfd98331d90ea5a2c7612c0d543fddc38672864dd`.
+The report was independently regenerated under the registered WSL Python 3.10
+environment with the same SHA-256.  Validation completed with 624 Python tests
+passing and 34 registered skips, the Windows native test binary passing, and
+Linux CTest passing 11/11.
+This remains an eight-key development diagnostic on reused Quick tasks.  It is
+not a formal speed, fresh-map, generalization or default-replacement result;
+the next decision still requires the registered larger confirmation rather
+than promoting StructPool from this small favorable sample.

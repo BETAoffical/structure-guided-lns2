@@ -1569,6 +1569,21 @@
       "contract": "Frozen same-ranker comparison, complete alternating pair schedule, uncapped raw-TTF clock, and non-formal claim boundary."
     },
     {
+      "path": "experiments/stride_structpool_lns2_quick.py",
+      "role": "active",
+      "purpose": "Strictly rotated three-controller raw-TTF collection and paired analysis for official Adaptive LNS2, frozen V2, and optimized StructPool."
+    },
+    {
+      "path": "scripts/run_stride_structpool_lns2_quick.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered official-LNS2, V2, and StructPool development Quick."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_lns2_quick.py",
+      "role": "active",
+      "contract": "Complete three-controller pairing, strict execution-order rotation, native official-LNS2 semantics, uncapped raw TTF, and non-formal claim boundary."
+    },
+    {
       "path": "experiments/stride_structpool_ttf_confirmation.py",
       "role": "active",
       "purpose": "Independent seed-3/4 extension and pooled four-seed paired raw-TTF confirmation for the unchanged StructPool method."
