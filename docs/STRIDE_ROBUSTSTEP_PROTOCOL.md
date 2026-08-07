@@ -4066,3 +4066,32 @@ Registration SHA-256 values are:
 - dataset manifest: `76230ca14f9c408428ae2d42cbed3bc8ea88faa2ab4aba0e3e2e36e5d70d45ba`;
 - replacement map: `9ef42dc6c43a2b07364c9678b7501a6a7ff1fc7e61215abae6d34000ba8e70c9`;
 - runtime config: `a0775ad37e3e6a935099b05f06565dd2bf7054e08d3bf98b43316c393acf36b6`.
+
+### StructPool Maze map-only swap result
+
+All 18 registered resets complete with zero errors, zero timeouts, complete
+initial plans, distinct solver-seed trajectories and no forbidden outcome
+fields.  Every state has nonzero conflicts and every tested load passes the
+fixed threshold.  At 100 agents, the six states range from 44 to 156 initial
+conflict pairs with mean `87.333333`; at 200 agents they range from 294 to 568
+with mean `441.166667`; at 300 agents they range from 1,144 to 1,804 with mean
+`1,359.0`.  The preregistered lowest-load rule therefore selects 100 agents.
+
+The unchanged `maze-128-128-10` baseline has zero conflicts in all 18 matched
+load/task/solver-seed cells.  Changing only the layout to
+`maze-128-128-1` restores the intended conflict regime, so the Maze failure is
+primarily a map-width problem under this generator and initialization—not a
+need to modify the task generator first.  The result remains a reset-only
+map-factor diagnostic: no repair, controller or TTF result was read, and it
+does not establish model speed or fresh-map generalization.
+
+All registered integrity and selection gates pass.  This permits separately
+preregistered Warehouse and Game map-only swaps while keeping the task
+generator and other controlled inputs unchanged.
+
+Reproducibility SHA-256 values are:
+
+- qualification manifest: `2ad97970f1d9a1292cd14cb874059d82062c68f7e314938577a6ed7164e39dd8`;
+- qualification report: `5302fb0e6319ea06c3fc28a54949ae3ce5f7370e0d64c1e36e9af3c82f5a9bd2`;
+- run config: `d9bc87cd16931fe3006929aec63d047dd66e4982dc9307a813f10d60572387ad`;
+- map-swap report: `b3196fb1f5748f200fd8afca73af86429e6572c789f28e6e690b5425a73195bb`.
