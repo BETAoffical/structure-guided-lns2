@@ -1567,6 +1567,21 @@
       "path": "tests/evaluation/test_stride_structpool_ttf_quick.py",
       "role": "active",
       "contract": "Frozen same-ranker comparison, complete alternating pair schedule, uncapped raw-TTF clock, and non-formal claim boundary."
+    },
+    {
+      "path": "experiments/stride_structpool_ttf_confirmation.py",
+      "role": "active",
+      "purpose": "Independent seed-3/4 extension and pooled four-seed paired raw-TTF confirmation for the unchanged StructPool method."
+    },
+    {
+      "path": "scripts/run_stride_structpool_ttf_confirmation.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the StructPool four-seed development confirmation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_ttf_confirmation.py",
+      "role": "active",
+      "contract": "Seed-disjoint extension, pooled four-seed coverage, unchanged method, uncapped TTF, and non-formal promotion boundary."
     }
   ]
 }

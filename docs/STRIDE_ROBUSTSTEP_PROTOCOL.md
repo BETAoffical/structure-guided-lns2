@@ -3814,3 +3814,53 @@ Reproducibility SHA-256 values are:
 - outcome-blind base/augmented selections: `a3900062f91f6520992c1b8f4c46d427d856a605fb3c937cde247ddf8d865303`;
 - paired state effects: `9292d1a0e8b761a5dd3880c612d41408c3806acbe5bdfb76681ca871152047a2`;
 - pool-effect report: `d89e01aab421f99c3dfa0ed2fdc3b4da6ab8869d0a7a4569defd4f283f4f6031`.
+
+### StructPool paired raw-TTF Quick result
+
+Commit `60939747b5c80edc5217f5dc197552a7ccbd3acb` registers the closed-loop
+runtime before timing.  The comparison changes only the candidate pool:
+baseline `v2-full` ranks the exact base pool, while `v2-plus-structpool` uses
+the same frozen V2 ranker over the base plus the gated six-candidate
+StructPool additions.  The gate is evaluated before topology analysis and an
+inactive state is an exact V2 fallback.  Execution is single-worker,
+run-to-completion, reset-inclusive raw wall TTF with alternating controller
+order and deterministic candidate-bound PP replay.
+
+The development Quick contains the two registered maze-300 tasks and two
+registered room-500 tasks under solver seeds 1 and 2: eight paired keys and 16
+episodes.  All episodes succeed with zero execution errors, invalid actions,
+fingerprint mismatches, initial-fingerprint differences, initial-conflict
+differences or capped-TTF values.  StructPool activates on 44 decisions, adds
+263 unique candidates in total and supplies the selected action on 43
+decisions.
+
+Mean raw TTF falls from `12.801066` seconds to `12.332954` seconds, a
+`3.6568%` improvement.  The challenger is faster on 5/8 pairs and slower on
+3/8.  Mean repair iterations fall from `20.75` to `11.625`, a delta of
+`-9.125`.  Mean PP replan time falls from `4.329069` to `3.383283` seconds,
+while mean candidate-generation time rises from `0.173794` to `0.990847`
+seconds and mean pre-repair controller time rises from `0.505392` to
+`1.224514` seconds.  The measured StructPool analysis contribution is
+`0.889884` seconds per episode.  Thus the Quick gain comes from fewer repairs
+and less PP work outweighing added topology/selection overhead.
+
+The result is heterogeneous.  Maze-300 improves from `15.598419` to
+`13.952287` seconds (`10.5532%`) and reduces mean repair iterations by `0.5`.
+Room-500 regresses from `10.003713` to `10.713621` seconds (`-7.0965%`) even
+though mean repair iterations fall by `17.75`; here the saved repairs do not
+fully repay the added controller cost.  Mean normalized wall-clock conflict
+AUC also increases by `0.024480` overall, so the intermediate trajectory is
+not uniformly better even though final TTF is lower.
+
+All preregistered Quick gates pass: overall TTF improvement is at least 2%,
+paired faster fraction is at least 50%, maximum group regression is at most
+10%, repair iterations are non-inferior and success count is non-inferior.
+This authorizes only the unchanged seed-3/4 development extension and pooled
+four-seed confirmation.  It is not formal OOD evidence and does not promote
+StructPool as the default.
+
+Reproducibility SHA-256 values are:
+
+- Quick config: `1edeeb339907c598d9ade844ef996678f8e584a28e4a35e98b1a8d7717994f7d`;
+- execution schedule: `ee50fe6c0cbf639ea8b419e7ac237710ac3d066d3c0bbad07b931c0cc2e60e79`;
+- Quick report: `7ef2bf3052b7128a1c532654cdd14e9f5c90b6eff06843347aa230d4bbd40bf8`.
