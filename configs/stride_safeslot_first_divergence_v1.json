@@ -1,0 +1,65 @@
+{
+  "schema": "lns2.stride.safeslot_first_divergence_config.v1",
+  "scientific_status": "retrospective_first_divergence_diagnostic_no_training",
+  "experiment_id": "stride-safeslot-first-divergence-v1",
+  "parent_commit": "f33be7f03837c9f1139e3d5d6cd5f6745b0638b5",
+  "controllers": [
+    "v2-full",
+    "v2-plus-structpool",
+    "v2-plus-slotpool"
+  ],
+  "cohort": {
+    "source_config": "configs/stride_slotpool_structpool_ttf_diagnostic_v1.json",
+    "paired_key_count": 29,
+    "known_tail_exclusion_count": 1,
+    "short_window_repairs": 8
+  },
+  "inputs": {
+    "cohort_config": {
+      "path": "configs/stride_slotpool_structpool_ttf_diagnostic_v1.json",
+      "sha256": "5b08771255dc6e1b5ac66df9ee40ca6ee42cfedf13f77847b56f96165293234a"
+    },
+    "v2_baseline_config": {
+      "path": "configs/stride_safeslot_v2_baseline_v1.json",
+      "sha256": "49fdfe069b9574e62f448528b1cebabf547438632da4a7d9486fc70ea32bde34"
+    },
+    "v2_baseline_report": {
+      "path": "build/stride-safeslot-v2-baseline-v1/safeslot_v2_baseline_report.json",
+      "sha256": "f78973c2ab0731676e18ead2ffdc0a0a4143fabe8ef10b4b13ca6b33cbbe7973"
+    },
+    "v2_manifest": {
+      "path": "build/stride-safeslot-v2-baseline-v1/realized_dynamic_manifest.jsonl",
+      "sha256": "bd09cb33c5388d0aabb3cc213cdbeda6341de9325fa49c1ae2fe5106285df171"
+    },
+    "structpool_manifest": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-structpool/realized_dynamic_manifest.jsonl",
+      "sha256": "74a4ca08f60970cfd50d547bdda4ccd6c01cc63169d7005b1f61c31656bc4c3b"
+    },
+    "slotpool_manifest": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-slotpool/realized_dynamic_manifest.jsonl",
+      "sha256": "dfdd46c8d6f1a253b3c52f777c383e425acfb6ea411bbfb48b9e4679dc12c5a9"
+    },
+    "slotpool_structpool_report": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/slotpool_structpool_ttf_report.json",
+      "sha256": "4c82e4283ec3626976f9944ec26f55757973d063ab1ff861dc2fa7c8a16f3c3d"
+    }
+  },
+  "integrity": {
+    "initial_fingerprint_and_conflicts_must_match": true,
+    "identical_prefix_candidate_and_pp_seed_must_match": true,
+    "identical_prefix_after_fingerprint_must_match": true,
+    "challenger_anchor_must_equal_v2_action_at_first_divergence": true,
+    "first_divergent_action_must_be_structural": true,
+    "all_29_keys_required": true
+  },
+  "claim_boundary": {
+    "retrospective_existing_outcomes": true,
+    "model_training_allowed": false,
+    "threshold_selection_allowed": false,
+    "formal_ttf_claim": false,
+    "cross_run_v2_timing_comparison_allowed": false,
+    "conflict_and_repair_trajectory_diagnostic_allowed": true,
+    "known_tail_remains_excluded": true,
+    "next_step_only_freezes_safeslot_label_and_interface_design": true
+  }
+}

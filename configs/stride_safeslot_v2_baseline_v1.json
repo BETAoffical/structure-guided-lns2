@@ -1,0 +1,77 @@
+{
+  "schema": "lns2.stride.safeslot_v2_baseline_config.v1",
+  "scientific_status": "preregistered_same_runtime_v2_trajectory_baseline_no_timing_claim",
+  "experiment_id": "stride-safeslot-v2-baseline-v1",
+  "pre_registration_parent_commit": "f33be7f03837c9f1139e3d5d6cd5f6745b0638b5",
+  "controller": "v2-full",
+  "cohort": {
+    "source_config": "configs/stride_slotpool_structpool_ttf_diagnostic_v1.json",
+    "paired_key_count": 29,
+    "known_tail_exclusion_count": 1
+  },
+  "runtime": {
+    "config": "configs/stride_structpool_lean_confirmation_runtime.json",
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "feature_backend": "native",
+    "controller_runtime": "optimized",
+    "verification_profile": "deployment",
+    "deterministic_pp_replay": true,
+    "workers": 1
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "qualification_source": "build/stride-slotpool-structpool-ttf-diagnostic-v1/qualification",
+  "inputs": {
+    "cohort_config": {
+      "path": "configs/stride_slotpool_structpool_ttf_diagnostic_v1.json",
+      "sha256": "5b08771255dc6e1b5ac66df9ee40ca6ee42cfedf13f77847b56f96165293234a"
+    },
+    "runtime_config": {
+      "path": "configs/stride_structpool_lean_confirmation_runtime.json",
+      "sha256": "a7c4467c0d4585626e557b11ecfbd04051a1cf9ff13b2789e4d5021904788611"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/dataset_summary.json",
+      "sha256": "282706a2a7658e720852be3ed8e72809d0eb3dc6f5c9f8e3aafc904366a0ec03"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "6d34f1274d2d270f85018dfa27b4d066061d351d37a764c7fed557137b979aaf"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/qualification/qualification_manifest.jsonl",
+      "sha256": "973e5472d7944961659f4042cf6ab0622edac12f0be7d4de4fbbed33f118a945"
+    },
+    "qualification_report": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/qualification/qualification_report.json",
+      "sha256": "6820b043af723ed1d72072d80763a9f3dcbf66a1e9b1c4bde9909ec4069519c8"
+    },
+    "qualification_run_config": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/qualification/run_config.json",
+      "sha256": "005cd5ab5cdc8df4949b9ef6fe0da2d9558ae9f226caa8bac47dc2dc8f212555"
+    }
+  },
+  "integrity": {
+    "exact_29_keys_required": true,
+    "all_success_required": true,
+    "zero_errors_required": true,
+    "zero_invalid_actions_required": true,
+    "zero_fingerprint_mismatches_required": true,
+    "same_registered_qualification_required": true
+  },
+  "claim_boundary": {
+    "trajectory_completion_only": true,
+    "formal_ttf_claim": false,
+    "wall_clock_comparison_allowed": false,
+    "model_training_allowed": false,
+    "threshold_selection_allowed": false,
+    "no_additional_result_based_exclusion": true,
+    "purpose": "complete_matched_runtime_v2_anchor_counterfactual_for_first_divergence_audit"
+  }
+}

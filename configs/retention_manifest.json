@@ -1904,6 +1904,36 @@
       "contract": "Freeze the 29 paired keys, exact single known-tail exclusion, two-controller alternating schedule, registered inputs, and diagnostic-only claim boundary."
     },
     {
+      "path": "experiments/stride_safeslot_v2_baseline.py",
+      "role": "active",
+      "purpose": "Collect and validate the exact current-runtime base-only V2 traces used as SafeSlot first-divergence anchors."
+    },
+    {
+      "path": "scripts/run_stride_safeslot_v2_baseline.py",
+      "role": "active",
+      "purpose": "Provide the resumable CLI for the fixed 29-key SafeSlot V2 anchor collection."
+    },
+    {
+      "path": "tests/evaluation/test_stride_safeslot_v2_baseline.py",
+      "role": "active",
+      "contract": "Require exact registered key coverage, current-runtime V2 semantics, valid actions and fingerprints, and no cross-run wall-clock comparison."
+    },
+    {
+      "path": "experiments/stride_safeslot_first_divergence.py",
+      "role": "active",
+      "purpose": "Audit first matched-state structural deviations from exact V2 and expose immediate-versus-terminal contradictions without training or timing claims."
+    },
+    {
+      "path": "scripts/analyze_stride_safeslot_first_divergence.py",
+      "role": "active",
+      "purpose": "Provide the deterministic CLI for the SafeSlot first-divergence integrity and causal trajectory report."
+    },
+    {
+      "path": "tests/evaluation/test_stride_safeslot_first_divergence.py",
+      "role": "active",
+      "contract": "Require matched pre-divergence state, action, PP seed and fingerprint semantics; preserve base-only V2 anchoring; forbid Cost-to-Go, future-label and TTF claims."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

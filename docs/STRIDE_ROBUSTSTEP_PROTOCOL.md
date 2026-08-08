@@ -4945,3 +4945,29 @@ gain, and its full-grid plus pairwise-reduction overhead is not recovered by
 repair-round savings. Neither treatment replaces `v2-full`. The deterministic
 report SHA-256 is
 `4c82e4283ec3626976f9944ec26f55757973d063ab1ff861dc2fa7c8a16f3c3d`.
+
+### SafeSlot v1 exact-anchor first-divergence audit
+
+The unified SafeSlot successor treats SlotPool as the non-manual structural
+candidate-budget mechanism and StructPool as its underlying family-by-size
+search space. Before training a new gate, an exact current-runtime V2 baseline
+was collected for the fixed 29-key known-tail-excluded cohort. All 29 episodes
+completed successfully with zero errors, invalid actions, or fingerprint
+mismatches. This separately collected baseline is valid for state/action
+causality but not for wall-clock comparison.
+
+The first-divergence audit passed all integrity checks across 58 controller-key
+comparisons. Full StructPool and SlotPool each diverged on 19/29 keys, always
+at decision zero. Three Maze actions reduced at least as many immediate
+conflicts as V2 but later required more repairs: `34 -> 40`, `18 -> 46`, and
+`18 -> 42`. This rejects immediate reduction as a sufficient safe-replacement
+label without introducing Cost-to-Go or future repair rounds as a target.
+
+The audit also found one full-StructPool state where adding structural
+candidates changed the best base candidate under V2's pairwise Borda scoring.
+Therefore mixed-pool V2 ranking is not an exact V2 fallback. SafeSlot freezes a
+two-stage interface: select V2 on the original pool, then apply an O(M)
+pointwise anchor-relative gate to structural challengers and abstain on
+uncertainty. Runtime rollback remains a separate safety layer. No controller
+is promoted and no TTF improvement is claimed. The report SHA-256 is
+`24147e3eb539a032f1e6db4cf3d5df460395a982fe64e73b980b4ef3aa1781fd`.
