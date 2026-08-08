@@ -4712,3 +4712,43 @@ selection time is no worse.  Failure retains Speed2 full StructPool and rejects
 LeanPool as the preferred runtime.  Passing authorizes only a separately
 registered fresh-map confirmation; this reused eight-key Quick cannot promote
 the default or support a formal speed/generalization claim.
+
+### StructPool LeanPool v1 four-controller runtime result
+
+All 32 schedule entries completed with 8/8 successes for every controller,
+zero execution errors, invalid actions, semantic mismatches, initial-state
+mismatches, capped-TTF values or clock violations.  Full StructPool passed its
+gate 44 times, generated 264 rows, added 263 and selected a StructPool action
+43 times.  LeanPool generated 246 rows along its shorter realized trajectory,
+filtered 41 pure-bottleneck rows, retained 205, added 204 and selected a
+StructPool action 39 times.  The unchanged full controller filtered zero rows.
+
+| Controller | Mean raw TTF (s) | Mean repairs | Mean PP (s) | Mean selection (s) | Mean normalized wall AUC |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Official LNS2 / Adaptive | 12.502717 | 57.500 | 5.111143 | 0.004316 | 0.675845 |
+| `v2-full` | 11.054525 | 20.750 | 3.786705 | 0.478355 | 0.720555 |
+| Full Speed2 StructPool | 9.907797 | 11.625 | 2.898067 | 0.498691 | 0.755054 |
+| LeanPool v1 | 9.896731 | 10.875 | 2.849105 | 0.478506 | 0.761257 |
+
+Relative to full StructPool, LeanPool reduces mean selection time by `4.0476%`,
+mean repair rounds by `0.75`, and mean raw TTF by only `0.1117%` (`0.0111`
+seconds).  It is faster on 4/8 paired keys.  The group directions differ:
+Room500 improves by `3.4847%` with 3/4 wins and `1.5` fewer rounds, while
+Maze300 regresses by `2.3456%` with only 1/4 wins and unchanged rounds.  Thus
+all preregistered development gates pass, but the aggregate TTF margin is too
+small and heterogeneous to establish a reliable solver-speed improvement.
+
+Against V2, LeanPool improves mean TTF by `10.4735%`, wins 5/8 and uses `9.875`
+fewer repair rounds; full StructPool improves by `10.3734%`, also wins 5/8 and
+uses `9.125` fewer rounds.  Against official LNS2, LeanPool improves mean TTF
+by `20.8434%`, wins 7/8 and uses `46.625` fewer rounds.  Normalized wall AUC is
+worse for LeanPool than for every comparator, so the faster endpoint does not
+mean uniformly better conflict trajectories.
+
+The independently regenerated report SHA-256 is
+`49567c33083733e9ec4fd3251f8821a7ae1d91a1f55bc48175ab86f9abeaf73b`;
+the 32-entry schedule SHA-256 is
+`ecdd82be501b9eca635f7ef99ae288ac32031e1a6100c05f65c506a716948b5a`.
+This result retains LeanPool only as a candidate for fresh-map confirmation.
+It neither replaces full StructPool nor supports a formal speed or
+generalization claim.
