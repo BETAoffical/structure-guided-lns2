@@ -311,7 +311,7 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
                 "map_id": str(state_row["map_id"]),
                 "layout_mode": str(state_row["layout_family"]),
                 "solver_seed": int(state_row["solver_seed"]),
-                "agent_count": int(state_row["agent_count"]),
+                "agent_count": int(job["dataset_row"]["agent_count"]),
                 "before_conflicts": before_conflicts,
                 "no_progress_rate": 1.0 - float(aggregate["progress_rate"]),
                 "repair_success_rate": float(aggregate["replan_success_rate"]),
