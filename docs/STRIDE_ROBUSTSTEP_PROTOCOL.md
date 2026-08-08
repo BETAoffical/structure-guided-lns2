@@ -4516,3 +4516,42 @@ This remains an eight-key development diagnostic on reused Quick tasks.  It is
 not a formal speed, fresh-map, generalization or default-replacement result;
 the next decision still requires the registered larger confirmation rather
 than promoting StructPool from this small favorable sample.
+
+### StructPool second semantics-preserving runtime optimization registration
+
+The second runtime-only optimization starts from clean commit `8924f4f`.  The
+recovery branch `codex/backup-before-structpool-speed2-20260808` and the
+complete-history bundle
+`../../backups/structure-guided-lns2-before-structpool-speed2-20260808.bundle`
+both point to that commit; the bundle SHA-256 is
+`e2cf3d2156a524bd8085e4aba5ba80ebaa49ab6fe7e727be70570cfafefb5bef`.
+
+Implementation commit `0c6e0d5` replaces repeated full-agent and full-event
+scans inside neighborhood fill, anchor cover and topology-boundary selection
+with incremental counters and lazy priority queues.  Path-overlap cell weights
+are also computed once per state.  It changes no family, neighborhood size,
+candidate cap, Jaccard rule, activation gate, frozen V2 artifact, candidate
+score, PP seed or native repair operation.
+
+The committed generator was compared with the backup implementation on all 44
+activated decisions reconstructed from the preceding three-controller Quick.
+All 264 candidate JSON rows, including order, IDs, agent sets, family metadata,
+audits and scores, are exactly equal; their combined SHA-256 remains
+`2d610d7d2eb5775ef6af5dc35552ffbe889e560d50515b023f586bc7d243afd9`.
+Median batch generation time fell from `2.976130` to `1.031359` seconds, a
+`65.3456%` reduction.  The benchmark reports have SHA-256
+`ecf26f36086bb9b969f6a6986017955f70262a418b229af4e4287409297e2878`
+and `029b70b6bc42392febf68878970e70c4c2608ad7be3210ab4abcc3cb18e253e3`.
+
+Before timing, the unchanged official-LNS2/V2/StructPool configuration is
+registered for a new output at
+`build/stride-structpool-lns2-speed2-quick-v1`.  It retains the same eight
+task/solver-seed keys, 24 strictly rotated schedule entries, one worker,
+deterministic PP and run-to-completion execution with no scientific,
+environment or process time limit.  The registration is stored in
+`configs/stride_structpool_lns2_speed2_registration.json`.  The primary
+readout is reset-inclusive mean raw wall TTF; selection/candidate time, repair
+rounds, PP time and normalized wall AUC are secondary.  In addition to all
+usual integrity gates, the StructPool selected-neighborhood and conflict
+trajectories must equal the preceding run.  This is a runtime diagnostic only,
+not a LeanPool, gate, training, fresh-map, formal-speed or promotion test.

@@ -1,0 +1,74 @@
+{
+  "schema": "lns2.stride.structpool_lns2_speed2_registration.v1",
+  "scientific_status": "preregistered_runtime_only_confirmation_before_timing",
+  "experiment_id": "stride-structpool-lns2-speed2-quick-v1",
+  "implementation_commit": "0c6e0d5c34d6fdd9d13e45df758e95420fa1857e",
+  "recovery": {
+    "branch": "codex/backup-before-structpool-speed2-20260808",
+    "commit": "8924f4fbbeb0ec9c3d0d767b54977aba1e4847d6",
+    "bundle": "../backups/structure-guided-lns2-before-structpool-speed2-20260808.bundle",
+    "bundle_sha256": "e2cf3d2156a524bd8085e4aba5ba80ebaa49ab6fe7e727be70570cfafefb5bef"
+  },
+  "source_comparison": {
+    "config": "configs/stride_structpool_lns2_quick.json",
+    "config_sha256": "18980f5bcc0e6ee9409223fd07d1bfd5205c9620f52b0951ddf48ff8deb1bef0",
+    "reference_output": "build/stride-structpool-lns2-quick-v1",
+    "new_output": "build/stride-structpool-lns2-speed2-quick-v1",
+    "controllers": [
+      "official_adaptive",
+      "v2-full",
+      "v2-plus-structpool"
+    ],
+    "schedule_entries": 24,
+    "paired_keys_per_controller": 8,
+    "execution_order": "strict_three_controller_rotation",
+    "workers": 1,
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "deterministic_pp_replay": true
+  },
+  "semantic_guard": {
+    "activated_state_count": 44,
+    "candidate_count": 264,
+    "candidate_records_sha256": "2d610d7d2eb5775ef6af5dc35552ffbe889e560d50515b023f586bc7d243afd9",
+    "all_candidate_json_exact": true,
+    "baseline_benchmark_sha256": "ecf26f36086bb9b969f6a6986017955f70262a418b229af4e4287409297e2878",
+    "optimized_benchmark_sha256": "029b70b6bc42392febf68878970e70c4c2608ad7be3210ab4abcc3cb18e253e3",
+    "baseline_median_batch_seconds": 2.9761295999924187,
+    "optimized_median_batch_seconds": 1.0313588999852072,
+    "median_reduction_percent": 65.345632
+  },
+  "integrity_gates": {
+    "complete_three_controller_pairing": true,
+    "zero_execution_errors": true,
+    "zero_invalid_actions": true,
+    "zero_semantic_mismatches": true,
+    "zero_initial_fingerprint_mismatches": true,
+    "zero_initial_conflict_mismatches": true,
+    "raw_ttf_clock_schema_required": true,
+    "all_controllers_success_count": 8,
+    "structpool_trajectory_must_match_reference": true
+  },
+  "performance_readout": {
+    "primary": "mean_reset_inclusive_raw_wall_ttf_seconds",
+    "secondary": [
+      "mean_neighborhood_selection_seconds",
+      "mean_structpool_candidate_seconds",
+      "mean_repair_iterations",
+      "mean_pp_seconds",
+      "mean_normalized_wall_auc"
+    ],
+    "expected_semantic_change": false,
+    "expected_direction": "lower_structpool_selection_and_raw_ttf_from_runtime_only_savings"
+  },
+  "claim_boundary": {
+    "development_diagnostic_only": true,
+    "formal_speed_claim": false,
+    "fresh_map_claim": false,
+    "generalization_claim": false,
+    "default_replacement_allowed": false,
+    "lean_pool_or_gate_change_included": false
+  }
+}
