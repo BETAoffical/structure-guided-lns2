@@ -8,13 +8,92 @@ from unittest.mock import patch
 from experiments.state_analysis import ConflictEvent, StateAnalysis
 import lns2_selector.runtime.topology_candidates as topology_candidates
 from lns2_selector.runtime.topology_candidates import (
+    _anchor_neighborhood,
     _boundary_neighborhood,
+    _fill_neighborhood,
     generate_structpool_candidates,
     generate_topology_anchor_candidates,
     generate_topology_boundary_candidates,
     merge_structpool_candidates,
     merge_topology_anchor_candidates,
 )
+
+
+def _reference_fill_neighborhood(
+    selected: set[int],
+    state: dict,
+    event_weight: collections.Counter[int],
+    size: int,
+) -> list[int]:
+    agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
+    adjacency = {agent: set() for agent in agent_rows}
+    for edge in state.get("conflict_edges", []):
+        left, right = map(int, edge)
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    while len(selected) < min(size, len(agent_rows)):
+        remaining = set(agent_rows) - selected
+        chosen = min(
+            remaining,
+            key=lambda agent: (
+                -len(adjacency[agent] & selected),
+                -int(agent_rows[agent].get("conflict_degree", 0)),
+                -int(event_weight[agent]),
+                agent,
+            ),
+        )
+        selected.add(chosen)
+    return sorted(selected)
+
+
+def _reference_anchor_neighborhood(
+    state: dict, events: list[ConflictEvent], size: int
+) -> list[int]:
+    uncovered = set(range(len(events)))
+    selected: set[int] = set()
+    event_weight: collections.Counter[int] = collections.Counter()
+    for event in events:
+        event_weight[event.left] += 1
+        event_weight[event.right] += 1
+    pairs = sorted({(event.left, event.right) for event in events})
+    while uncovered and len(selected) < size:
+        options = []
+        for left, right in pairs:
+            addition = {left, right} - selected
+            if not addition or len(selected) + len(addition) > size:
+                continue
+            covered = {
+                index
+                for index in uncovered
+                if events[index].left in addition or events[index].right in addition
+            }
+            internal = {
+                index
+                for index in uncovered
+                if events[index].left in (selected | addition)
+                and events[index].right in (selected | addition)
+            }
+            options.append(
+                (
+                    len(covered) / len(addition),
+                    len(covered),
+                    len(internal),
+                    sum(event_weight[agent] for agent in addition),
+                    -left,
+                    -right,
+                    addition,
+                )
+            )
+        if not options:
+            break
+        *_, addition = max(options, key=lambda value: value[:-1])
+        selected.update(addition)
+        uncovered = {
+            index
+            for index in uncovered
+            if events[index].left not in selected and events[index].right not in selected
+        }
+    return _reference_fill_neighborhood(selected, state, event_weight, size)
 
 
 def _reference_boundary_neighborhood(
@@ -219,6 +298,75 @@ class TopologyCandidatesTest(unittest.TestCase):
                         size=size,
                         core_budget=4,
                     ),
+                )
+
+    def test_incremental_fill_preserves_reference_actions(self) -> None:
+        for seed in range(16):
+            generator = random.Random(seed)
+            agent_count = 48
+            edges = {
+                tuple(sorted(generator.sample(range(agent_count), 2)))
+                for _ in range(180)
+            }
+            state = {
+                "agents": [
+                    {
+                        "id": agent,
+                        "path": [agent],
+                        "conflict_degree": generator.randrange(10),
+                    }
+                    for agent in range(agent_count)
+                ],
+                "conflict_edges": [list(edge) for edge in sorted(edges)],
+            }
+            event_weight = collections.Counter(
+                {agent: generator.randrange(20) for agent in range(agent_count)}
+            )
+            for size in (8, 16, 24, 32):
+                initial = set(generator.sample(range(agent_count), 4))
+                self.assertEqual(
+                    _fill_neighborhood(
+                        set(initial), state, event_weight, size
+                    ),
+                    _reference_fill_neighborhood(
+                        set(initial), state, event_weight, size
+                    ),
+                )
+
+    def test_incremental_anchor_preserves_reference_actions(self) -> None:
+        for seed in range(12):
+            generator = random.Random(seed)
+            agent_count = 48
+            events = []
+            for index in range(160):
+                left, right = sorted(generator.sample(range(agent_count), 2))
+                events.append(
+                    ConflictEvent(
+                        time=index % 17,
+                        kind="vertex",
+                        left=left,
+                        right=right,
+                        cells=(generator.randrange(256),),
+                    )
+                )
+            state = {
+                "agents": [
+                    {
+                        "id": agent,
+                        "path": [agent],
+                        "conflict_degree": generator.randrange(10),
+                    }
+                    for agent in range(agent_count)
+                ],
+                "conflict_edges": [
+                    list(pair)
+                    for pair in sorted({(event.left, event.right) for event in events})
+                ],
+            }
+            for size in (8, 16, 24, 32):
+                self.assertEqual(
+                    _anchor_neighborhood(state, events, size),
+                    _reference_anchor_neighborhood(state, events, size),
                 )
 
     def test_pair_set_cover_is_deterministic_and_closes_relevant_pairs(self) -> None:

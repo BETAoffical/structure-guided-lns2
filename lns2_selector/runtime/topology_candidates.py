@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import copy
+import heapq
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -67,18 +68,43 @@ def _fill_neighborhood(
     agent_rows = context.agent_rows
     if not selected <= context.agent_ids:
         raise ValueError("topology anchor selected an unknown agent")
-    while len(selected) < min(size, len(agent_rows)):
-        remaining = context.agent_ids - selected
-        chosen = min(
-            remaining,
-            key=lambda agent: (
-                -len(context.adjacency[agent] & selected),
-                -int(agent_rows[agent].get("conflict_degree", 0)),
-                -int(event_weight[agent]),
-                agent,
-            ),
+    limit = min(size, len(agent_rows))
+    if len(selected) >= limit:
+        return sorted(selected)
+
+    remaining = set(context.agent_ids) - selected
+    selected_neighbor_count = {
+        agent: len(context.adjacency[agent] & selected) for agent in remaining
+    }
+
+    def priority(agent: int) -> tuple[int, int, int, int]:
+        return (
+            -selected_neighbor_count[agent],
+            -int(agent_rows[agent].get("conflict_degree", 0)),
+            -int(event_weight[agent]),
+            agent,
         )
+
+    heap = [priority(agent) for agent in remaining]
+    heapq.heapify(heap)
+    while len(selected) < limit:
+        while True:
+            entry = heapq.heappop(heap)
+            chosen = int(entry[-1])
+            if chosen not in remaining:
+                continue
+            current = priority(chosen)
+            if entry != current:
+                heapq.heappush(heap, current)
+                continue
+            break
+        remaining.remove(chosen)
         selected.add(chosen)
+        for neighbor in context.adjacency[chosen]:
+            if neighbor not in remaining:
+                continue
+            selected_neighbor_count[neighbor] += 1
+            heapq.heappush(heap, priority(neighbor))
     return sorted(selected)
 
 
@@ -91,50 +117,57 @@ def _anchor_neighborhood(
 ) -> list[int]:
     if size <= 0 or not events:
         raise ValueError("topology anchor requires events and a positive size")
-    uncovered = set(range(len(events)))
+    uncovered = len(events)
     selected: set[int] = set()
     event_weight: collections.Counter[int] = collections.Counter()
+    pair_event_count: collections.Counter[tuple[int, int]] = collections.Counter()
+    partner_event_count: dict[int, collections.Counter[int]] = collections.defaultdict(
+        collections.Counter
+    )
     for event in events:
         event_weight[event.left] += 1
         event_weight[event.right] += 1
+        pair_event_count[(event.left, event.right)] += 1
+        partner_event_count[event.left][event.right] += 1
+        partner_event_count[event.right][event.left] += 1
+    uncovered_weight = collections.Counter(event_weight)
     pairs = sorted({(event.left, event.right) for event in events})
     while uncovered and len(selected) < size:
-        options = []
+        best_score: tuple[float, int, int, int, int, int] | None = None
+        best_addition: set[int] | None = None
+        best_covered = 0
         for left, right in pairs:
             addition = {left, right} - selected
             if not addition or len(selected) + len(addition) > size:
                 continue
-            covered = {
-                index
-                for index in uncovered
-                if events[index].left in addition or events[index].right in addition
-            }
-            internal = {
-                index
-                for index in uncovered
-                if events[index].left in (selected | addition)
-                and events[index].right in (selected | addition)
-            }
-            options.append(
-                (
-                    len(covered) / len(addition),
-                    len(covered),
-                    len(internal),
-                    sum(event_weight[agent] for agent in addition),
-                    -left,
-                    -right,
-                    addition,
-                )
+            internal = (
+                int(pair_event_count[(left, right)])
+                if len(addition) == 2
+                else 0
             )
-        if not options:
+            covered = sum(uncovered_weight[agent] for agent in addition) - internal
+            score = (
+                covered / len(addition),
+                covered,
+                internal,
+                sum(event_weight[agent] for agent in addition),
+                -left,
+                -right,
+            )
+            if best_score is None or score > best_score:
+                best_score = score
+                best_addition = addition
+                best_covered = covered
+        if best_addition is None:
             break
-        *_, addition = max(options, key=lambda value: value[:-1])
-        selected.update(addition)
-        uncovered = {
-            index
-            for index in uncovered
-            if events[index].left not in selected and events[index].right not in selected
-        }
+        selected.update(best_addition)
+        uncovered -= best_covered
+        for agent in best_addition:
+            uncovered_weight[agent] = 0
+        for agent in best_addition:
+            for other, count in partner_event_count[agent].items():
+                if other not in selected:
+                    uncovered_weight[other] -= count
     return _fill_neighborhood(
         selected, state, event_weight, size, context=context
     )
@@ -246,86 +279,142 @@ def _boundary_neighborhood(
 
     def incident_index(
         scored_events: list[ConflictEvent],
-    ) -> dict[int, tuple[ConflictEvent, ...]]:
-        incident: dict[int, list[ConflictEvent]] = collections.defaultdict(list)
+    ) -> tuple[
+        dict[int, int], dict[int, collections.Counter[int]]
+    ]:
+        totals: collections.Counter[int] = collections.Counter()
+        partners: dict[int, collections.Counter[int]] = collections.defaultdict(
+            collections.Counter
+        )
         for event in scored_events:
-            incident[int(event.left)].append(event)
-            incident[int(event.right)].append(event)
-        return {agent: tuple(rows) for agent, rows in incident.items()}
+            left = int(event.left)
+            right = int(event.right)
+            totals[left] += 1
+            totals[right] += 1
+            partners[left][right] += 1
+            partners[right][left] += 1
+        return dict(totals), dict(partners)
 
-    relevant_incident = incident_index(events)
-    all_incident = (
-        relevant_incident
+    relevant_totals, relevant_partners = incident_index(events)
+    if events is analysis.events:
+        all_totals = relevant_totals
+        all_partners = relevant_partners
+    else:
+        all_totals, all_partners = incident_index(analysis.events)
+    relevant_selected_events: collections.Counter[int] = collections.Counter()
+    all_selected_events = (
+        relevant_selected_events
         if events is analysis.events
-        else incident_index(analysis.events)
+        else collections.Counter()
     )
 
-    def choose(
-        available: set[int],
-        incident: dict[int, tuple[ConflictEvent, ...]],
-    ) -> int:
-        def score(agent: int) -> tuple[int, int, int, int, int, int]:
-            agent_events = incident.get(agent, ())
-            newly_incident = sum(
-                event.left not in selected
-                and event.right not in selected
-                for event in agent_events
-            )
-            newly_internal = sum(
-                (event.left in selected) != (event.right in selected)
-                for event in agent_events
-            )
-            component = analysis.component_id.get(agent)
-            component_novel = int(
-                component is not None and component not in selected_components
-            )
-            return (
-                3 * newly_incident - newly_internal,
-                newly_incident,
-                -newly_internal,
-                component_novel,
-                int(agent_rows[agent].get("conflict_degree", 0)),
-                -agent,
-            )
+    def score(
+        agent: int,
+        totals: dict[int, int],
+        selected_events: collections.Counter[int],
+    ) -> tuple[int, int, int, int, int, int]:
+        newly_internal = int(selected_events[agent])
+        newly_incident = int(totals.get(agent, 0)) - newly_internal
+        component = analysis.component_id.get(agent)
+        component_novel = int(
+            component is not None and component not in selected_components
+        )
+        return (
+            3 * newly_incident - newly_internal,
+            newly_incident,
+            -newly_internal,
+            component_novel,
+            int(agent_rows[agent].get("conflict_degree", 0)),
+            -agent,
+        )
 
-        return max(available, key=score)
+    def priority(
+        agent: int,
+        totals: dict[int, int],
+        selected_events: collections.Counter[int],
+    ) -> tuple[int, int, int, int, int, int]:
+        return tuple(-value for value in score(agent, totals, selected_events))
+
+    def candidate_heap(
+        available: set[int],
+        totals: dict[int, int],
+        selected_events: collections.Counter[int],
+    ) -> list[tuple[int, int, int, int, int, int]]:
+        heap = [priority(agent, totals, selected_events) for agent in available]
+        heapq.heapify(heap)
+        return heap
+
+    def choose(
+        heap: list[tuple[int, int, int, int, int, int]],
+        available: set[int],
+        totals: dict[int, int],
+        selected_events: collections.Counter[int],
+    ) -> tuple[int, int]:
+        # Every selection can only lower the remaining agents' scores.  A stale
+        # heap entry is therefore optimistically small and will be refreshed
+        # before it can win, so no full-domain reprioritization is required.
+        while True:
+            entry = heapq.heappop(heap)
+            chosen = int(entry[-1])
+            if chosen not in available:
+                continue
+            current = priority(chosen, totals, selected_events)
+            if entry != current:
+                heapq.heappush(heap, current)
+                continue
+            break
+        return chosen, int(totals.get(chosen, 0)) - int(selected_events[chosen])
+
+    def add_selected(agent: int) -> None:
+        selected.add(agent)
+        component = analysis.component_id.get(agent)
+        if component is not None:
+            selected_components.add(component)
+        for other, count in relevant_partners.get(agent, {}).items():
+            relevant_selected_events[other] += count
+        if all_selected_events is not relevant_selected_events:
+            for other, count in all_partners.get(agent, {}).items():
+                all_selected_events[other] += count
 
     relevant_agents = {
         agent for event in events for agent in (int(event.left), int(event.right))
     }
-    while len(selected) < min(core_budget, size) and relevant_agents - selected:
-        candidate = choose(relevant_agents - selected, relevant_incident)
-        before_coverage = sum(
-            event.left in selected or event.right in selected for event in events
+    relevant_available = relevant_agents - selected
+    relevant_heap = candidate_heap(
+        relevant_available, relevant_totals, relevant_selected_events
+    )
+    while len(selected) < min(core_budget, size) and relevant_available:
+        candidate, newly_incident = choose(
+            relevant_heap,
+            relevant_available,
+            relevant_totals,
+            relevant_selected_events,
         )
-        selected.add(candidate)
-        component = analysis.component_id.get(candidate)
-        if component is not None:
-            selected_components.add(component)
-        after_coverage = sum(
-            event.left in selected or event.right in selected for event in events
-        )
-        if after_coverage == before_coverage:
-            selected.remove(candidate)
-            selected_components = {
-                int(analysis.component_id[agent])
-                for agent in selected
-                if agent in analysis.component_id
-            }
+        if newly_incident == 0:
             break
+        relevant_available.remove(candidate)
+        add_selected(candidate)
 
     active_agents = {
         agent for event in analysis.events for agent in (int(event.left), int(event.right))
     }
     limit = min(size, len(agent_rows))
+    active_available = active_agents - selected
+    active_heap = candidate_heap(active_available, all_totals, all_selected_events)
+    while len(selected) < limit and active_available:
+        candidate, _ = choose(
+            active_heap, active_available, all_totals, all_selected_events
+        )
+        active_available.remove(candidate)
+        add_selected(candidate)
+    inactive_available = set(agent_rows) - selected
+    inactive_heap = candidate_heap(inactive_available, all_totals, all_selected_events)
     while len(selected) < limit:
-        remaining_active = active_agents - selected
-        available = remaining_active if remaining_active else set(agent_rows) - selected
-        candidate = choose(available, all_incident)
-        selected.add(candidate)
-        component = analysis.component_id.get(candidate)
-        if component is not None:
-            selected_components.add(component)
+        candidate, _ = choose(
+            inactive_heap, inactive_available, all_totals, all_selected_events
+        )
+        inactive_available.remove(candidate)
+        add_selected(candidate)
     return sorted(selected)
 
 
@@ -554,22 +643,20 @@ def _path_overlap_neighborhood(
 def _path_overlap_seed_data(
     state: dict[str, Any], analysis: StateAnalysis,
 ) -> tuple[list[int], dict[int, float]] | None:
-    overlapping_cells = {
-        int(cell)
+    overlap_priority = {
+        int(cell): float(agent_visits - 1)
+        + 0.01 * float(analysis.visit_heat[int(cell)])
         for cell, agent_visits in analysis.agent_heat.items()
         if int(agent_visits) >= 2
     }
-    if not overlapping_cells:
+    if not overlap_priority:
         return None
+    overlapping_cells = overlap_priority.keys()
     priority: dict[int, float] = {}
     for agent in state["agents"]:
         agent_id = int(agent["id"])
         path_cells = set(map(int, agent.get("path", []))) & overlapping_cells
-        priority[agent_id] = sum(
-            float(analysis.agent_heat[cell] - 1)
-            + 0.01 * float(analysis.visit_heat[cell])
-            for cell in path_cells
-        )
+        priority[agent_id] = sum(overlap_priority[cell] for cell in path_cells)
     seeds = [agent for agent, score in priority.items() if score > 0.0]
     if not seeds:
         return None
