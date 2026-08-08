@@ -12,8 +12,10 @@ from experiments.stride_structpool_size_ablation import (
     _family_variant,
     _fixed_half_consistency,
     _grouped_family_size_quality,
+    _validate_label_matrix,
     validate_size_ablation_config,
 )
+from experiments.stride_repairability_collection import repairability_pp_seed
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -116,6 +118,70 @@ class StructPoolSizeAblationTests(unittest.TestCase):
         self.assertEqual(
             counts["map_id"]["map-a"]["conflict_component"],
             {8: 1, 16: 1},
+        )
+
+    def test_label_matrix_requires_exact_trials_pairing_and_features(self) -> None:
+        features = {f"f{i}": float(i) for i in range(124)}
+        expected = {
+            ("state", "candidate-a"): {
+                "agents": [1, 2],
+                "features": features,
+                "before_conflicts": 4,
+            },
+            ("state", "candidate-b"): {
+                "agents": [2, 3],
+                "features": features,
+                "before_conflicts": 4,
+            },
+        }
+        aggregates = [
+            {
+                "state_id": "state",
+                "candidate_id": candidate_id,
+                "agent_count": 8,
+                "actual_size": 2,
+                "agents": agents,
+                "features": features,
+            }
+            for candidate_id, agents in (
+                ("candidate-a", [1, 2]),
+                ("candidate-b", [2, 3]),
+            )
+        ]
+        trials = []
+        before_repair = "repair-before"
+        for candidate_id in ("candidate-a", "candidate-b"):
+            for trial_index in range(16):
+                trials.append(
+                    {
+                        "schema": TRIAL_SCHEMA,
+                        "state_id": "state",
+                        "candidate_id": candidate_id,
+                        "trial_index": trial_index,
+                        "pp_seed": repairability_pp_seed(
+                            before_repair, trial_index
+                        ),
+                        "before_conflicts": 4,
+                        "before_fingerprint": "before",
+                        "before_repair_fingerprint": before_repair,
+                    }
+                )
+        validation = _validate_label_matrix(
+            trials=trials,
+            aggregates=aggregates,
+            expected_candidates=expected,
+        )
+        self.assertTrue(validation["passed"])
+        broken = copy.deepcopy(trials)
+        broken[-1]["trial_index"] = 14
+        validation = _validate_label_matrix(
+            trials=broken,
+            aggregates=aggregates,
+            expected_candidates=expected,
+        )
+        self.assertFalse(validation["passed"])
+        self.assertTrue(
+            any("exactly 0-15" in message for message in validation["errors"])
         )
 
 

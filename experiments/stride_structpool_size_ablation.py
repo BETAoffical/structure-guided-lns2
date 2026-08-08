@@ -559,6 +559,111 @@ def _copy_reused_trial(
     }
 
 
+def _validate_label_matrix(
+    *,
+    trials: list[dict[str, Any]],
+    aggregates: list[dict[str, Any]],
+    expected_candidates: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    errors: list[str] = []
+    aggregate_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in aggregates:
+        key = (str(row["state_id"]), str(row["candidate_id"]))
+        if key in aggregate_by_key:
+            errors.append(f"duplicate aggregate: {key[0]} {key[1]}")
+            continue
+        aggregate_by_key[key] = row
+    expected_keys = set(expected_candidates)
+    aggregate_keys = set(aggregate_by_key)
+    for state_id, candidate_id in sorted(expected_keys - aggregate_keys):
+        errors.append(f"missing aggregate: {state_id} {candidate_id}")
+    for state_id, candidate_id in sorted(aggregate_keys - expected_keys):
+        errors.append(f"unexpected aggregate: {state_id} {candidate_id}")
+
+    trials_by_key: dict[tuple[str, str], list[dict[str, Any]]] = (
+        collections.defaultdict(list)
+    )
+    state_trial_seeds: dict[tuple[str, int], set[int]] = collections.defaultdict(set)
+    for row in trials:
+        key = (str(row["state_id"]), str(row["candidate_id"]))
+        trials_by_key[key].append(row)
+        state_trial_seeds[(key[0], int(row["trial_index"]))].add(
+            int(row["pp_seed"])
+        )
+    for state_id, candidate_id in sorted(set(trials_by_key) - expected_keys):
+        errors.append(f"unexpected trial candidate: {state_id} {candidate_id}")
+
+    expected_indices = set(TRIAL_INDICES)
+    for key in sorted(expected_keys):
+        expected = expected_candidates[key]
+        aggregate = aggregate_by_key.get(key)
+        if aggregate is None:
+            continue
+        features = dict(aggregate.get("features") or {})
+        agents = tuple(int(agent) for agent in aggregate.get("agents") or [])
+        expected_agents = tuple(int(agent) for agent in expected["agents"])
+        if agents != expected_agents:
+            errors.append(f"candidate agents changed: {key[0]} {key[1]}")
+        if len(agents) != len(set(agents)) or any(
+            agent < 0 or agent >= int(aggregate["agent_count"]) for agent in agents
+        ):
+            errors.append(f"candidate agents are not a legal native action: {key[0]} {key[1]}")
+        if int(aggregate["actual_size"]) != len(agents):
+            errors.append(f"candidate actual size mismatch: {key[0]} {key[1]}")
+        if len(features) != 124:
+            errors.append(f"candidate feature dimension is not 124: {key[0]} {key[1]}")
+        if features != dict(expected["features"]):
+            errors.append(f"candidate features changed: {key[0]} {key[1]}")
+        rows = trials_by_key.get(key, [])
+        indices = [int(row["trial_index"]) for row in rows]
+        if (
+            len(rows) != 16
+            or set(indices) != expected_indices
+            or len(indices) != len(set(indices))
+        ):
+            errors.append(f"candidate trial matrix is not exactly 0-15: {key[0]} {key[1]}")
+            continue
+        before_values = {
+            (
+                int(row["before_conflicts"]),
+                str(row["before_fingerprint"]),
+                str(row["before_repair_fingerprint"]),
+            )
+            for row in rows
+        }
+        if len(before_values) != 1:
+            errors.append(f"candidate before-state identity changed: {key[0]} {key[1]}")
+            continue
+        before_conflicts, _, before_repair = next(iter(before_values))
+        if before_conflicts != int(expected["before_conflicts"]):
+            errors.append(f"candidate before conflicts changed: {key[0]} {key[1]}")
+        for row in rows:
+            if str(row.get("schema")) != TRIAL_SCHEMA:
+                errors.append(f"candidate trial schema mismatch: {key[0]} {key[1]}")
+                break
+            trial_index = int(row["trial_index"])
+            expected_seed = repairability_pp_seed(before_repair, trial_index)
+            if int(row["pp_seed"]) != expected_seed:
+                errors.append(f"candidate PP seed formula mismatch: {key[0]} {key[1]}")
+                break
+
+    for (state_id, trial_index), seeds in sorted(state_trial_seeds.items()):
+        if len(seeds) != 1:
+            errors.append(
+                f"state/trial PP seeds are not paired: {state_id} {trial_index}"
+            )
+    return {
+        "passed": not errors,
+        "errors": errors,
+        "expected_candidate_count": len(expected_keys),
+        "observed_candidate_count": len(aggregate_keys),
+        "observed_trial_count": len(trials),
+        "feature_dimension": 124,
+        "trial_indices": list(TRIAL_INDICES),
+        "paired_state_trial_count": len(state_trial_seeds),
+    }
+
+
 def _collect_size_label_state(job: dict[str, Any]) -> dict[str, Any]:
     grid_path = Path(str(job["grid_path"]))
     grid = _read_json(grid_path)
@@ -874,6 +979,16 @@ def collect_size_labels(
     all_trials: list[dict[str, Any]] = []
     all_aggregates: list[dict[str, Any]] = []
     state_rows = []
+    expected_candidates: dict[tuple[str, str], dict[str, Any]] = {}
+    for manifest in manifests:
+        grid_state = _read_json(Path(str(manifest["state_file"])))
+        state_id = str(grid_state["state_id"])
+        for candidate in grid_state["candidates"]:
+            expected_candidates[(state_id, str(candidate["candidate_id"]))] = {
+                "agents": list(candidate["agents"]),
+                "features": dict(candidate["features"]),
+                "before_conflicts": int(grid_state["before_conflicts"]),
+            }
     for result in sorted(successes, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["state_file"])))
         decision = dict(payload["decision"])
@@ -915,6 +1030,11 @@ def collect_size_labels(
     for row in all_trials:
         paired[(str(row["state_id"]), int(row["trial_index"]))].add(int(row["pp_seed"]))
         distinct[str(row["state_id"])].add(int(row["pp_seed"]))
+    matrix_validation = _validate_label_matrix(
+        trials=all_trials,
+        aggregates=all_aggregates,
+        expected_candidates=expected_candidates,
+    )
     passed = bool(
         len(state_rows) == len(manifests)
         and trial_count == candidate_count * 16
@@ -922,6 +1042,7 @@ def collect_size_labels(
         and not _forbidden_hits([all_trials, all_aggregates])
         and all(len(values) == 1 for values in paired.values())
         and all(len(values) == 16 for values in distinct.values())
+        and matrix_validation["passed"]
     )
     artifacts: dict[str, Any] = {}
     if passed:
@@ -950,6 +1071,7 @@ def collect_size_labels(
         "error_state_count": sum(row.get("status") == "error" for row in failures),
         "timeout_state_count": sum(row.get("status") == "timeout" for row in failures),
         "paired_pp_seed_integrity": passed,
+        "label_matrix_validation": matrix_validation,
         "runtime_or_future_fields_stored": False,
         "formal_ttf_claim": False,
         "passed": passed,
