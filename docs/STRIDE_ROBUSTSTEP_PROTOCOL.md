@@ -4650,3 +4650,38 @@ Top-3 deltas.  Passing authorizes only the full-generate-then-filter runtime
 implementation and a preregistered paired development Quick.  It does not
 authorize training, default replacement, a formal speed claim or a
 generalization claim.
+
+### StructPool LeanPool v1 offline result
+
+The preregistered audit completed with all identity and product checks passing:
+320 states, 98 active states, 6,285 full candidates, 6,236 LeanPool candidates,
+100,560 paired trials, 28 maps, and exactly 49 removed pure-bottleneck rows in
+49 states.  All 5,701 base candidates were retained, inactive fallback was
+exact, every full-pool selection reproduced the registered pool-effect audit,
+and none of the removed rows had been the full-pool winner.
+
+Only one of the 98 active-state V2 actions changed.  Across the active cohort,
+LeanPool produced one mean-quality improvement, 97 ties, zero mean-quality
+regressions and zero robust regressions.  Mean normalized selected gain was
+`0.002631`; mean normalized regret fell from `0.147120` to `0.144489`;
+exact-best rate rose from `0.428571` to `0.438776`; and quality Top-3 rate was
+unchanged at `0.765306`.  All seven preregistered runtime-Quick gates therefore
+passed.
+
+The changed state is not uniformly positive across the paired seed halves:
+its first fixed half is negative while its second fixed half is positive, even
+though the 16-seed mean improves and it does not meet the robust-regression
+rule.  The result therefore supports testing whether the smaller ranking pool
+reduces end-to-end overhead without a systematic quality loss; it does not
+establish a seed-stable quality improvement.
+
+The audit report SHA-256 is
+`d31d14232d4fc11028ab179837cf7c84f41551542897a0baa7504f08e5fee677`;
+the 320 outcome-blind selection rows have SHA-256
+`a017f550f4b14947f57f08fe08f5240ead8fef6ef1f56c4226327f793d62c948`;
+and the 320 paired-effect rows have SHA-256
+`e671be6eaabf4bfe442a7f5e81cb7a7a48abe1d1c40b9f26cd6f10bcbbcd507a`.
+This authorizes the registered runtime implementation and four-controller
+development Quick only.  Milestone validation passed 622 Python tests with 34
+registered skips in the WSL runtime, the Windows native test binary, Linux
+CTest 11/11, retention coverage and repository hygiene.
