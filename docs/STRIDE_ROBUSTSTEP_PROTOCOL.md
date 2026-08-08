@@ -4555,3 +4555,63 @@ rounds, PP time and normalized wall AUC are secondary.  In addition to all
 usual integrity gates, the StructPool selected-neighborhood and conflict
 trajectories must equal the preceding run.  This is a runtime diagnostic only,
 not a LeanPool, gate, training, fresh-map, formal-speed or promotion test.
+
+### StructPool second runtime optimization result
+
+All 24 registered schedule entries completed.  Every controller solved all
+eight paired keys, with zero execution errors, invalid actions, semantic
+mismatches, initial-fingerprint mismatches, initial-conflict mismatches,
+capped-TTF values or TTF-clock violations.  StructPool passed its gate on 44
+decisions, added 263 non-duplicate candidates and selected a StructPool action
+43 times.
+
+The dedicated runtime-equivalence audit compared the new StructPool traces with
+the preceding three-controller Quick after removing only timing fields.  All
+eight episodes and all 93 transitions match exactly.  The comparison includes
+the complete candidate pool, candidate scores, selected candidate, explicit
+agent set, PP seed and repair order, before/after fingerprints, low-level
+deltas, conflict trajectory and final summary.  Its semantic-row SHA-256 is
+`75efaf7104f2969e62a7cdf4b3e8b5e93b9a31c096913de0575534c78e52c511`.
+
+On those identical trajectories, mean StructPool candidate-construction time
+fell from `0.346240` to `0.118091` seconds per episode (`65.8933%`), and mean
+neighborhood-selection time fell from `0.754489` to `0.492894` seconds
+(`34.6718%`).  The new selection cost is only `0.026013` seconds above V2's
+`0.466881`, whereas the preceding run's gap was `0.251880` seconds.  These
+exact-trajectory measurements, together with the isolated generator benchmark,
+are the direct evidence that the code optimization worked.
+
+| Controller | Mean raw TTF (s) | Median raw TTF (s) | Mean repairs | Mean PP (s) | Mean selection (s) | Mean normalized wall AUC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Official LNS2 / Adaptive | 12.503440 | 11.066918 | 57.500 | 5.065152 | 0.004205 | 0.676776 |
+| `v2-full` | 11.085044 | 8.942151 | 20.750 | 3.790661 | 0.466881 | 0.718466 |
+| Speed2 `v2-plus-structpool` | 10.007047 | 7.582167 | 11.625 | 2.867379 | 0.492894 | 0.756750 |
+
+Within this strictly interleaved run, Speed2 StructPool improves mean raw TTF
+over V2 by `9.7248%`, is faster on 5/8 keys and uses `9.125` fewer repair
+iterations on average.  Against official LNS2 it improves mean TTF by
+`19.9656%`, is faster on 7/8 keys and uses `45.875` fewer repairs.  Maze300
+improves over V2 by `11.3638%` (3/4 faster), and Room500 improves by `7.2985%`
+(2/4 faster).  Thus both registered groups are positive in the aggregate,
+although the paired win counts remain mixed.
+
+The new StructPool mean TTF is `14.0184%` below its preceding identical-trajectory
+run, but mean PP time also fell by `16.1413%`.  The full cross-run TTF difference
+therefore cannot be attributed entirely to candidate code; the valid solver
+comparison is the within-run interleaved result, while the direct code-speed
+claim rests on generator and selection timing.  Normalized wall AUC also remains
+worse for StructPool than for V2 and official LNS2, so this result does not prove
+uniform trajectory quality or generalization.
+
+The independently regenerated result report SHA-256 is
+`55319c14992d33c05e4f30ad4837cfabcb6f12941ddf6385e14e6dced589d7d2`;
+the unchanged schedule SHA-256 is
+`95aa05a5c23df47fed548e5bfd98331d90ea5a2c7612c0d543fddc38672864dd`;
+and the runtime-equivalence report SHA-256 is
+`a18b82e46a8d14a275bcf60b5e609e7ae039a446becc9f15bc419dc5a2ceac53`.
+Final validation completed with 628 Python tests passing and 34 registered
+skips, the Windows native test binary passing, and Linux CTest passing 11/11.
+This remains an eight-key reused-task development diagnostic.  It supports
+retaining the runtime optimization, but it does not by itself authorize
+StructPool as the default or validate LeanPool, a new gate, fresh-map speed or
+formal generalization.

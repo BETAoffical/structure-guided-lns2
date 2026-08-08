@@ -1732,6 +1732,21 @@
       "path": "tests/evaluation/test_stride_structpool_revised_six_map_ttf.py",
       "role": "active",
       "contract": "Seventy-two alternating schedule entries, exact paired task/seed coverage, candidate-pool-only treatment, no time cap, and qualification-conditioned claim boundary."
+    },
+    {
+      "path": "scripts/benchmark_structpool_generator.py",
+      "role": "reproducibility",
+      "purpose": "Reconstruct activated StructPool decisions and verify exact candidate JSON while benchmarking semantics-preserving generator changes."
+    },
+    {
+      "path": "scripts/verify_structpool_runtime_equivalence.py",
+      "role": "shared",
+      "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."
+    },
+    {
+      "path": "tests/runtime/test_structpool_runtime_equivalence.py",
+      "role": "active",
+      "contract": "Runtime-field exclusion preserves full candidate and action semantics and detects any explicit-neighborhood change."
     }
   ]
 }

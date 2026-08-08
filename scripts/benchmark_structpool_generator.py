@@ -22,12 +22,11 @@ from experiments.closed_loop_trace_storage import (  # noqa: E402
     EPISODE_SCHEMA_V2,
     apply_extras_delta,
     apply_state_delta,
-    read_state_blob,
     read_trace_events,
-    resolve_state_blob,
 )
 from experiments.repair_collection import _read_jsonl, _write_json, state_fingerprint  # noqa: E402
 from experiments.state_analysis import analyze_state, analyze_static_grid  # noqa: E402
+from experiments.trace_replay import _initial_state  # noqa: E402
 from lns2_selector.runtime.topology_candidates import (  # noqa: E402
     generate_structpool_candidates,
 )
@@ -44,24 +43,6 @@ def _canonical(value: Any) -> bytes:
 
 def _sha256(value: Any) -> str:
     return hashlib.sha256(_canonical(value)).hexdigest()
-
-
-def _initial_state(
-    collection_root: Path, trace_path: Path, event: dict[str, Any]
-) -> dict[str, Any]:
-    if str(event.get("schema")) != EPISODE_SCHEMA_V2:
-        state = event.get("state")
-        if not isinstance(state, dict):
-            raise ValueError("source trace is missing its initial state")
-        return dict(state)
-    state = read_state_blob(
-        resolve_state_blob(trace_path, str(event["state_blob"]), collection_root)
-    )
-    extras = event.get("state_extras")
-    if not isinstance(extras, dict):
-        raise ValueError("source trace has invalid initial extras")
-    state.update(extras)
-    return state
 
 
 def _samples(collection_roots: list[Path]) -> list[dict[str, Any]]:
