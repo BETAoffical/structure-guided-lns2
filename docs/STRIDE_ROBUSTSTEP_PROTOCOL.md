@@ -4795,3 +4795,64 @@ six-map diagnostic.  A pass authorizes only preregistration of a truly
 never-timed MovingAI-map replication.  It cannot replace full StructPool,
 promote a default, or support a formal speed/generalization claim; a failure
 retains full StructPool and ends the current LeanPool preference attempt.
+
+### StructPool LeanPool v1 label-map-disjoint confirmation result
+
+The global current-implementation qualification passed with 30/30 valid
+resets, 27 nonzero-conflict states, five active maps, zero errors and zero
+timeouts.  All 120 strictly rotated episodes then completed: every controller
+solved all 30 paired keys, with zero execution errors, invalid actions,
+semantic mismatches, initial-state mismatches, capped values or TTF-clock
+violations.  Full StructPool activated and selected structural actions,
+LeanPool exercised its registered filter, and the full-pool control filtered
+zero rows.  All integrity gates therefore passed.
+
+| Controller | Mean raw TTF (s) | Median raw TTF (s) | Mean repairs | Mean PP (s) | Mean selection (s) | Mean normalized wall AUC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Official LNS2 / Adaptive | 6.696087 | 3.209249 | 39.533 | 3.234522 | 0.004845 | 0.643744 |
+| `v2-full` | 5.883889 | 3.292040 | 13.900 | 2.461667 | 0.346333 | 0.675543 |
+| Full Speed2 StructPool | 8.509288 | 2.834303 | 18.833 | 4.476338 | 0.891268 | 0.701789 |
+| LeanPool v1 | 20.812685 | 2.780771 | 162.900 | 11.013839 | 4.335545 | 0.692275 |
+
+LeanPool failed the primary comparison decisively.  Relative to full
+StructPool, mean raw TTF increased by `144.5879%` (`20.812685` versus
+`8.509288` seconds), mean repair iterations increased by `144.067`, and mean
+selection time increased by `386.4470%`.  LeanPool was nevertheless faster on
+17/30 paired keys.  This apparent contradiction is caused by a catastrophic
+tail episode rather than a uniform slowdown: on
+`maze-128-128-1__derived_opposite_exchange__task_seed_0233__agents_0100`
+with solver seed 3, full StructPool used 301 repairs and `99.356` seconds,
+whereas LeanPool used 4,623 repairs and `470.330` seconds.  Its accumulated
+selection and PP times rose from `17.622`/`75.509` seconds to
+`121.021`/`272.684` seconds.  The other five Maze100 keys retained identical
+repair counts between the two treatments.
+
+| Map/load group | Lean versus full mean raw-TTF improvement | Paired wins | Mean repair delta |
+| --- | ---: | ---: | ---: |
+| Den300 | +1.0235% | 3/6 | 0.000 |
+| Maze100 | -271.9121% | 3/6 | +720.333 |
+| Random500 | -0.5582% | 4/6 | 0.000 |
+| Room400 | +0.8567% | 4/6 | 0.000 |
+| Warehouse600 | +0.3021% | 3/6 | 0.000 |
+
+Thus paired-win fraction and success non-inferiority passed, but the registered
+mean-TTF, maximum group regression, repair non-inferiority and selection-time
+gates failed.  The smaller pool did not merely save or add a fixed amount of
+ranking overhead: on the deterministic paired Maze seed it changed the
+realized repair trajectory and exposed a severe long-tail failure.  The
+offline one-step audit and eight-key Quick therefore did not establish dynamic
+run-to-completion safety for removing pure bottleneck candidates.
+
+Full StructPool is also not promoted by this result.  Across the same 30 keys
+it was `44.6201%` slower than V2 on mean raw TTF and used `4.933` more repairs,
+despite winning 18/30 pairs; Maze100 was again the dominant negative group.
+`v2-full` remains the default anchor.  Per preregistration, LeanPool preference
+and never-timed replication are stopped, full StructPool is retained only as a
+research treatment, and no speed or generalization claim is made.
+
+The independently regenerated result SHA-256 is
+`ae2fbe84c64511ffce3aa373ef06403473d363c3a03917fe6de4a5571ada4ea7`;
+the execution-schedule file SHA-256 is
+`e05b19229bd9d119b0eb1c754b4a9bcf1499ef6bc7beba7b48f9ea95cddff413`;
+and the registered schedule fingerprint remains
+`e2aa4ee5b53f2fb6d2510da0d7f35fbd90241bfc48989d6f79c434cd7fe3ab95`.
