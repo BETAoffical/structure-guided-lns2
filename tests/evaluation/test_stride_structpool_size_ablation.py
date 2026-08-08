@@ -184,6 +184,48 @@ class StructPoolSizeAblationTests(unittest.TestCase):
             any("exactly 0-15" in message for message in validation["errors"])
         )
 
+    def test_label_matrix_rejects_changed_before_fingerprint(self) -> None:
+        before_repair = "repair-before"
+        candidate = {
+            "state_id": "state",
+            "candidate_id": "candidate",
+            "agents": [0, 1],
+            "actual_size": 2,
+            "agent_count": 2,
+            "features": {f"feature_{index}": 0.0 for index in range(124)},
+        }
+        trials = [
+            {
+                "schema": TRIAL_SCHEMA,
+                "state_id": "state",
+                "candidate_id": "candidate",
+                "trial_index": trial_index,
+                "pp_seed": repairability_pp_seed(before_repair, trial_index),
+                "before_conflicts": 4,
+                "before_fingerprint": "wrong-before",
+                "before_repair_fingerprint": before_repair,
+            }
+            for trial_index in range(16)
+        ]
+        validation = _validate_label_matrix(
+            trials=trials,
+            aggregates=[candidate],
+            expected_candidates={
+                ("state", "candidate"): {
+                    "agents": [0, 1],
+                    "features": dict(candidate["features"]),
+                    "before_conflicts": 4,
+                    "before_fingerprint": "expected-before",
+                    "before_repair_fingerprint": before_repair,
+                }
+            },
+        )
+        self.assertFalse(validation["passed"])
+        self.assertIn(
+            "candidate before fingerprint changed: state candidate",
+            validation["errors"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

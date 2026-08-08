@@ -54,6 +54,7 @@ LABEL_STATE_SCHEMA = "lns2.stride.structpool_size_label_state.v1"
 TRIAL_SCHEMA = "lns2.stride.structpool_size_label_trial.v1"
 AGGREGATE_SCHEMA = "lns2.stride.structpool_size_current_step_label.v1"
 LABEL_REPORT_SCHEMA = "lns2.stride.structpool_size_label_report.v1"
+LABEL_AUDIT_SCHEMA = "lns2.stride.structpool_size_label_audit.v1"
 ANALYSIS_SCHEMA = "lns2.stride.structpool_size_ablation_report.v1"
 TRIAL_INDICES = tuple(range(16))
 FORBIDDEN_FIELDS = {
@@ -637,6 +638,14 @@ def _validate_label_matrix(
         before_conflicts, _, before_repair = next(iter(before_values))
         if before_conflicts != int(expected["before_conflicts"]):
             errors.append(f"candidate before conflicts changed: {key[0]} {key[1]}")
+        expected_before = str(expected.get("before_fingerprint") or "")
+        expected_before_repair = str(expected.get("before_repair_fingerprint") or "")
+        if expected_before and next(iter(before_values))[1] != expected_before:
+            errors.append(f"candidate before fingerprint changed: {key[0]} {key[1]}")
+        if expected_before_repair and before_repair != expected_before_repair:
+            errors.append(
+                f"candidate before repair fingerprint changed: {key[0]} {key[1]}"
+            )
         for row in rows:
             if str(row.get("schema")) != TRIAL_SCHEMA:
                 errors.append(f"candidate trial schema mismatch: {key[0]} {key[1]}")
@@ -988,6 +997,10 @@ def collect_size_labels(
                 "agents": list(candidate["agents"]),
                 "features": dict(candidate["features"]),
                 "before_conflicts": int(grid_state["before_conflicts"]),
+                "before_fingerprint": str(grid_state["before_fingerprint"]),
+                "before_repair_fingerprint": str(
+                    grid_state["before_repair_fingerprint"]
+                ),
             }
     for result in sorted(successes, key=lambda row: str(row["state_id"])):
         payload = _read_json(Path(str(result["state_file"])))
@@ -1080,6 +1093,253 @@ def collect_size_labels(
     }
     _write_json(output / "collection_report.json", report)
     _write_json(status_path, {**report, "status": "complete" if passed else "failed"})
+    return report
+
+
+def audit_size_labels(
+    *,
+    config_path: str | Path,
+    grid: str | Path,
+    labels: str | Path,
+    output: str | Path,
+) -> dict[str, Any]:
+    """Audit an immutable completed label run with the current verifier.
+
+    The collection run fingerprint intentionally binds producer source hashes.  This
+    audit therefore never rewrites or resumes a run produced by an older source
+    snapshot; it verifies that run in place and writes current-code evidence to a
+    separate output directory.
+    """
+
+    config_path = Path(config_path).resolve()
+    project_root = config_path.parents[1]
+    config = _read_json(config_path)
+    validate_size_ablation_config(config, project_root=project_root)
+    grid = Path(grid).resolve()
+    labels = Path(labels).resolve()
+    output = Path(output).resolve()
+    if output == labels or labels in output.parents:
+        raise ValueError("size-label audit output must be separate from label artifacts")
+
+    errors: list[str] = []
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            errors.append(message)
+
+    grid_report = _read_json(grid / "grid_report.json")
+    grid_manifests = _read_jsonl(grid / "grid_manifest.jsonl")
+    collection_report = _read_json(labels / "collection_report.json")
+    collection_status = _read_json(labels / "collection_status.json")
+    original_run = _read_json(labels / "run_config.json")
+    trials_path = labels / "repair_trials.jsonl"
+    aggregates_path = labels / "candidate_aggregates.jsonl"
+    state_manifest_path = labels / "state_manifest.jsonl"
+    trials = _read_jsonl(trials_path)
+    aggregates = _read_jsonl(aggregates_path)
+    state_manifest = _read_jsonl(state_manifest_path)
+
+    expected_state_count = int(config["cohort"]["active_structpool_state_count"])
+    require(grid_report.get("passed") is True, "size grid is not complete")
+    require(
+        len(grid_manifests) == expected_state_count,
+        "size-grid state count changed",
+    )
+    require(collection_report.get("passed") is True, "label collection did not pass")
+    require(collection_status.get("status") == "complete", "label status is not complete")
+    require(not collection_report.get("errors"), "label collection contains errors")
+    require(
+        int(collection_report.get("error_state_count", -1)) == 0,
+        "label collection contains error states",
+    )
+    require(
+        int(collection_report.get("timeout_state_count", -1)) == 0,
+        "label collection contains timeout states",
+    )
+    require(
+        collection_report.get("run_fingerprint") == original_run.get("run_fingerprint"),
+        "label report and run fingerprint differ",
+    )
+    require(
+        collection_report.get("runtime_or_future_fields_stored") is False,
+        "label report permits runtime or future fields",
+    )
+    require(
+        collection_report.get("formal_ttf_claim") is False,
+        "label report makes an invalid TTF claim",
+    )
+
+    expected_candidates: dict[tuple[str, str], dict[str, Any]] = {}
+    grid_state_by_id: dict[str, dict[str, Any]] = {}
+    for manifest in grid_manifests:
+        state_file = Path(str(manifest["state_file"]))
+        require(state_file.is_file(), f"missing grid state: {state_file}")
+        if not state_file.is_file():
+            continue
+        require(
+            sha256_file(state_file) == str(manifest["state_file_sha256"]),
+            f"grid state SHA-256 changed: {manifest['state_id']}",
+        )
+        state = _read_json(state_file)
+        state_id = str(manifest["state_id"])
+        grid_state_by_id[state_id] = state
+        require(str(state.get("state_id")) == state_id, f"grid state id changed: {state_id}")
+        require(
+            int(state.get("unique_candidate_count", -1))
+            == int(manifest["candidate_count"]),
+            f"grid candidate count changed: {state_id}",
+        )
+        require(not _forbidden_hits(state), f"grid state has forbidden fields: {state_id}")
+        for candidate in state.get("candidates") or []:
+            key = (state_id, str(candidate["candidate_id"]))
+            require(key not in expected_candidates, f"duplicate grid candidate: {key}")
+            expected_candidates[key] = {
+                "agents": list(candidate["agents"]),
+                "features": dict(candidate["features"]),
+                "before_conflicts": int(state["before_conflicts"]),
+                "before_fingerprint": str(state["before_fingerprint"]),
+                "before_repair_fingerprint": str(state["before_repair_fingerprint"]),
+            }
+
+    matrix_validation = _validate_label_matrix(
+        trials=trials,
+        aggregates=aggregates,
+        expected_candidates=expected_candidates,
+    )
+    errors.extend(str(message) for message in matrix_validation["errors"])
+    forbidden_hits = sorted(_forbidden_hits([trials, aggregates]))
+    require(not forbidden_hits, f"label artifacts contain forbidden fields: {forbidden_hits}")
+
+    manifest_by_state: dict[str, dict[str, Any]] = {}
+    global_trials_by_state: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    global_aggregates_by_state: dict[str, dict[str, dict[str, Any]]] = (
+        collections.defaultdict(dict)
+    )
+    for row in trials:
+        global_trials_by_state[str(row["state_id"])].append(row)
+    for row in aggregates:
+        global_aggregates_by_state[str(row["state_id"])][str(row["candidate_id"])] = row
+
+    for row in state_manifest:
+        state_id = str(row["state_id"])
+        require(state_id not in manifest_by_state, f"duplicate label state manifest: {state_id}")
+        manifest_by_state[state_id] = row
+        state_file = Path(str(row["state_file"]))
+        require(state_file.is_file(), f"missing label state: {state_id}")
+        if not state_file.is_file():
+            continue
+        require(
+            sha256_file(state_file) == str(row["state_file_sha256"]),
+            f"label state SHA-256 changed: {state_id}",
+        )
+        payload = _read_json(state_file)
+        grid_state = grid_state_by_id.get(state_id)
+        require(payload.get("schema") == LABEL_STATE_SCHEMA, f"label state schema changed: {state_id}")
+        require(payload.get("complete") is True, f"label state is incomplete: {state_id}")
+        require(str(payload.get("state_id")) == state_id, f"label state id changed: {state_id}")
+        require(
+            payload.get("run_fingerprint") == original_run.get("run_fingerprint"),
+            f"label state run fingerprint changed: {state_id}",
+        )
+        require(not _forbidden_hits(payload), f"label state has forbidden fields: {state_id}")
+        if grid_state is not None:
+            require(
+                str(payload.get("before_fingerprint"))
+                == str(grid_state["before_fingerprint"]),
+                f"label state fingerprint changed: {state_id}",
+            )
+            require(
+                str(payload.get("before_repair_fingerprint"))
+                == str(grid_state["before_repair_fingerprint"]),
+                f"label repair fingerprint changed: {state_id}",
+            )
+            require(
+                int(payload.get("before_conflicts", -1))
+                == int(grid_state["before_conflicts"]),
+                f"label before conflicts changed: {state_id}",
+            )
+            require(
+                sha256_file(Path(str(payload["grid_state_file"])))
+                == str(payload["grid_state_sha256"]),
+                f"label grid reference SHA-256 changed: {state_id}",
+            )
+        require(
+            list(payload.get("trials") or []) == global_trials_by_state.get(state_id, []),
+            f"global and per-state trials differ: {state_id}",
+        )
+        global_candidates = global_aggregates_by_state.get(state_id, {})
+        for candidate in payload.get("candidate_aggregates") or []:
+            observed = global_candidates.get(str(candidate["candidate_id"]))
+            require(observed is not None, f"missing global aggregate: {state_id}")
+            if observed is not None:
+                require(
+                    all(observed.get(key) == value for key, value in candidate.items()),
+                    f"global and per-state aggregate differ: {state_id} {candidate['candidate_id']}",
+                )
+
+    expected_states = set(grid_state_by_id)
+    require(set(manifest_by_state) == expected_states, "label state manifest coverage changed")
+    require(len(state_manifest) == expected_state_count, "label state manifest count changed")
+    require(len(aggregates) == len(expected_candidates), "global candidate count changed")
+    require(len(trials) == len(expected_candidates) * len(TRIAL_INDICES), "global trial count changed")
+
+    reused_count = sum(
+        str(row.get("trial_source")) == "reused_exact_robustaction_v1" for row in trials
+    )
+    new_count = sum(str(row.get("trial_source")) == "new_size_grid_repair" for row in trials)
+    require(reused_count + new_count == len(trials), "unexpected trial source exists")
+    require(
+        reused_count == int(collection_report.get("reused_trial_count", -1)),
+        "reused trial count changed",
+    )
+    require(
+        new_count == int(collection_report.get("new_trial_count", -1)),
+        "new trial count changed",
+    )
+
+    artifact_paths = {
+        "repair_trials_sha256": trials_path,
+        "candidate_aggregates_sha256": aggregates_path,
+        "state_manifest_sha256": state_manifest_path,
+    }
+    observed_hashes = {name: sha256_file(path) for name, path in artifact_paths.items()}
+    observed_hashes["state_artifact_tree_sha256"] = state_artifact_tree_sha256(
+        labels / "states"
+    )
+    for name, observed in observed_hashes.items():
+        require(
+            str((collection_report.get("artifacts") or {}).get(name)) == observed,
+            f"label artifact SHA-256 changed: {name}",
+        )
+
+    report = {
+        "schema": LABEL_AUDIT_SCHEMA,
+        "scientific_status": "immutable_size_labels_verified_by_current_code"
+        if not errors
+        else "failed",
+        "source_run_fingerprint": original_run.get("run_fingerprint"),
+        "source_producer": original_run.get("producer"),
+        "auditor": producer_identity(
+            project_root=project_root,
+            source_files=PRODUCER_FILES,
+            native_required=True,
+            package_names=("numpy",),
+        ),
+        "state_count": len(state_manifest),
+        "candidate_count": len(aggregates),
+        "trial_count": len(trials),
+        "reused_trial_count": reused_count,
+        "new_trial_count": new_count,
+        "matrix_validation": matrix_validation,
+        "forbidden_fields": forbidden_hits,
+        "source_artifacts": observed_hashes,
+        "source_artifacts_modified": False,
+        "formal_ttf_claim": False,
+        "passed": not errors,
+        "errors": errors,
+    }
+    output.mkdir(parents=True, exist_ok=True)
+    _write_json(output / "audit_report.json", report)
     return report
 
 

@@ -24,10 +24,18 @@ def main() -> int:
     parser.add_argument(
         "--output", default="build/stride-scalepool-v1-offline-evaluation"
     )
+    parser.add_argument(
+        "--label-audit",
+        default=(
+            "build/stride-structpool-size-labels-current-audit-v1/"
+            "audit_report.json"
+        ),
+    )
     arguments = parser.parse_args()
     report = evaluate_scalepool(
         config_path=arguments.config,
         output=arguments.output,
+        label_audit=arguments.label_audit,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if report["runtime_integration_allowed"] else 1

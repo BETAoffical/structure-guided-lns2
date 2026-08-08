@@ -17,6 +17,7 @@ from experiments.stride_repairability_collection import _source_target_state
 from experiments.online_feature_engine import TopologyAnalysisCache
 from experiments.stride_structpool_size_ablation import (
     _best,
+    _family_variant,
     _forbidden_hits,
     state_artifact_tree_sha256,
 )
@@ -27,6 +28,7 @@ from lns2_selector.runtime.topology_candidates import generate_scalepool_candida
 CONFIG_SCHEMA = "lns2.stride.scalepool_registration.v1"
 REPORT_SCHEMA = "lns2.stride.scalepool_offline_evaluation.v1"
 STATE_SCHEMA = "lns2.stride.scalepool_offline_state.v1"
+LABEL_AUDIT_SCHEMA = "lns2.stride.structpool_size_label_audit.v1"
 
 
 def validate_scalepool_config(
@@ -151,8 +153,43 @@ def summarize_scalepool_acceptance(
     return {"metrics": metrics, "checks": checks, "passed": all(checks.values())}
 
 
+def _validate_external_label_audit(
+    *,
+    label_report: dict[str, Any],
+    audit_report: dict[str, Any],
+    observed_artifacts: dict[str, str],
+) -> None:
+    if audit_report.get("schema") != LABEL_AUDIT_SCHEMA:
+        raise ValueError("ScalePool label audit schema changed")
+    if audit_report.get("passed") is not True:
+        raise ValueError("ScalePool label audit did not pass")
+    if audit_report.get("source_artifacts_modified") is not False:
+        raise ValueError("ScalePool label audit modified source artifacts")
+    if audit_report.get("matrix_validation", {}).get("passed") is not True:
+        raise ValueError("ScalePool label audit lacks strict matrix validation")
+    if audit_report.get("source_run_fingerprint") != label_report.get(
+        "run_fingerprint"
+    ):
+        raise ValueError("ScalePool label audit run fingerprint differs")
+    for field in ("state_count", "candidate_count", "trial_count"):
+        source_field = (
+            "completed_state_count" if field == "state_count" else field
+        )
+        if int(audit_report.get(field, -1)) != int(label_report.get(source_field, -2)):
+            raise ValueError(f"ScalePool label audit {field} differs")
+    audited_artifacts = dict(audit_report.get("source_artifacts") or {})
+    registered_artifacts = dict(label_report.get("artifacts") or {})
+    if audited_artifacts != observed_artifacts:
+        raise ValueError("ScalePool label audit source artifact hashes differ")
+    if any(registered_artifacts.get(name) != value for name, value in observed_artifacts.items()):
+        raise ValueError("ScalePool label report artifact hashes differ")
+
+
 def evaluate_scalepool(
-    *, config_path: str | Path, output: str | Path
+    *,
+    config_path: str | Path,
+    output: str | Path,
+    label_audit: str | Path | None = None,
 ) -> dict[str, Any]:
     config_path = Path(config_path).resolve()
     project_root = config_path.parents[1]
@@ -168,8 +205,28 @@ def evaluate_scalepool(
         raise ValueError("ScalePool evaluation requires a complete Stage 2 grid")
     if label_report.get("passed") is not True:
         raise ValueError("ScalePool evaluation requires complete Stage 2 labels")
+    observed_label_artifacts = {
+        "repair_trials_sha256": sha256_file(labels_root / "repair_trials.jsonl"),
+        "candidate_aggregates_sha256": sha256_file(
+            labels_root / "candidate_aggregates.jsonl"
+        ),
+        "state_manifest_sha256": sha256_file(labels_root / "state_manifest.jsonl"),
+        "state_artifact_tree_sha256": state_artifact_tree_sha256(
+            labels_root / "states"
+        ),
+    }
+    label_audit_path: Path | None = None
     if label_report.get("label_matrix_validation", {}).get("passed") is not True:
-        raise ValueError("ScalePool evaluation requires strict label matrix validation")
+        if label_audit is None:
+            raise ValueError(
+                "ScalePool evaluation requires strict label matrix validation"
+            )
+        label_audit_path = Path(label_audit).resolve()
+        _validate_external_label_audit(
+            label_report=label_report,
+            audit_report=_read_json(label_audit_path),
+            observed_artifacts=observed_label_artifacts,
+        )
     manifests = _read_jsonl(grid_root / "grid_manifest.jsonl")
     aggregates = _read_jsonl(labels_root / "candidate_aggregates.jsonl")
     aggregate_by_state: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
@@ -178,6 +235,18 @@ def evaluate_scalepool(
 
     state_rows: list[dict[str, Any]] = []
     attempt_rows: list[dict[str, Any]] = []
+    support_alignment_rows: list[dict[str, Any]] = []
+    rejection_reason_counts: collections.Counter[str] = collections.Counter()
+    miss_attribution: collections.Counter[str] = collections.Counter()
+    selected_size_counts: dict[str, collections.Counter[int]] = collections.defaultdict(
+        collections.Counter
+    )
+    global_best_size_counts: dict[str, collections.Counter[int]] = (
+        collections.defaultdict(collections.Counter)
+    )
+    uniform_size_rows: dict[int, list[dict[str, Any]]] = {
+        size: [] for size in config["size_policy"]["allowed_sizes"]
+    }
     full_raw_count = 0
     scale_raw_count = 0
     for manifest in manifests:
@@ -225,6 +294,89 @@ def evaluate_scalepool(
         selected_best = _best(selected)
         first_best = _best(full, key="first_fixed_half_mean")
         second_best = _best(full, key="second_fixed_half_mean")
+        selected_by_variant: dict[str, set[int]] = collections.defaultdict(set)
+        attempts_by_variant: dict[str, list[dict[str, Any]]] = collections.defaultdict(
+            list
+        )
+        for attempt in generated.attempts:
+            variant = str(attempt["family_variant"])
+            attempts_by_variant[variant].append(attempt)
+            if attempt["decision"] == "selected":
+                size = int(attempt["attempted_size"])
+                selected_by_variant[variant].add(size)
+                selected_size_counts[variant][size] += 1
+            else:
+                rejection_reason_counts[str(attempt["rejection_reason"])] += 1
+
+        best_variant_sizes = {
+            (variant, size)
+            for family in best["selection_families"]
+            for variant, size, _group in [_family_variant(str(family))]
+        }
+        for variant, size in sorted(best_variant_sizes):
+            global_best_size_counts[variant][size] += 1
+            variant_attempts = attempts_by_variant.get(variant, [])
+            support_alignment_rows.append(
+                {
+                    "state_id": state_id,
+                    "map_id": str(decision["map_id"]),
+                    "layout_mode": str(decision["layout_mode"]),
+                    "family_variant": variant,
+                    "support_count": (
+                        int(variant_attempts[0]["support_count"])
+                        if variant_attempts
+                        else None
+                    ),
+                    "global_best_nominal_size": size,
+                    "selected_nominal_sizes": sorted(selected_by_variant.get(variant, set())),
+                    "global_best_retained": str(best["candidate_id"]) in selected_ids,
+                }
+            )
+        if str(best["candidate_id"]) not in selected_ids:
+            if any(
+                size in selected_by_variant.get(variant, set())
+                for variant, size in best_variant_sizes
+            ):
+                miss_attribution["same_nominal_size_different_agent_set"] += 1
+            elif any(variant in selected_by_variant for variant, _size in best_variant_sizes):
+                miss_attribution["support_nearest_size_mismatch"] += 1
+            else:
+                matching_rejections = [
+                    str(attempt["rejection_reason"])
+                    for variant, size in best_variant_sizes
+                    for attempt in attempts_by_variant.get(variant, [])
+                    if int(attempt["attempted_size"]) == size
+                    and attempt["decision"] == "rejected"
+                ]
+                if matching_rejections:
+                    miss_attribution[
+                        "best_size_rejected:" + sorted(matching_rejections)[0]
+                    ] += 1
+                else:
+                    miss_attribution["best_family_or_size_not_generated"] += 1
+
+        for nominal_size, diagnostic_rows in uniform_size_rows.items():
+            uniform_ids = {
+                str(row["candidate_id"])
+                for row in full
+                if any(
+                    _family_variant(str(family))[1] == nominal_size
+                    for family in row["selection_families"]
+                )
+            }
+            uniform_candidates = [by_id[candidate_id] for candidate_id in uniform_ids]
+            if not uniform_candidates:
+                continue
+            uniform_best = _best(uniform_candidates)
+            diagnostic_rows.append(
+                {
+                    "state_id": state_id,
+                    "candidate_count": len(uniform_candidates),
+                    "global_best_retained": str(best["candidate_id"]) in uniform_ids,
+                    "normalized_regret": float(best["seed_mean"])
+                    - float(uniform_best["seed_mean"]),
+                }
+            )
         state_rows.append(
             {
                 "schema": STATE_SCHEMA,
@@ -262,12 +414,46 @@ def evaluate_scalepool(
         full_raw_candidate_count=full_raw_count,
         scalepool_raw_candidate_count=scale_raw_count,
     )
+    uniform_size_diagnostics = {
+        str(size): {
+            "state_count": len(rows),
+            "mean_candidate_count": statistics.fmean(
+                int(row["candidate_count"]) for row in rows
+            ),
+            "global_best_retention": statistics.fmean(
+                bool(row["global_best_retained"]) for row in rows
+            ),
+            "mean_normalized_regret": statistics.fmean(
+                float(row["normalized_regret"]) for row in rows
+            ),
+            "maximum_normalized_regret": max(
+                float(row["normalized_regret"]) for row in rows
+            ),
+        }
+        for size, rows in sorted(uniform_size_rows.items())
+        if rows
+    }
+    failure_diagnostics = {
+        "miss_attribution": dict(sorted(miss_attribution.items())),
+        "attempt_rejection_reason_counts": dict(sorted(rejection_reason_counts.items())),
+        "selected_size_counts_by_variant": {
+            variant: {str(size): count for size, count in sorted(counts.items())}
+            for variant, counts in sorted(selected_size_counts.items())
+        },
+        "global_best_size_counts_by_variant": {
+            variant: {str(size): count for size, count in sorted(counts.items())}
+            for variant, counts in sorted(global_best_size_counts.items())
+        },
+        "uniform_size_pool_diagnostics": uniform_size_diagnostics,
+    }
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     states_path = output / "state_evaluation.jsonl"
     attempts_path = output / "candidate_attempts.jsonl"
+    support_alignment_path = output / "support_size_alignment.jsonl"
     _write_jsonl(states_path, state_rows)
     _write_jsonl(attempts_path, attempt_rows)
+    _write_jsonl(support_alignment_path, support_alignment_rows)
     report = {
         "schema": REPORT_SCHEMA,
         "scientific_status": (
@@ -281,6 +467,7 @@ def evaluate_scalepool(
         "candidate_generation_outcome_blind": True,
         "formal_ttf_claim": False,
         "acceptance": acceptance,
+        "failure_diagnostics": failure_diagnostics,
         "runtime_integration_allowed": bool(acceptance["passed"]),
         "producer": producer_identity(
             project_root=project_root,
@@ -297,6 +484,9 @@ def evaluate_scalepool(
             "config_sha256": sha256_file(config_path),
             "grid_manifest_sha256": sha256_file(grid_root / "grid_manifest.jsonl"),
             "label_report_sha256": sha256_file(labels_root / "collection_report.json"),
+            "label_audit_sha256": (
+                sha256_file(label_audit_path) if label_audit_path is not None else None
+            ),
             "candidate_aggregates_sha256": sha256_file(
                 labels_root / "candidate_aggregates.jsonl"
             ),
@@ -304,6 +494,7 @@ def evaluate_scalepool(
         "artifacts": {
             "state_evaluation_sha256": sha256_file(states_path),
             "candidate_attempts_sha256": sha256_file(attempts_path),
+            "support_size_alignment_sha256": sha256_file(support_alignment_path),
         },
     }
     _write_json(output / "scalepool_evaluation_report.json", report)

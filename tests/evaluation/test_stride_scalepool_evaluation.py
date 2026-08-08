@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.stride_scalepool_evaluation import (
+    _validate_external_label_audit,
     summarize_scalepool_acceptance,
     validate_scalepool_config,
 )
@@ -60,6 +61,45 @@ class ScalePoolEvaluationTests(unittest.TestCase):
         )
         self.assertFalse(result["passed"])
         self.assertFalse(result["checks"]["map_group_regret"])
+
+    def test_external_label_audit_is_bound_to_source_hashes(self) -> None:
+        artifacts = {
+            "repair_trials_sha256": "trials",
+            "candidate_aggregates_sha256": "aggregates",
+            "state_manifest_sha256": "manifest",
+            "state_artifact_tree_sha256": "tree",
+        }
+        label_report = {
+            "run_fingerprint": "run",
+            "completed_state_count": 98,
+            "candidate_count": 1368,
+            "trial_count": 21888,
+            "artifacts": dict(artifacts),
+        }
+        audit_report = {
+            "schema": "lns2.stride.structpool_size_label_audit.v1",
+            "passed": True,
+            "source_artifacts_modified": False,
+            "matrix_validation": {"passed": True},
+            "source_run_fingerprint": "run",
+            "state_count": 98,
+            "candidate_count": 1368,
+            "trial_count": 21888,
+            "source_artifacts": dict(artifacts),
+        }
+        _validate_external_label_audit(
+            label_report=label_report,
+            audit_report=audit_report,
+            observed_artifacts=artifacts,
+        )
+        broken = copy.deepcopy(audit_report)
+        broken["source_artifacts"]["repair_trials_sha256"] = "changed"
+        with self.assertRaisesRegex(ValueError, "source artifact hashes"):
+            _validate_external_label_audit(
+                label_report=label_report,
+                audit_report=broken,
+                observed_artifacts=artifacts,
+            )
 
 
 if __name__ == "__main__":
