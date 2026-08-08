@@ -4752,3 +4752,41 @@ the 32-entry schedule SHA-256 is
 This result retains LeanPool only as a candidate for fresh-map confirmation.
 It neither replaces full StructPool nor supports a formal speed or
 generalization claim.
+
+### StructPool LeanPool v1 label-map-disjoint confirmation registration
+
+The development Quick passed only by `0.1117%` mean raw TTF and showed opposite
+map-level directions, so it is not sufficient evidence to prefer LeanPool.
+Before reading any additional timing, commit `32dea69` fixes a broader paired
+confirmation.  The cohort is the exact subset of the previously qualified
+six-map dataset whose map IDs do not occur in the 320-state RobustAction label
+collection: `den312d`, `maze-128-128-1`, `random-64-64-20`,
+`room-64-64-16`, and `warehouse-10-20-10-2-1`.  The only excluded qualified
+group is `orz600` on `orz200d`, because that map occurs in the label collection.
+No group or task is selected using its prior solver outcome or TTF.
+
+The registered product contains five maps, two fixed tasks per map and solver
+seeds 1--3: 30 paired task-seed keys and 120 single-worker episodes under
+strict four-controller rotation.  The controllers remain official Adaptive
+LNS2, exact-base-pool `v2-full`, full Speed2 StructPool, and LeanPool.  They use
+the same deterministic PP replay, native features, optimized runtime and
+uncapped run-to-completion stopping rule.  LeanPool still differs only by
+removing exact pure `bottleneck_crossing` rows after full proposal generation
+and before feature construction; no ranker, PP repair, activation gate,
+neighborhood size, cap, or tie rule changes.
+
+Integrity requires complete four-way pairing, identical initial fingerprints
+and conflicts, all 30 successes per controller, valid raw-TTF clocks, no capped
+values, errors, invalid actions or semantic mismatches, activation and
+selection of both StructPool treatments, exercise of the Lean filter, and zero
+filtering by the full-pool control.  Performance requires at least `2%` lower
+mean raw TTF than full StructPool, at least 50% paired wins, no map group worse
+by more than 10%, non-inferior mean repair rounds and successes, and
+non-negative mean selection-time improvement.
+
+This is a **label-map-disjoint** confirmation, not a fully fresh timing test:
+the source maps already have full-StructPool versus V2 timing from the earlier
+six-map diagnostic.  A pass authorizes only preregistration of a truly
+never-timed MovingAI-map replication.  It cannot replace full StructPool,
+promote a default, or support a formal speed/generalization claim; a failure
+retains full StructPool and ends the current LeanPool preference attempt.

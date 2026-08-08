@@ -237,29 +237,44 @@ def _runtime_counts(
     return counts
 
 
-def run_structpool_lean_quick(
-    config_path: str | Path,
+def _group_dataset(root: Path, config: dict[str, Any], group: dict[str, Any]) -> Path:
+    dataset = group.get("dataset", dict(config["cohort"]).get("dataset"))
+    if dataset is None:
+        raise ValueError(f"StructPool Lean group {group.get('id')} lacks a dataset")
+    return (root / str(dataset)).resolve()
+
+
+def run_structpool_lean_multigroup(
+    path: Path,
+    root: Path,
+    config: dict[str, Any],
     output: str | Path,
     *,
+    status_schema: str,
+    status_filename: str,
+    report_schema: str,
+    report_filename: str,
+    report_scientific_status: str,
+    next_step_on_pass: str,
+    next_step_on_failure: str,
     resume: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    path, root, config = load_structpool_lean_quick_config(config_path)
     output = Path(output).resolve()
     schedule = structpool_lean_schedule(config)
     if dry_run:
         return {
-            "schema": STATUS_SCHEMA,
+            "schema": status_schema,
             "schedule_entry_count": len(schedule),
             "schedule_sha256": _fingerprint(schedule),
         }
-    status_path = output / "quick_status.json"
+    status_path = output / status_filename
     if status_path.is_file() and not resume:
         raise ValueError("StructPool Lean Quick output exists; pass --resume")
     output.mkdir(parents=True, exist_ok=True)
     _write_jsonl(output / "execution_schedule.jsonl", schedule)
     status_base = {
-        "schema": STATUS_SCHEMA,
+        "schema": status_schema,
         "config_sha256": sha256_file(path),
         "schedule_sha256": _fingerprint(schedule),
         "total_schedule_entries": len(schedule),
@@ -269,10 +284,16 @@ def run_structpool_lean_quick(
         {**status_base, "completed_schedule_entries": 0, "complete": False},
     )
     runtime = (root / str(config["runtime"]["config"])).resolve()
+    registered_qualification = config.get("qualification_source")
+    qualification_source = (
+        (root / str(registered_qualification)).resolve()
+        if registered_qualification is not None
+        else None
+    )
     groups = {str(row["id"]): dict(row) for row in config["cohort"]["groups"]}
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
     for group in groups.values():
-        dataset = (root / str(group["dataset"])).resolve()
+        dataset = _group_dataset(root, config, group)
         keys = {(str(task), seed) for task in group["tasks"] for seed in seeds}
         qualification = output / "groups" / str(group["id"]) / "qualification"
         run_closed_loop_collection(
@@ -284,6 +305,7 @@ def run_structpool_lean_quick(
             resume=qualification.joinpath("run_config.json").is_file(),
             cohort_job_keys=keys,
             job_keys=keys,
+            qualification_source=qualification_source,
             **_controller_kwargs(root, config, "v2-full"),
         )
         for controller in CONTROLLERS:
@@ -305,7 +327,7 @@ def run_structpool_lean_quick(
     completed = 0
     for item in schedule:
         group = groups[str(item["group_id"])]
-        dataset = (root / str(group["dataset"])).resolve()
+        dataset = _group_dataset(root, config, group)
         keys = {(str(task), seed) for task in group["tasks"] for seed in seeds}
         controller = str(item["controller"])
         collection = (
@@ -340,25 +362,64 @@ def run_structpool_lean_quick(
                 "complete": False,
             },
         )
-    report = analyze_structpool_lean_quick(path, output)
+    report = analyze_structpool_lean_multigroup(
+        path,
+        config,
+        output,
+        report_schema=report_schema,
+        report_filename=report_filename,
+        report_scientific_status=report_scientific_status,
+        next_step_on_pass=next_step_on_pass,
+        next_step_on_failure=next_step_on_failure,
+    )
     _write_json(
         status_path,
         {
             **status_base,
             "completed_schedule_entries": completed,
             "complete": True,
-            "report_sha256": sha256_file(
-                output / "structpool_lean_quick_report.json"
-            ),
+            "report_sha256": sha256_file(output / report_filename),
         },
     )
     return report
 
 
-def analyze_structpool_lean_quick(
-    config_path: str | Path, output: str | Path
+def run_structpool_lean_quick(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    resume: bool = False,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
-    path, _root, config = load_structpool_lean_quick_config(config_path)
+    path, root, config = load_structpool_lean_quick_config(config_path)
+    return run_structpool_lean_multigroup(
+        path,
+        root,
+        config,
+        output,
+        status_schema=STATUS_SCHEMA,
+        status_filename="quick_status.json",
+        report_schema=REPORT_SCHEMA,
+        report_filename="structpool_lean_quick_report.json",
+        report_scientific_status="development_four_controller_lean_quick",
+        next_step_on_pass="retain_lean_runtime_and_preregister_fresh_map_confirmation",
+        next_step_on_failure="retain_speed2_full_structpool_and_reject_lean_as_default",
+        resume=resume,
+        dry_run=dry_run,
+    )
+
+
+def analyze_structpool_lean_multigroup(
+    path: Path,
+    config: dict[str, Any],
+    output: str | Path,
+    *,
+    report_schema: str,
+    report_filename: str,
+    report_scientific_status: str,
+    next_step_on_pass: str,
+    next_step_on_failure: str,
+) -> dict[str, Any]:
     output = Path(output).resolve()
     groups = [dict(row) for row in config["cohort"]["groups"]]
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
@@ -550,8 +611,8 @@ def analyze_structpool_lean_quick(
     integrity_passed = not errors and all(integrity.values())
     performance_passed = integrity_passed and all(performance.values())
     report = {
-        "schema": REPORT_SCHEMA,
-        "scientific_status": "development_four_controller_lean_quick",
+        "schema": report_schema,
+        "scientific_status": report_scientific_status,
         "formal_speed_claim": False,
         "fresh_map_claim": False,
         "default_replacement_allowed": False,
@@ -569,11 +630,7 @@ def analyze_structpool_lean_quick(
         "performance_gates": performance,
         "integrity_passed": integrity_passed,
         "performance_passed": performance_passed,
-        "next_step": (
-            "retain_lean_runtime_and_preregister_fresh_map_confirmation"
-            if performance_passed
-            else "retain_speed2_full_structpool_and_reject_lean_as_default"
-        ),
+        "next_step": next_step_on_pass if performance_passed else next_step_on_failure,
         "errors": errors,
         "inputs": {
             "config_sha256": sha256_file(path),
@@ -581,14 +638,32 @@ def analyze_structpool_lean_quick(
             "controller_manifest_sha256": dict(hashes),
         },
     }
-    _write_json(output / "structpool_lean_quick_report.json", report)
+    _write_json(output / report_filename, report)
     return report
+
+
+def analyze_structpool_lean_quick(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    path, _root, config = load_structpool_lean_quick_config(config_path)
+    return analyze_structpool_lean_multigroup(
+        path,
+        config,
+        output,
+        report_schema=REPORT_SCHEMA,
+        report_filename="structpool_lean_quick_report.json",
+        report_scientific_status="development_four_controller_lean_quick",
+        next_step_on_pass="retain_lean_runtime_and_preregister_fresh_map_confirmation",
+        next_step_on_failure="retain_speed2_full_structpool_and_reject_lean_as_default",
+    )
 
 
 __all__ = [
     "CONTROLLERS",
+    "analyze_structpool_lean_multigroup",
     "analyze_structpool_lean_quick",
     "load_structpool_lean_quick_config",
+    "run_structpool_lean_multigroup",
     "run_structpool_lean_quick",
     "structpool_lean_schedule",
 ]
