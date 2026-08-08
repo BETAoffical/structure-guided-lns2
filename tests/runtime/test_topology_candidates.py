@@ -12,6 +12,7 @@ from lns2_selector.runtime.topology_candidates import (
     _boundary_neighborhood,
     _fill_neighborhood,
     generate_structpool_candidates,
+    generate_structpool_candidate_grid,
     generate_topology_anchor_candidates,
     generate_topology_boundary_candidates,
     merge_structpool_candidates,
@@ -577,6 +578,37 @@ class TopologyCandidatesTest(unittest.TestCase):
         self.assertEqual(overlap.call_count, 1)
         self.assertEqual(boundary.call_count, 8)
         self.assertLessEqual(audit.call_count, len(rows) + 4)
+
+    def test_structpool_grid_keeps_all_sizes_and_support_provenance(self) -> None:
+        state, analysis = self._structpool_state()
+        grid = generate_structpool_candidate_grid(state, analysis)
+        self.assertGreater(len(grid), 6)
+        self.assertEqual(grid, generate_structpool_candidate_grid(state, analysis))
+        observed = {
+            int(family.rsplit(":", 1)[1])
+            for row in grid
+            for family in row["selection_families"]
+        }
+        self.assertEqual(observed, {8, 16, 24, 32})
+        for row in grid:
+            families = set(row["selection_families"])
+            self.assertEqual(
+                set(row["structpool_support_count_by_family"]), families
+            )
+            self.assertEqual(
+                set(row["structpool_support_ratio_by_family"]), families
+            )
+            self.assertEqual(
+                set(row["structpool_nominal_size_by_family"]), families
+            )
+            self.assertEqual(
+                row["structpool_grid_pure_family"],
+                len(row["structpool_family_groups"]) == 1,
+            )
+            self.assertEqual(
+                row["structpool_grid_duplicate_provenance_count"],
+                len(row["selection_families"]),
+            )
 
     def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
         state, analysis = self._structpool_state()

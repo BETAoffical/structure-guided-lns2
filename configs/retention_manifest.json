@@ -1794,6 +1794,21 @@
       "purpose": "Verify exact 124-dimensional feature identity and benchmark reuse of one native analysis object by StructPool topology and feature extraction."
     },
     {
+      "path": "experiments/stride_structpool_size_ablation.py",
+      "role": "active",
+      "purpose": "Extract the outcome-blind uncapped four-size StructPool grid, collect strictly paired current-step labels, and analyze support-conditioned size regret."
+    },
+    {
+      "path": "scripts/run_stride_structpool_size_ablation.py",
+      "role": "active",
+      "purpose": "Command-line entry point for StructPool four-size grid extraction, paired label collection, and ablation analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_size_ablation.py",
+      "role": "active",
+      "contract": "Four fixed sizes, outcome-blind base-only V2 anchor, paired current-step labels, boundary subtype provenance, and no TTF claim."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."

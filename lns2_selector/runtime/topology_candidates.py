@@ -1021,6 +1021,94 @@ def finalize_structpool_candidates(
     ]
 
 
+def _structpool_support_by_family(
+    context: StructuralCandidateContext,
+    sizes: Iterable[int],
+) -> dict[str, set[int]]:
+    support: dict[str, set[int]] = {}
+    bottleneck = {
+        int(agent)
+        for event in context.bottleneck_events
+        for agent in (event.left, event.right)
+    }
+    component = (
+        set(map(int, context.component_seed_data[0]))
+        if context.component_seed_data is not None
+        else set()
+    )
+    hotspot = (
+        set(map(int, context.hotspot_seed_data[0]))
+        if context.hotspot_seed_data is not None
+        else set()
+    )
+    overlap = (
+        set(map(int, context.overlap_seed_data[0])) & set(context.event_weights)
+        if context.overlap_seed_data is not None
+        else set()
+    )
+    boundary = {
+        kind: {
+            int(agent)
+            for event in context.relevant_events_by_kind[kind]
+            for agent in (event.left, event.right)
+        }
+        for kind in ("articulation", "low_degree")
+    }
+    for size in sizes:
+        support[f"structpool-bottleneck-crossing:{size}"] = set(bottleneck)
+        support[f"structpool-conflict-component:{size}"] = set(component)
+        support[f"structpool-spatiotemporal-hotspot:{size}"] = set(hotspot)
+        support[f"structpool-path-overlap:{size}"] = set(overlap)
+        for kind in ("articulation", "low_degree"):
+            support[f"structpool-boundary-{kind}:{size}"] = set(boundary[kind])
+    return support
+
+
+def generate_structpool_candidate_grid(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    neighborhood_sizes: Iterable[int] = (8, 16, 24, 32),
+) -> list[dict[str, Any]]:
+    """Materialize the uncapped four-size StructPool ablation grid.
+
+    Exact agent-set duplicates are repaired only once while every generating
+    family/size remains in provenance.  This API is outcome blind and is not a
+    runtime candidate selector.
+    """
+
+    sizes = sorted(set(map(int, neighborhood_sizes)))
+    if sizes != [8, 16, 24, 32]:
+        raise ValueError("StructPool size grid requires sizes 8, 16, 24, and 32")
+    if not analysis.events:
+        return []
+    context = _structural_candidate_context(state, analysis)
+    drafts = generate_structpool_candidate_drafts(
+        context, neighborhood_sizes=sizes
+    )
+    merged = _merge_structpool_drafts(drafts)
+    rows = finalize_structpool_candidates(context, merged)
+    support = _structpool_support_by_family(context, sizes)
+    agent_count = len(state["agents"])
+    for row in rows:
+        families = list(map(str, row["selection_families"]))
+        row["structpool_support_count_by_family"] = {
+            family: len(support[family]) for family in families
+        }
+        row["structpool_support_ratio_by_family"] = {
+            family: len(support[family]) / max(1, agent_count)
+            for family in families
+        }
+        row["structpool_nominal_size_by_family"] = {
+            family: int(family.rsplit(":", 1)[1]) for family in families
+        }
+        row["structpool_grid_pure_family"] = (
+            len(row["structpool_family_groups"]) == 1
+        )
+        row["structpool_grid_duplicate_provenance_count"] = len(families)
+    return rows
+
+
 def reduce_structpool_candidates(
     context: StructuralCandidateContext,
     drafts: Iterable[StructuralCandidateDraft],
@@ -1215,6 +1303,7 @@ __all__ = [
     "StructuralCandidateDraft",
     "finalize_structpool_candidates",
     "generate_structpool_candidate_drafts",
+    "generate_structpool_candidate_grid",
     "generate_topology_anchor_candidates",
     "generate_topology_boundary_candidates",
     "generate_structpool_candidates",
