@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import unittest
 from pathlib import Path
+
+import numpy as np
 
 from experiments.stride_slotpool import (
     CANDIDATE_FEATURE_NAMES,
     DERIVED_FEATURE_NAMES,
     PAIR_FEATURE_NAMES,
+    export_slotpool_model,
+    predict_slotpool_model,
     stable_pair_table,
     summarize_slotpool_acceptance,
     validate_slotpool_config,
@@ -110,6 +115,35 @@ class SlotPoolTests(unittest.TestCase):
         )
         self.assertFalse(result["passed"])
         self.assertFalse(result["checks"]["candidate_budget"])
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("sklearn") is not None,
+        "scikit-learn is required only for training/export parity",
+    )
+    def test_portable_histogram_model_matches_sklearn(self) -> None:
+        from sklearn.ensemble import HistGradientBoostingClassifier
+
+        values = np.asarray(
+            [[float(index), float(index % 3), *([0.0] * 191)] for index in range(40)],
+            dtype=np.float32,
+        )
+        labels = np.asarray([int(index >= 20) for index in range(40)], dtype=np.int8)
+        parameters = {
+            "early_stopping": False,
+            "learning_rate": 0.05,
+            "max_iter": 10,
+            "min_samples_leaf": 5,
+            "random_state": 20260809,
+            "max_leaf_nodes": 7,
+            "l2_regularization": 0.1,
+        }
+        estimator = HistGradientBoostingClassifier(**parameters).fit(values, labels)
+        payload = export_slotpool_model(
+            estimator=estimator, parameters=parameters, parameter_index=0
+        )
+        expected = estimator.predict_proba(values)[:, 1]
+        observed = predict_slotpool_model(payload, values)
+        self.assertLess(float(np.max(np.abs(expected - observed))), 1e-12)
 
 
 if __name__ == "__main__":

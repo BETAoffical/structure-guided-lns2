@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 import itertools
+import json
+import math
 import statistics
 from pathlib import Path
 from typing import Any
@@ -12,12 +15,14 @@ from experiments.repair_collection import _read_json, _read_jsonl, _write_json, 
 from experiments.stride_scalepool_evaluation import _validate_external_label_audit
 from experiments.stride_structpool_size_ablation import _best, _family_variant, _forbidden_hits
 from lns2_selector.training.tree_utils import balanced_map_folds
+from lns2_selector.training.tree_utils import histogram_trees
 
 
 CONFIG_SCHEMA = "lns2.stride.slotpool_registration.v1"
 REPORT_SCHEMA = "lns2.stride.slotpool_offline_evaluation.v1"
 STATE_SCHEMA = "lns2.stride.slotpool_offline_state.v1"
 PAIR_SCHEMA = "lns2.stride.slotpool_stable_pair_summary.v1"
+MODEL_SCHEMA = "lns2.stride.slotpool_pairwise_hist_gbdt.v1"
 IMPLEMENTATION_ID = "stride-slotpool-v1"
 FAMILY_VARIANTS = (
     "bottleneck_crossing",
@@ -317,6 +322,62 @@ def _fit_model(
     estimator = HistGradientBoostingClassifier(**parameters)
     estimator.fit(values, labels, sample_weight=weights)
     return estimator
+
+
+def export_slotpool_model(
+    *, estimator: Any, parameters: dict[str, Any], parameter_index: int
+) -> dict[str, Any]:
+    if list(map(int, estimator.classes_)) != [0, 1]:
+        raise ValueError("SlotPool portable model requires binary classes")
+    payload = {
+        "schema": MODEL_SCHEMA,
+        "implementation_id": IMPLEMENTATION_ID,
+        "candidate_feature_names": list(CANDIDATE_FEATURE_NAMES),
+        "pair_feature_names": list(PAIR_FEATURE_NAMES),
+        "candidate_feature_dimension": len(CANDIDATE_FEATURE_NAMES),
+        "pair_feature_dimension": len(PAIR_FEATURE_NAMES),
+        "selected_parameter_index": int(parameter_index),
+        "parameters": dict(parameters),
+        "baseline": float(estimator._baseline_prediction[0, 0]),
+        "trees": histogram_trees(estimator),
+    }
+    semantic = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    payload["semantic_sha256"] = hashlib.sha256(semantic.encode("utf-8")).hexdigest()
+    return payload
+
+
+def predict_slotpool_model(payload: dict[str, Any], values: Any) -> Any:
+    import numpy as np
+
+    if (
+        payload.get("schema") != MODEL_SCHEMA
+        or tuple(payload.get("candidate_feature_names") or ()) != CANDIDATE_FEATURE_NAMES
+        or tuple(payload.get("pair_feature_names") or ()) != PAIR_FEATURE_NAMES
+    ):
+        raise ValueError("SlotPool portable model schema changed")
+    matrix = np.asarray(values, dtype=np.float32)
+    if matrix.ndim != 2 or matrix.shape[1] != len(PAIR_FEATURE_NAMES):
+        raise ValueError("SlotPool portable prediction dimension changed")
+    raw = np.full(matrix.shape[0], float(payload["baseline"]), dtype=np.float64)
+    for tree in payload["trees"]:
+        for row_index, row in enumerate(matrix):
+            node_index = 0
+            while not bool(tree[node_index]["is_leaf"]):
+                node = tree[node_index]
+                value = float(row[int(node["feature_idx"])])
+                go_left = (
+                    bool(node["missing_go_to_left"])
+                    if math.isnan(value)
+                    else value <= float(node["num_threshold"])
+                )
+                node_index = int(node["left"] if go_left else node["right"])
+            raw[row_index] += float(tree[node_index]["value"])
+    probabilities = np.empty_like(raw)
+    positive = raw >= 0.0
+    probabilities[positive] = 1.0 / (1.0 + np.exp(-raw[positive]))
+    exponential = np.exp(raw[~positive])
+    probabilities[~positive] = exponential / (1.0 + exponential)
+    return probabilities
 
 
 def _score_state(
@@ -676,6 +737,7 @@ def evaluate_slotpool(
     states_path = output / "state_evaluation.jsonl"
     pairs_path = output / "stable_pair_summary.jsonl"
     folds_path = output / "fold_diagnostics.jsonl"
+    model_path = output / "slotpool_pairwise_model.json"
     _write_jsonl(states_path, sorted(state_results, key=lambda row: str(row["state_id"])))
     state_pair_counts = collections.Counter(str(row["state_id"]) for row in pairs)
     _write_jsonl(
@@ -693,6 +755,43 @@ def evaluate_slotpool(
         ],
     )
     _write_jsonl(folds_path, fold_results)
+    final_parameter_index: int | None = None
+    final_parameter_summaries: list[dict[str, Any]] = []
+    if acceptance["passed"]:
+        final_parameter_index, final_parameter_summaries = _cross_validate_parameters(
+            config=config,
+            candidate_values=candidate_values,
+            rows=rows,
+            pairs=pairs,
+            train_maps=all_maps,
+        )
+        final_parameters = _parameters(
+            config, config["model"]["parameter_grid"][final_parameter_index]
+        )
+        final_estimator = _fit_model(candidate_values, pairs, final_parameters)
+        portable = export_slotpool_model(
+            estimator=final_estimator,
+            parameters=final_parameters,
+            parameter_index=final_parameter_index,
+        )
+        parity_pairs = pairs[: min(256, len(pairs))]
+        parity_values = pair_matrix(candidate_values, parity_pairs)
+        reference = final_estimator.predict_proba(parity_values)[:, 1]
+        portable_values = predict_slotpool_model(portable, parity_values)
+        maximum_difference = max(
+            (abs(float(left) - float(right)) for left, right in zip(reference, portable_values)),
+            default=0.0,
+        )
+        if maximum_difference > 1e-12:
+            raise RuntimeError(
+                f"SlotPool portable model parity failed: maximum difference {maximum_difference}"
+            )
+        portable["sklearn_portable_parity_maximum_absolute_difference"] = maximum_difference
+        portable["development_map_count"] = len(all_maps)
+        portable["development_state_count"] = len(state_results)
+        portable["development_candidate_count"] = len(rows)
+        portable["confirmation_labels_seen"] = False
+        _write_json(model_path, portable)
     report = {
         "schema": REPORT_SCHEMA,
         "scientific_status": (
@@ -708,6 +807,8 @@ def evaluate_slotpool(
         "stable_pair_count": len(pairs),
         "states_with_stable_pairs": len(state_ids_with_pairs),
         "outer_fold_count": len(outer_folds),
+        "final_parameter_index": final_parameter_index,
+        "final_parameter_summaries": final_parameter_summaries,
         "map_disjoint_oof": True,
         "known_maze_long_tail_included": False,
         "fresh_map_data_read": False,
@@ -737,6 +838,11 @@ def evaluate_slotpool(
             "state_evaluation_sha256": sha256_file(states_path),
             "stable_pair_summary_sha256": sha256_file(pairs_path),
             "fold_diagnostics_sha256": sha256_file(folds_path),
+            **(
+                {"slotpool_pairwise_model_sha256": sha256_file(model_path)}
+                if model_path.is_file()
+                else {}
+            ),
         },
     }
     _write_json(output / "slotpool_evaluation_report.json", report)
@@ -749,6 +855,8 @@ __all__ = [
     "PAIR_FEATURE_NAMES",
     "candidate_matrix",
     "evaluate_slotpool",
+    "export_slotpool_model",
+    "predict_slotpool_model",
     "stable_pair_table",
     "summarize_slotpool_acceptance",
     "validate_slotpool_config",
