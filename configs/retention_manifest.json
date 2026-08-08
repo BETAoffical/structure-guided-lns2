@@ -1824,6 +1824,21 @@
       "contract": "ScalePool remains outcome-blind, excludes the known Maze long tail, and cannot enter runtime unless all preregistered current-step quality gates pass."
     },
     {
+      "path": "experiments/stride_slotpool.py",
+      "role": "active",
+      "purpose": "Train and evaluate the preregistered whole-map grouped pairwise selector that retains at most six family-size slots from the complete StructPool grid."
+    },
+    {
+      "path": "scripts/run_stride_slotpool.py",
+      "role": "active",
+      "purpose": "Command-line entry point for SlotPool nested map-grouped offline candidate-budget evaluation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_slotpool.py",
+      "role": "active",
+      "contract": "Stable half-consistent current-step labels, uniform state weighting, map-disjoint evaluation, six-candidate budget, no fresh-map read, and no runtime or TTF claim before all gates pass."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."

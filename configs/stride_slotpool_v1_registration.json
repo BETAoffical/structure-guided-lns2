@@ -1,0 +1,125 @@
+{
+  "schema": "lns2.stride.slotpool_registration.v1",
+  "scientific_status": "preregistered_map_grouped_offline_candidate_budget_validation",
+  "implementation_id": "stride-slotpool-v1",
+  "pre_registration_parent_commit": "1f1566db0e484ab117893291efdf98d57ef8f20e",
+  "inputs": {
+    "label_audit": {
+      "path": "build/stride-structpool-size-labels-current-audit-v1/audit_report.json",
+      "sha256": "c0cce62bd366ce38d076d033d6c03d9f091ec899a7470c014409b2a281d76616"
+    },
+    "label_report": {
+      "path": "build/stride-structpool-size-labels-v1/collection_report.json",
+      "sha256": "5528363516433965fe723f340c4f3c71aba4d03fb73f70ed32a8c55d26e4f952"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-structpool-size-labels-v1/candidate_aggregates.jsonl",
+      "sha256": "e04f885f95972c95dd0f7922efa223cb2bb25d23c8d93ae3ec29ef55b4a58ed4"
+    },
+    "repair_trials": {
+      "path": "build/stride-structpool-size-labels-v1/repair_trials.jsonl",
+      "sha256": "e80c45317510eb91d3e69fd7c6f56cdef8445a8203f8737d9bd9231956b09537"
+    },
+    "state_manifest": {
+      "path": "build/stride-structpool-size-labels-v1/state_manifest.jsonl",
+      "sha256": "d4a66e64e950a7679d87d6f435c389b2e03d60be5d98330583b1e26ecb5476b3"
+    },
+    "grid_manifest": {
+      "path": "build/stride-structpool-size-grid-v1/grid_manifest.jsonl",
+      "sha256": "de4248402ed009e458fe282a25b22ce3c39edea46650757bfad3490a32d20a27"
+    },
+    "size_ablation_report": {
+      "path": "build/stride-structpool-size-ablation-v1/size_ablation_report.json",
+      "sha256": "03bc0eff1369f6c8ae0e8291910bc35af564880ac4a0ea11dbb26727f54aa82d"
+    },
+    "failed_scalepool_report": {
+      "path": "build/stride-scalepool-v1-offline-evaluation/scalepool_evaluation_report.json",
+      "sha256": "aa3bb57ef9f94e5d2dd30361c91d000e63a472e8b41faa4b753eb1a12cd6a3a0"
+    }
+  },
+  "cohort": {
+    "state_count": 98,
+    "candidate_count": 1368,
+    "trial_count": 21888,
+    "map_count": 16,
+    "known_maze_long_tail_excluded": true,
+    "development_oof_only": true,
+    "fresh_map_data_read_before_acceptance": false
+  },
+  "features": {
+    "base_schema": "lns2.realized_features.v2",
+    "base_dimension": 124,
+    "derived_slot_dimension": 46,
+    "candidate_dimension": 170,
+    "shared_state_dimension": 23,
+    "pair_dimension": 193,
+    "family_variants": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary_articulation",
+      "topology_boundary_low_degree",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "allowed_sizes": [8, 16, 24, 32]
+  },
+  "stable_pair_labels": {
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "minimum_absolute_gap_per_half": 0.01,
+    "require_same_order_in_both_halves": true,
+    "mirrored_training_pairs": true,
+    "uniform_total_weight_per_state": true,
+    "within_state_weight": "mean_absolute_fixed_half_gap"
+  },
+  "model": {
+    "class": "sklearn.ensemble.HistGradientBoostingClassifier",
+    "fixed_parameters": {
+      "early_stopping": false,
+      "learning_rate": 0.05,
+      "max_iter": 100,
+      "min_samples_leaf": 20,
+      "random_state": 20260809
+    },
+    "parameter_grid": [
+      {"max_leaf_nodes": 7, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 7, "l2_regularization": 1.0},
+      {"max_leaf_nodes": 15, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 15, "l2_regularization": 1.0}
+    ],
+    "outer_map_folds": 4,
+    "inner_map_folds": 3
+  },
+  "candidate_budget": {
+    "maximum_candidates": 6,
+    "ranking": "mean_pairwise_win_probability_borda",
+    "tie_break": "candidate_id_ascending",
+    "allow_multiple_sizes_per_family": true,
+    "exact_agent_set_deduplication": "reuse_stage2_grid",
+    "additional_jaccard_filter": false,
+    "additional_v2_anchor_filter": false
+  },
+  "offline_acceptance": {
+    "global_best_retention_minimum": 0.9,
+    "mean_normalized_regret_maximum": 0.02,
+    "maximum_map_mean_regret": 0.05,
+    "maximum_topology_group_mean_regret": 0.05,
+    "first_fixed_half_best_retention_minimum": 0.85,
+    "second_fixed_half_best_retention_minimum": 0.85,
+    "pairwise_accuracy_minimum": 0.6,
+    "maximum_selected_candidates": 6,
+    "raw_candidate_count_must_be_lower_than_full_grid": true
+  },
+  "claim_boundary": {
+    "current_step_labels_only": true,
+    "runtime_integration_before_acceptance": false,
+    "formal_ttf_claim": false,
+    "future_trajectory_read": false,
+    "cost_to_go_read": false,
+    "remaining_repair_rounds_read": false,
+    "known_maze_result_used_for_parameters": false
+  },
+  "outputs": {
+    "offline_evaluation": "build/stride-slotpool-v1-offline-evaluation"
+  }
+}
