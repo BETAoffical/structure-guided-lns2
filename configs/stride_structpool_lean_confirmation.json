@@ -19,7 +19,7 @@
     "workers": 1
   },
   "runtime": {
-    "config": "configs/stride_structpool_revised_six_map_ttf_runtime.json",
+    "config": "configs/stride_structpool_lean_confirmation_runtime.json",
     "stopping_rule": "run-to-completion",
     "scientific_time_limit_seconds": null,
     "environment_time_limit_seconds": null,
@@ -165,8 +165,8 @@
       "sha256": "49567c33083733e9ec4fd3251f8821a7ae1d91a1f55bc48175ab86f9abeaf73b"
     },
     "runtime_config": {
-      "path": "configs/stride_structpool_revised_six_map_ttf_runtime.json",
-      "sha256": "2bed775459f137c0222af783c4404b90b2c35b04d107c03fdf241470f459e6ae"
+      "path": "configs/stride_structpool_lean_confirmation_runtime.json",
+      "sha256": "a7c4467c0d4585626e557b11ecfbd04051a1cf9ff13b2789e4d5021904788611"
     },
     "controller_manifest": {
       "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",

@@ -62,7 +62,7 @@ def load_structpool_lean_confirmation_config(
     }:
         raise ValueError("LeanPool confirmation comparison changed")
     if dict(config.get("runtime") or {}) != {
-        "config": "configs/stride_structpool_revised_six_map_ttf_runtime.json",
+        "config": "configs/stride_structpool_lean_confirmation_runtime.json",
         "stopping_rule": "run-to-completion",
         "scientific_time_limit_seconds": None,
         "environment_time_limit_seconds": None,
@@ -146,6 +146,20 @@ def load_structpool_lean_confirmation_config(
         raise ValueError("LeanPool confirmation changed full StructPool")
     if str(source["controller_bundle"]) != str(config["controller_bundle"]):
         raise ValueError("LeanPool confirmation changed frozen V2")
+    source_runtime = _read_json(
+        (root / str(source["runtime"]["config"])).resolve()
+    )
+    expected_runtime = {
+        **source_runtime,
+        "experiment_runtime_id": "stride-structpool-lean-confirmation-v1",
+        "qualification": {
+            **dict(source_runtime["qualification"]),
+            "mode": "label_map_disjoint_five_map_confirmation",
+            "minimum_active_maps": 5,
+        },
+    }
+    if _read_json(inputs["runtime_config"]) != expected_runtime:
+        raise ValueError("LeanPool confirmation changed runtime beyond qualification scope")
     if _read_json(inputs["source_qualification_analysis"]).get("passed") is not True:
         raise ValueError("LeanPool confirmation source analysis did not pass")
     if _read_json(inputs["source_qualification_report"]).get("passed") is not True:

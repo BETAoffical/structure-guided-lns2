@@ -293,10 +293,16 @@ def run_structpool_lean_multigroup(
     )
     groups = {str(row["id"]): dict(row) for row in config["cohort"]["groups"]}
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
-    for group in groups.values():
-        dataset = _group_dataset(root, config, group)
-        keys = {(str(task), seed) for task in group["tasks"] for seed in seeds}
-        qualification = output / "groups" / str(group["id"]) / "qualification"
+    all_keys = {
+        (str(task), seed)
+        for group in groups.values()
+        for task in group["tasks"]
+        for seed in seeds
+    }
+    shared_dataset = dict(config["cohort"]).get("dataset")
+    if shared_dataset is not None:
+        dataset = (root / str(shared_dataset)).resolve()
+        qualification = output / "qualification"
         run_closed_loop_collection(
             dataset,
             runtime,
@@ -304,32 +310,63 @@ def run_structpool_lean_multigroup(
             phase="qualify",
             workers=1,
             resume=qualification.joinpath("run_config.json").is_file(),
-            cohort_job_keys=keys,
-            job_keys=keys,
+            cohort_job_keys=all_keys,
+            job_keys=all_keys,
             qualification_source=qualification_source,
             **_controller_kwargs(root, config, "v2-full"),
         )
-        for controller in CONTROLLERS:
-            collection = (
-                output / "groups" / str(group["id"]) / "controllers" / controller
-            )
+        qualification_plans = [
+            (group, controller, dataset, all_keys, qualification)
+            for group in groups.values()
+            for controller in CONTROLLERS
+        ]
+    else:
+        qualification_plans = []
+        for group in groups.values():
+            dataset = _group_dataset(root, config, group)
+            keys = {(str(task), seed) for task in group["tasks"] for seed in seeds}
+            qualification = output / "groups" / str(group["id"]) / "qualification"
             run_closed_loop_collection(
                 dataset,
                 runtime,
-                collection,
+                qualification,
                 phase="qualify",
                 workers=1,
-                resume=collection.joinpath("run_config.json").is_file(),
+                resume=qualification.joinpath("run_config.json").is_file(),
                 cohort_job_keys=keys,
                 job_keys=keys,
-                qualification_source=qualification,
-                **_controller_kwargs(root, config, controller),
+                qualification_source=qualification_source,
+                **_controller_kwargs(root, config, "v2-full"),
             )
+            qualification_plans.extend(
+                (group, controller, dataset, keys, qualification)
+                for controller in CONTROLLERS
+            )
+    for group, controller, dataset, keys, qualification in qualification_plans:
+        collection = (
+            output / "groups" / str(group["id"]) / "controllers" / controller
+        )
+        run_closed_loop_collection(
+            dataset,
+            runtime,
+            collection,
+            phase="qualify",
+            workers=1,
+            resume=collection.joinpath("run_config.json").is_file(),
+            cohort_job_keys=keys,
+            job_keys=keys,
+            qualification_source=qualification,
+            **_controller_kwargs(root, config, controller),
+        )
     completed = 0
     for item in schedule:
         group = groups[str(item["group_id"])]
         dataset = _group_dataset(root, config, group)
-        keys = {(str(task), seed) for task in group["tasks"] for seed in seeds}
+        keys = (
+            all_keys
+            if shared_dataset is not None
+            else {(str(task), seed) for task in group["tasks"] for seed in seeds}
+        )
         controller = str(item["controller"])
         collection = (
             output / "groups" / str(item["group_id"]) / "controllers" / controller

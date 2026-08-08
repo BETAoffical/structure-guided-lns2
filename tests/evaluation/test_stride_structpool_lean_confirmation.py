@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import experiments.stride_structpool_lean_quick as lean_quick
 from experiments.repair_collection import _read_jsonl
 from experiments.stride_structpool_lean_confirmation import (
     CONTROLLERS,
@@ -56,6 +59,67 @@ class StructPoolLeanConfirmationTests(unittest.TestCase):
         )
         self.assertTrue(all(str(row["map_id"]) not in label_maps for row in groups))
         self.assertIn("orz200d", label_maps)
+
+    def test_runtime_changes_only_five_map_qualification_scope(self) -> None:
+        source = json.loads(
+            (ROOT / "configs/stride_structpool_revised_six_map_ttf_runtime.json")
+            .read_text(encoding="utf-8")
+        )
+        current = json.loads(
+            (ROOT / "configs/stride_structpool_lean_confirmation_runtime.json")
+            .read_text(encoding="utf-8")
+        )
+        expected = {
+            **source,
+            "experiment_runtime_id": "stride-structpool-lean-confirmation-v1",
+            "qualification": {
+                **source["qualification"],
+                "mode": "label_map_disjoint_five_map_confirmation",
+                "minimum_active_maps": 5,
+            },
+        }
+        self.assertEqual(current, expected)
+
+    def test_shared_dataset_uses_one_global_thirty_key_qualification(self) -> None:
+        calls: list[mock._Call] = []
+
+        def fake_collection(*args: object, **kwargs: object) -> dict[str, object]:
+            calls.append(mock.call(*args, **kwargs))
+            return {}
+
+        def fake_analyze(
+            _path: Path,
+            _config: dict[str, object],
+            output: str | Path,
+            **kwargs: object,
+        ) -> dict[str, object]:
+            report = Path(output) / str(kwargs["report_filename"])
+            report.write_text("{}", encoding="utf-8")
+            return {"integrity_passed": True}
+
+        (ROOT / "build").mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as temporary:
+            with mock.patch.object(
+                lean_quick, "run_closed_loop_collection", side_effect=fake_collection
+            ), mock.patch.object(
+                lean_quick,
+                "analyze_structpool_lean_multigroup",
+                side_effect=fake_analyze,
+            ):
+                run_structpool_lean_confirmation(CONFIG, temporary)
+        self.assertEqual(len(calls), 141)
+        first = calls[0]
+        self.assertEqual(first.kwargs["phase"], "qualify")
+        self.assertEqual(len(first.kwargs["cohort_job_keys"]), 30)
+        self.assertEqual(len(first.kwargs["job_keys"]), 30)
+        self.assertIsNone(first.kwargs["qualification_source"])
+        for call in calls[1:21]:
+            self.assertEqual(call.kwargs["phase"], "qualify")
+            self.assertEqual(len(call.kwargs["cohort_job_keys"]), 30)
+            self.assertEqual(len(call.kwargs["job_keys"]), 30)
+        for call in calls[21:]:
+            self.assertEqual(len(call.kwargs["cohort_job_keys"]), 30)
+            self.assertEqual(len(call.kwargs["job_keys"]), 1)
 
     def test_dry_run_registers_one_hundred_twenty_entries(self) -> None:
         report = run_structpool_lean_confirmation(

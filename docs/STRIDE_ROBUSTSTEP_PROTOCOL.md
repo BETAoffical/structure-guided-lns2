@@ -4772,7 +4772,10 @@ LNS2, exact-base-pool `v2-full`, full Speed2 StructPool, and LeanPool.  They use
 the same deterministic PP replay, native features, optimized runtime and
 uncapped run-to-completion stopping rule.  The old qualification directory is
 registered as cohort evidence but is not reused: all 30 reset states are
-recomputed with the current implementation before timing.  LeanPool still differs only by
+recomputed and assessed together with the current implementation before timing.
+The confirmation-specific runtime changes only the qualification identity and
+the exact active-map threshold from six to five; its 24-state, per-layout and
+per-seed thresholds and all solver settings remain unchanged.  LeanPool still differs only by
 removing exact pure `bottleneck_crossing` rows after full proposal generation
 and before feature construction; no ranker, PP repair, activation gate,
 neighborhood size, cap, or tie rule changes.
