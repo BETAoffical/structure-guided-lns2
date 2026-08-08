@@ -760,17 +760,82 @@ py::dict realizedFeatures(const Analysis& analysis,
     fillRealizedFeatures(analysis, selected_ids, output);
     return output;
 }
+
+struct PreparedOnlineAnalysis
+{
+    Analysis analysis;
+    double analysis_seconds = 0;
+};
+
+constexpr const char* PREPARED_ANALYSIS_CAPSULE =
+    "lns2.prepared_online_analysis.v1";
+
+PreparedOnlineAnalysis& preparedAnalysis(const py::capsule& capsule)
+{
+    auto* prepared = static_cast<PreparedOnlineAnalysis*>(
+        PyCapsule_GetPointer(capsule.ptr(), PREPARED_ANALYSIS_CAPSULE));
+    if (prepared == nullptr)
+        throw py::value_error("invalid prepared online analysis capsule");
+    return *prepared;
 }
 
-py::dict batchOnlineFeatures(const py::dict& state, const py::list& candidates,
-                             const py::dict& static_grid, bool include_realized,
-                             const py::dict& required_features)
+void deletePreparedAnalysis(PyObject* capsule)
 {
-    const auto analysis_started = FeatureClock::now();
-    const Analysis analysis = analyze(
-        state, static_grid, include_realized, false
+    auto* prepared = static_cast<PreparedOnlineAnalysis*>(
+        PyCapsule_GetPointer(capsule, PREPARED_ANALYSIS_CAPSULE));
+    if (prepared == nullptr)
+    {
+        PyErr_Clear();
+        return;
+    }
+    delete prepared;
+}
+
+py::dict topologyPayload(const Analysis& source, double analysis_seconds)
+{
+    std::vector<Analysis::EventData> ordered = source.events;
+    std::sort(
+        ordered.begin(), ordered.end(),
+        [](const Analysis::EventData& left, const Analysis::EventData& right) {
+            return std::tie(
+                left.time, left.vertex, left.left, left.right,
+                left.first_cell, left.second_cell
+            ) < std::tie(
+                right.time, right.vertex, right.left, right.right,
+                right.first_cell, right.second_cell
+            );
+        }
     );
-    const double analysis_seconds = elapsedSeconds(analysis_started);
+    py::list events;
+    for (const Analysis::EventData& event : ordered)
+    {
+        py::tuple cells(event.vertex ? 1 : 2);
+        cells[0] = event.first_cell;
+        if (!event.vertex) cells[1] = event.second_cell;
+        events.append(py::make_tuple(
+            event.time,
+            event.vertex ? "vertex" : "edge",
+            event.left,
+            event.right,
+            cells
+        ));
+    }
+    py::dict result;
+    result["events"] = events;
+    result["event_count"] = py::len(events);
+    result["conflict_pair_count"] = source.conflict_pairs.size();
+    result["state_analysis_seconds"] = analysis_seconds;
+    result["state_input_seconds"] = source.input_seconds;
+    result["state_conflict_scan_seconds"] = source.conflict_scan_seconds;
+    result["state_graph_seconds"] = source.graph_seconds;
+    return result;
+}
+
+py::dict featurePayload(const py::dict& state, const py::list& candidates,
+                        const Analysis& analysis, double analysis_seconds,
+                        bool include_realized,
+                        const py::dict& required_features)
+{
     const auto fill_started = FeatureClock::now();
     py::dict result;
     result["dynamic"] = projectedFeatures(
@@ -803,14 +868,13 @@ py::dict batchOnlineFeatures(const py::dict& state, const py::list& candidates,
     return result;
 }
 
-py::dict batchOnlineFeatureVectors(const py::dict& state,
-                                   const py::list& candidates,
-                                   const py::dict& static_grid,
-                                   const py::list& feature_names)
+py::dict vectorPayload(const py::dict& state, const py::list& candidates,
+                       const Analysis& analysis, double analysis_seconds,
+                       const py::list& feature_names)
 {
     std::vector<std::string> names;
-    names.reserve(py::len(feature_names));
     bool include_realized = false;
+    names.reserve(py::len(feature_names));
     for (const py::handle& value : feature_names)
     {
         const std::string name = py::cast<std::string>(value);
@@ -819,8 +883,10 @@ py::dict batchOnlineFeatureVectors(const py::dict& state,
             name.rfind("proposal.", 0) == 0 ||
             name.rfind("realized.", 0) == 0;
         if (!known)
-            throw py::value_error("native dense feature request contains an unknown prefix");
-        include_realized = include_realized || name.rfind("realized.", 0) == 0;
+            throw py::value_error(
+                "native dense feature request contains an unknown prefix");
+        include_realized = include_realized ||
+            name.rfind("realized.", 0) == 0;
         names.push_back(name);
     }
     if (names.empty())
@@ -830,13 +896,9 @@ py::dict batchOnlineFeatureVectors(const py::dict& state,
     feature_indices.reserve(names.size());
     for (size_t index = 0; index < names.size(); index++)
         if (!feature_indices.emplace(names[index], index).second)
-            throw py::value_error("native dense feature request contains duplicate names");
+            throw py::value_error(
+                "native dense feature request contains duplicate names");
 
-    const auto analysis_started = FeatureClock::now();
-    const Analysis analysis = analyze(
-        state, static_grid, include_realized, true
-    );
-    const double analysis_seconds = elapsedSeconds(analysis_started);
     const auto fill_started = FeatureClock::now();
     std::vector<double> dynamic_values(names.size(), 0.0);
     DenseFeatureWriter dynamic_writer(feature_indices, dynamic_values);
@@ -868,45 +930,86 @@ py::dict batchOnlineFeatureVectors(const py::dict& state,
     result["feature_fill_seconds"] = elapsedSeconds(fill_started);
     return result;
 }
+}
+
+py::dict batchOnlineFeatures(const py::dict& state, const py::list& candidates,
+                             const py::dict& static_grid, bool include_realized,
+                             const py::dict& required_features)
+{
+    const auto analysis_started = FeatureClock::now();
+    const Analysis analysis = analyze(
+        state, static_grid, include_realized, false
+    );
+    const double analysis_seconds = elapsedSeconds(analysis_started);
+    return featurePayload(
+        state, candidates, analysis, analysis_seconds,
+        include_realized, required_features);
+}
+
+py::dict batchOnlineFeatureVectors(const py::dict& state,
+                                   const py::list& candidates,
+                                   const py::dict& static_grid,
+                                   const py::list& feature_names)
+{
+    bool include_realized = false;
+    for (const py::handle& value : feature_names)
+    {
+        const std::string name = py::cast<std::string>(value);
+        include_realized = include_realized || name.rfind("realized.", 0) == 0;
+    }
+
+    const auto analysis_started = FeatureClock::now();
+    const Analysis analysis = analyze(
+        state, static_grid, include_realized, true
+    );
+    const double analysis_seconds = elapsedSeconds(analysis_started);
+    return vectorPayload(
+        state, candidates, analysis, analysis_seconds, feature_names);
+}
 
 py::dict topologyConflictEvents(const py::dict& state,
                                 const py::dict& static_grid)
 {
     const auto started = FeatureClock::now();
-    Analysis analysis = analyze(state, static_grid, false, true, true);
-    std::sort(
-        analysis.events.begin(), analysis.events.end(),
-        [](const Analysis::EventData& left, const Analysis::EventData& right) {
-            return std::tie(
-                left.time, left.vertex, left.left, left.right,
-                left.first_cell, left.second_cell
-            ) < std::tie(
-                right.time, right.vertex, right.left, right.right,
-                right.first_cell, right.second_cell
-            );
-        }
-    );
-    py::list events;
-    for (const Analysis::EventData& event : analysis.events)
-    {
-        py::tuple cells(event.vertex ? 1 : 2);
-        cells[0] = event.first_cell;
-        if (!event.vertex) cells[1] = event.second_cell;
-        events.append(py::make_tuple(
-            event.time,
-            event.vertex ? "vertex" : "edge",
-            event.left,
-            event.right,
-            cells
-        ));
-    }
-    py::dict result;
-    result["events"] = events;
-    result["event_count"] = py::len(events);
-    result["conflict_pair_count"] = analysis.conflict_pairs.size();
-    result["state_analysis_seconds"] = elapsedSeconds(started);
-    result["state_input_seconds"] = analysis.input_seconds;
-    result["state_conflict_scan_seconds"] = analysis.conflict_scan_seconds;
-    result["state_graph_seconds"] = analysis.graph_seconds;
-    return result;
+    const Analysis analysis = analyze(state, static_grid, false, true, true);
+    return topologyPayload(analysis, elapsedSeconds(started));
+}
+
+py::capsule prepareOnlineAnalysis(const py::dict& state,
+                                  const py::dict& static_grid)
+{
+    const auto started = FeatureClock::now();
+    Analysis analysis = analyze(state, static_grid, true, true, true);
+    auto* prepared = new PreparedOnlineAnalysis{
+        std::move(analysis), elapsedSeconds(started)};
+    return py::capsule(
+        prepared,
+        PREPARED_ANALYSIS_CAPSULE,
+        deletePreparedAnalysis);
+}
+
+py::dict preparedTopologyConflictEvents(const py::capsule& capsule)
+{
+    PreparedOnlineAnalysis& prepared = preparedAnalysis(capsule);
+    return topologyPayload(prepared.analysis, prepared.analysis_seconds);
+}
+
+py::dict batchOnlineFeaturesPrepared(
+    const py::dict& state, const py::list& candidates,
+    const py::capsule& capsule, bool include_realized,
+    const py::dict& required_features)
+{
+    PreparedOnlineAnalysis& prepared = preparedAnalysis(capsule);
+    return featurePayload(
+        state, candidates, prepared.analysis, 0.0,
+        include_realized, required_features);
+}
+
+py::dict batchOnlineFeatureVectorsPrepared(
+    const py::dict& state, const py::list& candidates,
+    const py::capsule& capsule, const py::list& feature_names)
+{
+    PreparedOnlineAnalysis& prepared = preparedAnalysis(capsule);
+    return vectorPayload(
+        state, candidates, prepared.analysis, 0.0, feature_names);
 }

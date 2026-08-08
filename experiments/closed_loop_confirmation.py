@@ -1362,6 +1362,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                         topology_state_analysis = None
                         topology_state_analysis_seconds = 0.0
+                        topology_prepared_native_analysis = None
                         topology_runtime = dict(
                             effective_proposal.get("topology_boundary") or {}
                         )
@@ -1400,6 +1401,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 )
                             topology_pending_changed_agents.clear()
                             topology_state_analysis = topology_analysis_cache.analysis
+                            topology_prepared_native_analysis = (
+                                topology_analysis_cache.last_native_prepared
+                            )
                             topology_state_analysis_seconds = (
                                 topology_analysis_cache.last_prepare_seconds
                             )
@@ -1453,7 +1457,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             if feature_engine is None:
                                 feature_engine = make_feature_engine(state)
                                 feature_engine_created = True
-                            if feature_engine_created or decision_index == 0:
+                            if topology_prepared_native_analysis is not None:
+                                state_feature_metrics = feature_engine.prepare(
+                                    state,
+                                    changed_agents=sorted(pending_changed_agents),
+                                    prepared_native_analysis=(
+                                        topology_prepared_native_analysis
+                                    ),
+                                )
+                            elif feature_engine_created or decision_index == 0:
                                 state_feature_metrics = dict(
                                     feature_engine.last_prepare_metrics
                                 )

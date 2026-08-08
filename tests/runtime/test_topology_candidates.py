@@ -562,15 +562,21 @@ class TopologyCandidatesTest(unittest.TestCase):
             ) as overlap,
             patch.object(
                 topology_candidates,
-                "generate_topology_boundary_candidates",
-                wraps=topology_candidates.generate_topology_boundary_candidates,
+                "_boundary_neighborhood",
+                wraps=topology_candidates._boundary_neighborhood,
             ) as boundary,
+            patch.object(
+                topology_candidates,
+                "topology_candidate_audit",
+                wraps=topology_candidates.topology_candidate_audit,
+            ) as audit,
         ):
-            generate_structpool_candidates(state, analysis)
+            rows = generate_structpool_candidates(state, analysis)
         self.assertEqual(component.call_count, 1)
         self.assertEqual(hotspot.call_count, 1)
         self.assertEqual(overlap.call_count, 1)
-        self.assertEqual(boundary.call_count, 4)
+        self.assertEqual(boundary.call_count, 8)
+        self.assertLessEqual(audit.call_count, len(rows) + 4)
 
     def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
         state, analysis = self._structpool_state()

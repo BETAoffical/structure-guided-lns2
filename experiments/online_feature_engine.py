@@ -94,6 +94,45 @@ def _native_topology_event_function() -> Any | None:
     return None
 
 
+def _native_companion_function(name: str) -> Any | None:
+    _native_batch_function()
+    for module_name in ("lns2_env", "lns2_features_native"):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        function = getattr(module, name, None)
+        if callable(function):
+            return function
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def _native_prepare_analysis_function() -> Any | None:
+    return _native_companion_function("prepare_online_analysis")
+
+
+@functools.lru_cache(maxsize=1)
+def _native_prepared_topology_function() -> Any | None:
+    return _native_companion_function("prepared_topology_conflict_events")
+
+
+@functools.lru_cache(maxsize=1)
+def _native_prepared_batch_function() -> Any | None:
+    return _native_companion_function("batch_online_features_prepared")
+
+
+@functools.lru_cache(maxsize=1)
+def _native_prepared_vector_function() -> Any | None:
+    return _native_companion_function("batch_online_feature_vectors_prepared")
+
+
+@dataclass(frozen=True)
+class NativePreparedAnalysis:
+    capsule: Any
+    state_object_id: int
+
+
 @functools.lru_cache(maxsize=16)
 def _cached_static_grid(
     rows: int, cols: int, obstacles: tuple[int, ...]
@@ -334,9 +373,12 @@ class TopologyAnalysisCache:
         *,
         static_grid: StaticGridAnalysis | None = None,
         backend: str = "auto",
+        shadow_interval: int = 20,
     ) -> None:
         if backend not in {"auto", "python", "native"}:
             raise ValueError("unsupported topology analysis backend")
+        if shadow_interval <= 0:
+            raise ValueError("topology shadow interval must be positive")
         self.static_grid = static_grid or static_grid_for_state(initial_state)
         native_function = (
             _native_topology_event_function() if backend != "python" else None
@@ -344,10 +386,28 @@ class TopologyAnalysisCache:
         if backend == "native" and native_function is None:
             raise RuntimeError("native topology event extraction is unavailable")
         self.native_function = native_function
+        self.native_prepare_function = (
+            _native_prepare_analysis_function()
+            if native_function is not None
+            else None
+        )
+        self.native_prepared_topology_function = (
+            _native_prepared_topology_function()
+            if native_function is not None
+            else None
+        )
         self.backend = "native" if native_function is not None else "python"
         self.index: TemporalConflictIndex | None = None
+        self.paths: dict[int, list[int]] | None = None
         self.analysis: StateAnalysis | None = None
+        self.visit_heat: collections.Counter[int] = collections.Counter()
+        self.agent_heat: collections.Counter[int] = collections.Counter()
+        self.shadow_interval = int(shadow_interval)
+        self.incremental_prepare_count = 0
+        self.last_prepare_incremental = False
+        self.last_shadow_validation = False
         self.last_prepare_seconds = 0.0
+        self.last_native_prepared: NativePreparedAnalysis | None = None
         self.prepare(initial_state)
 
     def _validate_grid(self, state: dict[str, Any]) -> None:
@@ -359,7 +419,12 @@ class TopologyAnalysisCache:
             raise ValueError("topology cache grid changed during an episode")
 
     def _analysis_from_events(
-        self, state: dict[str, Any], events: list[ConflictEvent]
+        self,
+        state: dict[str, Any],
+        events: list[ConflictEvent],
+        *,
+        visit_heat: collections.Counter[int] | None = None,
+        agent_heat: collections.Counter[int] | None = None,
     ) -> StateAnalysis:
         pair_set = {(event.left, event.right) for event in events}
         expected_pairs = {
@@ -376,14 +441,15 @@ class TopologyAnalysisCache:
             )
         agent_ids = [int(agent["id"]) for agent in state["agents"]]
         component_id, component_members = _conflict_components(agent_ids, pair_set)
-        visit_heat: collections.Counter[int] = collections.Counter()
-        agent_heat: collections.Counter[int] = collections.Counter()
-        for agent in state["agents"]:
-            path = list(map(int, agent.get("path", [])))
-            if not path:
-                raise ValueError("topology cache requires non-empty agent paths")
-            visit_heat.update(path)
-            agent_heat.update(set(path))
+        if visit_heat is None or agent_heat is None:
+            visit_heat = collections.Counter()
+            agent_heat = collections.Counter()
+            for agent in state["agents"]:
+                path = list(map(int, agent.get("path", [])))
+                if not path:
+                    raise ValueError("topology cache requires non-empty agent paths")
+                visit_heat.update(path)
+                agent_heat.update(set(path))
         return StateAnalysis(
             rows=self.static_grid.rows,
             cols=self.static_grid.cols,
@@ -392,19 +458,28 @@ class TopologyAnalysisCache:
             articulation=self.static_grid.articulation,
             obstacle_rate_2=self.static_grid.obstacle_rate_2,
             obstacle_rate_4=self.static_grid.obstacle_rate_4,
-            visit_heat=visit_heat,
-            agent_heat=agent_heat,
+            visit_heat=collections.Counter(visit_heat),
+            agent_heat=collections.Counter(agent_heat),
             events=events,
             pair_set=pair_set,
             component_id=component_id,
             component_members=component_members,
         )
 
-    def _native_events(self, state: dict[str, Any]) -> list[ConflictEvent]:
+    def _native_events(
+        self,
+        state: dict[str, Any],
+        prepared: NativePreparedAnalysis | None = None,
+    ) -> list[ConflictEvent]:
         assert self.native_function is not None
-        payload = self.native_function(
-            state, _native_static_payload(self.static_grid)
-        )
+        if prepared is not None and self.native_prepared_topology_function is not None:
+            if prepared.state_object_id != id(state):
+                raise ValueError("prepared native analysis belongs to another state")
+            payload = self.native_prepared_topology_function(prepared.capsule)
+        else:
+            payload = self.native_function(
+                state, _native_static_payload(self.static_grid)
+            )
         events = [
             ConflictEvent(
                 int(row[0]),
@@ -419,6 +494,61 @@ class TopologyAnalysisCache:
             raise ValueError("native topology event count changed during conversion")
         return events
 
+    @staticmethod
+    def _paths(state: dict[str, Any]) -> dict[int, list[int]]:
+        paths = {
+            int(agent["id"]): list(map(int, agent.get("path", [])))
+            for agent in state["agents"]
+        }
+        if not paths or any(not path for path in paths.values()):
+            raise ValueError("topology cache requires non-empty agent paths")
+        return paths
+
+    def _reset_heat(self, paths: dict[int, list[int]]) -> None:
+        self.visit_heat = collections.Counter()
+        self.agent_heat = collections.Counter()
+        for path in paths.values():
+            self.visit_heat.update(path)
+            self.agent_heat.update(set(path))
+
+    @staticmethod
+    def _drop_zeros(counter: collections.Counter[int]) -> None:
+        for key in [key for key, value in counter.items() if value <= 0]:
+            del counter[key]
+
+    def _update_heat(
+        self,
+        old_paths: dict[int, list[int]],
+        new_paths: dict[int, list[int]],
+        changed: Iterable[int],
+    ) -> None:
+        for agent in changed:
+            old_path = old_paths[int(agent)]
+            new_path = new_paths[int(agent)]
+            self.visit_heat.subtract(old_path)
+            self.agent_heat.subtract(set(old_path))
+            self.visit_heat.update(new_path)
+            self.agent_heat.update(set(new_path))
+        self._drop_zeros(self.visit_heat)
+        self._drop_zeros(self.agent_heat)
+
+    def _full_events(
+        self, state: dict[str, Any], index: TemporalConflictIndex
+    ) -> list[ConflictEvent]:
+        return (
+            self._native_events(state)
+            if self.native_function is not None
+            else index.all_events()
+        )
+
+    def _shadow_analysis(
+        self, state: dict[str, Any], paths: dict[int, list[int]]
+    ) -> StateAnalysis:
+        index = TemporalConflictIndex(paths)
+        return self._analysis_from_events(
+            state, self._full_events(state, index)
+        )
+
     def prepare(
         self,
         state: dict[str, Any],
@@ -427,22 +557,95 @@ class TopologyAnalysisCache:
     ) -> StateAnalysis:
         started = time.perf_counter()
         self._validate_grid(state)
+        paths = self._paths(state)
         if self.native_function is not None:
+            native_prepared = None
+            if (
+                self.native_prepare_function is not None
+                and self.native_prepared_topology_function is not None
+            ):
+                native_prepared = NativePreparedAnalysis(
+                    self.native_prepare_function(
+                        state, _native_static_payload(self.static_grid)
+                    ),
+                    id(state),
+                )
+            if self.paths is None or changed_agents is None:
+                self._reset_heat(paths)
+                self.incremental_prepare_count = 0
+                self.last_prepare_incremental = False
+                self.last_shadow_validation = False
+            else:
+                requested = {int(agent) for agent in changed_agents}
+                if not requested <= set(paths):
+                    raise ValueError(
+                        "topology cache update contains an unknown agent"
+                    )
+                changed = {
+                    agent
+                    for agent in requested
+                    if self.paths[agent] != paths[agent]
+                }
+                self._update_heat(self.paths, paths, changed)
+                self.incremental_prepare_count += 1
+                self.last_prepare_incremental = True
+                self.last_shadow_validation = (
+                    self.incremental_prepare_count % self.shadow_interval == 0
+                )
+            self.paths = {agent: list(path) for agent, path in paths.items()}
             self.analysis = self._analysis_from_events(
-                state, self._native_events(state)
+                state,
+                self._native_events(state, native_prepared),
+                visit_heat=self.visit_heat,
+                agent_heat=self.agent_heat,
             )
+            if self.last_shadow_validation:
+                shadow = self._shadow_analysis(state, paths)
+                if shadow != self.analysis:
+                    raise ValueError(
+                        "incremental topology analysis differs from full shadow recomputation"
+                    )
+            self.last_native_prepared = native_prepared
             self.last_prepare_seconds = time.perf_counter() - started
             return self.analysis
-        paths = {
-            int(agent["id"]): list(map(int, agent["path"]))
-            for agent in state["agents"]
-        }
         if self.index is None or changed_agents is None:
             self.index = TemporalConflictIndex(paths)
+            self.paths = {agent: list(path) for agent, path in paths.items()}
+            self._reset_heat(paths)
+            self.incremental_prepare_count = 0
+            self.last_prepare_incremental = False
+            self.last_shadow_validation = False
+            events = self._full_events(state, self.index)
         else:
-            self.index.update(paths, changed_agents)
+            requested = {int(agent) for agent in changed_agents}
+            if not requested <= set(paths):
+                raise ValueError("topology cache update contains an unknown agent")
+            old_paths = {
+                agent: list(self.index.paths[agent]) for agent in requested
+            }
+            changed = self.index.update(paths, requested)
+            self._update_heat(old_paths, paths, changed)
+            self.paths = {agent: list(path) for agent, path in paths.items()}
+            self.incremental_prepare_count += 1
+            self.last_prepare_incremental = True
+            self.last_shadow_validation = (
+                self.incremental_prepare_count % self.shadow_interval == 0
+            )
+            events = self.index.all_events()
         assert self.index is not None
-        self.analysis = self._analysis_from_events(state, self.index.all_events())
+        self.analysis = self._analysis_from_events(
+            state,
+            events,
+            visit_heat=self.visit_heat,
+            agent_heat=self.agent_heat,
+        )
+        if self.last_shadow_validation:
+            shadow = self._shadow_analysis(state, paths)
+            if shadow != self.analysis:
+                raise ValueError(
+                    "incremental topology analysis differs from full shadow recomputation"
+                )
+        self.last_native_prepared = None
         self.last_prepare_seconds = time.perf_counter() - started
         return self.analysis
 
@@ -746,6 +949,12 @@ class OnlineFeatureEngine:
         self.native_vector_function = (
             _native_vector_function() if self.backend == "native" else None
         )
+        self.native_prepared_function = (
+            _native_prepared_batch_function() if self.backend == "native" else None
+        )
+        self.native_prepared_vector_function = (
+            _native_prepared_vector_function() if self.backend == "native" else None
+        )
         self.dense_output = bool(dense_output)
         if self.dense_output and self.backend != "native":
             raise ValueError("dense feature output requires the native backend")
@@ -778,6 +987,7 @@ class OnlineFeatureEngine:
         self.last_shadow_rows: dict[str, list[dict[str, Any]]] = {}
         self.last_prepare_metrics: dict[str, Any] = {}
         self.last_native_metrics: dict[str, float] = {}
+        self.native_prepared_analysis: NativePreparedAnalysis | None = None
         self.prepare(initial_state)
 
     def _native_payload(
@@ -796,7 +1006,20 @@ class OnlineFeatureEngine:
             "proposal": [name for name in names if name.startswith("proposal.")],
             "realized": [name for name in names if name.startswith("realized.")],
         }
-        if self.native_accepts_required_features:
+        prepared = self.native_prepared_analysis
+        if prepared is not None and self.native_prepared_function is not None:
+            if prepared.state_object_id != id(self.state):
+                raise ValueError("prepared native analysis belongs to another state")
+            payload = dict(
+                self.native_prepared_function(
+                    self.state,
+                    candidates,
+                    prepared.capsule,
+                    include_realized,
+                    required,
+                )
+            )
+        elif self.native_accepts_required_features:
             payload = dict(
                 self.native_function(
                     self.state,
@@ -823,6 +1046,9 @@ class OnlineFeatureEngine:
                 "feature_fill_seconds",
             )
         }
+        self.last_native_metrics["prepared_analysis_reused"] = float(
+            prepared is not None and self.native_prepared_function is not None
+        )
         return payload
 
     def _native_vector_payload(
@@ -830,11 +1056,21 @@ class OnlineFeatureEngine:
     ) -> dict[str, Any]:
         assert self.native_vector_function is not None and self.state is not None
         names = self.required_features[profile]
-        payload = dict(
-            self.native_vector_function(
-                self.state, candidates, self.native_static, list(names)
+        prepared = self.native_prepared_analysis
+        if prepared is not None and self.native_prepared_vector_function is not None:
+            if prepared.state_object_id != id(self.state):
+                raise ValueError("prepared native analysis belongs to another state")
+            payload = dict(
+                self.native_prepared_vector_function(
+                    self.state, candidates, prepared.capsule, list(names)
+                )
             )
-        )
+        else:
+            payload = dict(
+                self.native_vector_function(
+                    self.state, candidates, self.native_static, list(names)
+                )
+            )
         returned_names = tuple(map(str, payload.get("feature_names", ())))
         vectors = list(payload.get("vectors", ()))
         if returned_names != names:
@@ -852,6 +1088,9 @@ class OnlineFeatureEngine:
                 "feature_fill_seconds",
             )
         }
+        self.last_native_metrics["prepared_analysis_reused"] = float(
+            prepared is not None and self.native_prepared_vector_function is not None
+        )
         return payload
 
     def _dense_rows(
@@ -952,10 +1191,17 @@ class OnlineFeatureEngine:
         state: dict[str, Any],
         *,
         changed_agents: Iterable[int] | None = None,
+        prepared_native_analysis: NativePreparedAnalysis | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
         if self.backend == "native":
+            if (
+                prepared_native_analysis is not None
+                and prepared_native_analysis.state_object_id != id(state)
+            ):
+                raise ValueError("prepared native analysis belongs to another state")
             self.state = state
+            self.native_prepared_analysis = prepared_native_analysis
             self.last_prepare_metrics = {
                 "state_analysis_seconds": time.perf_counter() - started,
                 "conflict_update_seconds": 0.0,
@@ -965,6 +1211,7 @@ class OnlineFeatureEngine:
                 "incremental_cache_hit": False,
                 "feature_backend": self.backend,
                 "feature_output": "dense" if self.dense_output else "dict",
+                "prepared_analysis_reused": bool(prepared_native_analysis),
             }
             return dict(self.last_prepare_metrics)
         conflict_seconds = 0.0
@@ -998,6 +1245,7 @@ class OnlineFeatureEngine:
         dynamic = state_dynamic_features(state, analysis)
         dynamic_seconds = time.perf_counter() - dynamic_started
         self.state = state
+        self.native_prepared_analysis = None
         self.analysis = analysis
         self.cache = cache
         self.dynamic = dynamic
@@ -1255,6 +1503,7 @@ class OnlineFeatureEngine:
 
 __all__ = [
     "FEATURE_BACKENDS",
+    "NativePreparedAnalysis",
     "OnlineFeatureEngine",
     "TopologyAnalysisCache",
     "_native_vector_function",

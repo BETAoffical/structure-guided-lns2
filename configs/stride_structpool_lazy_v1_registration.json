@@ -1,0 +1,94 @@
+{
+  "schema": "lns2.stride.structpool_lazy_registration.v1",
+  "scientific_status": "tested_semantics_preserving_runtime_optimization",
+  "implementation_id": "stride-structpool-lazy-v1",
+  "source_head_before_implementation": "d264c5bd5eb11e30798a587c07fb149c511dcb5f",
+  "recovery": {
+    "branch": "codex/backup-before-structpool-next-20260808",
+    "bundle": "../backups/structure-guided-lns2-before-structpool-next-20260808.bundle",
+    "bundle_sha256": "ed1c146d69c51408652050af2ed8e448804dc5501972a4cb5b94cd47ce112ec3"
+  },
+  "frozen_semantics": {
+    "v2_baseline": "v2-full",
+    "pp_unchanged": true,
+    "sipps_unchanged": true,
+    "repair_seed_unchanged": true,
+    "base_candidate_pool_unchanged": true,
+    "known_maze_long_tail_excluded": true
+  },
+  "optimizations": [
+    {
+      "id": "lazy_structpool_candidate_finalization",
+      "mechanism": "draft_reduce_finalize_pipeline_with_deferred_audit_and_score",
+      "activated_state_count": 44,
+      "candidate_count": 264,
+      "candidate_records_sha256": "9c57f07c42b3cd7669649edfca918c967c4e0ca48cbe449ad1b56fec59b8e628",
+      "repeat_count": 11,
+      "paired_faster_count": 11,
+      "baseline_median_seconds": 0.927138751,
+      "optimized_median_seconds": 0.882769417,
+      "median_relative_improvement": 0.0478561962296838,
+      "exact": true,
+      "report": "build/stride-structpool-lazy-v1/refactor-generator-11.json",
+      "report_sha256": "ca9523d241240762904d71760553f50a446fe0ffd099819f3fab5c45f64fad5b"
+    },
+    {
+      "id": "incremental_topology_path_heat",
+      "mechanism": "changed_agent_path_heat_update_with_native_conflict_events_and_periodic_full_shadow",
+      "activated_state_count": 44,
+      "repeat_count": 11,
+      "paired_faster_count": 11,
+      "baseline_median_seconds": 0.5892448150000291,
+      "optimized_median_seconds": 0.43506250400014324,
+      "median_relative_improvement": 0.2616608701085953,
+      "analysis_signature_sha256": "cb79ffb799141558c8874250703766a9b90303c9a2b57305bba23825d31fe17a",
+      "exact": true,
+      "shadow_interval": 20,
+      "report": "build/stride-structpool-lazy-v1/topology-cache-11.json",
+      "report_sha256": "45b438fec6d3c134db76c3574def159e10d237c2fb30bc7cf7b9430a8f93c009"
+    },
+    {
+      "id": "shared_native_state_analysis",
+      "mechanism": "one_native_analysis_capsule_shared_by_topology_and_124d_feature_extraction",
+      "activated_state_count": 44,
+      "repeat_count": 11,
+      "paired_faster_count": 11,
+      "separate_median_seconds": 1.1353617619999987,
+      "shared_median_seconds": 0.8171956420000015,
+      "median_relative_improvement": 0.2802332530906546,
+      "feature_signature_sha256": "fca68bf3275819fa9eb609adb5563c8b16577dbc57359fa1fe795a4b0c1439fc",
+      "feature_vector_exact": true,
+      "report": "build/stride-structpool-lazy-v1/prepared-native-analysis-11.json",
+      "report_sha256": "582430d0e3a916a055d7d001b544f077895bc4717b82c32db33bc9881496d00d"
+    }
+  ],
+  "closed_loop_validation": {
+    "output": "build/stride-structpool-lazy-v1/quick-v3",
+    "controllers": [
+      "official_adaptive",
+      "v2-full",
+      "v2-plus-structpool"
+    ],
+    "schedule_entries": 24,
+    "paired_keys_per_controller": 8,
+    "all_controllers_success_count": 8,
+    "transition_count": 93,
+    "semantic_rows_sha256": "284fd5a0b2f7685ce658f182fec54efc6f1c1cf8e92844d4983a9a4cf174bcf2",
+    "exact_match": true,
+    "reference_mean_selection_seconds": 0.5226056407499649,
+    "candidate_mean_selection_seconds": 0.49460714700000874,
+    "mean_selection_relative_improvement": 0.053574802043424,
+    "reference_mean_raw_ttf_seconds": 11.769760537750017,
+    "candidate_mean_raw_ttf_seconds": 11.67623768087499,
+    "equivalence_report_sha256": "b140b96d658eddb57dcec39600ebe4ec3c01aac62b0d34a92689af759f0f5f4f",
+    "quick_report_sha256": "492ba20b571eb752e8062f1fe62d1e78773f7342c15237ace67be9d4d740559c"
+  },
+  "claim_boundary": {
+    "runtime_only": true,
+    "candidate_quality_change": false,
+    "formal_ttf_claim": false,
+    "fresh_map_claim": false,
+    "long_tail_claim": false,
+    "next_stage": "family_by_size_current_step_ablation"
+  }
+}

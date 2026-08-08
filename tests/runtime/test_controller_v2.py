@@ -303,6 +303,11 @@ class ControllerV2Tests(unittest.TestCase):
         }
         _refresh_conflicts(state)
         cache = TopologyAnalysisCache(state, backend="python")
+        native_cache = (
+            TopologyAnalysisCache(state, backend="native", shadow_interval=5)
+            if _native_topology_event_function() is not None
+            else None
+        )
         for step in range(30):
             updated = copy.deepcopy(state)
             changed = set(generator.sample(range(24), generator.randrange(1, 6)))
@@ -320,12 +325,15 @@ class ControllerV2Tests(unittest.TestCase):
             self.assertEqual(cache.analysis.component_members, expected.component_members)
             self.assertEqual(cache.analysis.visit_heat, expected.visit_heat)
             self.assertEqual(cache.analysis.agent_heat, expected.agent_heat)
-            if _native_topology_event_function() is not None:
-                native = TopologyAnalysisCache(updated, backend="native")
-                self.assertIsNotNone(native.analysis)
-                assert native.analysis is not None
-                self.assertEqual(native.analysis.events, expected.events)
-                self.assertEqual(native.analysis.pair_set, expected.pair_set)
+            if native_cache is not None:
+                native_cache.prepare(updated, changed_agents=sorted(changed))
+                self.assertIsNotNone(native_cache.analysis)
+                assert native_cache.analysis is not None
+                self.assertEqual(native_cache.analysis, expected)
+                self.assertTrue(native_cache.last_prepare_incremental)
+                self.assertEqual(
+                    native_cache.last_shadow_validation, (step + 1) % 5 == 0
+                )
             state = updated
 
     def test_native_topology_events_match_full_reconstruction(self) -> None:
@@ -355,6 +363,46 @@ class ControllerV2Tests(unittest.TestCase):
         rows, _ = engine.realized_rows(candidates, state_hash="fixture")
         self.assertEqual(len(rows), 2)
         self.assertEqual(engine.backend, "native")
+
+    def test_prepared_native_analysis_is_shared_without_feature_changes(self) -> None:
+        if _native_batch_function() is None:
+            self.skipTest("native feature module is not built")
+        state = make_state()
+        _refresh_conflicts(state)
+        candidates = [
+            make_candidate("candidate-a", [0, 1], "target:4"),
+            make_candidate("candidate-b", [1, 2], "collision:4"),
+        ]
+        topology = TopologyAnalysisCache(state, backend="native")
+        prepared = topology.last_native_prepared
+        if prepared is None:
+            self.skipTest("prepared native analysis is not built")
+
+        separate = OnlineFeatureEngine(
+            state, backend="native", dense_output=True
+        )
+        shared = OnlineFeatureEngine(
+            state, backend="native", dense_output=True
+        )
+        shared.prepare(state, prepared_native_analysis=prepared)
+        for profile, method in (
+            ("proposal_dynamic", "proposal_rows"),
+            ("realized_dynamic", "realized_rows"),
+        ):
+            expected, _ = getattr(separate, method)(
+                candidates, state_hash="fixture"
+            )
+            actual, metrics = getattr(shared, method)(
+                candidates, state_hash="fixture"
+            )
+            self.assertEqual(actual, expected, profile)
+            self.assertEqual(metrics["prepared_analysis_reused"], 1.0)
+            self.assertEqual(metrics["state_analysis_seconds"], 0.0)
+
+        with self.assertRaisesRegex(ValueError, "another state"):
+            shared.prepare(
+                copy.deepcopy(state), prepared_native_analysis=prepared
+            )
 
     def test_deployment_feature_projection_materializes_only_tree_inputs(self) -> None:
         state = make_state()

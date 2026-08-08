@@ -1784,6 +1784,16 @@
       "purpose": "Reconstruct activated StructPool decisions and verify exact candidate JSON while benchmarking semantics-preserving generator changes."
     },
     {
+      "path": "scripts/benchmark_topology_analysis_cache.py",
+      "role": "reproducibility",
+      "purpose": "Compare exact native StructPool topology analysis with full versus changed-agent path-heat maintenance on stored activated trajectories."
+    },
+    {
+      "path": "scripts/benchmark_prepared_native_analysis.py",
+      "role": "reproducibility",
+      "purpose": "Verify exact 124-dimensional feature identity and benchmark reuse of one native analysis object by StructPool topology and feature extraction."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."
