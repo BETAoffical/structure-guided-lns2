@@ -1839,6 +1839,21 @@
       "contract": "Stable half-consistent current-step labels, uniform state weighting, map-disjoint evaluation, six-candidate budget, no fresh-map read, and no runtime or TTF claim before all gates pass."
     },
     {
+      "path": "experiments/stride_slotpool_confirmation.py",
+      "role": "active",
+      "purpose": "Collect paired current-step labels and evaluate the frozen SlotPool model on the preregistered six-map disjoint confirmation cohort."
+    },
+    {
+      "path": "scripts/run_stride_slotpool_confirmation.py",
+      "role": "active",
+      "purpose": "Command-line entry point for resumable SlotPool fresh-map collection and frozen-model analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_slotpool_confirmation.py",
+      "role": "active",
+      "contract": "Map-disjoint fixed cohort, no result filtering or retraining, unchanged development gates, and no runtime or TTF claim before confirmation passes."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."

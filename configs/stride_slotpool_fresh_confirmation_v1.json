@@ -1,0 +1,111 @@
+{
+  "schema": "lns2.stride.slotpool_fresh_confirmation_config.v1",
+  "scientific_status": "preregistered_frozen_model_map_disjoint_current_step_confirmation",
+  "confirmation_id": "stride-slotpool-fresh-confirmation-v1",
+  "model_id": "stride-slotpool-v1",
+  "pre_registration_parent_commit": "a1824ff1ff5b7923966ed65a64e5bc4539eeec1c",
+  "dataset_root": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+  "inputs": {
+    "development_report": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_evaluation_report.json",
+      "sha256": "3b305b824af605e592ef7d667978c0029817c7b23d854d6e6207bae4a47cb826"
+    },
+    "frozen_model": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_pairwise_model.json",
+      "sha256": "e0a42c7a21cb341a6c5ce13ad6d89e6f5279c04378535fb9c44ce76a1dfe2319"
+    },
+    "preflight_report": {
+      "path": "build/stride-topoboundary-fresh-preflight-analysis-v1/robuststep_map_preflight_report.json",
+      "sha256": "eb8e36020c413b1c514c5a8b74bf7dfa6728259088f85cad46ac6a80bc0159e3"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "76ea8a63a0e3ed4c8a7933603b38463ebce1b29fb46296914d23beb63a20106b"
+    },
+    "coverage_report": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_report.json",
+      "sha256": "a8b856c2be07e930866572c41f2dd4aa4f75cc2e15b18d719fe5e127f634bd18"
+    },
+    "coverage_states": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_states.jsonl",
+      "sha256": "d1238c0508018905bd1fe7a57ca7813bb92490ce2b560f61f438d5b8ad3004d7"
+    },
+    "coverage_candidates": {
+      "path": "build/stride-topoboundary-fresh-coverage-v1/topology_coverage_candidates.jsonl",
+      "sha256": "f0e5075663c43072e757a2f7a19831fa94471bb57b6fc5e5bfb19bbc34d6857a"
+    },
+    "runtime_config": {
+      "path": "configs/stride_robuststep_topology_preflight_runtime.json",
+      "sha256": "6d545c15fc6fb3b13743671526d0457298a9a60840d4a63380b3bc4c82a3114b"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "development_map_ids": [
+    "ca_cave", "ca_caverns2", "den900d", "dr_primevalentrance",
+    "hrt001d", "ht_bartrand_n", "lak106d", "lak203d", "lak250d",
+    "lak526d", "lgt604d", "lt_hangedman", "lt_undercitydungeon",
+    "orz201d", "orz601d", "w_encounter3"
+  ],
+  "confirmation": {
+    "map_ids": ["arena", "den020d", "den404d", "hrt002d", "lak109d", "lak515d"],
+    "task_ids": [
+      "arena__derived_uniform_random__task_seed_0157__agents_1000",
+      "arena__derived_uniform_random__task_seed_0181__agents_1000",
+      "den020d__derived_opposite_exchange__task_seed_0157__agents_0620",
+      "den020d__derived_uniform_random__task_seed_0157__agents_0620",
+      "den404d__derived_uniform_random__task_seed_0157__agents_0130",
+      "den404d__derived_uniform_random__task_seed_0181__agents_0130",
+      "hrt002d__derived_opposite_exchange__task_seed_0181__agents_0260",
+      "hrt002d__derived_uniform_random__task_seed_0157__agents_0260",
+      "lak109d__derived_uniform_random__task_seed_0157__agents_0110",
+      "lak109d__derived_uniform_random__task_seed_0181__agents_0110",
+      "lak515d__derived_opposite_exchange__task_seed_0181__agents_0550",
+      "lak515d__derived_uniform_random__task_seed_0181__agents_0900"
+    ],
+    "solver_seeds": [1, 2],
+    "expected_map_count": 6,
+    "expected_task_count": 12,
+    "expected_state_count": 24,
+    "expected_states_per_map": 4,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "task_selection_source": "preflight_recommended_tasks_using_initial_conflicts_only",
+    "all_registered_states_required": true,
+    "result_based_state_filtering": false
+  },
+  "offline_acceptance": {
+    "global_best_retention_minimum": 0.9,
+    "mean_normalized_regret_maximum": 0.02,
+    "maximum_map_mean_regret": 0.05,
+    "maximum_topology_group_mean_regret": 0.05,
+    "first_fixed_half_best_retention_minimum": 0.85,
+    "second_fixed_half_best_retention_minimum": 0.85,
+    "pairwise_accuracy_minimum": 0.6,
+    "maximum_selected_candidates": 6,
+    "raw_candidate_count_must_be_lower_than_full_grid": true
+  },
+  "execution": {
+    "workers": 2,
+    "monitor_interval_minutes": 30,
+    "resume_required": true
+  },
+  "claim_boundary": {
+    "frozen_model_no_retraining": true,
+    "current_step_labels_only": true,
+    "candidate_repair_results_used_for_state_selection": false,
+    "prior_boundary_quality_results_used_for_state_selection": false,
+    "formal_ttf_claim": false,
+    "runtime_integration_before_acceptance": false,
+    "known_maze_included": false
+  },
+  "outputs": {
+    "collection": "build/stride-slotpool-fresh-confirmation-collection-v1",
+    "analysis": "build/stride-slotpool-fresh-confirmation-analysis-v1"
+  }
+}
