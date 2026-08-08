@@ -2,7 +2,8 @@
   "schema": "lns2.stride.guardpool_maze_regression_config.v1",
   "scientific_status": "preregistered_known_regression_after_runtime_semantics_tests",
   "experiment_id": "stride-guardpool-maze-regression-v1",
-  "pre_registration_parent_commit": "3e7b8cce3818ff0646da86ae2a7fa18a382a4c67",
+  "pre_registration_parent_commit": "e371fbb06e06939695be3bf6b84323666bb3984f",
+  "pre_registration_revision_reason": "replace_incompatible_historical_qualification_with_fresh_single_key_reset_before_any_solver_outcome",
   "controllers": [
     "v2-full",
     "v2-plus-structpool",
@@ -10,7 +11,7 @@
     "stride-guardpool-v1"
   ],
   "runtime": {
-    "config": "configs/stride_structpool_lean_confirmation_runtime.json",
+    "config": "configs/stride_guardpool_maze_regression_runtime_v1.json",
     "stopping_rule": "run-to-completion",
     "scientific_time_limit_seconds": null,
     "environment_time_limit_seconds": null,
@@ -32,7 +33,7 @@
     "expected_v2_repair_iterations": 15
   },
   "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
-  "qualification_source": "build/stride-structpool-lean-confirmation-v1/qualification",
+  "qualification_source": null,
   "full_structpool_augmentation": {
     "enabled": true,
     "pool_id": "stride-structpool-v1",
@@ -69,8 +70,8 @@
       "sha256": "ec6dbfb1678c71fca277e48b76113bb9022e2bf6c0d3e542b59dcba0caa6119d"
     },
     "runtime_config": {
-      "path": "configs/stride_structpool_lean_confirmation_runtime.json",
-      "sha256": "a7c4467c0d4585626e557b11ecfbd04051a1cf9ff13b2789e4d5021904788611"
+      "path": "configs/stride_guardpool_maze_regression_runtime_v1.json",
+      "sha256": "285f71ff2ad95b3611e623025e46b208e33e76d2fa422263fcaabe56b422850f"
     },
     "controller_manifest": {
       "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
@@ -83,14 +84,6 @@
     "dataset_manifest": {
       "path": "build/stride-structpool-revised-six-map-dataset-v1/balanced_wall_clock/manifest.jsonl",
       "sha256": "6d34f1274d2d270f85018dfa27b4d066061d351d37a764c7fed557137b979aaf"
-    },
-    "qualification_report": {
-      "path": "build/stride-structpool-lean-confirmation-v1/qualification/qualification_report.json",
-      "sha256": "6bdc0c1370ba181a63fb60b36610ffc5d836317224fd2cb9a2a3c7d1ef774375"
-    },
-    "qualification_manifest": {
-      "path": "build/stride-structpool-lean-confirmation-v1/qualification/qualification_manifest.jsonl",
-      "sha256": "f86a32ece5f2e74c08da226b0dd6ac5037ea1e0e02425ef4e79e78b12df15bec"
     },
     "slotpool_model": {
       "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_pairwise_model.json",

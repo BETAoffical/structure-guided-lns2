@@ -7,6 +7,11 @@ and not a formal TTF claim.  It is run only after the frozen SlotPool model was
 reproduced on all 24 fresh-map confirmation states and the runtime semantics
 tests passed.
 
+The first execution attempt stopped before any solver episode because a
+historical qualification artifact had an older reset-protocol fingerprint.  The
+preregistration was therefore technically revised, before reading any treatment
+outcome, to collect one fresh reset-only qualification for the frozen key.
+
 ## Frozen key
 
 - map: `maze-128-128-1`

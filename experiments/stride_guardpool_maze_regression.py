@@ -51,12 +51,14 @@ def load_guardpool_maze_regression_config(
         != "preregistered_known_regression_after_runtime_semantics_tests"
         or config.get("experiment_id") != "stride-guardpool-maze-regression-v1"
         or config.get("pre_registration_parent_commit")
-        != "3e7b8cce3818ff0646da86ae2a7fa18a382a4c67"
+        != "e371fbb06e06939695be3bf6b84323666bb3984f"
+        or config.get("pre_registration_revision_reason")
+        != "replace_incompatible_historical_qualification_with_fresh_single_key_reset_before_any_solver_outcome"
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("GuardPool Maze regression identity changed")
     if dict(config.get("runtime") or {}) != {
-        "config": "configs/stride_structpool_lean_confirmation_runtime.json",
+        "config": "configs/stride_guardpool_maze_regression_runtime_v1.json",
         "stopping_rule": "run-to-completion",
         "scientific_time_limit_seconds": None,
         "environment_time_limit_seconds": None,
@@ -112,8 +114,6 @@ def load_guardpool_maze_regression_config(
         "controller_manifest",
         "dataset_summary",
         "dataset_manifest",
-        "qualification_report",
-        "qualification_manifest",
         "slotpool_model",
     }
     if set(config.get("inputs") or {}) != expected_inputs:
@@ -126,9 +126,20 @@ def load_guardpool_maze_regression_config(
     validate_guardpool_registration(registration, project_root=root)
     if tuple(registration["known_maze_regression"]["treatments"]) != CONTROLLERS:
         raise ValueError("GuardPool registration treatment order changed")
-    qualification = _read_json(inputs["qualification_report"])
-    if qualification.get("passed") is not True or qualification.get("decision") != "eligible_for_closed_loop":
-        raise ValueError("GuardPool known Maze qualification is not eligible")
+    runtime = _read_json(inputs["runtime_config"])
+    if (
+        runtime.get("formal") is not False
+        or runtime.get("solver_seeds") != [3]
+        or dict(runtime.get("qualification") or {})
+        != {
+            "mode": "known_maze_regression_reset_only_v1",
+            "minimum_nonzero_states": 1,
+            "minimum_nonzero_states_per_layout": 1,
+            "minimum_active_maps": 1,
+            "minimum_nonzero_states_per_solver_seed": 1,
+        }
+    ):
+        raise ValueError("GuardPool fresh reset-only qualification changed")
     rows = _read_jsonl(inputs["dataset_manifest"])
     matching = [row for row in rows if str(row["task_id"]) == cohort["task_id"]]
     if len(matching) != 1 or int(matching[0]["agent_count"]) != 100:
@@ -207,7 +218,20 @@ def run_guardpool_maze_regression(
     keys = {key}
     dataset = (root / str(cohort["dataset"])).resolve()
     runtime = (root / str(config["runtime"]["config"])).resolve()
-    qualification_source = (root / str(config["qualification_source"])).resolve()
+    if config.get("qualification_source") is not None:
+        raise ValueError("GuardPool Maze must collect a fresh reset qualification")
+    qualification_source = output / "qualification"
+    run_closed_loop_collection(
+        dataset,
+        runtime,
+        qualification_source,
+        phase="qualify",
+        workers=1,
+        resume=qualification_source.joinpath("run_config.json").is_file(),
+        cohort_job_keys=keys,
+        job_keys=keys,
+        **_controller_kwargs(root, config, "v2-full"),
+    )
     for completed, item in enumerate(schedule, start=1):
         controller = str(item["controller"])
         collection = output / "controllers" / controller
