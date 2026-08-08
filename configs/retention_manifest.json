@@ -1854,6 +1854,21 @@
       "contract": "Map-disjoint fixed cohort, no result filtering or retraining, unchanged development gates, and no runtime or TTF claim before confirmation passes."
     },
     {
+      "path": "experiments/stride_guardpool.py",
+      "role": "active",
+      "purpose": "Validate the frozen GuardPool registration and select the lowest historical V2 no-progress threshold with at most one percent decision-level false triggers."
+    },
+    {
+      "path": "scripts/run_stride_guardpool.py",
+      "role": "active",
+      "purpose": "Run the preregistered GuardPool historical threshold audit before runtime integration or the held-out Maze regression."
+    },
+    {
+      "path": "tests/evaluation/test_stride_guardpool.py",
+      "role": "active",
+      "contract": "Freeze the SlotPool/V2 runtime boundary, eight-round no-progress guard, no wall-time condition, and exclusion of the held-out Maze result from parameter selection."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."
