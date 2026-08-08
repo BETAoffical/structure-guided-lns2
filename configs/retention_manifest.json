@@ -1889,6 +1889,21 @@
       "contract": "Freeze the known-Maze cohort, four-treatment schedule, unguarded ablation, and thirty-round GuardPool hard gate."
     },
     {
+      "path": "experiments/stride_slotpool_structpool_ttf.py",
+      "role": "active",
+      "purpose": "Run and audit the preregistered 29-key raw-TTF diagnostic comparing frozen SlotPool with full StructPool after excluding exactly one previously known Maze tail."
+    },
+    {
+      "path": "scripts/run_stride_slotpool_structpool_ttf.py",
+      "role": "active",
+      "purpose": "Provide the resumable CLI for the known-tail-excluded SlotPool versus full StructPool raw-TTF diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_slotpool_structpool_ttf.py",
+      "role": "active",
+      "contract": "Freeze the 29 paired keys, exact single known-tail exclusion, two-controller alternating schedule, registered inputs, and diagnostic-only claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
