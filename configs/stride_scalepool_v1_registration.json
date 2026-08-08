@@ -1,0 +1,61 @@
+{
+  "schema": "lns2.stride.scalepool_registration.v1",
+  "scientific_status": "preregistered_dormant_candidate_generator_pending_stage2_labels",
+  "implementation_id": "stride-scalepool-v1",
+  "pre_registration_commit": "2ad9f2200f5bf374aea5305424cad54a8e95ed4a",
+  "inputs": {
+    "stage2_grid": {
+      "path": "build/stride-structpool-size-grid-v1",
+      "manifest_sha256": "de4248402ed009e458fe282a25b22ce3c39edea46650757bfad3490a32d20a27",
+      "state_artifact_tree_sha256": "3a2e67a8f851891b12ee1fc8230f19352875f7e961f92d93991bca17bd3e0bb2"
+    },
+    "stage2_labels": {
+      "path": "build/stride-structpool-size-labels-v1",
+      "required_status": "complete",
+      "required_passed": true
+    }
+  },
+  "size_policy": {
+    "id": "support-nearest-size-v1",
+    "allowed_sizes": [8, 16, 24, 32],
+    "support_definition": {
+      "bottleneck_crossing": "articulation_or_low_degree_conflict_event_endpoints",
+      "conflict_component": "highest_internal_conflict_component_members",
+      "topology_boundary_articulation": "articulation_conflict_event_endpoints",
+      "topology_boundary_low_degree": "low_degree_conflict_event_endpoints",
+      "spatiotemporal_hotspot": "densest_time_cell_bucket_conflict_agents",
+      "path_overlap": "positive_overlap_agents_touching_current_conflict_graph"
+    },
+    "size_order": "ascending_abs_size_minus_support_then_smaller_size",
+    "maximum_candidates": 6,
+    "jaccard_limit": 0.8,
+    "anchor_jaccard_limit": 0.9,
+    "exact_duplicate_action": "merge_provenance",
+    "fallback_generation": "generate_next_size_only_after_rejection",
+    "one_candidate_per_variant": true
+  },
+  "cohort": {
+    "state_count": 98,
+    "map_count": 16,
+    "known_maze_long_tail_excluded": true,
+    "outcome_blind_candidate_generation": true
+  },
+  "offline_acceptance": {
+    "global_best_retention_minimum": 0.9,
+    "mean_normalized_regret_maximum": 0.02,
+    "maximum_map_or_topology_group_mean_regret": 0.05,
+    "first_fixed_half_best_retention_minimum": 0.85,
+    "second_fixed_half_best_retention_minimum": 0.85,
+    "raw_candidate_count_must_be_lower_than_full_grid": true
+  },
+  "claim_boundary": {
+    "runtime_integration_before_acceptance": false,
+    "formal_ttf_claim": false,
+    "future_trajectory_read": false,
+    "cost_to_go_read": false,
+    "known_maze_result_used_for_parameters": false
+  },
+  "outputs": {
+    "offline_evaluation": "build/stride-scalepool-v1-offline-evaluation"
+  }
+}

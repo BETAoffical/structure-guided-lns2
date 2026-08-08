@@ -1809,6 +1809,21 @@
       "contract": "Four fixed sizes, outcome-blind base-only V2 anchor, paired current-step labels, boundary subtype provenance, and no TTF claim."
     },
     {
+      "path": "experiments/stride_scalepool_evaluation.py",
+      "role": "active",
+      "purpose": "Evaluate the preregistered support-nearest ScalePool candidate reduction against the complete four-size current-step label grid."
+    },
+    {
+      "path": "scripts/evaluate_stride_scalepool.py",
+      "role": "active",
+      "purpose": "Command-line entry point for ScalePool offline candidate-retention and regret gates before runtime integration."
+    },
+    {
+      "path": "tests/evaluation/test_stride_scalepool_evaluation.py",
+      "role": "active",
+      "contract": "ScalePool remains outcome-blind, excludes the known Maze long tail, and cannot enter runtime unless all preregistered current-step quality gates pass."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."

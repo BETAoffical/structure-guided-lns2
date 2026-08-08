@@ -67,6 +67,15 @@ class _MergedStructuralCandidate:
     incumbent_boundary: bool
 
 
+@dataclass
+class ScalePoolGenerationResult:
+    """Outcome-blind adaptive-size candidate batch and its rejection trace."""
+
+    candidates: list[dict[str, Any]]
+    attempts: list[dict[str, Any]]
+    raw_candidate_count: int
+
+
 def _neighborhood_context(state: dict[str, Any]) -> _NeighborhoodContext:
     agent_rows = {int(agent["id"]): agent for agent in state["agents"]}
     adjacency: dict[int, set[int]] = {
@@ -539,6 +548,24 @@ _STRUCTPOOL_PREFERRED_SIZE = {
     "path_overlap": 32,
 }
 
+_STRUCTPOOL_DRAFT_VARIANT_ORDER = (
+    "bottleneck_crossing",
+    "conflict_component",
+    "spatiotemporal_hotspot",
+    "path_overlap",
+    "topology_boundary_articulation",
+    "topology_boundary_low_degree",
+)
+
+_SCALEPOOL_VARIANT_ORDER = (
+    "bottleneck_crossing",
+    "conflict_component",
+    "topology_boundary_articulation",
+    "topology_boundary_low_degree",
+    "spatiotemporal_hotspot",
+    "path_overlap",
+)
+
 
 def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
     left_set = set(map(int, left))
@@ -816,6 +843,112 @@ def _draft(
     )
 
 
+def _generate_structpool_variant_draft(
+    context: StructuralCandidateContext,
+    *,
+    variant: str,
+    size: int,
+) -> StructuralCandidateDraft | None:
+    state = context.state
+    analysis = context.analysis
+    neighborhood = context.neighborhood
+    if variant == "bottleneck_crossing":
+        if not context.bottleneck_events:
+            return None
+        return _draft(
+            _anchor_neighborhood(
+                state,
+                context.bottleneck_events,
+                size,
+                context=neighborhood,
+            ),
+            family_group="bottleneck_crossing",
+            family=f"structpool-bottleneck-crossing:{size}",
+            nominal_size=size,
+        )
+    if variant == "conflict_component":
+        if context.component_seed_data is None:
+            return None
+        agents = _conflict_component_neighborhood(
+            state,
+            analysis,
+            size=size,
+            context=neighborhood,
+            seed_data=context.component_seed_data,
+        )
+        return (
+            _draft(
+                agents,
+                family_group="conflict_component",
+                family=f"structpool-conflict-component:{size}",
+                nominal_size=size,
+            )
+            if agents
+            else None
+        )
+    if variant == "spatiotemporal_hotspot":
+        if context.hotspot_seed_data is None:
+            return None
+        agents = _hotspot_neighborhood(
+            state,
+            analysis,
+            size=size,
+            context=neighborhood,
+            seed_data=context.hotspot_seed_data,
+        )
+        return (
+            _draft(
+                agents,
+                family_group="spatiotemporal_hotspot",
+                family=f"structpool-spatiotemporal-hotspot:{size}",
+                nominal_size=size,
+            )
+            if agents
+            else None
+        )
+    if variant == "path_overlap":
+        if context.overlap_seed_data is None:
+            return None
+        agents = _path_overlap_neighborhood(
+            state,
+            analysis,
+            size=size,
+            context=neighborhood,
+            seed_data=context.overlap_seed_data,
+        )
+        return (
+            _draft(
+                agents,
+                family_group="path_overlap",
+                family=f"structpool-path-overlap:{size}",
+                nominal_size=size,
+            )
+            if agents
+            else None
+        )
+    if variant.startswith("topology_boundary_"):
+        kind = variant.removeprefix("topology_boundary_")
+        if kind not in {"articulation", "low_degree"}:
+            raise ValueError(f"unsupported StructPool boundary variant: {variant}")
+        events = context.relevant_events_by_kind[kind]
+        if not events:
+            return None
+        return _draft(
+            _boundary_neighborhood(
+                state,
+                analysis,
+                events,
+                size=size,
+                core_budget=min(4, size),
+                context=neighborhood,
+            ),
+            family_group="topology_boundary",
+            family=f"structpool-boundary-{kind}:{size}",
+            nominal_size=size,
+        )
+    raise ValueError(f"unsupported StructPool family variant: {variant}")
+
+
 def generate_structpool_candidate_drafts(
     context: StructuralCandidateContext,
     *,
@@ -826,99 +959,14 @@ def generate_structpool_candidate_drafts(
     sizes = sorted(set(map(int, neighborhood_sizes)))
     if sizes != [8, 16, 24, 32]:
         raise ValueError("StructPool v1 requires sizes 8, 16, 24, and 32")
-    state = context.state
-    analysis = context.analysis
-    neighborhood = context.neighborhood
     drafts: list[StructuralCandidateDraft] = []
     for size in sizes:
-        if context.bottleneck_events:
-            drafts.append(
-                _draft(
-                    _anchor_neighborhood(
-                        state,
-                        context.bottleneck_events,
-                        size,
-                        context=neighborhood,
-                    ),
-                    family_group="bottleneck_crossing",
-                    family=f"structpool-bottleneck-crossing:{size}",
-                    nominal_size=size,
-                )
+        for variant in _STRUCTPOOL_DRAFT_VARIANT_ORDER:
+            draft = _generate_structpool_variant_draft(
+                context, variant=variant, size=size
             )
-
-        if context.component_seed_data is not None:
-            component = _conflict_component_neighborhood(
-                state,
-                analysis,
-                size=size,
-                context=neighborhood,
-                seed_data=context.component_seed_data,
-            )
-            if component:
-                drafts.append(
-                    _draft(
-                        component,
-                        family_group="conflict_component",
-                        family=f"structpool-conflict-component:{size}",
-                        nominal_size=size,
-                    )
-                )
-
-        if context.hotspot_seed_data is not None:
-            hotspot = _hotspot_neighborhood(
-                state,
-                analysis,
-                size=size,
-                context=neighborhood,
-                seed_data=context.hotspot_seed_data,
-            )
-            if hotspot:
-                drafts.append(
-                    _draft(
-                        hotspot,
-                        family_group="spatiotemporal_hotspot",
-                        family=f"structpool-spatiotemporal-hotspot:{size}",
-                        nominal_size=size,
-                    )
-                )
-
-        if context.overlap_seed_data is not None:
-            overlap = _path_overlap_neighborhood(
-                state,
-                analysis,
-                size=size,
-                context=neighborhood,
-                seed_data=context.overlap_seed_data,
-            )
-            if overlap:
-                drafts.append(
-                    _draft(
-                        overlap,
-                        family_group="path_overlap",
-                        family=f"structpool-path-overlap:{size}",
-                        nominal_size=size,
-                    )
-                )
-
-        for kind in ("articulation", "low_degree"):
-            events = context.relevant_events_by_kind[kind]
-            if not events:
-                continue
-            drafts.append(
-                _draft(
-                    _boundary_neighborhood(
-                        state,
-                        analysis,
-                        events,
-                        size=size,
-                        core_budget=min(4, size),
-                        context=neighborhood,
-                    ),
-                    family_group="topology_boundary",
-                    family=f"structpool-boundary-{kind}:{size}",
-                    nominal_size=size,
-                )
-            )
+            if draft is not None:
+                drafts.append(draft)
     return drafts
 
 
@@ -1107,6 +1155,242 @@ def generate_structpool_candidate_grid(
         )
         row["structpool_grid_duplicate_provenance_count"] = len(families)
     return rows
+
+
+def _structpool_family_name(variant: str, size: int) -> str:
+    names = {
+        "bottleneck_crossing": "structpool-bottleneck-crossing",
+        "conflict_component": "structpool-conflict-component",
+        "topology_boundary_articulation": "structpool-boundary-articulation",
+        "topology_boundary_low_degree": "structpool-boundary-low_degree",
+        "spatiotemporal_hotspot": "structpool-spatiotemporal-hotspot",
+        "path_overlap": "structpool-path-overlap",
+    }
+    if variant not in names:
+        raise ValueError(f"unsupported StructPool family variant: {variant}")
+    return f"{names[variant]}:{int(size)}"
+
+
+def scalepool_size_attempt_order(
+    support_count: int,
+    allowed_sizes: Iterable[int] = (8, 16, 24, 32),
+) -> tuple[int, ...]:
+    sizes = tuple(sorted(set(map(int, allowed_sizes))))
+    if sizes != (8, 16, 24, 32):
+        raise ValueError("ScalePool v1 requires sizes 8, 16, 24, and 32")
+    support_count = max(0, int(support_count))
+    return tuple(sorted(sizes, key=lambda size: (abs(size - support_count), size)))
+
+
+def generate_scalepool_candidates(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    v2_anchor_agents: Iterable[int],
+    allowed_sizes: Iterable[int] = (8, 16, 24, 32),
+    maximum_candidates: int = 6,
+    maximum_jaccard_similarity: float = 0.8,
+    maximum_anchor_jaccard_similarity: float = 0.9,
+) -> ScalePoolGenerationResult:
+    """Generate the outcome-blind adaptive-size ScalePool v1 challenge pool.
+
+    Each structural variant tries sizes nearest to its current support count.
+    Later sizes are generated only after an anchor or diversity rejection.
+    Exact agent-set duplicates merge provenance and count as the variant's one
+    retained action.  The result is not a learned selector and makes no repair
+    quality or TTF claim.
+    """
+
+    sizes = tuple(sorted(set(map(int, allowed_sizes))))
+    if sizes != (8, 16, 24, 32):
+        raise ValueError("ScalePool v1 requires sizes 8, 16, 24, and 32")
+    if maximum_candidates != 6:
+        raise ValueError("ScalePool v1 requires a six-candidate cap")
+    if not 0.0 <= maximum_jaccard_similarity < 1.0:
+        raise ValueError("ScalePool candidate Jaccard threshold must be in [0, 1)")
+    if not 0.0 <= maximum_anchor_jaccard_similarity < 1.0:
+        raise ValueError("ScalePool anchor Jaccard threshold must be in [0, 1)")
+    anchor = tuple(sorted(set(map(int, v2_anchor_agents))))
+    if not anchor:
+        raise ValueError("ScalePool v1 requires a non-empty V2 anchor")
+    if not analysis.events:
+        return ScalePoolGenerationResult(candidates=[], attempts=[], raw_candidate_count=0)
+
+    context = _structural_candidate_context(state, analysis)
+    support = _structpool_support_by_family(context, sizes)
+    selected: list[_MergedStructuralCandidate] = []
+    selected_index: dict[tuple[int, ...], int] = {}
+    attempts: list[dict[str, Any]] = []
+    family_metadata: dict[str, dict[str, Any]] = {}
+    raw_candidate_count = 0
+
+    for variant in _SCALEPOOL_VARIANT_ORDER:
+        reference_family = _structpool_family_name(variant, sizes[0])
+        support_count = len(support[reference_family])
+        size_order = scalepool_size_attempt_order(support_count, sizes)
+        primary_size = int(size_order[0])
+        for attempt_index, size in enumerate(size_order):
+            draft = _generate_structpool_variant_draft(
+                context, variant=variant, size=size
+            )
+            family = _structpool_family_name(variant, size)
+            if draft is None:
+                attempts.append(
+                    {
+                        "family_variant": variant,
+                        "family": family,
+                        "support_count": support_count,
+                        "size_attempt_order": list(size_order),
+                        "attempt_index": attempt_index,
+                        "attempted_size": int(size),
+                        "decision": "rejected",
+                        "rejection_reason": "family_unavailable",
+                    }
+                )
+                break
+            if draft.family != family:
+                raise RuntimeError("ScalePool family identity drifted")
+            raw_candidate_count += 1
+            anchor_similarity = _jaccard(draft.agents, anchor)
+            selected_similarity = max(
+                (_jaccard(draft.agents, previous.agents) for previous in selected),
+                default=0.0,
+            )
+            attempt = {
+                "family_variant": variant,
+                "family": family,
+                "family_group": draft.family_group,
+                "support_count": support_count,
+                "size_attempt_order": list(size_order),
+                "primary_size": primary_size,
+                "attempt_index": attempt_index,
+                "attempted_size": int(size),
+                "actual_size": len(draft.agents),
+                "candidate_id": candidate_id(draft.agents),
+                "v2_anchor_jaccard": anchor_similarity,
+                "maximum_selected_jaccard": selected_similarity,
+            }
+            if anchor_similarity > maximum_anchor_jaccard_similarity:
+                attempts.append(
+                    {
+                        **attempt,
+                        "decision": "rejected",
+                        "rejection_reason": "v2_anchor_jaccard",
+                    }
+                )
+                continue
+            if draft.agents in selected_index:
+                index = selected_index[draft.agents]
+                previous = selected[index]
+                selected[index] = _MergedStructuralCandidate(
+                    agents=previous.agents,
+                    selection_families=tuple(
+                        sorted(set(previous.selection_families) | {draft.family})
+                    ),
+                    family_groups=tuple(
+                        sorted(set(previous.family_groups) | {draft.family_group})
+                    ),
+                    incumbent_boundary=False,
+                )
+                family_metadata[family] = {
+                    "support_count": support_count,
+                    "size_attempt_order": list(size_order),
+                    "primary_size": primary_size,
+                    "selected_size": int(size),
+                    "fallback_used": bool(attempt_index),
+                }
+                attempts.append(
+                    {
+                        **attempt,
+                        "decision": "merged",
+                        "rejection_reason": "exact_agent_set_duplicate",
+                    }
+                )
+                break
+            if selected_similarity > maximum_jaccard_similarity:
+                attempts.append(
+                    {
+                        **attempt,
+                        "decision": "rejected",
+                        "rejection_reason": "candidate_jaccard",
+                    }
+                )
+                continue
+            if len(selected) >= maximum_candidates:
+                attempts.append(
+                    {
+                        **attempt,
+                        "decision": "rejected",
+                        "rejection_reason": "maximum_candidates",
+                    }
+                )
+                break
+            selected_index[draft.agents] = len(selected)
+            selected.append(
+                _MergedStructuralCandidate(
+                    agents=draft.agents,
+                    selection_families=(draft.family,),
+                    family_groups=(draft.family_group,),
+                    incumbent_boundary=False,
+                )
+            )
+            family_metadata[family] = {
+                "support_count": support_count,
+                "size_attempt_order": list(size_order),
+                "primary_size": primary_size,
+                "selected_size": int(size),
+                "fallback_used": bool(attempt_index),
+            }
+            attempts.append(
+                {
+                    **attempt,
+                    "decision": "selected",
+                    "rejection_reason": None,
+                }
+            )
+            break
+
+    rows = finalize_structpool_candidates(context, selected)
+    agent_count = len(state["agents"])
+    for row in rows:
+        families = list(map(str, row["selection_families"]))
+        row["structpool_support_count_by_family"] = {
+            family: int(family_metadata[family]["support_count"])
+            for family in families
+        }
+        row["structpool_support_ratio_by_family"] = {
+            family: int(family_metadata[family]["support_count"])
+            / max(1, agent_count)
+            for family in families
+        }
+        row["structpool_nominal_size_by_family"] = {
+            family: int(family_metadata[family]["selected_size"])
+            for family in families
+        }
+        row["scalepool_size_attempt_order_by_family"] = {
+            family: list(family_metadata[family]["size_attempt_order"])
+            for family in families
+        }
+        row["scalepool_primary_size_by_family"] = {
+            family: int(family_metadata[family]["primary_size"])
+            for family in families
+        }
+        row["scalepool_fallback_size_by_family"] = {
+            family: (
+                int(family_metadata[family]["selected_size"])
+                if family_metadata[family]["fallback_used"]
+                else None
+            )
+            for family in families
+        }
+        row["v2_anchor_jaccard"] = _jaccard(row["agents"], anchor)
+        row["scalepool_pure_family"] = len(row["structpool_family_groups"]) == 1
+        row["scalepool_duplicate_provenance_count"] = len(families)
+    return ScalePoolGenerationResult(
+        candidates=rows,
+        attempts=attempts,
+        raw_candidate_count=raw_candidate_count,
+    )
 
 
 def reduce_structpool_candidates(
