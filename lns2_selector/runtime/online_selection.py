@@ -30,6 +30,7 @@ from experiments.state_analysis import (
     analyze_static_grid,
 )
 from lns2_selector.runtime.topology_candidates import (
+    generate_structpool_candidate_grid,
     generate_structpool_candidates,
     generate_topology_boundary_candidates,
     merge_structpool_candidates,
@@ -121,6 +122,40 @@ _STRUCTPOOL_LEAN_RUNTIME_CONFIG = {
         "applied_before_feature_construction": True,
     },
 }
+_SLOTPOOL_RUNTIME_CONFIG = {
+    "enabled": True,
+    "pool_id": "stride-slotpool-v1",
+    "runtime_id": "stride-slotpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 24,
+    "maximum_slotpool_candidates": 6,
+    "maximum_total_candidates": 48,
+    "static_grid_cache": True,
+    "slotpool_model": {
+        "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_pairwise_model.json",
+        "sha256": "e0a42c7a21cb341a6c5ce13ad6d89e6f5279c04378535fb9c44ce76a1dfe2319",
+    },
+    "activation_gate": {
+        "gate_id": "stride-highstress-state-v1",
+        "minimum_conflict_pair_count": 16,
+        "any_of": {
+            "minimum_agent_count": 96,
+            "minimum_active_conflict_agent_count": 32,
+            "minimum_largest_conflict_component_size": 16,
+        },
+    },
+}
+_GUARDPOOL_RUNTIME_CONFIG = {
+    **_SLOTPOOL_RUNTIME_CONFIG,
+    "runtime_id": "stride-guardpool-v1",
+    "stall_guard": {
+        "no_progress_limit": 8,
+        "recovery_controller": "v2-full",
+        "release_condition": "strict_conflict_decrease",
+        "tabu_scope": "last_structural_candidate_under_conflict_signature",
+        "wall_time_condition": None,
+    },
+}
 
 
 def validate_topology_boundary_augmentation(
@@ -147,9 +182,22 @@ def validate_structpool_augmentation(
     if value is None:
         return None
     result = dict(value)
-    if result not in (_STRUCTPOOL_RUNTIME_CONFIG, _STRUCTPOOL_LEAN_RUNTIME_CONFIG):
+    if result not in (
+        _STRUCTPOOL_RUNTIME_CONFIG,
+        _STRUCTPOOL_LEAN_RUNTIME_CONFIG,
+        _SLOTPOOL_RUNTIME_CONFIG,
+        _GUARDPOOL_RUNTIME_CONFIG,
+    ):
         raise ValueError("unsupported StructPool runtime augmentation")
     return result
+
+
+def guardpool_runtime_augmentation() -> dict[str, Any]:
+    return json.loads(json.dumps(_GUARDPOOL_RUNTIME_CONFIG))
+
+
+def slotpool_runtime_augmentation() -> dict[str, Any]:
+    return json.loads(json.dumps(_SLOTPOOL_RUNTIME_CONFIG))
 
 
 def filter_structpool_lean_candidates(
@@ -1033,6 +1081,18 @@ def generate_online_candidates(
     structpool_gate_seconds = 0.0
     structpool_gate_summary: dict[str, Any] = {}
     structpool_gate_precomputed = False
+    structpool_guard = dict(structpool.get("stall_guard") or {}) if structpool else {}
+    structpool_stall_guard_evaluated = bool(structpool_guard)
+    structpool_stall_guard_limit = (
+        int(structpool_guard["no_progress_limit"])
+        if structpool_guard
+        else None
+    )
+    structpool_stall_guard_active = bool(
+        structpool_guard
+        and topology_boundary_no_progress_streak
+        >= int(structpool_guard["no_progress_limit"])
+    )
     if structpool is None and structpool_gate_result is not None:
         raise ValueError("StructPool gate result requires StructPool augmentation")
     if structpool is not None:
@@ -1056,6 +1116,9 @@ def generate_online_candidates(
         structpool_gate_passed = bool(structpool_gate_summary["passed"])
         structpool_gate_reason = str(structpool_gate_summary["reason"])
         structpool_gate_seconds = float(structpool_gate_summary["seconds"])
+        if structpool_stall_guard_active:
+            structpool_gate_passed = False
+            structpool_gate_reason = "stall_guard_active"
         if structpool_gate_passed:
             static_started = time.perf_counter()
             structpool_static = topology_static_grid
@@ -1072,15 +1135,22 @@ def generate_online_candidates(
                 structpool_analysis = topology_state_analysis
                 structpool_dynamic_seconds = float(topology_state_analysis_seconds)
             candidate_started = time.perf_counter()
-            generated_additions = generate_structpool_candidates(
-                state,
-                structpool_analysis,
-                neighborhood_sizes=structpool["neighborhood_sizes"],
-                maximum_added_candidates=int(structpool["maximum_added_candidates"]),
-                maximum_jaccard_similarity=float(
-                    structpool["maximum_jaccard_similarity"]
-                ),
-            )
+            if structpool["pool_id"] == "stride-slotpool-v1":
+                generated_additions = generate_structpool_candidate_grid(
+                    state,
+                    structpool_analysis,
+                    neighborhood_sizes=structpool["neighborhood_sizes"],
+                )
+            else:
+                generated_additions = generate_structpool_candidates(
+                    state,
+                    structpool_analysis,
+                    neighborhood_sizes=structpool["neighborhood_sizes"],
+                    maximum_added_candidates=int(structpool["maximum_added_candidates"]),
+                    maximum_jaccard_similarity=float(
+                        structpool["maximum_jaccard_similarity"]
+                    ),
+                )
             additions, structpool_filtered_candidate_ids = (
                 filter_structpool_lean_candidates(generated_additions, structpool)
             )
@@ -1191,6 +1261,14 @@ def generate_online_candidates(
             for key, value in structpool_gate_summary.items()
             if key not in {"passed", "reason", "seconds"}
         },
+        "structpool_stall_guard_evaluated": structpool_stall_guard_evaluated,
+        "structpool_stall_guard_active": structpool_stall_guard_active,
+        "structpool_stall_guard_limit": structpool_stall_guard_limit,
+        "slotpool_reduction_pending": bool(
+            structpool is not None
+            and structpool.get("pool_id") == "stride-slotpool-v1"
+            and structpool_gate_passed
+        ),
         "seed_agents": list(seed_agents),
         "seed_agent_count": len(seed_agents),
         "seed_agents_overridden": seed_agents_override is not None,
@@ -1224,6 +1302,8 @@ __all__ = [
     "repair_random_seed",
     "score_online_candidates",
     "filter_structpool_lean_candidates",
+    "guardpool_runtime_augmentation",
+    "slotpool_runtime_augmentation",
     "validate_topology_boundary_augmentation",
     "validate_structpool_augmentation",
     "structpool_high_stress_gate",

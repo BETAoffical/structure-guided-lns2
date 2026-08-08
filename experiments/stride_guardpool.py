@@ -71,6 +71,24 @@ def validate_guardpool_registration(
         "wall_time_condition": None,
     }:
         raise ValueError("GuardPool stall guard changed")
+    regression = dict(config.get("known_maze_regression") or {})
+    if regression != {
+        "task_id": "maze-128-128-1__derived_opposite_exchange__task_seed_0233__agents_0100",
+        "solver_seed": 3,
+        "initial_conflicts": 66,
+        "v2_repair_iterations": 15,
+        "maximum_guardpool_repair_iterations": 30,
+        "treatments": [
+            "v2-full",
+            "v2-plus-structpool",
+            "v2-plus-slotpool",
+            "stride-guardpool-v1",
+        ],
+        "slotpool_without_guard_is_ablation_only": True,
+        "used_for_parameter_selection": False,
+        "run_only_after_runtime_semantics_tests": True,
+    }:
+        raise ValueError("GuardPool known-Maze regression contract changed")
     boundary = dict(config.get("claim_boundary") or {})
     if any(
         bool(boundary.get(name))

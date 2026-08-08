@@ -1,0 +1,108 @@
+{
+  "schema": "lns2.stride.guardpool_maze_regression_config.v1",
+  "scientific_status": "preregistered_known_regression_after_runtime_semantics_tests",
+  "experiment_id": "stride-guardpool-maze-regression-v1",
+  "pre_registration_parent_commit": "3e7b8cce3818ff0646da86ae2a7fa18a382a4c67",
+  "controllers": [
+    "v2-full",
+    "v2-plus-structpool",
+    "v2-plus-slotpool",
+    "stride-guardpool-v1"
+  ],
+  "runtime": {
+    "config": "configs/stride_structpool_lean_confirmation_runtime.json",
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "feature_backend": "native",
+    "controller_runtime": "optimized",
+    "verification_profile": "deployment",
+    "deterministic_pp_replay": true,
+    "workers": 1
+  },
+  "cohort": {
+    "dataset": "build/stride-structpool-revised-six-map-dataset-v1",
+    "split": "balanced_wall_clock",
+    "task_id": "maze-128-128-1__derived_opposite_exchange__task_seed_0233__agents_0100",
+    "map_id": "maze-128-128-1",
+    "solver_seed": 3,
+    "agent_count": 100,
+    "expected_initial_conflicts": 66,
+    "expected_v2_repair_iterations": 15
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "qualification_source": "build/stride-structpool-lean-confirmation-v1/qualification",
+  "full_structpool_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-structpool-v1",
+    "runtime_id": "stride-structpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "gates": {
+    "guardpool_success_required": true,
+    "guardpool_maximum_repair_iterations": 30,
+    "v2_success_required": true,
+    "v2_repair_iterations_must_equal": 15,
+    "all_initial_conflicts_must_equal": 66,
+    "all_initial_fingerprints_must_match": true,
+    "maximum_error_count": 0,
+    "maximum_invalid_action_count": 0,
+    "maximum_fingerprint_mismatch_count": 0
+  },
+  "inputs": {
+    "guardpool_registration": {
+      "path": "configs/stride_guardpool_v1_registration.json",
+      "sha256": "ec6dbfb1678c71fca277e48b76113bb9022e2bf6c0d3e542b59dcba0caa6119d"
+    },
+    "runtime_config": {
+      "path": "configs/stride_structpool_lean_confirmation_runtime.json",
+      "sha256": "a7c4467c0d4585626e557b11ecfbd04051a1cf9ff13b2789e4d5021904788611"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "dataset_summary": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/dataset_summary.json",
+      "sha256": "282706a2a7658e720852be3ed8e72809d0eb3dc6f5c9f8e3aafc904366a0ec03"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-structpool-revised-six-map-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "6d34f1274d2d270f85018dfa27b4d066061d351d37a764c7fed557137b979aaf"
+    },
+    "qualification_report": {
+      "path": "build/stride-structpool-lean-confirmation-v1/qualification/qualification_report.json",
+      "sha256": "6bdc0c1370ba181a63fb60b36610ffc5d836317224fd2cb9a2a3c7d1ef774375"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-structpool-lean-confirmation-v1/qualification/qualification_manifest.jsonl",
+      "sha256": "f86a32ece5f2e74c08da226b0dd6ac5037ea1e0e02425ef4e79e78b12df15bec"
+    },
+    "slotpool_model": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_pairwise_model.json",
+      "sha256": "e0a42c7a21cb341a6c5ce13ad6d89e6f5279c04378535fb9c44ce76a1dfe2319"
+    }
+  },
+  "claim_boundary": {
+    "known_regression_only": true,
+    "independent_generalization_evidence": false,
+    "formal_ttf_claim": false,
+    "parameter_selection_from_this_result": false,
+    "default_replacement_allowed": false,
+    "slotpool_without_guard_is_ablation_only": true
+  }
+}

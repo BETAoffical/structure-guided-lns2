@@ -119,6 +119,10 @@ from lns2_selector.runtime.online_selection import (
     validate_topology_boundary_augmentation,
 )
 from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
+from lns2_selector.runtime.slotpool_selection import (
+    load_slotpool_model,
+    reduce_slotpool_candidates,
+)
 from lns2_selector.solver.native import load_native_module
 from lns2_selector.training.policy_bundle import (
     PortablePairwiseModel,
@@ -320,6 +324,7 @@ CONTROLLER_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/topology_candidates.py",
     "lns2_selector/runtime/portable_scalar.py",
     "lns2_selector/runtime/repair_outcomes.py",
+    "lns2_selector/runtime/slotpool_selection.py",
     "lns2_selector/compatibility/controller_diagnostics.py",
     "lns2_selector/evaluation/trace_validation.py",
     "lns2_selector/training/policy_bundle.py",
@@ -991,6 +996,24 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         str, dict[str, dict[str, tuple[float, float]]]
     ] = {}
     diagnostic_shadow_fallback_thresholds: dict[str, float] = {}
+    structpool_runtime_config = dict(
+        dict(job.get("proposal") or {}).get("structpool") or {}
+    )
+    slotpool_runtime_enabled = (
+        structpool_runtime_config.get("pool_id") == "stride-slotpool-v1"
+    )
+    slotpool_model_payload: dict[str, Any] | None = None
+    if slotpool_runtime_enabled:
+        if policy != "realized_dynamic" or controller_mode != "v2-full":
+            raise ValueError("GuardPool requires a realized_dynamic v2-full episode")
+        model_registration = dict(structpool_runtime_config["slotpool_model"])
+        model_path = Path(str(model_registration["path"]))
+        if not model_path.is_absolute():
+            model_path = Path(__file__).resolve().parents[1] / model_path
+        slotpool_model_payload = load_slotpool_model(
+            model_path,
+            expected_sha256=str(model_registration["sha256"]),
+        )
     if policy in LEARNED_POLICIES:
         bundle = load_frozen_policy_bundle(job["frozen_models"], job["model_registration"])
         if controller_mode == "official_adaptive":
@@ -1199,6 +1222,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     set(v3_s3_bundle.required_feature_names)
                     & set(PROFILE_FEATURE_NAMES["realized_dynamic"])
                 )
+            if slotpool_runtime_enabled:
+                required_model_features.update(
+                    PROFILE_FEATURE_NAMES["realized_dynamic"]
+                )
+
             def make_feature_engine(current_state: dict[str, Any]) -> OnlineFeatureEngine:
                 return OnlineFeatureEngine(
                     current_state,
@@ -1220,6 +1248,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             topology_pending_changed_agents: set[int] = set()
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
+            guard_was_active = False
+            guard_tabu_by_signature: dict[str, str] = {}
+            last_structural_candidate_id: str | None = None
             previous_route: str | None = None
             v3_s3_selector = (
                 V3S3Selector(v3_s3_bundle)
@@ -1328,6 +1359,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     realized_feature_metrics = {"realized_feature_seconds": 0.0}
                     proposal_rows: list[dict[str, Any]] | None = None
                     state_analysis_seconds = 0.0
+                    slotpool_raw_candidates: list[dict[str, Any]] | None = None
+                    slotpool_raw_candidate_rows: list[dict[str, Any]] | None = None
+                    slotpool_retained_raw_indices: list[int] | None = None
                     if cache_hit:
                         assert stateful_cache is not None
                         candidates = stateful_cache["candidates"]
@@ -1369,11 +1403,62 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         structpool_runtime = dict(
                             effective_proposal.get("structpool") or {}
                         )
+                        guard_config = dict(
+                            structpool_runtime.get("stall_guard") or {}
+                        )
+                        guard_active_for_decision = bool(
+                            guard_config
+                            and no_progress_streak
+                            >= int(guard_config["no_progress_limit"])
+                        )
+                        guard_triggered_now = bool(
+                            guard_active_for_decision
+                            and not guard_was_active
+                        )
+                        guard_released_now = bool(
+                            guard_was_active and not guard_active_for_decision
+                        )
+                        conflict_signature = (
+                            _fingerprint(
+                                {
+                                    "conflict_pairs": int(
+                                        state["num_of_colliding_pairs"]
+                                    ),
+                                    "conflict_edges": sorted(
+                                        tuple(sorted(map(int, edge)))
+                                        for edge in state.get("conflict_edges", [])
+                                    ),
+                                }
+                            )
+                            if slotpool_runtime_enabled
+                            else None
+                        )
+                        if guard_released_now:
+                            guard_tabu_by_signature.clear()
+                            last_structural_candidate_id = None
+                        if (
+                            guard_triggered_now
+                            and last_structural_candidate_id is not None
+                        ):
+                            assert conflict_signature is not None
+                            guard_tabu_by_signature[conflict_signature] = (
+                                last_structural_candidate_id
+                            )
+                        guard_was_active = guard_active_for_decision
                         structpool_gate_result = (
                             structpool_high_stress_gate(state, structpool_runtime)
                             if structpool_runtime
                             else None
                         )
+                        if (
+                            structpool_gate_result is not None
+                            and guard_active_for_decision
+                        ):
+                            structpool_gate_result = {
+                                **structpool_gate_result,
+                                "passed": False,
+                                "reason": "stall_guard_active",
+                            }
                         structpool_gate_passed = bool(
                             structpool_gate_result
                             and structpool_gate_result["passed"]
@@ -1444,6 +1529,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 else None
                             ),
                             structpool_gate_result=structpool_gate_result,
+                        )
+                        proposal_metrics.update(
+                            {
+                                "guardpool_enabled": slotpool_runtime_enabled,
+                                "guardpool_no_progress_streak": no_progress_streak,
+                                "guardpool_active": guard_active_for_decision,
+                                "guardpool_triggered": guard_triggered_now,
+                                "guardpool_released": guard_released_now,
+                                "guardpool_conflict_signature": conflict_signature,
+                                "guardpool_tabu_candidate_id": (
+                                    guard_tabu_by_signature.get(conflict_signature)
+                                    if conflict_signature is not None
+                                    else None
+                                ),
+                            }
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
                         if controller_mode == "official_adaptive":
@@ -1522,6 +1622,138 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     )
                                 )
                             )
+                        if (
+                            slotpool_model_payload is not None
+                            and bool(
+                                proposal_metrics.get(
+                                    "slotpool_reduction_pending", False
+                                )
+                            )
+                        ):
+                            slotpool_raw_candidates = list(candidates)
+                            slotpool_raw_candidate_rows = list(candidate_rows)
+                            base_raw_indices = [
+                                index
+                                for index, candidate in enumerate(candidates)
+                                if not bool(
+                                    candidate.get("structpool_family_groups")
+                                )
+                            ]
+                            if not base_raw_indices:
+                                raise ClosedLoopExecutionError(
+                                    "slotpool_missing_v2_base_pool",
+                                    "SlotPool runtime produced no V2 base candidates",
+                                )
+                            slotpool_started = time.perf_counter()
+                            (
+                                v2_anchor_base_index,
+                                v2_base_scores,
+                                _,
+                            ) = score_online_candidates(
+                                [candidate_rows[index] for index in base_raw_indices],
+                                runtime_models[policy],
+                            )
+                            v2_anchor_raw_index = base_raw_indices[
+                                v2_anchor_base_index
+                            ]
+                            v2_anchor_seconds = time.perf_counter() - slotpool_started
+                            slotpool_rank_started = time.perf_counter()
+                            slotpool_result = reduce_slotpool_candidates(
+                                candidates=candidates,
+                                candidate_rows=candidate_rows,
+                                model_payload=slotpool_model_payload,
+                                v2_anchor_index=v2_anchor_raw_index,
+                                maximum_challengers=int(
+                                    structpool_runtime_config[
+                                        "maximum_slotpool_candidates"
+                                    ]
+                                ),
+                            )
+                            slotpool_rank_seconds = (
+                                time.perf_counter() - slotpool_rank_started
+                            )
+                            slotpool_retained_raw_indices = list(
+                                map(int, slotpool_result["retained_indices"])
+                            )
+                            retained_raw_set = set(slotpool_retained_raw_indices)
+                            dropped_candidate_ids = [
+                                str(candidate["candidate_id"])
+                                for index, candidate in enumerate(candidates)
+                                if index not in retained_raw_set
+                            ]
+                            candidates = [
+                                candidates[index]
+                                for index in slotpool_retained_raw_indices
+                            ]
+                            candidate_rows = [
+                                candidate_rows[index]
+                                for index in slotpool_retained_raw_indices
+                            ]
+                            slotpool_total_seconds = (
+                                v2_anchor_seconds + slotpool_rank_seconds
+                            )
+                            proposal_metrics.update(
+                                {
+                                    "raw_candidate_count": len(
+                                        slotpool_raw_candidates
+                                    ),
+                                    "candidate_count": len(candidates),
+                                    "slotpool_reduction_applied": True,
+                                    "slotpool_raw_structural_candidate_count": int(
+                                        slotpool_result[
+                                            "raw_structural_candidate_count"
+                                        ]
+                                    ),
+                                    "slotpool_selected_structural_candidate_count": len(
+                                        slotpool_result[
+                                            "selected_structural_indices"
+                                        ]
+                                    ),
+                                    "slotpool_selected_candidate_ids": list(
+                                        slotpool_result["selected_candidate_ids"]
+                                    ),
+                                    "slotpool_selected_scores": list(
+                                        slotpool_result["selected_scores"]
+                                    ),
+                                    "slotpool_dropped_candidate_ids": (
+                                        dropped_candidate_ids
+                                    ),
+                                    "slotpool_v2_anchor_candidate_id": str(
+                                        slotpool_result[
+                                            "v2_anchor_candidate_id"
+                                        ]
+                                    ),
+                                    "slotpool_v2_anchor_score": float(
+                                        v2_base_scores[v2_anchor_base_index]
+                                    ),
+                                    "slotpool_v2_anchor_inference_seconds": (
+                                        v2_anchor_seconds
+                                    ),
+                                    "slotpool_ranking_inference_seconds": (
+                                        slotpool_rank_seconds
+                                    ),
+                                    "slotpool_total_inference_seconds": (
+                                        slotpool_total_seconds
+                                    ),
+                                }
+                            )
+                        else:
+                            proposal_metrics.update(
+                                {
+                                    "raw_candidate_count": len(candidates),
+                                    "slotpool_reduction_applied": False,
+                                    "slotpool_raw_structural_candidate_count": 0,
+                                    "slotpool_selected_structural_candidate_count": 0,
+                                    "slotpool_selected_candidate_ids": [],
+                                    "slotpool_selected_scores": [],
+                                    "slotpool_dropped_candidate_ids": [],
+                                    "slotpool_v2_anchor_candidate_id": None,
+                                    "slotpool_v2_anchor_score": None,
+                                    "slotpool_v2_anchor_inference_seconds": 0.0,
+                                    "slotpool_ranking_inference_seconds": 0.0,
+                                    "slotpool_total_inference_seconds": 0.0,
+                                }
+                            )
                         if v3_s3_state is not None:
                             selected_local_index = 0
                             scores = [0.0] * len(candidate_rows)
@@ -1559,6 +1791,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             inference_seconds = (
                                 time.perf_counter() - inference_started
                             )
+                        inference_seconds += float(
+                            proposal_metrics.get(
+                                "slotpool_total_inference_seconds", 0.0
+                            )
+                        )
                         if stateful_controller is not None:
                             stateful_cache = {
                                 "key": cache_key,
@@ -1572,7 +1809,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             }
                     controller["proposal"] = proposal_metrics
                     pruning_metrics = no_pruning_metrics(len(candidates))
-                    retained_indices = list(range(len(candidates)))
                     base_selected_local_index = selected_local_index
                     diagnostic_shadow_seconds = 0.0
                     diagnostic_shadow_state_check_seconds = 0.0
@@ -1712,6 +1948,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     if bool(job.get("feature_shadow_validation", False)):
                         assert feature_engine is not None
                         shadow_rows = feature_engine.last_shadow_rows.get(policy)
+                        if (
+                            shadow_rows is not None
+                            and slotpool_retained_raw_indices is not None
+                        ):
+                            if (
+                                slotpool_raw_candidate_rows is None
+                                or len(shadow_rows)
+                                != len(slotpool_raw_candidate_rows)
+                            ):
+                                raise ClosedLoopExecutionError(
+                                    "slotpool_shadow_mismatch",
+                                    "SlotPool raw candidate shadow rows are incomplete",
+                                )
+                            shadow_rows = [
+                                shadow_rows[index]
+                                for index in slotpool_retained_raw_indices
+                            ]
                         if shadow_rows is None or len(shadow_rows) != len(candidate_rows):
                             raise ClosedLoopExecutionError(
                                 "controller_shadow_mismatch",
@@ -1855,8 +2108,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "controller did not select a candidate",
                         )
                     else:
-                        selected_index = retained_indices[selected_local_index]
-                        selected = candidates[selected_index]
+                        selected = candidates[selected_local_index]
                         selected_row = candidate_rows[selected_local_index]
                         random_seed = repair_random_seed(
                             str(row["task_id"]),
@@ -1874,13 +2126,36 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         diagnostic = feature_range_diagnostic(
                             selected_row, policy, runtime_ranges[policy]
                         )
+                        if slotpool_runtime_enabled and bool(
+                            selected.get("structpool_family_groups")
+                        ):
+                            last_structural_candidate_id = str(
+                                selected["candidate_id"]
+                            )
+                        proposal_metrics["guardpool_selected_structural"] = bool(
+                            slotpool_runtime_enabled
+                            and selected is not None
+                            and selected.get("structpool_family_groups")
+                        )
                     retained_positions = {
-                        global_index: local_index
-                        for local_index, global_index in enumerate(retained_indices)
+                        str(candidate["candidate_id"]): local_index
+                        for local_index, candidate in enumerate(candidates)
                     }
+                    if len(retained_positions) != len(candidates):
+                        raise ClosedLoopExecutionError(
+                            "duplicate_candidate_id",
+                            "runtime candidate IDs are not unique",
+                        )
+                    audit_candidates = (
+                        slotpool_raw_candidates
+                        if slotpool_raw_candidates is not None
+                        else candidates
+                    )
                     candidate_pool = []
-                    for index, candidate in enumerate(candidates):
-                        local_index = retained_positions.get(index)
+                    for candidate in audit_candidates:
+                        local_index = retained_positions.get(
+                            str(candidate["candidate_id"])
+                        )
                         candidate_pool.append(
                             {
                                 **candidate,
@@ -2003,11 +2278,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 else None
                             ),
                             "base_selected_candidate_id": (
-                                candidates[
-                                    retained_indices[
-                                        base_selected_local_index
-                                    ]
-                                ]["candidate_id"]
+                                candidates[base_selected_local_index][
+                                    "candidate_id"
+                                ]
                                 if v3_s3_bundle is None
                                 else None
                             ),
@@ -2058,6 +2331,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             selected_families[str(family)] += 1
                     controller_totals["proposal_count"] += int(proposal_metrics["proposal_count"])
                     controller_totals["candidate_count"] += int(proposal_metrics["candidate_count"])
+                    controller_totals["raw_candidate_count"] += int(
+                        proposal_metrics.get(
+                            "raw_candidate_count", proposal_metrics["candidate_count"]
+                        )
+                    )
                     controller_totals["base_candidate_count"] += int(
                         proposal_metrics.get(
                             "base_candidate_count", proposal_metrics["candidate_count"]
@@ -2168,6 +2446,53 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         f"structpool_gate_reason={structpool_reason}"
                     ] += 1
+                    controller_totals["slotpool_reduction_applied_count"] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "slotpool_reduction_applied", False
+                            )
+                        )
+                    )
+                    controller_totals[
+                        "slotpool_raw_structural_candidate_count"
+                    ] += int(
+                        proposal_metrics.get(
+                            "slotpool_raw_structural_candidate_count", 0
+                        )
+                    )
+                    controller_totals[
+                        "slotpool_selected_structural_candidate_count"
+                    ] += int(
+                        proposal_metrics.get(
+                            "slotpool_selected_structural_candidate_count", 0
+                        )
+                    )
+                    for slotpool_metric in (
+                        "slotpool_v2_anchor_inference_seconds",
+                        "slotpool_ranking_inference_seconds",
+                        "slotpool_total_inference_seconds",
+                    ):
+                        controller_totals[slotpool_metric] += float(
+                            proposal_metrics.get(slotpool_metric, 0.0)
+                        )
+                    controller_totals["guardpool_active_decision_count"] += int(
+                        bool(proposal_metrics.get("guardpool_active", False))
+                    )
+                    controller_totals["guardpool_trigger_count"] += int(
+                        bool(proposal_metrics.get("guardpool_triggered", False))
+                    )
+                    controller_totals["guardpool_release_count"] += int(
+                        bool(proposal_metrics.get("guardpool_released", False))
+                    )
+                    controller_totals[
+                        "guardpool_selected_structural_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "guardpool_selected_structural", False
+                            )
+                        )
+                    )
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
                     )
@@ -2351,6 +2676,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
                     no_progress_streak = 0
+                    last_structural_candidate_id = None
                 else:
                     no_progress_streak += 1
                 elapsed_wall = transition_ttf_elapsed_seconds

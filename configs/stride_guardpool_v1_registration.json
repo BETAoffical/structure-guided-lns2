@@ -86,6 +86,13 @@
     "initial_conflicts": 66,
     "v2_repair_iterations": 15,
     "maximum_guardpool_repair_iterations": 30,
+    "treatments": [
+      "v2-full",
+      "v2-plus-structpool",
+      "v2-plus-slotpool",
+      "stride-guardpool-v1"
+    ],
+    "slotpool_without_guard_is_ablation_only": true,
     "used_for_parameter_selection": false,
     "run_only_after_runtime_semantics_tests": true
   },

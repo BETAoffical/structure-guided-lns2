@@ -1869,6 +1869,31 @@
       "contract": "Freeze the SlotPool/V2 runtime boundary, eight-round no-progress guard, no wall-time condition, and exclusion of the held-out Maze result from parameter selection."
     },
     {
+      "path": "lns2_selector/runtime/slotpool_selection.py",
+      "role": "active",
+      "purpose": "Load the frozen portable SlotPool model and reduce a full four-size structural grid to six challengers with development-identical pairwise Borda semantics."
+    },
+    {
+      "path": "experiments/stride_guardpool_maze_regression.py",
+      "role": "active",
+      "purpose": "Execute and audit the V2, full StructPool, unguarded SlotPool, and GuardPool known-Maze regression without time caps."
+    },
+    {
+      "path": "scripts/run_stride_guardpool_maze_regression.py",
+      "role": "active",
+      "purpose": "Provide the resumable CLI for the preregistered GuardPool known-Maze regression."
+    },
+    {
+      "path": "tests/evaluation/test_stride_guardpool_maze_regression.py",
+      "role": "active",
+      "contract": "Freeze the known-Maze cohort, four-treatment schedule, unguarded ablation, and thirty-round GuardPool hard gate."
+    },
+    {
+      "path": "tests/runtime/test_slotpool_selection.py",
+      "role": "active",
+      "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
+    },
+    {
       "path": "scripts/verify_structpool_runtime_equivalence.py",
       "role": "shared",
       "purpose": "Compare StructPool traces after excluding only runtime fields while retaining candidate, action, PP, fingerprint, and conflict semantics."
