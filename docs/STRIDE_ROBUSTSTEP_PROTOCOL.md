@@ -4882,3 +4882,36 @@ This authorizes only runtime design, GuardPool, and the known Maze regression.
 It does not establish a repair-round or raw-TTF gain and does not replace
 `v2-full`. The immutable confirmation report SHA-256 is
 `8b648f38765cd0310a95a216e9ad475df97eb0c5954c8eb1d37c1652bcf880c0`.
+
+### GuardPool v1 known-Maze regression result
+
+The frozen runtime first chooses the exact V2 base anchor, reduces the full
+8/16/24/32 family-size grid to six SlotPool challengers, and lets the unchanged
+V2 ranker choose from base plus six.  Its no-progress guard was frozen at eight
+rounds using 29 other V2 episodes and 402 decisions; the known Maze key was not
+read during threshold selection.  A first technical execution attempt stopped
+before any solver outcome because an old qualification fingerprint was
+incompatible.  The protocol was revised before results to collect one fresh
+reset-only qualification.
+
+All four uncapped episodes completed from the identical 66-conflict state with
+zero errors, invalid actions, or fingerprint mismatches.  V2 reproduced 15
+repairs and 6.4229 s raw TTF. Full StructPool required 301 repairs and 133.1809
+s. Unguarded SlotPool required 61 repairs and 10.5504 s. GuardPool also required
+61 repairs and 10.6594 s, exceeding the frozen maximum of 30 repairs.
+
+SlotPool and GuardPool have the identical conflict trajectory.  Their first
+three structural actions reduce conflicts from `66` to `33`, `19`, and `12`.
+At 12 conflicts the minimum-16 activation gate has already disabled structural
+candidates, so both treatments are exact V2 fallbacks from decision 3 onward.
+The eight-round guard triggers only at decision 19, after the state has reached
+one conflict, and needs another 42 V2 repairs to finish.  It therefore cannot
+undo the low-conflict trap caused by the initial structural actions.
+
+The current GuardPool is rejected and the development TTF Quick is not run.
+The result demonstrates that excellent current-step candidate retention and
+large immediate conflict reductions do not ensure a favorable subsequent PP
+repair state.  Any successor must gate or abstain before the first structural
+deviation; the frozen known regression cannot be used to tune the current
+threshold.  The result report SHA-256 is
+`84b5ea9dd8c44f0abfd1cfbe49086ee7ed1d9def6e2e578b60648132790a3ebe`.

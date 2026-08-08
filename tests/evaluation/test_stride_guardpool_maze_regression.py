@@ -8,6 +8,7 @@ from pathlib import Path
 from experiments.stride_guardpool_maze_regression import (
     CONTROLLERS,
     _controller_kwargs,
+    _paired_pp_replay_audit,
     guardpool_maze_schedule,
     load_guardpool_maze_regression_config,
     run_guardpool_maze_regression,
@@ -62,6 +63,39 @@ class GuardPoolMazeRegressionTests(unittest.TestCase):
             path.write_text(json.dumps(changed), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "gates changed"):
                 load_guardpool_maze_regression_config(path)
+
+    def test_pp_pairing_is_conditioned_on_identical_before_state(self) -> None:
+        first = {
+            "decisions": [
+                {
+                    "decision_index": 0,
+                    "before_fingerprint": "same",
+                    "pp_random_seed": 7,
+                },
+                {
+                    "decision_index": 1,
+                    "before_fingerprint": "left-state",
+                    "pp_random_seed": 11,
+                },
+            ]
+        }
+        second = {
+            "decisions": [
+                {
+                    "decision_index": 0,
+                    "before_fingerprint": "same",
+                    "pp_random_seed": 7,
+                },
+                {
+                    "decision_index": 1,
+                    "before_fingerprint": "right-state",
+                    "pp_random_seed": 13,
+                },
+            ]
+        }
+        self.assertEqual(_paired_pp_replay_audit([first, second]), (True, 1))
+        second["decisions"][0]["pp_random_seed"] = 8
+        self.assertEqual(_paired_pp_replay_audit([first, second]), (False, 1))
 
 
 if __name__ == "__main__":

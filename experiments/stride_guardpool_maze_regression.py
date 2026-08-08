@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 from pathlib import Path
 from typing import Any
 
@@ -317,6 +318,7 @@ def _trace_summary(collection: Path, row: dict[str, Any]) -> dict[str, Any]:
                 "selected_families": list(selected.get("selection_families") or ()),
                 "selected_structural": bool(selected.get("structpool_family_groups")),
                 "pp_random_seed": int(dict(event.get("action") or {}).get("pp_random_seed", -1)),
+                "before_fingerprint": str(event.get("before_fingerprint") or ""),
                 "guard_active": bool(proposal.get("guardpool_active", False)),
                 "guard_triggered": bool(proposal.get("guardpool_triggered", False)),
                 "guard_released": bool(proposal.get("guardpool_released", False)),
@@ -383,6 +385,22 @@ def _trace_summary(collection: Path, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _paired_pp_replay_audit(
+    rows: list[dict[str, Any]],
+) -> tuple[bool, int]:
+    replay_groups: dict[tuple[int, str], list[int]] = collections.defaultdict(list)
+    for row in rows:
+        for decision in row.get("decisions") or ():
+            replay_groups[
+                (
+                    int(decision["decision_index"]),
+                    str(decision["before_fingerprint"]),
+                )
+            ].append(int(decision["pp_random_seed"]))
+    paired = [seeds for seeds in replay_groups.values() if len(seeds) >= 2]
+    return bool(paired) and all(len(set(seeds)) == 1 for seeds in paired), len(paired)
+
+
 def analyze_guardpool_maze_regression(
     config_path: str | Path, output: str | Path
 ) -> dict[str, Any]:
@@ -409,19 +427,7 @@ def analyze_guardpool_maze_regression(
     initial_conflicts = {int(row["initial_conflicts"]) for row in valid}
     v2 = by_controller["v2-full"]
     guard = by_controller["stride-guardpool-v1"]
-    common_decisions = min(
-        (len(row.get("decisions") or ()) for row in valid), default=0
-    )
-    pp_seed_pairing = all(
-        len(
-            {
-                int(row["decisions"][index]["pp_random_seed"])
-                for row in valid
-            }
-        )
-        == 1
-        for index in range(common_decisions)
-    )
+    pp_seed_pairing, paired_replay_group_count = _paired_pp_replay_audit(valid)
     first_divergence = {}
     v2_ids = [row["selected_candidate_id"] for row in v2.get("decisions", [])]
     for controller, row in by_controller.items():
@@ -469,7 +475,8 @@ def analyze_guardpool_maze_regression(
         "gates": gates,
         "controller_results": by_controller,
         "first_divergence_vs_v2": first_divergence,
-        "common_paired_pp_decision_count": common_decisions,
+        "identical_state_paired_pp_group_count": paired_replay_group_count,
+        "pp_pairing_semantics": "same_decision_index_and_before_fingerprint",
         "formal_ttf_claim": False,
         "independent_generalization_evidence": False,
         "next_step": (
@@ -491,6 +498,7 @@ def analyze_guardpool_maze_regression(
 
 __all__ = [
     "analyze_guardpool_maze_regression",
+    "_paired_pp_replay_audit",
     "guardpool_maze_schedule",
     "load_guardpool_maze_regression_config",
     "run_guardpool_maze_regression",

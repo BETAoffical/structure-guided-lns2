@@ -53,7 +53,10 @@ strict conflict decrease occurs.
 - no invalid actions or fingerprint mismatches;
 - V2 must succeed in exactly 15 repair iterations;
 - GuardPool must succeed in at most 30 repair iterations;
-- PP seeds must match across all common decision indices.
+- PP seeds must match whenever controllers have the same decision index and
+  before-state fingerprint.  Once actions cause the states to diverge, the
+  deterministic replay seed is intentionally state-dependent and is no longer
+  expected to match merely because the decision indices are equal.
 
 Full StructPool and unguarded SlotPool are ablations.  Their failure or long
 tail is reported but does not weaken the GuardPool safety gate.  GuardPool may
