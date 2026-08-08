@@ -317,11 +317,15 @@ def run_slotpool_structpool_ttf(
 
 
 def _pool_counts(row: dict[str, Any]) -> dict[str, int]:
-    totals = dict(dict(row.get("summary") or {}).get("controller_totals") or {})
+    summary = dict(row.get("summary") or {})
+    totals = dict(summary.get("controller_totals") or {})
+    selected_families = dict(summary.get("selected_family_counts") or {})
     return {
         "gate_passed": int(totals.get("structpool_gate_passed_count", 0)),
-        "structural_selected": int(
-            totals.get("guardpool_selected_structural_count", 0)
+        "structural_selected": sum(
+            int(count)
+            for family, count in selected_families.items()
+            if str(family).startswith("structpool-")
         ),
         "generated": int(totals.get("structpool_generated_count", 0)),
         "slotpool_reduced": int(
@@ -431,7 +435,9 @@ def analyze_slotpool_structpool_ttf(
             for summary in summaries.values()
         ),
         "full_structpool_activated": counts["v2-plus-structpool"]["gate_passed"] > 0,
+        "full_structpool_selected": counts["v2-plus-structpool"]["structural_selected"] > 0,
         "slotpool_activated": counts["v2-plus-slotpool"]["gate_passed"] > 0,
+        "slotpool_structural_selected": counts["v2-plus-slotpool"]["structural_selected"] > 0,
         "slotpool_reduction_exercised": counts["v2-plus-slotpool"]["slotpool_reduced"] > 0,
         "slotpool_selected_challengers": counts["v2-plus-slotpool"]["slotpool_selected"] > 0,
     }

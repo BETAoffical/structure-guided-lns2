@@ -4915,3 +4915,33 @@ repair state.  Any successor must gate or abstain before the first structural
 deviation; the frozen known regression cannot be used to tune the current
 threshold.  The result report SHA-256 is
 `84b5ea9dd8c44f0abfd1cfbe49086ee7ed1d9def6e2e578b60648132790a3ebe`.
+
+### SlotPool versus full StructPool known-tail-excluded TTF diagnostic
+
+At the user's request, commit `7c80deb` preregistered a focused raw-TTF
+comparison between full StructPool and frozen SlotPool after excluding exactly
+the one previously known catastrophic Maze key. The fixed five-map, ten-task,
+three-seed cohort otherwise remained intact, producing 29 paired keys and 58
+strictly alternating single-worker episodes. The exclusion is outcome-based,
+so the result is diagnostic only and cannot support a formal speed or
+generalization claim.
+
+All 58 episodes completed with matching initial fingerprints/conflicts, valid
+reset-inclusive raw-TTF clocks, 29/29 successes per controller and zero errors,
+invalid actions, semantic mismatches or capped values. Full StructPool averaged
+`6.421219` seconds and 9.103 repairs; SlotPool averaged `6.715697` seconds and
+9.207 repairs. SlotPool was therefore `4.5860%` slower and won only 10/29 paired
+keys. Mean selection time also increased from `0.326120` to `0.424105` seconds.
+
+Per group, SlotPool changed mean TTF by -4.5542% on Den300, -25.4994% on
+Maze100, +5.2986% on Random500, -14.1748% on Room400 and +4.2292% on
+Warehouse600. The known excluded key stayed absent, but two remaining Maze
+seeds still showed 46-versus-13 and 40-versus-19 repair regressions. These
+post-timing outcomes remain in the aggregate and are not filtered.
+
+Full StructPool wins this focused comparison. SlotPool's excellent one-step
+candidate-retention evidence does not translate into a stable end-to-end TTF
+gain, and its full-grid plus pairwise-reduction overhead is not recovered by
+repair-round savings. Neither treatment replaces `v2-full`. The deterministic
+report SHA-256 is
+`4c82e4283ec3626976f9944ec26f55757973d063ab1ff861dc2fa7c8a16f3c3d`.
