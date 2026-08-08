@@ -7,8 +7,11 @@ from pathlib import Path
 
 from experiments.stride_structpool_size_ablation import (
     TRIAL_SCHEMA,
+    _best_size_counts_by_context,
     _copy_reused_trial,
     _family_variant,
+    _fixed_half_consistency,
+    _grouped_family_size_quality,
     validate_size_ablation_config,
 )
 
@@ -66,6 +69,54 @@ class StructPoolSizeAblationTests(unittest.TestCase):
         self.assertEqual(copied["candidate_kind"], "structpool-grid")
         self.assertEqual(copied["trial_source"], "reused_exact_robustaction_v1")
         self.assertEqual(copied["normalized_conflict_reduction"], 0.6)
+
+    def test_grouped_analysis_preserves_context_and_half_consistency(self) -> None:
+        def row(candidate_id: str, size: int, first: float, second: float) -> dict:
+            return {
+                "candidate_id": candidate_id,
+                "family": "conflict_component",
+                "nominal_size": size,
+                "map_id": "map-a",
+                "agent_band": "high",
+                "seed_mean": (first + second) / 2.0,
+                "first_fixed_half_mean": first,
+                "second_fixed_half_mean": second,
+                "lower_half_mean": min(first, second),
+                "no_progress_rate": 0.0,
+                "seed_standard_deviation": 0.1,
+                "repair_success_rate": 1.0,
+                "feasible_rate": 0.0,
+            }
+
+        rows = [
+            row("a", 8, 0.7, 0.6),
+            row("b", 16, 0.6, 0.8),
+            row("c", 24, 0.5, 0.5),
+            row("d", 32, 0.4, 0.9),
+        ]
+        half = _fixed_half_consistency(rows)
+        self.assertFalse(half["exact_winner_agreement"])
+        self.assertEqual(half["top3_overlap"], 0.5)
+        grouped = _grouped_family_size_quality(rows, ["map_id", "agent_band"])
+        self.assertEqual(len(grouped), 8)
+        self.assertEqual({item["dimension"] for item in grouped}, {"map_id", "agent_band"})
+        context_rows = [
+            {
+                "map_id": "map-a",
+                "family": "conflict_component",
+                "best_size": 8,
+            },
+            {
+                "map_id": "map-a",
+                "family": "conflict_component",
+                "best_size": 16,
+            },
+        ]
+        counts = _best_size_counts_by_context(context_rows, ["map_id"])
+        self.assertEqual(
+            counts["map_id"]["map-a"]["conflict_component"],
+            {8: 1, 16: 1},
+        )
 
 
 if __name__ == "__main__":

@@ -1006,6 +1006,95 @@ def _best(rows: list[dict[str, Any]], key: str = "seed_mean") -> dict[str, Any]:
     )
 
 
+def _fixed_half_consistency(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    unique = {str(row["candidate_id"]): row for row in rows}
+    candidates = list(unique.values())
+    first_best = _best(candidates, key="first_fixed_half_mean")
+    second_best = _best(candidates, key="second_fixed_half_mean")
+    first_top3 = {
+        str(row["candidate_id"])
+        for row in sorted(
+            candidates,
+            key=lambda row: (
+                -float(row["first_fixed_half_mean"]),
+                str(row["candidate_id"]),
+            ),
+        )[:3]
+    }
+    second_top3 = {
+        str(row["candidate_id"])
+        for row in sorted(
+            candidates,
+            key=lambda row: (
+                -float(row["second_fixed_half_mean"]),
+                str(row["candidate_id"]),
+            ),
+        )[:3]
+    }
+    return {
+        "first_winner_candidate_id": str(first_best["candidate_id"]),
+        "second_winner_candidate_id": str(second_best["candidate_id"]),
+        "exact_winner_agreement": (
+            first_best["candidate_id"] == second_best["candidate_id"]
+        ),
+        "top3_overlap": len(first_top3 & second_top3) / max(
+            1, len(first_top3 | second_top3)
+        ),
+    }
+
+
+def _grouped_family_size_quality(
+    rows: list[dict[str, Any]], dimensions: list[str]
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, int], list[dict[str, Any]]] = (
+        collections.defaultdict(list)
+    )
+    for row in rows:
+        for dimension in dimensions:
+            grouped[
+                (
+                    dimension,
+                    str(row[dimension]),
+                    str(row["family"]),
+                    int(row["nominal_size"]),
+                )
+            ].append(row)
+    return [
+        {
+            "dimension": dimension,
+            "group_value": value,
+            "family": family,
+            "nominal_size": size,
+            **_summary(group_rows),
+        }
+        for (dimension, value, family, size), group_rows in sorted(grouped.items())
+    ]
+
+
+def _best_size_counts_by_context(
+    rows: list[dict[str, Any]], dimensions: list[str]
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for dimension in dimensions:
+        values: dict[str, Any] = {}
+        for value in sorted({str(row[dimension]) for row in rows}):
+            families: dict[str, Any] = {}
+            subset = [row for row in rows if str(row[dimension]) == value]
+            for family in sorted({str(row["family"]) for row in subset}):
+                families[family] = dict(
+                    sorted(
+                        collections.Counter(
+                            int(row["best_size"])
+                            for row in subset
+                            if str(row["family"]) == family
+                        ).items()
+                    )
+                )
+            values[value] = families
+        result[dimension] = values
+    return result
+
+
 def analyze_size_ablation(
     *, config_path: str | Path, labels: str | Path, output: str | Path
 ) -> dict[str, Any]:
@@ -1043,6 +1132,8 @@ def analyze_size_ablation(
                     "support_count": support,
                     "support_band": support_band,
                     "component_band": component_band,
+                    "agent_band": str(row["agent_band"]),
+                    "conflict_band": str(row["conflict_band"]),
                     "pure_or_mixed": (
                         "pure" if row["structpool_grid_pure_family"] else "mixed"
                     ),
@@ -1065,22 +1156,7 @@ def analyze_size_ablation(
             if int(row["nominal_size"]) == int(fixed[row["family_group"]])
         }
         current_best = _best(list(current.values()))
-        first_best = _best(list(unique.values()), key="first_fixed_half_mean")
-        second_best = _best(list(unique.values()), key="second_fixed_half_mean")
-        first_top3 = {
-            str(row["candidate_id"])
-            for row in sorted(
-                unique.values(),
-                key=lambda row: (-float(row["first_fixed_half_mean"]), str(row["candidate_id"])),
-            )[:3]
-        }
-        second_top3 = {
-            str(row["candidate_id"])
-            for row in sorted(
-                unique.values(),
-                key=lambda row: (-float(row["second_fixed_half_mean"]), str(row["candidate_id"])),
-            )[:3]
-        }
+        half = _fixed_half_consistency(list(unique.values()))
         state_rows.append(
             {
                 "state_id": state_id,
@@ -1089,10 +1165,10 @@ def analyze_size_ablation(
                 "best_candidate_id": str(best["candidate_id"]),
                 "current_candidate_id": str(current_best["candidate_id"]),
                 "normalized_regret": float(best["seed_mean"]) - float(current_best["seed_mean"]),
-                "fixed_half_exact_winner_agreement": (
-                    first_best["candidate_id"] == second_best["candidate_id"]
+                "fixed_half_exact_winner_agreement": bool(
+                    half["exact_winner_agreement"]
                 ),
-                "fixed_half_top3_overlap": len(first_top3 & second_top3) / max(1, len(first_top3 | second_top3)),
+                "fixed_half_top3_overlap": float(half["top3_overlap"]),
             }
         )
     for (state_id, family), rows in sorted(by_state_family.items()):
@@ -1106,6 +1182,7 @@ def analyze_size_ablation(
         if not current:
             raise ValueError(f"fixed family size is absent: {state_id} {family}")
         current_best = _best(current)
+        half = _fixed_half_consistency(list(unique.values()))
         family_state_rows.append(
             {
                 "state_id": state_id,
@@ -1116,8 +1193,17 @@ def analyze_size_ablation(
                 "current_candidate_id": str(current_best["candidate_id"]),
                 "normalized_regret": float(best["seed_mean"]) - float(current_best["seed_mean"]),
                 "support_count": int(best["support_count"]),
+                "support_band": str(best["support_band"]),
+                "component_band": str(best["component_band"]),
+                "agent_band": str(best["agent_band"]),
+                "conflict_band": str(best["conflict_band"]),
+                "pure_or_mixed": str(best["pure_or_mixed"]),
                 "map_id": str(best["map_id"]),
                 "layout_mode": str(best["layout_mode"]),
+                "fixed_half_exact_winner_agreement": bool(
+                    half["exact_winner_agreement"]
+                ),
+                "fixed_half_top3_overlap": float(half["top3_overlap"]),
             }
         )
     family_size = {}
@@ -1134,6 +1220,15 @@ def analyze_size_ablation(
         ).items()))
         for family in sorted({str(row["family"]) for row in family_state_rows})
     }
+    context_dimensions = [
+        name
+        for name in config["analysis"]["report_by"]
+        if name not in {"family", "size"}
+    ]
+    grouped_quality = _grouped_family_size_quality(expanded, context_dimensions)
+    contextual_best_sizes = _best_size_counts_by_context(
+        family_state_rows, context_dimensions
+    )
     report = {
         "schema": ANALYSIS_SCHEMA,
         "scientific_status": "completed_current_step_family_size_ablation",
@@ -1165,7 +1260,18 @@ def analyze_size_ablation(
                 row["fixed_half_top3_overlap"] for row in state_rows
             ),
         },
+        "family_fixed_half_consistency": {
+            "exact_winner_agreement_rate": statistics.fmean(
+                row["fixed_half_exact_winner_agreement"]
+                for row in family_state_rows
+            ),
+            "mean_top3_overlap": statistics.fmean(
+                row["fixed_half_top3_overlap"] for row in family_state_rows
+            ),
+        },
         "best_size_counts_by_family": best_size_counts,
+        "best_size_counts_by_context": contextual_best_sizes,
+        "grouped_family_size_quality_row_count": len(grouped_quality),
         "uniform_best_size_exists": all(
             len([size for size, count in counts.items() if count]) == 1
             for counts in best_size_counts.values()
@@ -1182,13 +1288,16 @@ def analyze_size_ablation(
     expanded_path = output / "expanded_family_size_rows.jsonl"
     state_path = output / "state_regret.jsonl"
     family_state_path = output / "family_state_regret.jsonl"
+    grouped_quality_path = output / "grouped_family_size_quality.jsonl"
     _write_jsonl(expanded_path, expanded)
     _write_jsonl(state_path, state_rows)
     _write_jsonl(family_state_path, family_state_rows)
+    _write_jsonl(grouped_quality_path, grouped_quality)
     report["artifacts"] = {
         "expanded_family_size_rows_sha256": sha256_file(expanded_path),
         "state_regret_sha256": sha256_file(state_path),
         "family_state_regret_sha256": sha256_file(family_state_path),
+        "grouped_family_size_quality_sha256": sha256_file(grouped_quality_path),
         "candidate_aggregates_sha256": sha256_file(labels / "candidate_aggregates.jsonl"),
         "repair_trials_sha256": sha256_file(labels / "repair_trials.jsonl"),
     }
