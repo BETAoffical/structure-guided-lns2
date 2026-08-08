@@ -42,6 +42,7 @@ class StructPoolLeanConfirmationTests(unittest.TestCase):
             self.assertEqual(tuple(str(row["controller"]) for row in ordered), expected)
 
     def test_cohort_is_exact_label_map_disjoint_subset(self) -> None:
+        self.assertIs(self.config["reuse_qualification_source"], False)
         label_maps = {
             str(row["map_id"])
             for row in _read_jsonl(

@@ -288,6 +288,7 @@ def run_structpool_lean_multigroup(
     qualification_source = (
         (root / str(registered_qualification)).resolve()
         if registered_qualification is not None
+        and bool(config.get("reuse_qualification_source", True))
         else None
     )
     groups = {str(row["id"]): dict(row) for row in config["cohort"]["groups"]}

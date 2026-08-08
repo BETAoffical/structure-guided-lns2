@@ -48,6 +48,7 @@ def load_structpool_lean_confirmation_config(
         or tuple(config.get("controllers") or ()) != CONTROLLERS
         or config.get("qualification_source")
         != "build/stride-structpool-revised-six-map-qualification-v1"
+        or config.get("reuse_qualification_source") is not False
     ):
         raise ValueError("LeanPool confirmation identity changed")
     if dict(config.get("comparison") or {}) != {

@@ -31,6 +31,7 @@
   },
   "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
   "qualification_source": "build/stride-structpool-revised-six-map-qualification-v1",
+  "reuse_qualification_source": false,
   "structpool_augmentation": {
     "enabled": true,
     "pool_id": "stride-structpool-v1",

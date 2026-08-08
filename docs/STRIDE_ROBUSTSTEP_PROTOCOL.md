@@ -4770,7 +4770,9 @@ seeds 1--3: 30 paired task-seed keys and 120 single-worker episodes under
 strict four-controller rotation.  The controllers remain official Adaptive
 LNS2, exact-base-pool `v2-full`, full Speed2 StructPool, and LeanPool.  They use
 the same deterministic PP replay, native features, optimized runtime and
-uncapped run-to-completion stopping rule.  LeanPool still differs only by
+uncapped run-to-completion stopping rule.  The old qualification directory is
+registered as cohort evidence but is not reused: all 30 reset states are
+recomputed with the current implementation before timing.  LeanPool still differs only by
 removing exact pure `bottleneck_crossing` rows after full proposal generation
 and before feature construction; no ranker, PP repair, activation gate,
 neighborhood size, cap, or tie rule changes.
