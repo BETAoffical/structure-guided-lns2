@@ -259,6 +259,11 @@
       "purpose": "Preregistered frozen-V2 audit of the exact pure-bottleneck StructPool candidate filter before runtime implementation."
     },
     {
+      "path": "experiments/stride_structpool_lean_quick.py",
+      "role": "active",
+      "purpose": "Strictly rotated official-LNS2, V2, full-StructPool, and LeanPool run-to-completion raw-TTF development Quick."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -497,6 +502,11 @@
       "path": "scripts/audit_stride_structpool_lean.py",
       "role": "active",
       "purpose": "Command-line entry point for the outcome-blind LeanPool selection and paired current-step quality audit."
+    },
+    {
+      "path": "scripts/run_stride_structpool_lean_quick.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the preregistered four-controller LeanPool raw-TTF Quick."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1382,6 +1392,11 @@
       "path": "tests/evaluation/test_stride_structpool_lean_audit.py",
       "role": "active",
       "contract": "Exact pure-bottleneck-only filter, frozen V2 ranking, sixteen-seed paired quality gates, and no-runtime/no-training boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_lean_quick.py",
+      "role": "active",
+      "contract": "Thirty-two strictly rotated paired entries, exact full-versus-Lean treatment isolation, raw-TTF gates, and development-only claims."
     },
     {
       "path": "experiments/stride_structpool.py",

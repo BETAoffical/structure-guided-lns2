@@ -4685,3 +4685,30 @@ This authorizes the registered runtime implementation and four-controller
 development Quick only.  Milestone validation passed 622 Python tests with 34
 registered skips in the WSL runtime, the Windows native test binary, Linux
 CTest 11/11, retention coverage and repository hygiene.
+
+### StructPool LeanPool v1 four-controller runtime registration
+
+The authorized runtime implementation retains the complete Speed2 StructPool
+generator and high-stress gate.  On a passed state it generates the same raw
+candidate rows, then removes only exact pure `bottleneck_crossing` rows before
+124-feature construction, ranking and PP repair.  The trace records generated,
+retained and filtered counts and filtered IDs.  The full StructPool controller
+does not execute this filter; no ranker, candidate cap, neighborhood size,
+Jaccard threshold, activation threshold, PP seed or stopping rule changes.
+
+Before reading new timing, `configs/stride_structpool_lean_quick.json`
+registers 32 entries: eight unchanged Maze300/Room500 task-seed keys, each run
+once by official Adaptive LNS2, base-pool V2, full Speed2 StructPool and
+LeanPool under strict four-way rotation.  Execution is single-worker,
+deterministic-PP, run-to-completion and uncapped.  The primary treatment
+comparison is LeanPool versus full StructPool; all six pairwise controller
+comparisons must also be reported.
+
+LeanPool passes this development Quick only if all controllers solve every
+key, the filter is exercised, mean raw TTF is no worse than full StructPool,
+at least half of paired keys are faster, neither map group regresses by more
+than 10%, mean repair rounds and success count are non-inferior, and mean
+selection time is no worse.  Failure retains Speed2 full StructPool and rejects
+LeanPool as the preferred runtime.  Passing authorizes only a separately
+registered fresh-map confirmation; this reused eight-key Quick cannot promote
+the default or support a formal speed/generalization claim.

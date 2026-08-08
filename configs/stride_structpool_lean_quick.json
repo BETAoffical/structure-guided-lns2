@@ -1,0 +1,151 @@
+{
+  "schema": "lns2.stride.structpool_lean_quick_config.v1",
+  "scientific_status": "preregistered_development_four_controller_quick_before_timing",
+  "experiment_id": "stride-structpool-lean-quick-v1",
+  "pre_registration_parent_commit": "3b97422359e27ecd2c53cc9be76e9b4689596774",
+  "controllers": [
+    "official_adaptive",
+    "v2-full",
+    "v2-plus-structpool",
+    "v2-plus-structpool-lean"
+  ],
+  "comparison": {
+    "lns2_baseline": "native_official_adaptive_neighborhood_generation",
+    "v2_baseline": "frozen_v2_ranking_over_exact_base_pool",
+    "full_structpool": "same_frozen_v2_over_base_plus_full_structpool",
+    "lean_structpool": "same_frozen_v2_after_pure_bottleneck_filter",
+    "execution_order": "strict_four_controller_rotation",
+    "paired_solver_seed_required": true,
+    "workers": 1
+  },
+  "runtime": {
+    "config": "configs/stride_stage4r_high_load_runtime.json",
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "feature_backend": "native",
+    "controller_runtime": "optimized",
+    "verification_profile": "deployment",
+    "deterministic_pp_replay": true
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "structpool_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-structpool-v1",
+    "runtime_id": "stride-structpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "lean_structpool_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-structpool-lean-v1",
+    "runtime_id": "stride-structpool-lean-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    },
+    "lean_filter": {
+      "filter_id": "stride-structpool-pure-bottleneck-filter-v1",
+      "candidate_kind": "structpool",
+      "remove_only_if_family_groups_exact": ["bottleneck_crossing"],
+      "preserve_mixed_family_candidates": true,
+      "replacement_candidate_added": false,
+      "applied_before_feature_construction": true
+    }
+  },
+  "cohort": {
+    "role": "reused_high_load_development_quick_not_formal_ood",
+    "solver_seeds": [1, 2],
+    "episode_count_per_controller": 8,
+    "groups": [
+      {
+        "id": "maze300",
+        "dataset": "build/stride-stage4r-high-load-maze-dataset-v1",
+        "split": "balanced_wall_clock",
+        "tasks": [
+          "maze-128-128-2__random_11__agents_0300",
+          "maze-128-128-2__random_17__agents_0300"
+        ]
+      },
+      {
+        "id": "room500",
+        "dataset": "build/stride-stage4r-high-load-room-dataset-v1",
+        "split": "balanced_wall_clock",
+        "tasks": [
+          "room-64-64-8__random_04__agents_0500",
+          "room-64-64-8__random_05__agents_0500"
+        ]
+      }
+    ]
+  },
+  "performance_gates": {
+    "minimum_mean_raw_ttf_improvement_vs_full_structpool": 0.0,
+    "minimum_paired_faster_fraction_vs_full_structpool": 0.5,
+    "maximum_group_raw_ttf_regression_vs_full_structpool": 0.1,
+    "maximum_mean_repair_iterations_delta_vs_full_structpool": 0.0,
+    "minimum_success_count_delta_vs_full_structpool": 0,
+    "minimum_selection_seconds_improvement_vs_full_structpool": 0.0
+  },
+  "inputs": {
+    "source_quick_config": {
+      "path": "configs/stride_structpool_lns2_quick.json",
+      "sha256": "18980f5bcc0e6ee9409223fd07d1bfd5205c9620f52b0951ddf48ff8deb1bef0"
+    },
+    "speed2_report": {
+      "path": "build/stride-structpool-lns2-speed2-quick-v1/structpool_lns2_quick_report.json",
+      "sha256": "55319c14992d33c05e4f30ad4837cfabcb6f12941ddf6385e14e6dced589d7d2"
+    },
+    "lean_audit_report": {
+      "path": "build/stride-structpool-lean-audit-v1/lean_audit_report.json",
+      "sha256": "d31d14232d4fc11028ab179837cf7c84f41551542897a0baa7504f08e5fee677"
+    },
+    "runtime_config": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "maze_dataset_summary": {
+      "path": "build/stride-stage4r-high-load-maze-dataset-v1/dataset_summary.json",
+      "sha256": "5fc8bdd608fe89a4a241958bfa36315319e344f832c7c359278c3d56b98a84ac"
+    },
+    "room_dataset_summary": {
+      "path": "build/stride-stage4r-high-load-room-dataset-v1/dataset_summary.json",
+      "sha256": "ed526c49297ee806eca2daa95d55035c99e0b8707891d6d2bbf06434fc7e6a12"
+    }
+  },
+  "claim_boundary": {
+    "development_diagnostic_only": true,
+    "formal_speed_claim": false,
+    "fresh_map_claim": false,
+    "default_replacement_allowed": false,
+    "new_ranker_trained": false,
+    "candidate_generator_changed": false,
+    "result_must_report_all_six_pairwise_comparisons": true
+  }
+}

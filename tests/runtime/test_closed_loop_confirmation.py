@@ -56,6 +56,7 @@ from experiments.neighborhood_features import _feature_profiles
 from experiments.state_analysis import analyze_state, analyze_static_grid
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.runtime.online_selection import (
+    filter_structpool_lean_candidates,
     structpool_high_stress_gate,
     validate_structpool_augmentation,
 )
@@ -78,6 +79,19 @@ STRUCTPOOL_RUNTIME = {
             "minimum_active_conflict_agent_count": 32,
             "minimum_largest_conflict_component_size": 16,
         },
+    },
+}
+STRUCTPOOL_LEAN_RUNTIME = {
+    **STRUCTPOOL_RUNTIME,
+    "pool_id": "stride-structpool-lean-v1",
+    "runtime_id": "stride-structpool-lean-runtime-v1",
+    "lean_filter": {
+        "filter_id": "stride-structpool-pure-bottleneck-filter-v1",
+        "candidate_kind": "structpool",
+        "remove_only_if_family_groups_exact": ["bottleneck_crossing"],
+        "preserve_mixed_family_candidates": True,
+        "replacement_candidate_added": False,
+        "applied_before_feature_construction": True,
     },
 }
 
@@ -1651,6 +1665,87 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(metrics["structpool_dynamic_seconds"], 0.125)
         self.assertTrue(metrics["structpool_static_cache_hit"])
         self.assertEqual(candidates[-1]["candidate_id"], "structpool-added")
+
+    def test_structpool_lean_filter_removes_only_pure_bottleneck_before_merge(
+        self,
+    ) -> None:
+        pure = {
+            "candidate_id": "structpool-pure-bottleneck",
+            "agents": [0, 3],
+            "actual_size": 2,
+            "selection_families": ["structpool-bottleneck-crossing:8"],
+            "selection_rank_by_family": {"structpool-bottleneck-crossing:8": 0},
+            "proposal_count_by_family": {"structpool-bottleneck-crossing:8": 1},
+            "proposal_seeds": [],
+            "seed_agents": [],
+            "structpool_family_groups": ["bottleneck_crossing"],
+            "structpool_score": 2.0,
+        }
+        mixed = {
+            **pure,
+            "candidate_id": "structpool-mixed-bottleneck",
+            "agents": [1, 3],
+            "structpool_family_groups": ["bottleneck_crossing", "path_overlap"],
+            "structpool_score": 1.0,
+        }
+        retained, removed = filter_structpool_lean_candidates(
+            [pure, mixed], STRUCTPOOL_LEAN_RUNTIME
+        )
+        self.assertEqual(retained, [mixed])
+        self.assertEqual(removed, ["structpool-pure-bottleneck"])
+        self.assertEqual(
+            filter_structpool_lean_candidates([pure, mixed], STRUCTPOOL_RUNTIME),
+            ([pure, mixed], []),
+        )
+
+        state = {
+            **make_state(),
+            "num_of_colliding_pairs": 16,
+            "conflict_edges": [[2 * index, 2 * index + 1] for index in range(16)],
+            "agents": [
+                _agent(index, [index % 8, index % 8], int(index < 32))
+                for index in range(40)
+            ],
+        }
+        with patch(
+            "lns2_selector.runtime.online_selection.generate_structpool_candidates",
+            return_value=[pure, mixed],
+        ):
+            candidates, metrics = generate_online_candidates(
+                FakeProposalEnvironment(state),
+                state,
+                task_id="task-a",
+                solver_seed=0,
+                decision_index=0,
+                proposal_config={
+                    "max_seed_agents": 1,
+                    "heuristics": ["target", "collision", "random"],
+                    "neighborhood_sizes": [4],
+                    "trials": 2,
+                    "candidates_per_family": 1,
+                    "structpool": STRUCTPOOL_LEAN_RUNTIME,
+                },
+                state_hash=state_fingerprint(state),
+                verify_full_state=False,
+                topology_static_grid=analyze_static_grid(state),
+                topology_state_analysis=analyze_state(make_state()),
+                topology_state_analysis_seconds=0.125,
+            )
+        self.assertTrue(metrics["structpool_lean_filter_enabled"])
+        self.assertEqual(metrics["structpool_generated_count"], 2)
+        self.assertEqual(metrics["structpool_retained_candidate_count"], 1)
+        self.assertEqual(metrics["structpool_filtered_candidate_count"], 1)
+        self.assertEqual(
+            metrics["structpool_filtered_candidate_ids"],
+            ["structpool-pure-bottleneck"],
+        )
+        self.assertNotIn("structpool-pure-bottleneck", {row["candidate_id"] for row in candidates})
+        self.assertIn("structpool-mixed-bottleneck", {row["candidate_id"] for row in candidates})
+
+        changed = json.loads(json.dumps(STRUCTPOOL_LEAN_RUNTIME))
+        changed["lean_filter"]["preserve_mixed_family_candidates"] = False
+        with self.assertRaisesRegex(ValueError, "unsupported StructPool"):
+            validate_structpool_augmentation(changed)
 
     def test_proposal_full_check_allows_live_runtime_to_advance(self) -> None:
         state = make_state()

@@ -2113,6 +2113,19 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals["structpool_generated_count"] += int(
                         proposal_metrics.get("structpool_generated_count", 0)
                     )
+                    controller_totals["structpool_retained_candidate_count"] += int(
+                        proposal_metrics.get("structpool_retained_candidate_count", 0)
+                    )
+                    controller_totals["structpool_filtered_candidate_count"] += int(
+                        proposal_metrics.get("structpool_filtered_candidate_count", 0)
+                    )
+                    controller_totals["structpool_lean_filter_enabled_count"] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "structpool_lean_filter_enabled", False
+                            )
+                        )
+                    )
                     controller_totals["structpool_added_candidate_count"] += int(
                         proposal_metrics.get("structpool_added_candidate_count", 0)
                     )

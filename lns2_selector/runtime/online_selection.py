@@ -108,6 +108,19 @@ _STRUCTPOOL_RUNTIME_CONFIG = {
         },
     },
 }
+_STRUCTPOOL_LEAN_RUNTIME_CONFIG = {
+    **_STRUCTPOOL_RUNTIME_CONFIG,
+    "pool_id": "stride-structpool-lean-v1",
+    "runtime_id": "stride-structpool-lean-runtime-v1",
+    "lean_filter": {
+        "filter_id": "stride-structpool-pure-bottleneck-filter-v1",
+        "candidate_kind": "structpool",
+        "remove_only_if_family_groups_exact": ["bottleneck_crossing"],
+        "preserve_mixed_family_candidates": True,
+        "replacement_candidate_added": False,
+        "applied_before_feature_construction": True,
+    },
+}
 
 
 def validate_topology_boundary_augmentation(
@@ -134,9 +147,35 @@ def validate_structpool_augmentation(
     if value is None:
         return None
     result = dict(value)
-    if result != _STRUCTPOOL_RUNTIME_CONFIG:
+    if result not in (_STRUCTPOOL_RUNTIME_CONFIG, _STRUCTPOOL_LEAN_RUNTIME_CONFIG):
         raise ValueError("unsupported StructPool runtime augmentation")
     return result
+
+
+def filter_structpool_lean_candidates(
+    candidates: list[dict[str, Any]], value: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Apply the registered LeanPool filter to generated StructPool rows.
+
+    Raw StructPool rows are intrinsically StructPool candidates, so the runtime
+    predicate only needs to inspect the exact family-group list.  Mixed-family
+    rows are deliberately retained.  The returned rows are the original
+    objects in their original order; feature construction has not happened yet.
+    """
+
+    config = validate_structpool_augmentation(value)
+    assert config is not None
+    if "lean_filter" not in config:
+        return list(candidates), []
+    retained: list[dict[str, Any]] = []
+    removed_ids: list[str] = []
+    for candidate in candidates:
+        groups = tuple(map(str, candidate.get("structpool_family_groups") or ()))
+        if groups == ("bottleneck_crossing",):
+            removed_ids.append(str(candidate["candidate_id"]))
+        else:
+            retained.append(candidate)
+    return retained, removed_ids
 
 
 def structpool_high_stress_gate(
@@ -978,6 +1017,9 @@ def generate_online_candidates(
         if not 0 <= topology_boundary_added_candidate_count <= maximum:
             raise RuntimeError("topology-boundary runtime merge changed the candidate cap")
     structpool_generated_count = 0
+    structpool_retained_candidate_count = 0
+    structpool_filtered_candidate_count = 0
+    structpool_filtered_candidate_ids: list[str] = []
     structpool_added_candidate_count = 0
     structpool_analysis_seconds = 0.0
     structpool_static_seconds = 0.0
@@ -1030,7 +1072,7 @@ def generate_online_candidates(
                 structpool_analysis = topology_state_analysis
                 structpool_dynamic_seconds = float(topology_state_analysis_seconds)
             candidate_started = time.perf_counter()
-            additions = generate_structpool_candidates(
+            generated_additions = generate_structpool_candidates(
                 state,
                 structpool_analysis,
                 neighborhood_sizes=structpool["neighborhood_sizes"],
@@ -1039,10 +1081,23 @@ def generate_online_candidates(
                     structpool["maximum_jaccard_similarity"]
                 ),
             )
+            additions, structpool_filtered_candidate_ids = (
+                filter_structpool_lean_candidates(generated_additions, structpool)
+            )
             structpool_candidate_seconds = time.perf_counter() - candidate_started
-            if len(additions) > int(structpool["maximum_added_candidates"]):
+            if len(generated_additions) > int(structpool["maximum_added_candidates"]):
                 raise RuntimeError("StructPool runtime candidate cap exceeded")
-            structpool_generated_count = len(additions)
+            structpool_generated_count = len(generated_additions)
+            structpool_retained_candidate_count = len(additions)
+            structpool_filtered_candidate_count = len(
+                structpool_filtered_candidate_ids
+            )
+            if (
+                structpool_retained_candidate_count
+                + structpool_filtered_candidate_count
+                != structpool_generated_count
+            ):
+                raise RuntimeError("StructPool Lean filter changed candidate identity")
             merge_started = time.perf_counter()
             candidates = merge_structpool_candidates(candidates, additions)
             structpool_merge_seconds = time.perf_counter() - merge_started
@@ -1112,7 +1167,13 @@ def generate_online_candidates(
             topology_boundary_remaining_wall_seconds
         ),
         "structpool_enabled": structpool is not None,
+        "structpool_lean_filter_enabled": bool(
+            structpool is not None and "lean_filter" in structpool
+        ),
         "structpool_generated_count": structpool_generated_count,
+        "structpool_retained_candidate_count": structpool_retained_candidate_count,
+        "structpool_filtered_candidate_count": structpool_filtered_candidate_count,
+        "structpool_filtered_candidate_ids": list(structpool_filtered_candidate_ids),
         "structpool_added_candidate_count": structpool_added_candidate_count,
         "structpool_analysis_seconds": structpool_analysis_seconds,
         "structpool_static_seconds": structpool_static_seconds,
@@ -1162,6 +1223,7 @@ __all__ = [
     "proposal_random_seeds",
     "repair_random_seed",
     "score_online_candidates",
+    "filter_structpool_lean_candidates",
     "validate_topology_boundary_augmentation",
     "validate_structpool_augmentation",
     "structpool_high_stress_gate",
