@@ -1,0 +1,119 @@
+{
+  "schema": "lns2.stride.structpool_lean_audit_config.v1",
+  "scientific_status": "preregistered_lean_pool_filter_before_outcome_join",
+  "experiment_id": "stride-structpool-lean-audit-v1",
+  "candidate_pool_id": "stride-structpool-lean-v1",
+  "pre_registration_parent_commit": "6e7fd018c9778a279e8d568e85852609e4982681",
+  "comparison": {
+    "baseline": "frozen_v2_ranking_over_exact_base_plus_full_structpool",
+    "challenger": "same_frozen_v2_ranking_after_registered_lean_filter",
+    "selection_must_be_persisted_before_outcomes": true,
+    "feature_profile": "realized_dynamic",
+    "feature_dimension": 124,
+    "score_tie_round_digits": 12,
+    "tie_break": "ascending_candidate_id"
+  },
+  "lean_filter": {
+    "candidate_kind": "structpool",
+    "remove_only_if_family_groups_exact": ["bottleneck_crossing"],
+    "preserve_mixed_family_candidates": true,
+    "replacement_candidate_added": false,
+    "runtime_strategy": "generate_full_structpool_then_filter_before_features"
+  },
+  "cohort": {
+    "all_state_count": 320,
+    "active_structpool_state_count": 98,
+    "inactive_fallback_state_count": 222,
+    "full_candidate_count": 6285,
+    "full_base_candidate_count": 5701,
+    "full_structpool_candidate_count": 584,
+    "expected_removed_candidate_count": 49,
+    "expected_affected_state_count": 49,
+    "expected_lean_candidate_count": 6236,
+    "expected_lean_structpool_candidate_count": 535,
+    "trial_count": 100560,
+    "map_count": 28,
+    "primary_summary_scope": "98_active_structpool_states"
+  },
+  "paired_quality": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "target": "normalized_current_step_conflict_reduction",
+    "comparison": "lean_selected_minus_full_selected",
+    "tie_epsilon": 1e-12,
+    "robust_improvement": {
+      "minimum_paired_win_fraction": 0.75,
+      "minimum_mean_effect": 0.02,
+      "require_positive_effect_in_both_fixed_halves": true
+    },
+    "robust_regression": {
+      "minimum_paired_loss_fraction": 0.75,
+      "minimum_mean_loss": 0.02,
+      "require_negative_effect_in_both_fixed_halves": true
+    }
+  },
+  "runtime_quick_gates": {
+    "scope": "98_active_structpool_states",
+    "maximum_action_changed_count": 2,
+    "maximum_selected_quality_worsened_count": 0,
+    "maximum_robust_worsened_count": 0,
+    "minimum_mean_normalized_selected_gain": 0.0,
+    "maximum_mean_normalized_regret_delta": 0.0,
+    "minimum_exact_best_rate_delta": 0.0,
+    "minimum_quality_top3_rate_delta": 0.0
+  },
+  "inputs": {
+    "label_collection_config": {
+      "path": "configs/stride_robustaction_structpool_label_collection.json",
+      "sha256": "6c7f5414cb0c354a37fcbe0b465d556eb092642f5b2b6e4e66449814c20c7b12"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-robustaction-label-collection-v1/candidate_aggregates.jsonl",
+      "sha256": "067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628"
+    },
+    "repair_trials": {
+      "path": "build/stride-robustaction-label-collection-v1/repair_trials.jsonl",
+      "sha256": "d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691"
+    },
+    "state_manifest": {
+      "path": "build/stride-robustaction-label-collection-v1/state_manifest.jsonl",
+      "sha256": "ce7452e0731375f21c524601ad4472cbc9b3a6420c2d1eb5cfb1cf00fd854361"
+    },
+    "preflight_rows": {
+      "path": "build/stride-robustaction-label-preflight-v1/preflight_states.jsonl",
+      "sha256": "fd17fb5272da1155e88949c8df4814a48d9b6181726b20ad79b3dddee1cf4eab"
+    },
+    "full_pool_selections": {
+      "path": "build/stride-robustaction-pool-effect-v1/outcome_blind_pool_selections.jsonl",
+      "sha256": "a3900062f91f6520992c1b8f4c46d427d856a605fb3c937cde247ddf8d865303"
+    },
+    "full_pool_report": {
+      "path": "build/stride-robustaction-pool-effect-v1/pool_effect_report.json",
+      "sha256": "d89e01aab421f99c3dfa0ed2fdc3b4da6ab8869d0a7a4569defd4f283f4f6031"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "preflight_state_artifact_root": "build/stride-robustaction-label-preflight-v1/states",
+  "preflight_state_artifact_tree_sha256": "6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2",
+  "outputs": {
+    "outcome_blind_selections": "outcome_blind_lean_selections.jsonl",
+    "paired_effects": "paired_lean_effects.jsonl",
+    "report": "lean_audit_report.json"
+  },
+  "claim_boundary": {
+    "new_ranker_trained": false,
+    "training_allowed": false,
+    "runtime_read": false,
+    "ttf_read": false,
+    "future_trajectory_read": false,
+    "formal_speed_claim": false,
+    "default_replacement_allowed": false,
+    "pass_authorizes_only_runtime_implementation_and_paired_quick": true
+  },
+  "next_decision_on_pass": "implement_full_then_filter_lean_v1_and_preregister_four_controller_raw_ttf_quick",
+  "next_decision_on_failure": "retain_speed2_full_structpool_and_reject_lean_v1"
+}

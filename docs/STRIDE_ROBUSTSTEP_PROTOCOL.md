@@ -4615,3 +4615,38 @@ This remains an eight-key reused-task development diagnostic.  It supports
 retaining the runtime optimization, but it does not by itself authorize
 StructPool as the default or validate LeanPool, a new gate, fresh-map speed or
 formal generalization.
+
+### StructPool LeanPool v1 offline registration
+
+LeanPool v1 starts from tested Speed2 commit `6e7fd01`; recovery branch
+`codex/backup-before-structpool-lean-v1-20260808` points to the same commit.
+The intervention is intentionally narrow: after generating the complete
+StructPool proposal set, remove only a candidate whose kind is `structpool`
+and whose exact family-group list is solely `bottleneck_crossing`.  Mixed
+families containing bottleneck evidence are retained, no replacement proposal
+is added, and the frozen 124-feature V2 ranker, tie rule and native PP repair
+remain unchanged.  The first runtime implementation, if authorized, must
+filter before feature construction and ranking but may not skip raw topology
+generation; this preserves exact correspondence with the already collected
+candidate outcomes.
+
+The filter is preregistered in
+`configs/stride_structpool_lean_audit.json` before joining outcomes.  Its fixed
+cohort contains 320 states and 6,285 candidates with sixteen paired PP trials
+per candidate.  StructPool is active in 98 states; 49 pure-bottleneck rows in
+49 states are expected to be removed, reducing the complete product to 6,236
+candidates while preserving all 5,701 base candidates and 535 other StructPool
+candidates.  Full-pool and LeanPool V2 selections must first be persisted
+without reading candidate repairs.  Only then may the fixed 16-seed outcomes
+be joined to measure paired current-step conflict reduction, the two fixed
+eight-seed halves, robust wins/losses, normalized regret, exact-best rate and
+quality Top-3 rate.
+
+Authorization for a four-controller raw-TTF Quick requires all integrity
+checks plus, over the 98 active states: at most two changed actions, zero
+mean-quality regressions, zero robust regressions, non-negative mean normalized
+gain, non-positive normalized-regret delta, and non-negative exact-best and
+Top-3 deltas.  Passing authorizes only the full-generate-then-filter runtime
+implementation and a preregistered paired development Quick.  It does not
+authorize training, default replacement, a formal speed claim or a
+generalization claim.

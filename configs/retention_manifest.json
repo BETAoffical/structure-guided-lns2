@@ -254,6 +254,11 @@
       "purpose": "Outcome-blind base-only versus augmented frozen-V2 candidate-pool selection and paired current-step effect audit."
     },
     {
+      "path": "experiments/stride_structpool_lean_audit.py",
+      "role": "active",
+      "purpose": "Preregistered frozen-V2 audit of the exact pure-bottleneck StructPool candidate filter before runtime implementation."
+    },
+    {
       "path": "experiments/stride_topology_probe.py",
       "role": "reproducibility",
       "purpose": "Consumed current-step candidate-relative topology feature extraction and whole-map OOF diagnostic."
@@ -487,6 +492,11 @@
       "path": "scripts/audit_stride_robustaction_pool_effect.py",
       "role": "active",
       "purpose": "Command-line entry point for the original-V2 versus V2-plus-StructPool paired candidate-pool effect audit."
+    },
+    {
+      "path": "scripts/audit_stride_structpool_lean.py",
+      "role": "active",
+      "purpose": "Command-line entry point for the outcome-blind LeanPool selection and paired current-step quality audit."
     },
     {
       "path": "scripts/analyze_stride_robuststep_preflight.py",
@@ -1367,6 +1377,11 @@
       "path": "tests/evaluation/test_stride_robustaction_pool_effect.py",
       "role": "active",
       "contract": "Separate frozen-V2 base and augmented pool selections, paired 16-seed quality effects, active-state gates, and no-training boundary."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structpool_lean_audit.py",
+      "role": "active",
+      "contract": "Exact pure-bottleneck-only filter, frozen V2 ranking, sixteen-seed paired quality gates, and no-runtime/no-training boundary."
     },
     {
       "path": "experiments/stride_structpool.py",
