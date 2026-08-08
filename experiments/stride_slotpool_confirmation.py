@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import concurrent.futures
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -540,6 +541,212 @@ def collect_slotpool_confirmation(
     return report
 
 
+def audit_slotpool_confirmation_collection(
+    *, config: dict[str, Any], collection: Path
+) -> dict[str, Any]:
+    report = _read_json(collection / "collection_report.json")
+    run = _read_json(collection / "run_config.json")
+    aggregates = _read_jsonl(collection / "candidate_aggregates.jsonl")
+    trials = _read_jsonl(collection / "repair_trials.jsonl")
+    expected_state_ids = {
+        f"{task_id}::solver_seed_{solver_seed}"
+        for task_id in config["confirmation"]["task_ids"]
+        for solver_seed in config["confirmation"]["solver_seeds"]
+    }
+    aggregate_by_key = {
+        (str(row.get("state_id")), str(row.get("candidate_id"))): row
+        for row in aggregates
+    }
+    trials_by_key: dict[tuple[str, str], list[dict[str, Any]]] = (
+        collections.defaultdict(list)
+    )
+    for row in trials:
+        trials_by_key[(str(row.get("state_id")), str(row.get("candidate_id")))].append(
+            row
+        )
+    state_paths = sorted((collection / "states").glob("*.json"))
+    state_payloads = [_read_json(path) for path in state_paths]
+    state_by_id = {str(row.get("state_id")): row for row in state_payloads}
+    paired_seed_valid = True
+    trial_semantics_valid = True
+    aggregate_recomputation_valid = True
+    feature_schema_valid = True
+    native_action_legal = True
+    state_consistency_valid = True
+    state_trial_pairs: dict[tuple[str, int], set[tuple[int, str]]] = (
+        collections.defaultdict(set)
+    )
+    for key, aggregate in aggregate_by_key.items():
+        candidate_trials = sorted(
+            trials_by_key.get(key, []), key=lambda row: int(row.get("trial_index", -1))
+        )
+        agents = list(map(int, aggregate.get("agents") or ()))
+        agent_count = int(aggregate.get("agent_count", -1))
+        native_action_legal = native_action_legal and (
+            len(agents) == int(aggregate.get("actual_size", -1))
+            and len(agents) == len(set(agents))
+            and all(0 <= agent < agent_count for agent in agents)
+        )
+        features = aggregate.get("features")
+        feature_schema_valid = feature_schema_valid and (
+            isinstance(features, dict)
+            and set(features) == set(PROFILE_FEATURE_NAMES["realized_dynamic"])
+            and all(
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and math.isfinite(float(value))
+                for value in features.values()
+            )
+        )
+        observed_indices = set()
+        for trial in candidate_trials:
+            trial_index = int(trial.get("trial_index", -1))
+            observed_indices.add(trial_index)
+            before_conflicts = int(trial.get("before_conflicts", -1))
+            before_repair = str(trial.get("before_repair_fingerprint", ""))
+            expected_reduction = (
+                before_conflicts - int(trial.get("conflicts_after", -1))
+            ) / max(1, before_conflicts)
+            expected_seed = repairability_pp_seed(before_repair, trial_index)
+            try:
+                expected_outcome = classify_repair_outcome(
+                    before_fingerprint=before_repair,
+                    after_fingerprint=str(trial.get("after_repair_fingerprint", "")),
+                    replan_success=bool(trial.get("replan_success")),
+                    conflicts_before=before_conflicts,
+                    conflicts_after=int(trial.get("conflicts_after", -1)),
+                    feasible=bool(trial.get("feasible")),
+                )
+            except (TypeError, ValueError):
+                expected_outcome = None
+            trial_semantics_valid = trial_semantics_valid and (
+                trial.get("schema") == TRIAL_SCHEMA
+                and trial.get("state_id") == key[0]
+                and trial.get("candidate_id") == key[1]
+                and trial.get("candidate_kind") == "structpool-grid"
+                and trial_index in TRIAL_INDICES
+                and before_conflicts == int(aggregate.get("before_conflicts", -2))
+                and int(trial.get("conflicts_after", -1)) >= 0
+                and abs(
+                    float(trial.get("normalized_conflict_reduction", math.nan))
+                    - expected_reduction
+                )
+                <= 1e-15
+                and trial.get("repair_outcome") == expected_outcome
+            )
+            paired_seed_valid = paired_seed_valid and (
+                int(trial.get("pp_seed", -1)) == expected_seed
+            )
+            state_trial_pairs[(key[0], trial_index)].add(
+                (int(trial.get("pp_seed", -1)), before_repair)
+            )
+        trial_semantics_valid = trial_semantics_valid and (
+            observed_indices == set(TRIAL_INDICES)
+            and len(candidate_trials) == len(TRIAL_INDICES)
+        )
+        expected = _aggregate_candidate(aggregate, candidate_trials)
+        aggregate_recomputation_valid = aggregate_recomputation_valid and all(
+            (
+                abs(float(aggregate.get(name)) - float(value)) <= 1e-15
+                if isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and isinstance(aggregate.get(name), (int, float))
+                and not isinstance(aggregate.get(name), bool)
+                else aggregate.get(name) == value
+            )
+            for name, value in expected.items()
+            if name != "schema"
+        )
+        aggregate_recomputation_valid = aggregate_recomputation_valid and (
+            aggregate.get("schema") == AGGREGATE_SCHEMA
+            and float(aggregate.get("no_progress_rate", math.nan))
+            == 1.0 - float(aggregate.get("progress_rate", math.nan))
+            and float(aggregate.get("repair_success_rate", math.nan))
+            == float(aggregate.get("replan_success_rate", math.nan))
+        )
+    paired_seed_valid = paired_seed_valid and all(
+        len(values) == 1 for values in state_trial_pairs.values()
+    ) and set(state_trial_pairs) == {
+        (state_id, trial_index)
+        for state_id in expected_state_ids
+        for trial_index in TRIAL_INDICES
+    }
+    for state_id, payload in state_by_id.items():
+        payload_candidates = {
+            (state_id, str(row.get("candidate_id"))): row
+            for row in payload.get("candidate_aggregates") or ()
+        }
+        payload_trials = {
+            (
+                state_id,
+                str(row.get("candidate_id")),
+                int(row.get("trial_index", -1)),
+            ): row
+            for row in payload.get("trials") or ()
+        }
+        combined_trials = {
+            (
+                str(row.get("state_id")),
+                str(row.get("candidate_id")),
+                int(row.get("trial_index", -1)),
+            ): row
+            for row in trials
+            if str(row.get("state_id")) == state_id
+        }
+        state_consistency_valid = state_consistency_valid and (
+            _state_artifact_valid(payload, identity=str(run["identity"]), state_id=state_id)
+            and payload_candidates
+            == {key: value for key, value in aggregate_by_key.items() if key[0] == state_id}
+            and payload_trials == combined_trials
+            and payload.get("runtime_fields_stored") is False
+            and payload.get("future_trajectory_stored") is False
+        )
+    state_maps = collections.Counter(
+        str(next(row for row in aggregates if str(row["state_id"]) == state_id)["map_id"])
+        for state_id in expected_state_ids
+    )
+    checks = {
+        "collection_complete": report.get("complete") is True
+        and int(report.get("error_state_count", -1)) == 0,
+        "state_product": set(state_by_id) == expected_state_ids
+        and {str(row.get("state_id")) for row in aggregates} == expected_state_ids
+        and state_maps
+        == collections.Counter(
+            {name: int(config["confirmation"]["expected_states_per_map"])
+             for name in config["confirmation"]["map_ids"]}
+        ),
+        "candidate_identity": len(aggregate_by_key) == len(aggregates)
+        and set(aggregate_by_key) == set(trials_by_key),
+        "trial_product": len(trials) == len(aggregates) * len(TRIAL_INDICES),
+        "paired_pp_seed": paired_seed_valid,
+        "trial_semantics": trial_semantics_valid,
+        "aggregate_recomputation": aggregate_recomputation_valid,
+        "feature_schema_124": feature_schema_valid,
+        "slot_feature_schema_170": candidate_matrix(aggregates).shape
+        == (len(aggregates), 170),
+        "native_action_legal": native_action_legal,
+        "state_artifact_consistency": state_consistency_valid
+        and len(state_paths) == len(expected_state_ids),
+        "no_forbidden_fields": not _forbidden_hits(aggregates)
+        and not _forbidden_hits(trials),
+        "artifact_hashes": report.get("artifacts")
+        == {
+            "candidate_aggregates_sha256": sha256_file(
+                collection / "candidate_aggregates.jsonl"
+            ),
+            "repair_trials_sha256": sha256_file(collection / "repair_trials.jsonl"),
+        },
+    }
+    return {
+        "passed": all(checks.values()),
+        "checks": checks,
+        "state_count": len(state_by_id),
+        "candidate_count": len(aggregates),
+        "trial_count": len(trials),
+        "map_state_count": dict(sorted(state_maps.items())),
+    }
+
+
 def analyze_slotpool_confirmation(
     *, config_path: str | Path, collection: str | Path, output: str | Path
 ) -> dict[str, Any]:
@@ -555,6 +762,11 @@ def analyze_slotpool_confirmation(
     collection_report = _read_json(collection / "collection_report.json")
     if collection_report.get("complete") is not True:
         raise ValueError("SlotPool fresh analysis requires a complete collection")
+    integrity = audit_slotpool_confirmation_collection(
+        config=config, collection=collection
+    )
+    if integrity["passed"] is not True:
+        raise ValueError(f"SlotPool fresh collection integrity failed: {integrity}")
     rows = _read_jsonl(collection / "candidate_aggregates.jsonl")
     if _forbidden_hits(rows):
         raise ValueError("forbidden future/runtime field entered SlotPool fresh analysis")
@@ -610,6 +822,7 @@ def analyze_slotpool_confirmation(
         "runtime_integration_allowed": bool(acceptance["passed"]),
         "known_maze_included": False,
         "formal_ttf_claim": False,
+        "collection_integrity": integrity,
         "next_decision": (
             "design_guardpool_and_maze_regression_without_retraining_slotpool"
             if acceptance["passed"]
@@ -623,6 +836,7 @@ def analyze_slotpool_confirmation(
 
 __all__ = [
     "analyze_slotpool_confirmation",
+    "audit_slotpool_confirmation_collection",
     "collect_slotpool_confirmation",
     "validate_slotpool_confirmation_config",
 ]

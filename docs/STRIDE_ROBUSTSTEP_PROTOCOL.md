@@ -4856,3 +4856,29 @@ the execution-schedule file SHA-256 is
 `e05b19229bd9d119b0eb1c754b4a9bcf1499ef6bc7beba7b48f9ea95cddff413`;
 and the registered schedule fingerprint remains
 `e2aa4ee5b53f2fb6d2510da0d7f35fbd90241bfc48989d6f79c434cd7fe3ab95`.
+
+### SlotPool v1 map-disjoint candidate-quality confirmation
+
+The independent `stride-slotpool-v1` successor replaced the rejected
+ScalePool rule with a learned family-by-size six-candidate budget. Its frozen
+pairwise model was trained only through whole-map grouped development on the
+Stage 2 four-size grid. Development OOF retained the global best on 96/98
+states and passed every registered gate.
+
+The frozen model was then evaluated without retraining on 24 initial states
+from six disjoint maps: `arena`, `den020d`, `den404d`, `hrt002d`, `lak109d`,
+and `lak515d`. All 416 candidates completed 16 strictly paired current-step PP
+trials, giving 6,656 outcomes and zero errors. The explicit integrity audit
+passed all 13 checks, including state coverage, paired seeds, native action
+legality, exact 124/170-dimensional feature schemas, aggregate recomputation,
+artifact identity, and exclusion of runtime and future fields.
+
+The frozen selector retained a global best candidate on all 24 states, with
+zero mean and maximum per-map normalized regret. Fixed-half retention was
+`1.0000` and `0.9583`, stable-pair accuracy was `0.9242`, and the candidate
+count fell from 416 to 144. All preregistered gates passed.
+
+This authorizes only runtime design, GuardPool, and the known Maze regression.
+It does not establish a repair-round or raw-TTF gain and does not replace
+`v2-full`. The immutable confirmation report SHA-256 is
+`8b648f38765cd0310a95a216e9ad475df97eb0c5954c8eb1d37c1652bcf880c0`.

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.stride_slotpool_confirmation import (
+    audit_slotpool_confirmation_collection,
     validate_slotpool_confirmation_config,
 )
 
@@ -60,6 +61,21 @@ class SlotPoolConfirmationTests(unittest.TestCase):
                 base_counts[state_id] = base_counts.get(state_id, 0) + 1
         self.assertEqual(len(base_counts), config["confirmation"]["expected_state_count"])
         self.assertTrue(all(count == 18 for count in base_counts.values()))
+
+    def test_completed_local_collection_passes_full_integrity_audit(self) -> None:
+        collection = (
+            PROJECT_ROOT / "build" / "stride-slotpool-fresh-confirmation-collection-v1"
+        )
+        if not (collection / "collection_report.json").is_file():
+            self.skipTest("fresh confirmation collection is not retained in a clean checkout")
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+        audit = audit_slotpool_confirmation_collection(
+            config=config, collection=collection
+        )
+        self.assertTrue(audit["passed"], audit)
+        self.assertTrue(all(audit["checks"].values()), audit)
+        self.assertEqual(audit["state_count"], 24)
+        self.assertEqual(audit["trial_count"], audit["candidate_count"] * 16)
 
 
 if __name__ == "__main__":
