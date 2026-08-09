@@ -1,0 +1,67 @@
+{
+  "schema": "lns2.stride.maze_tail_action_replay_preflight_config.v1",
+  "scientific_status": "preregistered_all_comparison_first_divergence_extraction_no_repair_trials",
+  "experiment_id": "stride-maze-tail-action-replay-v1",
+  "parent_commit": "446304a720cb2fd722cd3922a325feb665ede4a3",
+  "controllers": [
+    "v2-full",
+    "v2-plus-structpool",
+    "v2-plus-slotpool"
+  ],
+  "expected_source": {
+    "paired_key_count": 33,
+    "comparison_count": 66,
+    "tail_evidence_passed": true
+  },
+  "inputs": {
+    "state_collection_report": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/maze_tail_state_collection_report.json",
+      "sha256": "cd05a79e611816b4080bcb8dd4059a7e4741271a5311967e4226976bfbc812bc"
+    },
+    "v2_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-full/realized_dynamic_manifest.jsonl",
+      "sha256": "277820b014ce5cf8bf573d9c2d49e17fce0b02235b0d483a02d5d49690ede014"
+    },
+    "structpool_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-plus-structpool/realized_dynamic_manifest.jsonl",
+      "sha256": "cf243f53305138f0cb5a825b815c93c425849215e0bf568b9f851128161efdb5"
+    },
+    "slotpool_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-plus-slotpool/realized_dynamic_manifest.jsonl",
+      "sha256": "69c1899e85d3d8433104c559e6f7587ffd845ce3a66e81cc8ea883d33b8d2f9c"
+    }
+  },
+  "selection_contract": {
+    "all_66_comparisons_required": true,
+    "all_and_only_first_realized_neighborhood_divergences": true,
+    "identical_prefix_state_and_paired_pp_seed_required": true,
+    "first_challenger_action_must_be_structural": true,
+    "v2_action_must_exist_in_challenger_base_pool": true,
+    "outcome_based_selection_forbidden": true,
+    "no_divergence_rows_retained_in_preflight_report": true
+  },
+  "replay_contract": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "strictly_paired_pp_seed_per_state_and_index": true,
+    "primary_outcome": "current_step_conflict_reduction_normalized_by_before_conflicts",
+    "runtime_used_in_label": false,
+    "future_trajectory_read": false
+  },
+  "preflight_gates": {
+    "minimum_divergence_comparison_count": 24,
+    "minimum_tail_divergence_count": 12,
+    "minimum_severe_tail_divergence_count": 4,
+    "minimum_tail_divergence_map_count": 2,
+    "minimum_tail_divergence_task_count": 6,
+    "minimum_tail_divergence_solver_seed_count": 2,
+    "minimum_tail_divergence_per_challenger": 3
+  },
+  "claim_boundary": {
+    "state_condition_diagnostic_only": true,
+    "model_training_allowed": false,
+    "threshold_tuning_allowed": false,
+    "formal_ttf_claim": false,
+    "default_promotion_allowed": false,
+    "predictor_design_before_replay_passes": false
+  }
+}

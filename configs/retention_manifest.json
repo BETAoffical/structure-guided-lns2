@@ -2054,6 +2054,21 @@
       "contract": "Freeze the evidence fuse, 99-entry schedule, right-censoring semantics, fixed-horizon classifications, and no-training boundary."
     },
     {
+      "path": "experiments/stride_maze_tail_action_replay.py",
+      "role": "reproducibility",
+      "purpose": "Freeze every available first structural divergence in the complete Maze tail block and collect exact V2-versus-challenger one-step outcomes under sixteen strictly paired PP seeds."
+    },
+    {
+      "path": "scripts/run_stride_maze_tail_action_replay.py",
+      "role": "reproducibility",
+      "purpose": "Provide prepare, resumable collection, and analysis commands for the preregistered Maze first-divergence action replay."
+    },
+    {
+      "path": "tests/evaluation/test_stride_maze_tail_action_replay.py",
+      "role": "reproducibility",
+      "contract": "Freeze all-comparison first-divergence extraction, the two-action by sixteen-seed paired product, robust-order rule, evidence boundaries, and predictor-design gates."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
