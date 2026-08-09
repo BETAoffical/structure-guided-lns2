@@ -1,10 +1,12 @@
 {
   "schema": "lns2.stride.maze_tail_state_collection_config.v2",
-  "scientific_status": "preregistered_fused_state_collection_revision_after_zero_episode_reset_protocol_rejection",
-  "experiment_id": "stride-maze-tail-state-collection-v2-r1",
+  "scientific_status": "preregistered_fused_state_collection_revision_2_after_zero_episode_reset_protocol_rejection",
+  "experiment_id": "stride-maze-tail-state-collection-v2-r2",
   "pre_registration_parent_commit": "f8da77aa2c0aaa2355ec0b102462246b05d71552",
   "pre_registration_revision_parent_commit": "ebff095c5de296aca849f4a6c4e1634c53046ad9",
   "pre_registration_revision_reason": "restore_qualification_compatible_native_unlimited_repair_while_preserving_outer_200_decision_and_300_second_fuse_before_any_episode",
+  "pre_registration_revision_2_parent_commit": "eb93fba90d40e95602830b85753c6c0fd970b9bc",
+  "pre_registration_revision_2_reason": "preserve_unlimited_native_time_in_reset_protocol_and_read_300_second_fuse_from_runtime_outer_loop_before_any_episode",
   "controllers": ["v2-full", "v2-plus-structpool", "v2-plus-slotpool"],
   "comparison": {
     "baseline": "frozen_v2_over_original_candidate_pool",
@@ -23,7 +25,8 @@
     "maximum_repair_decisions": 200,
     "metric_iteration_budget": 200,
     "wall_time_budget_seconds": 300.0,
-    "environment_time_limit_seconds": 300.0,
+    "native_environment_time_limit_seconds": null,
+    "native_environment_unlimited": true,
     "episode_process_timeout_seconds": 360.0,
     "feature_backend": "native",
     "controller_runtime": "optimized",
@@ -125,7 +128,7 @@
     },
     "runtime_config": {
       "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
-      "sha256": "750d7e4ab6019169aa639e8c7545440b9c0b53ba12ab53e2daac1398a5ee4ac4"
+      "sha256": "e0af159a0dbeb8a492cf276996912dbfcd10cfdba0e297433d606d6daeed83fc"
     },
     "controller_manifest": {
       "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",

@@ -31,7 +31,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        default="build/stride-maze-tail-state-collection-v2-r1",
+        default="build/stride-maze-tail-state-collection-v2-r2",
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

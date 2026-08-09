@@ -24,8 +24,10 @@ controller timings, selected neighborhoods, and `repair_limit` or
 errors and not claims that the underlying solver can never finish.
 
 The 200-decision fuse is enforced by the trace-producing outer episode loop.
-The native environment keeps `max_repair_iterations=0`, which preserves the
-registered reset-protocol identity; it does not disable the outer fuse.
+The native environment keeps `max_repair_iterations=0` and `time_limit=0`
+with `unlimited_time=true`, which preserves the registered reset-protocol
+identity.  The 300-second limit belongs to the outer trace loop and therefore
+does not alter reset or individual PP semantics.
 
 ## Analysis
 

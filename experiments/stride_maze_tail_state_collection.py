@@ -46,14 +46,18 @@ def load_maze_tail_state_collection_config(
     if (
         config.get("schema") != CONFIG_SCHEMA
         or config.get("scientific_status")
-        != "preregistered_fused_state_collection_revision_after_zero_episode_reset_protocol_rejection"
-        or config.get("experiment_id") != "stride-maze-tail-state-collection-v2-r1"
+        != "preregistered_fused_state_collection_revision_2_after_zero_episode_reset_protocol_rejection"
+        or config.get("experiment_id") != "stride-maze-tail-state-collection-v2-r2"
         or config.get("pre_registration_parent_commit")
         != "f8da77aa2c0aaa2355ec0b102462246b05d71552"
         or config.get("pre_registration_revision_parent_commit")
         != "ebff095c5de296aca849f4a6c4e1634c53046ad9"
         or config.get("pre_registration_revision_reason")
         != "restore_qualification_compatible_native_unlimited_repair_while_preserving_outer_200_decision_and_300_second_fuse_before_any_episode"
+        or config.get("pre_registration_revision_2_parent_commit")
+        != "eb93fba90d40e95602830b85753c6c0fd970b9bc"
+        or config.get("pre_registration_revision_2_reason")
+        != "preserve_unlimited_native_time_in_reset_protocol_and_read_300_second_fuse_from_runtime_outer_loop_before_any_episode"
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("Maze tail state-collection identity changed")
@@ -63,7 +67,8 @@ def load_maze_tail_state_collection_config(
         "maximum_repair_decisions": 200,
         "metric_iteration_budget": 200,
         "wall_time_budget_seconds": 300.0,
-        "environment_time_limit_seconds": 300.0,
+        "native_environment_time_limit_seconds": None,
+        "native_environment_unlimited": True,
         "episode_process_timeout_seconds": 360.0,
         "feature_backend": "native",
         "controller_runtime": "optimized",
@@ -159,7 +164,8 @@ def load_maze_tail_state_collection_config(
         or runtime.get("wall_time_budget_seconds") != 300.0
         or runtime.get("episode_process_timeout_seconds") != 360.0
         or runtime.get("deterministic_pp_replay") is not True
-        or dict(runtime.get("environment") or {}).get("time_limit") != 300.0
+        or dict(runtime.get("environment") or {}).get("time_limit") != 0.0
+        or dict(runtime.get("environment") or {}).get("unlimited_time") is not True
         or dict(runtime.get("environment") or {}).get("max_repair_iterations") != 0
     ):
         raise ValueError("Maze tail fused runtime file changed")
@@ -195,19 +201,7 @@ def _fused_controller_kwargs(
     root: Path, config: dict[str, Any], controller: str
 ) -> dict[str, Any]:
     result = _controller_kwargs(root, config, controller)
-    runtime = dict(config["runtime"])
-    result.update(
-        {
-            "stopping_rule": "historical",
-            "wall_time_budget_seconds": float(runtime["wall_time_budget_seconds"]),
-            "episode_process_timeout_seconds": float(
-                runtime["episode_process_timeout_seconds"]
-            ),
-            "environment_time_limit_seconds": float(
-                runtime["environment_time_limit_seconds"]
-            ),
-        }
-    )
+    result["stopping_rule"] = "historical"
     return result
 
 
