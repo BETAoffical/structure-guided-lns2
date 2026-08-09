@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/selector-hardening-02-before-redundancy-pruning",
+  "checkpoint": "backup/selector-hardening-before-audit-fixes-20260809",
   "allowed_executable_roles": [
     "active",
     "shared",
@@ -1810,17 +1810,17 @@
     },
     {
       "path": "experiments/stride_scalepool_evaluation.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Evaluate the preregistered support-nearest ScalePool candidate reduction against the complete four-size current-step label grid."
     },
     {
       "path": "scripts/evaluate_stride_scalepool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Command-line entry point for ScalePool offline candidate-retention and regret gates before runtime integration."
     },
     {
       "path": "tests/evaluation/test_stride_scalepool_evaluation.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "ScalePool remains outcome-blind, excludes the known Maze long tail, and cannot enter runtime unless all preregistered current-step quality gates pass."
     },
     {
@@ -1855,17 +1855,17 @@
     },
     {
       "path": "experiments/stride_guardpool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Validate the frozen GuardPool registration and select the lowest historical V2 no-progress threshold with at most one percent decision-level false triggers."
     },
     {
       "path": "scripts/run_stride_guardpool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered GuardPool historical threshold audit before runtime integration or the held-out Maze regression."
     },
     {
       "path": "tests/evaluation/test_stride_guardpool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the SlotPool/V2 runtime boundary, eight-round no-progress guard, no wall-time condition, and exclusion of the held-out Maze result from parameter selection."
     },
     {
@@ -1875,107 +1875,107 @@
     },
     {
       "path": "experiments/stride_guardpool_maze_regression.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Execute and audit the V2, full StructPool, unguarded SlotPool, and GuardPool known-Maze regression without time caps."
     },
     {
       "path": "scripts/run_stride_guardpool_maze_regression.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the resumable CLI for the preregistered GuardPool known-Maze regression."
     },
     {
       "path": "tests/evaluation/test_stride_guardpool_maze_regression.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the known-Maze cohort, four-treatment schedule, unguarded ablation, and thirty-round GuardPool hard gate."
     },
     {
       "path": "experiments/stride_slotpool_structpool_ttf.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run and audit the preregistered 29-key raw-TTF diagnostic comparing frozen SlotPool with full StructPool after excluding exactly one previously known Maze tail."
     },
     {
       "path": "scripts/run_stride_slotpool_structpool_ttf.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the resumable CLI for the known-tail-excluded SlotPool versus full StructPool raw-TTF diagnostic."
     },
     {
       "path": "tests/evaluation/test_stride_slotpool_structpool_ttf.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the 29 paired keys, exact single known-tail exclusion, two-controller alternating schedule, registered inputs, and diagnostic-only claim boundary."
     },
     {
       "path": "experiments/stride_safeslot_v2_baseline.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Collect and validate the exact current-runtime base-only V2 traces used as SafeSlot first-divergence anchors."
     },
     {
       "path": "scripts/run_stride_safeslot_v2_baseline.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the resumable CLI for the fixed 29-key SafeSlot V2 anchor collection."
     },
     {
       "path": "tests/evaluation/test_stride_safeslot_v2_baseline.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Require exact registered key coverage, current-runtime V2 semantics, valid actions and fingerprints, and no cross-run wall-clock comparison."
     },
     {
       "path": "experiments/stride_safeslot_first_divergence.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit first matched-state structural deviations from exact V2 and expose immediate-versus-terminal contradictions without training or timing claims."
     },
     {
       "path": "scripts/analyze_stride_safeslot_first_divergence.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the deterministic CLI for the SafeSlot first-divergence integrity and causal trajectory report."
     },
     {
       "path": "tests/evaluation/test_stride_safeslot_first_divergence.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Require matched pre-divergence state, action, PP seed and fingerprint semantics; preserve base-only V2 anchoring; forbid Cost-to-Go, future-label and TTF claims."
     },
     {
       "path": "experiments/stride_safeslot_label_readiness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit exact base-only V2 versus four-size structural candidates under strictly paired current-step trials before collecting residual-state teacher fields."
     },
     {
       "path": "scripts/analyze_stride_safeslot_label_readiness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the deterministic CLI for the registered SafeSlot pre-residual label-readiness audit."
     },
     {
       "path": "tests/evaluation/test_stride_safeslot_label_readiness.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze exact PP-seed pairing, conservative current-step pre-residual positives, SlotPool opportunity retention, and the no-training/no-TTF claim boundary."
     },
     {
       "path": "experiments/stride_safeslot_residual_teacher.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Collect and audit one-step post-repair residual structure for the fixed exact V2 anchor plus frozen SlotPool action scope without reading future trajectories or timing."
     },
     {
       "path": "scripts/run_stride_safeslot_residual_teacher.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the resumable paired native-repair collection and deterministic SafeSlot residual-teacher analysis CLI."
     },
     {
       "path": "tests/evaluation/test_stride_safeslot_residual_teacher.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the residual metric, exact 16-seed action aggregate, teacher-only claim boundary, and registered 10,960-trial scope."
     },
     {
       "path": "experiments/stride_safeslot_gate.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Build the exact-anchor pre-action SafeSlot feature matrix and perform nested whole-map gate training with an explicit V2 abstention policy."
     },
     {
       "path": "scripts/train_stride_safeslot_gate.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Provide the deterministic CLI for preregistered SafeSlot offline gate training and map-grouped evaluation."
     },
     {
       "path": "tests/evaluation/test_stride_safeslot_gate.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the 193-dimensional pre-action representation, exact-V2 abstention behavior, and offline-only fresh-map confirmation boundary."
     },
     {

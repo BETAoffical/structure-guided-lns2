@@ -27,6 +27,8 @@ STRIDE_STAGE3_LABEL_AUDIT_CONFIG_SCHEMA = (
     "lns2.stride.stage3_label_audit_config.v1"
 )
 STRIDE_STAGE3_LABEL_AUDIT_SCHEMA = "lns2.stride.stage3_label_audit.v1"
+
+
 def _project_path(project_root: Path, value: str) -> Path:
     path = Path(value)
     return path.resolve() if path.is_absolute() else (project_root / path).resolve()
@@ -128,7 +130,15 @@ def run_stride_stage3_label_audit(
     aggregate_scientific_errors = 0
     aggregate_schema_errors = 0
     aggregate_metadata_errors = 0
-    for row in _read_jsonl(aggregate_path):
+    aggregate_parse_error: str | None = None
+    try:
+        aggregate_rows = _read_jsonl(aggregate_path)
+    except (OSError, ValueError) as error:
+        aggregate_rows = []
+        aggregate_parse_error = f"{type(error).__name__}: {error}"
+        if "non-finite JSON constant" in str(error):
+            nonfinite_feature_errors += 1
+    for row in aggregate_rows:
         aggregate_row_count += 1
         state_id = str(row["state_id"])
         candidate_id = str(row["candidate_id"])
@@ -339,6 +349,7 @@ def run_stride_stage3_label_audit(
         "formal_ood_overlap_zero": (
             not exact_ood_overlap and not conservative_ood_overlap
         ),
+        "aggregate_json_valid": aggregate_parse_error is None,
         "aggregate_rows_unique": duplicate_candidate_row_count == 0,
         "aggregate_schema_valid": aggregate_schema_errors == 0,
         "aggregate_metadata_valid": aggregate_metadata_errors == 0,
@@ -427,6 +438,7 @@ def run_stride_stage3_label_audit(
             "aggregate_scientific_error_count": aggregate_scientific_errors,
             "aggregate_schema_error_count": aggregate_schema_errors,
             "aggregate_metadata_error_count": aggregate_metadata_errors,
+            "aggregate_parse_error": aggregate_parse_error,
             "bad_state_weight_count": bad_state_weight_count,
             "pair_schema_error_count": pair_schema_errors,
             "pair_metadata_error_count": pair_metadata_errors,

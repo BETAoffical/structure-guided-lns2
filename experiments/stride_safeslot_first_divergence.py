@@ -5,7 +5,7 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
-from experiments._common import _native_filesystem_path, sha256_file
+from experiments._common import _native_filesystem_path, registered_input, sha256_file
 from experiments.closed_loop_trace_storage import read_trace_events
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 from experiments.stride_slotpool_structpool_ttf import (
@@ -22,10 +22,7 @@ REPORT_FILENAME = "safeslot_first_divergence_report.json"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered SafeSlot divergence input changed: {path}")
-    return path
+    return registered_input(root, specification, label="SafeSlot divergence")
 
 
 def load_safeslot_first_divergence_config(

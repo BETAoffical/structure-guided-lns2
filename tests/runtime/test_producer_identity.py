@@ -13,12 +13,40 @@ from experiments._common import (
     NATIVE_SEMANTICS_SCHEMA,
     contained_file,
     producer_identity,
+    registered_input,
+    sha256_file,
     validate_producer_identity,
 )
 from experiments.run_output_guard import prepare_run_output
 
 
 class ProducerIdentityResumeTest(unittest.TestCase):
+    def test_registered_input_is_hash_bound_and_contained(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "artifact.json"
+            artifact.write_text("{}\n", encoding="utf-8")
+            specification = {
+                "path": artifact.name,
+                "sha256": sha256_file(artifact),
+            }
+            self.assertEqual(
+                registered_input(root, specification, label="test").read_bytes(),
+                artifact.read_bytes(),
+            )
+            with self.assertRaisesRegex(ValueError, "changed"):
+                registered_input(
+                    root,
+                    {**specification, "sha256": "0" * 64},
+                    label="test",
+                )
+            with self.assertRaisesRegex(ValueError, "contained relative path"):
+                registered_input(
+                    root,
+                    {"path": "../artifact.json", "sha256": "0" * 64},
+                    label="test",
+                )
+
     @unittest.skipUnless(
         platform.system() == "Windows", "extended paths are Windows-specific"
     )

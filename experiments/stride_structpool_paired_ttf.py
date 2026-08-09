@@ -3,14 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
     _read_jsonl,
     _write_json,
-    _write_jsonl,
 )
 from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
@@ -38,6 +41,7 @@ def run_structpool_paired_ttf(
     next_step_on_failure: str,
     performance_claim_field: str | None = None,
     fixed_report_fields: dict[str, Any] | None = None,
+    producer_source_files: tuple[str, ...] = (),
     resume: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -50,20 +54,29 @@ def run_structpool_paired_ttf(
             "schedule_sha256": _fingerprint(schedule),
         }
     status_path = output / status_filename
-    if status_path.is_file() and not resume:
-        raise ValueError("StructPool paired TTF output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    base_status = {
-        "schema": status_schema,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(
-        status_path,
-        {**base_status, "completed_schedule_entries": 0, "complete": False},
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=status_filename,
+        status_schema=status_schema,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_paired_ttf.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                *producer_source_files,
+            ),
+        ),
+        resume=resume,
+        report_filename=report_filename,
+        report_schema=report_schema,
+        label="StructPool paired TTF",
     )
+    base_status = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     cohort = dict(config["cohort"])
     dataset = (root / str(cohort["dataset"])).resolve()
     runtime = (root / str(config["runtime"]["config"])).resolve()
@@ -87,7 +100,10 @@ def run_structpool_paired_ttf(
         qualification,
         phase="qualify",
         workers=1,
-        resume=qualification.joinpath("run_config.json").is_file(),
+        resume=(
+            prepared.resumed
+            and qualification.joinpath("run_config.json").is_file()
+        ),
         cohort_job_keys=all_keys,
         job_keys=all_keys,
         qualification_source=qualification_source,
@@ -101,7 +117,10 @@ def run_structpool_paired_ttf(
             controller_root,
             phase="qualify",
             workers=1,
-            resume=controller_root.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and controller_root.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=all_keys,
             job_keys=all_keys,
             qualification_source=qualification,
@@ -144,6 +163,7 @@ def run_structpool_paired_ttf(
         path,
         config,
         output,
+        status_filename=status_filename,
         report_schema=report_schema,
         report_filename=report_filename,
         report_scientific_status=report_scientific_status,
@@ -151,6 +171,8 @@ def run_structpool_paired_ttf(
         next_step_on_failure=next_step_on_failure,
         performance_claim_field=performance_claim_field,
         fixed_report_fields=fixed_report_fields,
+        producer=base_status["producer_identity"],
+        producer_source_files=producer_source_files,
     )
     _write_json(
         status_path,
@@ -169,6 +191,7 @@ def analyze_structpool_paired_ttf(
     config: dict[str, Any],
     output: str | Path,
     *,
+    status_filename: str,
     report_schema: str,
     report_filename: str,
     report_scientific_status: str,
@@ -176,8 +199,30 @@ def analyze_structpool_paired_ttf(
     next_step_on_failure: str,
     performance_claim_field: str | None = None,
     fixed_report_fields: dict[str, Any] | None = None,
+    producer: dict[str, Any] | None = None,
+    producer_source_files: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename=status_filename,
+        report_filename=report_filename,
+        report_schema=report_schema,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=path.parent.parent,
+            source_files=(
+                "experiments/stride_structpool_paired_ttf.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                *producer_source_files,
+            ),
+            native_required=False,
+        )
     groups = [dict(row) for row in config["cohort"]["groups"]]
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
     expected = {
@@ -310,6 +355,7 @@ def analyze_structpool_paired_ttf(
         "scientific_status": report_scientific_status,
         "default_replacement_allowed": False,
         "formal_speed_claim": False,
+        "producer_identity": producer,
         "primary_metric": "mean_run_to_completion_raw_wall_ttf",
         "ttf_clock_schema": TTF_CLOCK_SCHEMA,
         "episode_count_per_controller": len(expected),

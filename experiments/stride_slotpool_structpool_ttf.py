@@ -4,14 +4,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    registered_input,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
     _read_jsonl,
     _write_json,
-    _write_jsonl,
 )
 from experiments.stride_guardpool_maze_regression import _controller_kwargs
 from experiments.stride_maprank_raw_ttf import _paired_comparison
@@ -34,10 +38,7 @@ REPORT_FILENAME = "slotpool_structpool_ttf_report.json"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered SlotPool TTF input changed: {path}")
-    return path
+    return registered_input(root, specification, label="SlotPool TTF")
 
 
 def _expected_keys(config: dict[str, Any]) -> set[tuple[str, str, int]]:
@@ -226,20 +227,29 @@ def run_slotpool_structpool_ttf(
         }
     output = Path(output).resolve()
     status_path = output / STATUS_FILENAME
-    if status_path.is_file() and not resume:
-        raise ValueError("SlotPool versus StructPool output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    status_base = {
-        "schema": STATUS_SCHEMA,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(
-        status_path,
-        {**status_base, "completed_schedule_entries": 0, "complete": False},
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=STATUS_FILENAME,
+        status_schema=STATUS_SCHEMA,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_slotpool_structpool_ttf.py",
+                "experiments/stride_guardpool_maze_regression.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                "experiments/stride_structpool_ttf_quick.py",
+            ),
+        ),
+        resume=resume,
+        report_filename=REPORT_FILENAME,
+        report_schema=REPORT_SCHEMA,
+        label="SlotPool versus StructPool",
     )
+    status_base = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     dataset = (root / str(config["cohort"]["dataset"])).resolve()
     runtime = (root / str(config["runtime"]["config"])).resolve()
     expected = _expected_keys(config)
@@ -251,7 +261,10 @@ def run_slotpool_structpool_ttf(
         qualification,
         phase="qualify",
         workers=1,
-        resume=qualification.joinpath("run_config.json").is_file(),
+        resume=(
+            prepared.resumed
+            and qualification.joinpath("run_config.json").is_file()
+        ),
         cohort_job_keys=job_keys,
         job_keys=job_keys,
         **_controller_kwargs(root, config, "v2-full"),
@@ -264,7 +277,10 @@ def run_slotpool_structpool_ttf(
             collection,
             phase="qualify",
             workers=1,
-            resume=collection.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and collection.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=job_keys,
             job_keys=job_keys,
             qualification_source=qualification,
@@ -303,7 +319,11 @@ def run_slotpool_structpool_ttf(
                 "complete": False,
             },
         )
-    report = analyze_slotpool_structpool_ttf(path, output)
+    report = analyze_slotpool_structpool_ttf(
+        path,
+        output,
+        producer=status_base["producer_identity"],
+    )
     _write_json(
         status_path,
         {
@@ -341,10 +361,34 @@ def _pool_counts(row: dict[str, Any]) -> dict[str, int]:
 
 
 def analyze_slotpool_structpool_ttf(
-    config_path: str | Path, output: str | Path
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, _root, config = load_slotpool_structpool_ttf_config(config_path)
+    path, root, config = load_slotpool_structpool_ttf_config(config_path)
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename=STATUS_FILENAME,
+        report_filename=REPORT_FILENAME,
+        status_schema=STATUS_SCHEMA,
+        report_schema=REPORT_SCHEMA,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_slotpool_structpool_ttf.py",
+                "experiments/stride_guardpool_maze_regression.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                "experiments/stride_structpool_ttf_quick.py",
+            ),
+            native_required=False,
+        )
     expected = _expected_keys(config)
     indexed: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
     hashes: dict[str, str] = {}
@@ -476,6 +520,7 @@ def analyze_slotpool_structpool_ttf(
         "schema": REPORT_SCHEMA,
         "scientific_status": "known_tail_excluded_diagnostic_only",
         "formal_speed_claim": False,
+        "producer_identity": producer,
         "fresh_map_claim": False,
         "default_replacement_allowed": False,
         "known_outcome_based_exclusion": True,

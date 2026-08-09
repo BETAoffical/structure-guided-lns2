@@ -4,14 +4,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    registered_input,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
     _read_jsonl,
     _write_json,
-    _write_jsonl,
 )
 from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
@@ -36,10 +40,7 @@ PHASES = {
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered StructPool/LNS2 input changed: {path}")
-    return path
+    return registered_input(root, specification, label="StructPool/LNS2")
 
 
 def load_structpool_lns2_quick_config(
@@ -181,20 +182,29 @@ def run_structpool_lns2_quick(
             "schedule_sha256": _fingerprint(schedule),
         }
     status_path = output / "quick_status.json"
-    if status_path.is_file() and not resume:
-        raise ValueError("StructPool/LNS2 Quick output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    status_base = {
-        "schema": STATUS_SCHEMA,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(
-        status_path,
-        {**status_base, "completed_schedule_entries": 0, "complete": False},
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=status_path.name,
+        status_schema=STATUS_SCHEMA,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_lns2_quick.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_augcontrol_evaluation.py",
+                "experiments/stride_maprank_raw_ttf.py",
+            ),
+        ),
+        resume=resume,
+        report_filename="structpool_lns2_quick_report.json",
+        report_schema=REPORT_SCHEMA,
+        label="StructPool/LNS2 Quick",
     )
+    status_base = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     runtime = (root / str(config["runtime"]["config"])).resolve()
     groups = {str(row["id"]): dict(row) for row in config["cohort"]["groups"]}
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
@@ -208,7 +218,10 @@ def run_structpool_lns2_quick(
             qualification,
             phase="qualify",
             workers=1,
-            resume=qualification.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and qualification.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=keys,
             job_keys=keys,
             **_controller_kwargs(root, config, "v2-full"),
@@ -227,7 +240,10 @@ def run_structpool_lns2_quick(
                 collection,
                 phase="qualify",
                 workers=1,
-                resume=collection.joinpath("run_config.json").is_file(),
+                resume=(
+                    prepared.resumed
+                    and collection.joinpath("run_config.json").is_file()
+                ),
                 cohort_job_keys=keys,
                 job_keys=keys,
                 qualification_source=qualification,
@@ -275,7 +291,11 @@ def run_structpool_lns2_quick(
                 "complete": False,
             },
         )
-    report = analyze_structpool_lns2_quick(path, output)
+    report = analyze_structpool_lns2_quick(
+        path,
+        output,
+        producer=status_base["producer_identity"],
+    )
     _write_json(
         status_path,
         {
@@ -291,10 +311,34 @@ def run_structpool_lns2_quick(
 
 
 def analyze_structpool_lns2_quick(
-    config_path: str | Path, output: str | Path
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, _root, config = load_structpool_lns2_quick_config(config_path)
+    path, root, config = load_structpool_lns2_quick_config(config_path)
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename="quick_status.json",
+        report_filename="structpool_lns2_quick_report.json",
+        status_schema=STATUS_SCHEMA,
+        report_schema=REPORT_SCHEMA,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_lns2_quick.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_augcontrol_evaluation.py",
+                "experiments/stride_maprank_raw_ttf.py",
+            ),
+            native_required=False,
+        )
     groups = [dict(row) for row in config["cohort"]["groups"]]
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
     expected = {
@@ -407,6 +451,7 @@ def analyze_structpool_lns2_quick(
         "schema": REPORT_SCHEMA,
         "scientific_status": "development_three_controller_quick",
         "formal_speed_claim": False,
+        "producer_identity": producer,
         "default_replacement_allowed": False,
         "primary_metric": "mean_run_to_completion_raw_wall_ttf",
         "ttf_clock_schema": TTF_CLOCK_SCHEMA,

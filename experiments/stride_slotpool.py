@@ -9,7 +9,8 @@ import statistics
 from pathlib import Path
 from typing import Any
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import producer_identity, registered_input, sha256_file
+from experiments.run_output_guard import prepare_run_output
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json, _write_jsonl
 from experiments.stride_scalepool_evaluation import _validate_external_label_audit
@@ -59,15 +60,7 @@ PAIR_FEATURE_NAMES = tuple(f"delta:{name}" for name in CANDIDATE_FEATURE_NAMES) 
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file():
-        raise ValueError(f"registered SlotPool input is missing: {path}")
-    observed = sha256_file(path)
-    if observed != str(specification["sha256"]):
-        raise ValueError(
-            f"registered SlotPool input changed: {path}: expected {specification['sha256']}, got {observed}"
-        )
-    return path
+    return registered_input(project_root, specification, label="SlotPool")
 
 
 def validate_slotpool_config(
@@ -641,6 +634,29 @@ def evaluate_slotpool(
         audit_report=label_audit,
         observed_artifacts=observed_artifacts,
     )
+    producer = producer_identity(
+        project_root=project_root,
+        source_files=(
+            "experiments/stride_slotpool.py",
+            "experiments/stride_structpool_size_ablation.py",
+            "lns2_selector/training/tree_utils.py",
+        ),
+        native_required=False,
+        package_names=("numpy", "scikit-learn"),
+    )
+    output = Path(output).resolve()
+    prepare_run_output(
+        output,
+        resume=False,
+        identity={
+            "runner": "stride-slotpool-offline-evaluation-v1",
+            "config_sha256": sha256_file(config_path),
+            "input_sha256": {
+                name: sha256_file(path) for name, path in sorted(inputs.items())
+            },
+            "producer_identity": producer,
+        },
+    )
     rows = _read_jsonl(inputs["candidate_aggregates"])
     if (
         len(rows) != int(config["cohort"]["candidate_count"])
@@ -732,8 +748,6 @@ def evaluate_slotpool(
         pairwise_accuracy=weighted_correct / total_weight,
         config=config,
     )
-    output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
     states_path = output / "state_evaluation.jsonl"
     pairs_path = output / "stable_pair_summary.jsonl"
     folds_path = output / "fold_diagnostics.jsonl"
@@ -821,16 +835,7 @@ def evaluate_slotpool(
             if acceptance["passed"]
             else "stop_slotpool_runtime_and_analyze_failure"
         ),
-        "producer": producer_identity(
-            project_root=project_root,
-            source_files=(
-                "experiments/stride_slotpool.py",
-                "experiments/stride_structpool_size_ablation.py",
-                "lns2_selector/training/tree_utils.py",
-            ),
-            native_required=False,
-            package_names=("numpy", "scikit-learn"),
-        ),
+        "producer": producer,
         "inputs": {
             name: sha256_file(path) for name, path in sorted(inputs.items())
         },
@@ -840,7 +845,7 @@ def evaluate_slotpool(
             "fold_diagnostics_sha256": sha256_file(folds_path),
             **(
                 {"slotpool_pairwise_model_sha256": sha256_file(model_path)}
-                if model_path.is_file()
+                if acceptance["passed"]
                 else {}
             ),
         },

@@ -13,15 +13,61 @@ import importlib
 import importlib.metadata
 import json
 import math
+import os
 import platform
 import statistics
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
 
 PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v2"
 NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.upstream_compatible.v1"
+CLOSED_LOOP_IMPLEMENTATION_FILES = (
+    "CMakeLists.txt",
+    "experiments/_common.py",
+    "experiments/closed_loop_confirmation.py",
+    "experiments/closed_loop_confirmation_analysis.py",
+    "experiments/closed_loop_trace_storage.py",
+    "experiments/compact_controller_model.py",
+    "experiments/context_audit.py",
+    "experiments/feature_schema_v2.py",
+    "experiments/neighborhood_candidates.py",
+    "experiments/neighborhood_features.py",
+    "experiments/online_feature_engine.py",
+    "experiments/repair_collection.py",
+    "experiments/run_output_guard.py",
+    "experiments/state_analysis.py",
+    "experiments/v3_s3.py",
+    "lns2_selector/compatibility/controller_diagnostics.py",
+    "lns2_selector/compatibility/metrics.py",
+    "lns2_selector/controllers/__init__.py",
+    "lns2_selector/controllers/guardrank.py",
+    "lns2_selector/controllers/official.py",
+    "lns2_selector/controllers/v2.py",
+    "lns2_selector/controllers/v3_s3.py",
+    "lns2_selector/evaluation/trace_validation.py",
+    "lns2_selector/runtime/artifact_validation.py",
+    "lns2_selector/runtime/contracts.py",
+    "lns2_selector/runtime/fingerprints.py",
+    "lns2_selector/runtime/metrics.py",
+    "lns2_selector/runtime/online_selection.py",
+    "lns2_selector/runtime/portable_scalar.py",
+    "lns2_selector/runtime/repair_outcomes.py",
+    "lns2_selector/runtime/slotpool_selection.py",
+    "lns2_selector/runtime/topology_candidates.py",
+    "lns2_selector/solver/native.py",
+    "lns2_selector/training/policy_bundle.py",
+    "src/jsonl_observer.cpp",
+    "src/online_features.cpp",
+    "src/online_features.h",
+    "src/python_bindings.cpp",
+    "third_party/mapf_lns2/inc/BasicLNS.h",
+    "third_party/mapf_lns2/inc/InitLNS.h",
+    "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/src/InitLNS.cpp",
+)
 
 
 def _native_filesystem_path(path: Path) -> Path:
@@ -147,6 +193,57 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def registered_input(
+    project_root: Path,
+    specification: dict[str, Any],
+    *,
+    label: str,
+) -> Path:
+    """Resolve a checksum-pinned input while enforcing repository containment."""
+
+    if not isinstance(specification, dict):
+        raise ValueError(f"registered {label} input specification is not an object")
+    expected = specification.get("sha256")
+    if (
+        not isinstance(expected, str)
+        or len(expected) != 64
+        or any(character not in "0123456789abcdef" for character in expected)
+    ):
+        raise ValueError(f"registered {label} input has an invalid SHA-256")
+    path = contained_file(
+        Path(project_root).resolve(),
+        specification.get("path"),
+        field=f"registered {label} input",
+    )
+    observed = sha256_file(path)
+    if observed != expected:
+        raise ValueError(
+            f"registered {label} input changed: {path}: "
+            f"expected {expected}, got {observed}"
+        )
+    return path
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def canonical_json(value: Any) -> str:
+    """Serialize strict, deterministic JSON suitable for fingerprints."""
+
+    return json.dumps(
+        value,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def json_fingerprint(value: Any) -> str:
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
 def producer_identity(
     *,
     project_root: Path,
@@ -259,6 +356,26 @@ def producer_identity(
     return result
 
 
+def closed_loop_producer_identity(
+    *,
+    project_root: Path,
+    source_files: Iterable[str | Path],
+    native_required: bool = True,
+) -> dict[str, Any]:
+    """Build the shared identity for a native closed-loop experiment runner."""
+
+    return producer_identity(
+        project_root=project_root,
+        source_files=tuple(
+            dict.fromkeys(
+                (*map(str, source_files), *CLOSED_LOOP_IMPLEMENTATION_FILES)
+            )
+        ),
+        native_required=native_required,
+        optional_package_names=("numpy", "scikit-learn"),
+    )
+
+
 def validate_producer_identity(
     value: Any,
     *,
@@ -360,12 +477,7 @@ def config_producer_fingerprint(
         optional_package_names=optional_package_names,
     )
     expected = hashlib.sha256(
-        json.dumps(
-            identity,
-            ensure_ascii=True,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
+        canonical_json(identity).encode("utf-8")
     ).hexdigest()
     fingerprint = str(config.get("producer_identity_fingerprint", ""))
     if not fingerprint or fingerprint != expected:
@@ -374,14 +486,17 @@ def config_producer_fingerprint(
 
 
 def read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=_reject_json_constant,
+    )
 
 
 def read_collection_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         raise ValueError(f"missing collection file: {path}")
     return [
-        json.loads(line)
+        json.loads(line, parse_constant=_reject_json_constant)
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
@@ -391,7 +506,7 @@ def read_optional_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     return [
-        json.loads(line)
+        json.loads(line, parse_constant=_reject_json_constant)
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
@@ -399,14 +514,64 @@ def read_optional_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as stream:
-        return [json.loads(line) for line in stream if line.strip()]
+        return [
+            json.loads(line, parse_constant=_reject_json_constant)
+            for line in stream
+            if line.strip()
+        ]
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Replace a text artifact atomically, tolerating short DrvFS read locks."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".partial", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+        for attempt in range(8):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(min(0.025 * (2**attempt), 0.5))
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def write_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    atomic_write_text(
+        path,
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+    )
+
+
+def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
+    atomic_write_text(
+        path,
+        "".join(
+            json.dumps(
+                row,
+                ensure_ascii=False,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
+            for row in rows
+        ),
     )
 
 
@@ -505,14 +670,19 @@ def select_rows_by_task_id(
 
 
 __all__ = [
+    "CLOSED_LOOP_IMPLEMENTATION_FILES",
     "NATIVE_SEMANTICS_SCHEMA",
     "PRODUCER_IDENTITY_SCHEMA",
     "add_categorical_feature",
+    "atomic_write_text",
     "atomic_write_csv",
+    "canonical_json",
+    "closed_loop_producer_identity",
     "contained_file",
     "config_producer_fingerprint",
     "episode_id",
     "feature_names",
+    "json_fingerprint",
     "mean",
     "population_std",
     "producer_identity",
@@ -522,6 +692,7 @@ __all__ = [
     "read_json",
     "read_jsonl",
     "read_optional_jsonl",
+    "registered_input",
     "relative_improvement",
     "resolve_within",
     "sha256_file",
@@ -535,4 +706,5 @@ __all__ = [
     "trial_job_id",
     "validate_producer_identity",
     "write_json",
+    "write_jsonl",
 ]

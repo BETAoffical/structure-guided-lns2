@@ -4,10 +4,15 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    registered_input,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.closed_loop_trace_storage import read_trace_events
-from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json, _write_jsonl
+from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.stride_augcontrol_evaluation import _dataset_tasks, _metric
 from experiments.stride_maprank_raw_ttf import _controller_summary, _paired_comparison
 from experiments.stride_robuststep_preflight import _mean
@@ -22,10 +27,7 @@ TTF_CLOCK_SCHEMA = "lns2.ttf.reset_inclusive_wall.v1"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered StructPool TTF input changed: {path}")
-    return path
+    return registered_input(root, specification, label="StructPool TTF")
 
 
 def load_structpool_ttf_quick_config(
@@ -182,17 +184,29 @@ def run_structpool_ttf_quick(
             "schedule_sha256": _fingerprint(schedule),
         }
     status_path = output / "quick_status.json"
-    if status_path.is_file() and not resume:
-        raise ValueError("StructPool TTF Quick output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    base_status = {
-        "schema": STATUS_SCHEMA,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(status_path, {**base_status, "completed_schedule_entries": 0, "complete": False})
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=status_path.name,
+        status_schema=STATUS_SCHEMA,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_augcontrol_evaluation.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                "experiments/stride_robuststep_preflight.py",
+            ),
+        ),
+        resume=resume,
+        report_filename="structpool_ttf_quick_report.json",
+        report_schema=REPORT_SCHEMA,
+        label="StructPool TTF Quick",
+    )
+    base_status = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     runtime = (root / str(config["runtime"]["config"])).resolve()
     by_group = {str(row["id"]): dict(row) for row in config["cohort"]["groups"]}
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
@@ -206,7 +220,10 @@ def run_structpool_ttf_quick(
             qualification,
             phase="qualify",
             workers=1,
-            resume=qualification.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and qualification.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=keys,
             job_keys=keys,
             **_controller_kwargs(root, config, "v2-full"),
@@ -219,7 +236,10 @@ def run_structpool_ttf_quick(
                 controller_root,
                 phase="qualify",
                 workers=1,
-                resume=controller_root.joinpath("run_config.json").is_file(),
+                resume=(
+                    prepared.resumed
+                    and controller_root.joinpath("run_config.json").is_file()
+                ),
                 cohort_job_keys=keys,
                 job_keys=keys,
                 qualification_source=qualification,
@@ -256,7 +276,11 @@ def run_structpool_ttf_quick(
             status_path,
             {**base_status, "completed_schedule_entries": completed, "current": item, "complete": False},
         )
-    report = analyze_structpool_ttf_quick(path, output)
+    report = analyze_structpool_ttf_quick(
+        path,
+        output,
+        producer=base_status["producer_identity"],
+    )
     _write_json(
         status_path,
         {
@@ -310,10 +334,34 @@ def _quick_controller_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def analyze_structpool_ttf_quick(
-    config_path: str | Path, output: str | Path
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, _root, config = load_structpool_ttf_quick_config(config_path)
+    path, root, config = load_structpool_ttf_quick_config(config_path)
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename="quick_status.json",
+        report_filename="structpool_ttf_quick_report.json",
+        status_schema=STATUS_SCHEMA,
+        report_schema=REPORT_SCHEMA,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_augcontrol_evaluation.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                "experiments/stride_robuststep_preflight.py",
+            ),
+            native_required=False,
+        )
     groups = [dict(row) for row in config["cohort"]["groups"]]
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
     expected = {
@@ -411,6 +459,7 @@ def analyze_structpool_ttf_quick(
         "scientific_status": "development_quick",
         "default_replacement_allowed": False,
         "formal_speed_claim": False,
+        "producer_identity": producer,
         "primary_metric": "mean_run_to_completion_raw_wall_ttf",
         "ttf_clock_schema": TTF_CLOCK_SCHEMA,
         "episode_count_per_controller": len(expected),

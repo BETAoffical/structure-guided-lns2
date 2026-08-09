@@ -4,7 +4,7 @@ import collections
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 
 
@@ -13,16 +13,7 @@ AUDIT_SCHEMA = "lns2.stride.guardpool_threshold_audit.v1"
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file():
-        raise ValueError(f"registered GuardPool input is missing: {path}")
-    observed = sha256_file(path)
-    if observed != str(specification["sha256"]):
-        raise ValueError(
-            f"registered GuardPool input changed: {path}: "
-            f"expected {specification['sha256']}, got {observed}"
-        )
-    return path
+    return registered_input(project_root, specification, label="GuardPool")
 
 
 def validate_guardpool_registration(
@@ -63,6 +54,9 @@ def validate_guardpool_registration(
     ):
         raise ValueError("GuardPool SlotPool runtime contract changed")
     guard = dict(config.get("stall_guard") or {})
+    # The failed v1 preregistration recorded this proposed tabu scope even
+    # though the runtime never implemented it. Keep it only to authenticate
+    # the frozen negative-result config; active runtime config omits the field.
     if guard != {
         "no_progress_limit": 8,
         "recovery_controller": "v2-full",

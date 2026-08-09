@@ -4,14 +4,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    registered_input,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
     _read_jsonl,
     _write_json,
-    _write_jsonl,
 )
 from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_lns2_quick import (
@@ -44,10 +48,7 @@ PHASES = {
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered StructPool Lean Quick input changed: {path}")
-    return path
+    return registered_input(root, specification, label="StructPool Lean Quick")
 
 
 def load_structpool_lean_quick_config(
@@ -257,6 +258,7 @@ def run_structpool_lean_multigroup(
     report_scientific_status: str,
     next_step_on_pass: str,
     next_step_on_failure: str,
+    producer_source_files: tuple[str, ...] = (),
     resume: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -269,20 +271,30 @@ def run_structpool_lean_multigroup(
             "schedule_sha256": _fingerprint(schedule),
         }
     status_path = output / status_filename
-    if status_path.is_file() and not resume:
-        raise ValueError("StructPool Lean Quick output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    status_base = {
-        "schema": status_schema,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(
-        status_path,
-        {**status_base, "completed_schedule_entries": 0, "complete": False},
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=status_filename,
+        status_schema=status_schema,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_structpool_lean_quick.py",
+                "experiments/stride_structpool_lns2_quick.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                *producer_source_files,
+            ),
+        ),
+        resume=resume,
+        report_filename=report_filename,
+        report_schema=report_schema,
+        label="StructPool Lean",
     )
+    status_base = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     runtime = (root / str(config["runtime"]["config"])).resolve()
     registered_qualification = config.get("qualification_source")
     qualification_source = (
@@ -309,7 +321,10 @@ def run_structpool_lean_multigroup(
             qualification,
             phase="qualify",
             workers=1,
-            resume=qualification.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and qualification.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=all_keys,
             job_keys=all_keys,
             qualification_source=qualification_source,
@@ -332,7 +347,10 @@ def run_structpool_lean_multigroup(
                 qualification,
                 phase="qualify",
                 workers=1,
-                resume=qualification.joinpath("run_config.json").is_file(),
+                resume=(
+                    prepared.resumed
+                    and qualification.joinpath("run_config.json").is_file()
+                ),
                 cohort_job_keys=keys,
                 job_keys=keys,
                 qualification_source=qualification_source,
@@ -352,7 +370,10 @@ def run_structpool_lean_multigroup(
             collection,
             phase="qualify",
             workers=1,
-            resume=collection.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and collection.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=keys,
             job_keys=keys,
             qualification_source=qualification,
@@ -404,11 +425,14 @@ def run_structpool_lean_multigroup(
         path,
         config,
         output,
+        status_filename=status_filename,
         report_schema=report_schema,
         report_filename=report_filename,
         report_scientific_status=report_scientific_status,
         next_step_on_pass=next_step_on_pass,
         next_step_on_failure=next_step_on_failure,
+        producer=status_base["producer_identity"],
+        producer_source_files=producer_source_files,
     )
     _write_json(
         status_path,
@@ -442,6 +466,7 @@ def run_structpool_lean_quick(
         report_scientific_status="development_four_controller_lean_quick",
         next_step_on_pass="retain_lean_runtime_and_preregister_fresh_map_confirmation",
         next_step_on_failure="retain_speed2_full_structpool_and_reject_lean_as_default",
+        producer_source_files=("experiments/stride_structpool_lean_quick.py",),
         resume=resume,
         dry_run=dry_run,
     )
@@ -452,13 +477,37 @@ def analyze_structpool_lean_multigroup(
     config: dict[str, Any],
     output: str | Path,
     *,
+    status_filename: str,
     report_schema: str,
     report_filename: str,
     report_scientific_status: str,
     next_step_on_pass: str,
     next_step_on_failure: str,
+    producer: dict[str, Any] | None = None,
+    producer_source_files: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename=status_filename,
+        report_filename=report_filename,
+        report_schema=report_schema,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=path.parent.parent,
+            source_files=(
+                "experiments/stride_structpool_lean_quick.py",
+                "experiments/stride_structpool_lns2_quick.py",
+                "experiments/stride_structpool_ttf_quick.py",
+                "experiments/stride_maprank_raw_ttf.py",
+                *producer_source_files,
+            ),
+            native_required=False,
+        )
     groups = [dict(row) for row in config["cohort"]["groups"]]
     seeds = tuple(map(int, config["cohort"]["solver_seeds"]))
     expected = {
@@ -652,6 +701,7 @@ def analyze_structpool_lean_multigroup(
         "schema": report_schema,
         "scientific_status": report_scientific_status,
         "formal_speed_claim": False,
+        "producer_identity": producer,
         "fresh_map_claim": False,
         "default_replacement_allowed": False,
         "primary_metric": "mean_run_to_completion_raw_wall_ttf",
@@ -688,11 +738,13 @@ def analyze_structpool_lean_quick(
         path,
         config,
         output,
+        status_filename="quick_status.json",
         report_schema=REPORT_SCHEMA,
         report_filename="structpool_lean_quick_report.json",
         report_scientific_status="development_four_controller_lean_quick",
         next_step_on_pass="retain_lean_runtime_and_preregister_fresh_map_confirmation",
         next_step_on_failure="retain_speed2_full_structpool_and_reject_lean_as_default",
+        producer_source_files=("experiments/stride_structpool_lean_quick.py",),
     )
 
 

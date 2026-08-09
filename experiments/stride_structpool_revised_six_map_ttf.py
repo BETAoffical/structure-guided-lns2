@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input
 from experiments.repair_collection import _read_json
 from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_structpool_paired_ttf import (
@@ -23,10 +23,7 @@ REPORT_SCHEMA = "lns2.stride.structpool_revised_six_map_ttf_report.v1"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered revised six-map TTF input changed: {path}")
-    return path
+    return registered_input(root, specification, label="revised six-map TTF")
 
 
 def load_revised_six_map_ttf_config(
@@ -172,6 +169,10 @@ def run_revised_six_map_ttf(
             "qualification_conditioned": True,
             "fresh_ood_or_generalization_supported": False,
         },
+        producer_source_files=(
+            "experiments/stride_structpool_revised_six_map_ttf.py",
+            "experiments/stride_augcontrol_evaluation.py",
+        ),
         resume=resume,
         dry_run=dry_run,
     )
@@ -185,6 +186,7 @@ def analyze_revised_six_map_ttf(
         path,
         config,
         output,
+        status_filename="evaluation_status.json",
         report_schema=REPORT_SCHEMA,
         report_filename="revised_six_map_ttf_report.json",
         report_scientific_status="qualification_conditioned_paired_raw_ttf_diagnostic",
@@ -194,6 +196,10 @@ def analyze_revised_six_map_ttf(
             "qualification_conditioned": True,
             "fresh_ood_or_generalization_supported": False,
         },
+        producer_source_files=(
+            "experiments/stride_structpool_revised_six_map_ttf.py",
+            "experiments/stride_augcontrol_evaluation.py",
+        ),
     )
 
 

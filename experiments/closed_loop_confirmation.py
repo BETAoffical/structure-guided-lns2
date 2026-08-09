@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from experiments._common import (
+    CLOSED_LOOP_IMPLEMENTATION_FILES,
     NATIVE_SEMANTICS_SCHEMA,
     episode_id as _episode_id,
     select_rows_by_task_id as _selected_rows,
@@ -299,43 +300,7 @@ DEFAULT_CONTROLLER_BUNDLE = "artifacts/initlns-closed-loop-controller-v2"
 DEFAULT_V3_S3_BUNDLE = (
     "build/initlns-v3-s3-mixed-load-pilot-v5-adaptive/controller"
 )
-CONTROLLER_IMPLEMENTATION_FILES = (
-    "CMakeLists.txt",
-    "experiments/_common.py",
-    "experiments/closed_loop_confirmation.py",
-    "experiments/compact_controller_model.py",
-    "experiments/context_audit.py",
-    "experiments/feature_schema_v2.py",
-    "experiments/state_analysis.py",
-    "experiments/neighborhood_candidates.py",
-    "experiments/neighborhood_features.py",
-    "experiments/online_feature_engine.py",
-    "experiments/repair_collection.py",
-    "experiments/v3_s3.py",
-    "lns2_selector/compatibility/metrics.py",
-    "lns2_selector/controllers/__init__.py",
-    "lns2_selector/controllers/guardrank.py",
-    "lns2_selector/controllers/v2.py",
-    "lns2_selector/controllers/v3_s3.py",
-    "lns2_selector/runtime/contracts.py",
-    "lns2_selector/runtime/fingerprints.py",
-    "lns2_selector/runtime/metrics.py",
-    "lns2_selector/runtime/online_selection.py",
-    "lns2_selector/runtime/topology_candidates.py",
-    "lns2_selector/runtime/portable_scalar.py",
-    "lns2_selector/runtime/repair_outcomes.py",
-    "lns2_selector/runtime/slotpool_selection.py",
-    "lns2_selector/compatibility/controller_diagnostics.py",
-    "lns2_selector/evaluation/trace_validation.py",
-    "lns2_selector/training/policy_bundle.py",
-    "lns2_selector/solver/native.py",
-    "src/python_bindings.cpp",
-    "src/jsonl_observer.cpp",
-    "src/online_features.cpp",
-    "src/online_features.h",
-    "third_party/mapf_lns2/inc/RepairPolicy.h",
-    "third_party/mapf_lns2/src/InitLNS.cpp",
-)
+CONTROLLER_IMPLEMENTATION_FILES = CLOSED_LOOP_IMPLEMENTATION_FILES
 
 
 def controller_implementation_fingerprint(project_root: Path) -> dict[str, Any]:
@@ -889,9 +854,24 @@ def closed_loop_qualification_report(
 
 def _emit(stream: Any, row: dict[str, Any]) -> float:
     started = time.perf_counter()
-    stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    stream.write(
+        json.dumps(
+            row,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n"
+    )
     stream.flush()
     return time.perf_counter() - started
+
+
+def _pool_runtime_modes(value: dict[str, Any] | None) -> tuple[bool, bool]:
+    config = dict(value or {})
+    slotpool = config.get("pool_id") == "stride-slotpool-v1"
+    guardpool = bool(slotpool and config.get("stall_guard"))
+    return slotpool, guardpool
 
 
 def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
@@ -999,13 +979,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     structpool_runtime_config = dict(
         dict(job.get("proposal") or {}).get("structpool") or {}
     )
-    slotpool_runtime_enabled = (
-        structpool_runtime_config.get("pool_id") == "stride-slotpool-v1"
+    slotpool_runtime_enabled, guardpool_runtime_enabled = _pool_runtime_modes(
+        structpool_runtime_config
     )
     slotpool_model_payload: dict[str, Any] | None = None
     if slotpool_runtime_enabled:
         if policy != "realized_dynamic" or controller_mode != "v2-full":
-            raise ValueError("GuardPool requires a realized_dynamic v2-full episode")
+            raise ValueError(
+                "SlotPool/GuardPool requires a realized_dynamic v2-full episode"
+            )
         model_registration = dict(structpool_runtime_config["slotpool_model"])
         model_path = Path(str(model_registration["path"]))
         if not model_path.is_absolute():
@@ -1249,8 +1231,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
             guard_was_active = False
-            guard_tabu_by_signature: dict[str, str] = {}
-            last_structural_candidate_id: str | None = None
             previous_route: str | None = None
             v3_s3_selector = (
                 V3S3Selector(v3_s3_bundle)
@@ -1430,20 +1410,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     ),
                                 }
                             )
-                            if slotpool_runtime_enabled
+                            if guardpool_runtime_enabled
                             else None
                         )
-                        if guard_released_now:
-                            guard_tabu_by_signature.clear()
-                            last_structural_candidate_id = None
-                        if (
-                            guard_triggered_now
-                            and last_structural_candidate_id is not None
-                        ):
-                            assert conflict_signature is not None
-                            guard_tabu_by_signature[conflict_signature] = (
-                                last_structural_candidate_id
-                            )
                         guard_was_active = guard_active_for_decision
                         structpool_gate_result = (
                             structpool_high_stress_gate(state, structpool_runtime)
@@ -1532,17 +1501,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                         proposal_metrics.update(
                             {
-                                "guardpool_enabled": slotpool_runtime_enabled,
+                                "guardpool_enabled": guardpool_runtime_enabled,
                                 "guardpool_no_progress_streak": no_progress_streak,
                                 "guardpool_active": guard_active_for_decision,
                                 "guardpool_triggered": guard_triggered_now,
                                 "guardpool_released": guard_released_now,
                                 "guardpool_conflict_signature": conflict_signature,
-                                "guardpool_tabu_candidate_id": (
-                                    guard_tabu_by_signature.get(conflict_signature)
-                                    if conflict_signature is not None
-                                    else None
-                                ),
                             }
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
@@ -2126,14 +2090,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         diagnostic = feature_range_diagnostic(
                             selected_row, policy, runtime_ranges[policy]
                         )
-                        if slotpool_runtime_enabled and bool(
-                            selected.get("structpool_family_groups")
-                        ):
-                            last_structural_candidate_id = str(
-                                selected["candidate_id"]
-                            )
                         proposal_metrics["guardpool_selected_structural"] = bool(
-                            slotpool_runtime_enabled
+                            guardpool_runtime_enabled
                             and selected is not None
                             and selected.get("structpool_family_groups")
                         )
@@ -2676,7 +2634,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
                     no_progress_streak = 0
-                    last_structural_candidate_id = None
                 else:
                     no_progress_streak += 1
                 elapsed_wall = transition_ttf_elapsed_seconds

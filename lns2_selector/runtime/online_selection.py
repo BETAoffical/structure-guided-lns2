@@ -152,7 +152,6 @@ _GUARDPOOL_RUNTIME_CONFIG = {
         "no_progress_limit": 8,
         "recovery_controller": "v2-full",
         "release_condition": "strict_conflict_decrease",
-        "tabu_scope": "last_structural_candidate_under_conflict_signature",
         "wall_time_condition": None,
     },
 }

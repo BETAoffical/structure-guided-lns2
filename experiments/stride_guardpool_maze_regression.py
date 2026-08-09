@@ -4,7 +4,12 @@ import collections
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    registered_input,
+    sha256_file,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.closed_loop_trace_storage import read_trace_events
 from experiments.repair_collection import (
@@ -12,7 +17,6 @@ from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
     _write_json,
-    _write_jsonl,
 )
 from experiments.stride_guardpool import validate_guardpool_registration
 from lns2_selector.runtime.online_selection import (
@@ -34,10 +38,7 @@ CONTROLLERS = (
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered GuardPool Maze input changed: {path}")
-    return path
+    return registered_input(root, specification, label="GuardPool Maze")
 
 
 def load_guardpool_maze_regression_config(
@@ -200,20 +201,27 @@ def run_guardpool_maze_regression(
         }
     output = Path(output).resolve()
     status_path = output / "regression_status.json"
-    if status_path.is_file() and not resume:
-        raise ValueError("GuardPool Maze output exists; pass --resume")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_jsonl(output / "execution_schedule.jsonl", schedule)
-    status_base = {
-        "schema": STATUS_SCHEMA,
-        "config_sha256": sha256_file(path),
-        "schedule_sha256": _fingerprint(schedule),
-        "total_schedule_entries": len(schedule),
-    }
-    _write_json(
-        status_path,
-        {**status_base, "completed_schedule_entries": 0, "complete": False},
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=status_path.name,
+        status_schema=STATUS_SCHEMA,
+        config_path=path,
+        schedule=schedule,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_guardpool_maze_regression.py",
+                "experiments/stride_guardpool.py",
+            ),
+        ),
+        resume=resume,
+        report_filename="guardpool_maze_regression_report.json",
+        report_schema=REPORT_SCHEMA,
+        label="GuardPool Maze",
     )
+    status_base = prepared.base_status
+    if prepared.completed_report is not None:
+        return prepared.completed_report
     cohort = dict(config["cohort"])
     key = (str(cohort["task_id"]), int(cohort["solver_seed"]))
     keys = {key}
@@ -228,7 +236,10 @@ def run_guardpool_maze_regression(
         qualification_source,
         phase="qualify",
         workers=1,
-        resume=qualification_source.joinpath("run_config.json").is_file(),
+        resume=(
+            prepared.resumed
+            and qualification_source.joinpath("run_config.json").is_file()
+        ),
         cohort_job_keys=keys,
         job_keys=keys,
         **_controller_kwargs(root, config, "v2-full"),
@@ -242,7 +253,10 @@ def run_guardpool_maze_regression(
             collection,
             phase="qualify",
             workers=1,
-            resume=collection.joinpath("run_config.json").is_file(),
+            resume=(
+                prepared.resumed
+                and collection.joinpath("run_config.json").is_file()
+            ),
             cohort_job_keys=keys,
             job_keys=keys,
             qualification_source=qualification_source,
@@ -275,7 +289,11 @@ def run_guardpool_maze_regression(
                 "complete": False,
             },
         )
-    report = analyze_guardpool_maze_regression(path, output)
+    report = analyze_guardpool_maze_regression(
+        path,
+        output,
+        producer=status_base["producer_identity"],
+    )
     _write_json(
         status_path,
         {
@@ -402,10 +420,32 @@ def _paired_pp_replay_audit(
 
 
 def analyze_guardpool_maze_regression(
-    config_path: str | Path, output: str | Path
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, _root, config = load_guardpool_maze_regression_config(config_path)
+    path, root, config = load_guardpool_maze_regression_config(config_path)
     output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename="regression_status.json",
+        report_filename="guardpool_maze_regression_report.json",
+        status_schema=STATUS_SCHEMA,
+        report_schema=REPORT_SCHEMA,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_guardpool_maze_regression.py",
+                "experiments/stride_guardpool.py",
+            ),
+            native_required=False,
+        )
     by_controller: dict[str, dict[str, Any]] = {}
     error_count = 0
     for controller in CONTROLLERS:
@@ -466,6 +506,7 @@ def analyze_guardpool_maze_regression(
     report = {
         "schema": REPORT_SCHEMA,
         "scientific_status": "known_regression_only_not_generalization_or_ttf_claim",
+        "producer_identity": producer,
         "integrity_passed": all(
             value
             for name, value in gates.items()

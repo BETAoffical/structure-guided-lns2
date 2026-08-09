@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import producer_identity, registered_input, sha256_file
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.feature_schema_v2 import PROFILE_FEATURE_NAMES
 from experiments.online_feature_engine import OnlineFeatureEngine, TopologyAnalysisCache
@@ -55,16 +55,7 @@ TRIAL_INDICES = tuple(range(16))
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file():
-        raise ValueError(f"registered SlotPool confirmation input is missing: {path}")
-    observed = sha256_file(path)
-    if observed != str(specification["sha256"]):
-        raise ValueError(
-            f"registered SlotPool confirmation input changed: {path}: "
-            f"expected {specification['sha256']}, got {observed}"
-        )
-    return path
+    return registered_input(project_root, specification, label="SlotPool confirmation")
 
 
 def validate_slotpool_confirmation_config(

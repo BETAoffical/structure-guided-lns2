@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input, sha256_file
 from experiments.repair_collection import _read_json, _read_jsonl
 from experiments.stride_structpool_lean_quick import (
     CONTROLLERS,
@@ -25,10 +25,7 @@ REPORT_FILENAME = "structpool_lean_confirmation_report.json"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered LeanPool confirmation input changed: {path}")
-    return path
+    return registered_input(root, specification, label="LeanPool confirmation")
 
 
 def load_structpool_lean_confirmation_config(
@@ -216,6 +213,9 @@ def run_structpool_lean_confirmation(
         report_scientific_status="label_map_disjoint_four_controller_confirmation",
         next_step_on_pass="preregister_never_timed_movingai_map_replication",
         next_step_on_failure="retain_full_structpool_and_reject_leanpool_preference",
+        producer_source_files=(
+            "experiments/stride_structpool_lean_confirmation.py",
+        ),
         resume=resume,
         dry_run=dry_run,
     )
@@ -229,11 +229,15 @@ def analyze_structpool_lean_confirmation(
         path,
         config,
         output,
+        status_filename=STATUS_FILENAME,
         report_schema=REPORT_SCHEMA,
         report_filename=REPORT_FILENAME,
         report_scientific_status="label_map_disjoint_four_controller_confirmation",
         next_step_on_pass="preregister_never_timed_movingai_map_replication",
         next_step_on_failure="retain_full_structpool_and_reject_leanpool_preference",
+        producer_source_files=(
+            "experiments/stride_structpool_lean_confirmation.py",
+        ),
     )
 
 

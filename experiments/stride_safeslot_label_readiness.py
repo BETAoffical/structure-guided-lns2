@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input, sha256_file
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json, _write_jsonl
 from experiments.stride_robustaction_label_collection import state_artifact_tree_sha256
 
@@ -19,17 +19,7 @@ EXPERIMENT_ID = "stride-safeslot-label-readiness-v1"
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file():
-        raise ValueError(f"registered SafeSlot readiness input is missing: {path}")
-    observed = sha256_file(path)
-    expected = str(specification["sha256"])
-    if observed != expected:
-        raise ValueError(
-            f"registered SafeSlot readiness input changed: {path}: "
-            f"expected {expected}, got {observed}"
-        )
-    return path
+    return registered_input(project_root, specification, label="SafeSlot readiness")
 
 
 def validate_safeslot_label_readiness_config(

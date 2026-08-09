@@ -6,7 +6,8 @@ in the generated retention manifest:
 - `active`: directly required by an active controller or the V3-S3 pipeline;
 - `shared`: algorithm-neutral code used by at least two retained subsystems;
 - `reproducibility`: required to rebuild a retained bundle or reproduce a
-  current formal result;
+  checksum-bound current result, including a preregistered negative result
+  whose report freezes a hard-stop decision;
 - `compatibility`: the minimum read-only support for a frozen artifact schema;
 - `evidence-only`: scientific evidence is retained but executable code is not;
 - `obsolete`: no active caller, current reproduction role, or shared contract.
@@ -23,3 +24,6 @@ promotion threshold are removed together with that controller.
 Before every pruning phase, the clean predecessor commit is pushed and tagged.
 The generated manifest must contain no unclassified production module or test.
 
+Failed or diagnostic-only research chains are never labeled `active`. They may
+remain executable as `reproducibility` only when a retained report identifies
+the exact negative result and the code is not imported by an active controller.

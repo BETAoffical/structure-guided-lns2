@@ -304,6 +304,7 @@ def _canonical_json(value: Any) -> str:
         ensure_ascii=True,
         sort_keys=True,
         separators=(",", ":"),
+        allow_nan=False,
     )
 
 
@@ -312,8 +313,11 @@ def _fingerprint(value: Any) -> str:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
     with path.open("r", encoding="utf-8") as stream:
-        value = json.load(stream)
+        value = json.load(stream, parse_constant=reject_constant)
     if not isinstance(value, dict):
         raise ValueError(f"expected a JSON object: {path}")
     return value
@@ -347,7 +351,14 @@ def _atomic_write_text(path: Path, text: str) -> None:
 def _write_json(path: Path, value: dict[str, Any]) -> None:
     _atomic_write_text(
         path,
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
     )
 
 
@@ -355,7 +366,13 @@ def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     _atomic_write_text(
         path,
         "".join(
-            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+            json.dumps(
+                row,
+                ensure_ascii=False,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
             for row in rows
         ),
     )
@@ -377,6 +394,7 @@ def state_fingerprint(state: dict[str, Any]) -> str:
         ensure_ascii=True,
         sort_keys=True,
         separators=(",", ":"),
+        allow_nan=False,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -676,7 +694,7 @@ def _valid_episode_trace(
         return None
     try:
         rows = _read_jsonl(path)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     if (
         not rows

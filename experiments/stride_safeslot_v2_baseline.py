@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input, sha256_file
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.stride_guardpool_maze_regression import _controller_kwargs
@@ -20,10 +20,7 @@ REPORT_FILENAME = "safeslot_v2_baseline_report.json"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered SafeSlot V2 input changed: {path}")
-    return path
+    return registered_input(root, specification, label="SafeSlot V2")
 
 
 def load_safeslot_v2_baseline_config(

@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import producer_identity, registered_input, sha256_file
 from experiments.repair_collection import (
     _fingerprint,
     _plain,
@@ -66,10 +66,7 @@ PRODUCER_FILES = (
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered SafeSlot residual input changed: {path}")
-    return path
+    return registered_input(project_root, specification, label="SafeSlot residual")
 
 
 def validate_safeslot_residual_teacher_config(

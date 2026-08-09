@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from experiments._common import sha256_file
+from experiments._common import registered_input
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -26,10 +26,7 @@ REPORT_SCHEMA = "lns2.stride.structpool_ttf_fresh_report.v1"
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
-    path = (root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered StructPool fresh input changed: {path}")
-    return path
+    return registered_input(root, specification, label="StructPool fresh")
 
 
 def load_structpool_ttf_fresh_config(
@@ -180,6 +177,10 @@ def run_structpool_ttf_fresh(
         next_step_on_pass="preregister_independent_replication_and_default_promotion_design",
         next_step_on_failure="stop_structpool_ttf_promotion_and_diagnose_fresh_map_failures",
         performance_claim_field="cross_layout_generalization_supported",
+        producer_source_files=(
+            "experiments/stride_structpool_ttf_fresh.py",
+            "experiments/stride_augcontrol_evaluation.py",
+        ),
         resume=resume,
         dry_run=dry_run,
     )
@@ -193,12 +194,17 @@ def analyze_structpool_ttf_fresh(
         path,
         config,
         output,
+        status_filename="fresh_status.json",
         report_schema=REPORT_SCHEMA,
         report_filename="structpool_ttf_fresh_report.json",
         report_scientific_status="fresh_map_cross_layout_raw_ttf_confirmation",
         next_step_on_pass="preregister_independent_replication_and_default_promotion_design",
         next_step_on_failure="stop_structpool_ttf_promotion_and_diagnose_fresh_map_failures",
         performance_claim_field="cross_layout_generalization_supported",
+        producer_source_files=(
+            "experiments/stride_structpool_ttf_fresh.py",
+            "experiments/stride_augcontrol_evaluation.py",
+        ),
     )
 
 

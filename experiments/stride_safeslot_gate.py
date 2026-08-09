@@ -8,7 +8,8 @@ import statistics
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from experiments._common import producer_identity, sha256_file
+from experiments._common import producer_identity, registered_input, sha256_file
+from experiments.run_output_guard import prepare_run_output
 from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
@@ -48,10 +49,7 @@ PRODUCER_FILES = (
 
 
 def _registered(project_root: Path, specification: dict[str, Any]) -> Path:
-    path = (project_root / str(specification["path"])).resolve()
-    if not path.is_file() or sha256_file(path) != str(specification["sha256"]):
-        raise ValueError(f"registered SafeSlot gate input changed: {path}")
-    return path
+    return registered_input(project_root, specification, label="SafeSlot gate")
 
 
 def validate_safeslot_gate_config(
@@ -881,6 +879,26 @@ def train_safeslot_gate(
     project_root = config_path.parent.parent
     config = _read_json(config_path)
     validate_safeslot_gate_config(config, project_root=project_root)
+    producer = producer_identity(
+        project_root=project_root,
+        source_files=PRODUCER_FILES,
+        native_required=False,
+        package_names=("numpy", "scikit-learn"),
+    )
+    output = Path(output).resolve()
+    prepare_run_output(
+        output,
+        resume=False,
+        identity={
+            "runner": "stride-safeslot-gate-training-v1",
+            "config_sha256": sha256_file(config_path),
+            "input_sha256": {
+                name: str(specification["sha256"])
+                for name, specification in sorted(dict(config["inputs"]).items())
+            },
+            "producer_identity": producer,
+        },
+    )
     rows, row_audit = build_safeslot_gate_rows(config, project_root=project_root)
     values = np.asarray([row["feature_values"] for row in rows], dtype=np.float32)
     labels = np.asarray([bool(row["label"]) for row in rows], dtype=np.int8)
@@ -988,8 +1006,6 @@ def train_safeslot_gate(
     )
     passed = all(checks.values())
 
-    output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
     rows_path = output / "training_rows.jsonl"
     predictions_path = output / "oof_candidate_predictions.jsonl"
     policy_path = output / "oof_state_policy.jsonl"
@@ -1073,7 +1089,9 @@ def train_safeslot_gate(
         "oof_state_policy_sha256": sha256_file(policy_path),
         "fold_diagnostics_sha256": sha256_file(folds_path),
     }
-    if model_path.is_file():
+    if passed:
+        if not model_path.is_file():
+            raise RuntimeError("SafeSlot passed without producing its model artifact")
         artifacts["safeslot_gate_model_sha256"] = sha256_file(model_path)
     report = {
         "schema": REPORT_SCHEMA,
@@ -1085,12 +1103,7 @@ def train_safeslot_gate(
         "implementation_id": IMPLEMENTATION_ID,
         "model_id": MODEL_ID,
         "config_sha256": sha256_file(config_path),
-        "producer": producer_identity(
-            project_root=project_root,
-            source_files=PRODUCER_FILES,
-            native_required=False,
-            package_names=("numpy", "scikit-learn"),
-        ),
+        "producer": producer,
         "feature_dimension": len(FEATURE_NAMES),
         "row_audit": row_audit,
         "outer_fold_count": len(outer_folds),
