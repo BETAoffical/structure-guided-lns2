@@ -1979,6 +1979,21 @@
       "contract": "Freeze the 193-dimensional pre-action representation, exact-V2 abstention behavior, and offline-only fresh-map confirmation boundary."
     },
     {
+      "path": "experiments/stride_closurepool_longtail.py",
+      "role": "reproducibility",
+      "purpose": "Reconstruct saved V2, StructPool and SlotPool traces for agent, conflict-boundary, bottleneck and persistent-pair long-tail diagnosis without producing a candidate rule or model."
+    },
+    {
+      "path": "scripts/analyze_stride_closurepool_longtail.py",
+      "role": "reproducibility",
+      "purpose": "Provide the deterministic read-only CLI for the preregistered ClosurePool long-tail mechanism analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_closurepool_longtail.py",
+      "role": "reproducibility",
+      "contract": "Freeze conflict-component closure, boundary, pair-persistence and descriptive tail-group semantics while forbidding rule selection, training and TTF claims."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

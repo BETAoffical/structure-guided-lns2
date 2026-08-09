@@ -1,0 +1,65 @@
+{
+  "schema": "lns2.stride.closurepool_longtail_forensics_config.v1",
+  "scientific_status": "retrospective_mechanism_diagnostic_before_closurepool_design",
+  "experiment_id": "stride-closurepool-longtail-forensics-v1",
+  "pre_registration_parent_commit": "70761ac41106b91e1eeff32bcc6f442e1b09c1e5",
+  "inputs": {
+    "known_regression_report": {
+      "path": "build/stride-guardpool-maze-regression-v2/guardpool_maze_regression_report.json",
+      "sha256": "84b5ea9dd8c44f0abfd1cfbe49086ee7ed1d9def6e2e578b60648132790a3ebe"
+    },
+    "historical_divergence_report": {
+      "path": "build/stride-safeslot-first-divergence-v1/safeslot_first_divergence_report.json",
+      "sha256": "24147e3eb539a032f1e6db4cf3d5df460395a982fe64e73b980b4ef3aa1781fd"
+    },
+    "v2_manifest": {
+      "path": "build/stride-safeslot-v2-baseline-v1/realized_dynamic_manifest.jsonl",
+      "sha256": "bd09cb33c5388d0aabb3cc213cdbeda6341de9325fa49c1ae2fe5106285df171"
+    },
+    "slotpool_manifest": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-slotpool/realized_dynamic_manifest.jsonl",
+      "sha256": "dfdd46c8d6f1a253b3c52f777c383e425acfb6ea411bbfb48b9e4679dc12c5a9"
+    },
+    "structpool_manifest": {
+      "path": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-structpool/realized_dynamic_manifest.jsonl",
+      "sha256": "74a4ca08f60970cfd50d547bdda4ccd6c01cc63169d7005b1f61c31656bc4c3b"
+    }
+  },
+  "collection_roots": {
+    "known_v2": "build/stride-guardpool-maze-regression-v2/controllers/v2-full",
+    "known_slotpool": "build/stride-guardpool-maze-regression-v2/controllers/v2-plus-slotpool",
+    "known_structpool": "build/stride-guardpool-maze-regression-v2/controllers/v2-plus-structpool",
+    "historical_v2": "build/stride-safeslot-v2-baseline-v1",
+    "historical_slotpool": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-slotpool",
+    "historical_structpool": "build/stride-slotpool-structpool-ttf-diagnostic-v1/controllers/v2-plus-structpool"
+  },
+  "cohort": {
+    "historical_comparison_count": 58,
+    "historical_paired_key_count": 29,
+    "known_regression_comparison_count": 2,
+    "known_regression_key_count": 1,
+    "known_regression_used_for_rule_selection": false,
+    "all_historical_comparisons_retained": true
+  },
+  "tail_definition": {
+    "role": "descriptive_outcome_grouping_only",
+    "adverse_iteration_delta_minimum": 1,
+    "severe_iteration_delta_minimum": 10,
+    "severe_iteration_ratio_minimum": 2.0,
+    "persistent_pair_minimum_state_count": 3,
+    "threshold_selection_or_model_label_use_allowed": false
+  },
+  "claim_boundary": {
+    "read_only_existing_trace_analysis": true,
+    "candidate_rule_freeze_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "formal_ttf_claim": false,
+    "known_regression_is_generalization_evidence": false,
+    "fresh_solver_outcomes_collected": false,
+    "human_cross_case_review_required": true
+  },
+  "outputs": {
+    "analysis": "build/stride-closurepool-longtail-forensics-v1"
+  }
+}
