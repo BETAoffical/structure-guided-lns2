@@ -1,0 +1,96 @@
+{
+  "schema": "lns2.stride.safeslot_label_readiness_config.v1",
+  "scientific_status": "retrospective_registered_pre_residual_teacher_readiness_audit",
+  "experiment_id": "stride-safeslot-label-readiness-v1",
+  "implementation_id": "stride-safeslot-v1",
+  "pre_registration_parent_commit": "464fef97126c29f2105d1c582cfd7195fcca3934",
+  "inputs": {
+    "grid_report": {
+      "path": "build/stride-structpool-size-grid-v1/grid_report.json",
+      "sha256": "6a7f5cb3a28061dd2c62a767c70f88e40e0b01e879558c365f9881bfb8e01d5c"
+    },
+    "grid_manifest": {
+      "path": "build/stride-structpool-size-grid-v1/grid_manifest.jsonl",
+      "sha256": "de4248402ed009e458fe282a25b22ce3c39edea46650757bfad3490a32d20a27"
+    },
+    "grid_label_report": {
+      "path": "build/stride-structpool-size-labels-v1/collection_report.json",
+      "sha256": "5528363516433965fe723f340c4f3c71aba4d03fb73f70ed32a8c55d26e4f952"
+    },
+    "grid_candidate_aggregates": {
+      "path": "build/stride-structpool-size-labels-v1/candidate_aggregates.jsonl",
+      "sha256": "e04f885f95972c95dd0f7922efa223cb2bb25d23c8d93ae3ec29ef55b4a58ed4"
+    },
+    "grid_repair_trials": {
+      "path": "build/stride-structpool-size-labels-v1/repair_trials.jsonl",
+      "sha256": "e80c45317510eb91d3e69fd7c6f56cdef8445a8203f8737d9bd9231956b09537"
+    },
+    "base_label_report": {
+      "path": "build/stride-robustaction-label-collection-v1/collection_report.json",
+      "sha256": "f61871737ec7b14fd4abccbd14502b1cbbd93a4ab542850edc6f518c565aeea7"
+    },
+    "base_candidate_aggregates": {
+      "path": "build/stride-robustaction-label-collection-v1/candidate_aggregates.jsonl",
+      "sha256": "067150c57091d3b147945f1e5e3f5c4c6bc7711cebe5ebc47e390450f767f628"
+    },
+    "base_repair_trials": {
+      "path": "build/stride-robustaction-label-collection-v1/repair_trials.jsonl",
+      "sha256": "d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691"
+    },
+    "slotpool_report": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_evaluation_report.json",
+      "sha256": "3b305b824af605e592ef7d667978c0029817c7b23d854d6e6207bae4a47cb826"
+    },
+    "slotpool_state_evaluation": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/state_evaluation.jsonl",
+      "sha256": "364119bba83a634958c7b2d03f4504caf08863bd136afde8628bb7ef05d58d29"
+    }
+  },
+  "grid_state_artifact_root": "build/stride-structpool-size-grid-v1/states",
+  "grid_state_artifact_tree_sha256": "3a2e67a8f851891b12ee1fc8230f19352875f7e961f92d93991bca17bd3e0bb2",
+  "cohort": {
+    "state_count": 98,
+    "map_count": 16,
+    "grid_candidate_count": 1368,
+    "grid_trial_count": 21888,
+    "slotpool_selected_candidate_count": 588,
+    "known_maze_long_tail_excluded": true,
+    "all_states_retained": true
+  },
+  "paired_pre_residual_label": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "target": "challenger_minus_base_only_v2_anchor_normalized_current_step_reduction",
+    "minimum_mean_advantage": 0.02,
+    "minimum_paired_win_fraction": 0.75,
+    "fixed_half_rule": "strictly_positive_mean_advantage_in_each_half",
+    "no_progress_rule": "challenger_rate_not_above_anchor_rate",
+    "tie_epsilon": 1e-12,
+    "pp_seed_pairing": "same_state_and_trial_index_exact_seed",
+    "residual_teacher_required_for_final_positive_label": true
+  },
+  "readiness_gates": {
+    "minimum_pre_residual_positive_state_count": 25,
+    "minimum_pre_residual_positive_candidate_count": 50,
+    "minimum_positive_map_count": 8,
+    "minimum_slotpool_positive_state_retention": 0.85,
+    "minimum_slotpool_retained_positive_candidate_count": 30
+  },
+  "claim_boundary": {
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "formal_ttf_claim": false,
+    "runtime_or_ttf_read": false,
+    "future_trajectory_read": false,
+    "cost_to_go_read": false,
+    "remaining_repair_rounds_read": false,
+    "known_maze_result_used": false,
+    "post_state_collection_authorized_only_if_all_readiness_gates_pass": true
+  },
+  "outputs": {
+    "comparison_rows": "safeslot_pre_residual_comparisons.jsonl",
+    "state_rows": "safeslot_state_readiness.jsonl",
+    "report": "safeslot_label_readiness_report.json"
+  }
+}

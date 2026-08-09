@@ -1,0 +1,103 @@
+{
+  "schema": "lns2.stride.safeslot_residual_teacher_config.v1",
+  "scientific_status": "preregistered_outcome_unfiltered_paired_one_step_residual_teacher_collection",
+  "collection_id": "stride-safeslot-residual-teacher-v1",
+  "implementation_id": "stride-safeslot-v1",
+  "pre_registration_parent_commit": "464fef97126c29f2105d1c582cfd7195fcca3934",
+  "inputs": {
+    "readiness_report": {
+      "path": "build/stride-safeslot-label-readiness-v1/safeslot_label_readiness_report.json",
+      "sha256": "884fc6d46316613b13551ac23625215a1b084f9f4de61cf2cbffc0d4c0570275"
+    },
+    "readiness_comparisons": {
+      "path": "build/stride-safeslot-label-readiness-v1/safeslot_pre_residual_comparisons.jsonl",
+      "sha256": "95c4c1d0094f6598223f9b1612ec8ef921b3efb734526219f80dd3954d694a25"
+    },
+    "grid_report": {
+      "path": "build/stride-structpool-size-grid-v1/grid_report.json",
+      "sha256": "6a7f5cb3a28061dd2c62a767c70f88e40e0b01e879558c365f9881bfb8e01d5c"
+    },
+    "grid_manifest": {
+      "path": "build/stride-structpool-size-grid-v1/grid_manifest.jsonl",
+      "sha256": "de4248402ed009e458fe282a25b22ce3c39edea46650757bfad3490a32d20a27"
+    },
+    "base_repair_trials": {
+      "path": "build/stride-robustaction-label-collection-v1/repair_trials.jsonl",
+      "sha256": "d7ea0c68cd2e8d67b25f1b8963743d8e9cd338472a378b943da9b5b9385bf691"
+    },
+    "grid_repair_trials": {
+      "path": "build/stride-structpool-size-labels-v1/repair_trials.jsonl",
+      "sha256": "e80c45317510eb91d3e69fd7c6f56cdef8445a8203f8737d9bd9231956b09537"
+    },
+    "slotpool_state_evaluation": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/state_evaluation.jsonl",
+      "sha256": "364119bba83a634958c7b2d03f4504caf08863bd136afde8628bb7ef05d58d29"
+    }
+  },
+  "grid_state_artifact_root": "build/stride-structpool-size-grid-v1/states",
+  "grid_state_artifact_tree_sha256": "3a2e67a8f851891b12ee1fc8230f19352875f7e961f92d93991bca17bd3e0bb2",
+  "fixed_action_scope": {
+    "state_count": 98,
+    "base_only_v2_anchor_per_state": 1,
+    "slotpool_oof_candidates_per_state": 6,
+    "anchor_slotpool_exact_overlap_state_count": 1,
+    "unique_action_count": 685,
+    "trial_count_per_action": 16,
+    "total_trial_count": 10960,
+    "selection_is_fixed_before_residual_outcomes": true,
+    "outcome_based_candidate_filtering": false
+  },
+  "residual_metrics": {
+    "raw_fields": [
+      "conflict_pair_count",
+      "conflict_event_count",
+      "active_conflict_agent_count",
+      "largest_conflict_component_size",
+      "bottleneck_conflict_event_count",
+      "repeated_conflict_event_excess"
+    ],
+    "risk_components": [
+      "conflict_event_ratio_to_before",
+      "largest_component_ratio_to_before",
+      "bottleneck_event_ratio_to_before",
+      "repeated_event_excess_ratio_to_before"
+    ],
+    "risk_aggregation": "unweighted_arithmetic_mean",
+    "bottleneck_definition": "event_touches_static_articulation_or_degree_at_most_two",
+    "repeated_event_excess": "conflict_event_count_minus_unique_conflict_pair_count"
+  },
+  "final_label_contract": {
+    "requires_pre_residual_positive": true,
+    "mean_candidate_minus_anchor_risk_maximum": 0.0,
+    "each_fixed_half_candidate_minus_anchor_risk_maximum": 0.0,
+    "maximum_per_component_mean_regression": 0.02,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15]
+  },
+  "analysis_gates": {
+    "minimum_final_positive_state_count": 20,
+    "minimum_final_positive_candidate_count": 40,
+    "minimum_final_positive_map_count": 8
+  },
+  "execution": {
+    "workers": 2,
+    "per_state_timeout_seconds": 7200,
+    "monitor_interval_minutes": 30,
+    "resume_required": true
+  },
+  "claim_boundary": {
+    "model_training_allowed_before_completed_analysis": false,
+    "runtime_integration_allowed": false,
+    "formal_ttf_claim": false,
+    "runtime_or_ttf_stored": false,
+    "future_trajectory_stored": false,
+    "cost_to_go_stored": false,
+    "remaining_repair_rounds_stored": false,
+    "known_maze_result_used": false
+  },
+  "outputs": {
+    "collection": "build/stride-safeslot-residual-teacher-v1",
+    "analysis": "build/stride-safeslot-residual-teacher-analysis-v1"
+  }
+}

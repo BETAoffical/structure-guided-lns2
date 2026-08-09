@@ -1934,6 +1934,36 @@
       "contract": "Require matched pre-divergence state, action, PP seed and fingerprint semantics; preserve base-only V2 anchoring; forbid Cost-to-Go, future-label and TTF claims."
     },
     {
+      "path": "experiments/stride_safeslot_label_readiness.py",
+      "role": "active",
+      "purpose": "Audit exact base-only V2 versus four-size structural candidates under strictly paired current-step trials before collecting residual-state teacher fields."
+    },
+    {
+      "path": "scripts/analyze_stride_safeslot_label_readiness.py",
+      "role": "active",
+      "purpose": "Provide the deterministic CLI for the registered SafeSlot pre-residual label-readiness audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_safeslot_label_readiness.py",
+      "role": "active",
+      "contract": "Freeze exact PP-seed pairing, conservative current-step pre-residual positives, SlotPool opportunity retention, and the no-training/no-TTF claim boundary."
+    },
+    {
+      "path": "experiments/stride_safeslot_residual_teacher.py",
+      "role": "active",
+      "purpose": "Collect and audit one-step post-repair residual structure for the fixed exact V2 anchor plus frozen SlotPool action scope without reading future trajectories or timing."
+    },
+    {
+      "path": "scripts/run_stride_safeslot_residual_teacher.py",
+      "role": "active",
+      "purpose": "Provide the resumable paired native-repair collection and deterministic SafeSlot residual-teacher analysis CLI."
+    },
+    {
+      "path": "tests/evaluation/test_stride_safeslot_residual_teacher.py",
+      "role": "active",
+      "contract": "Freeze the residual metric, exact 16-seed action aggregate, teacher-only claim boundary, and registered 10,960-trial scope."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
