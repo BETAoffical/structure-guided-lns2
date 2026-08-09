@@ -2024,6 +2024,21 @@
       "contract": "Freeze the four-map, fresh task and solver seed product, reset-only field boundary, conflict-band selection, and no-training claim."
     },
     {
+      "path": "experiments/stride_maze_tail_full_episode.py",
+      "role": "reproducibility",
+      "purpose": "Run the frozen outcome-blind Maze cohort with V2, full StructPool, and frozen SlotPool under strict rotation and audit independent harmful-tail incidence."
+    },
+    {
+      "path": "scripts/run_stride_maze_tail_full_episode.py",
+      "role": "reproducibility",
+      "purpose": "Provide the deterministic resumable CLI for the preregistered 99-episode Maze tail evidence block."
+    },
+    {
+      "path": "tests/evaluation/test_stride_maze_tail_full_episode.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 33-key three-controller rotation, no-exclusion rule, run-to-completion semantics, tail definitions, and no-training claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

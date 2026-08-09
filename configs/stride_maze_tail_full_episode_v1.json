@@ -1,0 +1,152 @@
+{
+  "schema": "lns2.stride.maze_tail_full_episode_config.v1",
+  "scientific_status": "preregistered_after_outcome_blind_reset_selection_before_any_controller_episode",
+  "experiment_id": "stride-maze-tail-full-episode-v1",
+  "pre_registration_parent_commit": "9dbcab7df4c6ccbb8ee77d921435ea117d2ada33",
+  "controllers": ["v2-full", "v2-plus-structpool", "v2-plus-slotpool"],
+  "comparison": {
+    "baseline": "frozen_v2_over_original_candidate_pool",
+    "challengers": [
+      "frozen_v2_over_original_plus_full_structpool",
+      "frozen_v2_over_original_plus_frozen_slotpool"
+    ],
+    "execution_order": "strict_three_controller_rotation",
+    "paired_solver_seed_required": true,
+    "workers": 1
+  },
+  "runtime": {
+    "config": "configs/stride_maze_tail_evidence_preflight_runtime_v1.json",
+    "stopping_rule": "run-to-completion",
+    "scientific_time_limit_seconds": null,
+    "environment_time_limit_seconds": null,
+    "episode_process_timeout_seconds": null,
+    "feature_backend": "native",
+    "controller_runtime": "optimized",
+    "verification_profile": "deployment",
+    "deterministic_pp_replay": true,
+    "workers": 1
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "full_structpool_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-structpool-v1",
+    "runtime_id": "stride-structpool-runtime-v1",
+    "neighborhood_sizes": [8, 16, 24, 32],
+    "maximum_added_candidates": 6,
+    "maximum_jaccard_similarity": 0.8,
+    "maximum_total_candidates": 24,
+    "static_grid_cache": true,
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "cohort": {
+    "role": "outcome_blind_frozen_independent_maze_tail_cohort",
+    "dataset": "build/stride-maze-tail-evidence-candidate-dataset-v1",
+    "split": "balanced_wall_clock",
+    "solver_seeds": [17, 29, 43],
+    "paired_key_count": 33,
+    "episode_count_per_controller": 33,
+    "groups": [
+      {
+        "id": "maze-128-128-1",
+        "tasks": [
+          "maze-128-128-1__derived_opposite_exchange__task_seed_0853__agents_0120",
+          "maze-128-128-1__derived_opposite_exchange__task_seed_0811__agents_0080",
+          "maze-128-128-1__derived_uniform_random__task_seed_0853__agents_0120",
+          "maze-128-128-1__derived_uniform_random__task_seed_0853__agents_0080"
+        ]
+      },
+      {
+        "id": "maze-128-128-2",
+        "tasks": [
+          "maze-128-128-2__derived_opposite_exchange__task_seed_0853__agents_0600",
+          "maze-128-128-2__derived_opposite_exchange__task_seed_0853__agents_0400",
+          "maze-128-128-2__derived_uniform_random__task_seed_0853__agents_0500"
+        ]
+      },
+      {
+        "id": "maze-32-32-4",
+        "tasks": [
+          "maze-32-32-4__derived_opposite_exchange__task_seed_0811__agents_0160",
+          "maze-32-32-4__derived_opposite_exchange__task_seed_0853__agents_0120",
+          "maze-32-32-4__derived_uniform_random__task_seed_0811__agents_0200",
+          "maze-32-32-4__derived_uniform_random__task_seed_0853__agents_0160"
+        ]
+      }
+    ],
+    "result_based_exclusions": []
+  },
+  "tail_definition": {
+    "adverse_minimum_repair_iteration_delta": 1,
+    "severe_minimum_repair_iteration_delta": 10,
+    "severe_minimum_repair_iteration_ratio": 2.0
+  },
+  "tail_evidence_gates": {
+    "minimum_adverse_or_severe_comparisons": 12,
+    "minimum_severe_tail_comparisons": 4,
+    "minimum_adverse_map_count": 2,
+    "minimum_adverse_task_count": 6,
+    "minimum_adverse_solver_seed_count": 2,
+    "minimum_adverse_comparisons_per_challenger": 3
+  },
+  "inputs": {
+    "dataset_summary": {
+      "path": "build/stride-maze-tail-evidence-candidate-dataset-v1/dataset_summary.json",
+      "sha256": "b75058948bbe9829e71abd375cebab0432cc10992b69836ff3d132933b7cfe2f"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-maze-tail-evidence-candidate-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "d24498bebc6a569996dc310b43721a631be64035ff0c09beb2fba156e67a7053"
+    },
+    "runtime_config": {
+      "path": "configs/stride_maze_tail_evidence_preflight_runtime_v1.json",
+      "sha256": "1a53aaac8d19391df7edc0694afd12c189be930227b42aa6340ec715b134ea1d"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "slotpool_model": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/slotpool_pairwise_model.json",
+      "sha256": "e0a42c7a21cb341a6c5ce13ad6d89e6f5279c04378535fb9c44ce76a1dfe2319"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-maze-tail-evidence-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "8db87c81b069691eacbc889e0e613d5ab55f29002b2ebf906bba64029b3b438d"
+    },
+    "qualification_report": {
+      "path": "build/stride-maze-tail-evidence-qualification-v1/qualification_report.json",
+      "sha256": "be42fbf4dce812b60c77959d44e986c95c1687d5fb6fb6299485b223e098dc46"
+    },
+    "qualification_run_config": {
+      "path": "build/stride-maze-tail-evidence-qualification-v1/run_config.json",
+      "sha256": "dfab457a2832b5f0a5fb27c63296b3c95e173d3d38f3cfda8aea8f8d0eca18f6"
+    },
+    "selected_cohort": {
+      "path": "build/stride-maze-tail-evidence-preflight-analysis-v1/selected_cohort.jsonl",
+      "sha256": "555479deba9c85b700379f936191d5ceba2237b26ba3b07156ea5c961e32c436"
+    },
+    "preflight_report": {
+      "path": "build/stride-maze-tail-evidence-preflight-analysis-v1/maze_tail_evidence_preflight_report.json",
+      "sha256": "e376ed2b54e2d8374a583217d12bcba130dacadc32d62afe3594a7ac06e3f5cf"
+    }
+  },
+  "claim_boundary": {
+    "tail_incidence_evidence_only": true,
+    "formal_speed_claim": false,
+    "fresh_map_generalization_claim": false,
+    "default_replacement_allowed": false,
+    "training_allowed": false,
+    "no_result_based_exclusions": true,
+    "speed_metrics_descriptive_only": true
+  },
+  "next_step_on_tail_evidence_pass": "preregister_first_divergence_sixteen_seed_paired_action_replay",
+  "next_step_on_tail_evidence_failure": "retain_complete_block_and_preregister_second_independent_task_seed_block"
+}
