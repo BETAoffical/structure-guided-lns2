@@ -1994,6 +1994,21 @@
       "contract": "Freeze conflict-component closure, boundary, pair-persistence and descriptive tail-group semantics while forbidding rule selection, training and TTF claims."
     },
     {
+      "path": "experiments/stride_closurepool_temporal.py",
+      "role": "reproducibility",
+      "purpose": "Reconstruct saved Maze divergences and measure fixed low-degree corridor temporal dependencies without tuning a rule or running a solver."
+    },
+    {
+      "path": "scripts/analyze_stride_closurepool_temporal.py",
+      "role": "reproducibility",
+      "purpose": "Provide the deterministic read-only CLI for the preregistered ClosurePool temporal dependency supplement."
+    },
+    {
+      "path": "tests/evaluation/test_stride_closurepool_temporal.py",
+      "role": "reproducibility",
+      "contract": "Freeze map-only corridor segments, exact interval overlap and reverse-edge temporal dependency semantics."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

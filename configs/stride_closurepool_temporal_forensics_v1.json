@@ -1,0 +1,64 @@
+{
+  "schema": "lns2.stride.closurepool_temporal_forensics_config.v1",
+  "scientific_status": "preregistered_retrospective_temporal_dependency_diagnostic",
+  "experiment_id": "stride-closurepool-temporal-forensics-v1",
+  "pre_registration_parent_commit": "8b2fafc",
+  "inputs": {
+    "longtail_config": {
+      "path": "configs/stride_closurepool_longtail_forensics_v1.json",
+      "sha256": "929087df0adc70176b03dd8c67f4c15c568d06cd56b23637d6fd808251ad44f5"
+    },
+    "longtail_report": {
+      "path": "build/stride-closurepool-longtail-forensics-v1/closurepool_longtail_forensics_report.json",
+      "sha256": "a403711973f84659c9d78f6b342d2e288d5c967d3bea8766dbd733a76e28668a"
+    },
+    "comparison_diagnostics": {
+      "path": "build/stride-closurepool-longtail-forensics-v1/comparison_diagnostics.jsonl",
+      "sha256": "534e40edfee81b11b1fea4acc964652aff41de6a67305614a52bba8893289e8d"
+    },
+    "persistent_pair_diagnostics": {
+      "path": "build/stride-closurepool-longtail-forensics-v1/persistent_pair_diagnostics.jsonl",
+      "sha256": "1459b8ff5f39cb70421f003e461b15181347b4569d57a6cc4cd96e0552561668"
+    }
+  },
+  "cohort": {
+    "historical_group_id": "maze100",
+    "historical_comparison_count": 10,
+    "historical_paired_key_count": 5,
+    "historical_task_count": 2,
+    "historical_adverse_or_severe_count": 3,
+    "historical_beneficial_or_tied_count": 7,
+    "known_regression_comparison_count": 2,
+    "known_regression_used_for_rule_selection": false,
+    "room_minor_regression_is_out_of_scope": true
+  },
+  "corridor_definition": {
+    "cell_rule": "free_grid_degree_at_most_2",
+    "segment_rule": "connected_component_in_low_degree_induced_subgraph",
+    "visit_rule": "maximal_contiguous_path_run_in_one_segment",
+    "temporal_overlap_rule": "closed_visit_intervals_intersect",
+    "opposing_rule": "visits_traverse_at_least_one_shared_grid_edge_in_reverse_directions",
+    "time_window_parameter": null,
+    "outcome_dependent_parameter": false
+  },
+  "contrast": {
+    "primary": "historical_adverse_or_severe_minus_historical_beneficial_or_tied",
+    "stratify_by_controller": true,
+    "known_regression_role": "illustrative_external_regression_only",
+    "minimum_historical_adverse_map_groups_for_rule_freeze": 2,
+    "automatic_threshold_search_allowed": false
+  },
+  "claim_boundary": {
+    "read_only_existing_trace_analysis": true,
+    "candidate_rule_freeze_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "formal_ttf_claim": false,
+    "fresh_solver_outcomes_collected": false,
+    "known_regression_is_generalization_evidence": false,
+    "human_cross_case_review_required": true
+  },
+  "outputs": {
+    "analysis": "build/stride-closurepool-temporal-forensics-v1"
+  }
+}

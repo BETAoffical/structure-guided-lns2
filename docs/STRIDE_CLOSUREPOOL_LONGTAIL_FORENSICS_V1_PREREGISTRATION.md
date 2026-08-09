@@ -61,4 +61,3 @@ must first determine whether the same pre-action mechanism separates adverse
 and non-adverse divergences across more than one map/task group. Only then may
 a new document freeze an interpretable dependency-closure rule and test it on
 data not used to identify the mechanism.
-

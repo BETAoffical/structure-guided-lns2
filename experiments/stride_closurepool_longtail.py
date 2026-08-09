@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import collections
-import hashlib
 import math
 import statistics
 from pathlib import Path
@@ -9,7 +8,6 @@ from typing import Any, Iterable
 
 from experiments._common import (
     _native_filesystem_path,
-    contained_file,
     producer_identity,
     ratio,
     registered_input,
