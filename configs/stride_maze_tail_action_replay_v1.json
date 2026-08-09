@@ -1,0 +1,46 @@
+{
+  "schema": "lns2.stride.maze_tail_action_replay_config.v1",
+  "scientific_status": "preregistered_first_divergence_sixteen_seed_paired_action_replay",
+  "experiment_id": "stride-maze-tail-action-replay-v1",
+  "pre_registration_parent_commit": "a2dcbe2cd88e04928c920474fb56ee41738e5633",
+  "inputs": {
+    "preflight_report": {
+      "path": "build/stride-maze-tail-action-replay-preflight-v1/action_replay_preflight_report.json",
+      "sha256": "74dad85c81fadec8c9a44932bf3c0cb7ae942a078058776964bc6f00f1ac0330"
+    },
+    "state_selection": {
+      "path": "build/stride-maze-tail-action-replay-preflight-v1/state_selection.jsonl",
+      "sha256": "453fd4702e104b74ed032c62aae152017afb32401dc2191e9f90701872ef1377"
+    }
+  },
+  "expected_state_count": 66,
+  "candidate_roles": [
+    "v2_action",
+    "challenger_action"
+  ],
+  "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "strictly_paired_pp_seeds_within_state_and_index": true,
+  "primary_outcome": "current_step_conflict_reduction_normalized_by_before_conflicts",
+  "runtime_used_in_label": false,
+  "future_trajectory_read": false,
+  "outcome_based_state_filtering": false,
+  "robust_order_rule": {
+    "minimum_paired_win_fraction": 0.75,
+    "minimum_absolute_mean_effect": 0.02,
+    "require_both_half_mean_directions": true,
+    "require_winner_no_progress_rate_not_worse": true,
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "tie_epsilon": 1e-12
+  },
+  "analysis_gates": {
+    "minimum_robustly_ordered_fraction": 0.70,
+    "minimum_robustly_ordered_tail_count": 8,
+    "minimum_robust_tail_map_count": 2,
+    "minimum_robust_tail_task_count": 4,
+    "minimum_robust_tail_solver_seed_count": 2,
+    "minimum_robust_tail_per_challenger": 2
+  },
+  "workers": 1,
+  "state_timeout_seconds": 1800.0
+}

@@ -53,3 +53,19 @@ second independently registered task-seed block, not post-hoc case filtering or
 threshold adjustment.  Passing authorizes only an outcome-blind residual-hazard
 predictor design; training, runtime integration, default promotion, and TTF
 claims remain forbidden.
+
+## Frozen preflight result
+
+The extraction preflight passed before any new repair trial was executed.  All
+66 comparisons had a genuine first realized-neighborhood divergence: 63 at
+decision zero, one at decision one, and two at decision two.  The frozen set
+contains all 24 adverse/severe comparisons and all 10 severe comparisons, with
+12 tail cases per challenger across three maps, eight tasks, and three solver
+seeds.
+
+The immutable preflight report SHA-256 is
+`74dad85c81fadec8c9a44932bf3c0cb7ae942a078058776964bc6f00f1ac0330`;
+the 66-row state/action selection SHA-256 is
+`453fd4702e104b74ed032c62aae152017afb32401dc2191e9f90701872ef1377`.
+The subsequent replay config pins both artifacts and requires exactly 2,112
+single-step repairs.
