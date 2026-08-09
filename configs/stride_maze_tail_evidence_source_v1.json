@@ -1,0 +1,68 @@
+{
+  "schema": "lns2.stride.maze_tail_evidence_source.v1",
+  "scientific_status": "preregistered_before_reset_only_qualification",
+  "experiment_id": "stride-maze-tail-evidence-preflight-v1",
+  "pre_registration_parent_commit": "13a7b705e56c1b00767500be21c3cc99d37160af",
+  "dataset_revision": "stride-maze-tail-evidence-candidates-v1",
+  "source": "https://movingai.com/benchmarks/mapf/index.html",
+  "task_semantics": "project_derived_static_od_not_official_movingai_scenarios",
+  "master_seed": 20260809,
+  "task_seeds": [811, 853],
+  "task_variants": ["uniform_random", "opposite_exchange"],
+  "solver_seeds": [17, 29, 43],
+  "expected_map_count": 4,
+  "expected_task_count": 64,
+  "expected_reset_count": 192,
+  "benchmarks": [
+    {
+      "id": "maze-32-32-4",
+      "layout_family": "maze",
+      "agent_counts": [80, 120, 160, 200],
+      "map_archive": {
+        "url": "https://movingai.com/benchmarks/mapf/maze-32-32-4.map.zip",
+        "sha256": "44ed0abed028afe05f0fd71f49bb91bd57db3039ca7fc11738413d550d094917",
+        "member": "maze-32-32-4.map",
+        "member_sha256": "7ff67aa59f71933b8cf2605e12631b8a28d9ebcfb9b941de3afdc7dce3123fee"
+      }
+    },
+    {
+      "id": "maze-128-128-1",
+      "layout_family": "maze",
+      "agent_counts": [60, 80, 100, 120],
+      "map_archive": {
+        "url": "https://movingai.com/benchmarks/mapf/maze-128-128-1.map.zip",
+        "sha256": "95796c495114b91b342dd09b05f6c3d7e3f21b3fd91c620e73c345f3be362c5c",
+        "member": "maze-128-128-1.map",
+        "member_sha256": "9ef42dc6c43a2b07364c9678b7501a6a7ff1fc7e61215abae6d34000ba8e70c9"
+      }
+    },
+    {
+      "id": "maze-128-128-2",
+      "layout_family": "maze",
+      "agent_counts": [300, 400, 500, 600],
+      "map_archive": {
+        "url": "https://movingai.com/benchmarks/mapf/maze-128-128-2.map.zip",
+        "sha256": "e289362aa688dc27dc0e31b176a75ef35ba2c48ede14739ec4dd332d75388048",
+        "member": "maze-128-128-2.map",
+        "member_sha256": "9a22a1f6b63ac1914af03a24e4397e31000a3b4ffa85a6a4a813e04b5fa49bd1"
+      }
+    },
+    {
+      "id": "maze-128-128-10",
+      "layout_family": "maze",
+      "agent_counts": [400, 600, 800, 1000],
+      "map_archive": {
+        "url": "https://movingai.com/benchmarks/mapf/maze-128-128-10.map.zip",
+        "sha256": "bcd321d05ef536eac90a7ca7d1877f57a39a3c2335223529625625cf8654f90e",
+        "member": "maze-128-128-10.map",
+        "member_sha256": "2281ef15df0c94efc79b7c62f0c60ce4cb22c43c2cc584226d307c7676d53986"
+      }
+    }
+  ],
+  "outcome_boundary": {
+    "dataset_generation_uses_controller_outcomes": false,
+    "dataset_generation_uses_repair_outcomes": false,
+    "task_or_load_replacement_after_outcomes": false,
+    "wide_corridor_zero_conflict_control_is_retained": true
+  }
+}

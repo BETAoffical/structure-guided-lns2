@@ -2009,6 +2009,21 @@
       "contract": "Freeze map-only corridor segments, exact interval overlap and reverse-edge temporal dependency semantics."
     },
     {
+      "path": "experiments/stride_maze_tail_evidence.py",
+      "role": "reproducibility",
+      "purpose": "Materialize checksum-pinned Maze task and load ladders, run reset-only qualification, and select an outcome-blind independent-seed cohort before any new tail predictor is designed."
+    },
+    {
+      "path": "scripts/run_stride_maze_tail_evidence.py",
+      "role": "reproducibility",
+      "purpose": "Provide the deterministic prepare, qualify, and analyze CLI for the preregistered Maze long-tail evidence preflight."
+    },
+    {
+      "path": "tests/evaluation/test_stride_maze_tail_evidence.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four-map, fresh task and solver seed product, reset-only field boundary, conflict-band selection, and no-training claim."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

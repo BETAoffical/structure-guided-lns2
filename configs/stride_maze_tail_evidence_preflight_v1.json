@@ -1,0 +1,96 @@
+{
+  "schema": "lns2.stride.maze_tail_evidence_preflight_config.v1",
+  "scientific_status": "preregistered_before_dataset_materialization_and_reset_only_qualification",
+  "experiment_id": "stride-maze-tail-evidence-preflight-v1",
+  "pre_registration_parent_commit": "13a7b705e56c1b00767500be21c3cc99d37160af",
+  "dataset": "build/stride-maze-tail-evidence-candidate-dataset-v1",
+  "split": "balanced_wall_clock",
+  "runtime": "configs/stride_maze_tail_evidence_preflight_runtime_v1.json",
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "solver_seeds": [17, 29, 43],
+  "expected_map_count": 4,
+  "expected_task_count": 64,
+  "expected_reset_count": 192,
+  "candidate_ladders": [
+    {"map_id": "maze-32-32-4", "agent_counts": [80, 120, 160, 200]},
+    {"map_id": "maze-128-128-1", "agent_counts": [60, 80, 100, 120]},
+    {"map_id": "maze-128-128-2", "agent_counts": [300, 400, 500, 600]},
+    {"map_id": "maze-128-128-10", "agent_counts": [400, 600, 800, 1000]}
+  ],
+  "selection_rule": {
+    "group_by": ["map_id", "task_variant_family", "conflict_band"],
+    "task_variants": ["uniform_random", "opposite_exchange"],
+    "conflict_bands": [
+      {"id": "moderate", "minimum_mean_initial_conflicts": 16.0, "maximum_mean_initial_conflicts": 99.999999, "target_mean_initial_conflicts": 50.0},
+      {"id": "high", "minimum_mean_initial_conflicts": 100.0, "maximum_mean_initial_conflicts": 400.0, "target_mean_initial_conflicts": 200.0}
+    ],
+    "require_all_solver_seeds_ok_complete_and_consistent": true,
+    "require_each_solver_seed_at_least_conflicts": 16,
+    "maximum_tasks_per_map_variant_band": 1,
+    "tie_break": ["absolute_target_distance", "lower_agent_count", "lower_task_seed", "task_id"],
+    "minimum_selected_map_count": 3,
+    "minimum_selected_task_count": 8,
+    "minimum_map_coverage_per_task_variant": 2,
+    "minimum_selected_task_seed_count": 2,
+    "require_both_conflict_bands": true,
+    "retain_unqualified_maps_as_registered_negative_controls": true
+  },
+  "outcome_boundary": {
+    "allowed_observed_fields": [
+      "reset_status",
+      "initial_complete",
+      "initial_conflicts",
+      "initial_complexity",
+      "initial_state_consistent",
+      "state_fingerprint"
+    ],
+    "candidate_repair_outcomes_read": false,
+    "controller_outcomes_read": false,
+    "ttf_outcomes_read": false,
+    "known_maps_with_fresh_task_and_solver_seeds": true,
+    "fresh_map_generalization_claim": false,
+    "tail_incidence_claim": false,
+    "training_allowed": false
+  },
+  "forbidden_selection_inputs": [
+    "conflicts_after",
+    "repair_iterations",
+    "repair_runtime",
+    "pp_replan_seconds",
+    "selected_candidate",
+    "controller_action",
+    "controller_ttf",
+    "future_trajectory"
+  ],
+  "planned_next_evidence": {
+    "controllers": ["v2-full", "v2-plus-structpool", "v2-plus-slotpool"],
+    "execution": "strict_three_controller_rotation_run_to_completion",
+    "post_episode_sampling": "first_divergence_state_per_challenger_and_paired_v2_action",
+    "paired_pp_trials_per_action": 16,
+    "predictor_design_before_full_episode_and_pp_replay": false
+  },
+  "next_step_on_pass": "freeze_selected_tasks_and_preregister_three_controller_full_episode_block",
+  "next_step_on_failure": "retain_complete_resets_and_preregister_independent_task_seed_or_load_extension_without_outcome_filtering",
+  "inputs": {
+    "source_config": {
+      "path": "configs/stride_maze_tail_evidence_source_v1.json",
+      "sha256": "eb5871499d920d826138bb673da596b8520e553cca9b01ce72fa35243ac1b13b"
+    },
+    "runtime_config": {
+      "path": "configs/stride_maze_tail_evidence_preflight_runtime_v1.json",
+      "sha256": "1a53aaac8d19391df7edc0694afd12c189be930227b42aa6340ec715b134ea1d"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "known_tail_report": {
+      "path": "build/stride-guardpool-maze-regression-v2/guardpool_maze_regression_report.json",
+      "sha256": "84b5ea9dd8c44f0abfd1cfbe49086ee7ed1d9def6e2e578b60648132790a3ebe"
+    },
+    "closurepool_temporal_report": {
+      "path": "build/stride-closurepool-temporal-forensics-v1/closurepool_temporal_forensics_report.json",
+      "sha256": "3d6309211bad566499578eddf675eb40adab3b4d6d560ab884947f0a17c3cc7d"
+    }
+  }
+}
