@@ -1,0 +1,56 @@
+{
+  "schema": "lns2.stride.residualhazard_registration.v1",
+  "experiment_id": "stride-residualhazard-v1",
+  "scientific_status": "preregistered_target_design_without_training",
+  "parent": {
+    "report": "build/stride-maze-tail-action-replay-v1/action_replay_report.json",
+    "report_sha256": "54223f17155d6222f467823e11b3a31fe9faec1c51989e3a40c26d1a03f77587",
+    "state_selection_sha256": "453fd4702e104b74ed032c62aae152017afb32401dc2191e9f90701872ef1377",
+    "action_replay_trials_sha256": "1699317f021b771f8901294e20f6580773bcc5670a964e59064b43a3cfe28b11"
+  },
+  "cohort": {
+    "state_count": 66,
+    "actions_per_state": 2,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_pp_seeds": true,
+    "outcome_filtering": false,
+    "training_use": false
+  },
+  "residual_measurements": [
+    "normalized_residual_conflict_count",
+    "selected_unselected_residual_pair_ratio",
+    "new_residual_pair_ratio",
+    "low_degree_residual_event_ratio",
+    "largest_residual_component_agent_ratio",
+    "residual_conflict_cell_herfindahl",
+    "outside_boundary_queue_agent_ratio"
+  ],
+  "seed_stability": {
+    "minimum_same_direction_trials": 12,
+    "fixed_halves": [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]],
+    "both_halves_same_direction": true
+  },
+  "target_readiness": {
+    "target_priority": [
+      "new_residual_pair_ratio",
+      "selected_unselected_residual_pair_ratio",
+      "low_degree_residual_event_ratio",
+      "residual_conflict_cell_herfindahl",
+      "largest_residual_component_agent_ratio",
+      "outside_boundary_queue_agent_ratio"
+    ],
+    "same_direction_on_all_current_maps": true,
+    "same_direction_for_both_challengers": true,
+    "minimum_seed_stable_tail_comparisons": 8,
+    "minimum_seed_stable_tail_comparisons_with_no_worse_residual_conflict": 4,
+    "must_not_be_explained_only_by_total_residual_conflicts": true,
+    "weighted_post_hoc_target_forbidden": true
+  },
+  "claim_boundary": {
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_claim_allowed": false,
+    "future_trajectory_features_allowed": false,
+    "runtime_features_allowed": false
+  }
+}
