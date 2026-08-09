@@ -1,0 +1,137 @@
+{
+  "schema": "lns2.stride.safeslot_gate_training_config.v1",
+  "scientific_status": "preregistered_before_map_grouped_gate_training",
+  "implementation_id": "stride-safeslot-v1",
+  "model_id": "stride-safeslot-gate-v1",
+  "pre_registration_parent_commit": "b4f15a1deb283c4dd6dd01b533da43514b585bcb",
+  "inputs": {
+    "residual_analysis_report": {
+      "path": "build/stride-safeslot-residual-teacher-analysis-v1/residual_teacher_analysis_report.json",
+      "sha256": "cd2b0a6e22f5cbad9fd2a35435579ec2b14c56c0f19c0392e113ed0558ba6e71"
+    },
+    "safe_replace_labels": {
+      "path": "build/stride-safeslot-residual-teacher-analysis-v1/safe_replace_labels.jsonl",
+      "sha256": "81e57ecaca26c7b9ef6a8f4c9f38242e85db19196b33c8e4c83a74b575a17baa"
+    },
+    "residual_collection_report": {
+      "path": "build/stride-safeslot-residual-teacher-v1/collection_report.json",
+      "sha256": "3949358bf189f17c4a0232efecc848476c9c04a5994f32862f5ad1eaa70c652b"
+    },
+    "residual_action_aggregates": {
+      "path": "build/stride-safeslot-residual-teacher-v1/residual_action_aggregates.jsonl",
+      "sha256": "6d6f9d9d22d1ae7e18195297d158672e78d25e7bebdc501a898bbf850747cf88"
+    },
+    "readiness_comparisons": {
+      "path": "build/stride-safeslot-label-readiness-v1/safeslot_pre_residual_comparisons.jsonl",
+      "sha256": "95c4c1d0094f6598223f9b1612ec8ef921b3efb734526219f80dd3954d694a25"
+    },
+    "slotpool_state_evaluation": {
+      "path": "build/stride-slotpool-v1-offline-evaluation/state_evaluation.jsonl",
+      "sha256": "364119bba83a634958c7b2d03f4504caf08863bd136afde8628bb7ef05d58d29"
+    },
+    "grid_manifest": {
+      "path": "build/stride-structpool-size-grid-v1/grid_manifest.jsonl",
+      "sha256": "de4248402ed009e458fe282a25b22ce3c39edea46650757bfad3490a32d20a27"
+    }
+  },
+  "grid_state_artifact_root": "build/stride-structpool-size-grid-v1/states",
+  "grid_state_artifact_tree_sha256": "3a2e67a8f851891b12ee1fc8230f19352875f7e961f92d93991bca17bd3e0bb2",
+  "base_state_artifact_root": "build/stride-robustaction-label-preflight-v1/states",
+  "base_state_artifact_tree_sha256": "6bc5f8a4d0edcb2881eee4361fc5c5c4362b32f3cbc2953ef8a8a75998c07bc2",
+  "cohort": {
+    "state_count": 98,
+    "map_count": 16,
+    "slotpool_candidate_count": 588,
+    "exact_anchor_overlap_count": 1,
+    "eligible_challenger_count": 587,
+    "positive_challenger_count": 201,
+    "negative_challenger_count": 386,
+    "all_states_retained": true,
+    "known_maze_long_tail_excluded": true,
+    "fresh_map_labels_read": false
+  },
+  "features": {
+    "base_schema": "lns2.realized_features.v2",
+    "base_dimension": 124,
+    "challenger_minus_anchor_dimension": 124,
+    "challenger_slot_dimension": 46,
+    "shared_state_dimension": 23,
+    "input_dimension": 193,
+    "representation": "challenger_minus_exact_v2_anchor_plus_challenger_slot_features_plus_shared_state",
+    "residual_teacher_fields_used_as_inputs": false,
+    "outcome_fields_used_as_inputs": false,
+    "recent_failed_neighborhood_overlap_used": false,
+    "current_no_progress_streak_used": false,
+    "history_feature_exclusion_reason": "no_matched_safeslot_runtime_history_exists_before_training"
+  },
+  "labels": {
+    "schema": "lns2.stride.safeslot_safe_replace_label.v1",
+    "target": "final_safe_replace_positive",
+    "exact_anchor_overlap_action": "exclude_outcome_blind_before_training",
+    "sample_weighting": "equal_total_weight_per_state_uniform_over_eligible_challengers",
+    "runtime_or_ttf_used": false,
+    "future_trajectory_used": false,
+    "cost_to_go_used": false,
+    "remaining_repair_rounds_used": false
+  },
+  "model": {
+    "class": "sklearn.ensemble.HistGradientBoostingClassifier",
+    "fixed_parameters": {
+      "early_stopping": false,
+      "learning_rate": 0.05,
+      "max_iter": 100,
+      "min_samples_leaf": 20,
+      "random_state": 20260809
+    },
+    "parameter_grid": [
+      {"max_leaf_nodes": 7, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 7, "l2_regularization": 1.0},
+      {"max_leaf_nodes": 15, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 15, "l2_regularization": 1.0}
+    ],
+    "outer_map_folds": 4,
+    "inner_map_folds": 3,
+    "hyperparameter_selection": "maximum_feasible_replacement_coverage_then_precision_then_roc_auc_then_lowest_parameter_index"
+  },
+  "threshold_calibration": {
+    "threshold_grid": [0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "selection": "lowest_feasible_threshold_per_parameter",
+    "minimum_safe_replace_precision": 0.80,
+    "minimum_replacement_state_fraction": 0.10,
+    "minimum_selected_map_fraction": 0.50,
+    "minimum_mean_current_step_advantage": 0.0,
+    "minimum_first_fixed_half_advantage": 0.0,
+    "minimum_second_fixed_half_advantage": 0.0,
+    "maximum_mean_no_progress_rate_delta": 0.0,
+    "maximum_mean_residual_risk_delta": 0.0,
+    "maximum_map_mean_current_step_regret": 0.02,
+    "maximum_map_mean_residual_risk_degradation": 0.02,
+    "infeasible_action": "full_abstention_to_exact_v2_and_mark_calibration_infeasible"
+  },
+  "offline_acceptance": {
+    "minimum_candidate_roc_auc": 0.65,
+    "minimum_weighted_accuracy_gain_over_majority": 0.03,
+    "minimum_selected_safe_replace_precision": 0.80,
+    "minimum_replacement_state_fraction": 0.10,
+    "minimum_selected_map_count": 8,
+    "minimum_mean_current_step_advantage": 0.0,
+    "minimum_first_fixed_half_advantage": 0.0,
+    "minimum_second_fixed_half_advantage": 0.0,
+    "maximum_mean_no_progress_rate_delta": 0.0,
+    "maximum_mean_residual_risk_delta": 0.0,
+    "maximum_map_mean_current_step_regret": 0.02,
+    "maximum_map_mean_residual_risk_degradation": 0.02,
+    "minimum_feasible_outer_fold_fraction": 1.0
+  },
+  "claim_boundary": {
+    "development_labels_only": true,
+    "runtime_integration_allowed": false,
+    "formal_ttf_claim": false,
+    "fresh_map_label_confirmation_required": true,
+    "runtime_success_noninferiority_required_later": true,
+    "known_maze_regression_required_later": true
+  },
+  "outputs": {
+    "training": "build/stride-safeslot-gate-training-v1"
+  }
+}

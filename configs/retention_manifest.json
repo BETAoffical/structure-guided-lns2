@@ -1964,6 +1964,21 @@
       "contract": "Freeze the residual metric, exact 16-seed action aggregate, teacher-only claim boundary, and registered 10,960-trial scope."
     },
     {
+      "path": "experiments/stride_safeslot_gate.py",
+      "role": "active",
+      "purpose": "Build the exact-anchor pre-action SafeSlot feature matrix and perform nested whole-map gate training with an explicit V2 abstention policy."
+    },
+    {
+      "path": "scripts/train_stride_safeslot_gate.py",
+      "role": "active",
+      "purpose": "Provide the deterministic CLI for preregistered SafeSlot offline gate training and map-grouped evaluation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_safeslot_gate.py",
+      "role": "active",
+      "contract": "Freeze the 193-dimensional pre-action representation, exact-V2 abstention behavior, and offline-only fresh-map confirmation boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
