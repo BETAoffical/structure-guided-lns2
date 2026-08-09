@@ -1089,6 +1089,7 @@ def train_safeslot_gate(
             project_root=project_root,
             source_files=PRODUCER_FILES,
             native_required=False,
+            package_names=("numpy", "scikit-learn"),
         ),
         "feature_dimension": len(FEATURE_NAMES),
         "row_audit": row_audit,
