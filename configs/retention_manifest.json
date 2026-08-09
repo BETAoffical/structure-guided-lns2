@@ -2039,6 +2039,21 @@
       "contract": "Freeze the 33-key three-controller rotation, no-exclusion rule, run-to-completion semantics, tail definitions, and no-training claim boundary."
     },
     {
+      "path": "experiments/stride_maze_tail_state_collection.py",
+      "role": "reproducibility",
+      "purpose": "Collect the frozen Maze cohort under a trace-finalizing 200-decision or 300-second fuse and analyze explicit right-censored fixed-horizon tail evidence."
+    },
+    {
+      "path": "scripts/run_stride_maze_tail_state_collection.py",
+      "role": "reproducibility",
+      "purpose": "Provide the deterministic resumable CLI for fused Maze tail state-condition collection."
+    },
+    {
+      "path": "tests/evaluation/test_stride_maze_tail_state_collection.py",
+      "role": "reproducibility",
+      "contract": "Freeze the evidence fuse, 99-entry schedule, right-censoring semantics, fixed-horizon classifications, and no-training boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
