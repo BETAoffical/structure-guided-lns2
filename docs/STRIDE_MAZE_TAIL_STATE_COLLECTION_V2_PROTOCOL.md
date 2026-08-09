@@ -23,6 +23,10 @@ controller timings, selected neighborhoods, and `repair_limit` or
 `wall_timeout`.  Such rows are valid right-censored trajectories, not execution
 errors and not claims that the underlying solver can never finish.
 
+The 200-decision fuse is enforced by the trace-producing outer episode loop.
+The native environment keeps `max_repair_iterations=0`, which preserves the
+registered reset-protocol identity; it does not disable the outer fuse.
+
 ## Analysis
 
 Completed pairs retain the registered repair-iteration comparison.  When only

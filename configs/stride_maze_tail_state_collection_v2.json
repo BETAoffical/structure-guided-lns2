@@ -1,8 +1,10 @@
 {
   "schema": "lns2.stride.maze_tail_state_collection_config.v2",
-  "scientific_status": "preregistered_fused_state_collection_after_v1_operational_stop_before_any_v2_episode",
-  "experiment_id": "stride-maze-tail-state-collection-v2",
+  "scientific_status": "preregistered_fused_state_collection_revision_after_zero_episode_reset_protocol_rejection",
+  "experiment_id": "stride-maze-tail-state-collection-v2-r1",
   "pre_registration_parent_commit": "f8da77aa2c0aaa2355ec0b102462246b05d71552",
+  "pre_registration_revision_parent_commit": "ebff095c5de296aca849f4a6c4e1634c53046ad9",
+  "pre_registration_revision_reason": "restore_qualification_compatible_native_unlimited_repair_while_preserving_outer_200_decision_and_300_second_fuse_before_any_episode",
   "controllers": ["v2-full", "v2-plus-structpool", "v2-plus-slotpool"],
   "comparison": {
     "baseline": "frozen_v2_over_original_candidate_pool",
@@ -123,7 +125,7 @@
     },
     "runtime_config": {
       "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
-      "sha256": "f5c476acf144627249085d8c9549ef692abc9791eeba245529bac3d740f1b5cc"
+      "sha256": "750d7e4ab6019169aa639e8c7545440b9c0b53ba12ab53e2daac1398a5ee4ac4"
     },
     "controller_manifest": {
       "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",

@@ -46,10 +46,14 @@ def load_maze_tail_state_collection_config(
     if (
         config.get("schema") != CONFIG_SCHEMA
         or config.get("scientific_status")
-        != "preregistered_fused_state_collection_after_v1_operational_stop_before_any_v2_episode"
-        or config.get("experiment_id") != "stride-maze-tail-state-collection-v2"
+        != "preregistered_fused_state_collection_revision_after_zero_episode_reset_protocol_rejection"
+        or config.get("experiment_id") != "stride-maze-tail-state-collection-v2-r1"
         or config.get("pre_registration_parent_commit")
         != "f8da77aa2c0aaa2355ec0b102462246b05d71552"
+        or config.get("pre_registration_revision_parent_commit")
+        != "ebff095c5de296aca849f4a6c4e1634c53046ad9"
+        or config.get("pre_registration_revision_reason")
+        != "restore_qualification_compatible_native_unlimited_repair_while_preserving_outer_200_decision_and_300_second_fuse_before_any_episode"
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("Maze tail state-collection identity changed")
@@ -156,7 +160,7 @@ def load_maze_tail_state_collection_config(
         or runtime.get("episode_process_timeout_seconds") != 360.0
         or runtime.get("deterministic_pp_replay") is not True
         or dict(runtime.get("environment") or {}).get("time_limit") != 300.0
-        or dict(runtime.get("environment") or {}).get("max_repair_iterations") != 200
+        or dict(runtime.get("environment") or {}).get("max_repair_iterations") != 0
     ):
         raise ValueError("Maze tail fused runtime file changed")
     if str(slot["slotpool_model"]["sha256"]) != str(

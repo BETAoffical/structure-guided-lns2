@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "experiment_runtime_id": "stride-maze-tail-state-collection-v2",
+  "experiment_runtime_id": "stride-maze-tail-state-collection-v2-r1",
   "formal": false,
   "split": "balanced_wall_clock",
   "solver_seeds": [17, 29, 43],
   "policies": ["official_adaptive", "realized_dynamic"],
   "environment": {
     "time_limit": 300.0,
-    "max_repair_iterations": 200,
+    "max_repair_iterations": 0,
     "neighborhood_size": 8,
     "replan_algorithm": "PP",
     "use_sipp": true
