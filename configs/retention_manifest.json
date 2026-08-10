@@ -2069,6 +2069,21 @@
       "contract": "Freeze all-comparison first-divergence extraction, the two-action by sixteen-seed paired product, robust-order rule, evidence boundaries, and predictor-design gates."
     },
     {
+      "path": "experiments/stride_residualhazard.py",
+      "role": "reproducibility",
+      "purpose": "Replay the frozen Maze first-divergence actions exactly and measure preregistered immediate post-PP residual conflict structure without training or reading future trajectories."
+    },
+    {
+      "path": "scripts/run_stride_residualhazard.py",
+      "role": "reproducibility",
+      "purpose": "Provide resumable collection and analysis commands for the preregistered ResidualHazard target-readiness audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_residualhazard.py",
+      "role": "reproducibility",
+      "contract": "Freeze the seven residual measurements, paired-seed stability rule, target priority, and no-training evidence boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
