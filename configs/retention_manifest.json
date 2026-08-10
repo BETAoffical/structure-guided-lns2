@@ -2159,6 +2159,21 @@
       "contract": "Freeze candidate-pool mechanism flags, time-aligned path changes, bottleneck-order changes and repair-closure metrics."
     },
     {
+      "path": "experiments/stride_marginalpool_action_replay.py",
+      "role": "reproducibility",
+      "purpose": "Restore every frozen MarginalPool checkpoint and replay every existing candidate under sixteen strictly paired PP seeds without reading runtime or future trajectories."
+    },
+    {
+      "path": "scripts/run_stride_marginalpool_action_replay.py",
+      "role": "reproducibility",
+      "purpose": "Provide preflight, resumable full collection and checkpoint-local analysis commands for the preregistered MarginalPool action replay."
+    },
+    {
+      "path": "tests/evaluation/test_stride_marginalpool_action_replay.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 78-state and 2502-action cohort, sixteen-seed pairing, stable-dominance rule and current-step-only claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
