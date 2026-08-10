@@ -166,6 +166,26 @@ def _selected_candidate(
     return candidate, families
 
 
+def original_pool_anchor(candidate_pool: Iterable[dict[str, Any]]) -> dict[str, Any] | None:
+    original = [
+        dict(value)
+        for value in candidate_pool
+        if not any(
+            str(family).startswith("structpool-")
+            for family in value.get("selection_families") or ()
+        )
+    ]
+    if not original:
+        return None
+    return sorted(
+        original,
+        key=lambda value: (
+            -round(float(value.get("score", 0.0)), 12),
+            str(value["candidate_id"]),
+        ),
+    )[0]
+
+
 def _episode_rows(
     collection: Path,
     manifest: dict[str, Any],
@@ -216,15 +236,16 @@ def _episode_rows(
         if before_conflicts != len(before_edges) or after_conflicts != len(after_edges):
             raise ValueError(f"conflict-edge count changed: {state_id}/{policy}")
         structural = any(value.startswith("structpool-") for value in families)
-        base_id = str(controller.get("base_selected_candidate_id") or "")
-        base_candidate = next(
-            (
-                dict(row)
-                for row in controller.get("candidate_pool") or ()
-                if str(row.get("candidate_id")) == base_id
-            ),
-            None,
+        pool = [dict(value) for value in controller.get("candidate_pool") or ()]
+        original_anchor = original_pool_anchor(pool)
+        original_anchor_agents = (
+            set(map(int, original_anchor.get("agents") or ()))
+            if original_anchor is not None
+            else set()
         )
+        original_anchor_touched = {
+            edge for edge in before_edges if original_anchor_agents & set(edge)
+        }
         row = {
             **metadata,
             "state_id": state_id,
@@ -235,14 +256,39 @@ def _episode_rows(
             "selection_families": families,
             "selected_kind": "structural" if structural else "base",
             "selected_size": len(agents),
-            "base_selected_candidate_id": base_id or None,
-            "replaced_v2_anchor": bool(base_id and selected_id != base_id),
+            "original_pool_anchor_candidate_id": (
+                str(original_anchor["candidate_id"])
+                if original_anchor is not None
+                else None
+            ),
+            "differs_from_original_pool_anchor": bool(
+                original_anchor is not None
+                and selected_id != str(original_anchor["candidate_id"])
+            ),
+            "selected_vs_original_anchor_jaccard": (
+                _jaccard(agents, original_anchor_agents)
+                if original_anchor is not None
+                else 0.0
+            ),
+            "selected_minus_original_anchor_score": (
+                float(candidate.get("score", 0.0))
+                - float(original_anchor.get("score", 0.0))
+                if original_anchor is not None
+                else 0.0
+            ),
+            "conflict_touch_coverage_minus_original_anchor": (
+                len({edge for edge in before_edges if agents & set(edge)})
+                / len(before_edges)
+                - len(original_anchor_touched) / len(before_edges)
+                if before_edges and original_anchor is not None
+                else 0.0
+            ),
             "selected_feature_out_of_range_fraction": float(
                 candidate.get("feature_out_of_range_fraction", 0.0)
             ),
-            "base_feature_out_of_range_fraction": (
-                float(base_candidate.get("feature_out_of_range_fraction", 0.0))
-                if base_candidate is not None
+            "original_anchor_feature_out_of_range_fraction": (
+                float(original_anchor.get("feature_out_of_range_fraction", 0.0))
+                if original_anchor is not None
                 else None
             ),
             "score_margin": float(controller.get("score_margin", 0.0)),
@@ -299,8 +345,8 @@ def _episode_summary(rows: list[dict[str, Any]], early_window: int) -> dict[str,
         "structural_selection_rate": (
             len(structural) / len(continuation) if continuation else 0.0
         ),
-        "v2_anchor_replacement_count": sum(
-            bool(row["replaced_v2_anchor"]) for row in continuation
+        "original_pool_anchor_disagreement_count": sum(
+            bool(row["differs_from_original_pool_anchor"]) for row in continuation
         ),
         "exact_candidate_repeat_rate": _average(
             float(bool(row["exact_candidate_repeat"])) for row in continuation
@@ -326,9 +372,15 @@ def _kind_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     result["exact_candidate_repeat_rate"] = _average(
         float(bool(row["exact_candidate_repeat"])) for row in rows
     )
-    result["v2_anchor_replacement_rate"] = _average(
-        float(bool(row["replaced_v2_anchor"])) for row in rows
+    result["original_pool_anchor_disagreement_rate"] = _average(
+        float(bool(row["differs_from_original_pool_anchor"])) for row in rows
     )
+    for field in (
+        "selected_vs_original_anchor_jaccard",
+        "selected_minus_original_anchor_score",
+        "conflict_touch_coverage_minus_original_anchor",
+    ):
+        result[field] = _stats(rows, field)
     return result
 
 
@@ -672,5 +724,6 @@ def analyze_sequence_forensics(
 __all__ = [
     "analyze_sequence_forensics",
     "load_registration",
+    "original_pool_anchor",
     "transition_metrics",
 ]

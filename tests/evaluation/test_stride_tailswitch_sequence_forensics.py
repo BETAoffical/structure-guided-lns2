@@ -4,11 +4,36 @@ import unittest
 
 from experiments.stride_tailswitch_sequence_forensics import (
     _pair_rows,
+    original_pool_anchor,
     transition_metrics,
 )
 
 
 class TailSwitchSequenceForensicsTests(unittest.TestCase):
+    def test_original_pool_anchor_excludes_structural_candidates(self) -> None:
+        anchor = original_pool_anchor(
+            [
+                {
+                    "candidate_id": "struct",
+                    "score": 100.0,
+                    "selection_families": ["structpool-hotspot:16"],
+                },
+                {
+                    "candidate_id": "base-z",
+                    "score": 2.0,
+                    "selection_families": ["collision:16"],
+                },
+                {
+                    "candidate_id": "base-a",
+                    "score": 2.0,
+                    "selection_families": ["target:16"],
+                },
+            ]
+        )
+
+        self.assertIsNotNone(anchor)
+        self.assertEqual(anchor["candidate_id"], "base-a")
+
     def test_transition_metrics_measure_reuse_and_conflict_targeting(self) -> None:
         result = transition_metrics(
             {(0, 1), (1, 2), (3, 4)},
