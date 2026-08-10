@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import statistics
 from collections import Counter
 from pathlib import Path
@@ -49,6 +48,7 @@ from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 CONFIG_SCHEMA = "lns2.stride.marginalpool_action_replay_registration.v1"
 RUN_SCHEMA = "lns2.stride.marginalpool_action_replay_run.v1"
 STATE_SCHEMA = "lns2.stride.marginalpool_action_replay_state.v1"
+PARTIAL_STATE_SCHEMA = "lns2.stride.marginalpool_action_replay_partial_state.v1"
 TRIAL_SCHEMA = "lns2.stride.marginalpool_action_replay_trial.v1"
 AGGREGATE_SCHEMA = "lns2.stride.marginalpool_action_replay_aggregate.v1"
 COLLECTION_REPORT_SCHEMA = "lns2.stride.marginalpool_action_replay_collection_report.v1"
@@ -58,6 +58,7 @@ EXPERIMENT_ID = "stride-marginalpool-action-replay-v1"
 SCIENTIFIC_STATUS = "preregistered_all_existing_candidates_paired_current_step_replay"
 PARENT_COMMIT = "a9da04e065911ff4e1d8b94b5c9769d2723f3fb7"
 TRIAL_INDICES = tuple(range(16))
+DEFAULT_MAXIMUM_STATE_ATTEMPTS = 1
 FIRST_HALF = tuple(range(8))
 SECOND_HALF = tuple(range(8, 16))
 FEATURE_PROFILE = "realized_dynamic"
@@ -605,9 +606,123 @@ def _state_artifact_valid(
     return not _forbidden_hits(payload)
 
 
+def _partial_state_artifact_valid(
+    payload: dict[str, Any],
+    *,
+    state_record: dict[str, Any],
+    run_fingerprint: str,
+    trial_indices: tuple[int, ...],
+    candidates: list[dict[str, Any]],
+    before_repair: str,
+    before_conflicts: int,
+) -> bool:
+    completed = list(map(str, payload.get("completed_candidate_ids") or ()))
+    expected_ids = {str(row["candidate_id"]) for row in candidates}
+    trials = payload.get("trials")
+    if (
+        payload.get("schema") != PARTIAL_STATE_SCHEMA
+        or payload.get("run_fingerprint") != run_fingerprint
+        or payload.get("complete") is not False
+        or payload.get("state_fingerprint") != state_record["state_fingerprint"]
+        or payload.get("state_record_fingerprint") != _fingerprint(state_record)
+        or payload.get("state_blob_sha256") != state_record["state_blob_sha256"]
+        or payload.get("before_repair_fingerprint") != before_repair
+        or int(payload.get("before_conflicts", -1)) != before_conflicts
+        or payload.get("candidates") != candidates
+        or not isinstance(trials, list)
+        or completed != sorted(set(completed))
+        or not set(completed) <= expected_ids
+        or payload.get("native_action_semantics_validated") is not True
+        or payload.get("selected_feature_reproduction_validated") is not True
+        or payload.get("runtime_fields_stored") is not False
+        or payload.get("future_trajectory_stored") is not False
+    ):
+        return False
+    expected_pairs = {
+        (candidate_id, trial_index)
+        for candidate_id in completed
+        for trial_index in trial_indices
+    }
+    observed_pairs = Counter(
+        (str(row.get("candidate_id", "")), int(row.get("trial_index", -1)))
+        for row in trials
+        if isinstance(row, dict)
+    )
+    if set(observed_pairs) != expected_pairs or any(
+        count != 1 for count in observed_pairs.values()
+    ):
+        return False
+    for trial in trials:
+        trial_index = int(trial.get("trial_index", -1))
+        after = trial.get("conflicts_after")
+        if (
+            trial.get("schema") != TRIAL_SCHEMA
+            or trial.get("state_fingerprint") != state_record["state_fingerprint"]
+            or str(trial.get("candidate_id", "")) not in completed
+            or type(after) is not int
+            or after < 0
+            or int(trial.get("before_conflicts", -1)) != before_conflicts
+            or trial.get("before_repair_fingerprint") != before_repair
+            or int(trial.get("pp_seed", -1))
+            != repairability_pp_seed(before_repair, trial_index)
+            or not math.isfinite(
+                float(trial.get("normalized_conflict_reduction", math.nan))
+            )
+            or not math.isclose(
+                float(trial["normalized_conflict_reduction"]),
+                (before_conflicts - after) / max(1, before_conflicts),
+                rel_tol=0.0,
+                abs_tol=1e-15,
+            )
+            or not isinstance(trial.get("replan_success"), bool)
+            or not isinstance(trial.get("feasible"), bool)
+        ):
+            return False
+    return not _forbidden_hits(payload)
+
+
+def _partial_state_payload(
+    *,
+    state_record: dict[str, Any],
+    run_fingerprint: str,
+    before_repair: str,
+    before_conflicts: int,
+    restore_seed: int,
+    candidates: list[dict[str, Any]],
+    completed_candidate_ids: set[str],
+    trials: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema": PARTIAL_STATE_SCHEMA,
+        "run_fingerprint": run_fingerprint,
+        "complete": False,
+        "state_fingerprint": str(state_record["state_fingerprint"]),
+        "state_record_fingerprint": _fingerprint(state_record),
+        "state_blob_sha256": str(state_record["state_blob_sha256"]),
+        "before_repair_fingerprint": before_repair,
+        "before_conflicts": before_conflicts,
+        "state_restore": {
+            "contract": TARGET_STATE_RESTORE_CONTRACT,
+            "restore_seed": restore_seed,
+            "source_run_config_sha256": str(
+                state_record["source_run_config_sha256"]
+            ),
+        },
+        "logical_checkpoint_ids": list(state_record["logical_checkpoint_ids"]),
+        "completed_candidate_ids": sorted(completed_candidate_ids),
+        "candidates": candidates,
+        "trials": trials,
+        "native_action_semantics_validated": True,
+        "selected_feature_reproduction_validated": True,
+        "runtime_fields_stored": False,
+        "future_trajectory_stored": False,
+    }
+
+
 def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
     state_record = dict(job["state_record"])
     output_path = Path(str(job["output_path"]))
+    partial_path = output_path.with_name(output_path.name + ".partial")
     run_fingerprint = str(job["run_fingerprint"])
     trial_indices = tuple(map(int, job["trial_indices"]))
     if bool(job["resume"]) and output_path.is_file():
@@ -671,9 +786,30 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         for candidate in candidates
     ):
         raise RuntimeError("MarginalPool replay candidate contains an unknown agent")
+    completed_candidate_ids: set[str] = set()
     trials: list[dict[str, Any]] = []
+    if bool(job["resume"]) and partial_path.is_file():
+        partial_payload = _read_json(partial_path)
+        if not _partial_state_artifact_valid(
+            partial_payload,
+            state_record=state_record,
+            run_fingerprint=run_fingerprint,
+            trial_indices=trial_indices,
+            candidates=candidates,
+            before_repair=before_repair,
+            before_conflicts=before_conflicts,
+        ):
+            raise ValueError(
+                f"invalid partial MarginalPool replay state: {partial_path}"
+            )
+        completed_candidate_ids = set(
+            map(str, partial_payload["completed_candidate_ids"])
+        )
+        trials = list(partial_payload["trials"])
     for candidate in candidates:
         candidate_id = str(candidate["candidate_id"])
+        if candidate_id in completed_candidate_ids:
+            continue
         agents = list(map(int, candidate["agents"]))
         for trial_index in trial_indices:
             branch_environment, branch_state = restore_repair_state(
@@ -716,6 +852,29 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
                     "after_repair_fingerprint": after_repair,
                 }
             )
+        completed_candidate_ids.add(candidate_id)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        partial_payload = _partial_state_payload(
+            state_record=state_record,
+            run_fingerprint=run_fingerprint,
+            before_repair=before_repair,
+            before_conflicts=before_conflicts,
+            restore_seed=restore_seed,
+            candidates=candidates,
+            completed_candidate_ids=completed_candidate_ids,
+            trials=trials,
+        )
+        if not _partial_state_artifact_valid(
+            partial_payload,
+            state_record=state_record,
+            run_fingerprint=run_fingerprint,
+            trial_indices=trial_indices,
+            candidates=candidates,
+            before_repair=before_repair,
+            before_conflicts=before_conflicts,
+        ):
+            raise RuntimeError("MarginalPool replay partial state artifact is invalid")
+        _write_json(partial_path, partial_payload)
     payload = {
         "schema": STATE_SCHEMA,
         "run_fingerprint": run_fingerprint,
@@ -748,9 +907,8 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
     ):
         raise RuntimeError("MarginalPool replay state artifact is invalid")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    partial = output_path.with_name(output_path.name + ".partial")
-    _write_json(partial, payload)
-    os.replace(partial, output_path)
+    _write_json(output_path, payload)
+    partial_path.unlink(missing_ok=True)
     return {
         "state_fingerprint": state_key,
         "state_file": str(output_path),
@@ -760,6 +918,25 @@ def _collect_state(job: dict[str, Any]) -> dict[str, Any]:
         "candidate_count": len(candidates),
         "trial_count": len(trials),
         "error_count": 0,
+    }
+
+
+def _failed_state_result(
+    job: dict[str, Any], status: str, message: str
+) -> dict[str, Any]:
+    state_record = dict(job["state_record"])
+    return {
+        "state_fingerprint": str(state_record["state_fingerprint"]),
+        "map_id": str(state_record["map_id"]),
+        "task_id": str(state_record["task_id"]),
+        "solver_seed": int(state_record["solver_seed"]),
+        "status": status,
+        "error": message,
+        "state_count": 0,
+        "outcome_count": 0,
+        "candidate_count": 0,
+        "trial_count": 0,
+        "error_count": 1,
     }
 
 
@@ -787,6 +964,162 @@ def _validate_preflight(
     return report
 
 
+def _prepare_recovery_import(
+    recovery_source: str | Path,
+    *,
+    selected_states: list[dict[str, Any]],
+    trial_indices: tuple[int, ...],
+    metadata: dict[str, Any],
+    producer: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    source_root = Path(recovery_source).resolve()
+    source_run_path = source_root / "run_config.json"
+    source_status_path = source_root / "collection_status.json"
+    if not source_run_path.is_file() or not source_status_path.is_file():
+        raise ValueError("MarginalPool recovery source is missing run or status metadata")
+    source_run = _read_json(source_run_path)
+    source_status = _read_json(source_status_path)
+    selected_keys = [str(row["state_fingerprint"]) for row in selected_states]
+    source_native = dict(dict(source_run.get("producer") or {}).get("native") or {})
+    current_native = dict(producer.get("native") or {})
+    if (
+        source_run.get("schema") != RUN_SCHEMA
+        or source_run.get("mode") != "full"
+        or source_run.get("config_sha256") != metadata["config_sha256"]
+        or source_run.get("cohort_fingerprint") != metadata["cohort_fingerprint"]
+        or list(source_run.get("selected_state_fingerprints") or ()) != selected_keys
+        or tuple(map(int, source_run.get("trial_indices") or ())) != trial_indices
+        or source_run.get("target_state_restore_contract")
+        != TARGET_STATE_RESTORE_CONTRACT
+        or source_native.get("sha256") != current_native.get("sha256")
+        or source_status.get("run_fingerprint") != source_run.get("run_fingerprint")
+        or source_status.get("status")
+        not in {"complete", "failed", "error", "interrupted"}
+    ):
+        raise ValueError("MarginalPool recovery source identity changed")
+    state_by_key = {
+        str(row["state_fingerprint"]): row for row in selected_states
+    }
+    imported: dict[str, dict[str, Any]] = {}
+    state_hashes: dict[str, str] = {}
+    for state_key in selected_keys:
+        state_path = source_root / "states" / f"{state_key}.json"
+        if not state_path.is_file():
+            continue
+        payload = _read_json(state_path)
+        if not _state_artifact_valid(
+            payload,
+            state_record=state_by_key[state_key],
+            run_fingerprint=str(source_run["run_fingerprint"]),
+            trial_indices=trial_indices,
+        ):
+            raise ValueError(
+                f"invalid completed MarginalPool recovery state: {state_path}"
+            )
+        imported[state_key] = payload
+        state_hashes[state_key] = sha256_file(state_path)
+    if (
+        not imported
+        or len(imported) != int(source_status.get("completed_state_count", -1))
+    ):
+        raise ValueError("MarginalPool recovery state count does not match source status")
+    descriptor = {
+        "source_root": str(source_root),
+        "source_run_config_sha256": sha256_file(source_run_path),
+        "source_status_sha256": sha256_file(source_status_path),
+        "source_run_fingerprint": str(source_run["run_fingerprint"]),
+        "source_status": str(source_status["status"]),
+        "source_runner_error": source_status.get("runner_error"),
+        "import_policy": "all valid completed states without outcome filtering",
+        "imported_state_count": len(imported),
+        "imported_state_sha256": state_hashes,
+    }
+    return descriptor, imported
+
+
+def _import_recovery_states(
+    imported: dict[str, dict[str, Any]],
+    *,
+    descriptor: dict[str, Any],
+    selected_states: list[dict[str, Any]],
+    trial_indices: tuple[int, ...],
+    output: Path,
+    run_fingerprint: str,
+) -> None:
+    state_by_key = {
+        str(row["state_fingerprint"]): row for row in selected_states
+    }
+    for state_key, source_payload in imported.items():
+        output_path = output / "states" / f"{state_key}.json"
+        if output_path.is_file():
+            continue
+        payload = {
+            **source_payload,
+            "run_fingerprint": run_fingerprint,
+            "recovery_provenance": {
+                "source_run_fingerprint": descriptor["source_run_fingerprint"],
+                "source_state_sha256": descriptor["imported_state_sha256"][state_key],
+                "policy": descriptor["import_policy"],
+            },
+        }
+        if not _state_artifact_valid(
+            payload,
+            state_record=state_by_key[state_key],
+            run_fingerprint=run_fingerprint,
+            trial_indices=trial_indices,
+        ):
+            raise RuntimeError("imported MarginalPool recovery state is invalid")
+        _write_json(output_path, payload)
+
+
+def _validate_recovery_registration(
+    recovery_registration: str | Path,
+    *,
+    metadata: dict[str, Any],
+    descriptor: dict[str, Any],
+    worker_count: int,
+    per_attempt_timeout_seconds: float,
+    maximum_state_attempts: int,
+) -> tuple[str, str]:
+    path = Path(recovery_registration).resolve()
+    config = _read_json(path)
+    execution = dict(config.get("effective_execution") or {})
+    source = dict(config.get("recovery_source") or {})
+    if (
+        config.get("schema")
+        != "lns2.stride.marginalpool_action_replay_recovery_registration.v1"
+        or config.get("scientific_status")
+        != "operational_timeout_recovery_without_label_change"
+        or config.get("experiment_id")
+        != "stride-marginalpool-action-replay-recovery-v1"
+        or dict(config.get("base_registration") or {}).get("sha256")
+        != metadata["config_sha256"]
+        or source.get("source_run_config_sha256")
+        != descriptor["source_run_config_sha256"]
+        or source.get("source_status_sha256") != descriptor["source_status_sha256"]
+        or int(source.get("imported_state_count", -1))
+        != descriptor["imported_state_count"]
+        or dict(source.get("imported_state_sha256") or {})
+        != descriptor["imported_state_sha256"]
+        or source.get("import_policy") != descriptor["import_policy"]
+        or int(execution.get("workers", -1)) != worker_count
+        or float(execution.get("per_state_attempt_timeout_seconds", -1))
+        != per_attempt_timeout_seconds
+        or int(execution.get("maximum_state_attempts", -1))
+        != maximum_state_attempts
+        or float(execution.get("maximum_state_wall_seconds", -1))
+        != per_attempt_timeout_seconds * maximum_state_attempts
+        or execution.get("candidate_atomic_checkpoints") is not True
+        or int(execution.get("stop_after_consecutive_no_progress_attempts", -1))
+        != 2
+        or config.get("outcomes_used_for_recovery_policy") is not False
+        or config.get("labels_or_candidate_set_changed") is not False
+        or config.get("no_result_based_exclusion") is not True
+    ):
+        raise ValueError("MarginalPool recovery registration changed")
+    return str(path), sha256_file(path)
+
+
 def collect_marginalpool_action_replay(
     *,
     config_path: str | Path,
@@ -795,6 +1128,10 @@ def collect_marginalpool_action_replay(
     workers: int | None = None,
     resume: bool = False,
     preflight_output: str | Path | None = None,
+    recovery_source: str | Path | None = None,
+    recovery_registration: str | Path | None = None,
+    maximum_state_attempts: int = DEFAULT_MAXIMUM_STATE_ATTEMPTS,
+    per_state_attempt_timeout_seconds: float | None = None,
 ) -> dict[str, Any]:
     if mode not in {"preflight", "full"}:
         raise ValueError("MarginalPool replay mode must be preflight or full")
@@ -803,6 +1140,22 @@ def collect_marginalpool_action_replay(
     worker_count = int(workers or config["execution"]["workers"])
     if worker_count <= 0:
         raise ValueError("MarginalPool replay workers must be positive")
+    maximum_state_attempts = int(maximum_state_attempts)
+    if maximum_state_attempts <= 0:
+        raise ValueError("MarginalPool maximum state attempts must be positive")
+    attempt_timeout_seconds = float(
+        per_state_attempt_timeout_seconds
+        if per_state_attempt_timeout_seconds is not None
+        else config["execution"]["per_state_timeout_seconds"]
+    )
+    if attempt_timeout_seconds <= 0:
+        raise ValueError("MarginalPool state attempt timeout must be positive")
+    if recovery_source is not None and mode != "full":
+        raise ValueError("MarginalPool recovery import is only valid for full mode")
+    if (recovery_source is None) != (recovery_registration is None):
+        raise ValueError(
+            "MarginalPool recovery source and registration must be supplied together"
+        )
     first_two = [str(row["state_fingerprint"]) for row in all_states[:2]]
     if mode == "preflight":
         selected_states = all_states[:2]
@@ -824,6 +1177,29 @@ def collect_marginalpool_action_replay(
         native_required=True,
         package_names=("numpy",),
     )
+    recovery_descriptor: dict[str, Any] | None = None
+    imported_states: dict[str, dict[str, Any]] = {}
+    recovery_registration_identity: dict[str, str] | None = None
+    if recovery_source is not None:
+        recovery_descriptor, imported_states = _prepare_recovery_import(
+            recovery_source,
+            selected_states=selected_states,
+            trial_indices=trial_indices,
+            metadata=metadata,
+            producer=producer,
+        )
+        registration_path, registration_sha256 = _validate_recovery_registration(
+            recovery_registration,
+            metadata=metadata,
+            descriptor=recovery_descriptor,
+            worker_count=worker_count,
+            per_attempt_timeout_seconds=attempt_timeout_seconds,
+            maximum_state_attempts=maximum_state_attempts,
+        )
+        recovery_registration_identity = {
+            "path": registration_path,
+            "sha256": registration_sha256,
+        }
     run_identity = {
         "schema": RUN_SCHEMA,
         "experiment_id": EXPERIMENT_ID,
@@ -838,6 +1214,17 @@ def collect_marginalpool_action_replay(
         ],
         "trial_indices": list(trial_indices),
         "target_state_restore_contract": TARGET_STATE_RESTORE_CONTRACT,
+        "effective_execution": {
+            "worker_count": worker_count,
+            "per_state_attempt_timeout_seconds": attempt_timeout_seconds,
+            "maximum_state_attempts": maximum_state_attempts,
+            "maximum_state_wall_seconds": attempt_timeout_seconds
+            * maximum_state_attempts,
+            "candidate_atomic_checkpoints": True,
+            "stop_after_consecutive_no_progress_attempts": 2,
+        },
+        "recovery": recovery_descriptor,
+        "recovery_registration": recovery_registration_identity,
         "source_run_config_sha256": {
             str(row["state_fingerprint"]): str(row["source_run_config_sha256"])
             for row in selected_states
@@ -854,6 +1241,15 @@ def collect_marginalpool_action_replay(
             raise ValueError("MarginalPool replay output exists; pass --resume")
     output.mkdir(parents=True, exist_ok=True)
     _write_json(run_path, {**run_identity, "run_fingerprint": run_fingerprint})
+    if recovery_descriptor is not None:
+        _import_recovery_states(
+            imported_states,
+            descriptor=recovery_descriptor,
+            selected_states=selected_states,
+            trial_indices=trial_indices,
+            output=output,
+            run_fingerprint=run_fingerprint,
+        )
     logical_by_id = {
         str(row["logical_checkpoint_id"]): row for row in logical_rows
     }
@@ -870,17 +1266,22 @@ def collect_marginalpool_action_replay(
                 output / "states" / f"{str(row['state_fingerprint'])}.json"
             ),
             "run_fingerprint": run_fingerprint,
-            "resume": bool(resume),
+            "resume": bool(resume or recovery_source is not None),
         }
         for row in selected_states
     ]
     status_path = output / "collection_status.json"
-    observed: list[dict[str, Any]] = []
+    observed_by_state: dict[str, dict[str, Any]] = {}
+    attempt_history: list[dict[str, Any]] = []
+    current_attempt = 0
 
-    def update_status(result: dict[str, Any]) -> None:
-        observed.append(result)
+    def write_status(status: str) -> None:
+        rows = list(observed_by_state.values())
+        successes = [
+            row for row in rows if row.get("status") in {"ok", "resumed"}
+        ]
         failures = [
-            row for row in observed if row.get("status") in {"error", "timeout"}
+            row for row in rows if row.get("status") in {"error", "timeout"}
         ]
         _write_json(
             status_path,
@@ -889,12 +1290,12 @@ def collect_marginalpool_action_replay(
                 "mode": mode,
                 "run_fingerprint": run_fingerprint,
                 "requested_state_count": len(jobs),
-                "completed_state_count": len(observed) - len(failures),
+                "completed_state_count": len(successes),
                 "completed_candidate_count": sum(
-                    int(row.get("candidate_count", 0)) for row in observed
+                    int(row.get("candidate_count", 0)) for row in successes
                 ),
                 "completed_trial_count": sum(
-                    int(row.get("trial_count", 0)) for row in observed
+                    int(row.get("trial_count", 0)) for row in successes
                 ),
                 "error_state_count": sum(
                     row.get("status") == "error" for row in failures
@@ -903,39 +1304,98 @@ def collect_marginalpool_action_replay(
                     row.get("status") == "timeout" for row in failures
                 ),
                 "active_jobs": [],
-                "status": "running",
+                "status": status,
                 "errors": failures,
+                "current_attempt": current_attempt,
+                "maximum_state_attempts": maximum_state_attempts,
+                "attempt_failure_count": len(attempt_history),
+                "attempt_history": attempt_history,
+                "recovery_imported_state_count": len(imported_states),
             },
         )
 
-    _write_json(
-        status_path,
-        {
-            "schema": COLLECTION_REPORT_SCHEMA,
-            "mode": mode,
-            "run_fingerprint": run_fingerprint,
-            "requested_state_count": len(jobs),
-            "completed_state_count": 0,
-            "completed_candidate_count": 0,
-            "completed_trial_count": 0,
-            "error_state_count": 0,
-            "timeout_state_count": 0,
-            "active_jobs": [],
-            "status": "running",
-            "errors": [],
-        },
-    )
+    write_status("running")
+    last_partial_candidate_count: dict[str, int] = {}
+    consecutive_no_progress_attempts: dict[str, int] = {}
     try:
-        observed = _run_jobs(
-            _collect_state,
-            jobs,
-            worker_count,
-            phase=f"stride-marginalpool-action-replay-{mode}",
-            output_root=output,
-            run_fingerprint=run_fingerprint,
-            timeout_seconds=float(config["execution"]["per_state_timeout_seconds"]),
-            on_result=update_status,
-        )
+        pending_jobs = jobs
+        for current_attempt in range(1, maximum_state_attempts + 1):
+            attempt_results: dict[str, dict[str, Any]] = {}
+
+            def update_attempt(result: dict[str, Any]) -> None:
+                state_key = str(result["state_fingerprint"])
+                attempt_results[state_key] = result
+                if result.get("status") in {"ok", "resumed"}:
+                    observed_by_state[state_key] = result
+                write_status("running")
+
+            _run_jobs(
+                _collect_state,
+                pending_jobs,
+                worker_count,
+                phase=(
+                    f"stride-marginalpool-action-replay-{mode}"
+                    f"-attempt-{current_attempt}"
+                ),
+                output_root=output,
+                run_fingerprint=run_fingerprint,
+                timeout_seconds=attempt_timeout_seconds,
+                on_result=update_attempt,
+                failure_result=_failed_state_result,
+            )
+            retry_jobs: list[dict[str, Any]] = []
+            for job in pending_jobs:
+                state_key = str(job["state_record"]["state_fingerprint"])
+                result = attempt_results[state_key]
+                if result.get("status") in {"ok", "resumed"}:
+                    continue
+                partial_path = Path(str(job["output_path"])).with_name(
+                    Path(str(job["output_path"])).name + ".partial"
+                )
+                partial_candidate_count = 0
+                if partial_path.is_file():
+                    partial_candidate_count = len(
+                        _read_json(partial_path).get("completed_candidate_ids") or ()
+                    )
+                previous_partial_count = last_partial_candidate_count.get(state_key, 0)
+                if partial_candidate_count <= previous_partial_count:
+                    consecutive_no_progress_attempts[state_key] = (
+                        consecutive_no_progress_attempts.get(state_key, 0) + 1
+                    )
+                else:
+                    consecutive_no_progress_attempts[state_key] = 0
+                last_partial_candidate_count[state_key] = partial_candidate_count
+                attempt_history.append(
+                    {
+                        "attempt": current_attempt,
+                        "state_fingerprint": state_key,
+                        "status": str(result["status"]),
+                        "error": str(result.get("error")),
+                        "completed_candidate_checkpoint_count": partial_candidate_count,
+                        "consecutive_no_progress_attempts": (
+                            consecutive_no_progress_attempts[state_key]
+                        ),
+                    }
+                )
+                if (
+                    current_attempt < maximum_state_attempts
+                    and consecutive_no_progress_attempts[state_key] < 2
+                ):
+                    retry_jobs.append({**job, "resume": True})
+                else:
+                    if consecutive_no_progress_attempts[state_key] >= 2:
+                        result = {
+                            **result,
+                            "error": (
+                                f"{result.get('error')}; stopped after two "
+                                "consecutive attempts without candidate progress"
+                            ),
+                        }
+                    observed_by_state[state_key] = result
+            write_status("running")
+            pending_jobs = retry_jobs
+            if not pending_jobs:
+                break
     except BaseException as error:
         current = _read_json(status_path)
         _write_json(
@@ -947,6 +1407,10 @@ def collect_marginalpool_action_replay(
             },
         )
         raise
+
+    observed = [
+        observed_by_state[str(row["state_fingerprint"])] for row in selected_states
+    ]
 
     successes = [
         row for row in observed if row.get("status") in {"ok", "resumed"}
@@ -1118,6 +1582,10 @@ def collect_marginalpool_action_replay(
         ),
         "error_state_count": sum(row["status"] == "error" for row in errors),
         "timeout_state_count": sum(row["status"] == "timeout" for row in errors),
+        "attempt_failure_count": len(attempt_history),
+        "attempt_history": attempt_history,
+        "effective_execution": dict(run_identity["effective_execution"]),
+        "recovery": recovery_descriptor,
         "selected_state_fingerprints": [
             str(row["state_fingerprint"]) for row in selected_states
         ],

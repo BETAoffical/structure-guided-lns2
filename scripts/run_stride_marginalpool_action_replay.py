@@ -28,6 +28,10 @@ def main() -> int:
     collect.add_argument("--workers", type=int)
     collect.add_argument("--resume", action="store_true")
     collect.add_argument("--preflight-output")
+    collect.add_argument("--recovery-source")
+    collect.add_argument("--recovery-registration")
+    collect.add_argument("--maximum-state-attempts", type=int, default=1)
+    collect.add_argument("--per-state-attempt-timeout-seconds", type=float)
     analyze = subparsers.add_parser("analyze")
     analyze.add_argument("--config", required=True)
     analyze.add_argument("--collection", required=True)
@@ -41,6 +45,12 @@ def main() -> int:
             workers=args.workers,
             resume=args.resume,
             preflight_output=args.preflight_output,
+            recovery_source=args.recovery_source,
+            recovery_registration=args.recovery_registration,
+            maximum_state_attempts=args.maximum_state_attempts,
+            per_state_attempt_timeout_seconds=(
+                args.per_state_attempt_timeout_seconds
+            ),
         )
     else:
         result = analyze_marginalpool_action_replay(

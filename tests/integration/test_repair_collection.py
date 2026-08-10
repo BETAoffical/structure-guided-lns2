@@ -1248,6 +1248,40 @@ class RepairCollectionTests(unittest.TestCase):
             self.assertEqual(progress["timeout_jobs"], 1)
             self.assertEqual(progress["completed_jobs"], 1)
 
+    def test_scheduler_uses_custom_failure_result_for_non_dataset_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = [
+                {
+                    "job_id": "state-a",
+                    "state_record": {"state_fingerprint": "state-a"},
+                    "sleep": 0.3,
+                }
+            ]
+
+            def failure_result(job: dict, status: str, message: str) -> dict:
+                return {
+                    "state_fingerprint": job["state_record"]["state_fingerprint"],
+                    "status": status,
+                    "error": message,
+                    "state_count": 0,
+                    "outcome_count": 0,
+                }
+
+            results = _run_jobs(
+                _scheduler_worker,
+                jobs,
+                1,
+                phase="custom-timeout-test",
+                output_root=root,
+                run_fingerprint="run",
+                timeout_seconds=0.05,
+                failure_result=failure_result,
+            )
+            self.assertEqual(results[0]["state_fingerprint"], "state-a")
+            self.assertEqual(results[0]["status"], "timeout")
+            self.assertIn("exceeded", results[0]["error"])
+
     def test_scheduler_emits_each_result_incrementally(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

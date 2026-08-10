@@ -1,0 +1,53 @@
+{
+  "schema": "lns2.stride.marginalpool_action_replay_recovery_registration.v1",
+  "scientific_status": "operational_timeout_recovery_without_label_change",
+  "experiment_id": "stride-marginalpool-action-replay-recovery-v1",
+  "base_registration": {
+    "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+    "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+  },
+  "recovery_source": {
+    "root": "build/stride-marginalpool-action-replay-v1",
+    "source_run_config_sha256": "bd134b44b942b7f0b52611726caa58bf8dc806679504dbc79368cf7bccf4289f",
+    "source_status_sha256": "259e68f7b27d9d4cb85652f2ff041e09274b292926e28f60fcaebe4f564357d6",
+    "source_status": "error",
+    "source_runner_error": "KeyError: 'row'",
+    "import_policy": "all valid completed states without outcome filtering",
+    "imported_state_count": 22,
+    "imported_state_sha256": {
+      "006fa7aa1a26eaf611ec5ff2f354859e6027de6c0d40689c3100e14f574785a2": "4bb4a3047eed9b5c8c5376fce3b8e56d82a85b9c053315662f8e081516a4d81f",
+      "008224076406ce74e7da313ebc3bfa2a9c26d2f3a2ce59fc22cefe9828b0484d": "3104286702706c59ad37a2a752ce08fb5f49d60f707d3e96fd07895b1ae211ff",
+      "0532d8c95ea650cee9a7ce0bd9c09fa8df14bfd2d392b563a5555c1026198ba8": "933e55c7fd3db3dfb2d1512680889e76f0cf5273db55046548d39f2585d44755",
+      "071d0327234f82717cc4ace7dd6a85a93fb7c352d4815c92ae0c20dc4b3740cf": "e4fe8e0d8642e056fbaab2e3732a73090e13b347a432289ec5eff504bdff76f9",
+      "0ad7b32de690783f8b3ed3a21125801d259e433308547420d6982e293cc48703": "6d3068426962d8653d1afcde1a74f529007a98edd9ee49fb876d5211060e20aa",
+      "10db6415ba024baa933e8202d1c77c81c0a8dbf7d84f287433045063740425d4": "615e621915b5541327835cd00ba6f967054c59bbcea6e08a1d57b746f8a41e89",
+      "1739b278b808f81c5017bee0e99bd0360cce28e71f69ac518a9f13d19a7e190c": "60b32eecc2e3f01bf79ce3739644a3a8481a025a9b1d2a147aba5df493a76b3c",
+      "195f60afaf113324105e080f8d906f2d96e7495ea7da2a31147465387bbe6007": "b40b801d42c432f395706891c2d8ca531b3883297a66c0b30867aa04d06a3b43",
+      "19a023cab71ac7ca7db1f058610600df39542db4de41d0c0c597bd37c2e695e7": "32d7d8bc0a116cf411f35f53340eb64957f1a957191be80bd42db251c78cbbec",
+      "1d672cac94461ec6125a97f089f46e2c013f74f613fc71038e37e8513f2cccc0": "27e8c7dc28e6911e0febdbd52261886a2eb10f4bbd48856da3b7616fd159d364",
+      "1f0a5072cc242bc434ec6a8c673e46db6ba35ada0d108f4e92db42fbfa6782c2": "15d24388efa4135454b6c63d6b06aa332e65fb6d42596133e5e94de79786fbd2",
+      "1f1b94f163bafbffc601203cf322dc4f87cb374288f106b8092c93b0381f0648": "da711e15f398e15904d7aa56968d6758179f28d1c0cc523f4c5f045af44f2d08",
+      "23cab3bccf973a572e0e93ab2b15442facfdc0db2ec2779cff8e971be896ba11": "21fa1abfe3e180c96cc08733d90d2f461eb4aa8f45f8a8e41f298777a7f95439",
+      "28441427791c08c9df6d9d2ddbbdc14769456fa57b6c7877289c2fcde2dec232": "2ccb473f7b8fdb4d8536252df8e30cb2cb87598614d516e17505e11b5daf6a7b",
+      "2d280c6e4a211328d8d0703da7790028a2b466bf3e741f5ac771aa9c6495fdf3": "33d6eb82c2abf14351812c510582361ca834f37df4615416b688ed87d6ea388f",
+      "304fcd9113e41933fa37e498a3ec08cbe6fced648b154f9b212c7990a1de18a5": "08c4e511093f2b7323a2ca6fb01a3c90d85d8b9ac8c1a6e5e3f619b9cbc841b7",
+      "3a4bf27d018511d0ab897a43b131f548747e7bc4d8e26fa968d3ab9587928ec0": "8ba3a1b41e4acd7c432d4ff6ba2da1acfef680d4bb2abf3ca4468d14482240a3",
+      "3b804c59dc6ee8740809f48ae29a8d4106ff48d5d96bdefd4b8749aed70de1af": "3ace1ec2be78db672fd9c4b7589b094be299c4fe5398ad06683266cd1ddc8caf",
+      "3d1b16b835203778ff614c5062d2406caab40d82e19af43ea28c22d34b945cb3": "05dc7ba05569b7062872130b76943432ce172e316f09f52cdc5d1396b769a1d5",
+      "3dfdb7250ed3602c64d7c07a234911b677de26f0de64cc50a7fb85c29131815d": "da59892af6bc1f52c86cdde9e1cc4a8ff2b0b50ea42d64af405c2a0eacf0b634",
+      "4409105fd0730c27f7ff45952c011f5bcf156bbf17a811a5159dad81f81d31ed": "b5eb7198cf394b4974578351d80facec431ff9b8e43c37f96f520066fc397a77",
+      "4c452c0b345d8044f1f46d493d06744eaf48733dc8c0f7bb2dac532ef3fb8ea0": "a7b84740d5c12a23767a6a3d62a1e6a31bacaa67da8ff6454935bd9fb020c516"
+    }
+  },
+  "effective_execution": {
+    "workers": 4,
+    "per_state_attempt_timeout_seconds": 1800,
+    "maximum_state_attempts": 4,
+    "maximum_state_wall_seconds": 7200,
+    "candidate_atomic_checkpoints": true,
+    "stop_after_consecutive_no_progress_attempts": 2
+  },
+  "outcomes_used_for_recovery_policy": false,
+  "labels_or_candidate_set_changed": false,
+  "no_result_based_exclusion": true
+}

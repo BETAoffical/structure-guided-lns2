@@ -2292,6 +2292,7 @@ def _run_jobs(
     run_fingerprint: str = "untracked",
     timeout_seconds: float | None = None,
     on_result: Callable[[dict[str, Any]], None] | None = None,
+    failure_result: Callable[[dict[str, Any], str, str], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if workers <= 0:
         raise ValueError("workers must be positive")
@@ -2425,7 +2426,8 @@ def _run_jobs(
                 if payload.get("ok"):
                     result = payload["result"]
                 else:
-                    result = _failed_job_result(
+                    failure_builder = failure_result or _failed_job_result
+                    result = failure_builder(
                         entry["job"],
                         "timeout" if payload.get("timeout") else "error",
                         str(payload.get("error", "worker failed")),

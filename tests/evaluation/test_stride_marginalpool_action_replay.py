@@ -9,11 +9,16 @@ import pytest
 from experiments.stride_marginalpool_action_replay import (
     CONFIG_SCHEMA,
     EXPERIMENT_ID,
+    PARTIAL_STATE_SCHEMA,
+    TRIAL_SCHEMA,
+    _partial_state_artifact_valid,
+    _partial_state_payload,
     aggregate_candidate,
     build_frozen_cohort,
     stable_dominates,
     validate_registration,
 )
+from experiments.stride_repairability_collection import repairability_pp_seed
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -100,3 +105,61 @@ def test_candidate_aggregate_uses_fixed_halves_and_no_progress() -> None:
     assert row["second_fixed_half_mean"] == pytest.approx(0.115)
     assert row["no_progress_rate"] == pytest.approx(1 / 16)
     assert row["replan_success_rate"] == pytest.approx(0.5)
+
+
+def test_partial_state_checkpoint_requires_complete_paired_candidate_trials() -> None:
+    state_record = {
+        "state_fingerprint": "state-a",
+        "state_blob_sha256": "1" * 64,
+        "source_run_config_sha256": "2" * 64,
+        "logical_checkpoint_ids": ["logical-a"],
+    }
+    candidates = [{"candidate_id": "candidate-a", "agents": [1], "actual_size": 1}]
+    before_repair = "3" * 64
+    trials = [
+        {
+            "schema": TRIAL_SCHEMA,
+            "state_fingerprint": "state-a",
+            "candidate_id": "candidate-a",
+            "trial_index": index,
+            "pp_seed": repairability_pp_seed(before_repair, index),
+            "before_conflicts": 10,
+            "before_repair_fingerprint": before_repair,
+            "conflicts_after": 9,
+            "normalized_conflict_reduction": 0.1,
+            "replan_success": True,
+            "feasible": False,
+        }
+        for index in range(16)
+    ]
+    payload = _partial_state_payload(
+        state_record=state_record,
+        run_fingerprint="run",
+        before_repair=before_repair,
+        before_conflicts=10,
+        restore_seed=7,
+        candidates=candidates,
+        completed_candidate_ids={"candidate-a"},
+        trials=trials,
+    )
+    assert payload["schema"] == PARTIAL_STATE_SCHEMA
+    assert _partial_state_artifact_valid(
+        payload,
+        state_record=state_record,
+        run_fingerprint="run",
+        trial_indices=tuple(range(16)),
+        candidates=candidates,
+        before_repair=before_repair,
+        before_conflicts=10,
+    )
+    incomplete = copy.deepcopy(payload)
+    incomplete["trials"].pop()
+    assert not _partial_state_artifact_valid(
+        incomplete,
+        state_record=state_record,
+        run_fingerprint="run",
+        trial_indices=tuple(range(16)),
+        candidates=candidates,
+        before_repair=before_repair,
+        before_conflicts=10,
+    )
