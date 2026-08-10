@@ -2129,6 +2129,21 @@
       "contract": "Freeze the pre-action triplet trigger semantics, early-window evaluation, false-trigger gates, and diagnostic-only claim boundary."
     },
     {
+      "path": "experiments/stride_productivityguard_trigger_audit.py",
+      "role": "reproducibility",
+      "purpose": "Distinguish productive from non-productive exact neighborhood repetition using only the two completed repairs visible before the current proposal."
+    },
+    {
+      "path": "scripts/run_stride_productivityguard_trigger_audit.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered STRIDE-ProductivityGuard historical-progress trigger audit on completed TailSwitch trajectories."
+    },
+    {
+      "path": "tests/evaluation/test_stride_productivityguard_trigger_audit.py",
+      "role": "reproducibility",
+      "contract": "Freeze exact-triplet historical productivity timing, progress and persistence rules, registered gates, and no-runtime-integration boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
