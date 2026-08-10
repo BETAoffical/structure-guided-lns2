@@ -1,0 +1,139 @@
+{
+  "schema": "lns2.stride.tailswitch_registration.v1",
+  "scientific_status": "preregistered_two_by_two_first_action_and_continuation_causal_diagnostic",
+  "experiment_id": "stride-tailswitch-v1",
+  "pre_registration_parent_commit": "62ca3f4bef4a51d55e687f725916f70a1687c733",
+  "inputs": {
+    "state_selection": {
+      "path": "build/stride-maze-tail-action-replay-v1/state_selection.jsonl",
+      "sha256": "453fd4702e104b74ed032c62aae152017afb32401dc2191e9f90701872ef1377"
+    },
+    "action_replay_report": {
+      "path": "build/stride-maze-tail-action-replay-v1/action_replay_report.json",
+      "sha256": "54223f17155d6222f467823e11b3a31fe9faec1c51989e3a40c26d1a03f77587"
+    },
+    "state_collection_config": {
+      "path": "configs/stride_maze_tail_state_collection_v2.json",
+      "sha256": "5efa9276844890eecc5d25b2fc0427aa86c940c745aaea17a3131e0baf5f2f28"
+    },
+    "runtime_config": {
+      "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
+      "sha256": "e0af159a0dbeb8a492cf276996912dbfcd10cfdba0e297433d606d6daeed83fc"
+    },
+    "source_report": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/maze_tail_state_collection_report.json",
+      "sha256": "cd05a79e611816b4080bcb8dd4059a7e4741271a5311967e4226976bfbc812bc"
+    },
+    "v2_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-full/realized_dynamic_manifest.jsonl",
+      "sha256": "277820b014ce5cf8bf573d9c2d49e17fce0b02235b0d483a02d5d49690ede014"
+    },
+    "structpool_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-plus-structpool/realized_dynamic_manifest.jsonl",
+      "sha256": "cf243f53305138f0cb5a825b815c93c425849215e0bf568b9f851128161efdb5"
+    },
+    "slotpool_manifest": {
+      "path": "build/stride-maze-tail-state-collection-v2-r2/controllers/v2-plus-slotpool/realized_dynamic_manifest.jsonl",
+      "sha256": "69c1899e85d3d8433104c559e6f7587ffd845ce3a66e81cc8ea883d33b8d2f9c"
+    }
+  },
+  "cohort": {
+    "state_count": 66,
+    "selection_rule": "all_frozen_first_divergence_comparisons_without_result_based_exclusion",
+    "challengers": [
+      "v2-plus-structpool",
+      "v2-plus-slotpool"
+    ],
+    "strata_frozen_before_execution": [
+      "all_states",
+      "tail_category",
+      "challenger",
+      "map_id",
+      "conflict_band",
+      "robust_first_action_winner"
+    ]
+  },
+  "factorial_policies": [
+    {
+      "id": "v2-then-v2",
+      "first_action": "frozen_v2_action",
+      "continuation": "frozen_v2_over_original_candidate_pool"
+    },
+    {
+      "id": "struct-then-v2",
+      "first_action": "frozen_challenger_action",
+      "continuation": "frozen_v2_over_original_candidate_pool"
+    },
+    {
+      "id": "v2-then-struct",
+      "first_action": "frozen_v2_action",
+      "continuation": "matching_frozen_structpool_or_slotpool_challenger"
+    },
+    {
+      "id": "struct-then-struct",
+      "first_action": "frozen_challenger_action",
+      "continuation": "matching_frozen_structpool_or_slotpool_challenger"
+    }
+  ],
+  "execution": {
+    "state_restore_contract": "lns2.trace_replay.target-path-restore.v1",
+    "first_action_forced_exactly_once": true,
+    "first_action_pp_seed": "source_paired_pp_seed",
+    "continuation_begins_after_first_action": true,
+    "strict_four_policy_rotation_within_state": true,
+    "workers": 1,
+    "maximum_repair_decisions_from_restored_state": 200,
+    "fixed_metric_horizon": 200,
+    "wall_time_fuse_seconds": 300.0,
+    "process_timeout_seconds": 360.0,
+    "right_censoring_is_valid_state_evidence": true,
+    "right_censoring_is_not_an_execution_error": true
+  },
+  "primary_outcomes": {
+    "lower_is_better": true,
+    "metrics": [
+      "fixed_200_step_normalized_conflict_auc",
+      "fixed_horizon_final_conflicts",
+      "success_or_right_censoring_status"
+    ],
+    "ttf_is_primary": false,
+    "runtime_is_used_in_causal_label": false
+  },
+  "registered_contrasts": {
+    "first_action_under_v2_continuation": "struct-then-v2 minus v2-then-v2",
+    "first_action_under_struct_continuation": "struct-then-struct minus v2-then-struct",
+    "struct_continuation_after_v2": "v2-then-struct minus v2-then-v2",
+    "struct_continuation_after_struct": "struct-then-struct minus struct-then-v2",
+    "factorial_interaction": "struct-then-struct minus struct-then-v2 minus v2-then-struct plus v2-then-v2"
+  },
+  "adverse_pair_rule": {
+    "challenger_censored_reference_complete": true,
+    "normalized_auc_delta_at_least": 0.05,
+    "or_final_conflict_delta_at_least": 5,
+    "reference_censored_challenger_complete_is_beneficial": true,
+    "both_censored_uses_fixed_horizon_metrics": true
+  },
+  "mechanism_evidence_gate": {
+    "minimum_adverse_fraction": 0.6666666666666666,
+    "minimum_adverse_comparison_count": 8,
+    "minimum_map_count": 2,
+    "minimum_task_count": 4,
+    "minimum_solver_seed_count": 2,
+    "minimum_per_challenger_count": 2
+  },
+  "interpretation": {
+    "first_action_mechanism": "struct-then-v2 remains adverse versus v2-then-v2",
+    "continuation_feedback_mechanism": "struct-then-v2 is safe but struct-then-struct is adverse",
+    "later_exposure_sufficient": "v2-then-struct is adverse versus v2-then-v2",
+    "sustained_interaction": "both switch policies are safe but struct-then-struct is adverse",
+    "inconclusive": "no registered contrast passes the mechanism evidence gate"
+  },
+  "claim_boundary": {
+    "causal_policy_switch_diagnostic_only": true,
+    "model_training_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
