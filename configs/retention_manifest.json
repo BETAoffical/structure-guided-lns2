@@ -2114,6 +2114,21 @@
       "contract": "Freeze the neighborhood-reuse and conflict-targeting metric definitions used by the TailSwitch sequence diagnostic."
     },
     {
+      "path": "experiments/stride_loopguard_trigger_audit.py",
+      "role": "reproducibility",
+      "purpose": "Audit frozen pre-action neighborhood-repetition exit triggers against every registered TailSwitch continuation contrast without modifying the solver or rerunning PP."
+    },
+    {
+      "path": "scripts/run_stride_loopguard_trigger_audit.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered STRIDE-LoopGuard trigger association audit on completed TailSwitch trajectories."
+    },
+    {
+      "path": "tests/evaluation/test_stride_loopguard_trigger_audit.py",
+      "role": "reproducibility",
+      "contract": "Freeze the pre-action triplet trigger semantics, early-window evaluation, false-trigger gates, and diagnostic-only claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

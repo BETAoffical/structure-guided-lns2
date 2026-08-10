@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import statistics
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from experiments._common import contained_file, registered_input, sha256_file
 from experiments.repair_collection import (
@@ -13,6 +13,7 @@ from experiments.repair_collection import (
 )
 from experiments.stride_tailswitch_sequence_forensics import (
     CONTINUATION_PAIRS,
+    _average,
     _episode_rows,
     load_registration as load_sequence_registration,
 )
@@ -26,11 +27,6 @@ SCIENTIFIC_STATUS = (
     "preregistered_existing_trajectory_outcome_blind_trigger_audit"
 )
 PARENT_COMMIT = "913a050395b788e5af762b782fe88d603eeb79ff"
-
-
-def _average(values: Iterable[float]) -> float:
-    rows = list(values)
-    return sum(rows) / len(rows) if rows else 0.0
 
 
 def _trigger_at(
