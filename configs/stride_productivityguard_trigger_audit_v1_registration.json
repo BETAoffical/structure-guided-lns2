@@ -1,0 +1,98 @@
+{
+  "schema": "lns2.stride.productivityguard_trigger_audit_registration.v1",
+  "scientific_status": "preregistered_existing_trajectory_historical_productivity_trigger_audit",
+  "experiment_id": "stride-productivityguard-trigger-audit-v1",
+  "pre_registration_parent_commit": "ac07eccc8735cf87d3db434432ce79e111a9394f",
+  "inputs": {
+    "loopguard_registration": {
+      "path": "configs/stride_loopguard_trigger_audit_v1_registration.json",
+      "sha256": "81cd48c6377e61ac340b56a27b412df877672838f1dbb68928db2d5d6acdd13b"
+    },
+    "loopguard_status": {
+      "path": "build/stride-loopguard-trigger-audit-v1/loopguard_trigger_audit_status.json",
+      "sha256": "6a23dfa5d89284094e60276f1cbd390dcb042594dd7922156fb8046609bf8782"
+    },
+    "loopguard_report": {
+      "path": "build/stride-loopguard-trigger-audit-v1/loopguard_trigger_audit_report.json",
+      "sha256": "78fd31a772888b41192f6d0c5560a05499a7b2b13313779c86c57269e4eadda5"
+    }
+  },
+  "cohort": {
+    "state_count": 66,
+    "continuation_contrast_count": 132,
+    "classification_counts": {
+      "adverse": 17,
+      "beneficial": 11,
+      "neutral": 104
+    },
+    "selection_rule": "all_registered_TailSwitch_continuation_contrasts_without_result_based_exclusion"
+  },
+  "base_trigger": {
+    "name": "exact-triplet",
+    "definition": "current proposed winner and two immediately preceding actions are structural and have the same candidate_id",
+    "history_includes_forced_first_action": true,
+    "current_proposed_action_is_not_repaired_before_trigger": true
+  },
+  "historical_productivity": {
+    "completed_repairs": 2,
+    "cumulative_conflict_progress": "(conflicts_before_first_prior_repair-current_conflicts_before)/max(conflicts_before_first_prior_repair,1)",
+    "mean_unresolved_edge_fraction": "mean unresolved_edge_fraction over the two completed prior repairs",
+    "all_fields_are_available_before_current_repair": true,
+    "current_action_outcome_is_forbidden": true,
+    "future_trajectory_fields_are_forbidden": true,
+    "ttf_and_runtime_fields_are_forbidden": true
+  },
+  "trigger_variants_in_frozen_priority_order": [
+    {
+      "id": "exact-triplet-zero-progress",
+      "maximum_prior_cumulative_conflict_progress": 0.0
+    },
+    {
+      "id": "exact-triplet-low-progress-005-persistent-080",
+      "maximum_prior_cumulative_conflict_progress": 0.05,
+      "minimum_prior_mean_unresolved_edge_fraction": 0.8
+    },
+    {
+      "id": "exact-triplet-low-progress-005",
+      "maximum_prior_cumulative_conflict_progress": 0.05
+    },
+    {
+      "id": "exact-triplet-low-progress-010-persistent-080",
+      "maximum_prior_cumulative_conflict_progress": 0.1,
+      "minimum_prior_mean_unresolved_edge_fraction": 0.8
+    }
+  ],
+  "trigger_scope": {
+    "name": "STRIDE-ProductivityGuard-v1",
+    "continuation_starts_at_decision_index": 1,
+    "early_continuation_window": 20,
+    "early_window_trigger_is_primary": true,
+    "full_episode_trigger_is_descriptive_only": true
+  },
+  "registered_gates": {
+    "minimum_adverse_recall": 0.7,
+    "maximum_beneficial_false_trigger_rate": 0.2,
+    "maximum_neutral_false_trigger_rate": 0.1,
+    "minimum_triggered_adverse_pair_count": 12,
+    "minimum_triggered_adverse_map_count": 2,
+    "minimum_triggered_adverse_challenger_count": 2,
+    "qualifying_variant_rule": "first_variant_in_frozen_priority_order_passing_every_gate"
+  },
+  "interpretation_rules": {
+    "if_a_variant_qualifies": "eligible_only_for_a_new_paired_runtime_guard_ablation",
+    "if_no_variant_qualifies": "do_not_implement_a_productivity_guard_from_conflict_progress_or_edge_persistence",
+    "same_cohort_threshold_selection_is_validation": false,
+    "association_is_causation": false
+  },
+  "claim_boundary": {
+    "existing_trajectory_diagnostic_only": true,
+    "model_training_allowed": false,
+    "solver_modification_allowed": false,
+    "new_solver_runs_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "causal_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
