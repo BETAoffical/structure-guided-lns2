@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from experiments.stride_tailswitch_sequence_forensics import transition_metrics
+from experiments.stride_tailswitch_sequence_forensics import (
+    _pair_rows,
+    transition_metrics,
+)
 
 
 class TailSwitchSequenceForensicsTests(unittest.TestCase):
@@ -37,6 +40,53 @@ class TailSwitchSequenceForensicsTests(unittest.TestCase):
         self.assertEqual(result["conflict_touch_coverage"], 0.0)
         self.assertEqual(result["unresolved_edge_fraction"], 0.0)
         self.assertEqual(result["largest_component_persistence"], 0.0)
+
+    def test_pair_rows_use_tailswitch_struct_continuation_names(self) -> None:
+        fields = {
+            "structural_selection_count": 0,
+            "structural_selection_rate": 0.0,
+            "exact_candidate_repeat_rate": 0.0,
+            "maximum_structural_run_length": 0,
+            "mean_recent_three_reuse_fraction": 0.0,
+            "mean_unresolved_edge_fraction": 0.0,
+            "mean_conflict_touch_coverage": 0.0,
+            "mean_normalized_conflict_progress": 0.0,
+        }
+        summaries = {
+            ("state-a", policy): dict(fields)
+            for policy in (
+                "v2-then-v2",
+                "struct-then-v2",
+                "v2-then-struct",
+                "struct-then-struct",
+            )
+        }
+        state = {
+            "state_id": "state-a",
+            "map_id": "map-a",
+            "task_id": "task-a",
+            "solver_seed": 1,
+            "challenger": "v2-plus-structpool",
+            "contrasts": {
+                name: {
+                    "classification": "neutral",
+                    "normalized_auc_delta": 0.0,
+                    "final_conflict_delta": 0,
+                }
+                for name in (
+                    "struct_continuation_after_v2",
+                    "struct_continuation_after_struct",
+                )
+            },
+        }
+
+        rows = _pair_rows([state], summaries)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {row["contrast"] for row in rows},
+            {"continuation_after_v2", "continuation_after_struct"},
+        )
 
 
 if __name__ == "__main__":

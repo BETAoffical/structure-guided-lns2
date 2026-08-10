@@ -389,7 +389,7 @@ def _pair_rows(
         for name, (reference_policy, treatment_policy) in CONTINUATION_PAIRS.items():
             reference = episode_summaries[(state_id, reference_policy)]
             treatment = episode_summaries[(state_id, treatment_policy)]
-            contrast = dict(state["contrasts"][name])
+            contrast = dict(state["contrasts"][f"struct_{name}"])
             output.append(
                 {
                     "state_id": state_id,
