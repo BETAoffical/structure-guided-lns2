@@ -2144,6 +2144,21 @@
       "contract": "Freeze exact-triplet historical productivity timing, progress and persistence rules, registered gates, and no-runtime-integration boundary."
     },
     {
+      "path": "experiments/stride_marginalpool_root_diagnostic.py",
+      "role": "reproducibility",
+      "purpose": "Separate structural candidate-generation collapse, memoryless ranker lock, latent PP path changes and true PP no-ops at every frozen repeated/stalled TailSwitch checkpoint."
+    },
+    {
+      "path": "scripts/run_stride_marginalpool_root_diagnostic.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered existing-trajectory STRIDE-MarginalPool root diagnostic without new solver or PP calls."
+    },
+    {
+      "path": "tests/evaluation/test_stride_marginalpool_root_diagnostic.py",
+      "role": "reproducibility",
+      "contract": "Freeze candidate-pool mechanism flags, time-aligned path changes, bottleneck-order changes and repair-closure metrics."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
