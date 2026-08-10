@@ -193,6 +193,7 @@ def _episode_rows(
     state_id: str,
     policy: str,
     metadata: dict[str, Any],
+    include_guard_metrics: bool = False,
 ) -> list[dict[str, Any]]:
     trace_path = contained_file(
         collection, manifest.get("trace_file"), field="TailSwitch trace_file"
@@ -209,6 +210,7 @@ def _episode_rows(
     state.update(dict(initial.get("state_extras") or {}))
     previous_agents: list[set[int]] = []
     previous_candidate_ids: list[str] = []
+    previous_before_edges: list[set[tuple[int, int]]] = []
     rows: list[dict[str, Any]] = []
     for event in events[1:-1]:
         if event.get("event") != "transition":
@@ -307,9 +309,16 @@ def _episode_rows(
                 previous_candidate_ids=previous_candidate_ids,
             ),
         }
+        if include_guard_metrics:
+            row["pre_action_adjacent_conflict_jaccard"] = (
+                _jaccard(before_edges, previous_before_edges[-1])
+                if previous_before_edges
+                else 0.0
+            )
         rows.append(row)
         previous_agents.append(agents)
         previous_candidate_ids.append(selected_id)
+        previous_before_edges.append(before_edges)
         state = after
     return rows
 
