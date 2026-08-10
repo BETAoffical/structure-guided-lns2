@@ -2099,6 +2099,21 @@
       "contract": "Freeze the four-policy rotation, adverse-pair classification, mechanism evidence gate, and no-training claim boundary."
     },
     {
+      "path": "experiments/stride_tailswitch_sequence_forensics.py",
+      "role": "reproducibility",
+      "purpose": "Reconstruct every completed TailSwitch trajectory and diagnose candidate targeting, neighborhood reuse, conflict persistence, and missing exit behavior without new solver runs."
+    },
+    {
+      "path": "scripts/run_stride_tailswitch_sequence_forensics.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered existing-trajectory TailSwitch sequence-forensics analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_tailswitch_sequence_forensics.py",
+      "role": "reproducibility",
+      "contract": "Freeze the neighborhood-reuse and conflict-targeting metric definitions used by the TailSwitch sequence diagnostic."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
