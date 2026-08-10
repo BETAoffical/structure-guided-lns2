@@ -2084,6 +2084,21 @@
       "contract": "Freeze the seven residual measurements, paired-seed stability rule, target priority, and no-training evidence boundary."
     },
     {
+      "path": "experiments/stride_tailswitch.py",
+      "role": "reproducibility",
+      "purpose": "Restore every frozen Maze first-divergence state and execute the preregistered two-by-two first-action and continuation-policy causal diagnostic."
+    },
+    {
+      "path": "scripts/run_stride_tailswitch.py",
+      "role": "reproducibility",
+      "purpose": "Provide resumable collection and analysis commands for the preregistered TailSwitch causal diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_tailswitch.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four-policy rotation, adverse-pair classification, mechanism evidence gate, and no-training claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

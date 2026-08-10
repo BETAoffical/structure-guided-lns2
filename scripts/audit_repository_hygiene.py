@@ -271,13 +271,19 @@ def run_check(root: Path, config: dict[str, Any]) -> dict[str, Any]:
 
     duplicate_blobs = duplicate_blob_groups(root, files)
     duplicate_functions = duplicate_function_groups(root, files, production_roots)
+    allowed_unused_imports = {
+        (str(row["path"]), str(row["name"]))
+        for row in config.get("allowed_unused_imports", [])
+        if str(row.get("reason", "")).strip()
+    }
     unused_imports = []
     for relative in files:
         path = Path(relative)
         if path.suffix != ".py" or not path.parts or path.parts[0] not in production_roots:
             continue
         for item in _unused_imports(root / path):
-            unused_imports.append({"path": path.as_posix(), **item})
+            if (path.as_posix(), str(item["name"])) not in allowed_unused_imports:
+                unused_imports.append({"path": path.as_posix(), **item})
 
     module_references = _module_references(root, files)
     orphan_modules = sorted(

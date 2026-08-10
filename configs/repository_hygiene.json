@@ -9,6 +9,13 @@
     "lns2_selector",
     "scripts"
   ],
+  "allowed_unused_imports": [
+    {
+      "path": "experiments/stride_tailswitch.py",
+      "name": "_controller_kwargs",
+      "reason": "Preserve the exact source SHA-256 recorded by the completed 264-episode TailSwitch evidence block."
+    }
+  ],
   "tracked_roles": {
     ".vscode": "workspace visibility settings",
     "artifacts": "frozen models and compact evidence",
