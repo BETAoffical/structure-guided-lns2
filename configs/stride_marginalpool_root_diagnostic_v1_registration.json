@@ -1,0 +1,109 @@
+{
+  "schema": "lns2.stride.marginalpool_root_diagnostic_registration.v1",
+  "scientific_status": "preregistered_existing_trajectory_root_mechanism_diagnostic",
+  "experiment_id": "stride-marginalpool-root-diagnostic-v1",
+  "pre_registration_parent_commit": "4ca81c53b547b62b0ac9cc1c49db07e7b8fce2e6",
+  "inputs": {
+    "productivityguard_registration": {
+      "path": "configs/stride_productivityguard_trigger_audit_v1_registration.json",
+      "sha256": "0745b560f91f814e8a3d4cd69c6f2f34df4ede5f868666660cea2a580c5eefab"
+    },
+    "productivityguard_status": {
+      "path": "build/stride-productivityguard-trigger-audit-v1/productivityguard_trigger_audit_status.json",
+      "sha256": "b6c13d83e0f2e63a8dbd42d562bfbf35da41e3d425dcfc3b9037ddbf4fbd7205"
+    },
+    "productivityguard_report": {
+      "path": "build/stride-productivityguard-trigger-audit-v1/productivityguard_trigger_audit_report.json",
+      "sha256": "80bb6c36a7b69e41fb25a0508f11bc999288694ef2a00a9edeb3dd5d2e59d164"
+    },
+    "sequence_registration": {
+      "path": "configs/stride_tailswitch_sequence_forensics_v1_registration.json",
+      "sha256": "19dfb4dbde278702c96e9d03a22c9d5a8ca8d247fa74c4c8951b9fd5a670104a"
+    },
+    "sequence_status": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_status.json",
+      "sha256": "25c2a8fb9eb55683a62171557c62894c3ae63a962c459261e738cf0c4b1d27e7"
+    },
+    "sequence_report": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_report.json",
+      "sha256": "5461e88a9348a38b25b20305ae77f1a09f1bdba736d282cf27bf9d60ac2b9fc4"
+    }
+  },
+  "cohort": {
+    "source_variant": "exact-triplet-zero-progress",
+    "selection_rule": "all early-window triggered continuation contrasts from the frozen first ProductivityGuard variant",
+    "triggered_contrast_count": 45,
+    "classification_counts_for_descriptive_stratification_only": {
+      "adverse": 17,
+      "beneficial": 8,
+      "neutral": 20
+    },
+    "classification_must_not_affect_selection": true,
+    "no_result_based_exclusion": true
+  },
+  "checkpoints": {
+    "first_structural_selection": "earliest continuation decision at or after decision 1 whose selected candidate is structural",
+    "first_repeat_stall": "first early-window decision emitted by exact-triplet-zero-progress before repairing the third repeated action",
+    "prior_repair_window": 2,
+    "expected_checkpoint_count": 90
+  },
+  "candidate_pool_diagnostics": {
+    "diverse_candidate_maximum_jaccard": 0.8,
+    "score_rank_order": "descending score rounded to 12 decimals then ascending candidate_id",
+    "generator_collapse": "no different structural candidate at first_repeat_stall has Jaccard at most 0.8 to the repeated selected candidate",
+    "ranker_lock": "a different candidate with Jaccard at most 0.8 exists in the combined pool while the repeated selected candidate remains rank 1",
+    "original_pool_anchor_is_reference_only": true
+  },
+  "path_response_diagnostics": {
+    "time_aligned_path_change_ratio": "mismatched time-indexed cells divided by the maximum of the two path lengths, padding the shorter path with its final cell",
+    "wait_count": "number of adjacent equal cells in an agent path",
+    "bottleneck_cells": "static articulation cells union static free cells of degree at most 2",
+    "bottleneck_order_change": "fraction of common pairwise first-arrival order relations at bottleneck cells whose direction reverses",
+    "latent_path_change": "either prior repair changes any time-aligned path occupancy, wait count, path cost, delay or bottleneck order",
+    "true_pp_noop": "neither prior repair changes any registered path-level descriptor",
+    "current_third_action_outcome_is_forbidden": true,
+    "future_trajectory_fields_are_forbidden": true
+  },
+  "closure_diagnostics": {
+    "persistent_core": "intersection of conflict edges before the first action in the repeated triplet and before first_repeat_stall",
+    "full_edge_coverage": "fraction of persistent-core edges whose two endpoints are selected",
+    "closure_deficit": "persistent-core endpoints not selected by the repeated candidate",
+    "component_truncation": "a touched current conflict component with at least one member outside the repeated candidate"
+  },
+  "feature_diagnostics": {
+    "schema": "lns2.realized_features.v2",
+    "profile": "realized_dynamic",
+    "expected_feature_count": 124,
+    "selected_checkpoint_drift": true,
+    "same_candidate_state_drift_when_available": true,
+    "features_are_diagnostic_only": true
+  },
+  "integrity_gates": {
+    "required_triggered_contrast_count": 45,
+    "required_checkpoint_count": 90,
+    "required_feature_count_per_candidate": 124,
+    "required_trace_hash_match_fraction": 1.0,
+    "required_state_fingerprint_match_fraction": 1.0,
+    "required_selected_candidate_coverage_fraction": 1.0,
+    "required_current_action_outcome_read_count": 0,
+    "required_new_solver_run_count": 0
+  },
+  "interpretation_rules": {
+    "selection_and_pp_response_are_separate_axes": true,
+    "stage2_if_integrity_passes": "freeze both checkpoints and compare every existing candidate under sixteen strictly paired PP seeds",
+    "candidate_quality_claim_from_stage1": false,
+    "ttf_claim_from_stage1": false
+  },
+  "claim_boundary": {
+    "existing_trajectory_diagnostic_only": true,
+    "model_training_allowed": false,
+    "solver_modification_allowed": false,
+    "new_solver_runs_allowed": false,
+    "candidate_quality_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "causal_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
