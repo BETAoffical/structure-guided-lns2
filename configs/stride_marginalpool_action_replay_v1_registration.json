@@ -1,0 +1,142 @@
+{
+  "schema": "lns2.stride.marginalpool_action_replay_registration.v1",
+  "scientific_status": "preregistered_all_existing_candidates_paired_current_step_replay",
+  "experiment_id": "stride-marginalpool-action-replay-v1",
+  "pre_registration_parent_commit": "a9da04e065911ff4e1d8b94b5c9769d2723f3fb7",
+  "inputs": {
+    "root_registration": {
+      "path": "configs/stride_marginalpool_root_diagnostic_v1_registration.json",
+      "sha256": "4013b7619be43c8feea0049296c7a11ddbf3259ec8415fa95dd2300278e99bf4"
+    },
+    "root_status": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_status.json",
+      "sha256": "0bde553b4ea039f3d4afc58467c8b16a88d8008f6f57472918b174eaf271eb5c"
+    },
+    "root_report": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_report.json",
+      "sha256": "8f21f709f69cba540842cbd11dcfe65c19214c7c55b5d4492d70244d90a2f483"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    }
+  },
+  "cohort": {
+    "logical_checkpoint_count": 90,
+    "unique_repair_state_count": 78,
+    "unique_state_candidate_action_count": 2502,
+    "deduplication_key": [
+      "state_fingerprint",
+      "candidate_id"
+    ],
+    "logical_checkpoint_mapping_is_retained": true,
+    "candidate_set": "union of every frozen candidate_pool entry at both registered checkpoints",
+    "classification_must_not_affect_collection": true,
+    "no_result_based_exclusion": true
+  },
+  "execution": {
+    "workers": 2,
+    "per_state_timeout_seconds": 7200,
+    "replan_algorithm": "PP",
+    "use_sipp": true,
+    "native_repair_semantics_unchanged": true,
+    "trial_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "paired_pp_seed": "sha256 namespace stride-repairability-pp-seed-v1 over repair_structure_fingerprint and trial_index",
+    "paired_seed_scope": "all candidates sharing one restored repair state and trial index",
+    "state_restore": "native reset_paths from the frozen root-diagnostic state blob",
+    "resume": "one atomic artifact per unique repair state"
+  },
+  "preflight": {
+    "selection": "first two unique state_fingerprint values in ascending lexical order",
+    "trial_indices": [
+      0,
+      1
+    ],
+    "all_candidates_in_selected_states": true,
+    "outcomes_must_not_change_cohort_thresholds_or_protocol": true,
+    "full_collection_requires_integrity_pass": true
+  },
+  "current_step_labels": {
+    "score": "(conflicts_before - conflicts_after) / max(1, conflicts_before)",
+    "aggregates": [
+      "seed_mean",
+      "seed_standard_deviation",
+      "lower_half_mean",
+      "first_fixed_half_mean",
+      "second_fixed_half_mean",
+      "no_progress_rate",
+      "replan_success_rate",
+      "feasible_rate",
+      "minimum_seed_score",
+      "maximum_seed_score"
+    ],
+    "first_fixed_half": [
+      0,
+      7
+    ],
+    "second_fixed_half": [
+      8,
+      15
+    ],
+    "future_trajectory_forbidden": true,
+    "runtime_and_ttf_forbidden": true
+  },
+  "stable_dominance": {
+    "reference": "the candidate actually selected at the logical checkpoint",
+    "minimum_seed_mean_advantage": 0.02,
+    "no_progress_rate_must_not_increase": true,
+    "both_fixed_half_mean_differences_must_be_strictly_positive": true,
+    "ties_are_not_dominance": true
+  },
+  "root_decision": {
+    "ranker_error": "at least one existing alternative stably dominates the actually selected candidate",
+    "pool_or_operator_error": "no existing candidate has positive seed_mean and no existing alternative stably dominates the selected candidate",
+    "selected_is_current_step_best": "the selected candidate has maximum seed_mean and no alternative stably dominates it",
+    "pp_uncertainty": "winner or dominance direction differs between the two fixed eight-seed halves",
+    "next_if_ranker_error": "build a history-aware ranker over frozen existing candidates",
+    "next_if_selected_is_current_step_best": "run a separately preregistered two-step repair-closure sequence diagnostic",
+    "next_if_pool_or_operator_error": "generate repair-closure candidates before any ranker training"
+  },
+  "integrity_gates": {
+    "required_logical_checkpoint_count": 90,
+    "required_unique_state_count": 78,
+    "required_unique_state_candidate_action_count": 2502,
+    "required_trial_count": 40032,
+    "required_trial_indices_per_action": 16,
+    "required_feature_count_per_action": 124,
+    "required_state_blob_hash_match_fraction": 1.0,
+    "required_state_and_repair_fingerprint_match_fraction": 1.0,
+    "required_paired_pp_seed_match_fraction": 1.0,
+    "required_native_action_valid_fraction": 1.0,
+    "required_error_count": 0,
+    "required_timeout_count": 0
+  },
+  "claim_boundary": {
+    "paired_current_step_repair_diagnostic_only": true,
+    "model_training_allowed": false,
+    "solver_modification_allowed": false,
+    "candidate_quality_claim_is_checkpoint_local": true,
+    "long_term_quality_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
