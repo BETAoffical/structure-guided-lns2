@@ -44,6 +44,7 @@ from experiments.feature_schema_v2 import (
 from experiments.state_analysis import (
     analyze_static_grid,
 )
+from experiments.trace_replay import target_state_from_trace
 from experiments.neighborhood_candidates import (
     _seed_isolation,
     conflict_density,
@@ -945,6 +946,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 return result
             if not bool(job.get("require_finalization_timings", False)):
                 return result
+    episode_override = dict(job.get("episode_override") or {})
+    initial_restore = dict(episode_override.get("initial_restore") or {})
+    forced_first_action = dict(episode_override.get("forced_first_action") or {})
+    source_state: dict[str, Any] | None = None
+    source_trace_path: Path | None = None
+    if initial_restore:
+        source_state, source_trace_path = target_state_from_trace(
+            Path(str(initial_restore["collection_root"])),
+            dict(initial_restore["manifest"]),
+            decision_index=int(initial_restore["decision_index"]),
+            expected_fingerprint=str(initial_restore["expected_fingerprint"]),
+        )
+        expected_repair = str(initial_restore["repair_structure_fingerprint"])
+        if repair_structure_fingerprint(source_state) != expected_repair:
+            raise ValueError("episode override source repair fingerprint changed")
+        if int(source_state["num_of_colliding_pairs"]) != int(
+            initial_restore["expected_conflicts"]
+        ):
+            raise ValueError("episode override source conflict count changed")
+    if forced_first_action and not initial_restore:
+        raise ValueError("forced first action requires an initial restored state")
+    if forced_first_action:
+        if (
+            str(forced_first_action.get("mode")) != "explicit_neighborhood"
+            or not list(forced_first_action.get("agents") or ())
+            or int(forced_first_action.get("pp_random_seed", -1)) < 0
+        ):
+            raise ValueError("invalid forced first action override")
     bundle = None
     learned_selector: Selector | None = None
     controller_mode = str(job.get("controller", "official_adaptive"))
@@ -1113,7 +1142,39 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             # must not consume a controller's registered solve budget.
             ttf_started_wall = time.perf_counter()
             reset_started = time.perf_counter()
-            state = _plain(environment.reset(seed=solver_seed))
+            if source_state is None:
+                state = _plain(environment.reset(seed=solver_seed))
+            else:
+                source_agents = sorted(
+                    source_state.get("agents", []), key=lambda value: int(value["id"])
+                )
+                if [int(value["id"]) for value in source_agents] != list(
+                    range(len(source_agents))
+                ):
+                    raise ValueError("episode override source has non-contiguous agents")
+                source_paths = [
+                    list(map(int, value.get("path", []))) for value in source_agents
+                ]
+                if not source_paths or any(not path for path in source_paths):
+                    raise ValueError("episode override source contains an empty path")
+                state = _plain(
+                    environment.reset_paths(
+                        source_paths,
+                        seed=int(initial_restore["restore_seed"]),
+                    )
+                )
+                if repair_structure_fingerprint(state) != str(
+                    initial_restore["repair_structure_fingerprint"]
+                ):
+                    raise RuntimeError(
+                        "episode override restored repair structure differs from source"
+                    )
+                if int(state["num_of_colliding_pairs"]) != int(
+                    initial_restore["expected_conflicts"]
+                ):
+                    raise RuntimeError(
+                        "episode override restored conflict count differs from source"
+                    )
             reset_completed_wall = time.perf_counter()
             reset_wall_seconds = reset_completed_wall - reset_started
             initial_state_elapsed_seconds = reset_completed_wall - ttf_started_wall
@@ -1150,6 +1211,33 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "solver_seed": solver_seed,
                 "state_fingerprint": initial_fingerprint,
                 "state": state,
+                "episode_override": (
+                    {
+                        "schema": str(episode_override.get("schema", "")),
+                        "state_id": str(episode_override.get("state_id", "")),
+                        "source_trace_file": (
+                            str(source_trace_path) if source_trace_path is not None else None
+                        ),
+                        "source_decision_index": (
+                            int(initial_restore["decision_index"])
+                            if initial_restore
+                            else None
+                        ),
+                        "source_full_fingerprint": (
+                            str(initial_restore["expected_fingerprint"])
+                            if initial_restore
+                            else None
+                        ),
+                        "source_repair_fingerprint": (
+                            str(initial_restore["repair_structure_fingerprint"])
+                            if initial_restore
+                            else None
+                        ),
+                        "forced_first_action": bool(forced_first_action),
+                    }
+                    if episode_override
+                    else None
+                ),
             }
             if trace_format == TRACE_FORMAT_DELTA_GZIP_V2:
                 initial_event, initial_state_ref = encode_initial_event(
@@ -1275,10 +1363,70 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 )
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
+                force_this_action = bool(
+                    forced_first_action and decision_index == 0
+                )
                 route = "model" if policy in LEARNED_POLICIES else "official_adaptive"
                 route_started = time.perf_counter()
                 pre_step_orchestration_seconds = route_started - iteration_started
-                if route == "official_adaptive":
+                if force_this_action:
+                    route = "model"
+                    action = dict(forced_first_action)
+                    controller_seconds_before_repair = (
+                        time.perf_counter() - route_started
+                    )
+                    forced_agents = list(map(int, action["agents"]))
+                    forced_candidate_id = str(
+                        episode_override.get("forced_candidate_id", "")
+                    )
+                    forced_families = list(
+                        map(str, episode_override.get("forced_selection_families") or ())
+                    )
+                    controller.update(
+                        {
+                            "controller_mode": controller_mode,
+                            "controller_runtime": controller_runtime,
+                            "verification_profile": verification_profile,
+                            "route": route,
+                            "route_conflicts": int(state["num_of_colliding_pairs"]),
+                            "route_conflict_threshold": None,
+                            "forced_first_action": True,
+                            "forced_candidate_role": str(
+                                episode_override.get("forced_candidate_role", "")
+                            ),
+                            "selected_candidate_id": forced_candidate_id,
+                            "candidate_pool": [
+                                {
+                                    "candidate_id": forced_candidate_id,
+                                    "agents": forced_agents,
+                                    "actual_size": len(forced_agents),
+                                    "selection_families": forced_families,
+                                    "forced_first_action": True,
+                                }
+                            ],
+                            "controller_seconds_before_repair": (
+                                controller_seconds_before_repair
+                            ),
+                            "candidate_generation_seconds": 0.0,
+                            "state_check_seconds": 0.0,
+                            "state_check_fingerprint_seconds": 0.0,
+                            "state_analysis_seconds": 0.0,
+                            "proposal_feature_seconds": 0.0,
+                            "realized_feature_seconds": 0.0,
+                            "ranking_inference_seconds": 0.0,
+                            "selection_residual_seconds": (
+                                controller_seconds_before_repair
+                            ),
+                        }
+                    )
+                    selected_sizes[len(forced_agents)] += 1
+                    for family in forced_families:
+                        selected_families[family] += 1
+                    controller_totals["forced_first_action_count"] += 1
+                    controller_totals["controller_seconds_before_repair"] += (
+                        controller_seconds_before_repair
+                    )
+                elif route == "official_adaptive":
                     action = {"mode": "official"}
                     controller_seconds_before_repair = time.perf_counter() - route_started
                     controller.update(
@@ -2517,7 +2665,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 ):
                     external_timeout = True
                     break
-                if bool(job.get("deterministic_pp_replay", False)):
+                if (
+                    bool(job.get("deterministic_pp_replay", False))
+                    and not force_this_action
+                ):
                     # Pair the low-level PP stream across controller routes.
                     # Official neighborhood generation still consumes its
                     # upstream RNG stream before PP is reseeded; explicit
@@ -3319,6 +3470,7 @@ def run_closed_loop_collection(
     use_global_collection_lock: bool = True,
     topology_boundary_augmentation: dict[str, Any] | None = None,
     structpool_augmentation: dict[str, Any] | None = None,
+    episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
     dataset_root = Path(dataset).resolve()
@@ -3449,6 +3601,10 @@ def run_closed_loop_collection(
         if cohort_job_keys is not None
         else None
     )
+    normalized_episode_overrides = {
+        (str(task_id), int(solver_seed)): dict(value)
+        for (task_id, solver_seed), value in dict(episode_overrides or {}).items()
+    }
     if (
         normalized_cohort_job_keys is not None
         and not normalized_cohort_job_keys <= available_job_keys
@@ -3458,6 +3614,15 @@ def run_closed_loop_collection(
     if normalized_job_keys is not None and not normalized_job_keys <= available_job_keys:
         unknown = sorted(normalized_job_keys - available_job_keys)
         raise ValueError(f"closed-loop job filter contains unknown task/seed pairs: {unknown}")
+    if not set(normalized_episode_overrides) <= available_job_keys:
+        unknown = sorted(set(normalized_episode_overrides) - available_job_keys)
+        raise ValueError(
+            f"closed-loop episode overrides contain unknown task/seed pairs: {unknown}"
+        )
+    if normalized_job_keys is not None and not set(
+        normalized_episode_overrides
+    ) <= normalized_job_keys:
+        raise ValueError("closed-loop episode overrides are outside the execution slice")
     if (
         normalized_job_keys is not None
         and normalized_cohort_job_keys is not None
@@ -3542,6 +3707,12 @@ def run_closed_loop_collection(
         "v3_s3_bundle": (
             str(v3_s3_root) if v3_s3_root is not None else None
         ),
+        "episode_override_fingerprints": {
+            f"{task_id}::{solver_seed}": _fingerprint(value)
+            for (task_id, solver_seed), value in sorted(
+                normalized_episode_overrides.items()
+            )
+        },
     }
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
@@ -3877,6 +4048,9 @@ def run_closed_loop_collection(
                     config.get("deterministic_pp_replay", False)
                 ),
                 "existing_manifest_row": existing_by_key.get(
+                    (str(row["task_id"]), int(solver_seed))
+                ),
+                "episode_override": normalized_episode_overrides.get(
                     (str(row["task_id"]), int(solver_seed))
                 ),
             }
