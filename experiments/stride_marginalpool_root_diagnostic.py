@@ -77,9 +77,14 @@ def _structural(candidate: dict[str, Any]) -> bool:
     )
 
 
+def _candidate_score(candidate: dict[str, Any]) -> float:
+    value = candidate.get("score")
+    return float(value) if value is not None else 0.0
+
+
 def _candidate_rank_key(candidate: dict[str, Any]) -> tuple[float, str]:
     return (
-        -round(float(candidate.get("score", 0.0)), 12),
+        -round(_candidate_score(candidate), 12),
         str(candidate["candidate_id"]),
     )
 
@@ -117,7 +122,7 @@ def candidate_pool_diagnostic(
             {
                 "candidate_id": candidate_id,
                 "structural": _structural(candidate),
-                "score": float(candidate.get("score", 0.0)),
+                "score": _candidate_score(candidate),
                 "actual_size": len(agents),
                 "selected_jaccard": jaccard,
                 "diverse": jaccard <= maximum_diverse_jaccard,
@@ -138,10 +143,10 @@ def candidate_pool_diagnostic(
         "selected_candidate_id": str(selected_candidate_id),
         "selected_structural": _structural(selected),
         "selected_rank": selected_rank,
-        "selected_score": float(selected.get("score", 0.0)),
+        "selected_score": _candidate_score(selected),
         "score_margin_over_second": (
-            float(ranked[0].get("score", 0.0))
-            - float(ranked[1].get("score", 0.0))
+            _candidate_score(ranked[0])
+            - _candidate_score(ranked[1])
             if len(ranked) > 1 and selected_rank == 1
             else 0.0
         ),
@@ -161,8 +166,7 @@ def candidate_pool_diagnostic(
             else None
         ),
         "selected_minus_original_anchor_score": (
-            float(selected.get("score", 0.0))
-            - float(anchor.get("score", 0.0))
+            _candidate_score(selected) - _candidate_score(anchor)
             if anchor is not None
             else None
         ),
@@ -1016,4 +1020,3 @@ __all__ = [
     "path_response_diagnostic",
     "time_aligned_path_change_ratio",
 ]
-

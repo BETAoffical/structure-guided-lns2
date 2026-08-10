@@ -74,6 +74,14 @@ def test_candidate_pool_detects_diverse_structural_alternative() -> None:
     assert result["ranker_lock"] is True
 
 
+def test_forced_candidate_may_have_null_score() -> None:
+    forced = _candidate("forced", [0, 1], 0.0, "structpool-hotspot:8")
+    forced["score"] = None
+    result = candidate_pool_diagnostic([forced], "forced")
+    assert result["selected_score"] == 0.0
+    assert result["selected_rank"] == 1
+
+
 def test_path_response_distinguishes_latent_change_from_noop() -> None:
     before = _state({0: [0, 1, 2], 1: [3, 4, 5]}, [])
     unchanged = _state({0: [0, 1, 2], 1: [3, 4, 5]}, [])
