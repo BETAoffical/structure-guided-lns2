@@ -3,7 +3,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import math
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
@@ -39,6 +38,7 @@ from experiments.stride_productivityguard_trigger_audit import (
     load_registration as load_productivityguard_registration,
 )
 from experiments.stride_tailswitch_sequence_forensics import (
+    _jaccard,
     load_registration as load_sequence_registration,
     original_pool_anchor,
 )
@@ -63,11 +63,6 @@ def _mean(values: Iterable[float | int]) -> float:
 def _median(values: Iterable[float | int]) -> float:
     rows = [float(value) for value in values]
     return float(statistics.median(rows)) if rows else 0.0
-
-
-def _jaccard(left: set[int], right: set[int]) -> float:
-    union = left | right
-    return len(left & right) / len(union) if union else 0.0
 
 
 def _structural(candidate: dict[str, Any]) -> bool:
