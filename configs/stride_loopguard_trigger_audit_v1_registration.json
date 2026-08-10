@@ -1,0 +1,91 @@
+{
+  "schema": "lns2.stride.loopguard_trigger_audit_registration.v1",
+  "scientific_status": "preregistered_existing_trajectory_outcome_blind_trigger_audit",
+  "experiment_id": "stride-loopguard-trigger-audit-v1",
+  "pre_registration_parent_commit": "913a050395b788e5af762b782fe88d603eeb79ff",
+  "inputs": {
+    "sequence_registration": {
+      "path": "configs/stride_tailswitch_sequence_forensics_v1_registration.json",
+      "sha256": "19dfb4dbde278702c96e9d03a22c9d5a8ca8d247fa74c4c8951b9fd5a670104a"
+    },
+    "sequence_status": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_status.json",
+      "sha256": "25c2a8fb9eb55683a62171557c62894c3ae63a962c459261e738cf0c4b1d27e7"
+    },
+    "sequence_report": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_report.json",
+      "sha256": "5461e88a9348a38b25b20305ae77f1a09f1bdba736d282cf27bf9d60ac2b9fc4"
+    }
+  },
+  "cohort": {
+    "state_count": 66,
+    "continuation_contrast_count": 132,
+    "selection_rule": "all_registered_TailSwitch_continuation_contrasts_without_result_based_exclusion",
+    "challengers": [
+      "v2-plus-structpool",
+      "v2-plus-slotpool"
+    ]
+  },
+  "trigger_scope": {
+    "name": "STRIDE-LoopGuard-v1",
+    "evaluated_object": "the_augmented_controller_proposed_winner_before_native_repair",
+    "history_available_at_decision": true,
+    "history_includes_forced_first_action": true,
+    "continuation_starts_at_decision_index": 1,
+    "early_continuation_window": 20,
+    "early_window_trigger_is_primary": true,
+    "full_episode_trigger_is_descriptive_only": true,
+    "current_action_outcome_is_forbidden": true,
+    "future_trajectory_fields_are_forbidden": true,
+    "ttf_and_runtime_fields_are_forbidden": true
+  },
+  "trigger_variants_in_frozen_priority_order": [
+    {
+      "id": "exact-triplet",
+      "consecutive_structural_actions": 3,
+      "same_candidate_id_across_run": true
+    },
+    {
+      "id": "overlap-095-triplet",
+      "consecutive_structural_actions": 3,
+      "minimum_adjacent_agent_jaccard": 0.95
+    },
+    {
+      "id": "overlap-090-conflict-080-triplet",
+      "consecutive_structural_actions": 3,
+      "minimum_adjacent_agent_jaccard": 0.9,
+      "minimum_adjacent_pre_action_conflict_jaccard": 0.8
+    },
+    {
+      "id": "overlap-090-triplet",
+      "consecutive_structural_actions": 3,
+      "minimum_adjacent_agent_jaccard": 0.9
+    }
+  ],
+  "registered_gates": {
+    "minimum_adverse_recall": 0.7,
+    "maximum_beneficial_false_trigger_rate": 0.2,
+    "maximum_neutral_false_trigger_rate": 0.1,
+    "minimum_triggered_adverse_pair_count": 12,
+    "minimum_triggered_adverse_map_count": 2,
+    "minimum_triggered_adverse_challenger_count": 2,
+    "qualifying_variant_rule": "first_variant_in_frozen_priority_order_passing_every_gate"
+  },
+  "interpretation_rules": {
+    "if_a_variant_qualifies": "eligible_only_for_a_new_paired_runtime_guard_ablation",
+    "if_no_variant_qualifies": "do_not_implement_a_loop_guard_from_these_features",
+    "same_cohort_threshold_selection_is_validation": false,
+    "association_is_causation": false
+  },
+  "claim_boundary": {
+    "existing_trajectory_diagnostic_only": true,
+    "model_training_allowed": false,
+    "solver_modification_allowed": false,
+    "new_solver_runs_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "causal_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
