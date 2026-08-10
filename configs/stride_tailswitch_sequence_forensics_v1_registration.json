@@ -1,0 +1,114 @@
+{
+  "schema": "lns2.stride.tailswitch_sequence_forensics_registration.v1",
+  "scientific_status": "preregistered_existing_trajectory_sequence_mechanism_diagnostic",
+  "experiment_id": "stride-tailswitch-sequence-forensics-v1",
+  "pre_registration_parent_commit": "0b2f22699437a6908331cc1d13a4dc8a6d997f45",
+  "inputs": {
+    "tailswitch_registration": {
+      "path": "configs/stride_tailswitch_v1_registration.json",
+      "sha256": "9f8e4cceda38fa146aa3edaeb31849099e080aee802d59e74413ebb75d05d82c"
+    },
+    "tailswitch_status": {
+      "path": "build/stride-tailswitch-v1/tailswitch_status.json",
+      "sha256": "8ab059fc31a3b27a1aaa9c6cff386d15fc347daf4fef788899a14dd785b20003"
+    },
+    "tailswitch_report": {
+      "path": "build/stride-tailswitch-v1/tailswitch_report.json",
+      "sha256": "107f11faaa2e18f92af8e73e4a69e1ba7f8948f77b8f0e174981cc4c3c2b6754"
+    },
+    "state_selection": {
+      "path": "build/stride-maze-tail-action-replay-v1/state_selection.jsonl",
+      "sha256": "453fd4702e104b74ed032c62aae152017afb32401dc2191e9f90701872ef1377"
+    }
+  },
+  "cohort": {
+    "state_count": 66,
+    "policy_count": 4,
+    "episode_count": 264,
+    "selection_rule": "all_completed_tailswitch_states_and_policies_without_result_based_exclusion",
+    "policies": [
+      "v2-then-v2",
+      "struct-then-v2",
+      "v2-then-struct",
+      "struct-then-struct"
+    ],
+    "challengers": [
+      "v2-plus-structpool",
+      "v2-plus-slotpool"
+    ]
+  },
+  "transition_scope": {
+    "forced_first_action_is_reported_separately": true,
+    "continuation_starts_at_decision_index": 1,
+    "early_continuation_window": 20,
+    "early_window_has_no_imputation": true,
+    "all_short_or_censored_sequences_remain_in_coverage_counts": true,
+    "conflict_bands": {
+      "low": [1, 5],
+      "moderate": [6, 20],
+      "high": [21, null]
+    }
+  },
+  "structural_action_rule": {
+    "definition": "selected candidate has at least one selection_families value beginning with structpool-",
+    "candidate_pool_selected_row_must_exist": true,
+    "forced_first_action_uses_registered_frozen_family": true
+  },
+  "sequence_metrics": {
+    "adjacent_agent_jaccard": "jaccard(A_t,A_t-1)",
+    "recent_three_reuse_fraction": "abs(A_t intersect union(A_t-3..A_t-1))/abs(A_t)",
+    "exact_candidate_repeat": "selected_candidate_id occurred in one of the previous three actions",
+    "conflict_touch_coverage": "fraction of pre-action conflict edges with at least one selected endpoint",
+    "conflict_full_coverage": "fraction of pre-action conflict edges with both endpoints selected",
+    "selected_conflict_agent_fraction": "fraction of selected agents incident to a pre-action conflict edge",
+    "unresolved_edge_fraction": "abs(E_before intersect E_after)/abs(E_before)",
+    "new_edge_fraction": "abs(E_after minus E_before)/abs(E_after)",
+    "normalized_conflict_progress": "(conflicts_before-conflicts_after)/max(conflicts_before,1)",
+    "largest_component_persistence": "largest_conflict_component_after/max(largest_conflict_component_before,1)"
+  },
+  "registered_comparisons": {
+    "continuation_after_v2": "v2-then-struct minus v2-then-v2",
+    "continuation_after_struct": "struct-then-struct minus struct-then-v2",
+    "actual_structural_vs_base_actions": "within augmented-policy continuation transitions, grouped by map, challenger and conflict band",
+    "adverse_vs_non_adverse_sequences": "registered TailSwitch adverse continuation pairs versus all remaining pairs, with every state retained"
+  },
+  "interpretation_rules": {
+    "candidate_targeting_problem": {
+      "required_directions": [
+        "structural conflict_touch_coverage is lower",
+        "structural normalized_conflict_progress is lower",
+        "structural unresolved_edge_fraction is higher"
+      ],
+      "minimum_challenger_coverage": 2,
+      "minimum_map_coverage": 2,
+      "causal_wording_allowed": false
+    },
+    "selection_memory_problem": {
+      "required_directions": [
+        "adverse continuation pairs have higher recent_three_reuse_fraction",
+        "adverse continuation pairs have higher exact_candidate_repeat rate",
+        "adverse continuation pairs have higher unresolved_edge_fraction"
+      ],
+      "minimum_direction_count": 2,
+      "causal_wording_allowed": false
+    },
+    "missing_exit_or_abstention_problem": {
+      "required_evidence": [
+        "TailSwitch first structural action is not adverse on average",
+        "continued augmented selection is adverse on average",
+        "adverse pairs contain repeated post-first structural selections before censoring or completion"
+      ],
+      "causal_scope": "policy-level only"
+    }
+  },
+  "claim_boundary": {
+    "existing_trajectory_diagnostic_only": true,
+    "model_training_allowed": false,
+    "new_solver_runs_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "per_transition_causal_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true
+  }
+}
