@@ -2174,6 +2174,21 @@
       "contract": "Freeze the 78-state and 2502-action cohort, sixteen-seed pairing, stable-dominance rule and current-step-only claim boundary."
     },
     {
+      "path": "experiments/stride_historyrank_rule.py",
+      "role": "reproducibility",
+      "purpose": "Audit the preregistered exact-noop HistoryRank fallback over all frozen first-repeat checkpoints without reading runtime or future trajectories."
+    },
+    {
+      "path": "scripts/run_stride_historyrank_rule.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered checkpoint-local HistoryRank rule audit and emit immutable row and report identities."
+    },
+    {
+      "path": "tests/evaluation/test_stride_historyrank_rule.py",
+      "role": "reproducibility",
+      "contract": "Freeze exact repeated-candidate exclusion and deterministic retained-candidate V2 score fallback semantics."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
