@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import collections
-import concurrent.futures
 import math
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-from experiments._common import closed_loop_producer_identity, registered_input, sha256_file
+from experiments._common import (
+    closed_loop_producer_identity,
+    mean,
+    registered_input,
+    sha256_file,
+)
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.run_output_guard import prepare_resumable_output
@@ -19,6 +22,7 @@ from experiments.stride_repairability_collection import repairability_restore_se
 from experiments.stride_tailswitch import _episode_summary, classify_adverse_pair
 from experiments.trace_replay import target_state_from_trace
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+from lns2_selector.runtime.topology_candidates import _jaccard
 
 
 CONFIG_SCHEMA = "lns2.stride.pretail_forced_continuation_registration.v1"
@@ -28,11 +32,6 @@ OVERRIDE_SCHEMA = "lns2.stride.pretail_forced_continuation_override.v1"
 ARMS = ("actual_selected", "one_step_oracle", "coverage_diverse")
 STATUS_FILENAME = "pretail_forced_continuation_status.json"
 REPORT_FILENAME = "pretail_forced_continuation_report.json"
-
-
-def _mean(values: Iterable[float]) -> float:
-    rows = list(values)
-    return sum(rows) / len(rows) if rows else 0.0
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
@@ -52,6 +51,10 @@ def load_pretail_forced_continuation_config(
         or config.get("experiment_id") != "stride-pretail-forced-continuation-v1"
         or config.get("pre_registration_parent_commit")
         != "0ec302239db793974009e92c39b0d5e35798aa67"
+        or config.get("execution_amendment_parent_commit")
+        != "d7d416bd1424702dd2060be777574e919979daf2"
+        or config.get("execution_amendment_reason")
+        != "replace_thread_pool_with_eight_independent_process_shards_after_smoke_showed_native_spawn_serialization_before_formal_collection"
     ):
         raise ValueError("PreTail forced-continuation identity changed")
     expected_inputs = {
@@ -61,6 +64,9 @@ def load_pretail_forced_continuation_config(
         "tailswitch_registration",
         "tailswitch_status",
         "tailswitch_report",
+        "tailswitch_qualification_manifest",
+        "tailswitch_qualification_report",
+        "tailswitch_qualification_run_config",
         "state_collection_config",
         "runtime_config",
     }
@@ -81,7 +87,8 @@ def load_pretail_forced_continuation_config(
         "paired_first_action_trial_indices": [0, 1],
         "first_action_forced_exactly_once": True,
         "continuation_controller": "matching_frozen_structpool_or_slotpool",
-        "workers": 4,
+        "parallel_shard_count": 8,
+        "workers_per_shard": 1,
         "maximum_repair_decisions_from_restored_state": 200,
         "fixed_metric_horizon": 200,
         "wall_time_fuse_seconds": 300.0,
@@ -127,13 +134,6 @@ def _paired_first_action_seed(case_id: str, trial_index: int) -> int:
         )[:8],
         16,
     ) & 0x7FFFFFFF
-
-
-def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
-    left_set = set(map(int, left))
-    right_set = set(map(int, right))
-    union = left_set | right_set
-    return len(left_set & right_set) / len(union) if union else 1.0
 
 
 def _candidate_roles(
@@ -244,6 +244,16 @@ def continuation_schedule(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return schedule
 
 
+def select_shard(
+    cases: list[dict[str, Any]], *, shard_index: int, shard_count: int
+) -> list[dict[str, Any]]:
+    if shard_count <= 0 or not 0 <= shard_index < shard_count:
+        raise ValueError("PreTail shard index/count is invalid")
+    return [
+        case for position, case in enumerate(cases) if position % shard_count == shard_index
+    ]
+
+
 def _state_directory(output: Path, case_id: str) -> Path:
     return output / "states" / _fingerprint({"case_id": case_id})[:20]
 
@@ -338,17 +348,24 @@ def run_pretail_forced_continuation(
     resume: bool = False,
     dry_run: bool = False,
     limit_cases: int | None = None,
+    shard_index: int | None = None,
+    shard_count: int | None = None,
 ) -> dict[str, Any]:
     path, root, config, inputs, parent = load_pretail_forced_continuation_config(
         config_path
     )
-    cases = prepare_cases(
+    all_cases = prepare_cases(
         _read_jsonl(inputs["root_checkpoints"]),
         _read_jsonl(inputs["logical_checkpoint_results"]),
         _read_jsonl(inputs["candidate_aggregates"]),
     )
-    if limit_cases is not None:
-        cases = cases[: int(limit_cases)]
+    cases = all_cases if limit_cases is None else all_cases[: int(limit_cases)]
+    if (shard_index is None) != (shard_count is None):
+        raise ValueError("PreTail shard index and count must be provided together")
+    if shard_index is not None and shard_count is not None:
+        cases = select_shard(
+            cases, shard_index=int(shard_index), shard_count=int(shard_count)
+        )
     schedule = continuation_schedule(cases)
     if dry_run:
         identical_oracle = sum(
@@ -372,6 +389,8 @@ def run_pretail_forced_continuation(
             "maximum_repair_decisions": 200,
             "wall_time_fuse_seconds": 300.0,
             "process_timeout_seconds": 360.0,
+            "shard_index": shard_index,
+            "shard_count": shard_count,
         }
     output = Path(output).resolve()
     prepared = prepare_resumable_output(
@@ -393,9 +412,10 @@ def run_pretail_forced_continuation(
     runtime = inputs["runtime_config"]
     registered_job_keys = {
         (str(case["checkpoint"]["task_id"]), int(case["checkpoint"]["solver_seed"]))
-        for case in cases
+        for case in all_cases
     }
     qualification_root = output / "qualification"
+    qualification_source = inputs["tailswitch_qualification_report"].parent
     run_closed_loop_collection(
         dataset,
         runtime,
@@ -405,6 +425,7 @@ def run_pretail_forced_continuation(
         resume=(resume and qualification_root.joinpath("run_config.json").is_file()),
         cohort_job_keys=registered_job_keys,
         job_keys=registered_job_keys,
+        qualification_source=qualification_source,
         **_fused_controller_kwargs(root, parent, "v2-full"),
     )
     case_by_id = {str(case["checkpoint"]["case_id"]): case for case in cases}
@@ -454,22 +475,22 @@ def run_pretail_forced_continuation(
 
     pending = [item for item in schedule if not _done(_collection_path(output, item))]
     completed = len(schedule) - len(pending)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(run_item, item): item for item in pending}
-        for future in concurrent.futures.as_completed(futures):
-            item = future.result()
-            completed += 1
-            _write_json(
-                output / STATUS_FILENAME,
-                {
-                    **status_base,
-                    "completed_schedule_entries": completed,
-                    "total_schedule_entries": len(schedule),
-                    "active_jobs": min(4, len(schedule) - completed),
-                    "current": item,
-                    "complete": False,
-                },
-            )
+    for item in pending:
+        run_item(item)
+        completed += 1
+        _write_json(
+            output / STATUS_FILENAME,
+            {
+                **status_base,
+                "completed_schedule_entries": completed,
+                "total_schedule_entries": len(schedule),
+                "active_jobs": int(completed < len(schedule)),
+                "current": item,
+                "shard_index": shard_index,
+                "shard_count": shard_count,
+                "complete": False,
+            },
+        )
     report = analyze_pretail_forced_continuation(
         path, output, expected_cases=len(cases)
     )
@@ -496,13 +517,25 @@ def analyze_pretail_forced_continuation(
     _path, _root, config, inputs, _parent = load_pretail_forced_continuation_config(
         config_path
     )
-    cases = prepare_cases(
+    all_cases = prepare_cases(
         _read_jsonl(inputs["root_checkpoints"]),
         _read_jsonl(inputs["logical_checkpoint_results"]),
         _read_jsonl(inputs["candidate_aggregates"]),
-    )[:expected_cases]
-    schedule = continuation_schedule(cases)
+    )
     output = Path(output).resolve()
+    registered_schedule_path = output / "execution_schedule.jsonl"
+    if registered_schedule_path.is_file():
+        registered_schedule = _read_jsonl(registered_schedule_path)
+        ordered_case_ids = list(
+            dict.fromkeys(str(row["case_id"]) for row in registered_schedule)
+        )
+        case_by_id = {
+            str(case["checkpoint"]["case_id"]): case for case in all_cases
+        }
+        cases = [case_by_id[case_id] for case_id in ordered_case_ids]
+    else:
+        cases = all_cases[:expected_cases]
+    schedule = continuation_schedule(cases)
     episodes: list[dict[str, Any]] = []
     for item in schedule:
         manifest_path = _collection_path(output, item) / "realized_dynamic_manifest.jsonl"
@@ -549,11 +582,11 @@ def analyze_pretail_forced_continuation(
                 str(row["stop_reason"]) in {"repair_limit", "wall_timeout"}
                 for row in rows
             ),
-            "mean_normalized_fixed_auc": _mean(
+            "mean_normalized_fixed_auc": mean(
                 float(row["normalized_fixed_auc"]) for row in rows
             ),
-            "mean_final_conflicts": _mean(float(row["final_conflicts"]) for row in rows),
-            "mean_repair_iterations": _mean(
+            "mean_final_conflicts": mean(float(row["final_conflicts"]) for row in rows),
+            "mean_repair_iterations": mean(
                 float(row["repair_iterations"]) for row in rows
             ),
         }
@@ -619,4 +652,5 @@ __all__ = [
     "load_pretail_forced_continuation_config",
     "prepare_cases",
     "run_pretail_forced_continuation",
+    "select_shard",
 ]

@@ -35,6 +35,17 @@ timeout remains an integrity failure.
 
 The collection therefore cannot run indefinitely on an unrepairable state.
 
+### Execution amendment before formal collection
+
+The first one-case smoke run showed that a Python thread pool serialized the
+native spawned workers: only one actual solver child was active.  No formal
+episode completed and no result was inspected.  Before formal collection the
+execution layout was therefore amended to eight independent process shards,
+each with one native worker and a disjoint case partition.  WSL exposes 20
+logical CPUs and 23 GiB of memory, so eight workers leave capacity for the host
+and for high-agent-count memory spikes.  Candidate definitions, seeds, cohort,
+outcomes, and all three per-episode fuses are unchanged.
+
 ## Outcomes and interpretation
 
 Primary outcomes are fixed-200-step normalized conflict AUC, final conflict

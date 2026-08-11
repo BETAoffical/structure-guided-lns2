@@ -5,6 +5,7 @@ from experiments.stride_pretail_forced_continuation import (
     _candidate_roles,
     _paired_first_action_seed,
     continuation_schedule,
+    select_shard,
 )
 
 
@@ -68,3 +69,10 @@ def test_candidate_roles_use_oracle_and_diverse_coverage() -> None:
     assert roles["actual_selected"]["candidate_id"] == "selected"
     assert roles["one_step_oracle"]["candidate_id"] == "oracle"
     assert roles["coverage_diverse"]["candidate_id"] == "coverage"
+
+
+def test_eight_process_shards_partition_cases_without_overlap() -> None:
+    cases = [{"case": value} for value in range(45)]
+    shards = [select_shard(cases, shard_index=index, shard_count=8) for index in range(8)]
+    assert sorted(row["case"] for shard in shards for row in shard) == list(range(45))
+    assert [len(shard) for shard in shards] == [6, 6, 6, 6, 6, 5, 5, 5]

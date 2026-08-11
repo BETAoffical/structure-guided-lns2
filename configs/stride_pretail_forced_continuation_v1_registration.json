@@ -3,6 +3,8 @@
   "scientific_status": "preregistered_bounded_forced_first_action_continuation_diagnostic",
   "experiment_id": "stride-pretail-forced-continuation-v1",
   "pre_registration_parent_commit": "0ec302239db793974009e92c39b0d5e35798aa67",
+  "execution_amendment_parent_commit": "d7d416bd1424702dd2060be777574e919979daf2",
+  "execution_amendment_reason": "replace_thread_pool_with_eight_independent_process_shards_after_smoke_showed_native_spawn_serialization_before_formal_collection",
   "inputs": {
     "root_checkpoints": {
       "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
@@ -27,6 +29,18 @@
     "tailswitch_report": {
       "path": "build/stride-tailswitch-v1/tailswitch_report.json",
       "sha256": "107f11faaa2e18f92af8e73e4a69e1ba7f8948f77b8f0e174981cc4c3c2b6754"
+    },
+    "tailswitch_qualification_manifest": {
+      "path": "build/stride-tailswitch-v1/qualification/qualification_manifest.jsonl",
+      "sha256": "6f82b8135693342d6f429af21d1af9194560e5750b94a24f72e6a53c35befa10"
+    },
+    "tailswitch_qualification_report": {
+      "path": "build/stride-tailswitch-v1/qualification/qualification_report.json",
+      "sha256": "2a8462c3d28e0e06cb957ff611c357fe82395f5cf10f33d1c22755cdb9322193"
+    },
+    "tailswitch_qualification_run_config": {
+      "path": "build/stride-tailswitch-v1/qualification/run_config.json",
+      "sha256": "9e694f5cba3b3e9716d28db7e16c9bd2e33716f38542930b9de2879e05469ab0"
     },
     "state_collection_config": {
       "path": "configs/stride_maze_tail_state_collection_v2.json",
@@ -59,7 +73,8 @@
     "paired_first_action_trial_indices": [0, 1],
     "first_action_forced_exactly_once": true,
     "continuation_controller": "matching_frozen_structpool_or_slotpool",
-    "workers": 4,
+    "parallel_shard_count": 8,
+    "workers_per_shard": 1,
     "maximum_repair_decisions_from_restored_state": 200,
     "fixed_metric_horizon": 200,
     "wall_time_fuse_seconds": 300.0,
