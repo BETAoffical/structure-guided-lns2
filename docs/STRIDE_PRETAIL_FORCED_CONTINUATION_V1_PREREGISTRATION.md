@@ -57,6 +57,15 @@ The dedicated qualification completed with 19/19 unique task-seed resets,
 and zero errors.  Its manifest, report, and run configuration hashes are frozen
 in the registration before any formal continuation episode.
 
+The attempted eight top-level process launch then exposed the repository's
+global atomic collection lock.  Seven processes were rejected and the one
+remaining process was stopped before a complete formal manifest was written.
+The lock is retained.  The final execution plan uses one lock-owning collector
+and 24 batches defined by challenger, treatment policy, paired seed, and arm.
+Each batch has unique task-seed keys and runs up to eight native workers inside
+the supported collector.  This changes only orchestration; cohort, candidate
+actions, seeds, outcomes, and per-episode fuses remain frozen.
+
 ## Outcomes and interpretation
 
 Primary outcomes are fixed-200-step normalized conflict AUC, final conflict

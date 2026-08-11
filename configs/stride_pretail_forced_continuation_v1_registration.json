@@ -8,6 +8,8 @@
   "qualification_amendment_parent_commit": "8ccbbba168c36ef441ffe8d47723e1e257e9735b",
   "qualification_amendment_reason": "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible",
   "qualification_artifact_registration_parent_commit": "bf1ecbadd2002b71a53d12d9ef1baadfa6dc5c94",
+  "batch_execution_amendment_parent_commit": "fdad0a2a45fe3fce410598a858cc189b4142606f",
+  "batch_execution_amendment_reason": "replace_mutually_exclusive_top_level_shards_with_one_locked_collector_and_eight_native_workers_over_twenty_four_unique_job_key_batches_before_any_formal_episode_completed",
   "inputs": {
     "root_checkpoints": {
       "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
@@ -76,8 +78,15 @@
     "paired_first_action_trial_indices": [0, 1],
     "first_action_forced_exactly_once": true,
     "continuation_controller": "matching_frozen_structpool_or_slotpool",
-    "parallel_shard_count": 8,
-    "workers_per_shard": 1,
+    "top_level_process_count": 1,
+    "parallel_batch_worker_count": 8,
+    "batch_dimensions": [
+      "challenger",
+      "treatment_policy",
+      "trial_index",
+      "arm"
+    ],
+    "expected_batch_count": 24,
     "maximum_repair_decisions_from_restored_state": 200,
     "fixed_metric_horizon": 200,
     "wall_time_fuse_seconds": 300.0,

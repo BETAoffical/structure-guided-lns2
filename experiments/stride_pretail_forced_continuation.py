@@ -61,6 +61,10 @@ def load_pretail_forced_continuation_config(
         != "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible"
         or config.get("qualification_artifact_registration_parent_commit")
         != "bf1ecbadd2002b71a53d12d9ef1baadfa6dc5c94"
+        or config.get("batch_execution_amendment_parent_commit")
+        != "fdad0a2a45fe3fce410598a858cc189b4142606f"
+        or config.get("batch_execution_amendment_reason")
+        != "replace_mutually_exclusive_top_level_shards_with_one_locked_collector_and_eight_native_workers_over_twenty_four_unique_job_key_batches_before_any_formal_episode_completed"
     ):
         raise ValueError("PreTail forced-continuation identity changed")
     expected_inputs = {
@@ -93,8 +97,15 @@ def load_pretail_forced_continuation_config(
         "paired_first_action_trial_indices": [0, 1],
         "first_action_forced_exactly_once": True,
         "continuation_controller": "matching_frozen_structpool_or_slotpool",
-        "parallel_shard_count": 8,
-        "workers_per_shard": 1,
+        "top_level_process_count": 1,
+        "parallel_batch_worker_count": 8,
+        "batch_dimensions": [
+            "challenger",
+            "treatment_policy",
+            "trial_index",
+            "arm",
+        ],
+        "expected_batch_count": 24,
         "maximum_repair_decisions_from_restored_state": 200,
         "fixed_metric_horizon": 200,
         "wall_time_fuse_seconds": 300.0,
@@ -250,25 +261,22 @@ def continuation_schedule(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return schedule
 
 
-def select_shard(
-    cases: list[dict[str, Any]], *, shard_index: int, shard_count: int
-) -> list[dict[str, Any]]:
-    if shard_count <= 0 or not 0 <= shard_index < shard_count:
-        raise ValueError("PreTail shard index/count is invalid")
-    return [
-        case for position, case in enumerate(cases) if position % shard_count == shard_index
-    ]
-
-
-def _state_directory(output: Path, case_id: str) -> Path:
-    return output / "states" / _fingerprint({"case_id": case_id})[:20]
-
-
 def _collection_path(output: Path, item: dict[str, Any]) -> Path:
     return (
-        _state_directory(output, str(item["case_id"]))
+        output
+        / "batches"
+        / f"{item['challenger']}__{item['treatment_policy']}"
         / f"trial_{int(item['trial_index']):02d}"
         / str(item["arm"])
+    )
+
+
+def _batch_key(item: dict[str, Any]) -> tuple[str, str, int, str]:
+    return (
+        str(item["challenger"]),
+        str(item["treatment_policy"]),
+        int(item["trial_index"]),
+        str(item["arm"]),
     )
 
 
@@ -340,10 +348,18 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
     )
 
 
-def _done(collection: Path) -> bool:
+def _completed_job_keys(collection: Path) -> set[tuple[str, int]]:
     manifest = collection / "realized_dynamic_manifest.jsonl"
-    return manifest.is_file() and any(
-        row.get("status") in {"ok", "error", "timeout"} for row in _read_jsonl(manifest)
+    return {
+        (str(row["task_id"]), int(row["solver_seed"]))
+        for row in (_read_jsonl(manifest) if manifest.is_file() else [])
+        if row.get("status") in {"ok", "error", "timeout"}
+    }
+
+
+def _done(output: Path, item: dict[str, Any]) -> bool:
+    return (str(item["task_id"]), int(item["solver_seed"])) in _completed_job_keys(
+        _collection_path(output, item)
     )
 
 
@@ -354,8 +370,6 @@ def run_pretail_forced_continuation(
     resume: bool = False,
     dry_run: bool = False,
     limit_cases: int | None = None,
-    shard_index: int | None = None,
-    shard_count: int | None = None,
 ) -> dict[str, Any]:
     path, root, config, inputs, parent = load_pretail_forced_continuation_config(
         config_path
@@ -366,12 +380,6 @@ def run_pretail_forced_continuation(
         _read_jsonl(inputs["candidate_aggregates"]),
     )
     cases = all_cases if limit_cases is None else all_cases[: int(limit_cases)]
-    if (shard_index is None) != (shard_count is None):
-        raise ValueError("PreTail shard index and count must be provided together")
-    if shard_index is not None and shard_count is not None:
-        cases = select_shard(
-            cases, shard_index=int(shard_index), shard_count=int(shard_count)
-        )
     schedule = continuation_schedule(cases)
     if dry_run:
         identical_oracle = sum(
@@ -395,8 +403,7 @@ def run_pretail_forced_continuation(
             "maximum_repair_decisions": 200,
             "wall_time_fuse_seconds": 300.0,
             "process_timeout_seconds": 360.0,
-            "shard_index": shard_index,
-            "shard_count": shard_count,
+            "batch_count": len({_batch_key(item) for item in schedule}),
         }
     output = Path(output).resolve()
     prepared = prepare_resumable_output(
@@ -436,22 +443,45 @@ def run_pretail_forced_continuation(
     )
     case_by_id = {str(case["checkpoint"]["case_id"]): case for case in cases}
 
-    def run_item(item: dict[str, Any]) -> dict[str, Any]:
-        collection = _collection_path(output, item)
-        if _done(collection):
-            return item
-        case = case_by_id[str(item["case_id"])]
-        checkpoint = case["checkpoint"]
-        candidate = case["roles"][str(item["arm"])]
-        key = (str(item["task_id"]), int(item["solver_seed"]))
-        override = _episode_override(
-            root,
-            checkpoint,
-            candidate,
-            trial_index=int(item["trial_index"]),
-            arm=str(item["arm"]),
+    batches: dict[tuple[str, str, int, str], list[dict[str, Any]]] = {}
+    for item in schedule:
+        batches.setdefault(_batch_key(item), []).append(item)
+    if len(cases) == 45 and len(batches) != 24:
+        raise ValueError("PreTail expected 24 batch identities")
+    for batch_items in batches.values():
+        job_keys = {
+            (str(item["task_id"]), int(item["solver_seed"])) for item in batch_items
+        }
+        if len(job_keys) != len(batch_items):
+            raise ValueError("PreTail batch contains duplicate task-seed keys")
+
+    completed = sum(_done(output, item) for item in schedule)
+    for batch_key, batch_items in batches.items():
+        collection = _collection_path(output, batch_items[0])
+        done_keys = _completed_job_keys(collection)
+        pending_items = [
+            item
+            for item in batch_items
+            if (str(item["task_id"]), int(item["solver_seed"])) not in done_keys
+        ]
+        if not pending_items:
+            continue
+        overrides: dict[tuple[str, int], dict[str, Any]] = {}
+        for item in batch_items:
+            case = case_by_id[str(item["case_id"])]
+            checkpoint = case["checkpoint"]
+            candidate = case["roles"][str(item["arm"])]
+            key = (str(item["task_id"]), int(item["solver_seed"]))
+            overrides[key] = _episode_override(
+                root,
+                checkpoint,
+                candidate,
+                trial_index=int(item["trial_index"]),
+                arm=str(item["arm"]),
+            )
+        kwargs = _fused_controller_kwargs(
+            root, parent, str(batch_items[0]["challenger"])
         )
-        kwargs = _fused_controller_kwargs(root, parent, str(item["challenger"]))
         run_closed_loop_collection(
             dataset,
             runtime,
@@ -462,7 +492,7 @@ def run_pretail_forced_continuation(
             cohort_job_keys=registered_job_keys,
             job_keys=registered_job_keys,
             qualification_source=qualification_root,
-            episode_overrides={key: override},
+            episode_overrides=overrides,
             **kwargs,
         )
         run_closed_loop_collection(
@@ -470,30 +500,31 @@ def run_pretail_forced_continuation(
             runtime,
             collection,
             phase="realized_dynamic",
-            workers=1,
+            workers=8,
             resume=True,
             cohort_job_keys=registered_job_keys,
-            job_keys={key},
-            episode_overrides={key: override},
+            job_keys={
+                (str(item["task_id"]), int(item["solver_seed"]))
+                for item in batch_items
+            },
+            episode_overrides=overrides,
             **kwargs,
         )
-        return item
-
-    pending = [item for item in schedule if not _done(_collection_path(output, item))]
-    completed = len(schedule) - len(pending)
-    for item in pending:
-        run_item(item)
-        completed += 1
+        completed = sum(_done(output, item) for item in schedule)
         _write_json(
             output / STATUS_FILENAME,
             {
                 **status_base,
                 "completed_schedule_entries": completed,
                 "total_schedule_entries": len(schedule),
-                "active_jobs": int(completed < len(schedule)),
-                "current": item,
-                "shard_index": shard_index,
-                "shard_count": shard_count,
+                "active_jobs": min(8, len(batch_items)),
+                "current_batch": {
+                    "challenger": batch_key[0],
+                    "treatment_policy": batch_key[1],
+                    "trial_index": batch_key[2],
+                    "arm": batch_key[3],
+                    "episode_count": len(batch_items),
+                },
                 "complete": False,
             },
         )
@@ -576,7 +607,12 @@ def analyze_pretail_forced_continuation(
     episodes: list[dict[str, Any]] = []
     for item in schedule:
         manifest_path = _collection_path(output, item) / "realized_dynamic_manifest.jsonl"
-        manifests = _read_jsonl(manifest_path) if manifest_path.is_file() else []
+        manifests = [
+            row
+            for row in (_read_jsonl(manifest_path) if manifest_path.is_file() else [])
+            if str(row["task_id"]) == str(item["task_id"])
+            and int(row["solver_seed"]) == int(item["solver_seed"])
+        ]
         if len(manifests) != 1:
             episodes.append({**item, "missing": True})
             continue
@@ -690,5 +726,4 @@ __all__ = [
     "prepare_cases",
     "run_pretail_forced_continuation",
     "run_pretail_qualification",
-    "select_shard",
 ]

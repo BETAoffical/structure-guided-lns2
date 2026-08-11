@@ -37,8 +37,6 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit-cases", type=int)
-    parser.add_argument("--shard-index", type=int)
-    parser.add_argument("--shard-count", type=int)
     arguments = parser.parse_args()
     if arguments.command == "qualify":
         report = run_pretail_qualification(
@@ -59,8 +57,6 @@ def main() -> int:
             resume=arguments.resume,
             dry_run=arguments.dry_run,
             limit_cases=arguments.limit_cases,
-            shard_index=arguments.shard_index,
-            shard_count=arguments.shard_count,
         )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if arguments.dry_run or report.get("integrity_passed", True) else 1
