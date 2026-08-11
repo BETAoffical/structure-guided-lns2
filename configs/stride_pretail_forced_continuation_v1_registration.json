@@ -1,0 +1,94 @@
+{
+  "schema": "lns2.stride.pretail_forced_continuation_registration.v1",
+  "scientific_status": "preregistered_bounded_forced_first_action_continuation_diagnostic",
+  "experiment_id": "stride-pretail-forced-continuation-v1",
+  "pre_registration_parent_commit": "0ec302239db793974009e92c39b0d5e35798aa67",
+  "inputs": {
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "logical_checkpoint_results": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_results.jsonl",
+      "sha256": "efdbc8d7020628b3ac485d0946f9ad89b1b6d7afb547a29069d2009d41671973"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "tailswitch_registration": {
+      "path": "configs/stride_tailswitch_v1_registration.json",
+      "sha256": "9f8e4cceda38fa146aa3edaeb31849099e080aee802d59e74413ebb75d05d82c"
+    },
+    "tailswitch_status": {
+      "path": "build/stride-tailswitch-v1/tailswitch_status.json",
+      "sha256": "8ab059fc31a3b27a1aaa9c6cff386d15fc347daf4fef788899a14dd785b20003"
+    },
+    "tailswitch_report": {
+      "path": "build/stride-tailswitch-v1/tailswitch_report.json",
+      "sha256": "107f11faaa2e18f92af8e73e4a69e1ba7f8948f77b8f0e174981cc4c3c2b6754"
+    },
+    "state_collection_config": {
+      "path": "configs/stride_maze_tail_state_collection_v2.json",
+      "sha256": "5efa9276844890eecc5d25b2fc0427aa86c940c745aaea17a3131e0baf5f2f28"
+    },
+    "runtime_config": {
+      "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
+      "sha256": "e0af159a0dbeb8a492cf276996912dbfcd10cfdba0e297433d606d6daeed83fc"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_structural_selection",
+    "case_count": 45,
+    "selection_rule": "all frozen first structural checkpoints from the registered exact-triplet-zero-progress cohort",
+    "no_result_based_exclusion": true,
+    "classification_is_descriptive_only": true
+  },
+  "arms": [
+    "actual_selected",
+    "one_step_oracle",
+    "coverage_diverse"
+  ],
+  "arm_definitions": {
+    "actual_selected": "the candidate selected by the frozen deployed ranker at the checkpoint",
+    "one_step_oracle": "the maximum 16-seed mean one-step conflict-reduction candidate; diagnostic only and never a runtime policy",
+    "coverage_diverse": "among candidates with Jaccard at most 0.8 to actual, maximize current-state internal conflict coverage, then incident conflict coverage, frozen V2 score and candidate id; if no diverse candidate exists, use the same ordering over any non-identical candidate"
+  },
+  "execution": {
+    "checkpoint_kind": "first_structural_selection",
+    "paired_first_action_trial_indices": [0, 1],
+    "first_action_forced_exactly_once": true,
+    "continuation_controller": "matching_frozen_structpool_or_slotpool",
+    "workers": 4,
+    "maximum_repair_decisions_from_restored_state": 200,
+    "fixed_metric_horizon": 200,
+    "wall_time_fuse_seconds": 300.0,
+    "process_timeout_seconds": 360.0,
+    "right_censoring_is_valid_state_evidence": true,
+    "right_censoring_is_not_an_execution_error": true,
+    "external_process_timeout_is_execution_error": true
+  },
+  "paired_outcome_rule": {
+    "challenger_censored_reference_complete": true,
+    "normalized_auc_delta_at_least": 0.05,
+    "or_final_conflict_delta_at_least": 5,
+    "reference_censored_challenger_complete_is_beneficial": true,
+    "both_censored_uses_fixed_horizon_metrics": true
+  },
+  "interpretation_rules": {
+    "ranking_actionable": "one_step_oracle is beneficial in at least 30 percent of non-identical paired comparisons, on both challengers and at least four tasks",
+    "single_step_label_incomplete": "coverage_diverse is beneficial in at least 30 percent of non-identical paired comparisons and wins cases where one_step_oracle does not",
+    "pool_or_operator_reassessment": "neither tested alternative reaches the registered actionable pattern; this does not prove that no candidate in the pool can escape",
+    "training_before_analysis_forbidden": true
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "one_step_oracle_is_result_derived_diagnostic_only": true,
+    "model_training_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true,
+    "censored_ttf_is_not_imputed": true
+  }
+}

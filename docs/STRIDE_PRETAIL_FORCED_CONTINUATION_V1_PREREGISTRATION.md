@@ -1,0 +1,52 @@
+# STRIDE PreTail Forced Continuation v1 preregistration
+
+## Question
+
+The MarginalPool replay showed that the deployed ranker is not selecting the
+best current-step candidate at most registered checkpoints.  That alone does
+not show that choosing the one-step best candidate prevents a later tail.
+This diagnostic changes exactly one action at the first structural checkpoint,
+then returns control to the matching frozen StructPool or SlotPool controller.
+
+It distinguishes three mechanisms:
+
+1. `actual_selected`: the action that the frozen ranker actually selected;
+2. `one_step_oracle`: the best 16-seed current-step action, used only as a
+   diagnostic upper bound;
+3. `coverage_diverse`: an outcome-blind, low-overlap action that covers the
+   largest share of the current conflict structure.
+
+All 45 registered first-structural checkpoints are retained.  Each arm is run
+with two strictly paired forced-action PP seeds.  The oracle is derived from
+already frozen one-step labels and cannot be used as a runtime selector or a
+training label in this experiment.
+
+## Hard execution fuse
+
+Every continuation has three independent upper bounds:
+
+- at most 200 repair decisions from the restored checkpoint;
+- at most 300 seconds of reset-inclusive episode wall time;
+- a 360-second external process timeout for execution failures.
+
+`repair_limit` and `wall_timeout` are valid right-censored trajectory evidence,
+not execution errors.  Censored TTF is never imputed.  An external process
+timeout remains an integrity failure.
+
+The collection therefore cannot run indefinitely on an unrepairable state.
+
+## Outcomes and interpretation
+
+Primary outcomes are fixed-200-step normalized conflict AUC, final conflict
+count, and success versus right censoring.  Runtime is recorded but is not used
+as a causal label and this diagnostic makes no TTF or generalization claim.
+
+The ranking diagnosis is actionable only if the one-step oracle is beneficial
+in at least 30% of non-identical paired comparisons, covers both challengers,
+and covers at least four tasks.  A comparable `coverage_diverse` result,
+especially where the one-step oracle does not win, indicates that the existing
+one-step label omits longer-horizon structural information.  Failure of both
+arms does not prove the entire pool is defective; it triggers a separate pool
+or PP-operator reassessment.
+
+No model is trained before the complete paired analysis passes integrity.
