@@ -1,0 +1,52 @@
+{
+  "schema": "lns2.stride.marginalpool_action_replay_recovery_registration.v2",
+  "scientific_status": "operational_partial_checkpoint_continuation_without_label_change",
+  "experiment_id": "stride-marginalpool-action-replay-continuation-v1",
+  "base_registration": {
+    "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+    "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+  },
+  "recovery_source": {
+    "root": "build/stride-marginalpool-action-replay-recovery-v1",
+    "source_run_config_sha256": "4ca25075dd6fc38d31e7cd1ac9a6c9ed31b004c4f18d8b4a9f2160c1f44c15c3",
+    "source_status_sha256": "78df09eb6d8ec66a52584ac440337b49fd1d0d2af62b256d88d64454d85ad0c0",
+    "source_collection_report_sha256": "b80f2c2c005a443ca9339f09170cbc8938677a5f406abfb294a80518f1392dba",
+    "source_status": "failed",
+    "import_policy": "all valid completed and partial states without outcome filtering",
+    "imported_state_count": 70,
+    "imported_state_sha256_digest": "fef9ec0bc2e6d4660f3cd16ece71f7855083c591847e18994e56c098e81f1675",
+    "imported_partial_state_count": 8,
+    "imported_partial_state_sha256": {
+      "17f11d995fbd7a99463e4213f820dccc7e1663a0a253e403581dc50587c2d24d": "4da6ba1465a81ecb061505ee4803a5847c03cb7e3a065d81343c205763408689",
+      "4a385ce88ea72de58746fed5f39d545abfcdcb694a267d24074a2701762b635f": "45e030f3663e26ff6d69c03e7e7209b2553ff883cbf4aff480792310ed36acd7",
+      "6d1742e0f3cb5dc1734055c890cc0c0961d66f5777d48a3f1a01de2344e892a5": "f7e9151987721c5adc3053cba2af15191dd562e693fc41c7bf04f6251fe68957",
+      "749e44508e4e0de86f472a378f106035c117b2e67a1522039609af6f5c188e48": "788d6296022b643d57ee90e2c8e0dd7cf3427e60c9dd97cf88286d725f8cc8d7",
+      "a9946a48e97a26276e92329cac5af35a330b0c5e3ecfa2ac7905f13db11c126e": "1958b00a0df7911b233d984a3bd890dab8232c1b5e81cc957587e3a0fffb965d",
+      "da9f6d3f39365070f70fcfd5b7d189004b749af4c3c8390cfb1099f03d334bff": "8f730f04e4e7abeeea8834b2088fa99f4b2835f4b9f09a1aeaab0f52986599f3",
+      "f749a324373aa9898830c10ff418116eb7779ede8357420b35a02cdcae392b80": "540b1f24ddbeb5a7c9a4b392bc9a4461b42ea7f348e232dfc2362eff08b48f3d",
+      "fe3098fcfc4c8c189fc6c654bc0d4bf208c0a241686b7cbc104f71380ac1028a": "86b2f687b7f268c8a933594b76726ccae41c7ab490c58acf79e69ef4f5cd9835"
+    },
+    "imported_partial_state_progress": {
+      "17f11d995fbd7a99463e4213f820dccc7e1663a0a253e403581dc50587c2d24d": {"completed_candidate_count": 26, "candidate_count": 42, "trial_count": 416},
+      "4a385ce88ea72de58746fed5f39d545abfcdcb694a267d24074a2701762b635f": {"completed_candidate_count": 25, "candidate_count": 42, "trial_count": 400},
+      "6d1742e0f3cb5dc1734055c890cc0c0961d66f5777d48a3f1a01de2344e892a5": {"completed_candidate_count": 38, "candidate_count": 39, "trial_count": 608},
+      "749e44508e4e0de86f472a378f106035c117b2e67a1522039609af6f5c188e48": {"completed_candidate_count": 27, "candidate_count": 41, "trial_count": 432},
+      "a9946a48e97a26276e92329cac5af35a330b0c5e3ecfa2ac7905f13db11c126e": {"completed_candidate_count": 23, "candidate_count": 42, "trial_count": 368},
+      "da9f6d3f39365070f70fcfd5b7d189004b749af4c3c8390cfb1099f03d334bff": {"completed_candidate_count": 31, "candidate_count": 40, "trial_count": 496},
+      "f749a324373aa9898830c10ff418116eb7779ede8357420b35a02cdcae392b80": {"completed_candidate_count": 33, "candidate_count": 42, "trial_count": 528},
+      "fe3098fcfc4c8c189fc6c654bc0d4bf208c0a241686b7cbc104f71380ac1028a": {"completed_candidate_count": 38, "candidate_count": 41, "trial_count": 608}
+    }
+  },
+  "effective_execution": {
+    "workers": 4,
+    "per_state_attempt_timeout_seconds": 1800,
+    "maximum_state_attempts": 4,
+    "maximum_state_wall_seconds": 7200,
+    "candidate_atomic_checkpoints": true,
+    "stop_after_consecutive_no_progress_attempts": 2
+  },
+  "partial_selection_policy": "all valid partial states from the registered source",
+  "outcomes_used_for_recovery_policy": false,
+  "labels_or_candidate_set_changed": false,
+  "no_result_based_exclusion": true
+}

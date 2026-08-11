@@ -971,7 +971,11 @@ def _prepare_recovery_import(
     trial_indices: tuple[int, ...],
     metadata: dict[str, Any],
     producer: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+) -> tuple[
+    dict[str, Any],
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+]:
     source_root = Path(recovery_source).resolve()
     source_run_path = source_root / "run_config.json"
     source_status_path = source_root / "collection_status.json"
@@ -1001,7 +1005,10 @@ def _prepare_recovery_import(
         str(row["state_fingerprint"]): row for row in selected_states
     }
     imported: dict[str, dict[str, Any]] = {}
+    imported_partials: dict[str, dict[str, Any]] = {}
     state_hashes: dict[str, str] = {}
+    partial_hashes: dict[str, str] = {}
+    partial_progress: dict[str, dict[str, int]] = {}
     for state_key in selected_keys:
         state_path = source_root / "states" / f"{state_key}.json"
         if not state_path.is_file():
@@ -1023,6 +1030,43 @@ def _prepare_recovery_import(
         or len(imported) != int(source_status.get("completed_state_count", -1))
     ):
         raise ValueError("MarginalPool recovery state count does not match source status")
+    for state_key in selected_keys:
+        if state_key in imported:
+            continue
+        partial_path = source_root / "states" / f"{state_key}.json.partial"
+        if not partial_path.is_file():
+            continue
+        payload = _read_json(partial_path)
+        candidates = list(payload.get("candidates") or ())
+        if not _partial_state_artifact_valid(
+            payload,
+            state_record=state_by_key[state_key],
+            run_fingerprint=str(source_run["run_fingerprint"]),
+            trial_indices=trial_indices,
+            candidates=candidates,
+            before_repair=str(payload.get("before_repair_fingerprint", "")),
+            before_conflicts=int(payload.get("before_conflicts", -1)),
+        ):
+            raise ValueError(
+                f"invalid partial MarginalPool recovery state: {partial_path}"
+            )
+        imported_partials[state_key] = payload
+        partial_hashes[state_key] = sha256_file(partial_path)
+        partial_progress[state_key] = {
+            "completed_candidate_count": len(payload["completed_candidate_ids"]),
+            "candidate_count": len(candidates),
+            "trial_count": len(payload["trials"]),
+        }
+    source_timeout_count = int(source_status.get("timeout_state_count", 0))
+    if len(imported_partials) != source_timeout_count:
+        raise ValueError(
+            "MarginalPool recovery partial count does not match source timeouts"
+        )
+    import_policy = (
+        "all valid completed and partial states without outcome filtering"
+        if imported_partials
+        else "all valid completed states without outcome filtering"
+    )
     descriptor = {
         "source_root": str(source_root),
         "source_run_config_sha256": sha256_file(source_run_path),
@@ -1030,16 +1074,25 @@ def _prepare_recovery_import(
         "source_run_fingerprint": str(source_run["run_fingerprint"]),
         "source_status": str(source_status["status"]),
         "source_runner_error": source_status.get("runner_error"),
-        "import_policy": "all valid completed states without outcome filtering",
+        "source_collection_report_sha256": (
+            sha256_file(source_root / "collection_report.json")
+            if (source_root / "collection_report.json").is_file()
+            else None
+        ),
+        "import_policy": import_policy,
         "imported_state_count": len(imported),
         "imported_state_sha256": state_hashes,
+        "imported_partial_state_count": len(imported_partials),
+        "imported_partial_state_sha256": partial_hashes,
+        "imported_partial_state_progress": partial_progress,
     }
-    return descriptor, imported
+    return descriptor, imported, imported_partials
 
 
 def _import_recovery_states(
     imported: dict[str, dict[str, Any]],
     *,
+    imported_partials: dict[str, dict[str, Any]],
     descriptor: dict[str, Any],
     selected_states: list[dict[str, Any]],
     trial_indices: tuple[int, ...],
@@ -1070,6 +1123,32 @@ def _import_recovery_states(
         ):
             raise RuntimeError("imported MarginalPool recovery state is invalid")
         _write_json(output_path, payload)
+    for state_key, source_payload in imported_partials.items():
+        output_path = output / "states" / f"{state_key}.json.partial"
+        if output_path.is_file():
+            continue
+        payload = {
+            **source_payload,
+            "run_fingerprint": run_fingerprint,
+            "recovery_provenance": {
+                "source_run_fingerprint": descriptor["source_run_fingerprint"],
+                "source_state_sha256": descriptor[
+                    "imported_partial_state_sha256"
+                ][state_key],
+                "policy": descriptor["import_policy"],
+            },
+        }
+        if not _partial_state_artifact_valid(
+            payload,
+            state_record=state_by_key[state_key],
+            run_fingerprint=run_fingerprint,
+            trial_indices=trial_indices,
+            candidates=list(payload["candidates"]),
+            before_repair=str(payload["before_repair_fingerprint"]),
+            before_conflicts=int(payload["before_conflicts"]),
+        ):
+            raise RuntimeError("imported partial MarginalPool recovery state is invalid")
+        _write_json(output_path, payload)
 
 
 def _validate_recovery_registration(
@@ -1085,13 +1164,25 @@ def _validate_recovery_registration(
     config = _read_json(path)
     execution = dict(config.get("effective_execution") or {})
     source = dict(config.get("recovery_source") or {})
+    partial_count = int(descriptor.get("imported_partial_state_count", 0))
+    if partial_count:
+        expected_schema = (
+            "lns2.stride.marginalpool_action_replay_recovery_registration.v2"
+        )
+        expected_status = (
+            "operational_partial_checkpoint_continuation_without_label_change"
+        )
+        expected_experiment = "stride-marginalpool-action-replay-continuation-v1"
+    else:
+        expected_schema = (
+            "lns2.stride.marginalpool_action_replay_recovery_registration.v1"
+        )
+        expected_status = "operational_timeout_recovery_without_label_change"
+        expected_experiment = "stride-marginalpool-action-replay-recovery-v1"
     if (
-        config.get("schema")
-        != "lns2.stride.marginalpool_action_replay_recovery_registration.v1"
-        or config.get("scientific_status")
-        != "operational_timeout_recovery_without_label_change"
-        or config.get("experiment_id")
-        != "stride-marginalpool-action-replay-recovery-v1"
+        config.get("schema") != expected_schema
+        or config.get("scientific_status") != expected_status
+        or config.get("experiment_id") != expected_experiment
         or dict(config.get("base_registration") or {}).get("sha256")
         != metadata["config_sha256"]
         or source.get("source_run_config_sha256")
@@ -1099,8 +1190,23 @@ def _validate_recovery_registration(
         or source.get("source_status_sha256") != descriptor["source_status_sha256"]
         or int(source.get("imported_state_count", -1))
         != descriptor["imported_state_count"]
-        or dict(source.get("imported_state_sha256") or {})
-        != descriptor["imported_state_sha256"]
+        or (
+            partial_count == 0
+            and dict(source.get("imported_state_sha256") or {})
+            != descriptor["imported_state_sha256"]
+        )
+        or (
+            partial_count > 0
+            and source.get("imported_state_sha256_digest")
+            != _fingerprint(descriptor["imported_state_sha256"])
+        )
+        or int(source.get("imported_partial_state_count", 0)) != partial_count
+        or dict(source.get("imported_partial_state_sha256") or {})
+        != descriptor["imported_partial_state_sha256"]
+        or dict(source.get("imported_partial_state_progress") or {})
+        != descriptor["imported_partial_state_progress"]
+        or source.get("source_collection_report_sha256")
+        != descriptor["source_collection_report_sha256"]
         or source.get("import_policy") != descriptor["import_policy"]
         or int(execution.get("workers", -1)) != worker_count
         or float(execution.get("per_state_attempt_timeout_seconds", -1))
@@ -1115,6 +1221,11 @@ def _validate_recovery_registration(
         or config.get("outcomes_used_for_recovery_policy") is not False
         or config.get("labels_or_candidate_set_changed") is not False
         or config.get("no_result_based_exclusion") is not True
+        or (
+            partial_count > 0
+            and config.get("partial_selection_policy")
+            != "all valid partial states from the registered source"
+        )
     ):
         raise ValueError("MarginalPool recovery registration changed")
     return str(path), sha256_file(path)
@@ -1179,9 +1290,14 @@ def collect_marginalpool_action_replay(
     )
     recovery_descriptor: dict[str, Any] | None = None
     imported_states: dict[str, dict[str, Any]] = {}
+    imported_partial_states: dict[str, dict[str, Any]] = {}
     recovery_registration_identity: dict[str, str] | None = None
     if recovery_source is not None:
-        recovery_descriptor, imported_states = _prepare_recovery_import(
+        (
+            recovery_descriptor,
+            imported_states,
+            imported_partial_states,
+        ) = _prepare_recovery_import(
             recovery_source,
             selected_states=selected_states,
             trial_indices=trial_indices,
@@ -1244,6 +1360,7 @@ def collect_marginalpool_action_replay(
     if recovery_descriptor is not None:
         _import_recovery_states(
             imported_states,
+            imported_partials=imported_partial_states,
             descriptor=recovery_descriptor,
             selected_states=selected_states,
             trial_indices=trial_indices,
@@ -1311,6 +1428,9 @@ def collect_marginalpool_action_replay(
                 "attempt_failure_count": len(attempt_history),
                 "attempt_history": attempt_history,
                 "recovery_imported_state_count": len(imported_states),
+                "recovery_imported_partial_state_count": len(
+                    imported_partial_states
+                ),
             },
         )
 
