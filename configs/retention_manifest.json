@@ -2189,6 +2189,21 @@
       "contract": "Freeze exact repeated-candidate exclusion and deterministic retained-candidate V2 score fallback semantics."
     },
     {
+      "path": "experiments/stride_historyrank_feature.py",
+      "role": "reproducibility",
+      "purpose": "Audit frozen outcome-blind history interaction features over retained and all-generated first-repeat candidate scopes without fitting a model."
+    },
+    {
+      "path": "scripts/run_stride_historyrank_feature.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered HistoryRank feature audit and emit deterministic per-feature selection rows and readiness results."
+    },
+    {
+      "path": "tests/evaluation/test_stride_historyrank_feature.py",
+      "role": "reproducibility",
+      "contract": "Freeze directed history-feature semantics and deterministic V2-score and candidate-ID tie-breaking."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."

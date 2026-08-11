@@ -1,0 +1,85 @@
+{
+  "schema": "lns2.stride.historyrank_feature_registration.v1",
+  "scientific_status": "preregistered_outcome_blind_history_feature_audit",
+  "experiment_id": "stride-historyrank-feature-v1",
+  "inputs": {
+    "root_cases": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_cases.jsonl",
+      "sha256": "ea9bc11708cb911c03677e0166b518630b44819ddd9be05414311ca040172956"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "collection_report": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/collection_report.json",
+      "sha256": "f888b2ca5a3ee91839eb8daf92d96cd0bdb1e39bb51b41589a7eedb4266f79a0"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "logical_results": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_results.jsonl",
+      "sha256": "efdbc8d7020628b3ac485d0946f9ad89b1b6d7afb547a29069d2009d41671973"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_checkpoint_count": 45,
+    "retain_all_registered_checkpoints": true,
+    "no_result_based_exclusion": true
+  },
+  "candidate_scopes": {
+    "primary": "all runtime-retained alternatives except the exact repeated candidate",
+    "diagnostic": "all generated alternatives except the exact repeated candidate",
+    "primary_scope_controls_readiness": true
+  },
+  "feature_priority": [
+    "agent_novelty",
+    "family_novelty",
+    "feature_standardized_l1",
+    "feature_changed_fraction",
+    "removed_agent_ratio",
+    "added_agent_ratio",
+    "internal_conflict_coverage_delta",
+    "incident_conflict_coverage_delta",
+    "component_coverage_mean_delta",
+    "lower_boundary_conflict_edges",
+    "lower_path_overlap_mean",
+    "absolute_log_size_ratio",
+    "v2_score_margin"
+  ],
+  "feature_semantics": {
+    "all_features_are_selection_time_only": true,
+    "feature_direction_is_frozen_before_outcome_read": true,
+    "larger_directed_value_is_always_preferred": true,
+    "tie_break": "higher frozen V2 score when available, then ascending candidate_id",
+    "no_learned_parameters": true,
+    "no_outcome_derived_threshold": true
+  },
+  "quality_rule": {
+    "minimum_seed_mean_advantage": 0.02,
+    "no_progress_rate_must_not_increase": true,
+    "both_fixed_half_mean_differences_must_be_strictly_positive": true
+  },
+  "readiness_gates": {
+    "minimum_stable_improvement_fraction": 0.6,
+    "minimum_mean_seed_improvement": 0.02,
+    "maximum_mean_no_progress_delta": 0.0,
+    "minimum_both_half_positive_fraction": 0.6,
+    "minimum_per_map_mean_seed_improvement": 0.0,
+    "required_error_count": 0
+  },
+  "claim_boundary": {
+    "offline_checkpoint_local_feature_audit_only": true,
+    "model_training_allowed": false,
+    "solver_modification_allowed": false,
+    "runtime_or_ttf_read": false,
+    "future_trajectory_read": false,
+    "long_term_quality_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false
+  }
+}
