@@ -2204,6 +2204,21 @@
       "contract": "Freeze directed history-feature semantics and deterministic V2-score and candidate-ID tie-breaking."
     },
     {
+      "path": "experiments/stride_pretail_forced_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Restore every registered first-structural checkpoint and compare the deployed, one-step-oracle and outcome-blind coverage-diverse first actions under bounded paired continuations."
+    },
+    {
+      "path": "scripts/run_stride_pretail_forced_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Provide qualification, resumable bounded collection and analysis commands for the preregistered PreTail forced-action continuation diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_pretail_forced_continuation.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 45-state paired three-arm schedule, one-time forced action, execution fuses, escape-evidence gate and diagnostic-only claim boundary."
+    },
+    {
       "path": "tests/runtime/test_slotpool_selection.py",
       "role": "active",
       "contract": "Verify frozen model integrity and exact six-candidate selection parity on all retained fresh-map confirmation states."
