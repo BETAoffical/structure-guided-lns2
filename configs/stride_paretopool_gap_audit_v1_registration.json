@@ -1,0 +1,35 @@
+{
+  "schema": "lns2.stride.paretopool_gap_audit_registration.v1",
+  "scientific_status": "preregistered_candidate_gap_audit_only",
+  "experiment_id": "stride-paretopool-gap-audit-v1",
+  "pre_registration_parent_commit": "13a3275407fbe38c48ec76e8c0253e450bd3ba62",
+  "inputs": {
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    }
+  },
+  "cohort": {
+    "state_occurrence_count": 90,
+    "unique_state_fingerprint_count": 78,
+    "selection": "all frozen root-diagnostic checkpoint occurrences",
+    "outcome_enriched": true,
+    "use": "candidate gap audit only",
+    "no_result_based_exclusion": true
+  },
+  "candidate_budgets": [6, 8, 12],
+  "maximum_neighborhood_size": 64,
+  "fixed_size_grid_is_not_used_by_paretopool": true,
+  "budget_selection_rule": "defer to paired multi-horizon quality; historical one-step overlap is diagnostic only",
+  "claim_boundary": {
+    "candidate_gap_audit_only": true,
+    "model_training_allowed": false,
+    "ttf_improvement_claim": false,
+    "one_step_labels_are_not_future_value": true,
+    "novel_candidates_are_not_scored_as_failures": true
+  }
+}
