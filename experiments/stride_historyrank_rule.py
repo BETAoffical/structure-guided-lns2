@@ -66,6 +66,8 @@ def choose_fallback(
         dict(row)
         for row in candidates
         if str(row["candidate_id"]) != repeated_candidate_id
+        and row.get("retained") is True
+        and row.get("score") is not None
     ]
     if not remaining:
         raise ValueError("HistoryRank rule has no fallback candidate")
