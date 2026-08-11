@@ -4,7 +4,7 @@ import collections
 from pathlib import Path
 from typing import Any
 
-from experiments._common import registered_input, sha256_file
+from experiments._common import contained_file, registered_input, sha256_file
 from experiments.closed_loop_trace_storage import read_state_blob
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
 from experiments.state_analysis import analyze_state, analyze_static_grid
@@ -92,7 +92,11 @@ def run_paretopool_gap_audit(
     static_cache: dict[str, Any] = {}
     for checkpoint in checkpoints:
         fingerprint = str(checkpoint["state_fingerprint"])
-        state_path = Path(str(checkpoint["state_blob"])).resolve()
+        state_path = contained_file(
+            inputs["root_checkpoints"].parent,
+            checkpoint["state_blob"],
+            field="ParetoPool audit state blob",
+        )
         blob_sha256 = str(checkpoint["state_blob_sha256"])
         if sha256_file(state_path) != blob_sha256:
             raise ValueError("ParetoPool audit state blob hash changed")
