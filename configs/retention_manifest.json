@@ -2232,6 +2232,61 @@
       "path": "tests/runtime/test_structpool_runtime_equivalence.py",
       "role": "active",
       "contract": "Runtime-field exclusion preserves full candidate and action semantics and detects any explicit-neighborhood change."
+    },
+    {
+      "path": "lns2_selector/runtime/temporal_state.py",
+      "role": "active",
+      "purpose": "Represent occurrence-aware STRIDE temporal history without collapsing repeated state fingerprints."
+    },
+    {
+      "path": "lns2_selector/runtime/paretopool.py",
+      "role": "active",
+      "purpose": "Generate natural-support ParetoPool structural and history-conditioned neighborhood challengers."
+    },
+    {
+      "path": "experiments/stride_paretopool_audit.py",
+      "role": "reproducibility",
+      "purpose": "Audit natural ParetoPool candidate gaps and budgets without making runtime or TTF claims."
+    },
+    {
+      "path": "scripts/run_stride_paretopool_audit.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered ParetoPool candidate-gap audit."
+    },
+    {
+      "path": "experiments/stride_multivalue.py",
+      "role": "active",
+      "purpose": "Define censored multi-horizon targets, anchor deltas and dynamic worker selection for STRIDE MultiValue."
+    },
+    {
+      "path": "experiments/stride_multivalue_collection.py",
+      "role": "active",
+      "purpose": "Prepare, collect, recover and analyze dual-teacher MultiValue rollouts with occurrence-aware history."
+    },
+    {
+      "path": "scripts/run_stride_multivalue.py",
+      "role": "active",
+      "purpose": "Run preregistered STRIDE MultiValue preparation, worker preflight, collection and stability analysis stages."
+    },
+    {
+      "path": "tests/runtime/test_temporal_state.py",
+      "role": "active",
+      "contract": "Verify temporal state identities preserve decision occurrence and history repetition."
+    },
+    {
+      "path": "tests/runtime/test_paretopool.py",
+      "role": "active",
+      "contract": "Verify natural ParetoPool breakpoints, history candidates, diversity and deterministic budgets."
+    },
+    {
+      "path": "tests/evaluation/test_stride_multivalue.py",
+      "role": "active",
+      "contract": "Verify multi-horizon censoring, structural future metrics, anchor deltas and worker selection."
+    },
+    {
+      "path": "tests/evaluation/test_stride_multivalue_collection.py",
+      "role": "active",
+      "contract": "Verify strict-prefix temporal history, pilot selection and MultiValue label stability gates."
     }
   ]
 }

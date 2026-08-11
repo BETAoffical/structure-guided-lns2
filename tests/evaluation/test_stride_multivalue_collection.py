@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from experiments.stride_multivalue_collection import (
+    _direction_against_anchor,
+    _stability_group,
     history_before_decision,
     select_pilot_occurrences,
 )
@@ -36,6 +38,63 @@ def _transition(agents: list[int], candidate: str, success: bool = True) -> dict
 
 
 class MultiValueCollectionTest(unittest.TestCase):
+    def test_anchor_direction_uses_future_value_order(self) -> None:
+        def summary(auc: float) -> dict:
+            return {
+                "horizons": {
+                    str(horizon): {
+                        "feasible_probability": 0.5,
+                        "right_censored_fraction": 0.0,
+                        "mean_normalized_conflict_auc": auc,
+                        "mean_original_edge_residual_rate": 0.25,
+                        "mean_new_conflict_edge_rate": 0.1,
+                    }
+                    for horizon in (1, 8, 32, 128)
+                }
+            }
+
+        self.assertEqual(
+            _direction_against_anchor(
+                "challenger", summary(0.2), "anchor", summary(0.3)
+            ),
+            1,
+        )
+        self.assertEqual(
+            _direction_against_anchor(
+                "challenger", summary(0.4), "anchor", summary(0.3)
+            ),
+            -1,
+        )
+
+    def test_stability_group_requires_every_registered_gate(self) -> None:
+        states = [
+            {
+                "teachers": [
+                    {
+                        "top3_overlap": 1.0,
+                        "paired_rank_correlation": 0.8,
+                        "cross_seed_normalized_regret": 0.01,
+                    },
+                    {
+                        "top3_overlap": 1.0,
+                        "paired_rank_correlation": 0.7,
+                        "cross_seed_normalized_regret": 0.0,
+                    },
+                ]
+            }
+        ]
+        directions = [{"directions_agree": True} for _ in range(4)]
+        gates = {
+            "seed_half_top3_overlap_minimum": 0.8,
+            "paired_rank_correlation_minimum": 0.6,
+            "cross_teacher_direction_agreement_minimum": 0.7,
+            "cross_seed_normalized_regret_maximum": 0.02,
+        }
+        self.assertTrue(_stability_group(states, directions, gates)["passed"])
+        directions[0]["directions_agree"] = False
+        directions[1]["directions_agree"] = False
+        self.assertFalse(_stability_group(states, directions, gates)["passed"])
+
     def test_history_uses_only_strict_prefix_and_keeps_repetition(self) -> None:
         states = [
             _state([(0, 1)], 0),

@@ -63,7 +63,7 @@ def _neighborhood(transition: Mapping[str, Any]) -> tuple[int, ...]:
     return agents
 
 
-def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
+def jaccard_similarity(left: Iterable[int], right: Iterable[int]) -> float:
     first, second = set(left), set(right)
     union = first | second
     return len(first & second) / len(union) if union else 1.0
@@ -90,7 +90,10 @@ def _repeat_metrics(transitions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         streak = streak + 1 if index and neighborhood == neighborhoods[index - 1] else 0
         maximum_streak = max(maximum_streak, streak)
         maximum_jaccard.append(
-            max((_jaccard(neighborhood, row) for row in prior), default=0.0)
+            max(
+                (jaccard_similarity(neighborhood, row) for row in prior),
+                default=0.0,
+            )
         )
     return {
         "neighborhood_count": len(neighborhoods),
@@ -335,5 +338,6 @@ __all__ = [
     "WorkerPreflightMeasurement",
     "anchor_relative_targets",
     "choose_dynamic_worker_count",
+    "jaccard_similarity",
     "multihorizon_targets",
 ]
