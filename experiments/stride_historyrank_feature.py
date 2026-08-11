@@ -170,10 +170,6 @@ def choose_by_directed_feature(
     return min(eligible, key=key)
 
 
-def _mean(rows: list[dict[str, Any]], field: str) -> float:
-    return statistics.fmean(float(row[field]) for row in rows)
-
-
 def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "checkpoint_count": len(rows),
@@ -181,12 +177,18 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "stable_improvement_fraction": statistics.fmean(
             float(row["stable_improvement"]) for row in rows
         ),
-        "mean_seed_improvement": _mean(rows, "seed_mean_delta"),
-        "mean_no_progress_delta": _mean(rows, "no_progress_rate_delta"),
+        "mean_seed_improvement": statistics.fmean(
+            float(row["seed_mean_delta"]) for row in rows
+        ),
+        "mean_no_progress_delta": statistics.fmean(
+            float(row["no_progress_rate_delta"]) for row in rows
+        ),
         "both_halves_positive_fraction": statistics.fmean(
             float(row["both_halves_positive"]) for row in rows
         ),
-        "mean_feature_value": _mean(rows, "directed_feature_value"),
+        "mean_feature_value": statistics.fmean(
+            float(row["directed_feature_value"]) for row in rows
+        ),
     }
 
 
