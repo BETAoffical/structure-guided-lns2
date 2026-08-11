@@ -17,6 +17,10 @@ horizons, censoring rules, or labels.
 - Only the owning state worker writes its `.json.partial` artifact. Successful
   sibling episodes are atomically checkpointed even if another episode fails.
 - Existing state and episode fuses remain 1800, 360, 300, and 128 respectively.
+- A state stops dispatching new episode batches after 1080 seconds, drains the
+  current batch, checkpoints it, and returns a productive window before the
+  outer 1800-second fuse. This prevents orphaned episode processes and duplicate
+  work across recovery windows.
 - Productive state windows continue without consuming the four genuine-failure
   recovery budget. Two consecutive zero-progress windows still stop recovery.
 

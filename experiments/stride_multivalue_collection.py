@@ -128,6 +128,7 @@ def load_multivalue_collection_config(
             or int(recovery.get("consecutive_no_progress_limit", -1)) != 2
             or int(recovery.get("episode_worker_limit", -1)) != 12
             or recovery.get("single_partial_writer_per_state") is not True
+            or int(recovery.get("episode_dispatch_cutoff_seconds", -1)) != 1080
         ):
             raise ValueError("MultiValue productive recovery amendment changed")
     return path, root, config, inputs
@@ -839,29 +840,44 @@ def _collect_rollout_state(job: dict[str, Any]) -> dict[str, Any]:
         max(1, int(job.get("episode_worker_count", 1))),
         max(1, len(pending_rollouts)),
     )
-    failures: list[BaseException] = []
-    if episode_workers == 1:
-        for specification in pending_rollouts:
-            checkpoint(collect_one(specification))
-    else:
-        # Each rollout has a distinct output directory. Threads only coordinate
-        # the independently spawned native episode processes; this state worker
-        # remains the sole writer of the shared partial artifact.
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=episode_workers,
-            thread_name_prefix="multivalue-episode",
-        ) as executor:
-            futures = [executor.submit(collect_one, spec) for spec in pending_rollouts]
+    dispatch_cutoff = float(job.get("episode_dispatch_cutoff_seconds", 0.0))
+    window_started = time.monotonic()
+    window_start_count = len(completed)
+    # Each rollout has a distinct output directory. Threads only coordinate
+    # the independently spawned native episode processes; this state worker
+    # remains the sole writer of the shared partial artifact. Submit one bounded
+    # batch at a time so a state window can stop dispatching and drain cleanly
+    # before the outer 1800-second fuse terminates its process tree.
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=episode_workers,
+        thread_name_prefix="multivalue-episode",
+    ) as executor:
+        for offset in range(0, len(pending_rollouts), episode_workers):
+            if (
+                dispatch_cutoff > 0.0
+                and len(completed) > window_start_count
+                and time.monotonic() - window_started >= dispatch_cutoff
+            ):
+                return {
+                    "state_occurrence_id": str(state_record["state_occurrence_id"]),
+                    "status": "timeout",
+                    "error": "cooperative episode dispatch cutoff reached",
+                    "episode_count": len(completed),
+                    "candidate_count": len(state_record["candidates"]),
+                }
+            batch = pending_rollouts[offset : offset + episode_workers]
+            futures = [executor.submit(collect_one, spec) for spec in batch]
+            failures: list[BaseException] = []
             for future in concurrent.futures.as_completed(futures):
                 try:
                     checkpoint(future.result())
                 except BaseException as error:  # preserve successful sibling checkpoints
                     failures.append(error)
-    if failures:
-        raise RuntimeError(
-            f"{len(failures)} MultiValue episode worker(s) failed; "
-            "successful sibling episodes were checkpointed"
-        ) from failures[0]
+            if failures:
+                raise RuntimeError(
+                    f"{len(failures)} MultiValue episode worker(s) failed; "
+                    "successful sibling episodes were checkpointed"
+                ) from failures[0]
     payload = {
         **_partial_payload(job, episodes),
         "schema": ROLLOUT_STATE_SCHEMA,
@@ -1374,6 +1390,9 @@ def run_multivalue_collection(
         for job in active_pending:
             state_id = str(job["state_record"]["state_occurrence_id"])
             job["episode_worker_count"] = allocation[state_id]
+            job["episode_dispatch_cutoff_seconds"] = float(
+                recovery_amendment["episode_dispatch_cutoff_seconds"]
+            )
 
         def record(result: dict[str, Any]) -> None:
             state_id = str(result["state_occurrence_id"])

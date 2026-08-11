@@ -68,13 +68,15 @@
     "reason": "productive 1800-second state windows were incorrectly consuming the four-failure recovery budget",
     "compatible_run_fingerprints": [
       "a90bbdb7fb46552e833f3e1e4917bc0aa11ae75bbaf1d3530365029dabc0f05f",
-      "27143e8b428927d85d3c16308c1e4de69ff784391c2448cc287b6364d60ffaeb"
+      "27143e8b428927d85d3c16308c1e4de69ff784391c2448cc287b6364d60ffaeb",
+      "70b8dbb5631221ee38c62edcdd7c55a710af9b4b1cd3c7de4730a316a051265d"
     ],
     "productive_windows_consume_failure_budget": false,
     "maximum_failed_recovery_attempts": 4,
     "consecutive_no_progress_limit": 2,
     "episode_worker_limit": 12,
     "single_partial_writer_per_state": true,
+    "episode_dispatch_cutoff_seconds": 1080,
     "episode_and_process_fuses_unchanged": true,
     "no_outcome_based_state_filtering": true
   },

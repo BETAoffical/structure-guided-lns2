@@ -166,6 +166,48 @@ class MultiValueCollectionTest(unittest.TestCase):
             self.assertTrue(output.is_file())
             self.assertFalse(output.with_name(output.name + ".partial").exists())
 
+    def test_cooperative_cutoff_drains_batch_and_checkpoints(self) -> None:
+        with TemporaryDirectory() as temporary:
+            state = {
+                "state_occurrence_id": "occurrence",
+                "candidates": [
+                    {"candidate_id": f"candidate-{index}", "candidate_position": index}
+                    for index in range(3)
+                ],
+            }
+            output = Path(temporary) / "state.json"
+
+            def rollout(_job, _state, candidate, *, teacher, trial_index):
+                time.sleep(0.01)
+                return {
+                    "episode_job_id": _episode_job_id(
+                        teacher, candidate["candidate_id"], trial_index
+                    ),
+                    "status": "ok",
+                }
+
+            with mock.patch(
+                "experiments.stride_multivalue_collection._single_rollout",
+                side_effect=rollout,
+            ):
+                result = _collect_rollout_state(
+                    {
+                        "state_record": state,
+                        "output_path": str(output),
+                        "run_fingerprint": "new",
+                        "teachers": ["v2-full"],
+                        "trial_indices": [0],
+                        "episode_worker_count": 1,
+                        "episode_dispatch_cutoff_seconds": 0.001,
+                    }
+                )
+            self.assertEqual(result["status"], "timeout")
+            partial = json.loads(
+                output.with_name(output.name + ".partial").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(partial["episodes"]), 1)
+            self.assertFalse(output.exists())
+
     def test_single_rollout_reuses_qualification_before_policy(self) -> None:
         with TemporaryDirectory() as temporary:
             job = {
