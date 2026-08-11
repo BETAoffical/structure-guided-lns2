@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 from experiments.stride_multivalue_collection import (
     _direction_against_anchor,
+    _single_rollout,
     _stability_group,
     history_before_decision,
     select_pilot_occurrences,
@@ -38,6 +42,70 @@ def _transition(agents: list[int], candidate: str, success: bool = True) -> dict
 
 
 class MultiValueCollectionTest(unittest.TestCase):
+    def test_single_rollout_reuses_qualification_before_policy(self) -> None:
+        with TemporaryDirectory() as temporary:
+            job = {
+                "root": temporary,
+                "parent": {},
+                "dataset": str(Path(temporary) / "dataset"),
+                "runtime": str(Path(temporary) / "runtime.json"),
+                "qualification": str(Path(temporary) / "qualification"),
+                "cohort_job_keys": [("task", 3), ("other", 5)],
+                "state_root": str(Path(temporary) / "state"),
+            }
+            state = {
+                "task_id": "task",
+                "solver_seed": 3,
+                "state_occurrence_id": "occurrence",
+            }
+            candidate = {
+                "candidate_id": "candidate",
+                "candidate_position": 0,
+                "multivalue_role": "paretopool_challenger",
+                "agents": [1, 2],
+            }
+            manifest = {
+                "task_id": "task",
+                "solver_seed": 3,
+                "status": "ok",
+                "trace_sha256": "f" * 64,
+                "summary": {
+                    "stop_reason": "success",
+                    "controller_totals": {"forced_first_action_count": 1},
+                },
+            }
+            with (
+                mock.patch(
+                    "experiments.stride_multivalue_collection._teacher_kwargs",
+                    return_value=("realized_dynamic", {}),
+                ),
+                mock.patch(
+                    "experiments.stride_multivalue_collection._episode_override",
+                    return_value={"forced": True},
+                ),
+                mock.patch(
+                    "experiments.stride_multivalue_collection.run_closed_loop_collection"
+                ) as run,
+                mock.patch(
+                    "experiments.stride_multivalue_collection._read_jsonl",
+                    return_value=[manifest],
+                ),
+            ):
+                result = _single_rollout(
+                    job, state, candidate, teacher="v2-full", trial_index=0
+                )
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(run.call_count, 2)
+            first = run.call_args_list[0].kwargs
+            second = run.call_args_list[1].kwargs
+            self.assertEqual(first["phase"], "qualify")
+            self.assertEqual(first["job_keys"], {("task", 3), ("other", 5)})
+            self.assertIn("qualification_source", first)
+            self.assertEqual(second["phase"], "realized_dynamic")
+            self.assertEqual(second["job_keys"], {("task", 3)})
+            self.assertNotIn("qualification_source", second)
+            self.assertTrue(second["resume"])
+
     def test_anchor_direction_uses_future_value_order(self) -> None:
         def summary(auc: float) -> dict:
             return {

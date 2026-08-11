@@ -661,20 +661,36 @@ def _single_rollout(
     override = _episode_override(
         state_record, candidate, trial_index=trial_index, pp_seed=pp_seed
     )
+    cohort_job_keys = {
+        (str(task_id), int(seed)) for task_id, seed in job["cohort_job_keys"]
+    }
+    episode_overrides = {key: override}
+    qualification_manifest = collection / "qualification_manifest.jsonl"
+    if not qualification_manifest.is_file():
+        run_closed_loop_collection(
+            Path(str(job["dataset"])),
+            Path(str(job["runtime"])),
+            collection,
+            phase="qualify",
+            workers=1,
+            resume=collection.joinpath("run_config.json").is_file(),
+            cohort_job_keys=cohort_job_keys,
+            job_keys=cohort_job_keys,
+            qualification_source=Path(str(job["qualification"])),
+            episode_overrides=episode_overrides,
+            use_global_collection_lock=False,
+            **kwargs,
+        )
     run_closed_loop_collection(
         Path(str(job["dataset"])),
         Path(str(job["runtime"])),
         collection,
         phase=phase,
         workers=1,
-        resume=collection.joinpath("run_config.json").is_file(),
-        cohort_job_keys={
-            (str(task_id), int(seed))
-            for task_id, seed in job["cohort_job_keys"]
-        },
+        resume=True,
+        cohort_job_keys=cohort_job_keys,
         job_keys={key},
-        qualification_source=Path(str(job["qualification"])),
-        episode_overrides={key: override},
+        episode_overrides=episode_overrides,
         use_global_collection_lock=False,
         **kwargs,
     )
@@ -910,6 +926,7 @@ def run_worker_preflight(
     )
     measurements: list[WorkerPreflightMeasurement] = []
     detail: list[dict[str, Any]] = []
+    attempt_results: list[dict[str, Any]] = []
     for requested in map(int, config["dynamic_workers"]["heavy_candidates"]):
         actual = min(requested, len(state_rows))
         preflight_root = output / "worker_preflight" / f"workers_{requested:02d}"
@@ -972,6 +989,21 @@ def run_worker_preflight(
                 "conservative_peak_rss_bytes": peak,
                 "error_count": errors,
             }
+        )
+        attempt_results.append(
+            {
+                "requested_workers": requested,
+                "results": results,
+            }
+        )
+        _write_json(
+            output / "worker_preflight_attempts.json",
+            {
+                "schema": "lns2.stride.multivalue_worker_preflight_attempts.v1",
+                "measurements": detail,
+                "attempts": attempt_results,
+                "outcomes_used_for_worker_selection": False,
+            },
         )
     cpu_count = int(os.cpu_count() or 1)
     available_memory = _memory_available_bytes()
