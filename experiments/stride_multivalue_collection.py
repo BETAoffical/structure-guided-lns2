@@ -915,6 +915,7 @@ def run_worker_preflight(
         preflight_root = output / "worker_preflight" / f"workers_{requested:02d}"
         jobs = [
             {
+                "job_id": str(row["state_occurrence_id"]),
                 "root": str(root),
                 "parent": parent,
                 "dataset": str(dataset),
@@ -1120,6 +1121,7 @@ def run_multivalue_collection(
     )
     jobs = [
         {
+            "job_id": str(row["state_occurrence_id"]),
             "root": str(root),
             "parent": parent,
             "dataset": str(dataset),
