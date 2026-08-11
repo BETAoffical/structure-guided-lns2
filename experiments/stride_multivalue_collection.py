@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import concurrent.futures
 import os
 import time
 from pathlib import Path
@@ -125,6 +126,8 @@ def load_multivalue_collection_config(
             or recovery.get("productive_windows_consume_failure_budget") is not False
             or int(recovery.get("maximum_failed_recovery_attempts", -1)) != 4
             or int(recovery.get("consecutive_no_progress_limit", -1)) != 2
+            or int(recovery.get("episode_worker_limit", -1)) != 12
+            or recovery.get("single_partial_writer_per_state") is not True
         ):
             raise ValueError("MultiValue productive recovery amendment changed")
     return path, root, config, inputs
@@ -800,25 +803,65 @@ def _collect_rollout_state(job: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("invalid MultiValue partial state artifact")
         episodes = list(partial["episodes"])
     completed = {str(row["episode_job_id"]) for row in episodes}
-    for teacher in job["teachers"]:
-        for candidate in state_record["candidates"]:
-            for trial_index in job["trial_indices"]:
-                identity = _episode_job_id(
-                    teacher, str(candidate["candidate_id"]), trial_index
-                )
-                if identity in completed:
-                    continue
-                row = _single_rollout(
-                    job,
-                    state_record,
-                    dict(candidate),
-                    teacher=str(teacher),
-                    trial_index=int(trial_index),
-                )
-                episodes.append(row)
-                completed.add(identity)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                _write_json(partial_path, _partial_payload(job, episodes))
+    pending_rollouts = [
+        (str(teacher), dict(candidate), int(trial_index))
+        for teacher in job["teachers"]
+        for candidate in state_record["candidates"]
+        for trial_index in job["trial_indices"]
+        if _episode_job_id(
+            str(teacher), str(candidate["candidate_id"]), int(trial_index)
+        )
+        not in completed
+    ]
+
+    def collect_one(
+        specification: tuple[str, dict[str, Any], int]
+    ) -> dict[str, Any]:
+        teacher, candidate, trial_index = specification
+        return _single_rollout(
+            job,
+            state_record,
+            candidate,
+            teacher=teacher,
+            trial_index=trial_index,
+        )
+
+    def checkpoint(row: dict[str, Any]) -> None:
+        identity = str(row["episode_job_id"])
+        if identity in completed:
+            raise RuntimeError("MultiValue episode worker returned a duplicate identity")
+        episodes.append(row)
+        completed.add(identity)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(partial_path, _partial_payload(job, episodes))
+
+    episode_workers = min(
+        max(1, int(job.get("episode_worker_count", 1))),
+        max(1, len(pending_rollouts)),
+    )
+    failures: list[BaseException] = []
+    if episode_workers == 1:
+        for specification in pending_rollouts:
+            checkpoint(collect_one(specification))
+    else:
+        # Each rollout has a distinct output directory. Threads only coordinate
+        # the independently spawned native episode processes; this state worker
+        # remains the sole writer of the shared partial artifact.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=episode_workers,
+            thread_name_prefix="multivalue-episode",
+        ) as executor:
+            futures = [executor.submit(collect_one, spec) for spec in pending_rollouts]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    checkpoint(future.result())
+                except BaseException as error:  # preserve successful sibling checkpoints
+                    failures.append(error)
+    if failures:
+        raise RuntimeError(
+            f"{len(failures)} MultiValue episode worker(s) failed; "
+            "successful sibling episodes were checkpointed"
+        ) from failures[0]
     payload = {
         **_partial_payload(job, episodes),
         "schema": ROLLOUT_STATE_SCHEMA,
@@ -1132,6 +1175,22 @@ def _recovery_window_decision(
     }
 
 
+def _episode_worker_allocation(
+    jobs: Sequence[dict[str, Any]], worker_limit: int
+) -> dict[str, int]:
+    if worker_limit <= 0:
+        raise ValueError("MultiValue episode worker limit must be positive")
+    if not jobs:
+        return {}
+    active_state_count = min(len(jobs), worker_limit)
+    base, remainder = divmod(worker_limit, active_state_count)
+    return {
+        str(job["state_record"]["state_occurrence_id"]): base
+        + int(index < remainder)
+        for index, job in enumerate(jobs[:active_state_count])
+    }
+
+
 def run_multivalue_collection(
     config_path: str | Path,
     output: str | Path,
@@ -1235,8 +1294,14 @@ def run_multivalue_collection(
         }
         for row in selected_rows
     ]
-    worker_count = min(int(preflight["selected_worker_count"]), len(jobs))
     recovery_amendment = dict(config.get("recovery_amendment") or {})
+    episode_worker_limit = int(
+        recovery_amendment.get(
+            "episode_worker_limit", preflight["selected_worker_count"]
+        )
+    )
+    if episode_worker_limit > int(preflight["selected_worker_count"]):
+        raise ValueError("MultiValue episode worker limit exceeds passed preflight")
     maximum_attempts = int(
         recovery_amendment.get(
             "maximum_failed_recovery_attempts",
@@ -1264,7 +1329,14 @@ def run_multivalue_collection(
     }
     no_progress: dict[str, int] = {}
     failed_recoveries: dict[str, int] = {}
-    pending = jobs
+    pending = []
+    for job in jobs:
+        output_path = Path(str(job["output_path"]))
+        if output_path.is_file():
+            resumed = _collect_rollout_state(job)
+            observed[str(resumed["state_occurrence_id"])] = resumed
+        else:
+            pending.append(job)
     current_attempt = 0
     previous_status = (
         _read_json(output / f"{phase}_collection_status.json")
@@ -1297,6 +1369,11 @@ def run_multivalue_collection(
     while pending:
         current_attempt += 1
         attempt_results: dict[str, dict[str, Any]] = {}
+        allocation = _episode_worker_allocation(pending, episode_worker_limit)
+        active_pending = pending[: len(allocation)]
+        for job in active_pending:
+            state_id = str(job["state_record"]["state_occurrence_id"])
+            job["episode_worker_count"] = allocation[state_id]
 
         def record(result: dict[str, Any]) -> None:
             state_id = str(result["state_occurrence_id"])
@@ -1317,8 +1394,8 @@ def run_multivalue_collection(
 
         _run_jobs(
             _collect_rollout_state,
-            pending,
-            worker_count,
+            active_pending,
+            len(active_pending),
             phase=f"stride-multivalue-{phase}-attempt-{current_attempt}",
             output_root=output,
             run_fingerprint=run_fingerprint,
@@ -1327,7 +1404,7 @@ def run_multivalue_collection(
             failure_result=_failed_rollout_state,
         )
         retry = []
-        for job in pending:
+        for job in active_pending:
             state_id = str(job["state_record"]["state_occurrence_id"])
             result = attempt_results[state_id]
             if result.get("status") in {"ok", "resumed"}:
@@ -1371,7 +1448,7 @@ def run_multivalue_collection(
                 retry.append(job)
             else:
                 observed[state_id] = result
-        pending = retry
+        pending = retry + pending[len(active_pending) :]
         if not pending:
             break
     complete = [

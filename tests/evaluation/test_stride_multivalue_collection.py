@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 import json
+import threading
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -10,6 +12,7 @@ from experiments.stride_multivalue_collection import (
     ROLLOUT_STATE_SCHEMA,
     _collect_rollout_state,
     _direction_against_anchor,
+    _episode_worker_allocation,
     _episode_job_id,
     _recovery_window_decision,
     _single_rollout,
@@ -47,6 +50,19 @@ def _transition(agents: list[int], candidate: str, success: bool = True) -> dict
 
 
 class MultiValueCollectionTest(unittest.TestCase):
+    def test_episode_worker_allocation_uses_global_limit(self) -> None:
+        jobs = [
+            {"state_record": {"state_occurrence_id": f"state-{index}"}}
+            for index in range(4)
+        ]
+        self.assertEqual(
+            _episode_worker_allocation(jobs, 12),
+            {f"state-{index}": 3 for index in range(4)},
+        )
+        self.assertEqual(
+            sorted(_episode_worker_allocation(jobs[:2], 12).values()), [6, 6]
+        )
+
     def test_productive_timeout_does_not_consume_failure_budget(self) -> None:
         decision = _recovery_window_decision(
             status="timeout", previous_count=10, completed_count=15
@@ -97,6 +113,58 @@ class MultiValueCollectionTest(unittest.TestCase):
             )
             self.assertEqual(result["status"], "resumed")
             self.assertEqual(result["episode_count"], 1)
+
+    def test_state_parallelism_keeps_one_partial_writer(self) -> None:
+        with TemporaryDirectory() as temporary:
+            state = {
+                "state_occurrence_id": "occurrence",
+                "candidates": [
+                    {"candidate_id": f"candidate-{index}", "candidate_position": index}
+                    for index in range(3)
+                ],
+            }
+            output = Path(temporary) / "state.json"
+            lock = threading.Lock()
+            active = 0
+            maximum_active = 0
+
+            def rollout(_job, _state, candidate, *, teacher, trial_index):
+                nonlocal active, maximum_active
+                with lock:
+                    active += 1
+                    maximum_active = max(maximum_active, active)
+                time.sleep(0.03)
+                with lock:
+                    active -= 1
+                return {
+                    "episode_job_id": _episode_job_id(
+                        teacher, candidate["candidate_id"], trial_index
+                    ),
+                    "teacher": teacher,
+                    "candidate_id": candidate["candidate_id"],
+                    "trial_index": trial_index,
+                    "status": "ok",
+                }
+
+            with mock.patch(
+                "experiments.stride_multivalue_collection._single_rollout",
+                side_effect=rollout,
+            ):
+                result = _collect_rollout_state(
+                    {
+                        "state_record": state,
+                        "output_path": str(output),
+                        "run_fingerprint": "new",
+                        "teachers": ["v2-full"],
+                        "trial_indices": [0],
+                        "episode_worker_count": 3,
+                    }
+                )
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["episode_count"], 3)
+            self.assertEqual(maximum_active, 3)
+            self.assertTrue(output.is_file())
+            self.assertFalse(output.with_name(output.name + ".partial").exists())
 
     def test_single_rollout_reuses_qualification_before_policy(self) -> None:
         with TemporaryDirectory() as temporary:
