@@ -121,7 +121,7 @@ def run_historyrank_rule(
         if row.get("checkpoint_kind") == "first_repeat_stall"
     ]
     logical = {
-        str(row["logical_checkpoint_id"]): row
+        str(row["case_id"]): row
         for row in _read_jsonl(inputs["logical_results"])
         if row.get("checkpoint_kind") == "first_repeat_stall"
     }
@@ -135,9 +135,10 @@ def run_historyrank_rule(
 
     rows: list[dict[str, Any]] = []
     for checkpoint in checkpoints:
-        checkpoint_id = str(checkpoint["logical_checkpoint_id"])
-        result = logical[checkpoint_id]
-        case = cases[str(checkpoint["case_id"])]
+        case_id = str(checkpoint["case_id"])
+        result = logical[case_id]
+        checkpoint_id = str(result["logical_checkpoint_id"])
+        case = cases[case_id]
         repeated = str(case["repeated_candidate_id"])
         prior = list(dict(case["pp_response"])["prior_repairs"])
         if (
@@ -166,7 +167,7 @@ def run_historyrank_rule(
             float(aggregates[(state_key, str(candidate_id))]["seed_mean"])
             for candidate_id in result["candidate_ids"]
         )
-        before = max(1.0, float(checkpoint["before_conflicts"]))
+        before = max(1.0, float(result["before_conflicts"]))
         row = {
             "schema": ROW_SCHEMA,
             "logical_checkpoint_id": checkpoint_id,
@@ -208,7 +209,7 @@ def run_historyrank_rule(
             ),
             "selected_normalized_regret": best_mean - float(selected_quality["seed_mean"]),
             "fallback_normalized_regret": best_mean - float(fallback_quality["seed_mean"]),
-            "before_conflicts": int(checkpoint["before_conflicts"]),
+            "before_conflicts": int(result["before_conflicts"]),
             "regret_scale_reference": before,
             "runtime_or_ttf_read": False,
             "future_trajectory_read": False,
