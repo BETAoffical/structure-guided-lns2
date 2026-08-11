@@ -55,6 +55,10 @@ def load_pretail_forced_continuation_config(
         != "d7d416bd1424702dd2060be777574e919979daf2"
         or config.get("execution_amendment_reason")
         != "replace_thread_pool_with_eight_independent_process_shards_after_smoke_showed_native_spawn_serialization_before_formal_collection"
+        or config.get("qualification_amendment_parent_commit")
+        != "8ccbbba168c36ef441ffe8d47723e1e257e9735b"
+        or config.get("qualification_amendment_reason")
+        != "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible"
     ):
         raise ValueError("PreTail forced-continuation identity changed")
     expected_inputs = {
@@ -508,6 +512,37 @@ def run_pretail_forced_continuation(
     return report
 
 
+def run_pretail_qualification(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    resume: bool = False,
+) -> dict[str, Any]:
+    _path, root, _config, inputs, parent = load_pretail_forced_continuation_config(
+        config_path
+    )
+    cases = prepare_cases(
+        _read_jsonl(inputs["root_checkpoints"]),
+        _read_jsonl(inputs["logical_checkpoint_results"]),
+        _read_jsonl(inputs["candidate_aggregates"]),
+    )
+    job_keys = {
+        (str(case["checkpoint"]["task_id"]), int(case["checkpoint"]["solver_seed"]))
+        for case in cases
+    }
+    return run_closed_loop_collection(
+        (root / str(parent["cohort"]["dataset"])).resolve(),
+        inputs["runtime_config"],
+        Path(output).resolve(),
+        phase="qualify",
+        workers=8,
+        resume=resume,
+        cohort_job_keys=job_keys,
+        job_keys=job_keys,
+        **_fused_controller_kwargs(root, parent, "v2-full"),
+    )
+
+
 def analyze_pretail_forced_continuation(
     config_path: str | Path,
     output: str | Path,
@@ -652,5 +687,6 @@ __all__ = [
     "load_pretail_forced_continuation_config",
     "prepare_cases",
     "run_pretail_forced_continuation",
+    "run_pretail_qualification",
     "select_shard",
 ]

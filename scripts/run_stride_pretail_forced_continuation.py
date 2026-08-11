@@ -17,6 +17,7 @@ if NATIVE_BUILD.is_dir() and str(NATIVE_BUILD) not in sys.path:
 from experiments.stride_pretail_forced_continuation import (  # noqa: E402
     analyze_pretail_forced_continuation,
     run_pretail_forced_continuation,
+    run_pretail_qualification,
 )
 
 
@@ -24,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run the bounded PreTail forced-action continuation diagnostic."
     )
-    parser.add_argument("command", choices=("run", "analyze"))
+    parser.add_argument("command", choices=("qualify", "run", "analyze"))
     parser.add_argument(
         "--config",
         default="configs/stride_pretail_forced_continuation_v1_registration.json",
@@ -39,7 +40,13 @@ def main() -> int:
     parser.add_argument("--shard-index", type=int)
     parser.add_argument("--shard-count", type=int)
     arguments = parser.parse_args()
-    if arguments.command == "analyze":
+    if arguments.command == "qualify":
+        report = run_pretail_qualification(
+            arguments.config,
+            arguments.output,
+            resume=arguments.resume,
+        )
+    elif arguments.command == "analyze":
         report = analyze_pretail_forced_continuation(
             arguments.config,
             arguments.output,

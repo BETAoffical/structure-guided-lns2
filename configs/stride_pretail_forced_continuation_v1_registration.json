@@ -5,6 +5,8 @@
   "pre_registration_parent_commit": "0ec302239db793974009e92c39b0d5e35798aa67",
   "execution_amendment_parent_commit": "d7d416bd1424702dd2060be777574e919979daf2",
   "execution_amendment_reason": "replace_thread_pool_with_eight_independent_process_shards_after_smoke_showed_native_spawn_serialization_before_formal_collection",
+  "qualification_amendment_parent_commit": "8ccbbba168c36ef441ffe8d47723e1e257e9735b",
+  "qualification_amendment_reason": "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible",
   "inputs": {
     "root_checkpoints": {
       "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",

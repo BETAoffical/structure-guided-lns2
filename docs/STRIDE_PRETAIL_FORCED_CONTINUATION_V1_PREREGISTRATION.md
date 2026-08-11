@@ -46,6 +46,12 @@ logical CPUs and 23 GiB of memory, so eight workers leave capacity for the host
 and for high-agent-count memory spikes.  Candidate definitions, seeds, cohort,
 outcomes, and all three per-episode fuses are unchanged.
 
+The first eight-shard launch then rejected the legacy TailSwitch qualification
+as reset-protocol incompatible before any formal episode.  The protocol was
+amended to build one dedicated current-protocol qualification collection and
+freeze its hashes before retrying the formal shards.  This qualification step
+contains reset-only data and cannot inspect forced-action outcomes.
+
 ## Outcomes and interpretation
 
 Primary outcomes are fixed-200-step normalized conflict AUC, final conflict
