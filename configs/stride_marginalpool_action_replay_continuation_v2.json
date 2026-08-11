@@ -1,0 +1,47 @@
+{
+  "schema": "lns2.stride.marginalpool_action_replay_recovery_registration.v2",
+  "scientific_status": "operational_partial_checkpoint_continuation_without_label_change",
+  "experiment_id": "stride-marginalpool-action-replay-continuation-v1",
+  "continuation_segment": 2,
+  "base_registration": {
+    "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+    "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+  },
+  "parent_continuation_registration": {
+    "path": "configs/stride_marginalpool_action_replay_continuation_v1.json",
+    "sha256": "8543c8eae19b9d27c57fc138a8089a7be5df9db14e2b771588df1dd0a666ced7"
+  },
+  "recovery_source": {
+    "root": "build/stride-marginalpool-action-replay-continuation-v1",
+    "source_run_config_sha256": "e46f285cb1eb47f02477a5982181383fd54ef8fb3715340b4f68617f159c835b",
+    "source_status_sha256": "850684a860ee257a7da31d003db925302b1c4d6b5dfab8a4fb1b6692a0fb9b02",
+    "source_collection_report_sha256": "e695a6f1bb8a9ed9259e73091ff73882bc15db1b2c3492fd33f6265e316ca540",
+    "source_status": "failed",
+    "import_policy": "all valid completed and partial states without outcome filtering",
+    "imported_state_count": 77,
+    "imported_state_sha256_digest": "13471cc24b21222549ac21468357eb18de10fc36e6aacdd17f88be088adaf1f9",
+    "imported_partial_state_count": 1,
+    "imported_partial_state_sha256": {
+      "a9946a48e97a26276e92329cac5af35a330b0c5e3ecfa2ac7905f13db11c126e": "2b874e197ffb11fc0bfc0895767665f908b2843a4c4ccc51db7cc087f4aed9c3"
+    },
+    "imported_partial_state_progress": {
+      "a9946a48e97a26276e92329cac5af35a330b0c5e3ecfa2ac7905f13db11c126e": {
+        "completed_candidate_count": 38,
+        "candidate_count": 42,
+        "trial_count": 608
+      }
+    }
+  },
+  "effective_execution": {
+    "workers": 4,
+    "per_state_attempt_timeout_seconds": 1800,
+    "maximum_state_attempts": 4,
+    "maximum_state_wall_seconds": 7200,
+    "candidate_atomic_checkpoints": true,
+    "stop_after_consecutive_no_progress_attempts": 2
+  },
+  "partial_selection_policy": "all valid partial states from the registered source",
+  "outcomes_used_for_recovery_policy": false,
+  "labels_or_candidate_set_changed": false,
+  "no_result_based_exclusion": true
+}
