@@ -106,7 +106,7 @@ def run_historyrank_rule(
     if (
         collection.get("complete") is not True
         or collection.get("integrity_passed") is not True
-        or int(collection.get("state_count", -1)) != 78
+        or int(collection.get("completed_state_count", -1)) != 78
         or int(collection.get("candidate_count", -1)) != 2502
         or int(collection.get("trial_count", -1)) != 40032
         or analysis.get("integrity_passed") is not True
