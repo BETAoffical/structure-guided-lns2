@@ -1,0 +1,81 @@
+{
+  "schema": "lns2.stride.multivalue_collection_registration.v1",
+  "scientific_status": "preregistered_outcome_enriched_label_stability_pilot",
+  "experiment_id": "stride-multivalue-pilot-v1",
+  "pre_registration_parent_commit": "819ba7f",
+  "inputs": {
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "paretopool_gap_report": {
+      "path": "build/stride-paretopool-gap-audit-v1/paretopool_gap_audit_report.json",
+      "sha256": "c220861e972485ba0724cead3fd67c3663d7960d60d52a940e546475f7de9061"
+    },
+    "state_collection_config": {
+      "path": "configs/stride_maze_tail_state_collection_v2.json",
+      "sha256": "5efa9276844890eecc5d25b2fc0427aa86c940c745aaea17a3131e0baf5f2f28"
+    },
+    "runtime_config": {
+      "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
+      "sha256": "e0af159a0dbeb8a492cf276996912dbfcd10cfdba0e297433d606d6daeed83fc"
+    },
+    "qualification_report": {
+      "path": "build/stride-pretail-forced-continuation-qualification-v1/qualification_report.json",
+      "sha256": "005bad2bf7119c12ae0647f541203b2a9df64da54a1ddfc0ff05c352179f51e6"
+    }
+  },
+  "cohort": {
+    "state_occurrence_count": 12,
+    "per_map_occurrences": 4,
+    "selection": "map-balanced task-round-robin identity hash without candidate outcomes",
+    "source_is_outcome_enriched": true,
+    "use": "label stability pilot only",
+    "result_blind_validation_required_later": true,
+    "no_result_based_exclusion": true
+  },
+  "paretopool": {
+    "candidate_budgets": [6, 8, 12],
+    "collect_union_of_budgets": true,
+    "maximum_neighborhood_size": 64,
+    "retain_full_v2_base_pool_at_runtime": true,
+    "label_v2_anchor_and_paretopool_challengers": true
+  },
+  "rollout": {
+    "teachers": ["v2-full", "official-adaptive"],
+    "horizons": [1, 8, 32, 128],
+    "initial_paired_seed_count": 8,
+    "fixed_seed_halves": [[0, 1, 2, 3], [4, 5, 6, 7]],
+    "extended_paired_seed_count": 16,
+    "extend_all_state_candidates_when_either_teacher_top3_overlap_below": 0.8,
+    "maximum_repair_decisions": 128,
+    "wall_time_fuse_seconds": 300.0,
+    "process_timeout_seconds": 360.0,
+    "state_attempt_timeout_seconds": 1800,
+    "maximum_state_attempts": 4,
+    "no_progress_attempt_limit": 2,
+    "right_censoring_is_valid": true
+  },
+  "dynamic_workers": {
+    "normal_candidates": [12, 14, 16],
+    "heavy_candidates": [8, 10, 12],
+    "maximum_workers": 16,
+    "reserved_logical_cpus": 2,
+    "available_memory_fraction": 0.75,
+    "selection": "maximum measured throughput with zero errors and RSS within budget"
+  },
+  "stability_gates": {
+    "seed_half_top3_overlap_minimum": 0.8,
+    "paired_rank_correlation_minimum": 0.6,
+    "cross_teacher_direction_agreement_minimum": 0.7,
+    "cross_seed_normalized_regret_maximum": 0.02,
+    "each_map_group_must_pass": true
+  },
+  "claim_boundary": {
+    "label_stability_pilot_only": true,
+    "model_training_allowed_before_gates": false,
+    "ttf_improvement_claim": false,
+    "oracle_runtime_policy": false,
+    "source_cohort_is_not_result_blind_validation": true
+  }
+}
