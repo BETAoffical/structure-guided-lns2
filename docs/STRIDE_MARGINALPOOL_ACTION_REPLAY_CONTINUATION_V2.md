@@ -21,6 +21,12 @@ per-attempt fuse, at most four attempts, candidate-level atomic checkpoints,
 and the two-consecutive-no-progress stop.  Only one state remains, so at most
 one actual compute worker can be active.
 
+The segment completed the remaining four candidates in its first attempt.
+The final collection contains 78 states, 2,502 candidates and 40,032 trials,
+with zero terminal errors or timeouts and all integrity gates passed.  The
+scientific result is recorded in
+`docs/STRIDE_MARGINALPOOL_ACTION_REPLAY_V1_REPORT.md`.
+
 ```text
 wsl.exe -d Ubuntu-22.04 --cd "/mnt/c/Users/18448/Documents/lns2 2/structure-guided-lns2" -- /usr/bin/env PYTHONPATH=build/wsl-release /usr/bin/python3 scripts/run_stride_marginalpool_action_replay.py collect --config configs/stride_marginalpool_action_replay_v1_registration.json --output build/stride-marginalpool-action-replay-continuation-v2 --mode full --workers 4 --preflight-output build/stride-marginalpool-action-replay-preflight-v1 --recovery-source build/stride-marginalpool-action-replay-continuation-v1 --recovery-registration configs/stride_marginalpool_action_replay_continuation_v2.json --maximum-state-attempts 4 --per-state-attempt-timeout-seconds 1800 --resume
 ```
