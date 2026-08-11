@@ -52,6 +52,11 @@ amended to build one dedicated current-protocol qualification collection and
 freeze its hashes before retrying the formal shards.  This qualification step
 contains reset-only data and cannot inspect forced-action outcomes.
 
+The dedicated qualification completed with 19/19 unique task-seed resets,
+19 nonzero-conflict states, all three registered solver seeds, three Maze maps,
+and zero errors.  Its manifest, report, and run configuration hashes are frozen
+in the registration before any formal continuation episode.
+
 ## Outcomes and interpretation
 
 Primary outcomes are fixed-200-step normalized conflict AUC, final conflict

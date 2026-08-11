@@ -7,6 +7,7 @@
   "execution_amendment_reason": "replace_thread_pool_with_eight_independent_process_shards_after_smoke_showed_native_spawn_serialization_before_formal_collection",
   "qualification_amendment_parent_commit": "8ccbbba168c36ef441ffe8d47723e1e257e9735b",
   "qualification_amendment_reason": "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible",
+  "qualification_artifact_registration_parent_commit": "bf1ecbadd2002b71a53d12d9ef1baadfa6dc5c94",
   "inputs": {
     "root_checkpoints": {
       "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
@@ -32,17 +33,17 @@
       "path": "build/stride-tailswitch-v1/tailswitch_report.json",
       "sha256": "107f11faaa2e18f92af8e73e4a69e1ba7f8948f77b8f0e174981cc4c3c2b6754"
     },
-    "tailswitch_qualification_manifest": {
-      "path": "build/stride-tailswitch-v1/qualification/qualification_manifest.jsonl",
-      "sha256": "6f82b8135693342d6f429af21d1af9194560e5750b94a24f72e6a53c35befa10"
+    "pretail_qualification_manifest": {
+      "path": "build/stride-pretail-forced-continuation-qualification-v1/qualification_manifest.jsonl",
+      "sha256": "25f7f91fff80aa0d9b78ed4e5bda07d760c69e5edee70622703743f925c66ef6"
     },
-    "tailswitch_qualification_report": {
-      "path": "build/stride-tailswitch-v1/qualification/qualification_report.json",
-      "sha256": "2a8462c3d28e0e06cb957ff611c357fe82395f5cf10f33d1c22755cdb9322193"
+    "pretail_qualification_report": {
+      "path": "build/stride-pretail-forced-continuation-qualification-v1/qualification_report.json",
+      "sha256": "005bad2bf7119c12ae0647f541203b2a9df64da54a1ddfc0ff05c352179f51e6"
     },
-    "tailswitch_qualification_run_config": {
-      "path": "build/stride-tailswitch-v1/qualification/run_config.json",
-      "sha256": "9e694f5cba3b3e9716d28db7e16c9bd2e33716f38542930b9de2879e05469ab0"
+    "pretail_qualification_run_config": {
+      "path": "build/stride-pretail-forced-continuation-qualification-v1/run_config.json",
+      "sha256": "43530a3b2000e39055efdfdd7720c4c651998fc6c9cd6e344d919fd9d1ac2f94"
     },
     "state_collection_config": {
       "path": "configs/stride_maze_tail_state_collection_v2.json",

@@ -59,6 +59,8 @@ def load_pretail_forced_continuation_config(
         != "8ccbbba168c36ef441ffe8d47723e1e257e9735b"
         or config.get("qualification_amendment_reason")
         != "build_one_current_protocol_qualification_collection_before_formal_episodes_after_legacy_tailswitch_qualification_was_rejected_as_reset_protocol_incompatible"
+        or config.get("qualification_artifact_registration_parent_commit")
+        != "bf1ecbadd2002b71a53d12d9ef1baadfa6dc5c94"
     ):
         raise ValueError("PreTail forced-continuation identity changed")
     expected_inputs = {
@@ -68,9 +70,9 @@ def load_pretail_forced_continuation_config(
         "tailswitch_registration",
         "tailswitch_status",
         "tailswitch_report",
-        "tailswitch_qualification_manifest",
-        "tailswitch_qualification_report",
-        "tailswitch_qualification_run_config",
+        "pretail_qualification_manifest",
+        "pretail_qualification_report",
+        "pretail_qualification_run_config",
         "state_collection_config",
         "runtime_config",
     }
@@ -419,7 +421,7 @@ def run_pretail_forced_continuation(
         for case in all_cases
     }
     qualification_root = output / "qualification"
-    qualification_source = inputs["tailswitch_qualification_report"].parent
+    qualification_source = inputs["pretail_qualification_report"].parent
     run_closed_loop_collection(
         dataset,
         runtime,
