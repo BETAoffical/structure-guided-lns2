@@ -114,6 +114,19 @@ def load_multivalue_collection_config(
         raise ValueError("MultiValue pilot rollout or recovery contract changed")
     if tuple(map(int, config["paretopool"]["candidate_budgets"])) != PARETOPOOL_BUDGETS:
         raise ValueError("MultiValue pilot candidate budgets changed")
+    recovery = dict(config.get("recovery_amendment") or {})
+    if recovery:
+        compatible = tuple(
+            map(str, recovery.get("compatible_run_fingerprints") or ())
+        )
+        if (
+            not compatible
+            or any(len(value) != 64 for value in compatible)
+            or recovery.get("productive_windows_consume_failure_budget") is not False
+            or int(recovery.get("maximum_failed_recovery_attempts", -1)) != 4
+            or int(recovery.get("consecutive_no_progress_limit", -1)) != 2
+        ):
+            raise ValueError("MultiValue productive recovery amendment changed")
     return path, root, config, inputs
 
 
@@ -757,11 +770,15 @@ def _collect_rollout_state(job: dict[str, Any]) -> dict[str, Any]:
         for candidate in state_record["candidates"]
         for trial_index in job["trial_indices"]
     }
+    accepted_run_fingerprints = {
+        str(job["run_fingerprint"]),
+        *map(str, job.get("compatible_run_fingerprints") or ()),
+    }
     if output_path.is_file():
         payload = _read_json(output_path)
         if (
             payload.get("schema") == ROLLOUT_STATE_SCHEMA
-            and payload.get("run_fingerprint") == job["run_fingerprint"]
+            and payload.get("run_fingerprint") in accepted_run_fingerprints
             and payload.get("complete") is True
             and set(payload.get("completed_episode_job_ids") or ()) == expected
         ):
@@ -777,7 +794,7 @@ def _collect_rollout_state(job: dict[str, Any]) -> dict[str, Any]:
         partial = _read_json(partial_path)
         if (
             partial.get("schema") != ROLLOUT_PARTIAL_SCHEMA
-            or partial.get("run_fingerprint") != job["run_fingerprint"]
+            or partial.get("run_fingerprint") not in accepted_run_fingerprints
             or partial.get("state_record_sha256") != _fingerprint(state_record)
         ):
             raise ValueError("invalid MultiValue partial state artifact")
@@ -1047,6 +1064,7 @@ def _collection_status(
     current_attempt: int,
     maximum_attempts: int,
     status: str,
+    recovery_source_run_fingerprint: str | None = None,
 ) -> None:
     rows = list(results.values())
     _write_json(
@@ -1070,8 +1088,19 @@ def _collection_status(
             ),
             "active_jobs": [],
             "current_attempt": current_attempt,
-            "maximum_state_attempts": maximum_attempts,
-            "attempt_failure_count": len(attempt_history),
+            "current_productive_window": current_attempt,
+            "maximum_state_attempts": None,
+            "maximum_failed_recovery_attempts": maximum_attempts,
+            "productive_windows_consume_failure_budget": False,
+            "attempt_failure_count": sum(
+                int(row.get("failure_budget_increment", 0))
+                for row in attempt_history
+            ),
+            "productive_window_count": sum(
+                row.get("classification") == "productive_window"
+                for row in attempt_history
+            ),
+            "recovery_source_run_fingerprint": recovery_source_run_fingerprint,
             "attempt_history": attempt_history,
             "errors": [
                 row
@@ -1080,6 +1109,27 @@ def _collection_status(
             ],
         },
     )
+
+
+def _recovery_window_decision(
+    *, status: str, previous_count: int, completed_count: int
+) -> dict[str, Any]:
+    if status not in {"error", "timeout"}:
+        raise ValueError("MultiValue recovery decision requires a failed window")
+    progressed = completed_count > previous_count
+    consumes_failure_budget = status == "error" or not progressed
+    return {
+        "progressed": progressed,
+        "new_episode_checkpoint_count": max(0, completed_count - previous_count),
+        "classification": (
+            "productive_window"
+            if progressed and status == "timeout"
+            else "execution_error"
+            if status == "error"
+            else "no_progress_window"
+        ),
+        "failure_budget_increment": int(consumes_failure_budget),
+    }
 
 
 def run_multivalue_collection(
@@ -1173,19 +1223,66 @@ def run_multivalue_collection(
                 / f"{str(row['state_occurrence_id'])}.json"
             ),
             "run_fingerprint": run_fingerprint,
+            "compatible_run_fingerprints": list(
+                map(
+                    str,
+                    dict(config.get("recovery_amendment") or {}).get(
+                        "compatible_run_fingerprints"
+                    )
+                    or (),
+                )
+            ),
         }
         for row in selected_rows
     ]
     worker_count = min(int(preflight["selected_worker_count"]), len(jobs))
-    maximum_attempts = int(config["rollout"]["maximum_state_attempts"])
+    recovery_amendment = dict(config.get("recovery_amendment") or {})
+    maximum_attempts = int(
+        recovery_amendment.get(
+            "maximum_failed_recovery_attempts",
+            config["rollout"]["maximum_state_attempts"],
+        )
+    )
     attempt_timeout = float(config["rollout"]["state_attempt_timeout_seconds"])
     no_progress_limit = int(config["rollout"]["no_progress_attempt_limit"])
     observed: dict[str, dict[str, Any]] = {}
     attempt_history: list[dict[str, Any]] = []
-    last_progress: dict[str, int] = {}
+    def checkpoint_count(job: dict[str, Any]) -> int:
+        output_path = Path(str(job["output_path"]))
+        if output_path.is_file():
+            return len(_read_json(output_path).get("completed_episode_job_ids") or ())
+        partial_path = output_path.with_name(output_path.name + ".partial")
+        return (
+            len(_read_json(partial_path).get("completed_episode_job_ids") or ())
+            if partial_path.is_file()
+            else 0
+        )
+
+    last_progress: dict[str, int] = {
+        str(job["state_record"]["state_occurrence_id"]): checkpoint_count(job)
+        for job in jobs
+    }
     no_progress: dict[str, int] = {}
+    failed_recoveries: dict[str, int] = {}
     pending = jobs
     current_attempt = 0
+    previous_status = (
+        _read_json(output / f"{phase}_collection_status.json")
+        if (output / f"{phase}_collection_status.json").is_file()
+        else {}
+    )
+    compatible_run_fingerprints = set(
+        map(
+            str,
+            recovery_amendment.get("compatible_run_fingerprints") or (),
+        )
+    )
+    previous_run_fingerprint = str(previous_status.get("run_fingerprint", ""))
+    recovery_source_run_fingerprint = (
+        previous_run_fingerprint
+        if previous_run_fingerprint in compatible_run_fingerprints
+        else None
+    )
     _collection_status(
         output,
         run_fingerprint=run_fingerprint,
@@ -1195,8 +1292,10 @@ def run_multivalue_collection(
         current_attempt=current_attempt,
         maximum_attempts=maximum_attempts,
         status="running",
+        recovery_source_run_fingerprint=recovery_source_run_fingerprint,
     )
-    for current_attempt in range(1, maximum_attempts + 1):
+    while pending:
+        current_attempt += 1
         attempt_results: dict[str, dict[str, Any]] = {}
 
         def record(result: dict[str, Any]) -> None:
@@ -1213,6 +1312,7 @@ def run_multivalue_collection(
                 current_attempt=current_attempt,
                 maximum_attempts=maximum_attempts,
                 status="running",
+                recovery_source_run_fingerprint=recovery_source_run_fingerprint,
             )
 
         _run_jobs(
@@ -1232,30 +1332,42 @@ def run_multivalue_collection(
             result = attempt_results[state_id]
             if result.get("status") in {"ok", "resumed"}:
                 continue
-            partial_path = Path(str(job["output_path"])).with_name(
-                Path(str(job["output_path"])).name + ".partial"
-            )
-            completed = (
-                len(_read_json(partial_path).get("completed_episode_job_ids") or ())
-                if partial_path.is_file()
-                else 0
-            )
+            completed = checkpoint_count(job)
             previous = last_progress.get(state_id, 0)
-            no_progress[state_id] = (
-                no_progress.get(state_id, 0) + 1 if completed <= previous else 0
+            decision = _recovery_window_decision(
+                status=str(result["status"]),
+                previous_count=previous,
+                completed_count=completed,
+            )
+            progressed = bool(decision["progressed"])
+            no_progress[state_id] = 0 if progressed else no_progress.get(state_id, 0) + 1
+            status_name = str(result["status"])
+            failed_recoveries[state_id] = failed_recoveries.get(state_id, 0) + int(
+                decision["failure_budget_increment"]
             )
             last_progress[state_id] = completed
             attempt_history.append(
                 {
-                    "attempt": current_attempt,
+                    "window": current_attempt,
                     "state_occurrence_id": state_id,
-                    "status": str(result["status"]),
+                    "status": status_name,
                     "error": str(result.get("error")),
                     "completed_episode_checkpoint_count": completed,
+                    "new_episode_checkpoint_count": decision[
+                        "new_episode_checkpoint_count"
+                    ],
+                    "classification": decision["classification"],
+                    "failure_budget_increment": decision[
+                        "failure_budget_increment"
+                    ],
+                    "failed_recovery_count": failed_recoveries[state_id],
                     "consecutive_no_progress_attempts": no_progress[state_id],
                 }
             )
-            if current_attempt < maximum_attempts and no_progress[state_id] < no_progress_limit:
+            if (
+                failed_recoveries[state_id] < maximum_attempts
+                and no_progress[state_id] < no_progress_limit
+            ):
                 retry.append(job)
             else:
                 observed[state_id] = result
@@ -1275,6 +1387,7 @@ def run_multivalue_collection(
         current_attempt=current_attempt,
         maximum_attempts=maximum_attempts,
         status=final_status,
+        recovery_source_run_fingerprint=recovery_source_run_fingerprint,
     )
     return _read_json(output / f"{phase}_collection_status.json")
 

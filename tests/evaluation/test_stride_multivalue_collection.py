@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import unittest
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
 from experiments.stride_multivalue_collection import (
+    ROLLOUT_STATE_SCHEMA,
+    _collect_rollout_state,
     _direction_against_anchor,
+    _episode_job_id,
+    _recovery_window_decision,
     _single_rollout,
     _stability_group,
     history_before_decision,
@@ -42,6 +47,57 @@ def _transition(agents: list[int], candidate: str, success: bool = True) -> dict
 
 
 class MultiValueCollectionTest(unittest.TestCase):
+    def test_productive_timeout_does_not_consume_failure_budget(self) -> None:
+        decision = _recovery_window_decision(
+            status="timeout", previous_count=10, completed_count=15
+        )
+        self.assertEqual(decision["classification"], "productive_window")
+        self.assertEqual(decision["new_episode_checkpoint_count"], 5)
+        self.assertEqual(decision["failure_budget_increment"], 0)
+        stalled = _recovery_window_decision(
+            status="timeout", previous_count=15, completed_count=15
+        )
+        self.assertEqual(stalled["classification"], "no_progress_window")
+        self.assertEqual(stalled["failure_budget_increment"], 1)
+        errored = _recovery_window_decision(
+            status="error", previous_count=15, completed_count=16
+        )
+        self.assertEqual(errored["classification"], "execution_error")
+        self.assertEqual(errored["failure_budget_increment"], 1)
+
+    def test_compatible_run_fingerprint_resumes_completed_state(self) -> None:
+        with TemporaryDirectory() as temporary:
+            state = {
+                "state_occurrence_id": "occurrence",
+                "candidates": [{"candidate_id": "candidate"}],
+            }
+            episode_id = _episode_job_id("v2-full", "candidate", 0)
+            output = Path(temporary) / "state.json"
+            output.write_text(
+                json.dumps(
+                    {
+                        "schema": ROLLOUT_STATE_SCHEMA,
+                        "run_fingerprint": "legacy",
+                        "complete": True,
+                        "completed_episode_job_ids": [episode_id],
+                        "episodes": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = _collect_rollout_state(
+                {
+                    "state_record": state,
+                    "output_path": str(output),
+                    "run_fingerprint": "new",
+                    "compatible_run_fingerprints": ["legacy"],
+                    "teachers": ["v2-full"],
+                    "trial_indices": [0],
+                }
+            )
+            self.assertEqual(result["status"], "resumed")
+            self.assertEqual(result["episode_count"], 1)
+
     def test_single_rollout_reuses_qualification_before_policy(self) -> None:
         with TemporaryDirectory() as temporary:
             job = {

@@ -64,6 +64,17 @@
     "available_memory_fraction": 0.75,
     "selection": "maximum measured throughput with zero errors and RSS within budget"
   },
+  "recovery_amendment": {
+    "reason": "productive 1800-second state windows were incorrectly consuming the four-failure recovery budget",
+    "compatible_run_fingerprints": [
+      "a90bbdb7fb46552e833f3e1e4917bc0aa11ae75bbaf1d3530365029dabc0f05f"
+    ],
+    "productive_windows_consume_failure_budget": false,
+    "maximum_failed_recovery_attempts": 4,
+    "consecutive_no_progress_limit": 2,
+    "episode_and_process_fuses_unchanged": true,
+    "no_outcome_based_state_filtering": true
+  },
   "stability_gates": {
     "seed_half_top3_overlap_minimum": 0.8,
     "paired_rank_correlation_minimum": 0.6,
