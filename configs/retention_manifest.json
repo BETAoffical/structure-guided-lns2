@@ -2287,6 +2287,21 @@
       "path": "tests/evaluation/test_stride_multivalue_collection.py",
       "role": "active",
       "contract": "Verify strict-prefix temporal history, pilot selection and MultiValue label stability gates."
+    },
+    {
+      "path": "experiments/stride_repairability_causal_audit.py",
+      "role": "reproducibility",
+      "purpose": "Instrument PP without changing repair semantics and reproduce the frozen agent-set by repair-order causal audit over all first-repeat stall states."
+    },
+    {
+      "path": "scripts/run_stride_repairability_causal_audit.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered Repairability worker preflight, resumable paired intervention collection and causal analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairability_causal_audit.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 45-state, five-arm, sixteen-seed causal intervention design, stable-effect rules and diagnostic-only claim boundary."
     }
   ]
 }

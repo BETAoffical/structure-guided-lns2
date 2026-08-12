@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import statistics
 import threading
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from experiments._common import producer_identity, registered_input, sha256_file
 from experiments.closed_loop_trace_storage import read_state_blob
@@ -21,6 +20,7 @@ from experiments.repair_collection import (
 )
 from experiments.stride_collection import _validate_native_repair
 from experiments.stride_marginalpool_action_replay import (
+    _mean,
     _replay_job,
     build_frozen_cohort,
 )
@@ -57,11 +57,6 @@ PRODUCER_FILES = (
     "third_party/mapf_lns2/inc/RepairPolicy.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
 )
-
-
-def _mean(values: Iterable[float | int]) -> float:
-    rows = [float(value) for value in values]
-    return float(statistics.fmean(rows)) if rows else 0.0
 
 
 def load_registration(
