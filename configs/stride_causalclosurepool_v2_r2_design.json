@@ -1,0 +1,73 @@
+{
+  "schema": "lns2.stride.causalclosurepool_design.v2",
+  "scientific_status": "preregistered_outcome_blind_event_local_causal_compactness_audit",
+  "experiment_id": "stride-causalclosurepool-v2-r2",
+  "pre_registration_parent_commit": "21337b97ae36e90be6a9c6c040c02faecc29a140",
+  "inputs": {
+    "repairclosure_v1_cohort": {
+      "path": "build/stride-repairclosurepool-v1-registration/repairclosure_cohort.jsonl",
+      "sha256": "757f7155e1709a0ac897b7b9847f5f933d155810bb4a57279f631e67f7cc314b"
+    },
+    "repairclosure_v1_materialization": {
+      "path": "build/stride-repairclosurepool-v1-registration/materialization_report.json",
+      "sha256": "63e18c0fde94571df2b3c2f1d0827a393df9d43ab36814aa39a7329bce6eea01"
+    }
+  },
+  "diagnostic_parent": {
+    "path": "build/stride-causalclosurepool-v2-compactness/compactness_report.json",
+    "sha256": "baaaa7bb2284f4a626994cbd5eae304a69ae11a9eeade369e9328e09e1234535",
+    "failed_gate": "oversized_family_fraction",
+    "observed_value": 0.14654088050314465
+  },
+  "generator": {
+    "id": "stride-causalclosurepool-v2",
+    "core_sources": [
+      "frozen_v2_anchor",
+      "current_conflict_component_if_at_most_64_agents"
+    ],
+    "closure_families": [
+      "direct_conflict",
+      "exact_temporal",
+      "bottleneck_exact",
+      "near_temporal",
+      "bottleneck_near"
+    ],
+    "direct_conflict_propagation": "only_events_within_plus_or_minus_temporal_window_of_a_core_incident_event",
+    "temporal_window": 2,
+    "maximum_candidates": 12,
+    "maximum_neighborhood_size": 64,
+    "maximum_candidate_jaccard": 0.9,
+    "fixed_preferred_sizes": [],
+    "full_path_overlap_can_admit_agent": false,
+    "oversized_core_policy": "record_once_and_skip_infeasible_core",
+    "oversized_closure_policy": "reject_entire_family_without_truncation",
+    "future_outcomes_used": false,
+    "pp_failure_diagnostics_used_online": false,
+    "repair_order_controlled": false
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true
+  },
+  "readiness_gates": {
+    "all_78_states_materialized": true,
+    "minimum_candidates_per_state": 1,
+    "maximum_mean_size_ratio_to_v1": 0.8,
+    "maximum_median_size_ratio_to_v1": 0.75,
+    "maximum_oversized_family_fraction": 0.1,
+    "full_path_only_admission_count": 0,
+    "zero_errors_and_timeouts": true
+  },
+  "claim_boundary": {
+    "compactness_and_integrity_audit_only": true,
+    "candidate_outcomes_used": false,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "native_pp_collection_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false
+  }
+}

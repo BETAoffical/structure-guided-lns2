@@ -2372,6 +2372,31 @@
       "path": "tests/evaluation/test_stride_repairclosurepool.py",
       "role": "active",
       "contract": "Freeze no-ranker, uncontrolled-order, bounded native replay and pool-opportunity report semantics."
+    },
+    {
+      "path": "lns2_selector/runtime/causalclosurepool.py",
+      "role": "active",
+      "purpose": "Generate event-time-slice causal repair closures without whole-path-only admission, fixed preferred sizes or cap truncation."
+    },
+    {
+      "path": "experiments/stride_causalclosurepool.py",
+      "role": "active",
+      "purpose": "Run the outcome-blind 78-state compactness and integrity audit for CausalClosurePool before any native PP quality study."
+    },
+    {
+      "path": "scripts/run_stride_causalclosurepool.py",
+      "role": "active",
+      "purpose": "Materialize CausalClosurePool candidates with 16 workers and write the frozen compactness report."
+    },
+    {
+      "path": "tests/runtime/test_causalclosurepool.py",
+      "role": "active",
+      "contract": "Verify deterministic event-local causal membership, exclusion of far full-path overlap and whole-family rejection instead of cap truncation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_causalclosurepool.py",
+      "role": "active",
+      "contract": "Freeze 16-worker compactness-only execution, natural sizes and the no-PP/no-ranker/no-TTF claim boundary."
     }
   ]
 }
