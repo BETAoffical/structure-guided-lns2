@@ -2332,6 +2332,21 @@
       "path": "tests/evaluation/test_stride_transactionalrepair.py",
       "role": "active",
       "contract": "Freeze transactional retry caps, blocker-tail placement, conflict-priority fallback and non-TTF claim boundaries."
+    },
+    {
+      "path": "experiments/stride_transactionalrepair_confirmation.py",
+      "role": "active",
+      "purpose": "Confirm the frozen TransactionalRepair mechanism on all 240 map-disjoint result-blind repairability states without consulting source repair outcomes."
+    },
+    {
+      "path": "scripts/run_stride_transactionalrepair_confirmation.py",
+      "role": "active",
+      "purpose": "Prepare, collect and analyze the preregistered 16-worker TransactionalRepair result-blind confirmation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_transactionalrepair_confirmation.py",
+      "role": "active",
+      "contract": "Freeze the 240-state cohort, discovery-policy parity, result-blind selected-neighborhood extraction, stop-on-failure execution and non-TTF claim boundary."
     }
   ]
 }

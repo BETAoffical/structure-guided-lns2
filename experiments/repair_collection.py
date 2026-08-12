@@ -2293,6 +2293,7 @@ def _run_jobs(
     timeout_seconds: float | None = None,
     on_result: Callable[[dict[str, Any]], None] | None = None,
     failure_result: Callable[[dict[str, Any], str, str], dict[str, Any]] | None = None,
+    stop_on_failure: bool = False,
 ) -> list[dict[str, Any]]:
     if workers <= 0:
         raise ValueError("workers must be positive")
@@ -2434,6 +2435,14 @@ def _run_jobs(
                     )
                 record(result)
                 made_progress = True
+                if stop_on_failure and result.get("status") in {"error", "timeout"}:
+                    pending.clear()
+                    for remaining in active.values():
+                        _stop_process(remaining["process"])
+                        remaining["connection"].close()
+                    active.clear()
+                    update_progress("failed")
+                    return results
             if not made_progress and (pending or active):
                 time.sleep(LOCK_POLL_SECONDS)
         update_progress("complete")

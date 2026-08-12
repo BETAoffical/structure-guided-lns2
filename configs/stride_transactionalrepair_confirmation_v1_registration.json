@@ -1,0 +1,125 @@
+{
+  "schema": "lns2.stride.transactionalrepair_confirmation_registration.v1",
+  "scientific_status": "preregistered_independent_result_blind_transactionalrepair_confirmation",
+  "experiment_id": "stride-transactionalrepair-confirmation-v1",
+  "pre_registration_parent_commit": "8ad2202",
+  "inputs": {
+    "cohort": {
+      "path": "build/stride-transactionalrepair-confirmation-v1-registration/confirmation_cohort.jsonl",
+      "sha256": "1a4850442d4acdaa135ac7e9ba5100e53391066f000fdfd173df3e958ef13fbe"
+    },
+    "cohort_report": {
+      "path": "build/stride-transactionalrepair-confirmation-v1-registration/confirmation_cohort_report.json",
+      "sha256": "661553ff27febee23a426332d909e031a38abe0c07fd23652be189aaacb4d416"
+    },
+    "discovery_registration": {
+      "path": "configs/stride_transactionalrepair_v1_registration.json",
+      "sha256": "ec23a0b5448ba5bb839a8392b21f45af8153b36dfa152d4dc8c0ea811730bc15"
+    },
+    "discovery_report": {
+      "path": "build/stride-transactionalrepair-v1-r2/transactionalrepair_report.json",
+      "sha256": "65bfc9a2f696ffe01a308b1898f37c32e93241ad4de3820dd3c16eb48134eeff"
+    },
+    "source_selection": {
+      "path": "build/stride-repairability-selection-v1/state_selection.jsonl",
+      "sha256": "f523122c62a000274df1250f4bbda9ff7757c73991d26ce33644f4040bfe6bb8"
+    },
+    "source_selection_report": {
+      "path": "build/stride-repairability-selection-v1/selection_report.json",
+      "sha256": "4f8cd24c517bd763718a1f9e240320b40a5624956af4d709154d8d07e1a484e6"
+    },
+    "source_pool_report": {
+      "path": "build/stride-repairability-selection-v1/source_selection_report.json",
+      "sha256": "d0a36f8f4650b66a91fd1379ffbac88bd0daa9070634322e0b59c3be1299ee70"
+    },
+    "source_run_config": {
+      "path": "build/stride-repairability-source-paired-collection-v1/run_config.json",
+      "sha256": "ea47c5166d272047f2745adea5c6c634e3e624653bb4a1f89132037732df1246"
+    },
+    "official_adaptive_manifest": {
+      "path": "build/stride-repairability-source-paired-collection-v1/official_adaptive_manifest.jsonl",
+      "sha256": "6b6e7b23fbc01d2b868c217233e6eb631c47c43094e3f81828743fa0999ea1f8"
+    },
+    "v2_full_manifest": {
+      "path": "build/stride-repairability-source-paired-collection-v1/realized_dynamic_manifest.jsonl",
+      "sha256": "4a9aed6d0f5b5fb913d059967ae61a259857245874fd05bc0d4cbbe364ffed92"
+    }
+  },
+  "source_collection": {
+    "path": "build/stride-repairability-source-paired-collection-v1"
+  },
+  "cohort": {
+    "source": "all previously frozen result-blind repairability states",
+    "selected_neighborhood": "recorded pre-repair neighborhood membership of the already frozen source decision",
+    "required_state_count": 240,
+    "required_map_count": 22,
+    "required_source_policy_counts": {
+      "official_adaptive": 120,
+      "v2-full": 120
+    },
+    "required_discovery_map_overlap": 0,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "candidate_outcomes_read": false,
+    "future_trajectory_read": false,
+    "no_result_based_exclusion": true,
+    "all_states_required": true
+  },
+  "policies": {
+    "ids": [
+      "selected_single_attempt",
+      "transactional_set_retry",
+      "transactional_set_order_retry"
+    ],
+    "primary": "transactional_set_order_retry",
+    "maximum_attempts": {
+      "selected_single_attempt": 1,
+      "transactional_set_retry": 2,
+      "transactional_set_order_retry": 3
+    },
+    "retry_only_after": "conflict_bound_exceeded_with_exact_native_rollback",
+    "maximum_added_external_blockers": 8,
+    "blocker_order": "first_observed_failed_attempt_order_then_agent_id",
+    "blocker_placement": "tail_preserving_prior_applied_order_prefix",
+    "order_retry": "pre_state_conflict_degree_descending_then_agent_id",
+    "order_retry_only_when_no_distinct_blocker_addition_exists": true,
+    "same_pp_seed_for_every_attempt_within_state_trial_policy": true,
+    "successful_native_attempt_is_committed_without_posthoc_rejection": true,
+    "time_limit_failure_is_not_retried": true
+  },
+  "execution": {
+    "worker_count": 16,
+    "task_granularity": "state_x_trial_index_x_policy",
+    "per_state_trial_policy_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "atomic_checkpoint": "one unique state-trial-policy JSON written by its worker",
+    "resume": "rerun only missing or invalid jobs without filtering",
+    "tail_must_use_multiple_workers": true,
+    "fresh_output": "build/stride-transactionalrepair-confirmation-v1",
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "readiness_gates": {
+    "minimum_returned_unchanged_rate_reduction": 0.15,
+    "minimum_replan_success_rate_improvement": 0.15,
+    "minimum_seed_half_unchanged_rate_reduction": 0.10,
+    "per_map_unchanged_rate_must_strictly_improve": true,
+    "strict_conflict_reduction_rate_must_not_decrease": true,
+    "joint_policy_must_not_be_worse_than_set_only": true,
+    "maximum_mean_attempt_count": 2.25,
+    "maximum_mean_added_agent_ratio": 0.50,
+    "maximum_total_neighborhood_fraction": 0.80,
+    "zero_errors_and_timeouts": true,
+    "sixteen_worker_execution": true,
+    "tail_parallelism": true
+  },
+  "claim_boundary": {
+    "independent_result_blind_confirmation_only": true,
+    "failed_attempt_diagnostics_are_online_internal_feedback_not_training_labels": true,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "generalization_claim_allowed_before_gate": false,
+    "default_controller_replacement_allowed": false,
+    "passing_result_only_authorizes_separate_runtime_semantics_preregistration": true
+  }
+}

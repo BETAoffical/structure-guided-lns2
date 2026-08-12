@@ -1282,6 +1282,44 @@ class RepairCollectionTests(unittest.TestCase):
             self.assertEqual(results[0]["status"], "timeout")
             self.assertIn("exceeded", results[0]["error"])
 
+    def test_scheduler_can_stop_dispatch_after_first_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = [
+                {
+                    "row": {
+                        "split": "train",
+                        "map_id": "map",
+                        "task_id": task_id,
+                        "agent_count": 10,
+                    },
+                    "solver_seed": 0,
+                    "sleep": delay,
+                }
+                for task_id, delay in (
+                    ("timeout", 0.3),
+                    ("must-not-start-a", 0.0),
+                    ("must-not-start-b", 0.0),
+                )
+            ]
+            results = _run_jobs(
+                _scheduler_worker,
+                jobs,
+                1,
+                phase="stop-on-failure-test",
+                output_root=root,
+                run_fingerprint="run",
+                timeout_seconds=0.05,
+                stop_on_failure=True,
+            )
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["status"], "timeout")
+            progress = json.loads(
+                (root / "collection_progress.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(progress["status"], "failed")
+            self.assertEqual(progress["completed_jobs"], 1)
+
     def test_scheduler_emits_each_result_incrementally(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
