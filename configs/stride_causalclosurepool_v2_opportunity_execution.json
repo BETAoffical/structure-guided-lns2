@@ -1,0 +1,59 @@
+{
+  "schema": "lns2.stride.causalclosurepool_opportunity_execution.v1",
+  "scientific_status": "preregistered_ranker_free_paired_native_pp_opportunity_audit",
+  "experiment_id": "stride-causalclosurepool-v2-opportunity-v1",
+  "pre_registration_parent_commit": "aa59185",
+  "inputs": {
+    "generator_design": {
+      "path": "configs/stride_causalclosurepool_v2_r3_design.json",
+      "sha256": "0cebb54e8268d0ec1e75fb4448af3c0611c662fc71021464f2e3b32b6db49e71"
+    },
+    "cohort": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/causalclosure_cohort.jsonl",
+      "sha256": "4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50"
+    },
+    "compactness_report": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/compactness_report.json",
+      "sha256": "3191d56e96cdfcf2e4d8558290a6657ca7001ae1a23c69d35978e18a3f997768"
+    },
+    "base_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    }
+  },
+  "cohort": {
+    "state_count": 78,
+    "causal_candidate_count": 930,
+    "base_candidate_count": 1367,
+    "all_frozen_states_required": true,
+    "no_result_based_exclusion": true
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state_x_candidate_x_trial",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "preflight_state_count": 2,
+    "preflight_trial_indices": [0, 1],
+    "full_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_seed_namespace": "stride-repairability-paired-pp-v1",
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "readiness_gates": {
+    "minimum_robust_best_base_opportunity_fraction": 0.10,
+    "minimum_stable_frontier_addition_fraction": 0.10,
+    "zero_errors_and_timeouts": true,
+    "base_pool_preserved": true
+  },
+  "claim_boundary": {
+    "candidate_pool_opportunity_audit_only": true,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "repair_order_intervention_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}

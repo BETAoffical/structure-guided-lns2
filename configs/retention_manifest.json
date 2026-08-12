@@ -2397,6 +2397,21 @@
       "path": "tests/evaluation/test_stride_causalclosurepool.py",
       "role": "active",
       "contract": "Freeze 16-worker compactness-only execution, natural sizes and the no-PP/no-ranker/no-TTF claim boundary."
+    },
+    {
+      "path": "experiments/stride_causalclosurepool_opportunity.py",
+      "role": "active",
+      "purpose": "Replay every frozen CausalClosurePool action with sixteen strictly paired native PP seeds and compare opportunity against the complete V2 base pool."
+    },
+    {
+      "path": "scripts/run_stride_causalclosurepool_opportunity.py",
+      "role": "active",
+      "purpose": "Run the bounded 16-worker CausalClosurePool native preflight, full collection and ranker-free opportunity analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_causalclosurepool_opportunity.py",
+      "role": "active",
+      "contract": "Freeze paired seeds, 300-second job bounds, complete cohort identity and no-ranker/no-TTF opportunity semantics."
     }
   ]
 }
