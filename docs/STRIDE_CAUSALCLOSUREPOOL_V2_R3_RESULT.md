@@ -14,7 +14,9 @@ integrity gate on all 78 frozen development states.
   an oversized-family rate of 0.91% versus the frozen 10% maximum.
 - No core was intrinsically larger than 64 and no agent was admitted by
   whole-path overlap alone.
-- All 78 states materialized without execution or identity errors.
+- All 78 states materialized without execution or identity errors; the cohort
+  carries the original solver run configuration and its registered SHA-256 for
+  later exact native restoration.
 
 Per-map mean/median sizes were 5.43/4 on `maze-128-128-1`, 4.38/4 on
 `maze-128-128-2`, and 7.08/5 on `maze-32-32-4`.  The largest candidate was 58
@@ -22,10 +24,10 @@ agents and occurred in the smaller maze group; large neighborhoods remain
 possible when a single event-time causal slice genuinely connects them.
 
 Compactness report SHA-256:
-`b40f8ee313311946c5fa30b6722e7a6cca2324329fd9f52ae42cd64ba15bc8fa`.
+`3191d56e96cdfcf2e4d8558290a6657ca7001ae1a23c69d35978e18a3f997768`.
 
 Cohort manifest SHA-256:
-`6a22b4ec6f987c7e54ef0c6feafa3f16bb38e3edff7beb4a7eb31577462295fe`.
+`4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50`.
 
 ## Claim boundary
 

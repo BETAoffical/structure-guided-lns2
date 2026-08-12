@@ -143,6 +143,8 @@ def _materialize_state(job: dict[str, Any]) -> dict[str, Any]:
             "task_id": str(source["task_id"]),
             "solver_seed": int(source["solver_seed"]),
             "split": str(source["split"]),
+            "source_run_config": str(source["source_run_config"]),
+            "source_run_config_sha256": str(source["source_run_config_sha256"]),
             "logical_checkpoint_ids": list(source["logical_checkpoint_ids"]),
             "v2_anchors": list(source["v2_anchors"]),
             "base_candidate_ids": sorted(base_ids),
