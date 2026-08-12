@@ -35,6 +35,70 @@ void requireTimings(const RepairTransition& transition)
             "native timing partition does not close");
 }
 
+void requirePPDiagnostics(const RepairTransition& transition)
+{
+    require(transition.pp_failure_reason != PPFailureReason::NOT_RUN,
+            "PP diagnostics claim that PP was not run");
+    require(transition.pp_attempted_agent_count ==
+                (int)transition.pp_agent_diagnostics.size(),
+            "PP attempted-agent count is inconsistent");
+    require(transition.pp_inserted_agent_count <=
+                transition.pp_attempted_agent_count,
+            "PP inserted more agents than it attempted");
+    require(transition.pp_old_conflict_pair_count >= 0 &&
+                transition.pp_attempt_conflict_pair_count >= 0,
+            "PP conflict-pair counts are negative");
+    for (size_t index = 0; index < transition.pp_agent_diagnostics.size(); index++)
+    {
+        const auto& row = transition.pp_agent_diagnostics[index];
+        require(row.order_index == (int)index,
+                "PP diagnostic order index is not contiguous");
+        require(row.agent_id == transition.repair_order[index],
+                "PP diagnostic agent differs from the applied repair order");
+        require(row.path_cost_before >= 0 && row.path_cost_after >= 0,
+                "PP diagnostic path cost is invalid");
+        require(row.low_level_collision_count >= 0 &&
+                    row.cumulative_conflict_pair_count >= 0,
+                "PP diagnostic conflict count is invalid");
+        for (int blocker : row.external_blocker_agents)
+            require(std::find(transition.neighborhood.begin(),
+                              transition.neighborhood.end(), blocker) ==
+                        transition.neighborhood.end(),
+                    "external PP blocker is inside the neighborhood");
+        for (int blocker : row.internal_blocker_agents)
+            require(std::find(transition.neighborhood.begin(),
+                              transition.neighborhood.end(), blocker) !=
+                        transition.neighborhood.end(),
+                    "internal PP blocker is outside the neighborhood");
+    }
+    if (transition.replan_success)
+    {
+        require(transition.pp_failure_reason == PPFailureReason::NONE,
+                "successful PP reports a failure reason");
+        require(!transition.pp_rolled_back,
+                "successful PP reports a rollback");
+        require(transition.pp_inserted_agent_count ==
+                    (int)transition.repair_order.size(),
+                "successful PP did not insert every repair agent");
+        require(transition.pp_failed_agent == -1 &&
+                    transition.pp_failed_order_index == -1,
+                "successful PP reports a failed agent");
+    }
+    else
+    {
+        require(transition.pp_failure_reason ==
+                    PPFailureReason::CONFLICT_BOUND_EXCEEDED ||
+                    transition.pp_failure_reason == PPFailureReason::TIME_LIMIT,
+                "failed PP does not report a causal failure reason");
+        require(transition.pp_rolled_back,
+                "failed PP does not report rollback");
+        require(transition.pp_failed_order_index >= 0 &&
+                    transition.pp_failed_order_index <
+                        (int)transition.repair_order.size(),
+                "failed PP order index is invalid");
+    }
+}
+
 struct CountingObserver : public RepairObserver
 {
     int initial = 0;
@@ -159,7 +223,8 @@ Snapshot stepWithActionSeed(int solver_seed, int action_seed)
     return snapshot;
 }
 
-Snapshot stepWithExplicitOrder(int solver_seed, int action_seed)
+Snapshot stepWithExplicitOrder(int solver_seed, int action_seed,
+                               bool collect_pp_diagnostics = true)
 {
     constexpr int AGENT_COUNT = 100;
     Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
@@ -189,6 +254,7 @@ Snapshot stepWithExplicitOrder(int solver_seed, int action_seed)
     std::reverse(action.repair_order.begin(), action.repair_order.end());
     action.random_seed = action_seed + 1;
     action.pp_random_seed = 45678;
+    action.collect_pp_diagnostics = collect_pp_diagnostics;
     require(solver.step(action), "explicit-order step did not execute");
     const RepairTransition& transition = solver.getLastTransition();
     require(transition.action_valid, "valid explicit repair order was rejected");
@@ -196,6 +262,15 @@ Snapshot stepWithExplicitOrder(int solver_seed, int action_seed)
             "actual PP repair order differs from the request");
     require(transition.applied_pp_random_seed == action.pp_random_seed,
             "PP did not retain the independently requested seed");
+    if (collect_pp_diagnostics)
+        requirePPDiagnostics(transition);
+    else
+    {
+        require(transition.pp_failure_reason == PPFailureReason::NOT_RUN,
+                "disabled PP diagnostics unexpectedly ran");
+        require(transition.pp_agent_diagnostics.empty(),
+                "disabled PP diagnostics emitted agent rows");
+    }
 
     Snapshot snapshot;
     state = solver.getRepairState();
@@ -319,6 +394,14 @@ int main()
             "explicit repair order changed the neighborhood");
     require(ordered_first.paths == ordered_second.paths,
             "explicit repair order paths are not deterministic");
+    const Snapshot ordered_without_diagnostics =
+        stepWithExplicitOrder(0, 23456, false);
+    require(ordered_first.conflicts == ordered_without_diagnostics.conflicts,
+            "PP diagnostics changed the conflict result");
+    require(ordered_first.neighborhood == ordered_without_diagnostics.neighborhood,
+            "PP diagnostics changed the neighborhood");
+    require(ordered_first.paths == ordered_without_diagnostics.paths,
+            "PP diagnostics changed the repaired paths");
     requireInvalidOrderFallback(0, 34567);
     requireReplayNeighborhoodAllowsRecordedNoop(0);
 

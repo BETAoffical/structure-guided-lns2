@@ -23,4 +23,7 @@ private:
     void writeState(const RepairState& state);
     void writeAction(const RepairAction& action);
     static void writeIntArray(std::ostream& stream, const vector<int>& values);
+    static void writePairArray(
+        std::ostream& stream, const vector<pair<int, int>>& values);
+    void writePPDiagnostics(const RepairTransition& transition);
 };

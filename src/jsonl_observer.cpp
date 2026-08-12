@@ -28,6 +28,66 @@ void JsonlRepairObserver::writeIntArray(std::ostream& stream, const vector<int>&
     stream << ']';
 }
 
+void JsonlRepairObserver::writePairArray(
+    std::ostream& stream, const vector<pair<int, int>>& values)
+{
+    stream << '[';
+    for (size_t index = 0; index < values.size(); index++)
+    {
+        if (index > 0)
+            stream << ',';
+        stream << '[' << values[index].first << ',' << values[index].second << ']';
+    }
+    stream << ']';
+}
+
+void JsonlRepairObserver::writePPDiagnostics(const RepairTransition& transition)
+{
+    output << "{\"schema\":\"lns2.pp_repair_diagnostic.v1\""
+           << ",\"failure_reason\":\""
+           << ppFailureReasonName(transition.pp_failure_reason) << '"'
+           << ",\"attempted_agent_count\":"
+           << transition.pp_attempted_agent_count
+           << ",\"inserted_agent_count\":"
+           << transition.pp_inserted_agent_count
+           << ",\"failed_agent\":" << transition.pp_failed_agent
+           << ",\"failed_order_index\":"
+           << transition.pp_failed_order_index
+           << ",\"old_conflict_pair_count\":"
+           << transition.pp_old_conflict_pair_count
+           << ",\"attempt_conflict_pair_count\":"
+           << transition.pp_attempt_conflict_pair_count
+           << ",\"rolled_back\":"
+           << (transition.pp_rolled_back ? "true" : "false")
+           << ",\"agents\":[";
+    for (size_t index = 0; index < transition.pp_agent_diagnostics.size(); index++)
+    {
+        if (index > 0)
+            output << ',';
+        const auto& row = transition.pp_agent_diagnostics[index];
+        output << "{\"agent_id\":" << row.agent_id
+               << ",\"order_index\":" << row.order_index
+               << ",\"path_cost_before\":" << row.path_cost_before
+               << ",\"path_cost_after\":" << row.path_cost_after
+               << ",\"low_level_collision_count\":"
+               << row.low_level_collision_count
+               << ",\"cumulative_conflict_pair_count\":"
+               << row.cumulative_conflict_pair_count
+               << ",\"path_changed\":"
+               << (row.path_changed ? "true" : "false")
+               << ",\"inserted_into_path_table\":"
+               << (row.inserted_into_path_table ? "true" : "false")
+               << ",\"new_conflict_pairs\":";
+        writePairArray(output, row.new_conflict_pairs);
+        output << ",\"internal_blocker_agents\":";
+        writeIntArray(output, row.internal_blocker_agents);
+        output << ",\"external_blocker_agents\":";
+        writeIntArray(output, row.external_blocker_agents);
+        output << '}';
+    }
+    output << "]}";
+}
+
 void JsonlRepairObserver::writeAction(const RepairAction& action)
 {
     output << "{\"mode\":\"" << repairActionModeName(action.mode)
@@ -36,6 +96,8 @@ void JsonlRepairObserver::writeAction(const RepairAction& action)
            << ",\"neighborhood_size\":" << action.neighborhood_size
            << ",\"random_seed\":" << action.random_seed
            << ",\"pp_random_seed\":" << action.pp_random_seed
+           << ",\"collect_pp_diagnostics\":"
+           << (action.collect_pp_diagnostics ? "true" : "false")
            << ",\"agents\":";
     writeIntArray(output, action.agents);
     output << ",\"repair_order\":";
@@ -120,6 +182,8 @@ void JsonlRepairObserver::onTransition(const RepairState& before,
     writeIntArray(output, transition.neighborhood);
     output << ",\"repair_order\":";
     writeIntArray(output, transition.repair_order);
+    output << ",\"pp_diagnostic\":";
+    writePPDiagnostics(transition);
     output << ",\"metrics\":{\"iteration\":" << transition.iteration
            << ",\"conflicts_before\":" << transition.conflicts_before
            << ",\"conflicts_after\":" << transition.conflicts_after

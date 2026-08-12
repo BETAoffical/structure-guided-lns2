@@ -418,7 +418,8 @@ bool InitLNS::step(const RepairAction& action)
     {
         const vector<int> requested_order = action_valid ? action.repair_order : vector<int>();
         const int pp_random_seed = action_valid ? action.pp_random_seed : -1;
-        succ = runPP(requested_order, transition.repair_order, pp_random_seed);
+        succ = runPP(requested_order, transition.repair_order, transition,
+                     pp_random_seed);
         if (pp_random_seed >= 0)
             transition.applied_pp_random_seed = pp_random_seed;
     }
@@ -594,7 +595,7 @@ bool InitLNS::runPBS()
     }
 }
 bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_order,
-                    int pp_random_seed)
+                    RepairTransition& transition, int pp_random_seed)
 {
     vector<int> shuffled_agents;
     if (requested_order.empty())
@@ -605,12 +606,159 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     else
         shuffled_agents = requested_order;
     applied_order = shuffled_agents;
-    // Seed only after the source-side random shuffle.  Replay supplies the
+    // Seed only after the source-side random shuffle. Replay supplies the
     // recorded order and therefore skips that shuffle; seeding earlier would
     // leave source and replay at different RNG positions for low-level tie
     // breaking even though their applied orders are identical.
     if (pp_random_seed >= 0)
         srand(pp_random_seed);
+    if (!transition.requested_action.collect_pp_diagnostics)
+        return runPPWithoutDiagnostics(shuffled_agents);
+
+    transition.pp_failure_reason = PPFailureReason::NONE;
+    transition.pp_old_conflict_pair_count =
+        (int)neighbor.old_colliding_pairs.size();
+    transition.pp_attempt_conflict_pair_count = 0;
+    transition.pp_attempted_agent_count = 0;
+    transition.pp_inserted_agent_count = 0;
+    transition.pp_failed_agent = -1;
+    transition.pp_failed_order_index = -1;
+    transition.pp_rolled_back = false;
+    transition.pp_agent_diagnostics.clear();
+    if (screen >= 2) {
+        cout<<"Neighbors_set: ";
+        for (auto id : shuffled_agents)
+            cout << id << ", ";
+        cout << endl;
+    }
+    int remaining_agents = (int)shuffled_agents.size();
+    auto p = shuffled_agents.begin();
+    neighbor.sum_of_costs = 0;
+    neighbor.colliding_pairs.clear();
+    runtime = ((fsec)(Time::now() - start_time)).count();
+    double T = min(time_limit - runtime, replan_time_limit);
+    auto time = Time::now();
+    ConstraintTable constraint_table(instance.num_of_cols, instance.map_size, nullptr, &path_table);
+    vector<int> old_path_index(agents.size(), -1);
+    set<int> neighborhood_agents;
+    for (int index = 0; index < (int)neighbor.agents.size(); index++)
+    {
+        old_path_index[neighbor.agents[index]] = index;
+        neighborhood_agents.insert(neighbor.agents[index]);
+    }
+    while (p != shuffled_agents.end() && ((fsec)(Time::now() - time)).count() < T)
+    {
+        int id = *p;
+        PPAgentDiagnostic diagnostic;
+        diagnostic.agent_id = id;
+        diagnostic.order_index = (int)(p - shuffled_agents.begin());
+        const int prior_path_index = old_path_index[id];
+        assert(prior_path_index >= 0);
+        const Path& prior_path = neighbor.old_paths[prior_path_index];
+        diagnostic.path_cost_before = (int)prior_path.size() - 1;
+        const set<pair<int, int>> prior_colliding_pairs = neighbor.colliding_pairs;
+        agents[id].path = agents[id].path_planner->findPath(constraint_table);
+        assert(!agents[id].path.empty() && agents[id].path.back().location == agents[id].path_planner->goal_location);
+        diagnostic.path_cost_after = (int)agents[id].path.size() - 1;
+        diagnostic.path_changed = !isSamePath(prior_path, agents[id].path);
+        diagnostic.low_level_collision_count = agents[id].path_planner->num_collisions;
+        if (agents[id].path_planner->num_collisions > 0)
+            updateCollidingPairs(neighbor.colliding_pairs, agents[id].id, agents[id].path);
+        assert(agents[id].path_planner->num_collisions > 0 or
+            !updateCollidingPairs(neighbor.colliding_pairs, agents[id].id, agents[id].path));
+        for (const auto& pair : neighbor.colliding_pairs)
+        {
+            if (prior_colliding_pairs.find(pair) != prior_colliding_pairs.end())
+                continue;
+            diagnostic.new_conflict_pairs.push_back(pair);
+            const int blocker = pair.first == id ? pair.second : pair.first;
+            if (neighborhood_agents.find(blocker) == neighborhood_agents.end())
+                diagnostic.external_blocker_agents.push_back(blocker);
+            else
+                diagnostic.internal_blocker_agents.push_back(blocker);
+        }
+        std::sort(diagnostic.internal_blocker_agents.begin(),
+                  diagnostic.internal_blocker_agents.end());
+        diagnostic.internal_blocker_agents.erase(
+            std::unique(diagnostic.internal_blocker_agents.begin(),
+                        diagnostic.internal_blocker_agents.end()),
+            diagnostic.internal_blocker_agents.end());
+        std::sort(diagnostic.external_blocker_agents.begin(),
+                  diagnostic.external_blocker_agents.end());
+        diagnostic.external_blocker_agents.erase(
+            std::unique(diagnostic.external_blocker_agents.begin(),
+                        diagnostic.external_blocker_agents.end()),
+            diagnostic.external_blocker_agents.end());
+        diagnostic.cumulative_conflict_pair_count =
+            (int)neighbor.colliding_pairs.size();
+        neighbor.sum_of_costs += (int)agents[id].path.size() - 1;
+        remaining_agents--;
+        if (screen >= 3)
+        {
+            runtime = ((fsec)(Time::now() - start_time)).count();
+            cout << "After agent " << id << ": Remaining agents = " << remaining_agents <<
+                 ", colliding pairs = " << neighbor.colliding_pairs.size() <<
+                 ", LL nodes = " << agents[id].path_planner->getNumExpanded() <<
+                 ", remaining time = " << time_limit - runtime << " seconds. " << endl;
+        }
+        transition.pp_attempted_agent_count++;
+        if (neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
+        {
+            transition.pp_failure_reason = PPFailureReason::CONFLICT_BOUND_EXCEEDED;
+            transition.pp_failed_agent = id;
+            transition.pp_failed_order_index = diagnostic.order_index;
+            transition.pp_agent_diagnostics.push_back(std::move(diagnostic));
+            break;
+        }
+        path_table.insertPath(agents[id].id, agents[id].path);
+        diagnostic.inserted_into_path_table = true;
+        transition.pp_inserted_agent_count++;
+        transition.pp_agent_diagnostics.push_back(std::move(diagnostic));
+        ++p;
+    }
+    transition.pp_attempt_conflict_pair_count =
+        (int)neighbor.colliding_pairs.size();
+    if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size()) // accept new paths
+    {
+        return true;
+    }
+    else // stick to old paths
+    {
+        transition.pp_rolled_back = true;
+        if (transition.pp_failure_reason == PPFailureReason::NONE)
+        {
+            transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
+            transition.pp_failed_order_index = (int)(p - shuffled_agents.begin());
+            if (p != shuffled_agents.end())
+                transition.pp_failed_agent = *p;
+        }
+        if (p != shuffled_agents.end())
+            num_of_failures++;
+        auto p2 = shuffled_agents.begin();
+        while (p2 != p)
+        {
+            int a = *p2;
+            path_table.deletePath(agents[a].id);
+            ++p2;
+        }
+        if (!neighbor.old_paths.empty())
+        {
+            p2 = neighbor.agents.begin();
+            for (int i = 0; i < (int)neighbor.agents.size(); i++)
+            {
+                int a = *p2;
+                agents[a].path = neighbor.old_paths[i];
+                path_table.insertPath(agents[a].id);
+                ++p2;
+            }
+            neighbor.sum_of_costs = neighbor.old_sum_of_costs;
+        }
+        return false;
+    }
+}
+
+bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents)
+{
     if (screen >= 2) {
         cout<<"Neighbors_set: ";
         for (auto id : shuffled_agents)
@@ -649,35 +797,31 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
         path_table.insertPath(agents[id].id, agents[id].path);
         ++p;
     }
-    if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size()) // accept new paths
-    {
+    if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size())
         return true;
-    }
-    else // stick to old paths
+
+    if (p != shuffled_agents.end())
+        num_of_failures++;
+    auto p2 = shuffled_agents.begin();
+    while (p2 != p)
     {
-        if (p != shuffled_agents.end())
-            num_of_failures++;
-        auto p2 = shuffled_agents.begin();
-        while (p2 != p)
+        int a = *p2;
+        path_table.deletePath(agents[a].id);
+        ++p2;
+    }
+    if (!neighbor.old_paths.empty())
+    {
+        p2 = neighbor.agents.begin();
+        for (int i = 0; i < (int)neighbor.agents.size(); i++)
         {
             int a = *p2;
-            path_table.deletePath(agents[a].id);
+            agents[a].path = neighbor.old_paths[i];
+            path_table.insertPath(agents[a].id);
             ++p2;
         }
-        if (!neighbor.old_paths.empty())
-        {
-            p2 = neighbor.agents.begin();
-            for (int i = 0; i < (int)neighbor.agents.size(); i++)
-            {
-                int a = *p2;
-                agents[a].path = neighbor.old_paths[i];
-                path_table.insertPath(agents[a].id);
-                ++p2;
-            }
-            neighbor.sum_of_costs = neighbor.old_sum_of_costs;
-        }
-        return false;
+        neighbor.sum_of_costs = neighbor.old_sum_of_costs;
     }
+    return false;
 }
 
 bool InitLNS::getInitialSolution()

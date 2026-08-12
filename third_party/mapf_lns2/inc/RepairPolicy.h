@@ -36,6 +36,9 @@ struct RepairAction
     // the recorded neighborhood without repeating the former, so it needs an
     // independent PP seed to reproduce low-level tie breaking exactly.
     int pp_random_seed = -1;
+    // Opt-in causal instrumentation. Disabled by default so normal solver
+    // timing and PP acceptance semantics do not pay diagnostic-loop overhead.
+    bool collect_pp_diagnostics = false;
     vector<int> agents;
     vector<int> repair_order;
 };
@@ -82,6 +85,29 @@ struct RepairState
     vector<RepairAgentState> agents;
 };
 
+enum class PPFailureReason
+{
+    NOT_RUN,
+    NONE,
+    CONFLICT_BOUND_EXCEEDED,
+    TIME_LIMIT
+};
+
+struct PPAgentDiagnostic
+{
+    int agent_id = -1;
+    int order_index = -1;
+    int path_cost_before = -1;
+    int path_cost_after = -1;
+    int low_level_collision_count = 0;
+    int cumulative_conflict_pair_count = 0;
+    bool path_changed = false;
+    bool inserted_into_path_table = false;
+    vector<pair<int, int>> new_conflict_pairs;
+    vector<int> internal_blocker_agents;
+    vector<int> external_blocker_agents;
+};
+
 struct RepairTransition
 {
     RepairAction requested_action;
@@ -91,6 +117,15 @@ struct RepairTransition
     bool action_valid = true;
     bool generated = false;
     bool replan_success = false;
+    PPFailureReason pp_failure_reason = PPFailureReason::NOT_RUN;
+    int pp_attempted_agent_count = 0;
+    int pp_inserted_agent_count = 0;
+    int pp_failed_agent = -1;
+    int pp_failed_order_index = -1;
+    int pp_old_conflict_pair_count = 0;
+    int pp_attempt_conflict_pair_count = 0;
+    bool pp_rolled_back = false;
+    vector<PPAgentDiagnostic> pp_agent_diagnostics;
     int applied_pp_random_seed = -1;
     int iteration = 0;
     int conflicts_before = 0;
@@ -146,6 +181,18 @@ inline const char* repairHeuristicName(RepairHeuristic heuristic)
         case RepairHeuristic::TARGET: return "target";
         case RepairHeuristic::COLLISION: return "collision";
         case RepairHeuristic::RANDOM: return "random";
+    }
+    return "unknown";
+}
+
+inline const char* ppFailureReasonName(PPFailureReason reason)
+{
+    switch (reason)
+    {
+        case PPFailureReason::NOT_RUN: return "not_run";
+        case PPFailureReason::NONE: return "none";
+        case PPFailureReason::CONFLICT_BOUND_EXCEEDED: return "conflict_bound_exceeded";
+        case PPFailureReason::TIME_LIMIT: return "time_limit";
     }
     return "unknown";
 }

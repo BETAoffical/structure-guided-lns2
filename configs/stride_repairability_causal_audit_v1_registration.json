@@ -1,0 +1,80 @@
+{
+  "schema": "lns2.stride.repairability_causal_audit_registration.v1",
+  "scientific_status": "preregistered_pp_set_order_causal_diagnostic",
+  "experiment_id": "stride-repairability-causal-audit-v1",
+  "pre_registration_parent_commit": "58bdae5",
+  "inputs": {
+    "marginalpool_registration": {
+      "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+      "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+    },
+    "action_replay_analysis": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/action_replay_analysis.json",
+      "sha256": "8232e687db8009acee13ffbc523b625ee8c4fc5954fb3ffa10f4ce6567e02988"
+    },
+    "logical_checkpoint_manifest": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_manifest.jsonl",
+      "sha256": "c8f281635e806398215916edfb6b38d1e164c9901f928e19ccbbc33814bc4f6f"
+    },
+    "root_diagnostic_report": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_report.json",
+      "sha256": "8f21f709f69cba540842cbd11dcfe65c19214c7c55b5d4492d70244d90a2f483"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_logical_checkpoint_count": 45,
+    "required_unique_state_count": 45,
+    "required_map_count": 3,
+    "no_result_based_exclusion": true
+  },
+  "interventions": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "arms": [
+      "selected_native_order",
+      "selected_reverse_order",
+      "selected_conflict_priority",
+      "blocker_augmented_tail",
+      "blocker_augmented_head"
+    ],
+    "maximum_added_external_blockers": 8,
+    "blocker_order": "first_observed_failed_order_index_then_agent_id",
+    "paired_seed_scope": "same state fingerprint and trial index across every applicable arm",
+    "state_restore": "native reset_paths from frozen root-diagnostic state blob",
+    "collect_pp_diagnostics": true,
+    "future_trajectory_forbidden": true,
+    "runtime_and_ttf_forbidden_from_trials": true
+  },
+  "worker_preflight": {
+    "worker_counts": [12, 14, 16],
+    "state_selection": "first 16 unique state fingerprints in lexical order",
+    "trial_indices": [0],
+    "arms": ["selected_native_order"],
+    "maximum_memory_fraction": 0.75,
+    "selection": "highest-throughput safe worker count with positive throughput versus next lower safe count",
+    "outcomes_must_not_change_protocol": true
+  },
+  "execution": {
+    "maximum_workers": 16,
+    "per_state_attempt_timeout_seconds": 1800,
+    "maximum_state_attempts": 4,
+    "stop_after_consecutive_no_progress_attempts": 2,
+    "atomic_checkpoint": "one trial-arm row per state partial artifact",
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "stable_effect": {
+    "minimum_mean_normalized_conflict_reduction_advantage": 0.02,
+    "no_progress_rate_must_not_increase": true,
+    "both_fixed_eight_seed_halves_must_be_strictly_positive": true
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "outcome_enriched_blockers_not_online_features": true,
+    "model_training_allowed": false,
+    "runtime_controller_change_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false
+  }
+}

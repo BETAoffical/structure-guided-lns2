@@ -359,6 +359,9 @@ RepairAction parseAction(const py::dict& value)
         if (action.pp_random_seed < 0)
             throw py::value_error("pp_random_seed must be non-negative");
     }
+    if (value.contains("collect_pp_diagnostics"))
+        action.collect_pp_diagnostics = py::cast<bool>(
+            value["collect_pp_diagnostics"]);
     if (value.contains("agents"))
         action.agents = py::cast<vector<int>>(value["agents"]);
     if (value.contains("repair_order"))
@@ -374,12 +377,41 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["requested_heuristic"] = repairHeuristicName(transition.requested_action.heuristic);
     result["requested_random_seed"] = transition.requested_action.random_seed;
     result["requested_pp_random_seed"] = transition.requested_action.pp_random_seed;
+    result["requested_collect_pp_diagnostics"] =
+        transition.requested_action.collect_pp_diagnostics;
     result["applied_pp_random_seed"] = transition.applied_pp_random_seed;
     result["requested_repair_order"] = transition.requested_action.repair_order;
     result["applied_heuristic"] = repairHeuristicName(transition.applied_heuristic);
     result["action_valid"] = transition.action_valid;
     result["generated"] = transition.generated;
     result["replan_success"] = transition.replan_success;
+    result["pp_failure_reason"] = ppFailureReasonName(transition.pp_failure_reason);
+    result["pp_attempted_agent_count"] = transition.pp_attempted_agent_count;
+    result["pp_inserted_agent_count"] = transition.pp_inserted_agent_count;
+    result["pp_failed_agent"] = transition.pp_failed_agent;
+    result["pp_failed_order_index"] = transition.pp_failed_order_index;
+    result["pp_old_conflict_pair_count"] = transition.pp_old_conflict_pair_count;
+    result["pp_attempt_conflict_pair_count"] = transition.pp_attempt_conflict_pair_count;
+    result["pp_rolled_back"] = transition.pp_rolled_back;
+    py::list pp_agent_diagnostics;
+    for (const auto& diagnostic : transition.pp_agent_diagnostics)
+    {
+        py::dict row;
+        row["agent_id"] = diagnostic.agent_id;
+        row["order_index"] = diagnostic.order_index;
+        row["path_cost_before"] = diagnostic.path_cost_before;
+        row["path_cost_after"] = diagnostic.path_cost_after;
+        row["low_level_collision_count"] = diagnostic.low_level_collision_count;
+        row["cumulative_conflict_pair_count"] =
+            diagnostic.cumulative_conflict_pair_count;
+        row["path_changed"] = diagnostic.path_changed;
+        row["inserted_into_path_table"] = diagnostic.inserted_into_path_table;
+        row["new_conflict_pairs"] = diagnostic.new_conflict_pairs;
+        row["internal_blocker_agents"] = diagnostic.internal_blocker_agents;
+        row["external_blocker_agents"] = diagnostic.external_blocker_agents;
+        pp_agent_diagnostics.append(row);
+    }
+    result["pp_agent_diagnostics"] = pp_agent_diagnostics;
     result["neighborhood"] = transition.neighborhood;
     result["repair_order"] = transition.repair_order;
     result["conflicts_before"] = transition.conflicts_before;

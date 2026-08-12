@@ -909,11 +909,34 @@ class RepairEnvironmentTests(unittest.TestCase):
                     "agents": agents,
                     "repair_order": order,
                     "random_seed": order_seed,
+                    "collect_pp_diagnostics": True,
                 }
             )
             self.assertTrue(result["metrics"]["action_valid"])
             self.assertEqual(result["metrics"]["requested_repair_order"], order)
             self.assertEqual(result["metrics"]["repair_order"], order)
+            metrics = result["metrics"]
+            self.assertIn(
+                metrics["pp_failure_reason"],
+                {"none", "conflict_bound_exceeded", "time_limit"},
+            )
+            self.assertEqual(
+                metrics["pp_attempted_agent_count"],
+                len(metrics["pp_agent_diagnostics"]),
+            )
+            self.assertLessEqual(
+                metrics["pp_inserted_agent_count"],
+                metrics["pp_attempted_agent_count"],
+            )
+            for index, diagnostic in enumerate(metrics["pp_agent_diagnostics"]):
+                self.assertEqual(diagnostic["order_index"], index)
+                self.assertEqual(diagnostic["agent_id"], order[index])
+                self.assertTrue(
+                    set(diagnostic["external_blocker_agents"]).isdisjoint(agents)
+                )
+                self.assertTrue(
+                    set(diagnostic["internal_blocker_agents"]).issubset(agents)
+                )
             return result["observation"], result["metrics"]
 
         first, _ = run(33001)
@@ -1001,6 +1024,8 @@ class RepairEnvironmentTests(unittest.TestCase):
         self.assertTrue(result["metrics"]["action_valid"])
         self.assertEqual(result["metrics"]["neighborhood"], sorted(agents))
         self.assertFalse(result["metrics"]["replan_success"])
+        self.assertEqual(result["metrics"]["pp_failure_reason"], "not_run")
+        self.assertEqual(result["metrics"]["pp_agent_diagnostics"], [])
 
     def test_replay_neighborhood_rejects_empty_action(self) -> None:
         env = self.make_env()
