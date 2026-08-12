@@ -2347,6 +2347,31 @@
       "path": "tests/evaluation/test_stride_transactionalrepair_confirmation.py",
       "role": "active",
       "contract": "Freeze the 240-state cohort, discovery-policy parity, result-blind selected-neighborhood extraction, stop-on-failure execution and non-TTF claim boundary."
+    },
+    {
+      "path": "lns2_selector/runtime/repairclosurepool.py",
+      "role": "active",
+      "purpose": "Generate outcome-blind repair dependency closures at natural Pareto evidence-front boundaries without fixed preferred sizes or repair-order control."
+    },
+    {
+      "path": "experiments/stride_repairclosurepool.py",
+      "role": "active",
+      "purpose": "Materialize and exhaustively replay RepairClosurePool challengers against the complete frozen V2 base pool without using the current ranker."
+    },
+    {
+      "path": "scripts/run_stride_repairclosurepool.py",
+      "role": "active",
+      "purpose": "Run sixteen-worker RepairClosurePool materialization, bounded native PP preflight, collection and pool-opportunity analysis."
+    },
+    {
+      "path": "tests/runtime/test_repairclosurepool.py",
+      "role": "active",
+      "contract": "Verify deterministic natural dependency-front candidates, conflict contact, diversity and absence of fixed size grids."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairclosurepool.py",
+      "role": "active",
+      "contract": "Freeze no-ranker, uncontrolled-order, bounded native replay and pool-opportunity report semantics."
     }
   ]
 }

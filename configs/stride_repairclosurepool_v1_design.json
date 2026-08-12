@@ -1,0 +1,94 @@
+{
+  "schema": "lns2.stride.repairclosurepool_design.v1",
+  "scientific_status": "preregistered_outcome_blind_candidate_generator_and_pool_opportunity_audit",
+  "experiment_id": "stride-repairclosurepool-v1",
+  "pre_registration_parent_commit": "ce104d623f201cb8f883b1a86c196149a2be2e3f",
+  "inputs": {
+    "marginalpool_registration": {
+      "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+      "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "base_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "transactionalrepair_discovery": {
+      "path": "build/stride-transactionalrepair-v1-r2/transactionalrepair_report.json",
+      "sha256": "65bfc9a2f696ffe01a308b1898f37c32e93241ad4de3820dd3c16eb48134eeff"
+    }
+  },
+  "cohort": {
+    "logical_checkpoint_count": 90,
+    "unique_state_count": 78,
+    "development_outcome_enriched": true,
+    "all_frozen_states_required": true,
+    "no_result_based_exclusion": true,
+    "independent_result_blind_confirmation_required_after_development": true
+  },
+  "generator": {
+    "id": "stride-repairclosurepool-v1",
+    "v2_anchor_source": "highest frozen V2 base score at each logical checkpoint",
+    "core_sources": [
+      "v2_anchor",
+      "current_conflict_component"
+    ],
+    "dependency_evidence": [
+      "current_conflict_events",
+      "same_cell_temporal_reservations",
+      "shared_articulation_or_low_degree_cells",
+      "shared_path_cells"
+    ],
+    "dependency_layering": "Pareto fronts over the four evidence counts without scalar weights",
+    "temporal_window": 2,
+    "maximum_candidates": 12,
+    "maximum_neighborhood_size": 64,
+    "maximum_candidate_jaccard": 0.9,
+    "fixed_preferred_sizes": [],
+    "must_touch_current_conflict": true,
+    "future_outcomes_used": false,
+    "pp_failure_diagnostics_used_online": false,
+    "repair_order_controlled": false
+  },
+  "evaluation": {
+    "base_pool": "all frozen V2 base candidates with existing 16-seed aggregates",
+    "new_pool": "novel RepairClosurePool candidates only",
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_seed_namespace": "stride-repairability-paired-pp-v1",
+    "stable_dominance_minimum_seed_mean_advantage": 0.02,
+    "no_progress_rate_must_not_increase": true,
+    "both_fixed_seed_halves_must_improve": true,
+    "oracle_use": "pool opportunity diagnostic only"
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state_x_candidate_x_trial",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "atomic_checkpoint": "one JSON per state-candidate-trial",
+    "preflight_state_count": 2,
+    "preflight_trial_indices": [0, 1],
+    "full_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "readiness_gates": {
+    "minimum_robust_best_base_opportunity_fraction": 0.1,
+    "minimum_stable_frontier_addition_fraction": 0.1,
+    "zero_errors_and_timeouts": true,
+    "base_pool_preserved": true
+  },
+  "claim_boundary": {
+    "candidate_pool_opportunity_audit_only": true,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "repair_order_intervention_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "schema": "lns2.stride.repairclosurepool_execution.v1",
+  "scientific_status": "preregistered_repairclosurepool_paired_native_pp_opportunity_audit",
+  "experiment_id": "stride-repairclosurepool-v1",
+  "pre_registration_parent_commit": "ce104d623f201cb8f883b1a86c196149a2be2e3f",
+  "inputs": {
+    "design": {
+      "path": "configs/stride_repairclosurepool_v1_design.json",
+      "sha256": "2cad62b3052cfc02f0e2851fe4bc4227c9b55d5754fd8c0f5435a3b9d00609f6"
+    },
+    "cohort": {
+      "path": "build/stride-repairclosurepool-v1-registration/repairclosure_cohort.jsonl",
+      "sha256": "757f7155e1709a0ac897b7b9847f5f933d155810bb4a57279f631e67f7cc314b"
+    },
+    "materialization_report": {
+      "path": "build/stride-repairclosurepool-v1-registration/materialization_report.json",
+      "sha256": "63e18c0fde94571df2b3c2f1d0827a393df9d43ab36814aa39a7329bce6eea01"
+    },
+    "base_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    }
+  },
+  "cohort": {
+    "logical_checkpoint_count": 90,
+    "state_count": 78,
+    "base_candidate_count": 1367,
+    "novel_candidate_count": 922,
+    "development_cohort_is_outcome_enriched": true,
+    "no_result_based_exclusion": true,
+    "independent_result_blind_confirmation_required": true
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state_x_candidate_x_trial",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "atomic_checkpoint": "one JSON per state-candidate-trial",
+    "preflight_state_count": 2,
+    "preflight_trial_indices": [0, 1],
+    "full_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_seed_namespace": "stride-repairability-paired-pp-v1",
+    "replan_algorithm": "PP",
+    "use_sipp": true,
+    "repair_order_controlled": false
+  },
+  "readiness_gates": {
+    "minimum_robust_best_base_opportunity_fraction": 0.10,
+    "minimum_stable_frontier_addition_fraction": 0.10,
+    "zero_errors_and_timeouts": true,
+    "base_pool_preserved": true
+  },
+  "claim_boundary": {
+    "candidate_pool_opportunity_audit_only": true,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "repair_order_intervention_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
