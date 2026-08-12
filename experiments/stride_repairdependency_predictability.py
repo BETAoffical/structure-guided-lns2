@@ -569,7 +569,11 @@ def analyze_predictability(
             if all(gates.values())
             else "stop RepairDependency pool construction; pre-action blocker signal is insufficient"
         ),
-        "producer": producer_identity(root, source_files=PRODUCER_FILES),
+        "producer": producer_identity(
+            project_root=root,
+            source_files=PRODUCER_FILES,
+            native_required=False,
+        ),
         "input_sha256": {
             name: sha256_file(path) for name, path in sorted(inputs.items())
         },
