@@ -2317,6 +2317,21 @@
       "path": "tests/evaluation/test_stride_repairdependency_predictability.py",
       "role": "reproducibility",
       "contract": "Freeze unweighted Pareto-frontier definitions, primary predictor identity and scientific-row exclusion of execution fields."
+    },
+    {
+      "path": "experiments/stride_transactionalrepair.py",
+      "role": "active",
+      "purpose": "Evaluate bounded pre-commit PP retries that use native rollback diagnostics to revise a selected neighborhood before any solver-state transition is committed."
+    },
+    {
+      "path": "scripts/run_stride_transactionalrepair.py",
+      "role": "active",
+      "purpose": "Run the preregistered sixteen-worker TransactionalRepair discovery-cohort collection and mechanism analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_transactionalrepair.py",
+      "role": "active",
+      "contract": "Freeze transactional retry caps, blocker-tail placement, conflict-priority fallback and non-TTF claim boundaries."
     }
   ]
 }
