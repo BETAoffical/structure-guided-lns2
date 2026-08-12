@@ -239,6 +239,7 @@ def reconstruct_trace(
     return {
         "trace_path": ordinary_trace,
         "trace_sha256": str(manifest["trace_sha256"]),
+        "initial_event": events[0],
         "states": states,
         "transitions": transitions,
         "summary": summary,

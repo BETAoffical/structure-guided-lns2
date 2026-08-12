@@ -17,6 +17,7 @@ from experiments.stride_multivalue_collection import (
     _recovery_window_decision,
     _single_rollout,
     _stability_group,
+    analyze_multivalue_collection,
     history_before_decision,
     select_pilot_occurrences,
 )
@@ -50,6 +51,22 @@ def _transition(agents: list[int], candidate: str, success: bool = True) -> dict
 
 
 class MultiValueCollectionTest(unittest.TestCase):
+    def test_analysis_rejects_nonpositive_worker_count(self) -> None:
+        with self.assertRaisesRegex(ValueError, "analysis_workers must be positive"):
+            with (
+                mock.patch(
+                    "experiments.stride_multivalue_collection.load_multivalue_collection_config",
+                    return_value=(Path("config"), Path("root"), {}, {}),
+                ),
+                mock.patch(
+                    "experiments.stride_multivalue_collection._read_jsonl",
+                    return_value=[],
+                ),
+            ):
+                analyze_multivalue_collection(
+                    "config.json", ".", analysis_workers=0
+                )
+
     def test_episode_worker_allocation_uses_global_limit(self) -> None:
         jobs = [
             {"state_record": {"state_occurrence_id": f"state-{index}"}}

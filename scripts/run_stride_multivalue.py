@@ -41,6 +41,12 @@ def main() -> int:
     parser.add_argument(
         "--output", default="build/stride-multivalue-pilot-v1"
     )
+    parser.add_argument(
+        "--analysis-workers",
+        type=int,
+        default=1,
+        help="State-level process count for analysis commands (default: 1).",
+    )
     arguments = parser.parse_args()
     if arguments.command == "prepare":
         report = prepare_multivalue_pilot(arguments.config, arguments.output)
@@ -52,7 +58,10 @@ def main() -> int:
         )
     elif arguments.command == "analyze-initial":
         report = analyze_multivalue_collection(
-            arguments.config, arguments.output, include_extension=False
+            arguments.config,
+            arguments.output,
+            include_extension=False,
+            analysis_workers=arguments.analysis_workers,
         )
     elif arguments.command == "collect-extension":
         report = run_multivalue_collection(
@@ -60,7 +69,10 @@ def main() -> int:
         )
     else:
         report = analyze_multivalue_collection(
-            arguments.config, arguments.output, include_extension=True
+            arguments.config,
+            arguments.output,
+            include_extension=True,
+            analysis_workers=arguments.analysis_workers,
         )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     if report.get("status") in {"complete", "not_required"}:

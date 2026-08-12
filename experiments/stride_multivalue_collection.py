@@ -1624,36 +1624,18 @@ def _stability_group(
     }
 
 
-def analyze_multivalue_collection(
-    config_path: str | Path,
-    output: str | Path,
-    *,
-    include_extension: bool = False,
-) -> dict[str, Any]:
-    _path, _root, config, _inputs = load_multivalue_collection_config(config_path)
-    output = Path(output).resolve()
-    states = _read_jsonl(output / "state_manifest.jsonl")
-    state_by_id = {str(row["state_occurrence_id"]): row for row in states}
-    phases = ["initial", "extension"] if include_extension else ["initial"]
-    episode_rows: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for phase in phases:
-        phase_root = output / "rollout_states" / phase
-        for state_id, state in state_by_id.items():
-            state_path = phase_root / f"{state_id}.json"
-            if not state_path.is_file():
-                continue
-            payload = _read_json(state_path)
-            if payload.get("schema") != ROLLOUT_STATE_SCHEMA or payload.get("complete") is not True:
-                raise ValueError("MultiValue rollout state artifact is invalid")
-            for episode in payload["episodes"]:
-                episode_rows.append((state, dict(episode)))
+def _analyze_multivalue_state_job(job: Mapping[str, Any]) -> dict[str, Any]:
+    """Analyze every rollout for one state without writing shared artifacts."""
+    state = dict(job["state"])
+    expected_repair_fingerprint = str(job["expected_repair_fingerprint"])
+    candidate_by_id = {
+        str(row["candidate_id"]): row for row in state["candidates"]
+    }
     labels: list[dict[str, Any]] = []
-    for state, episode in episode_rows:
-        candidate = next(
-            row
-            for row in state["candidates"]
-            if str(row["candidate_id"]) == str(episode["candidate_id"])
-        )
+    restored_full_fingerprint_difference_count = 0
+    for episode_value in job["episodes"]:
+        episode = dict(episode_value)
+        candidate = candidate_by_id[str(episode["candidate_id"])]
         collection = Path(str(episode["collection"]))
         manifest = dict(episode["manifest"])
         trace = reconstruct_trace(collection, manifest)
@@ -1661,10 +1643,41 @@ def analyze_multivalue_collection(
         controller_totals = dict(summary.get("controller_totals") or {})
         if not trace["transitions"]:
             raise ValueError("MultiValue rollout has no forced transition")
-        if state_fingerprint(trace["states"][0]) != str(
+        state_id = str(state["state_occurrence_id"])
+        observed_initial_fingerprint = state_fingerprint(trace["states"][0])
+        expected_initial_fingerprint = str(
             state["temporal_identity"]["state_fingerprint"]
+        )
+        observed_repair_fingerprint = repair_structure_fingerprint(
+            trace["states"][0]
+        )
+        if observed_repair_fingerprint != expected_repair_fingerprint:
+            raise ValueError(
+                "MultiValue rollout initial repair structure changed: "
+                f"state_occurrence_id={state['state_occurrence_id']}, "
+                f"candidate_id={episode['candidate_id']}, "
+                f"teacher={episode['teacher']}, trial_index={episode['trial_index']}, "
+                f"expected={expected_repair_fingerprint}, "
+                f"observed={observed_repair_fingerprint}"
+            )
+        initial_override = dict(
+            dict(trace["initial_event"]).get("episode_override") or {}
+        )
+        if (
+            str(initial_override.get("source_full_fingerprint"))
+            != expected_initial_fingerprint
+            or str(initial_override.get("source_repair_fingerprint"))
+            != expected_repair_fingerprint
         ):
-            raise ValueError("MultiValue rollout initial state fingerprint changed")
+            raise ValueError(
+                "MultiValue rollout initial restore provenance changed: "
+                f"state_occurrence_id={state['state_occurrence_id']}, "
+                f"candidate_id={episode['candidate_id']}, "
+                f"teacher={episode['teacher']}, trial_index={episode['trial_index']}"
+            )
+        restored_full_fingerprint_difference_count += int(
+            observed_initial_fingerprint != expected_initial_fingerprint
+        )
         if len(_edge_set(trace["states"][0])) != int(state["before_conflicts"]):
             raise ValueError("MultiValue rollout initial conflict count changed")
         if _transition_neighborhood(trace["transitions"][0]) != tuple(
@@ -1713,6 +1726,77 @@ def analyze_multivalue_collection(
                 "ttf_is_not_a_label": True,
             }
         )
+    return {
+        "labels": labels,
+        "restored_full_fingerprint_difference_count": (
+            restored_full_fingerprint_difference_count
+        ),
+    }
+
+
+def analyze_multivalue_collection(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    include_extension: bool = False,
+    analysis_workers: int = 1,
+) -> dict[str, Any]:
+    _path, _root, config, _inputs = load_multivalue_collection_config(config_path)
+    output = Path(output).resolve()
+    states = _read_jsonl(output / "state_manifest.jsonl")
+    state_by_id = {str(row["state_occurrence_id"]): row for row in states}
+    expected_repair_fingerprints = {
+        state_id: repair_structure_fingerprint(
+            read_state_blob(Path(str(state["state_blob"])))
+        )
+        for state_id, state in state_by_id.items()
+    }
+    phases = ["initial", "extension"] if include_extension else ["initial"]
+    episodes_by_state: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for phase in phases:
+        phase_root = output / "rollout_states" / phase
+        for state_id in state_by_id:
+            state_path = phase_root / f"{state_id}.json"
+            if not state_path.is_file():
+                continue
+            payload = _read_json(state_path)
+            if payload.get("schema") != ROLLOUT_STATE_SCHEMA or payload.get("complete") is not True:
+                raise ValueError("MultiValue rollout state artifact is invalid")
+            episodes_by_state[state_id].extend(
+                dict(episode) for episode in payload["episodes"]
+            )
+    analysis_jobs = [
+        {
+            "state": state,
+            "episodes": episodes_by_state[state_id],
+            "expected_repair_fingerprint": expected_repair_fingerprints[state_id],
+        }
+        for state_id, state in state_by_id.items()
+        if episodes_by_state[state_id]
+    ]
+    if analysis_workers < 1:
+        raise ValueError("analysis_workers must be positive")
+    worker_count = min(int(analysis_workers), max(1, len(analysis_jobs)))
+    if worker_count == 1:
+        state_results = [
+            _analyze_multivalue_state_job(job) for job in analysis_jobs
+        ]
+    else:
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=worker_count
+        ) as executor:
+            state_results = list(
+                executor.map(_analyze_multivalue_state_job, analysis_jobs)
+            )
+    labels = [
+        label
+        for result in state_results
+        for label in result["labels"]
+    ]
+    restored_full_fingerprint_difference_count = sum(
+        int(result["restored_full_fingerprint_difference_count"])
+        for result in state_results
+    )
     labels.sort(
         key=lambda row: (
             str(row["state_occurrence_id"]),
@@ -1911,6 +1995,8 @@ def analyze_multivalue_collection(
             and row["ttf_is_not_a_label"] is True
             for row in labels
         ),
+        "all_initial_repair_structures_match": True,
+        "all_initial_restore_provenance_matches": True,
     }
     integrity_passed = all(integrity.values())
     stability_passed = (
@@ -1943,6 +2029,13 @@ def analyze_multivalue_collection(
         "expected_label_count": expected_label_count,
         "integrity": integrity,
         "integrity_passed": integrity_passed,
+        "restored_full_fingerprint_difference_count": (
+            restored_full_fingerprint_difference_count
+        ),
+        "restored_full_fingerprint_difference_reason": (
+            "reset_paths preserves repair structure while intentionally "
+            "reinitializing iteration and low-level counters"
+        ),
         "claim_boundary": dict(config["claim_boundary"]),
         "artifact_sha256": {
             "state_manifest": sha256_file(output / "state_manifest.jsonl"),
