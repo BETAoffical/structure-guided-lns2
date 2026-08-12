@@ -39,8 +39,8 @@ def test_registration_freezes_three_policies_and_bounded_global_execution() -> N
     }
     assert config["policies"]["maximum_added_external_blockers"] == 8
     assert config["execution"]["worker_count"] == 16
-    assert config["execution"]["per_state_trial_timeout_seconds"] == 300
-    assert config["execution"]["task_granularity"].startswith("state_x_trial_index")
+    assert config["execution"]["per_state_trial_policy_timeout_seconds"] == 300
+    assert config["execution"]["task_granularity"] == "state_x_trial_index_x_policy"
     assert config["claim_boundary"]["model_training_allowed"] is False
     assert config["claim_boundary"]["ttf_experiment_allowed"] is False
 

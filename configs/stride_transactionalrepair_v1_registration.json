@@ -60,11 +60,13 @@
   },
   "execution": {
     "worker_count": 16,
-    "task_granularity": "state_x_trial_index_with_three_paired_policies",
-    "per_state_trial_timeout_seconds": 300,
-    "atomic_checkpoint": "one unique state-trial JSON written by its worker",
+    "task_granularity": "state_x_trial_index_x_policy",
+    "per_state_trial_policy_timeout_seconds": 300,
+    "atomic_checkpoint": "one unique state-trial-policy JSON written by its worker",
     "resume": "rerun only missing or invalid state-trial jobs without filtering",
     "tail_must_use_multiple_workers": true,
+    "superseded_output": "build/stride-transactionalrepair-v1",
+    "fresh_output": "build/stride-transactionalrepair-v1-r2",
     "replan_algorithm": "PP",
     "use_sipp": true
   },

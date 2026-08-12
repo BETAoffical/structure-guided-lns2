@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -367,6 +368,9 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
     state_record = dict(job["state_record"])
     state_key = str(state_record["state_fingerprint"])
     trial_index = int(job["trial_index"])
+    policy_id = str(job["policy_id"])
+    if policy_id not in POLICIES:
+        raise ValueError("unknown TransactionalRepair policy")
     output_path = Path(str(job["output_path"]))
     run_fingerprint = str(job["run_fingerprint"])
     if output_path.is_file():
@@ -376,12 +380,13 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
             and existing.get("run_fingerprint") == run_fingerprint
             and existing.get("state_fingerprint") == state_key
             and int(existing.get("trial_index", -1)) == trial_index
+            and existing.get("policy", {}).get("policy_id") == policy_id
         ):
             return {
                 "job_id": str(job["job_id"]),
                 "status": "resumed",
                 "state_count": 0,
-                "outcome_count": len(existing["policies"]),
+                "outcome_count": 1,
                 "error_count": 0,
                 "worker_pid": os.getpid(),
             }
@@ -391,27 +396,18 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
     )
     base_agents = list(map(int, state_record["selected_candidate"]["agents"]))
     pp_seed = repairability_pp_seed(before_repair, trial_index)
-    policies = []
-    for policy_id in POLICIES:
-        policies.append(
-            _run_policy(
-                replay=replay,
-                state=state,
-                before_repair=before_repair,
-                before_conflicts=before_conflicts,
-                restore_seed=restore_seed,
-                base_agents=base_agents,
-                pp_seed=pp_seed,
-                policy_id=policy_id,
-                maximum_added_agents=int(job["maximum_added_agents"]),
-                maximum_attempts=int(job["maximum_attempts"][policy_id]),
-            )
-        )
-    initial_signatures = {
-        str(row["attempts"][0]["attempt_signature"]) for row in policies
-    }
-    if len(initial_signatures) != 1:
-        raise RuntimeError("TransactionalRepair paired initial attempt changed")
+    policy = _run_policy(
+        replay=replay,
+        state=state,
+        before_repair=before_repair,
+        before_conflicts=before_conflicts,
+        restore_seed=restore_seed,
+        base_agents=base_agents,
+        pp_seed=pp_seed,
+        policy_id=policy_id,
+        maximum_added_agents=int(job["maximum_added_agents"]),
+        maximum_attempts=int(job["maximum_attempts"]),
+    )
     payload = {
         "schema": TRIAL_SCHEMA,
         "complete": True,
@@ -428,8 +424,7 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
         "before_repair_fingerprint": before_repair,
         "base_agents": base_agents,
         "agent_count": len(state["agents"]),
-        "initial_attempt_parity": True,
-        "policies": policies,
+        "policy": policy,
         "runtime_fields_stored": False,
         "future_trajectory_stored": False,
     }
@@ -439,7 +434,7 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
         "job_id": str(job["job_id"]),
         "status": "ok",
         "state_count": 0,
-        "outcome_count": len(policies),
+        "outcome_count": 1,
         "error_count": 0,
         "worker_pid": os.getpid(),
     }
@@ -498,33 +493,40 @@ def collect_transactional_audit(
     for state_record in cohort:
         state_key = str(state_record["state_fingerprint"])
         for trial_index in map(int, config["cohort"]["trial_indices"]):
-            jobs.append(
-                {
-                    "job_id": f"{state_key}:{trial_index:02d}",
-                    "state_record": state_record,
-                    "trial_index": trial_index,
-                    "output_path": str(
-                        output / "trials" / state_key / f"trial_{trial_index:02d}.json"
-                    ),
-                    "run_fingerprint": run_fingerprint,
-                    "maximum_added_agents": int(
-                        config["policies"]["maximum_added_external_blockers"]
-                    ),
-                    "maximum_attempts": maximum_attempts,
-                }
-            )
+            for policy_id in POLICIES:
+                jobs.append(
+                    {
+                        "job_id": f"{state_key}:{trial_index:02d}:{policy_id}",
+                        "state_record": state_record,
+                        "trial_index": trial_index,
+                        "policy_id": policy_id,
+                        "output_path": str(
+                            output
+                            / "trials"
+                            / state_key
+                            / f"trial_{trial_index:02d}__{policy_id}.json"
+                        ),
+                        "run_fingerprint": run_fingerprint,
+                        "maximum_added_agents": int(
+                            config["policies"]["maximum_added_external_blockers"]
+                        ),
+                        "maximum_attempts": maximum_attempts[policy_id],
+                    }
+                )
     results = _run_jobs(
         _collect_job,
         jobs,
         int(config["execution"]["worker_count"]),
-        phase="transactionalrepair-state-trial",
+        phase="transactionalrepair-state-trial-policy",
         output_root=output,
         run_fingerprint=run_fingerprint,
-        timeout_seconds=float(config["execution"]["per_state_trial_timeout_seconds"]),
+        timeout_seconds=float(
+            config["execution"]["per_state_trial_policy_timeout_seconds"]
+        ),
         failure_result=_failed_job,
     )
     files = _trial_files(output)
-    expected = len(cohort) * len(config["cohort"]["trial_indices"])
+    expected = len(cohort) * len(config["cohort"]["trial_indices"]) * len(POLICIES)
     errors = [row for row in results if row["status"] in {"error", "timeout"}]
     execution_pids = {
         int(row["worker_pid"]) for row in results if row.get("worker_pid") is not None
@@ -539,10 +541,10 @@ def collect_transactional_audit(
         "experiment_id": EXPERIMENT_ID,
         "status": "complete" if len(files) == expected and not errors else "incomplete",
         "run_fingerprint": run_fingerprint,
-        "completed_state_trial_count": len(files),
-        "required_state_trial_count": expected,
-        "completed_policy_row_count": len(files) * len(POLICIES),
-        "required_policy_row_count": expected * len(POLICIES),
+        "completed_policy_job_count": len(files),
+        "required_policy_job_count": expected,
+        "completed_state_trial_count": len(files) // len(POLICIES),
+        "required_state_trial_count": expected // len(POLICIES),
         "error_job_count": sum(row["status"] == "error" for row in errors),
         "timeout_job_count": sum(row["status"] == "timeout" for row in errors),
         "worker_process_count": len(execution_pids),
@@ -607,45 +609,64 @@ def analyze_transactional_audit(
     if status.get("status") != "complete":
         raise ValueError("TransactionalRepair collection is incomplete")
     files = _trial_files(output)
-    trials = [_read_json(path) for path in files]
+    artifacts = [_read_json(path) for path in files]
     expected_trials = len(cohort) * len(config["cohort"]["trial_indices"])
+    grouped: dict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
+    for artifact in artifacts:
+        grouped[
+            (str(artifact["state_fingerprint"]), int(artifact["trial_index"]))
+        ].append(artifact)
     rows: list[dict[str, Any]] = []
-    for trial in trials:
-        seed_half = "first" if int(trial["trial_index"]) < 8 else "second"
-        for policy in trial["policies"]:
-            rows.append(
-                {
-                    **policy,
-                    "state_fingerprint": str(trial["state_fingerprint"]),
-                    "map_id": str(trial["map_id"]),
-                    "trial_index": int(trial["trial_index"]),
-                    "seed_half": seed_half,
-                    "discovery_root_cause": str(trial["discovery_root_cause"]),
-                    "before_conflicts": int(trial["before_conflicts"]),
-                    "base_agent_count": len(trial["base_agents"]),
-                    "agent_count": int(trial["agent_count"]),
-                }
-            )
+    for artifact in artifacts:
+        policy = dict(artifact["policy"])
+        seed_half = "first" if int(artifact["trial_index"]) < 8 else "second"
+        rows.append(
+            {
+                **policy,
+                "state_fingerprint": str(artifact["state_fingerprint"]),
+                "map_id": str(artifact["map_id"]),
+                "trial_index": int(artifact["trial_index"]),
+                "seed_half": seed_half,
+                "discovery_root_cause": str(artifact["discovery_root_cause"]),
+                "before_conflicts": int(artifact["before_conflicts"]),
+                "base_agent_count": len(artifact["base_agents"]),
+                "agent_count": int(artifact["agent_count"]),
+            }
+        )
     integrity = {
-        "state_trial_count": len(trials) == expected_trials,
+        "state_trial_count": len(grouped) == expected_trials,
+        "policy_artifact_count": len(artifacts)
+        == expected_trials * len(POLICIES),
         "policy_row_count": len(rows) == expected_trials * len(POLICIES),
+        "policy_coverage": all(
+            {str(artifact["policy"]["policy_id"]) for artifact in group}
+            == set(POLICIES)
+            for group in grouped.values()
+        ),
         "state_count": len({str(row["state_fingerprint"]) for row in rows})
         == int(config["cohort"]["required_state_count"]),
         "map_count": len({str(row["map_id"]) for row in rows})
         == int(config["cohort"]["required_map_count"]),
         "initial_attempt_parity": all(
-            bool(trial["initial_attempt_parity"]) for trial in trials
+            len(
+                {
+                    str(artifact["policy"]["attempts"][0]["attempt_signature"])
+                    for artifact in group
+                }
+            )
+            == 1
+            for group in grouped.values()
         ),
         "rollback_integrity": all(
             not attempt["rolled_back"]
             or (
                 attempt["after_repair_fingerprint"]
-                == trial["before_repair_fingerprint"]
-                and int(attempt["conflicts_after"]) == int(trial["before_conflicts"])
+                == artifact["before_repair_fingerprint"]
+                and int(attempt["conflicts_after"])
+                == int(artifact["before_conflicts"])
             )
-            for trial in trials
-            for policy in trial["policies"]
-            for attempt in policy["attempts"]
+            for artifact in artifacts
+            for attempt in artifact["policy"]["attempts"]
         ),
         "no_runtime_or_future_fields": all(
             row["runtime_fields_stored"] is False
@@ -726,7 +747,7 @@ def analyze_transactional_audit(
         "integrity": integrity,
         "integrity_passed": all(integrity.values()),
         "state_count": int(config["cohort"]["required_state_count"]),
-        "state_trial_count": len(trials),
+        "state_trial_count": len(grouped),
         "policy_row_count": len(rows),
         "policy_summaries": summaries,
         "by_map": by_map,
@@ -741,9 +762,9 @@ def analyze_transactional_audit(
             "final_32_completed_job_worker_process_count": int(
                 status["final_32_completed_job_worker_process_count"]
             ),
-            "task_granularity": "state_x_trial_index_with_three_paired_policies",
+            "task_granularity": "state_x_trial_index_x_policy",
             "per_job_timeout_seconds": float(
-                config["execution"]["per_state_trial_timeout_seconds"]
+                config["execution"]["per_state_trial_policy_timeout_seconds"]
             ),
             "tail_parallelism_observed": bool(status["tail_parallelism_observed"]),
         },
