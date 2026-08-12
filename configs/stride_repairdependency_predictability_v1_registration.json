@@ -1,0 +1,79 @@
+{
+  "schema": "lns2.stride.repairdependency_predictability_registration.v1",
+  "scientific_status": "preregistered_outcome_blind_blocker_predictability_audit",
+  "experiment_id": "stride-repairdependency-predictability-v1",
+  "pre_registration_parent_commit": "860c0c2",
+  "inputs": {
+    "causal_registration": {
+      "path": "configs/stride_repairability_causal_audit_v1_registration.json",
+      "sha256": "61d63da5ee33cb531149afe6adec31ea13c3883de1185b996bb419e2cf4e79a8"
+    },
+    "causal_run_config": {
+      "path": "build/stride-repairability-causal-audit-v1/run_config.json",
+      "sha256": "83173bdeeb3e040f44ecbb8b8ad72c7e19dcccb4e9f01c7fe98e548d8c4a84d0"
+    },
+    "causal_collection_status": {
+      "path": "build/stride-repairability-causal-audit-v1/collection_status.json",
+      "sha256": "65203b09bb501c8e836e2270f2d27e401a078810d25b08734e3992a79b12d95e"
+    },
+    "causal_report": {
+      "path": "build/stride-repairability-causal-audit-v1/repairability_causal_report.json",
+      "sha256": "f2a5b0f5a99ea58382539681179b948783e1ab7c18a9bc2fc3abe775402e2ee7"
+    },
+    "causal_state_effects": {
+      "path": "build/stride-repairability-causal-audit-v1/state_effects.jsonl",
+      "sha256": "507746850954dd893dce939441da38cc6f41ffe6a2399c109871a38010f61c78"
+    },
+    "causal_state_manifest": {
+      "path": "build/stride-repairdependency-predictability-v1/input_state_manifest.jsonl",
+      "sha256": "45a2d484ad85797172bdae82f73e978b454c95451bb1eb7a04db88c94c32c125"
+    }
+  },
+  "causal_collection": {
+    "path": "build/stride-repairability-causal-audit-v1"
+  },
+  "cohort": {
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "no_state_exclusion": true
+  },
+  "predictors": {
+    "ids": [
+      "direct_conflict_boundary",
+      "spatial_low_degree_frontier",
+      "temporal_corridor_frontier",
+      "repair_dependency_frontier",
+      "full_temporal_boundary_reference"
+    ],
+    "primary": "repair_dependency_frontier",
+    "uses_only_pre_action_state": true,
+    "weighted_score_forbidden": true,
+    "fixed_neighborhood_size_forbidden": true,
+    "transitive_dependency_closure_forbidden": true
+  },
+  "readiness_gates": {
+    "minimum_overall_recall": 0.50,
+    "minimum_per_map_recall": 0.40,
+    "minimum_seed_half_recall": 0.45,
+    "minimum_direct_boundary_recall_advantage": 0.10,
+    "minimum_overall_random_recall_lift": 0.15,
+    "maximum_mean_expansion_ratio": 0.50,
+    "maximum_total_neighborhood_fraction": 0.80
+  },
+  "execution": {
+    "worker_count": 16,
+    "task_granularity": "state_x_trial_index_x_predictor",
+    "single_coordinator_atomic_output": true,
+    "formal_ttf": false
+  },
+  "claim_boundary": {
+    "diagnostic_only": true,
+    "observed_blockers_are_evaluation_targets_only": true,
+    "observed_blockers_as_features_or_training_labels": false,
+    "model_training_allowed": false,
+    "runtime_controller_change_allowed": false,
+    "ttf_claim_allowed": false,
+    "paired_pp_replay_requires_all_gates": true
+  }
+}

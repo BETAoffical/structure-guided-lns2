@@ -2302,6 +2302,21 @@
       "path": "tests/evaluation/test_stride_repairability_causal_audit.py",
       "role": "reproducibility",
       "contract": "Freeze the 45-state, five-arm, sixteen-seed causal intervention design, stable-effect rules and diagnostic-only claim boundary."
+    },
+    {
+      "path": "experiments/stride_repairdependency_predictability.py",
+      "role": "reproducibility",
+      "purpose": "Measure whether frozen PP external blockers are predictable from action-preceding conflict, corridor and path structure without fitting a model."
+    },
+    {
+      "path": "scripts/run_stride_repairdependency_predictability.py",
+      "role": "reproducibility",
+      "purpose": "Freeze RepairDependency inputs and run the preregistered sixteen-worker predictability audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairdependency_predictability.py",
+      "role": "reproducibility",
+      "contract": "Freeze unweighted Pareto-frontier definitions, primary predictor identity and scientific-row exclusion of execution fields."
     }
   ]
 }
