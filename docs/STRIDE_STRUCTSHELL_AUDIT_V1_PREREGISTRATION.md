@@ -9,10 +9,12 @@ The audit addresses one question only: should the next candidate generator keep 
 ## Frozen evidence
 
 - 98 non-tail development states with the complete four-size family grid and 16 paired PP seeds.
-- 78 Maze difficult states with 1,367 V2 candidates, 1,135 StructPool candidates, 209 current-step robust structural actions, and 41 states with current-step structural opportunity.
+- 78 Maze difficult states with 1,367 V2 candidates and 1,135 StructPool candidates. There are 209 current-step robust structural actions across 47 states; the legacy-best-only opportunity statistic is 41 states.
 - 45 outcome-enriched checkpoints with 270 bounded forced-continuation episodes. These episodes are used only to test whether a proposed filter would discard previously observed beneficial first actions; they are not an independent validation cohort.
 
 All input paths and SHA-256 values are frozen in `configs/stride_structshell_audit_v1_registration.json`. The pre-run backup is branch `codex/backup-before-structshell-audit-20260813` and bundle `../backups/structure-guided-lns2-before-structshell-audit-20260813.bundle` with SHA-256 `58c6b0a9911d2a5842183512da500d3f1d5b33f2294973a7fb5a48f249a53e9c`.
+
+The 41-versus-47 identity wording was clarified after an integrity-only failed run; see `STRIDE_STRUCTSHELL_AUDIT_V1_EXECUTION_AMENDMENT.md`. No rule, threshold, action, or state changed.
 
 ## Rules fixed before analysis
 

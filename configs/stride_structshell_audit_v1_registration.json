@@ -56,7 +56,8 @@
       "base_candidate_count": 1367,
       "structural_candidate_count": 1135,
       "legacy_robust_action_count": 209,
-      "legacy_opportunity_state_count": 41,
+      "legacy_best_opportunity_state_count": 41,
+      "robust_action_opportunity_state_count": 47,
       "development_outcome_enriched": true
     },
     "bounded_forced_continuation": {
@@ -150,5 +151,11 @@
     "ttf_experiment_allowed": false,
     "long_tail_avoidance_claim_allowed": false,
     "default_controller_replacement_allowed": false
+  },
+  "execution_amendment": {
+    "document": "docs/STRIDE_STRUCTSHELL_AUDIT_V1_EXECUTION_AMENDMENT.md",
+    "reason": "separate_legacy_best_opportunity_count_41_from_any_robust_action_state_count_47",
+    "rules_or_thresholds_changed": false,
+    "states_or_actions_filtered": false
   }
 }

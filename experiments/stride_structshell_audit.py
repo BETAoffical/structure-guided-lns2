@@ -152,22 +152,30 @@ def select_fixed_preferred(
 def _rule_candidates(
     rows_by_family: dict[str, list[dict[str, Any]]],
     fixed: dict[str, int],
-) -> dict[str, set[str]]:
+) -> tuple[dict[str, set[str]], dict[str, bool]]:
     selected = {rule: set() for rule in RULES}
+    available = {rule: True for rule in RULES}
     for family, rows in sorted(rows_by_family.items()):
         selected["structural_knee"].add(
             str(select_structural_knee(rows, family)["candidate_id"])
         )
-        selected["support_nearest"].add(
-            str(select_support_nearest(rows, family)["candidate_id"])
-        )
+        try:
+            support_row = select_support_nearest(rows, family)
+        except ValueError as error:
+            if not str(error).startswith("missing support count"):
+                raise
+            available["support_nearest"] = False
+            selected["support_nearest"].clear()
+        else:
+            if available["support_nearest"]:
+                selected["support_nearest"].add(str(support_row["candidate_id"]))
         fixed_row = select_fixed_preferred(rows, int(fixed[family]))
         if fixed_row is not None:
             selected["fixed_preferred"].add(str(fixed_row["candidate_id"]))
         selected["equal_four_size_grid"].update(
             str(row["candidate_id"]) for row in rows
         )
-    return selected
+    return selected, available
 
 
 def _load_config(
@@ -356,7 +364,7 @@ def _maze_state_job(
         family: list(rows_by_size.values())
         for family, rows_by_size in by_family.items()
     }
-    selected = _rule_candidates(family_rows, fixed)
+    selected, available = _rule_candidates(family_rows, fixed)
     return {
         "state_fingerprint": state_key,
         "map_id": str(rows[0]["map_id"]),
@@ -367,8 +375,10 @@ def _maze_state_job(
         "rule_selected_candidate_ids": {
             rule: sorted(candidate_ids) for rule, candidate_ids in selected.items()
         },
+        "rule_available": available,
         "rules": {
             rule: {
+                "available": bool(available[rule]),
                 "selected_candidate_count": len(candidate_ids),
                 "selected_robust_action_count": len(candidate_ids & robust_ids),
                 "preserves_opportunity": bool(candidate_ids & robust_ids),
@@ -400,13 +410,16 @@ def _aggregate_size_rule(
 def _aggregate_maze_rule(
     states: list[dict[str, Any]], rule: str
 ) -> dict[str, Any]:
-    opportunity = [row for row in states if row["has_structural_opportunity"]]
-    robust_count = sum(len(row["robust_action_ids"]) for row in states)
+    available = [row for row in states if row["rules"][rule]["available"]]
+    opportunity = [row for row in available if row["has_structural_opportunity"]]
+    robust_count = sum(len(row["robust_action_ids"]) for row in available)
     selected_robust = sum(
-        int(row["rules"][rule]["selected_robust_action_count"]) for row in states
+        int(row["rules"][rule]["selected_robust_action_count"]) for row in available
     )
     return {
         "state_count": len(states),
+        "available_state_count": len(available),
+        "unavailable_state_count": len(states) - len(available),
         "opportunity_state_count": len(opportunity),
         "preserved_opportunity_state_count": sum(
             bool(row["rules"][rule]["preserves_opportunity"]) for row in opportunity
@@ -418,8 +431,13 @@ def _aggregate_maze_rule(
         "robust_action_count": robust_count,
         "retained_robust_action_count": selected_robust,
         "robust_action_recall": _fraction(selected_robust, robust_count),
-        "mean_selected_structural_candidate_count": statistics.fmean(
-            int(row["rules"][rule]["selected_candidate_count"]) for row in states
+        "mean_selected_structural_candidate_count": (
+            statistics.fmean(
+                int(row["rules"][rule]["selected_candidate_count"])
+                for row in available
+            )
+            if available
+            else None
         ),
     }
 
@@ -467,9 +485,16 @@ def _tail_rows(
                 "identical_action": bool(comparison["identical_action"]),
                 "candidate_is_v2_base": base,
                 "retained_by_rule": {
-                    rule: base
-                    or candidate_id
-                    in set(state["rule_selected_candidate_ids"][rule])
+                    rule: (
+                        True
+                        if base
+                        else (
+                            candidate_id
+                            in set(state["rule_selected_candidate_ids"][rule])
+                            if state["rule_available"][rule]
+                            else None
+                        )
+                    )
                     for rule in RULES
                 },
             }
@@ -482,11 +507,15 @@ def _aggregate_tail_rule(rows: list[dict[str, Any]], rule: str) -> dict[str, Any
     by_class = {}
     for classification in ("beneficial", "neutral", "adverse"):
         selected = [row for row in informative if row["classification"] == classification]
-        retained = sum(bool(row["retained_by_rule"][rule]) for row in selected)
+        evaluable = [
+            row for row in selected if row["retained_by_rule"][rule] is not None
+        ]
+        retained = sum(bool(row["retained_by_rule"][rule]) for row in evaluable)
         by_class[classification] = {
             "comparison_count": len(selected),
+            "evaluable_comparison_count": len(evaluable),
             "retained_comparison_count": retained,
-            "retained_comparison_fraction": _fraction(retained, len(selected)),
+            "retained_comparison_fraction": _fraction(retained, len(evaluable)),
         }
     return {
         "informative_comparison_count": len(informative),
@@ -570,10 +599,14 @@ def analyze_structshell(
             coverage_report.get("legacy_robust_action_rows") or ()
         )
         == int(maze_expected["legacy_robust_action_count"]),
-        "legacy_opportunity_state_count": sum(
+        "legacy_best_opportunity_state_count": int(
+            coverage_report["overall_opportunity"]["legacy_opportunity_state_count"]
+        )
+        == int(maze_expected["legacy_best_opportunity_state_count"]),
+        "robust_action_opportunity_state_count": sum(
             bool(row["has_structural_opportunity"]) for row in maze_state_rows
         )
-        == int(maze_expected["legacy_opportunity_state_count"]),
+        == int(maze_expected["robust_action_opportunity_state_count"]),
         "pretail_integrity": pretail_report.get("integrity_passed") is True,
         "pretail_case_count": int(pretail_report.get("case_count", -1))
         == int(tail_expected["case_count"]),

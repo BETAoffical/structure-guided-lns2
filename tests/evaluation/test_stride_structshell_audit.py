@@ -7,6 +7,7 @@ from pathlib import Path
 from experiments.stride_structshell_audit import (
     CONFIG_SCHEMA,
     EXPERIMENT_ID,
+    _rule_candidates,
     parse_structpool_family,
     select_structural_knee,
     select_support_nearest,
@@ -51,6 +52,21 @@ class StructShellAuditTest(unittest.TestCase):
         self.assertFalse(
             config["claim_boundary"]["long_tail_avoidance_claim_allowed"]
         )
+        self.assertEqual(
+            config["cohorts"]["maze_difficult_states"][
+                "legacy_best_opportunity_state_count"
+            ],
+            41,
+        )
+        self.assertEqual(
+            config["cohorts"]["maze_difficult_states"][
+                "robust_action_opportunity_state_count"
+            ],
+            47,
+        )
+        self.assertFalse(
+            config["execution_amendment"]["rules_or_thresholds_changed"]
+        )
 
     def test_family_parser_preserves_boundary_variants(self) -> None:
         self.assertEqual(
@@ -79,6 +95,25 @@ class StructShellAuditTest(unittest.TestCase):
         self.assertEqual(
             select_support_nearest(rows, "path_overlap")["nominal_size"], 16
         )
+
+    def test_missing_historical_support_is_not_imputed(self) -> None:
+        rows = [_row(size, 0.5) for size in (8, 16, 24, 32)]
+        for row in rows:
+            row.pop("support_count")
+        selected, available = _rule_candidates(
+            {"path_overlap": rows},
+            {
+                "bottleneck_crossing": 8,
+                "conflict_component": 24,
+                "topology_boundary_articulation": 16,
+                "topology_boundary_low_degree": 16,
+                "spatiotemporal_hotspot": 16,
+                "path_overlap": 32,
+            },
+        )
+        self.assertFalse(available["support_nearest"])
+        self.assertEqual(selected["support_nearest"], set())
+        self.assertTrue(available["structural_knee"])
 
 
 if __name__ == "__main__":
