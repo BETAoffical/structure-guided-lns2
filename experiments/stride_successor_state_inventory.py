@@ -410,7 +410,7 @@ def analyze_successor_state_inventory(
             }
         )
     workers = int(config["analysis"]["worker_count"])
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
         rows = list(executor.map(_episode_row, tasks))
     rows.sort(
         key=lambda row: (
