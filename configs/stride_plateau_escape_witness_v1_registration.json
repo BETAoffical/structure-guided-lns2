@@ -1,0 +1,135 @@
+{
+  "schema": "lns2.stride.plateau_escape_witness_registration.v1",
+  "scientific_status": "preregistered_existing_trajectory_mechanism_forensics",
+  "experiment_id": "stride-plateau-escape-witness-v1",
+  "pre_registration_parent_commit": "98fb4601599bffd6c6679226edecdeebe3953d18",
+  "inputs": {
+    "tailswitch_sequence_registration": {
+      "path": "configs/stride_tailswitch_sequence_forensics_v1_registration.json",
+      "sha256": "19dfb4dbde278702c96e9d03a22c9d5a8ca8d247fa74c4c8951b9fd5a670104a"
+    },
+    "tailswitch_report": {
+      "path": "build/stride-tailswitch-v1/tailswitch_report.json",
+      "sha256": "107f11faaa2e18f92af8e73e4a69e1ba7f8948f77b8f0e174981cc4c3c2b6754"
+    },
+    "tailswitch_status": {
+      "path": "build/stride-tailswitch-v1/tailswitch_status.json",
+      "sha256": "8ab059fc31a3b27a1aaa9c6cff386d15fc347daf4fef788899a14dd785b20003"
+    },
+    "sequence_forensics_report": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_report.json",
+      "sha256": "5461e88a9348a38b25b20305ae77f1a09f1bdba736d282cf27bf9d60ac2b9fc4"
+    },
+    "sequence_forensics_status": {
+      "path": "build/stride-tailswitch-sequence-forensics-v1/sequence_forensics_status.json",
+      "sha256": "25c2a8fb9eb55683a62171557c62894c3ae63a962c459261e738cf0c4b1d27e7"
+    },
+    "root_diagnostic_cases": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_cases.jsonl",
+      "sha256": "ea9bc11708cb911c03677e0166b518630b44819ddd9be05414311ca040172956"
+    },
+    "root_diagnostic_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "root_diagnostic_report": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_report.json",
+      "sha256": "8f21f709f69cba540842cbd11dcfe65c19214c7c55b5d4492d70244d90a2f483"
+    },
+    "causal_report": {
+      "path": "build/stride-repairability-causal-audit-v1/repairability_causal_report.json",
+      "sha256": "f2a5b0f5a99ea58382539681179b948783e1ab7c18a9bc2fc3abe775402e2ee7"
+    },
+    "causal_state_effects": {
+      "path": "build/stride-repairability-causal-audit-v1/state_effects.jsonl",
+      "sha256": "507746850954dd893dce939441da38cc6f41ffe6a2399c109871a38010f61c78"
+    },
+    "causal_collection_status": {
+      "path": "build/stride-repairability-causal-audit-v1/collection_status.json",
+      "sha256": "65203b09bb501c8e836e2270f2d27e401a078810d25b08734e3992a79b12d95e"
+    },
+    "known_maze_regression_report": {
+      "path": "build/stride-guardpool-maze-regression-v2/guardpool_maze_regression_report.json",
+      "sha256": "84b5ea9dd8c44f0abfd1cfbe49086ee7ed1d9def6e2e578b60648132790a3ebe"
+    }
+  },
+  "causal_state_artifacts": {
+    "path": "build/stride-repairability-causal-audit-v1/states",
+    "file_count": 45,
+    "canonical_manifest_sha256": "d659770201e5fed8c3705f47fe278d72f3a3dbd191d243e68d1dc20488f11269",
+    "canonical_manifest_definition": "sha256(concat(sorted(filename + NUL + file_sha256 + LF)))"
+  },
+  "cohort": {
+    "registered_first_repeat_state_count": 45,
+    "classification_counts": {
+      "adverse": 17,
+      "beneficial": 8,
+      "neutral": 20
+    },
+    "selection_rule": "all registered first-repeat-stall cases, with no result-based exclusion",
+    "treatment_trace_only": true
+  },
+  "plateau_definition": {
+    "trigger": "the frozen first_repeat_stall pre-action decision from root_diagnostic_cases; its outcome was not used by the source audit",
+    "segment": "maximal consecutive flat transition run immediately preceding trigger, extended through trigger and later transitions only while conflicts_before equals conflicts_after and both equal the trigger pre-action conflict count",
+    "minimum_registered_pre_trigger_flat_length": 2,
+    "strict_escape": "the first transition after the segment has conflicts_after lower than conflicts_before",
+    "worsening_exit": "the first transition after the segment has conflicts_after greater than conflicts_before",
+    "right_censored": "the trace ends while the segment remains at the same conflict count",
+    "exact_repair_noop": "agent paths and conflict-edge set are both unchanged",
+    "persistent_core": "intersection of conflict edges over all pre/post states inside the segment"
+  },
+  "registration_amendment": {
+    "reason": "the first integrity-only execution established that first_repeat_stall denotes the third repeated candidate before its outcome, while only its two preceding actions are frozen zero-progress observations",
+    "result_rows_observed_before_amendment": 0,
+    "report_or_witness_artifact_written_before_amendment": false,
+    "cohort_or_threshold_changed": false
+  },
+  "post_analysis_descriptive_correction": {
+    "aggregate_results_observed_before_correction": true,
+    "changes": [
+      "entry_after_strict_progress now refers only to the transition immediately before the maximal plateau",
+      "unique PP seed and repair-order fractions are reported to distinguish repeated selection from repeated PP realization",
+      "post-hoc descriptive Spearman and repairability-rate buckets relate the frozen 16-seed causal label to observed plateau length",
+      "post-hoc trigger-pool opportunity checks whether each future set-change escape was already available at the frozen trigger decision"
+    ],
+    "gate_or_cohort_changed": false,
+    "claim_boundary_changed": false,
+    "fields_are_descriptive_only": true
+  },
+  "escape_witness_definition": {
+    "dominant_plateau_candidate": "most frequent candidate_id in the plateau, ties broken by first occurrence then candidate_id",
+    "set_change_escape": "strict escape action agent set differs from the dominant plateau candidate agent set",
+    "same_set_escape": "strict escape action agent set equals the dominant plateau candidate agent set",
+    "same_candidate_escape": "strict escape action candidate_id equals the dominant plateau candidate_id",
+    "order_change": "repair_order differs from the final plateau attempt",
+    "added_agents": "strict escape action agents minus dominant plateau candidate agents",
+    "external_blocker_overlap": "added_agents intersect union of external_blocker_agents observed in all selected_native_order causal-audit trials",
+    "future_enriched_online_use_allowed": false
+  },
+  "known_regression_scope": {
+    "controllers": [
+      "v2-full",
+      "v2-plus-structpool",
+      "v2-plus-slotpool"
+    ],
+    "minimum_reported_flat_run_length": 3,
+    "case_is_regression_only": true
+  },
+  "execution": {
+    "maximum_workers": 16,
+    "new_solver_runs": 0,
+    "model_training": false
+  },
+  "claim_boundary": {
+    "existing_trajectory_forensics_only": true,
+    "new_solver_runs_allowed": false,
+    "model_training_allowed": false,
+    "runtime_controller_change_allowed": false,
+    "ttf_improvement_claim": false,
+    "longtail_prevention_claim": false,
+    "generalization_claim": false,
+    "outcome_enriched_blockers_are_online_features": false,
+    "no_result_based_exclusion": true
+  }
+}
