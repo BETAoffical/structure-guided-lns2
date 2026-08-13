@@ -2452,6 +2452,21 @@
       "path": "tests/evaluation/test_stride_causaltopopool.py",
       "role": "active",
       "contract": "Freeze preserved source pools, 16-worker compactness-only execution and no-training/no-TTF/no-long-tail claim boundaries."
+    },
+    {
+      "path": "experiments/stride_causaltopopool_opportunity.py",
+      "role": "active",
+      "purpose": "Replay all novel natural-topology actions with strictly paired native PP seeds and measure their added opportunity over preserved V2 and CausalClosure pools."
+    },
+    {
+      "path": "scripts/run_stride_causaltopopool_opportunity.py",
+      "role": "active",
+      "purpose": "Run bounded 16-worker CausalTopoPool preflight, full collection and ranker-free opportunity analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_causaltopopool_opportunity.py",
+      "role": "active",
+      "contract": "Freeze 5,856 paired topology jobs, stronger restoration gates, generic trial schema identity and no-training/no-TTF boundaries."
     }
   ]
 }

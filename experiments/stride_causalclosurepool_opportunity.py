@@ -135,8 +135,9 @@ def _valid_trial(
     before = int(row.get("before_conflicts", -1))
     after = row.get("conflicts_after")
     candidate = dict(job["candidate"])
+    expected_schema = str(job.get("trial_schema", TRIAL_SCHEMA))
     return bool(
-        row.get("schema") == TRIAL_SCHEMA
+        row.get("schema") == expected_schema
         and row.get("run_fingerprint") == run_fingerprint
         and row.get("state_fingerprint") == job["state_fingerprint"]
         and row.get("candidate_id") == candidate["candidate_id"]
@@ -210,7 +211,7 @@ def _collect_trial(job: dict[str, Any]) -> dict[str, Any]:
     conflicts_after = int(after["num_of_colliding_pairs"])
     after_repair = repair_structure_fingerprint(after)
     payload = {
-        "schema": TRIAL_SCHEMA,
+        "schema": str(job.get("trial_schema", TRIAL_SCHEMA)),
         "run_fingerprint": run_fingerprint,
         "state_fingerprint": str(job["state_fingerprint"]),
         "candidate_id": str(candidate["candidate_id"]),

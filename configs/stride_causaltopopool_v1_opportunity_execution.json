@@ -1,0 +1,66 @@
+{
+  "schema": "lns2.stride.causaltopopool_opportunity_execution.v1",
+  "scientific_status": "preregistered_ranker_free_paired_native_pp_topology_opportunity_audit",
+  "experiment_id": "stride-causaltopopool-opportunity-v1",
+  "pre_registration_parent_commit": "3274493ff7b4f98166b1669f1d3945e89f403fab",
+  "inputs": {
+    "generator_design": {
+      "path": "configs/stride_causaltopopool_v1_design.json",
+      "sha256": "c7fbe7b456835d86262d0da5d7b86493c1d0bfc1b937b41b9dbbb623abe47d0f"
+    },
+    "cohort": {
+      "path": "build/stride-causaltopopool-v1-compactness/causaltopopool_cohort.jsonl",
+      "sha256": "6a4accad75cee257cf5408adcf1c2b61942bded61516264637854fd4b176bdfa"
+    },
+    "compactness_report": {
+      "path": "build/stride-causaltopopool-v1-compactness/compactness_report.json",
+      "sha256": "7be3b406585b633410e03e068e7c3367cf9e207f7021c706458fe02fd3b54b56"
+    },
+    "base_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "causalclosure_opportunity_report": {
+      "path": "build/stride-causalclosurepool-v2-opportunity-full-v1/collection_report.json",
+      "sha256": "c2daf6ee13a9aa53e0644c187446d112e123f79d3210b01f6ecd632df3f19c56"
+    }
+  },
+  "cohort": {
+    "state_count": 78,
+    "base_candidate_count": 1367,
+    "causal_candidate_count": 930,
+    "topology_candidate_count": 366,
+    "all_frozen_states_required": true,
+    "no_result_based_exclusion": true
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state_x_candidate_x_trial",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "preflight_state_count": 2,
+    "preflight_trial_indices": [0, 1],
+    "full_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "paired_seed_namespace": "stride-repairability-paired-pp-v1",
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "readiness_gates": {
+    "minimum_topology_robust_best_base_opportunity_fraction": 0.3,
+    "minimum_hybrid_robust_best_base_opportunity_fraction": 0.4,
+    "minimum_topology_stable_frontier_addition_fraction": 0.3,
+    "minimum_per_map_hybrid_opportunity_fraction": 0.25,
+    "zero_errors_and_timeouts": true,
+    "base_and_causal_pools_preserved": true
+  },
+  "claim_boundary": {
+    "candidate_pool_opportunity_audit_only": true,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "repair_order_intervention_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
