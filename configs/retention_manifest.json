@@ -2587,6 +2587,31 @@
       "path": "tests/evaluation/test_stride_successor_repairability.py",
       "role": "active",
       "contract": "Freeze outcome-blind preflight selection, semantic candidate-trial caching, full distribution metrics, seed-half stability and no-training/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_repairdependencypool.py",
+      "role": "active",
+      "purpose": "Reconstruct the frozen platform-entry witnesses and materialize the bounded RepairDependencyPool cohort without new solver runs."
+    },
+    {
+      "path": "lns2_selector/runtime/repairdependencypool.py",
+      "role": "active",
+      "purpose": "Generate compact evidence-backed repair-dependency candidates and apply the transparent V2-anchored Pareto selector."
+    },
+    {
+      "path": "scripts/run_stride_repairdependencypool.py",
+      "role": "active",
+      "purpose": "Run the preregistered zero-solver RepairDependencyPool witness reconstruction and static gate."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairdependencypool.py",
+      "role": "active",
+      "contract": "Freeze registration identity, separate escape and causal classifications, witness reconstruction, static gates and the no-continuation boundary."
+    },
+    {
+      "path": "tests/runtime/test_repairdependencypool.py",
+      "role": "active",
+      "contract": "Freeze pre-action blocker evidence, compactness, deduplication, family rotation and conservative Pareto fallback semantics."
     }
   ]
 }

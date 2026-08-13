@@ -271,6 +271,20 @@ def run_check(root: Path, config: dict[str, Any]) -> dict[str, Any]:
 
     duplicate_blobs = duplicate_blob_groups(root, files)
     duplicate_functions = duplicate_function_groups(root, files, production_roots)
+    allowed_duplicate_functions = {
+        frozenset(
+            (str(item["path"]), str(item["name"]))
+            for item in row.get("functions", [])
+        )
+        for row in config.get("allowed_duplicate_function_groups", [])
+        if str(row.get("reason", "")).strip() and len(row.get("functions", [])) >= 2
+    }
+    duplicate_functions = [
+        group
+        for group in duplicate_functions
+        if frozenset((str(item["path"]), str(item["name"])) for item in group)
+        not in allowed_duplicate_functions
+    ]
     allowed_unused_imports = {
         (str(row["path"]), str(row["name"]))
         for row in config.get("allowed_unused_imports", [])

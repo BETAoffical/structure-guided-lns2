@@ -98,6 +98,39 @@ class RepositoryHygieneTests(unittest.TestCase):
             self.assertEqual(len(groups), 1)
             self.assertEqual({row["name"] for row in groups[0]}, {"value"})
 
+    def test_explicit_duplicate_function_group_requires_exact_membership(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "experiments").mkdir()
+            for name in ("first.py", "second.py"):
+                (root / "experiments" / name).write_text(
+                    "def value(number):\n    return number + 1\n",
+                    encoding="utf-8",
+                )
+            config = json.loads(json.dumps(load_config()))
+            config["production_python_roots"] = ["experiments"]
+            config["tracked_roles"] = {"experiments": "test"}
+            config["tracked_root_files"] = []
+            config["absolute_path_scan_roots"] = []
+            config["allowed_duplicate_function_groups"] = [
+                {
+                    "functions": [
+                        {"path": "experiments/first.py", "name": "value"},
+                        {"path": "experiments/second.py", "name": "value"},
+                    ],
+                    "reason": "registered source preservation",
+                }
+            ]
+            _write_json(root / config["result_consolidation_config"], {"experiments": []})
+            with patch(
+                "scripts.audit_repository_hygiene.tracked_files",
+                return_value=["experiments/first.py", "experiments/second.py"],
+            ), patch(
+                "scripts.audit_repository_hygiene.untracked_files", return_value=[]
+            ):
+                report = run_check(root, config)
+            self.assertEqual(report["errors"]["duplicate_function_groups"], [])
+
     def test_untracked_files_are_diagnostic_not_tracked_audit_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

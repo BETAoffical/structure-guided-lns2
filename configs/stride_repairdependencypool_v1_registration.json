@@ -1,0 +1,86 @@
+{
+  "schema": "lns2.stride.repairdependencypool_registration.v1",
+  "scientific_status": "preregistered_platform_entry_zero_solver_witness_reconstruction",
+  "experiment_id": "stride-repairdependencypool-v1",
+  "pre_registration_commit": "63b758de2fbaf8d26f635f67fee5b438f944b56a",
+  "inputs": {
+    "plateau_witnesses": {
+      "path": "build/stride-plateau-escape-witness-v1/plateau_escape_witnesses.jsonl",
+      "sha256": "a7769c4ccc9b751d653c80077d46a41afb3b19aa98df350a260760cf766145e1"
+    },
+    "plateau_report": {
+      "path": "build/stride-plateau-escape-witness-v1/plateau_escape_witness_report.json",
+      "sha256": "ecc062a8a37b2e1a4a8b6668fdf3d474a7d3bc8c23425d9bfc44b87b0b4ad827"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "causal_report": {
+      "path": "build/stride-repairability-causal-audit-v1/repairability_causal_report.json",
+      "sha256": "f2a5b0f5a99ea58382539681179b948783e1ab7c18a9bc2fc3abe775402e2ee7"
+    },
+    "causal_status": {
+      "path": "build/stride-repairability-causal-audit-v1/collection_status.json",
+      "sha256": "65203b09bb501c8e836e2270f2d27e401a078810d25b08734e3992a79b12d95e"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "causal_state_artifacts": {
+    "path": "build/stride-repairability-causal-audit-v1/states",
+    "file_count": 45,
+    "canonical_manifest_sha256": "d659770201e5fed8c3705f47fe278d72f3a3dbd191d243e68d1dc20488f11269",
+    "canonical_manifest_definition": "sha256(concat(sorted(filename + NUL + file_sha256 + LF)))"
+  },
+  "generator": {
+    "id": "stride-repairdependencypool-v1",
+    "core_families": [
+      "topology_boundary",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "semantic_variants_per_core": [
+      "direct-boundary",
+      "temporal-corridor"
+    ],
+    "maximum_added_agents_per_core": 8,
+    "maximum_neighborhood_size": 32,
+    "maximum_candidates_per_state": 6,
+    "maximum_candidate_jaccard": 0.9,
+    "fixed_preferred_sizes": [],
+    "oversized_policy": "reject_without_truncation",
+    "future_outcomes_used": false,
+    "pp_failure_diagnostics_used_online": false
+  },
+  "selection": {
+    "v2_anchor_always_available": true,
+    "rule": "unique Pareto dominance over dependency coverage, evidence density, smaller actual size, and frozen v2-full quality score; otherwise V2 anchor",
+    "model_training": false,
+    "runtime_pp_probe": false
+  },
+  "witness_reconstruction_gate": {
+    "expected_external_blocker_case_count": 6,
+    "minimum_covered_external_blocker_cases": 5,
+    "expected_map_count": 3,
+    "failure_action": "stop_before_continuation_without_relaxing_closure"
+  },
+  "execution": {
+    "workers": 16,
+    "per_state_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "new_solver_runs": 0
+  },
+  "claim_boundary": {
+    "existing_evidence_only": true,
+    "new_solver_runs_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "longtail_prevention_claim_allowed": false,
+    "outcome_enriched_evidence_used_for_generation": false,
+    "no_result_based_state_selection": true
+  }
+}

@@ -16,6 +16,47 @@
       "reason": "Preserve the exact source SHA-256 recorded by the completed 264-episode TailSwitch evidence block."
     }
   ],
+  "allowed_duplicate_function_groups": [
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_cycletransition.py",
+          "name": "_mean"
+        },
+        {
+          "path": "experiments/stride_successor_repairability.py",
+          "name": "_mean"
+        }
+      ],
+      "reason": "Preserve the registered source identities of two completed, stopped diagnostic experiments while documenting their identical semantics-free helper."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_cycletransition.py",
+          "name": "_ranks"
+        },
+        {
+          "path": "experiments/stride_successor_repairability.py",
+          "name": "_ranks"
+        }
+      ],
+      "reason": "Preserve the registered source identities of two completed, stopped diagnostic experiments while documenting their identical average-rank helper."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_successor_repairability.py",
+          "name": "_manifest_index_sha256"
+        },
+        {
+          "path": "experiments/stride_successor_state_inventory.py",
+          "name": "_manifest_index_sha256"
+        }
+      ],
+      "reason": "Preserve completed Successor diagnostic source hashes while documenting the shared manifest-index implementation."
+    }
+  ],
   "tracked_roles": {
     ".vscode": "workspace visibility settings",
     "artifacts": "frozen models and compact evidence",
