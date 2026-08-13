@@ -1,0 +1,86 @@
+{
+  "schema": "lns2.stride.repairability_stability_registration.v1",
+  "scientific_status": "preregistered_existing_paired_seed_label_stability_audit",
+  "experiment_id": "stride-repairability-stability-v1",
+  "pre_registration_parent_commit": "65166112073f33ad8d71109f1ef2705eb1be6724",
+  "inputs": {
+    "candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "repair_trials": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/repair_trials.jsonl",
+      "sha256": "e1b45746ec81296a945943d65bda6b8c4fef7d998f1d66deb4164fd717879e84"
+    },
+    "logical_checkpoint_results": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_results.jsonl",
+      "sha256": "efdbc8d7020628b3ac485d0946f9ad89b1b6d7afb547a29069d2009d41671973"
+    },
+    "root_diagnostic_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "opportunity_report": {
+      "path": "build/stride-repairability-opportunity-v1/repairability_opportunity_report.json",
+      "sha256": "a4865d8122083a75302bb2fe665a11f81edd4bb617e8b07454f6bc17304916db"
+    },
+    "opportunity_status": {
+      "path": "build/stride-repairability-opportunity-v1/repairability_opportunity_status.json",
+      "sha256": "6597b490549a3d96e1367f370fb529a4330c4c6ec3dd7ee44fe82dbda9bc9e25"
+    }
+  },
+  "cohort": {
+    "logical_checkpoint_count": 90,
+    "distinct_state_count": 78,
+    "candidate_count": 2502,
+    "trial_count": 40032,
+    "fixed_halves": [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]],
+    "no_result_based_exclusion": true
+  },
+  "robust_quality_pool": {
+    "always_include_v2_anchor": true,
+    "candidate_seed_mean_at_least_anchor": true,
+    "candidate_lower_half_mean_at_least_anchor": true,
+    "candidate_first_fixed_half_mean_at_least_anchor": true,
+    "candidate_second_fixed_half_mean_at_least_anchor": true,
+    "candidate_no_progress_rate_at_most_anchor": true,
+    "epsilon": 1e-12
+  },
+  "metrics": {
+    "candidate_half_rank_correlation": "tie-aware Spearman of path-change success rates over the fixed robust-quality pool",
+    "top3_overlap": "intersection size divided by three after deterministic half-specific ordering",
+    "cross_half_regret": "best validation-half path-change rate minus the rate of the opposite-half selected candidate",
+    "anchor_direction_agreement": "candidate-minus-V2 path-change-rate signs agree between fixed halves"
+  },
+  "stability_gates": {
+    "minimum_mean_top3_overlap": 0.8,
+    "minimum_median_rank_correlation": 0.6,
+    "minimum_anchor_direction_agreement": 0.7,
+    "maximum_mean_cross_half_regret": 0.02,
+    "every_map_checkpoint_group_must_pass": true
+  },
+  "decision_rule": {
+    "all_gates_pass": "permit_preregistration_of_independent_result_blind_training_cohort_only",
+    "any_gate_fails": "stop_before_training_and_revise_seed_budget_or_target",
+    "training_in_this_stage_allowed": false
+  },
+  "post_analysis_metric_correction": {
+    "aggregate_results_observed_before_correction": true,
+    "original_error": "a constant success-rate vector makes Spearman undefined, but the initial helper returned zero even when both fixed halves were entirely tied and therefore decision-equivalent",
+    "correction": "assign rank correlation one when both halves are constant, zero when exactly one half is constant, and ordinary tie-aware Spearman otherwise; report all three cases separately",
+    "cohort_or_gate_changed": false,
+    "claim_boundary_changed": false
+  },
+  "claim_boundary": {
+    "label_stability_only": true,
+    "new_solver_runs_allowed": false,
+    "model_training_allowed": false,
+    "future_trajectory_read": false,
+    "runtime_or_ttf_read": false,
+    "runtime_controller_change_allowed": false,
+    "longtail_prevention_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "no_result_based_exclusion": true
+  }
+}

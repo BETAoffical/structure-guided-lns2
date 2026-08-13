@@ -2542,6 +2542,21 @@
       "path": "tests/evaluation/test_stride_repairability_opportunity.py",
       "role": "active",
       "contract": "Freeze paired seed identity, two-half repairability dominance, V2 quality noninferiority and no-training/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_repairability_stability.py",
+      "role": "active",
+      "purpose": "Measure fixed-half rank, Top-3, anchor-direction and cross-half regret stability for the quality-constrained PP repairability target."
+    },
+    {
+      "path": "scripts/run_stride_repairability_stability.py",
+      "role": "active",
+      "purpose": "Run the existing-data repairability label-stability audit before any independent-cohort registration or training."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairability_stability.py",
+      "role": "active",
+      "contract": "Freeze fixed seed halves, robust V2-relative quality pool, repairability direction agreement and cross-half regret semantics."
     }
   ]
 }
