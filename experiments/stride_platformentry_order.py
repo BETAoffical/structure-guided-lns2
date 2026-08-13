@@ -79,6 +79,10 @@ def load_platformentry_order_config(
         != "85d38a3b6e92107347b0af655f3233506753cebb"
         or config.get("execution_amendment_2_reason")
         != "rebuild_the_deadline_fix_into_the_canonical_build_linux_project_module_after_r2_producer_identity_proved_that_the_launcher_loaded_the_pre_fix_binary"
+        or config.get("execution_amendment_3_parent_commit")
+        != "e61c9a3d89cb132e94ad1f292c130e6e5b1576e1"
+        or config.get("execution_amendment_3_reason")
+        != "propagate_the_live_reset_inclusive_outer_wall_remainder_into_each_native_PP_call_after_r3_proved_that_the_unlimited_native_sentinel_bypassed_the_low_level_deadline_fix"
     ):
         raise ValueError("Platform-entry order registration identity changed")
     if dict(config.get("execution_amendment_recovery") or {}) != {
@@ -97,6 +101,14 @@ def load_platformentry_order_config(
         "preserve_superseded_artifacts": True,
     }:
         raise ValueError("Platform-entry order second recovery identity changed")
+    if dict(config.get("execution_amendment_3_recovery") or {}) != {
+        "superseded_output": "build/stride-platformentry-order-v1-r3",
+        "replacement_output": "build/stride-platformentry-order-v1-r4",
+        "completed_old_episodes_imported": 0,
+        "restart_entire_initial_schedule": True,
+        "preserve_superseded_artifacts": True,
+    }:
+        raise ValueError("Platform-entry order third recovery identity changed")
     if set(config.get("inputs") or {}) != {
         "pretail_registration",
         "platform_entry_witnesses",
@@ -151,6 +163,8 @@ def load_platformentry_order_config(
         "right_censoring_is_valid_state_evidence": True,
         "right_censoring_is_not_an_execution_error": True,
         "external_process_timeout_is_execution_error": True,
+        "live_outer_wall_remainder_propagated_to_native_pp": True,
+        "native_unlimited_sentinel_never_overrides_outer_wall_fuse": True,
         "uniform_all_case_extension_only": True,
     }:
         raise ValueError("Platform-entry order execution bounds changed")

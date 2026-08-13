@@ -2779,6 +2779,53 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(result["summary"]["route_switch_count"], 0)
         self.assertEqual(environment.step_calls, 0)
 
+    def test_live_outer_budget_is_forwarded_to_native_pp(self) -> None:
+        class BudgetAwareEnvironment(UnlimitedRepairEnvironment):
+            def __init__(self) -> None:
+                super().__init__(solve_after=1, timing_v2=True)
+                self.received_budgets: list[float] = []
+
+            def step_with_time_limit(
+                self, action: dict, pp_time_limit_seconds: float
+            ) -> dict:
+                self.received_budgets.append(float(pp_time_limit_seconds))
+                return self.step(action)
+
+        with tempfile.TemporaryDirectory() as directory:
+            environment = BudgetAwareEnvironment()
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "official_adaptive",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "run",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 10,
+                "metric_iteration_budget": 10,
+                "wall_time_budget_seconds": 10.0,
+                "stopping_rule": "historical",
+                "proposal": {},
+            }
+            with patch(
+                "experiments.closed_loop_confirmation._make_environment",
+                return_value=environment,
+            ):
+                result = _closed_loop_episode_worker(job)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(len(environment.received_budgets), 1)
+        self.assertGreater(environment.received_budgets[0], 0.0)
+        self.assertLessEqual(environment.received_budgets[0], 10.0)
+
     def test_trace_validation_rejects_wrong_episode_and_resume_reruns_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             job = {

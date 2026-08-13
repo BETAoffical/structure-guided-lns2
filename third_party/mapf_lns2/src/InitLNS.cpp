@@ -636,6 +636,9 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     neighbor.colliding_pairs.clear();
     runtime = ((fsec)(Time::now() - start_time)).count();
     double T = min(time_limit - runtime, replan_time_limit);
+    if (transition.requested_action.pp_time_limit_seconds >= 0.0)
+        T = min(T, transition.requested_action.pp_time_limit_seconds);
+    T = max(0.0, T);
     auto time = Time::now();
     ConstraintTable constraint_table(instance.num_of_cols, instance.map_size, nullptr, &path_table);
     vector<int> old_path_index(agents.size(), -1);
@@ -782,6 +785,9 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
     neighbor.colliding_pairs.clear();
     runtime = ((fsec)(Time::now() - start_time)).count();
     double T = min(time_limit - runtime, replan_time_limit);
+    if (transition.requested_action.pp_time_limit_seconds >= 0.0)
+        T = min(T, transition.requested_action.pp_time_limit_seconds);
+    T = max(0.0, T);
     auto time = Time::now();
     ConstraintTable constraint_table(instance.num_of_cols, instance.map_size, nullptr, &path_table);
     while (p != shuffled_agents.end() && ((fsec)(Time::now() - time)).count() < T)

@@ -36,6 +36,12 @@ struct RepairAction
     // the recorded neighborhood without repeating the former, so it needs an
     // independent PP seed to reproduce low-level tie breaking exactly.
     int pp_random_seed = -1;
+    // Optional wall-clock budget for this PP invocation. The Python runtime
+    // uses it to propagate the live remainder of an outer, reset-inclusive
+    // episode budget even when the native environment itself is configured
+    // with the unlimited-time sentinel. A negative value keeps the upstream
+    // native behavior.
+    double pp_time_limit_seconds = -1.0;
     // Opt-in causal instrumentation. Disabled by default so normal solver
     // timing and PP acceptance semantics do not pay diagnostic-loop overhead.
     bool collect_pp_diagnostics = false;

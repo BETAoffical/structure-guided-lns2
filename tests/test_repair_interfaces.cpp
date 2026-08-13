@@ -177,6 +177,48 @@ void requireLowLevelDeadlineIsEnforced()
             "space-time A* ignored an expired low-level deadline");
 }
 
+void requireExpiredPPInvocationRollsBack()
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(0);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    require(solver.initialize(), "failed to initialize PP-budget source");
+    const RepairState before = solver.getRepairState();
+    require(!before.conflict_edges.empty(), "PP-budget source has no conflicts");
+
+    RepairAction action;
+    action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    action.agents = {
+        before.conflict_edges.front().first,
+        before.conflict_edges.front().second,
+    };
+    action.random_seed = 123;
+    action.pp_random_seed = 456;
+    action.pp_time_limit_seconds = 0.0;
+    require(solver.step(action), "expired PP invocation did not return cleanly");
+    const RepairTransition& transition = solver.getLastTransition();
+    const RepairState after = solver.getRepairState();
+    require(!transition.replan_success && transition.pp_rolled_back,
+            "expired PP invocation did not roll back");
+    require(transition.pp_failure_reason == PPFailureReason::TIME_LIMIT,
+            "expired PP invocation has the wrong failure reason");
+    require(transition.pp_attempted_agent_count == 0,
+            "expired PP invocation started a low-level search");
+    require(before.num_of_colliding_pairs == after.num_of_colliding_pairs &&
+                before.sum_of_costs == after.sum_of_costs,
+            "expired PP invocation changed aggregate repair state");
+    require(before.agents.size() == after.agents.size(),
+            "expired PP invocation changed agent cardinality");
+    for (size_t index = 0; index < before.agents.size(); index++)
+        require(before.agents[index].path == after.agents[index].path,
+                "expired PP invocation changed an agent path");
+}
+
 bool sameState(const RepairState& left, const RepairState& right);
 
 Snapshot stepWithActionSeed(int solver_seed, int action_seed)
@@ -389,6 +431,7 @@ int main()
 {
     requireIncompleteInitialSolutionIsNotFeasible();
     requireLowLevelDeadlineIsEnforced();
+    requireExpiredPPInvocationRollsBack();
     const Snapshot first = initializeWithSeed(7);
     const Snapshot second = initializeWithSeed(7);
     require(first.conflicts == second.conflicts, "reset conflict count is not deterministic");

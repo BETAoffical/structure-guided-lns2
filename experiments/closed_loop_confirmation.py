@@ -2688,7 +2688,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     break
                 repair_started = time.perf_counter()
                 try:
-                    result = _plain(environment.step(action))
+                    timed_step = getattr(environment, "step_with_time_limit", None)
+                    if wall_budget is not None and callable(timed_step):
+                        live_pp_budget = max(
+                            0.0,
+                            wall_budget - (repair_started - ttf_started_wall),
+                        )
+                        result = _plain(timed_step(action, live_pp_budget))
+                    else:
+                        result = _plain(environment.step(action))
                 except RuntimeError as error:
                     elapsed_after_error = time.perf_counter() - ttf_started_wall
                     if (

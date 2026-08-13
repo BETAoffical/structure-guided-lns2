@@ -21,6 +21,15 @@
     "restart_entire_initial_schedule": true,
     "preserve_superseded_artifacts": true
   },
+  "execution_amendment_3_parent_commit": "e61c9a3d89cb132e94ad1f292c130e6e5b1576e1",
+  "execution_amendment_3_reason": "propagate_the_live_reset_inclusive_outer_wall_remainder_into_each_native_PP_call_after_r3_proved_that_the_unlimited_native_sentinel_bypassed_the_low_level_deadline_fix",
+  "execution_amendment_3_recovery": {
+    "superseded_output": "build/stride-platformentry-order-v1-r3",
+    "replacement_output": "build/stride-platformentry-order-v1-r4",
+    "completed_old_episodes_imported": 0,
+    "restart_entire_initial_schedule": true,
+    "preserve_superseded_artifacts": true
+  },
   "inputs": {
     "pretail_registration": {
       "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
@@ -73,6 +82,8 @@
     "right_censoring_is_valid_state_evidence": true,
     "right_censoring_is_not_an_execution_error": true,
     "external_process_timeout_is_execution_error": true,
+    "live_outer_wall_remainder_propagated_to_native_pp": true,
+    "native_unlimited_sentinel_never_overrides_outer_wall_fuse": true,
     "uniform_all_case_extension_only": true
   },
   "platform_definition": {

@@ -377,6 +377,8 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["requested_heuristic"] = repairHeuristicName(transition.requested_action.heuristic);
     result["requested_random_seed"] = transition.requested_action.random_seed;
     result["requested_pp_random_seed"] = transition.requested_action.pp_random_seed;
+    result["requested_pp_time_limit_seconds"] =
+        transition.requested_action.pp_time_limit_seconds;
     result["requested_collect_pp_diagnostics"] =
         transition.requested_action.collect_pp_diagnostics;
     result["applied_pp_random_seed"] = transition.applied_pp_random_seed;
@@ -597,10 +599,27 @@ public:
 
     py::dict step(const py::dict& action_value)
     {
+        return stepImpl(action_value, -1.0);
+    }
+
+    py::dict stepWithTimeLimit(const py::dict& action_value,
+                               double pp_time_limit_seconds)
+    {
+        if (!std::isfinite(pp_time_limit_seconds) ||
+            pp_time_limit_seconds < 0.0)
+            throw py::value_error(
+                "pp_time_limit_seconds must be finite and non-negative");
+        return stepImpl(action_value, pp_time_limit_seconds);
+    }
+
+    py::dict stepImpl(const py::dict& action_value,
+                      double pp_time_limit_seconds)
+    {
         const auto binding_started = DiagnosticClock::now();
         if (!solver)
             throw std::runtime_error("reset() must be called before step()");
         RepairAction action = parseAction(action_value);
+        action.pp_time_limit_seconds = pp_time_limit_seconds;
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
         const bool already_done = solver->isDone();
@@ -1070,6 +1089,8 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("neighborhood_sizes"), py::arg("random_seeds"),
              py::arg("trials"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
+        .def("step_with_time_limit", &LNS2RepairEnv::stepWithTimeLimit,
+             py::arg("action"), py::arg("pp_time_limit_seconds"))
         .def("get_state", &LNS2RepairEnv::getState)
         .def("get_state_revision", &LNS2RepairEnv::getStateRevision)
         .def("get_last_reset_timings", &LNS2RepairEnv::getLastResetTimings);

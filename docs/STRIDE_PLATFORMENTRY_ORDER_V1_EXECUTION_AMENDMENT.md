@@ -55,3 +55,31 @@ therefore name that path and carry the new binary hash.  Preserve `r2`, import
 none of its 88 completed episodes, and restart all 288 jobs under the new
 `build/stride-platformentry-order-v1-r3` identity.  This correction changes no
 scientific action, seed, schedule, or time limit.
+
+## Outer-budget propagation correction
+
+The canonical `r3` run passed all 17 qualification jobs but stopped at 85/288
+scheduled jobs.  The failed 600-agent `native_order`, trial-1 episode had
+completed five transitions by 173.52 seconds and then began one more PP call.
+Its native environment used the registered unlimited-time sentinel because
+the 180-second limit is reset-inclusive and owned by the Python closed-loop
+runtime.  Consequently, the low-level deadline added above still received the
+native sentinel rather than the 6.48-second live outer remainder.  A serial
+reproduction completed that last PP after 31.43 seconds, at 204.94 seconds,
+and showed a 24.94-second scientific-budget overshoot.  Under the formal
+16-worker load the same missing propagation reached the independent
+240-second process fuse.
+
+The closed-loop runtime now passes the live reset-inclusive wall remainder to
+each native PP invocation through a separate `step_with_time_limit` binding.
+`InitLNS::runPP` intersects that value with its native limits, including in
+the no-diagnostics path.  An expired invocation performs no low-level search,
+records `time_limit`, and restores the entire old neighborhood atomically.
+Ordinary `step()` callers retain their previous native timing semantics.
+
+The exact failed r3 job, state, arm, trial and PP seed now closes as a valid
+`wall_timeout` episode in 180.80 process seconds, with only 0.14 seconds of
+finalization overshoot and no budget-external conflict improvement.  Preserve
+`r3`, import none of its 84 valid episodes, and restart all 288 jobs in
+`build/stride-platformentry-order-v1-r4`.  The 64-decision, 180-second wall,
+240-second process and 300-second outer-job limits remain unchanged.
