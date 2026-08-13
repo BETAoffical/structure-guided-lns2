@@ -227,7 +227,7 @@ def validate_registration(config: dict[str, Any]) -> None:
         raise ValueError("CycleTransition claim boundary changed")
 
 
-def load_registration(
+def load_cycletransition_registration(
     config_path: str | Path,
 ) -> tuple[Path, Path, dict[str, Any], dict[str, Path]]:
     path = Path(config_path).resolve()
@@ -511,7 +511,7 @@ def _failure(job: dict[str, Any], status: str, error: str) -> dict[str, Any]:
 def prepare_cycletransition(
     *, config_path: str | Path, output: str | Path, workers: int | None = None
 ) -> dict[str, Any]:
-    config_path, root, config, inputs = load_registration(config_path)
+    config_path, root, config, inputs = load_cycletransition_registration(config_path)
     metadata, state_rows, logical_rows = build_frozen_cohort(
         inputs["marginalpool_registration"]
     )
@@ -861,7 +861,7 @@ def collect_cycletransition(
     workers: int | None = None,
     resume: bool = True,
 ) -> dict[str, Any]:
-    config_path, _root, config, inputs = load_registration(config_path)
+    config_path, _root, config, inputs = load_cycletransition_registration(config_path)
     output = Path(output).resolve()
     preparation = _read_json(output / "preparation_report.json")
     if (
@@ -1066,7 +1066,9 @@ def _map_metrics(states: list[dict[str, Any]]) -> dict[str, Any]:
 def analyze_cycletransition(
     *, config_path: str | Path, collection: str | Path, output: str | Path
 ) -> dict[str, Any]:
-    config_path, _root, config, _inputs = load_registration(config_path)
+    config_path, _root, config, _inputs = load_cycletransition_registration(
+        config_path
+    )
     collection = Path(collection).resolve()
     output = Path(output).resolve()
     status = _read_json(collection / "collection_status.json")
@@ -1316,7 +1318,7 @@ def analyze_cycletransition(
 __all__ = [
     "analyze_cycletransition",
     "collect_cycletransition",
-    "load_registration",
+    "load_cycletransition_registration",
     "prepare_cycletransition",
     "validate_registration",
 ]
