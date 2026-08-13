@@ -2572,6 +2572,21 @@
       "path": "tests/evaluation/test_stride_successor_state_inventory.py",
       "role": "active",
       "contract": "Freeze successor-state reconstruction, post-successor no-op streak and right-censoring semantics."
+    },
+    {
+      "path": "experiments/stride_successor_repairability.py",
+      "role": "active",
+      "purpose": "Measure the complete frozen V2 base-pool PP repairability distribution in every exact first-action successor state."
+    },
+    {
+      "path": "scripts/run_stride_successor_repairability.py",
+      "role": "active",
+      "purpose": "Prepare, collect and analyze the bounded 16-worker successor-repairability mechanism probe."
+    },
+    {
+      "path": "tests/evaluation/test_stride_successor_repairability.py",
+      "role": "active",
+      "contract": "Freeze outcome-blind preflight selection, semantic candidate-trial caching, full distribution metrics, seed-half stability and no-training/no-TTF boundaries."
     }
   ]
 }
