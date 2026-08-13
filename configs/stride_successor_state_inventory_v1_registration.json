@@ -1,0 +1,83 @@
+{
+  "schema": "lns2.stride.successor_state_inventory_registration.v1",
+  "scientific_status": "preregistered_existing_forced_transition_inventory",
+  "experiment_id": "stride-successor-state-inventory-v1",
+  "pre_registration_parent_commit": "2a0cb3de6370460634f3f701cab1824186b796f0",
+  "inputs": {
+    "pretail_registration": {
+      "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
+      "sha256": "9d5588dabca7cff85470b0ea419127c7ff941f24f82bf787dd77950aaee2d00b"
+    },
+    "execution_schedule": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/execution_schedule.jsonl",
+      "sha256": "a619aba720f5ac5ed07a3e79750535255909952c34000365a7fc7b0df91905ec"
+    },
+    "pretail_report": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/pretail_forced_continuation_report.json",
+      "sha256": "39f319794155c892022d018f6b8d855d6cabfe4dfc5f81e6a4ab903d91fb2952"
+    },
+    "pretail_status": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/pretail_forced_continuation_status.json",
+      "sha256": "31c4734a7b0e89c560ab0149eec471ff6a7aa6e3510a9a50e9302d8955882701"
+    },
+    "pretail_runner_config": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/runner_config.json",
+      "sha256": "d7eb347ba130e2999be7b8f0999d871662ca14a17d456f0d3b8724a901fc510b"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    }
+  },
+  "source_collection": {
+    "path": "build/stride-pretail-forced-continuation-v1-r3",
+    "manifest_file_count": 24,
+    "manifest_index_sha256": "d10e6ae57bad16ccfd8c7f416b3c828be87850818a48ac453ed69d0e7966266c",
+    "trace_format": "delta-gzip-v2"
+  },
+  "cohort": {
+    "case_count": 45,
+    "trial_indices": [0, 1],
+    "arms": ["actual_selected", "one_step_oracle", "coverage_diverse"],
+    "episode_count": 270,
+    "include_every_registered_episode": true,
+    "no_result_based_exclusion": true
+  },
+  "analysis": {
+    "worker_count": 16,
+    "forced_transition_index": 0,
+    "successor_is_exact_state_after_forced_transition": true,
+    "exact_successor_noop_streak_starts_at_next_decision": true,
+    "first_strict_drop_is_relative_to_successor_conflict_count": true,
+    "right_censor_unobserved_state_change_or_conflict_drop": true,
+    "future_continuation_outcomes_are_diagnostic_only": true
+  },
+  "integrity_gates": {
+    "required_episode_count": 270,
+    "required_forced_transition_count": 270,
+    "required_reconstructed_successor_count": 270,
+    "required_trace_sha_mismatch_count": 0,
+    "required_state_fingerprint_mismatch_count": 0,
+    "required_candidate_mismatch_count": 0,
+    "required_pp_seed_or_order_mismatch_count": 0,
+    "required_invalid_action_count": 0,
+    "required_execution_error_count": 0
+  },
+  "decision_rule": {
+    "all_integrity_gates_pass": "permit_preregistration_of_bounded_successor_repairability_probe",
+    "any_integrity_gate_fails": "stop_and_preserve_artifacts",
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false
+  },
+  "claim_boundary": {
+    "existing_trace_inventory_only": true,
+    "new_solver_runs_allowed": false,
+    "model_training_allowed": false,
+    "runtime_controller_change_allowed": false,
+    "future_outcome_used_as_online_feature": false,
+    "longtail_prevention_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "no_result_based_exclusion": true
+  }
+}

@@ -2557,6 +2557,21 @@
       "path": "tests/evaluation/test_stride_repairability_stability.py",
       "role": "active",
       "contract": "Freeze fixed seed halves, robust V2-relative quality pool, repairability direction agreement and cross-half regret semantics."
+    },
+    {
+      "path": "experiments/stride_successor_state_inventory.py",
+      "role": "active",
+      "purpose": "Reconstruct and audit every exact first-action successor state in the frozen bounded PreTail cohort without new solver runs."
+    },
+    {
+      "path": "scripts/run_stride_successor_state_inventory.py",
+      "role": "active",
+      "purpose": "Run the preregistered 16-worker existing-trace successor-state inventory."
+    },
+    {
+      "path": "tests/evaluation/test_stride_successor_state_inventory.py",
+      "role": "active",
+      "contract": "Freeze successor-state reconstruction, post-successor no-op streak and right-censoring semantics."
     }
   ]
 }
