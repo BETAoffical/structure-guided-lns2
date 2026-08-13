@@ -1,0 +1,94 @@
+{
+  "schema": "lns2.stride.platformentry_order_registration.v1",
+  "scientific_status": "preregistered_bounded_first_action_order_mechanism",
+  "experiment_id": "stride-platformentry-order-v1",
+  "pre_registration_parent_commit": "bbebdb44f4acad14d69e5523c95da657a177417d",
+  "inputs": {
+    "pretail_registration": {
+      "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
+      "sha256": "9d5588dabca7cff85470b0ea419127c7ff941f24f82bf787dd77950aaee2d00b"
+    },
+    "platform_entry_witnesses": {
+      "path": "build/stride-repairdependencypool-v1/platform_entry_witnesses.jsonl",
+      "sha256": "202f88bc43c72f7d2c6fa48bde32dd20069906bc769e5b57d9ad238eb12cec53"
+    },
+    "runtime_config": {
+      "path": "configs/stride_platformentry_order_runtime_v1.json",
+      "sha256": "18eebf90e8aa77597fceee1954fb611d1cb781bc7071193b1316f5a095c7720e"
+    }
+  },
+  "cohort": {
+    "source_case_count": 45,
+    "escape_classification": "same_set_order_escape",
+    "case_count": 36,
+    "checkpoint_kind": "first_structural_selection",
+    "selection_rule": "all frozen cases with observed same-set order escape",
+    "outcome_enriched_mechanism_cohort": true,
+    "generalization_claim": false,
+    "no_case_exclusion_after_registration": true
+  },
+  "arms": [
+    "native_order",
+    "conflict_priority_order"
+  ],
+  "arm_definitions": {
+    "native_order": "force the historical selected agent set once and let native PP apply its seeded shuffle",
+    "conflict_priority_order": "force the identical agent set once with explicit descending pre-action conflict-degree then agent-id order"
+  },
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "paired_first_action_pp_seed": true,
+    "first_action_forced_exactly_once": true,
+    "continuation_controller": "matching_frozen_structpool_or_slotpool",
+    "qualification_mode": "build_current_protocol_v2_full_reset_set_once",
+    "qualification_worker_count": 16,
+    "qualification_process_timeout_seconds": 360.0,
+    "worker_count": 16,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_timeout": true,
+    "right_censoring_is_valid_state_evidence": true,
+    "right_censoring_is_not_an_execution_error": true,
+    "external_process_timeout_is_execution_error": true,
+    "uniform_all_case_extension_only": true
+  },
+  "platform_definition": {
+    "minimum_consecutive_exact_rollbacks": 3,
+    "replan_success_required": false,
+    "repair_structure_fingerprint_unchanged": true,
+    "conflict_edge_set_unchanged": true,
+    "same_repair_structure_fingerprint_across_streak": true,
+    "maximum_observation_decisions": 64
+  },
+  "initial_extension_gate": {
+    "overall_platform_risk_difference_order_minus_native_strictly_below": 0.0,
+    "success_rate_difference_order_minus_native_minimum": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05,
+    "all_cases_and_both_arms_complete_or_validly_censored": true
+  },
+  "final_gate": {
+    "paired_case_cluster_bootstrap_replicates": 10000,
+    "paired_platform_risk_difference_95pct_upper_strictly_below": 0.0,
+    "success_rate_difference_order_minus_native_minimum": 0.0,
+    "normalized_fixed_auc_difference_order_minus_native_strictly_below": 0.0,
+    "kaplan_meier_restricted_mean_repair_decision_difference_order_minus_native_strictly_below": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "candidate_pool_claim": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false,
+    "multiple_pp_runtime_retry_allowed": false,
+    "no_result_based_exclusion": true,
+    "censored_ttf_is_not_imputed": true
+  }
+}

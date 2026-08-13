@@ -2612,6 +2612,21 @@
       "path": "tests/runtime/test_repairdependencypool.py",
       "role": "active",
       "contract": "Freeze pre-action blocker evidence, compactness, deduplication, family rotation and conservative Pareto fallback semantics."
+    },
+    {
+      "path": "experiments/stride_platformentry_order.py",
+      "role": "active",
+      "purpose": "Run and analyze the bounded same-neighborhood first-action PP-order platform-entry mechanism experiment."
+    },
+    {
+      "path": "scripts/run_stride_platformentry_order.py",
+      "role": "active",
+      "purpose": "Collect and analyze the preregistered 16-worker PlatformEntry order mechanism with uniform extension gates."
+    },
+    {
+      "path": "tests/evaluation/test_stride_platformentry_order.py",
+      "role": "active",
+      "contract": "Freeze the 36-case cohort, paired action identity, explicit PP-order intervention, persistent-platform definition, censoring semantics and paired bootstrap."
     }
   ]
 }
