@@ -2427,6 +2427,31 @@
       "path": "tests/evaluation/test_stride_causalclosurepool_structcoverage.py",
       "role": "active",
       "contract": "Freeze realized-agent-set overlap, structural opportunity recall gates and the posthoc/no-TTF/no-long-tail claim boundary."
+    },
+    {
+      "path": "lns2_selector/runtime/causaltopopool.py",
+      "role": "active",
+      "purpose": "Combine preserved causal actions with exact natural topology closures while rejecting oversized relations without truncation or fixed preferred sizes."
+    },
+    {
+      "path": "experiments/stride_causaltopopool.py",
+      "role": "active",
+      "purpose": "Materialize and audit the outcome-blind hybrid V2 plus CausalClosure plus natural-topology candidate pool."
+    },
+    {
+      "path": "scripts/run_stride_causaltopopool.py",
+      "role": "active",
+      "purpose": "Run the preregistered 16-worker CausalTopoPool compactness and integrity stage."
+    },
+    {
+      "path": "tests/runtime/test_causaltopopool.py",
+      "role": "active",
+      "contract": "Verify deterministic exact closures, whole-closure oversized rejection, deduplication and absence of preferred size targets."
+    },
+    {
+      "path": "tests/evaluation/test_stride_causaltopopool.py",
+      "role": "active",
+      "contract": "Freeze preserved source pools, 16-worker compactness-only execution and no-training/no-TTF/no-long-tail claim boundaries."
     }
   ]
 }

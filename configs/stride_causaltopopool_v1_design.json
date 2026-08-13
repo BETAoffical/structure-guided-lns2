@@ -1,0 +1,80 @@
+{
+  "schema": "lns2.stride.causaltopopool_design.v1",
+  "scientific_status": "preregistered_outcome_blind_hybrid_compactness_audit",
+  "experiment_id": "stride-causaltopopool-v1",
+  "pre_registration_parent_commit": "34fb43e550afd3bdee8141cb89054fbc4d64d2b8",
+  "inputs": {
+    "causalclosure_cohort": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/causalclosure_cohort.jsonl",
+      "sha256": "4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50"
+    },
+    "causalclosure_compactness": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/compactness_report.json",
+      "sha256": "3191d56e96cdfcf2e4d8558290a6657ca7001ae1a23c69d35978e18a3f997768"
+    }
+  },
+  "cohort": {
+    "state_count": 78,
+    "base_candidate_count": 1367,
+    "causal_candidate_count": 930,
+    "selection": "all frozen CausalClosurePool development states",
+    "outcome_enriched": true,
+    "no_result_based_exclusion": true
+  },
+  "generator": {
+    "id": "stride-causaltopopool-v1",
+    "preserved_sources": [
+      "complete_v2_base_pool",
+      "complete_causalclosurepool_v2"
+    ],
+    "topology_support_families": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary_articulation",
+      "topology_boundary_low_degree",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "exact_natural_closure_levels": [
+      "support",
+      "conflict_neighbor_closure",
+      "touched_component_closure",
+      "active_path_contact_closure"
+    ],
+    "maximum_topology_candidates": 12,
+    "maximum_neighborhood_size": 64,
+    "maximum_topology_jaccard": 0.9,
+    "fixed_preferred_sizes": [],
+    "oversized_closure_policy": "reject_exact_closure_without_truncation",
+    "history_conditioned_candidates": false,
+    "future_outcomes_used": false,
+    "current_ranker_used": false
+  },
+  "execution": {
+    "workers": 16,
+    "job_granularity": "state",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true
+  },
+  "readiness_gates": {
+    "expected_base_candidate_count": 1367,
+    "expected_causal_candidate_count": 930,
+    "minimum_topology_candidates_per_state": 1,
+    "maximum_topology_candidates_per_state": 12,
+    "no_truncated_closures": true,
+    "maximum_neighborhood_size_respected": true,
+    "no_exact_existing_duplicates": true,
+    "zero_errors_and_timeouts": true
+  },
+  "next_step_if_passed": "preregister_ranker_free_paired_native_pp_opportunity_audit_for_novel_topology_candidates",
+  "claim_boundary": {
+    "compactness_and_integrity_audit_only": true,
+    "candidate_outcomes_used": false,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "native_pp_collection_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false
+  }
+}
