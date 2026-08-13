@@ -8,6 +8,7 @@ from experiments.stride_structshell_audit import (
     CONFIG_SCHEMA,
     EXPERIMENT_ID,
     _rule_candidates,
+    _tail_rows,
     parse_structpool_family,
     select_structural_knee,
     select_support_nearest,
@@ -114,6 +115,136 @@ class StructShellAuditTest(unittest.TestCase):
         self.assertFalse(available["support_nearest"])
         self.assertEqual(selected["support_nearest"], set())
         self.assertTrue(available["structural_knee"])
+
+    def test_pretail_identity_uses_first_structural_checkpoint(self) -> None:
+        case_id = "case-1"
+        candidate_id = "candidate-16"
+        checkpoints = [
+            {
+                "case_id": case_id,
+                "checkpoint_kind": "first_structural_selection",
+                "state_fingerprint": "structural-state",
+                "task_id": "task-1",
+                "solver_seed": 3,
+            },
+            {
+                "case_id": case_id,
+                "checkpoint_kind": "first_repeat_stall",
+                "state_fingerprint": "stall-state",
+                "task_id": "task-1",
+                "solver_seed": 3,
+            },
+        ]
+        schedule = [
+            {
+                "case_id": case_id,
+                "trial_index": 0,
+                "arm": "coverage_diverse",
+                "candidate_id": candidate_id,
+                "task_id": "task-1",
+                "solver_seed": 3,
+            }
+        ]
+        comparisons = [
+            {
+                "case_id": case_id,
+                "trial_index": 0,
+                "arm": "coverage_diverse",
+                "classification": "beneficial",
+                "reason": "lower_auc",
+                "identical_action": False,
+            }
+        ]
+        common = {
+            "map_id": "maze",
+            "task_id": "task-1",
+            "solver_seed": 3,
+            "base_candidate_ids": [],
+            "rule_selected_candidate_ids": {
+                rule: [candidate_id]
+                for rule in (
+                    "structural_knee",
+                    "support_nearest",
+                    "fixed_preferred",
+                    "equal_four_size_grid",
+                )
+            },
+            "rule_available": {
+                rule: True
+                for rule in (
+                    "structural_knee",
+                    "support_nearest",
+                    "fixed_preferred",
+                    "equal_four_size_grid",
+                )
+            },
+        }
+        maze_states = [
+            {
+                **common,
+                "state_fingerprint": "structural-state",
+                "all_candidate_ids": [candidate_id],
+            },
+            {
+                **common,
+                "state_fingerprint": "stall-state",
+                "all_candidate_ids": ["other-candidate"],
+            },
+        ]
+        rows, errors = _tail_rows(
+            comparisons, schedule, checkpoints, maze_states
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["state_fingerprint"], "structural-state")
+
+    def test_pretail_identity_rejects_candidate_outside_state_pool(self) -> None:
+        checkpoints = [
+            {
+                "case_id": "case-1",
+                "checkpoint_kind": "first_structural_selection",
+                "state_fingerprint": "state-1",
+                "task_id": "task-1",
+                "solver_seed": 3,
+            }
+        ]
+        schedule = [
+            {
+                "case_id": "case-1",
+                "trial_index": 0,
+                "arm": "coverage_diverse",
+                "candidate_id": "missing-candidate",
+                "task_id": "task-1",
+                "solver_seed": 3,
+            }
+        ]
+        comparisons = [
+            {
+                "case_id": "case-1",
+                "trial_index": 0,
+                "arm": "coverage_diverse",
+                "classification": "beneficial",
+                "reason": "lower_auc",
+                "identical_action": False,
+            }
+        ]
+        maze_states = [
+            {
+                "state_fingerprint": "state-1",
+                "map_id": "maze",
+                "task_id": "task-1",
+                "solver_seed": 3,
+                "all_candidate_ids": ["present-candidate"],
+                "base_candidate_ids": [],
+                "rule_selected_candidate_ids": {},
+                "rule_available": {},
+            }
+        ]
+        rows, errors = _tail_rows(
+            comparisons, schedule, checkpoints, maze_states
+        )
+        self.assertEqual(rows, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("pretail_candidate_left_state_pool", errors[0])
 
 
 if __name__ == "__main__":

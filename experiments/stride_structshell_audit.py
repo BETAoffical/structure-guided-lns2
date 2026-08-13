@@ -32,7 +32,9 @@ FAMILY_LABELS = {
 
 
 def _fraction(numerator: int, denominator: int) -> float | None:
-    return numerator / denominator if denominator else None
+    if denominator == 0:
+        return None
+    return float(numerator) / float(denominator)
 
 
 def _mean(values: Iterable[float]) -> float | None:
@@ -368,6 +370,9 @@ def _maze_state_job(
     return {
         "state_fingerprint": state_key,
         "map_id": str(rows[0]["map_id"]),
+        "task_id": str(rows[0]["task_id"]),
+        "solver_seed": int(rows[0]["solver_seed"]),
+        "all_candidate_ids": sorted(str(row["candidate_id"]) for row in rows),
         "base_candidate_ids": sorted(str(row["candidate_id"]) for row in base),
         "structural_candidate_count": len(structural),
         "robust_action_ids": sorted(robust_ids),
@@ -449,13 +454,25 @@ def _tail_rows(
     maze_states: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
     errors: list[str] = []
-    case_state = {
-        str(row["case_id"]): str(row["state_fingerprint"]) for row in checkpoints
-    }
-    schedule_by_key = {
-        (str(row["case_id"]), int(row["trial_index"]), str(row["arm"])): row
-        for row in schedule
-    }
+    eligible_checkpoints = [
+        row
+        for row in checkpoints
+        if str(row.get("checkpoint_kind")) == "first_structural_selection"
+    ]
+    checkpoint_by_case: dict[str, dict[str, Any]] = {}
+    for row in eligible_checkpoints:
+        case_id = str(row["case_id"])
+        if case_id in checkpoint_by_case:
+            errors.append(f"duplicate_first_structural_case:{case_id}")
+            continue
+        checkpoint_by_case[case_id] = row
+    schedule_by_key: dict[tuple[str, int, str], dict[str, Any]] = {}
+    for row in schedule:
+        key = (str(row["case_id"]), int(row["trial_index"]), str(row["arm"]))
+        if key in schedule_by_key:
+            errors.append(f"duplicate_pretail_schedule_key:{key}")
+            continue
+        schedule_by_key[key] = row
     state_by_key = {str(row["state_fingerprint"]): row for row in maze_states}
     output: list[dict[str, Any]] = []
     for comparison in comparisons:
@@ -465,12 +482,29 @@ def _tail_rows(
             str(comparison["arm"]),
         )
         item = schedule_by_key.get(key)
-        state_key = case_state.get(key[0])
+        checkpoint = checkpoint_by_case.get(key[0])
+        state_key = (
+            str(checkpoint["state_fingerprint"])
+            if checkpoint is not None
+            else None
+        )
         state = state_by_key.get(str(state_key)) if state_key is not None else None
-        if item is None or state is None:
+        if item is None or checkpoint is None or state is None:
             errors.append(f"missing_pretail_identity:{key}")
             continue
+        if (
+            str(item.get("task_id")) != str(checkpoint.get("task_id"))
+            or int(item.get("solver_seed", -1))
+            != int(checkpoint.get("solver_seed", -2))
+            or str(state["task_id"]) != str(checkpoint.get("task_id"))
+            or int(state["solver_seed"]) != int(checkpoint.get("solver_seed", -1))
+        ):
+            errors.append(f"pretail_task_or_seed_mismatch:{key}")
+            continue
         candidate_id = str(item["candidate_id"])
+        if candidate_id not in set(state["all_candidate_ids"]):
+            errors.append(f"pretail_candidate_left_state_pool:{key}:{candidate_id}")
+            continue
         base = candidate_id in set(state["base_candidate_ids"])
         output.append(
             {

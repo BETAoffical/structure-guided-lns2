@@ -8,3 +8,14 @@ Both numbers are present in the same immutable registered structural-coverage re
 - 47 is the number of states containing at least one of the 209 robust structural actions.
 
 The audit's action-retention question necessarily uses the second population. The registration now freezes both identities with explicit names. No state or action was added, removed, or selected by result. The primary `structural_knee` rule, all comparator definitions, all readiness thresholds, the equal-four-size fallback, and every claim boundary remain unchanged. The rejected report is overwritten only after the corrected identity checks pass.
+
+A subsequent review rejected the first corrected report before acceptance because the
+PreTail `case_id` is deliberately shared by two logical checkpoints: one
+`first_structural_selection` checkpoint and one `first_repeat_stall` checkpoint.
+The PreTail protocol constructs its 45 cases exclusively from
+`first_structural_selection`, but the initial audit used an unfiltered dictionary and
+therefore let the later stall row overwrite the intended state. The implementation now
+reproduces the frozen checkpoint-kind filter and additionally verifies the task, solver
+seed, state fingerprint, and candidate-pool membership for every scheduled action. This
+is an identity correction only; no outcome, rule, threshold, state, or candidate is
+changed.

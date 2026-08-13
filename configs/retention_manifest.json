@@ -2467,6 +2467,21 @@
       "path": "tests/evaluation/test_stride_causaltopopool_opportunity.py",
       "role": "active",
       "contract": "Freeze 5,856 paired topology jobs, stronger restoration gates, generic trial schema identity and no-training/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_structshell_audit.py",
+      "role": "active",
+      "purpose": "Audit nested StructPool size shells and outcome-blind size cutpoints against frozen non-tail, Maze and bounded-continuation evidence."
+    },
+    {
+      "path": "scripts/run_stride_structshell_audit.py",
+      "role": "active",
+      "purpose": "Run the preregistered sixteen-worker read-only StructShell audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_audit.py",
+      "role": "active",
+      "contract": "Freeze equal four-size fallback, outcome-blind cutpoint semantics, PreTail checkpoint identity and no-training/no-TTF boundaries."
     }
   ]
 }
