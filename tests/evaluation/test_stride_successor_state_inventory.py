@@ -70,8 +70,8 @@ class SuccessorStateInventoryTests(unittest.TestCase):
             _transition(3, successor, exit_state),
         ]
         result = successor_dynamics(initial, rows)
-        self.assertEqual(result["exact_successor_noop_streak"], 2)
-        self.assertEqual(result["decisions_to_first_state_change"], 3)
+        self.assertEqual(result["exact_repair_successor_noop_streak"], 2)
+        self.assertEqual(result["decisions_to_first_repair_state_change"], 3)
         self.assertEqual(result["decisions_to_first_strict_conflict_drop"], 3)
         self.assertFalse(result["strict_drop_right_censored"])
 
@@ -81,9 +81,9 @@ class SuccessorStateInventoryTests(unittest.TestCase):
         result = successor_dynamics(
             initial, [_transition(0, initial, successor)]
         )
-        self.assertTrue(result["state_change_right_censored"])
+        self.assertTrue(result["repair_state_change_right_censored"])
         self.assertTrue(result["strict_drop_right_censored"])
-        self.assertIsNone(result["decisions_to_first_state_change"])
+        self.assertIsNone(result["decisions_to_first_repair_state_change"])
 
     def test_terminal_successor_is_not_censored(self) -> None:
         initial = _state(0, [[0, 1]])
@@ -92,7 +92,7 @@ class SuccessorStateInventoryTests(unittest.TestCase):
             initial, [_transition(0, initial, successor)]
         )
         self.assertTrue(result["successor_feasible"])
-        self.assertFalse(result["state_change_right_censored"])
+        self.assertFalse(result["repair_state_change_right_censored"])
         self.assertFalse(result["strict_drop_right_censored"])
 
 

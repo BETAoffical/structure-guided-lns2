@@ -80,33 +80,36 @@ def successor_dynamics(
     successor_conflicts = int(successor["num_of_colliding_pairs"])
     successor_edges = _edge_signature(successor)
     state = successor
-    exact_noop_streak = 0
+    repair_noop_streak = 0
     conflict_signature_streak = 0
-    first_state_change: int | None = None
+    first_repair_state_change: int | None = None
     first_strict_drop: int | None = None
     left_successor = False
     returned_after_departure = False
     for offset, event in enumerate(transitions[1:], start=1):
         if int(event.get("decision_index", -1)) != offset:
             raise ValueError("transition decision indices are not contiguous")
-        before_full = state_fingerprint(state)
+        before_repair = repair_structure_fingerprint(state)
         after = _apply_transition(state, event)
-        after_full = state_fingerprint(after)
-        if first_state_change is None and after_full != successor_full:
-            first_state_change = offset
+        after_repair = repair_structure_fingerprint(after)
+        if (
+            first_repair_state_change is None
+            and after_repair != successor_repair
+        ):
+            first_repair_state_change = offset
             left_successor = True
-        elif left_successor and before_full == successor_full:
+        elif left_successor and before_repair == successor_repair:
             returned_after_departure = True
         if first_strict_drop is None and int(
             after["num_of_colliding_pairs"]
         ) < successor_conflicts:
             first_strict_drop = offset
         if (
-            offset == exact_noop_streak + 1
-            and before_full == successor_full
-            and after_full == successor_full
+            offset == repair_noop_streak + 1
+            and before_repair == successor_repair
+            and after_repair == successor_repair
         ):
-            exact_noop_streak += 1
+            repair_noop_streak += 1
         if (
             offset == conflict_signature_streak + 1
             and _edge_signature(state) == successor_edges
@@ -127,15 +130,15 @@ def successor_dynamics(
         "forced_conflict_delta": int(initial_state["num_of_colliding_pairs"])
         - successor_conflicts,
         "following_transition_count": max(0, len(transitions) - 1),
-        "exact_successor_noop_streak": exact_noop_streak,
+        "exact_repair_successor_noop_streak": repair_noop_streak,
         "successor_conflict_signature_noop_streak": conflict_signature_streak,
-        "decisions_to_first_state_change": first_state_change,
-        "state_change_right_censored": first_state_change is None
+        "decisions_to_first_repair_state_change": first_repair_state_change,
+        "repair_state_change_right_censored": first_repair_state_change is None
         and not bool(successor.get("feasible")),
         "decisions_to_first_strict_conflict_drop": first_strict_drop,
         "strict_drop_right_censored": first_strict_drop is None
         and not bool(successor.get("feasible")),
-        "returned_to_exact_successor_after_departure": returned_after_departure,
+        "returned_to_exact_repair_successor_after_departure": returned_after_departure,
         "final_reconstructed_fingerprint": state_fingerprint(state),
     }
 
@@ -273,17 +276,17 @@ def _percentile(values: list[float], quantile: float) -> float:
 
 
 def _group_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    state_change = [
-        int(row["decisions_to_first_state_change"])
+    repair_state_change = [
+        int(row["decisions_to_first_repair_state_change"])
         for row in rows
-        if row["decisions_to_first_state_change"] is not None
+        if row["decisions_to_first_repair_state_change"] is not None
     ]
     strict_drop = [
         int(row["decisions_to_first_strict_conflict_drop"])
         for row in rows
         if row["decisions_to_first_strict_conflict_drop"] is not None
     ]
-    noops = [int(row["exact_successor_noop_streak"]) for row in rows]
+    noops = [int(row["exact_repair_successor_noop_streak"]) for row in rows]
     return {
         "episode_count": len(rows),
         "forced_repair_state_change_rate": _mean(
@@ -295,16 +298,20 @@ def _group_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_forced_conflict_delta": _mean(
             float(row["forced_conflict_delta"]) for row in rows
         ),
-        "any_exact_successor_noop_rate": _mean(float(value > 0) for value in noops),
-        "mean_exact_successor_noop_streak": _mean(map(float, noops)),
-        "p95_exact_successor_noop_streak": _percentile(
+        "any_exact_repair_successor_noop_rate": _mean(
+            float(value > 0) for value in noops
+        ),
+        "mean_exact_repair_successor_noop_streak": _mean(map(float, noops)),
+        "p95_exact_repair_successor_noop_streak": _percentile(
             list(map(float, noops)), 0.95
         ),
-        "maximum_exact_successor_noop_streak": max(noops, default=0),
-        "state_change_right_censored_rate": _mean(
-            float(row["state_change_right_censored"]) for row in rows
+        "maximum_exact_repair_successor_noop_streak": max(noops, default=0),
+        "repair_state_change_right_censored_rate": _mean(
+            float(row["repair_state_change_right_censored"]) for row in rows
         ),
-        "mean_observed_decisions_to_state_change": _mean(map(float, state_change)),
+        "mean_observed_decisions_to_repair_state_change": _mean(
+            map(float, repair_state_change)
+        ),
         "strict_drop_right_censored_rate": _mean(
             float(row["strict_drop_right_censored"]) for row in rows
         ),

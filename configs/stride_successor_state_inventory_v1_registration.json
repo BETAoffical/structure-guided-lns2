@@ -47,10 +47,22 @@
     "worker_count": 16,
     "forced_transition_index": 0,
     "successor_is_exact_state_after_forced_transition": true,
-    "exact_successor_noop_streak_starts_at_next_decision": true,
+    "exact_repair_successor_noop_streak_starts_at_next_decision": true,
+    "exact_repair_successor_identity": "repair_structure_fingerprint_paths_and_conflicts",
+    "full_state_fingerprint_is_integrity_only": true,
     "first_strict_drop_is_relative_to_successor_conflict_count": true,
     "right_censor_unobserved_state_change_or_conflict_drop": true,
     "future_continuation_outcomes_are_diagnostic_only": true
+  },
+  "post_analysis_metric_correction": {
+    "preliminary_output_preserved_at": "build/stride-successor-state-inventory-v1-rejected-full-fingerprint",
+    "preliminary_result_observed_before_correction": true,
+    "original_error": "the complete state fingerprint includes iteration and low-level counters, so every following repair appeared to change state even when paths and conflicts were unchanged",
+    "correction": "use repair_structure_fingerprint for successor recurrence, no-op streaks, departures and returns; retain the complete fingerprint only for lossless trace reconstruction checks",
+    "cohort_changed": false,
+    "trace_or_outcome_changed": false,
+    "integrity_gate_changed": false,
+    "claim_boundary_changed": false
   },
   "integrity_gates": {
     "required_episode_count": 270,
