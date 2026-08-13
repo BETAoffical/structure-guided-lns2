@@ -12,6 +12,15 @@
     "restart_entire_initial_schedule": true,
     "preserve_superseded_artifacts": true
   },
+  "execution_amendment_2_parent_commit": "85d38a3b6e92107347b0af655f3233506753cebb",
+  "execution_amendment_2_reason": "rebuild_the_deadline_fix_into_the_canonical_build_linux_project_module_after_r2_producer_identity_proved_that_the_launcher_loaded_the_pre_fix_binary",
+  "execution_amendment_2_recovery": {
+    "superseded_output": "build/stride-platformentry-order-v1-r2",
+    "replacement_output": "build/stride-platformentry-order-v1-r3",
+    "completed_old_episodes_imported": 0,
+    "restart_entire_initial_schedule": true,
+    "preserve_superseded_artifacts": true
+  },
   "inputs": {
     "pretail_registration": {
       "path": "configs/stride_pretail_forced_continuation_v1_registration.json",

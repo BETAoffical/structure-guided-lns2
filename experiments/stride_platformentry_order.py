@@ -75,6 +75,10 @@ def load_platformentry_order_config(
         != "d53dea7ead078a8f302c576251a1eaef89acfd6e"
         or config.get("execution_amendment_reason")
         != "enforce_the_existing_native_PP_remaining_time_budget_inside_each_single_agent_search_after_the_first_formal_run_exposed_an_unbounded_low_level_overrun_before_any_outcome_analysis"
+        or config.get("execution_amendment_2_parent_commit")
+        != "85d38a3b6e92107347b0af655f3233506753cebb"
+        or config.get("execution_amendment_2_reason")
+        != "rebuild_the_deadline_fix_into_the_canonical_build_linux_project_module_after_r2_producer_identity_proved_that_the_launcher_loaded_the_pre_fix_binary"
     ):
         raise ValueError("Platform-entry order registration identity changed")
     if dict(config.get("execution_amendment_recovery") or {}) != {
@@ -85,6 +89,14 @@ def load_platformentry_order_config(
         "preserve_superseded_artifacts": True,
     }:
         raise ValueError("Platform-entry order recovery identity changed")
+    if dict(config.get("execution_amendment_2_recovery") or {}) != {
+        "superseded_output": "build/stride-platformentry-order-v1-r2",
+        "replacement_output": "build/stride-platformentry-order-v1-r3",
+        "completed_old_episodes_imported": 0,
+        "restart_entire_initial_schedule": True,
+        "preserve_superseded_artifacts": True,
+    }:
+        raise ValueError("Platform-entry order second recovery identity changed")
     if set(config.get("inputs") or {}) != {
         "pretail_registration",
         "platform_entry_witnesses",

@@ -39,3 +39,19 @@ or lengthen any scientific or process bound.
 
 No platform-effect result from the superseded run was inspected or used to
 choose this amendment.
+
+## Canonical-module correction
+
+The first replacement run (`r2`) also stopped at 89/288, on the paired
+`conflict_priority_order` arm of the same 600-agent state.  Its producer
+identity and partial trace proved that the launcher had loaded
+`build/linux/project/lns2_env...so`, whose hash still matched the pre-fix
+binary.  The targeted validation had loaded the newly built sibling module
+from `build/linux`, so it did not expose this path mismatch.
+
+The current source is now rebuilt into the repository's registered canonical
+module directory, `build/linux/project`.  The native producer identity must
+therefore name that path and carry the new binary hash.  Preserve `r2`, import
+none of its 88 completed episodes, and restart all 288 jobs under the new
+`build/stride-platformentry-order-v1-r3` identity.  This correction changes no
+scientific action, seed, schedule, or time limit.
