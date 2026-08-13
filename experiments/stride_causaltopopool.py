@@ -18,6 +18,7 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.state_analysis import analyze_state, analyze_static_grid
+from experiments.stride_causalclosurepool import _size_summary
 from experiments.stride_marginalpool_root_diagnostic import _feature_payload
 from lns2_selector.runtime.causaltopopool import (
     CAUSALTOPOPOOL_ID,
@@ -180,26 +181,6 @@ def _materialize_state(job: dict[str, Any]) -> dict[str, Any]:
             "history_context_used": False,
             "repair_order_controlled": False,
         },
-    }
-
-
-def _quantile(values: list[int], fraction: float) -> int:
-    ordered = sorted(values)
-    if not ordered:
-        return 0
-    index = max(0, math.ceil(fraction * len(ordered)) - 1)
-    return int(ordered[index])
-
-
-def _size_summary(values: list[int]) -> dict[str, Any]:
-    return {
-        "count": len(values),
-        "minimum": min(values, default=0),
-        "median": statistics.median(values) if values else 0.0,
-        "mean": statistics.fmean(values) if values else 0.0,
-        "p90": _quantile(values, 0.9),
-        "p95": _quantile(values, 0.95),
-        "maximum": max(values, default=0),
     }
 
 

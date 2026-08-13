@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import statistics
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -504,6 +504,10 @@ def analyze_causaltopology_trials(
                 )
                 for candidate in state_row["causaltopology_candidates"]
             ]
+            topology_metadata = {
+                str(candidate["candidate_id"]): candidate
+                for candidate in state_row["causaltopology_candidates"]
+            }
             base_best = max(
                 base_rows,
                 key=lambda row: (float(row["seed_mean"]), str(row["candidate_id"])),
@@ -526,6 +530,7 @@ def analyze_causaltopology_trials(
             topology_opportunity = stable_dominates(topology_best, base_best)
             causal_opportunity = bool(causal_state["new_stably_dominates_base_best"])
             for candidate in topology_rows:
+                metadata = topology_metadata[str(candidate["candidate_id"])]
                 candidate_results.append(
                     {
                         "state_fingerprint": state_key,
@@ -533,8 +538,8 @@ def analyze_causaltopology_trials(
                         "candidate_id": str(candidate["candidate_id"]),
                         "actual_size": int(candidate["actual_size"]),
                         "size_band": _size_band(int(candidate["actual_size"])),
-                        "family_groups": list(candidate["structpool_family_groups"]),
-                        "closure_levels": list(candidate["causaltopo_closure_levels"]),
+                        "family_groups": list(metadata["structpool_family_groups"]),
+                        "closure_levels": list(metadata["causaltopo_closure_levels"]),
                         "stably_dominates_base_best": stable_dominates(
                             candidate, base_best
                         ),

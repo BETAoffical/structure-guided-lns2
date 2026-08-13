@@ -63,6 +63,14 @@ class CausalTopoPoolOpportunityTest(unittest.TestCase):
         }
         self.assertTrue(_valid_trial(row, job=job, run_fingerprint="run"))
 
+    def test_aggregate_metadata_is_joined_from_frozen_candidate(self) -> None:
+        source = Path(__file__).resolve().parents[2] / "experiments" / (
+            "stride_causaltopopool_opportunity.py"
+        )
+        text = source.read_text(encoding="utf-8")
+        self.assertIn("topology_metadata = {", text)
+        self.assertIn('metadata["causaltopo_closure_levels"]', text)
+
 
 if __name__ == "__main__":
     unittest.main()
