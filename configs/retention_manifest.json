@@ -2512,6 +2512,36 @@
       "path": "tests/evaluation/test_stride_cycletransition.py",
       "role": "active",
       "contract": "Freeze result-blind cohort selection, exact edge metrics, V2 quality admissibility, joint soft-cycle stability, 300-second job bounds and no-training/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_plateau_escape_witness.py",
+      "role": "active",
+      "purpose": "Reconstruct frozen first-repeat plateaus, their exact PP realizations and observed escape witnesses without new solver runs or training."
+    },
+    {
+      "path": "scripts/run_stride_plateau_escape_witness.py",
+      "role": "active",
+      "purpose": "Run the 16-process existing-trajectory plateau and escape-witness mechanism audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_plateau_escape_witness.py",
+      "role": "active",
+      "contract": "Freeze pre-trigger plateau semantics, same-set and set-change exits, right censoring, repairability correlation and trigger-pool opportunity boundaries."
+    },
+    {
+      "path": "experiments/stride_repairability_opportunity.py",
+      "role": "active",
+      "purpose": "Audit quality-constrained paired PP-repairability opportunity relative to each frozen V2 anchor without reading future trajectories or runtime."
+    },
+    {
+      "path": "scripts/run_stride_repairability_opportunity.py",
+      "role": "active",
+      "purpose": "Run the frozen 78-state, 2,502-candidate repairability opportunity analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairability_opportunity.py",
+      "role": "active",
+      "contract": "Freeze paired seed identity, two-half repairability dominance, V2 quality noninferiority and no-training/no-TTF boundaries."
     }
   ]
 }

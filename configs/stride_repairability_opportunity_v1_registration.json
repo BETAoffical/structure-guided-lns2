@@ -1,0 +1,106 @@
+{
+  "schema": "lns2.stride.repairability_opportunity_registration.v1",
+  "scientific_status": "preregistered_existing_paired_pp_opportunity_audit",
+  "experiment_id": "stride-repairability-opportunity-v1",
+  "pre_registration_parent_commit": "c783b7fffd89b6c207507df1f36a49bcea0abc48",
+  "inputs": {
+    "collection_report": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/collection_report.json",
+      "sha256": "f888b2ca5a3ee91839eb8daf92d96cd0bdb1e39bb51b41589a7eedb4266f79a0"
+    },
+    "candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "repair_trials": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/repair_trials.jsonl",
+      "sha256": "e1b45746ec81296a945943d65bda6b8c4fef7d998f1d66deb4164fd717879e84"
+    },
+    "logical_checkpoint_results": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_results.jsonl",
+      "sha256": "efdbc8d7020628b3ac485d0946f9ad89b1b6d7afb547a29069d2009d41671973"
+    },
+    "source_analysis": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/action_replay_analysis.json",
+      "sha256": "8232e687db8009acee13ffbc523b625ee8c4fc5954fb3ffa10f4ce6567e02988"
+    },
+    "root_diagnostic_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "plateau_escape_report": {
+      "path": "build/stride-plateau-escape-witness-v1/plateau_escape_witness_report.json",
+      "sha256": "ecc062a8a37b2e1a4a8b6668fdf3d474a7d3bc8c23425d9bfc44b87b0b4ad827"
+    },
+    "plateau_escape_status": {
+      "path": "build/stride-plateau-escape-witness-v1/plateau_escape_witness_status.json",
+      "sha256": "6040dc385336c16a03de0fbc2cee0a4f1ec2cd5aabf1aab502c0cda87329919e"
+    }
+  },
+  "cohort": {
+    "distinct_state_count": 78,
+    "logical_checkpoint_count": 90,
+    "candidate_count": 2502,
+    "trial_count": 40032,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "selection_rule": "all frozen logical checkpoints and all their candidates; no result-based exclusion"
+  },
+  "v2_anchor": {
+    "definition": "original_pool_anchor_candidate_id frozen in each root diagnostic checkpoint",
+    "must_be_base_candidate": true
+  },
+  "quality_noninferiority": {
+    "candidate_seed_mean_at_least_anchor": true,
+    "candidate_lower_half_mean_at_least_anchor": true,
+    "candidate_first_fixed_half_mean_at_least_anchor": true,
+    "candidate_second_fixed_half_mean_at_least_anchor": true,
+    "candidate_no_progress_rate_at_most_anchor": true,
+    "epsilon": 1e-12
+  },
+  "repairability_dominance": {
+    "label": "native PP changed at least one path",
+    "candidate_replan_success_rate_strictly_above_anchor": true,
+    "paired_success_wins_strictly_above_losses": true,
+    "each_fixed_eight_seed_half_wins_at_least_losses": true,
+    "minimum_absolute_gain": 0.0,
+    "reason": "use exact paired dominance and both-half direction instead of tuning a gain threshold after outcomes"
+  },
+  "opportunity_pools": ["base", "structural", "all"],
+  "critical_slice": {
+    "checkpoint_kind": "first_repeat_stall",
+    "classification": "adverse",
+    "expected_case_count": 17
+  },
+  "diagnosis_rule": {
+    "v2_anchor_is_always_admissible": true,
+    "uncovered_zero_hazard": "V2 anchor replan success rate is zero and no quality-noninferior repairability-dominating candidate exists",
+    "any_uncovered_zero_hazard": "candidate_pool_gap_and_ranking_both_present",
+    "no_uncovered_zero_hazard_and_any_inadmissible_selection": "ranking_is_primary_within_current_pool_no_zero_hazard_gap_observed",
+    "otherwise": "no_mechanism_gap_observed"
+  },
+  "post_analysis_logic_correction": {
+    "aggregate_results_observed_before_correction": true,
+    "original_error": "absence of a challenger strictly better than V2 was treated as candidate-pool insufficiency even when the frozen V2 anchor already had high repairability",
+    "correction": "V2 is always an admissible fallback; only a zero-repairability V2 anchor without a quality-preserving positive-repairability challenger is an observed coverage gap",
+    "cohort_changed": false,
+    "pairing_or_quality_criteria_changed": false,
+    "claim_boundary_changed": false
+  },
+  "execution": {
+    "new_solver_runs": 0,
+    "model_training": false,
+    "maximum_workers": 16
+  },
+  "claim_boundary": {
+    "paired_pp_opportunity_only": true,
+    "future_trajectory_read": false,
+    "runtime_or_ttf_read": false,
+    "model_training_allowed": false,
+    "runtime_controller_change_allowed": false,
+    "candidate_pool_promotion_allowed": false,
+    "longtail_prevention_claim": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "no_result_based_exclusion": true
+  }
+}

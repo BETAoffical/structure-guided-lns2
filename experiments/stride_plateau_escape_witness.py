@@ -4,7 +4,6 @@ import collections
 import concurrent.futures
 import hashlib
 import math
-import statistics
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -24,7 +23,9 @@ from experiments.repair_collection import (
     _write_jsonl,
     state_fingerprint,
 )
+from experiments.stride_tailswitch import _mean
 from experiments.stride_tailswitch_sequence_forensics import _selected_candidate
+from experiments.stride_tailswitch_sequence_forensics import _median
 
 
 CONFIG_SCHEMA = "lns2.stride.plateau_escape_witness_registration.v1"
@@ -40,16 +41,6 @@ ROOT_CAUSES = (
     "set_and_order_joint",
     "residual_pp_instability",
 )
-
-
-def _mean(values: Iterable[float]) -> float:
-    rows = list(values)
-    return sum(rows) / len(rows) if rows else 0.0
-
-
-def _median(values: Iterable[float]) -> float:
-    rows = list(values)
-    return float(statistics.median(rows)) if rows else 0.0
 
 
 def _average_ranks(values: list[float]) -> list[float]:
