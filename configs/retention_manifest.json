@@ -2497,6 +2497,21 @@
       "path": "tests/evaluation/test_stride_shellbudget_audit.py",
       "role": "active",
       "contract": "Freeze size-balanced family-diverse reduction, outcome-field independence, full-pool fallback and no-ranker/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_cycletransition.py",
+      "role": "active",
+      "purpose": "Audit whether a single forced neighborhood creates a quality-constrained repeatable state-action transition under the complete equal-size structural grid."
+    },
+    {
+      "path": "scripts/run_stride_cycletransition.py",
+      "role": "active",
+      "purpose": "Run the result-blind preparation and bounded 16-worker state-candidate-seed CycleTransition collection and analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_cycletransition.py",
+      "role": "active",
+      "contract": "Freeze result-blind cohort selection, exact edge metrics, V2 quality admissibility, joint soft-cycle stability, 300-second job bounds and no-training/no-TTF boundaries."
     }
   ]
 }
