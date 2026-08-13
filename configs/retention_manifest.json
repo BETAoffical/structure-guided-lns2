@@ -2482,6 +2482,21 @@
       "path": "tests/evaluation/test_stride_structshell_audit.py",
       "role": "active",
       "contract": "Freeze equal four-size fallback, outcome-blind cutpoint semantics, PreTail checkpoint identity and no-training/no-TTF boundaries."
+    },
+    {
+      "path": "experiments/stride_shellbudget_audit.py",
+      "role": "active",
+      "purpose": "Audit deterministic ranker-free budgets 6, 8 and 12 over the exact-deduplicated equal four-size StructPool."
+    },
+    {
+      "path": "scripts/run_stride_shellbudget_audit.py",
+      "role": "active",
+      "purpose": "Run the preregistered sixteen-worker ShellBudget audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_shellbudget_audit.py",
+      "role": "active",
+      "contract": "Freeze size-balanced family-diverse reduction, outcome-field independence, full-pool fallback and no-ranker/no-TTF boundaries."
     }
   ]
 }
