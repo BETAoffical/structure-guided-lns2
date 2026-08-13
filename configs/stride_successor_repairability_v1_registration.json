@@ -1,0 +1,162 @@
+{
+  "schema": "lns2.stride.successor_repairability_registration.v1",
+  "scientific_status": "preregistered_bounded_successor_base_pool_repairability_probe",
+  "experiment_id": "stride-successor-repairability-v1",
+  "pre_registration_parent_commit": "18272f12ed5a4878817baf78b2a0a241147f750d",
+  "inputs": {
+    "successor_inventory_registration": {
+      "path": "configs/stride_successor_state_inventory_v1_registration.json",
+      "sha256": "97ca713ba20ece22bf0b96056310d2e795f0c990e4ebde4a86682507eefe74dd"
+    },
+    "successor_inventory_report": {
+      "path": "build/stride-successor-state-inventory-v1/successor_state_inventory_report.json",
+      "sha256": "05ded243ca0ab5ea89daeffbac842fc962aed70426cf3019fef7a2877f9f6d31"
+    },
+    "successor_inventory_status": {
+      "path": "build/stride-successor-state-inventory-v1/successor_state_inventory_status.json",
+      "sha256": "8e79f404afa8d950bc3bf5bc90365493414eb37ba926eda5efc38df6384b11cd"
+    },
+    "successor_inventory_rows": {
+      "path": "build/stride-successor-state-inventory-v1/successor_state_inventory.jsonl",
+      "sha256": "b6394fbd88e2e24b27dea65d0f445b18a825eb85c6bcab1b591b97cd0463c9d8"
+    },
+    "pretail_registration": {
+      "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
+      "sha256": "9d5588dabca7cff85470b0ea419127c7ff941f24f82bf787dd77950aaee2d00b"
+    },
+    "pretail_execution_schedule": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/execution_schedule.jsonl",
+      "sha256": "a619aba720f5ac5ed07a3e79750535255909952c34000365a7fc7b0df91905ec"
+    },
+    "pretail_runner_config": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/runner_config.json",
+      "sha256": "d7eb347ba130e2999be7b8f0999d871662ca14a17d456f0d3b8724a901fc510b"
+    }
+  },
+  "source_collection": {
+    "path": "build/stride-pretail-forced-continuation-v1-r3",
+    "manifest_file_count": 24,
+    "manifest_index_sha256": "d10e6ae57bad16ccfd8c7f416b3c828be87850818a48ac453ed69d0e7966266c",
+    "trace_format": "delta-gzip-v2"
+  },
+  "cohort": {
+    "occurrence_count": 270,
+    "case_count": 45,
+    "arm_count": 3,
+    "distinct_full_successor_count": 234,
+    "distinct_repair_successor_count": 223,
+    "preserve_occurrence_identity": true,
+    "semantic_trial_cache_key": [
+      "task_id",
+      "successor_repair_fingerprint",
+      "candidate_agent_set",
+      "trial_index",
+      "pp_sipps_semantics"
+    ],
+    "no_result_based_exclusion": true,
+    "future_outcome_forbidden_during_preparation_and_collection": true
+  },
+  "candidate_probe": {
+    "role": "standardized_measurement_instrument_not_deployment_pool",
+    "families": ["target", "collision", "random"],
+    "neighborhood_sizes": [4, 8, 16],
+    "candidates_per_family": 2,
+    "maximum_candidates_per_occurrence": 18,
+    "structpool_allowed": false,
+    "slotpool_allowed": false,
+    "topology_boundary_allowed": false,
+    "causal_or_closure_augmentation_allowed": false,
+    "fixed_structpool_sizes_8_16_24_32_allowed": false,
+    "v2_anchor": "frozen v2-full realized_dynamic ranker over base candidates only",
+    "feature_schema": "lns2.realized_features.v2",
+    "feature_dimension": 124
+  },
+  "execution": {
+    "prepare_workers": 16,
+    "collection_workers": 16,
+    "prepare_job_timeout_seconds": 600,
+    "per_candidate_trial_timeout_seconds": 300,
+    "job_granularity": "unique repair state x exact candidate agent set x paired PP trial",
+    "preflight_repair_state_count": 3,
+    "preflight_selection": "one hash-only repair state per map without outcomes",
+    "preflight_trial_indices": [0, 1],
+    "initial_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "uniform_extension_trial_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "extension_only_if_initial_stability_fails": true,
+    "extension_must_include_every_state_and_candidate": true,
+    "stop_on_first_error_or_timeout": true,
+    "resume_from_atomic_candidate_trial": true,
+    "replan_algorithm": "PP",
+    "use_sipp": true,
+    "repair_order_controlled": false,
+    "raw_ttf_timing_run": false
+  },
+  "measurements": {
+    "retain_full_candidate_distribution": true,
+    "candidate_metrics": [
+      "repair_state_change_rate",
+      "strict_conflict_drop_rate",
+      "no_progress_rate",
+      "replan_success_rate",
+      "mean_normalized_conflict_reduction",
+      "after_repair_fingerprint_distribution"
+    ],
+    "state_metrics": [
+      "v2_anchor_distribution",
+      "best_observed_candidate_distribution",
+      "top3_candidate_ids",
+      "zero_repair_candidate_fraction",
+      "zero_strict_drop_candidate_fraction",
+      "pool_mean_repair_state_change_rate",
+      "pool_mean_strict_conflict_drop_rate"
+    ],
+    "candidate_order_for_stability_only": [
+      "repair_state_change_rate_desc",
+      "strict_conflict_drop_rate_desc",
+      "mean_normalized_conflict_reduction_desc",
+      "no_progress_rate_asc",
+      "candidate_id_asc"
+    ],
+    "single_binary_tail_label_allowed": false,
+    "future_continuation_success_or_auc_is_analysis_only": true
+  },
+  "initial_stability_gates": {
+    "minimum_mean_top3_overlap": 0.8,
+    "minimum_median_repair_change_rank_correlation": 0.6,
+    "minimum_median_strict_drop_rank_correlation": 0.6,
+    "minimum_anchor_direction_agreement": 0.7,
+    "maximum_mean_cross_half_regret": 0.02,
+    "every_map_group_must_pass": true,
+    "required_error_count": 0,
+    "required_timeout_count": 0
+  },
+  "offline_association_gates": {
+    "primary_burden": "one minus pool mean strict conflict drop rate",
+    "minimum_overall_spearman_burden_vs_bounded_auc": 0.1,
+    "minimum_maps_with_nonnegative_burden_vs_auc": 2,
+    "minimum_within_case_auc_direction_concordance": 0.55,
+    "minimum_informative_within_case_pairs": 20,
+    "bounded_success_and_auc_never_enter_online_features": true
+  },
+  "decision_rule": {
+    "preflight_integrity_pass": "permit_initial_eight_seed_collection",
+    "initial_stability_fails": "permit_only_uniform_all_state_all_candidate_seed_extension_or_stop",
+    "stability_passes_but_association_fails": "stop_successor_repairability_target_before_training",
+    "all_initial_gates_pass": "permit_preregistration_of_independent_saved_successor_confirmation_only",
+    "model_training_in_this_stage_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false
+  },
+  "claim_boundary": {
+    "mechanism_probe_only": true,
+    "candidate_pool_improvement_claim_allowed": false,
+    "ranker_improvement_claim_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "longtail_prevention_claim_allowed": false,
+    "future_outcome_used_for_job_selection": false,
+    "future_outcome_used_as_online_feature": false,
+    "no_result_based_exclusion": true
+  }
+}
