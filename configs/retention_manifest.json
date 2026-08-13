@@ -2412,6 +2412,21 @@
       "path": "tests/evaluation/test_stride_causalclosurepool_opportunity.py",
       "role": "active",
       "contract": "Freeze paired seeds, 300-second job bounds, complete cohort identity and no-ranker/no-TTF opportunity semantics."
+    },
+    {
+      "path": "experiments/stride_causalclosurepool_structcoverage.py",
+      "role": "active",
+      "purpose": "Measure which previously robust StructPool opportunities and agent-set geometries are absent from compact CausalClosurePool actions."
+    },
+    {
+      "path": "scripts/run_stride_causalclosurepool_structcoverage.py",
+      "role": "active",
+      "purpose": "Run the preregistered retrospective structural-coverage diagnostic without training or runtime integration."
+    },
+    {
+      "path": "tests/evaluation/test_stride_causalclosurepool_structcoverage.py",
+      "role": "active",
+      "contract": "Freeze realized-agent-set overlap, structural opportunity recall gates and the posthoc/no-TTF/no-long-tail claim boundary."
     }
   ]
 }
