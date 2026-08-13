@@ -65,6 +65,7 @@ public:
     // Returns a path that satisfies the constraint_table while
     // minimizing the number of conflicts with constraint_table, breaking ties by the path length.
     Path findPath(const ConstraintTable& constraint_table);
+    Path findPath(const ConstraintTable& constraint_table, double time_limit_seconds);
 
 	pair<Path, int> findSuboptimalPath(const HLNode& node, const ConstraintTable& initial_constraints,
 		const vector<Path*>& paths, int agent, int lowerbound, double w);  // return the path and the lowerbound

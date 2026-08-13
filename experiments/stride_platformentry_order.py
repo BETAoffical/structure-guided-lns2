@@ -71,8 +71,20 @@ def load_platformentry_order_config(
         or config.get("experiment_id") != "stride-platformentry-order-v1"
         or config.get("pre_registration_parent_commit")
         != "bbebdb44f4acad14d69e5523c95da657a177417d"
+        or config.get("execution_amendment_parent_commit")
+        != "d53dea7ead078a8f302c576251a1eaef89acfd6e"
+        or config.get("execution_amendment_reason")
+        != "enforce_the_existing_native_PP_remaining_time_budget_inside_each_single_agent_search_after_the_first_formal_run_exposed_an_unbounded_low_level_overrun_before_any_outcome_analysis"
     ):
         raise ValueError("Platform-entry order registration identity changed")
+    if dict(config.get("execution_amendment_recovery") or {}) != {
+        "superseded_output": "build/stride-platformentry-order-v1",
+        "replacement_output": "build/stride-platformentry-order-v1-r2",
+        "completed_old_episodes_imported": 0,
+        "restart_entire_initial_schedule": True,
+        "preserve_superseded_artifacts": True,
+    }:
+        raise ValueError("Platform-entry order recovery identity changed")
     if set(config.get("inputs") or {}) != {
         "pretail_registration",
         "platform_entry_witnesses",

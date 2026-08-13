@@ -104,7 +104,11 @@ public:
 		const vector<Path*>& paths, int agent, int lower_bound) = 0;
 	virtual pair<Path, int> findSuboptimalPath(const HLNode& node, const ConstraintTable& initial_constraints,
 		const vector<Path*>& paths, int agent, int lowerbound, double w) = 0;  // return the path and the lowerbound
-    virtual Path findPath(const ConstraintTable& constraint_table) = 0;  // return the path
+	virtual Path findPath(const ConstraintTable& constraint_table) = 0;  // return the path
+	// Return an empty path and set last_find_path_timed_out when the
+	// low-level search reaches its wall-clock budget. This is used by PP so a
+	// single hard agent cannot overrun the repair episode deadline.
+	virtual Path findPath(const ConstraintTable& constraint_table, double time_limit_seconds) = 0;
     void findMinimumSetofColldingTargets(vector<int>& goal_table,set<int>& A_target);
     virtual int getTravelTime(int start, int end, const ConstraintTable& constraint_table, int upper_bound) = 0;
 	virtual string getName() const = 0;
@@ -118,6 +122,7 @@ public:
     uint64_t getTotalNumGenerated() const { return accumulated_num_generated + num_generated; }
     uint64_t getTotalNumReopened() const { return accumulated_num_reopened + num_reopened; }
     uint64_t getTotalNumRuns() const { return num_runs + (num_generated > 0 ? 1 : 0); }
+    bool last_find_path_timed_out = false;
 
     // Start a logically independent repair episode without rebuilding the
     // planner's immutable heuristic table.  reset() deliberately rolls the

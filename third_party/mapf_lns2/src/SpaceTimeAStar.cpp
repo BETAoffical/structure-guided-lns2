@@ -27,7 +27,14 @@ Path SpaceTimeAStar::findOptimalPath(const HLNode& node, const ConstraintTable& 
 // Returns a path that minimizes the collisions with the paths in the path table, breaking ties by the length
 Path SpaceTimeAStar::findPath(const ConstraintTable& constraint_table)
 {
+    return findPath(constraint_table, -1.0);
+}
+
+Path SpaceTimeAStar::findPath(const ConstraintTable& constraint_table, double time_limit_seconds)
+{
     reset();
+    last_find_path_timed_out = false;
+    const auto search_started = Time::now();
     Path path;
     if (constraint_table.constrained(start_location, 0))
     {
@@ -45,6 +52,12 @@ Path SpaceTimeAStar::findPath(const ConstraintTable& constraint_table)
     allNodes_table.insert(start);
     while (!focal_list.empty())
     {
+        if (time_limit_seconds >= 0.0 &&
+            duration<double>(Time::now() - search_started).count() >= time_limit_seconds)
+        {
+            last_find_path_timed_out = true;
+            break;
+        }
         auto* curr = focal_list.top();
         focal_list.pop();
         curr->in_openlist = false;

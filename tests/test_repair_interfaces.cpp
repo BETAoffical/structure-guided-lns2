@@ -161,6 +161,22 @@ void requireIncompleteInitialSolutionIsNotFeasible()
             "terminal state changed after a rejected repair step");
 }
 
+void requireLowLevelDeadlineIsEnforced()
+{
+    Instance instance(TEST_MAP, TEST_SCEN, 80);
+    ConstraintTable constraint_table(instance.num_of_cols, instance.map_size);
+
+    SIPP sipp(instance, 0);
+    const Path sipp_path = sipp.findPath(constraint_table, 0.0);
+    require(sipp_path.empty() && sipp.last_find_path_timed_out,
+            "SIPP ignored an expired low-level deadline");
+
+    SpaceTimeAStar astar(instance, 0);
+    const Path astar_path = astar.findPath(constraint_table, 0.0);
+    require(astar_path.empty() && astar.last_find_path_timed_out,
+            "space-time A* ignored an expired low-level deadline");
+}
+
 bool sameState(const RepairState& left, const RepairState& right);
 
 Snapshot stepWithActionSeed(int solver_seed, int action_seed)
@@ -266,8 +282,8 @@ Snapshot stepWithExplicitOrder(int solver_seed, int action_seed,
         requirePPDiagnostics(transition);
     else
     {
-        require(transition.pp_failure_reason == PPFailureReason::NOT_RUN,
-                "disabled PP diagnostics unexpectedly ran");
+        require(transition.pp_failure_reason != PPFailureReason::NOT_RUN,
+                "PP execution did not retain its outcome without detailed rows");
         require(transition.pp_agent_diagnostics.empty(),
                 "disabled PP diagnostics emitted agent rows");
     }
@@ -372,6 +388,7 @@ bool sameState(const RepairState& left, const RepairState& right)
 int main()
 {
     requireIncompleteInitialSolutionIsNotFeasible();
+    requireLowLevelDeadlineIsEnforced();
     const Snapshot first = initializeWithSeed(7);
     const Snapshot second = initializeWithSeed(7);
     require(first.conflicts == second.conflicts, "reset conflict count is not deterministic");

@@ -79,7 +79,8 @@ private:
 
     bool runPP(const vector<int>& requested_order, vector<int>& applied_order,
                RepairTransition& transition, int pp_random_seed = -1);
-    bool runPPWithoutDiagnostics(const vector<int>& shuffled_agents);
+    bool runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
+                                 RepairTransition& transition);
     bool runGCBS();
     bool runPBS();
 

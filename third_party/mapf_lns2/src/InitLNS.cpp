@@ -612,9 +612,6 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     // breaking even though their applied orders are identical.
     if (pp_random_seed >= 0)
         srand(pp_random_seed);
-    if (!transition.requested_action.collect_pp_diagnostics)
-        return runPPWithoutDiagnostics(shuffled_agents);
-
     transition.pp_failure_reason = PPFailureReason::NONE;
     transition.pp_old_conflict_pair_count =
         (int)neighbor.old_colliding_pairs.size();
@@ -625,6 +622,8 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     transition.pp_failed_order_index = -1;
     transition.pp_rolled_back = false;
     transition.pp_agent_diagnostics.clear();
+    if (!transition.requested_action.collect_pp_diagnostics)
+        return runPPWithoutDiagnostics(shuffled_agents, transition);
     if (screen >= 2) {
         cout<<"Neighbors_set: ";
         for (auto id : shuffled_agents)
@@ -657,7 +656,18 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
         const Path& prior_path = neighbor.old_paths[prior_path_index];
         diagnostic.path_cost_before = (int)prior_path.size() - 1;
         const set<pair<int, int>> prior_colliding_pairs = neighbor.colliding_pairs;
-        agents[id].path = agents[id].path_planner->findPath(constraint_table);
+        const double elapsed = ((fsec)(Time::now() - time)).count();
+        agents[id].path = agents[id].path_planner->findPath(
+            constraint_table, max(0.0, T - elapsed));
+        if (agents[id].path_planner->last_find_path_timed_out)
+        {
+            transition.pp_attempted_agent_count++;
+            transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
+            transition.pp_failed_agent = id;
+            transition.pp_failed_order_index = diagnostic.order_index;
+            transition.pp_agent_diagnostics.push_back(std::move(diagnostic));
+            break;
+        }
         assert(!agents[id].path.empty() && agents[id].path.back().location == agents[id].path_planner->goal_location);
         diagnostic.path_cost_after = (int)agents[id].path.size() - 1;
         diagnostic.path_changed = !isSamePath(prior_path, agents[id].path);
@@ -757,7 +767,8 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     }
 }
 
-bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents)
+bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
+                                      RepairTransition& transition)
 {
     if (screen >= 2) {
         cout<<"Neighbors_set: ";
@@ -776,7 +787,17 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents)
     while (p != shuffled_agents.end() && ((fsec)(Time::now() - time)).count() < T)
     {
         int id = *p;
-        agents[id].path = agents[id].path_planner->findPath(constraint_table);
+        const double elapsed = ((fsec)(Time::now() - time)).count();
+        agents[id].path = agents[id].path_planner->findPath(
+            constraint_table, max(0.0, T - elapsed));
+        transition.pp_attempted_agent_count++;
+        if (agents[id].path_planner->last_find_path_timed_out)
+        {
+            transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
+            transition.pp_failed_agent = id;
+            transition.pp_failed_order_index = (int)(p - shuffled_agents.begin());
+            break;
+        }
         assert(!agents[id].path.empty() && agents[id].path.back().location == agents[id].path_planner->goal_location);
         if (agents[id].path_planner->num_collisions > 0)
             updateCollidingPairs(neighbor.colliding_pairs, agents[id].id, agents[id].path);
@@ -793,13 +814,28 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents)
                  ", remaining time = " << time_limit - runtime << " seconds. " << endl;
         }
         if (neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
+        {
+            transition.pp_failure_reason = PPFailureReason::CONFLICT_BOUND_EXCEEDED;
+            transition.pp_failed_agent = id;
+            transition.pp_failed_order_index = (int)(p - shuffled_agents.begin());
             break;
+        }
         path_table.insertPath(agents[id].id, agents[id].path);
+        transition.pp_inserted_agent_count++;
         ++p;
     }
+    transition.pp_attempt_conflict_pair_count = (int)neighbor.colliding_pairs.size();
     if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size())
         return true;
 
+    transition.pp_rolled_back = true;
+    if (transition.pp_failure_reason == PPFailureReason::NONE)
+    {
+        transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
+        transition.pp_failed_order_index = (int)(p - shuffled_agents.begin());
+        if (p != shuffled_agents.end())
+            transition.pp_failed_agent = *p;
+    }
     if (p != shuffled_agents.end())
         num_of_failures++;
     auto p2 = shuffled_agents.begin();
