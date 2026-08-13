@@ -1,0 +1,154 @@
+{
+  "schema": "lns2.stride.structshell_audit_registration.v1",
+  "experiment_id": "stride-structshell-audit-v1",
+  "scientific_status": "preregistered_retrospective_structpool_shell_and_cutpoint_diagnostic",
+  "pre_registration_head": "b6ff0cec8d7ebf2d1033800bcad8e0a3dcf64884",
+  "backup": {
+    "branch": "codex/backup-before-structshell-audit-20260813",
+    "bundle": "../backups/structure-guided-lns2-before-structshell-audit-20260813.bundle",
+    "bundle_sha256": "58c6b0a9911d2a5842183512da500d3f1d5b33f2294973a7fb5a48f249a53e9c"
+  },
+  "inputs": {
+    "size_ablation_rows": {
+      "path": "build/stride-structpool-size-ablation-v1/expanded_family_size_rows.jsonl",
+      "sha256": "1e07d4687dbbfe533d41e58a37426b18f5a92ba2ffb15833053c39027e88b047"
+    },
+    "size_ablation_report": {
+      "path": "build/stride-structpool-size-ablation-v1/size_ablation_report.json",
+      "sha256": "03bc0eff1369f6c8ae0e8291910bc35af564880ac4a0ea11dbb26727f54aa82d"
+    },
+    "maze_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "maze_checkpoint_results": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/logical_checkpoint_results.jsonl",
+      "sha256": "efdbc8d7020628b3ac485d0946f9ad89b1b6d7afb547a29069d2009d41671973"
+    },
+    "maze_action_replay_report": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/action_replay_analysis.json",
+      "sha256": "8232e687db8009acee13ffbc523b625ee8c4fc5954fb3ffa10f4ce6567e02988"
+    },
+    "legacy_structural_coverage_report": {
+      "path": "build/stride-causalclosurepool-structcoverage-v1/structural_coverage_report.json",
+      "sha256": "7cb2c7ba53766ef58d6eb4ca672841302c4161051439361ca7279f885b74c875"
+    },
+    "pretail_report": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/pretail_forced_continuation_report.json",
+      "sha256": "39f319794155c892022d018f6b8d855d6cabfe4dfc5f81e6a4ab903d91fb2952"
+    },
+    "pretail_schedule": {
+      "path": "build/stride-pretail-forced-continuation-v1-r3/execution_schedule.jsonl",
+      "sha256": "a619aba720f5ac5ed07a3e79750535255909952c34000365a7fc7b0df91905ec"
+    }
+  },
+  "cohorts": {
+    "non_tail_size_grid": {
+      "state_count": 98,
+      "candidate_count": 1368,
+      "expanded_family_size_row_count": 1680,
+      "known_maze_long_tail_included": false,
+      "development_outcome_enriched": true
+    },
+    "maze_difficult_states": {
+      "state_count": 78,
+      "candidate_count": 2502,
+      "base_candidate_count": 1367,
+      "structural_candidate_count": 1135,
+      "legacy_robust_action_count": 209,
+      "legacy_opportunity_state_count": 41,
+      "development_outcome_enriched": true
+    },
+    "bounded_forced_continuation": {
+      "case_count": 45,
+      "schedule_entry_count": 270,
+      "paired_comparison_count": 180,
+      "result_blind_confirmation": false
+    }
+  },
+  "candidate_contract": {
+    "allowed_sizes": [8, 16, 24, 32],
+    "family_variants": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary_articulation",
+      "topology_boundary_low_degree",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "fixed_preferred_size_comparator": {
+      "bottleneck_crossing": 8,
+      "conflict_component": 24,
+      "topology_boundary_articulation": 16,
+      "topology_boundary_low_degree": 16,
+      "spatiotemporal_hotspot": 16,
+      "path_overlap": 32
+    },
+    "primary_outcome_blind_rule": "structural_knee",
+    "comparators": [
+      "support_nearest",
+      "fixed_preferred",
+      "equal_four_size_grid"
+    ],
+    "posthoc_best_rule_selection_allowed": false,
+    "missing_family_or_size_is_not_imputed": true
+  },
+  "structural_knee": {
+    "metrics": [
+      "realized.incident_event_coverage",
+      "realized.internal_conflict_coverage",
+      "realized.component_coverage_max",
+      "family_specific_signal"
+    ],
+    "metric_normalization": "within_state_family_min_max",
+    "metric_weighting": "equal",
+    "size_normalization": "within_available_sizes_min_max",
+    "selection": "maximum_mean_normalized_coverage_minus_normalized_size",
+    "tie_break": "smaller_nominal_size_then_candidate_id",
+    "single_available_size_action": "retain",
+    "family_specific_signal": {
+      "bottleneck_crossing": "realized.internal_conflict_coverage",
+      "conflict_component": "realized.component_coverage_max",
+      "topology_boundary_articulation": "realized.boundary_conflict_edges_div_state_colliding_pairs",
+      "topology_boundary_low_degree": "realized.boundary_conflict_edges_div_state_colliding_pairs",
+      "spatiotemporal_hotspot": "realized.incident_event_coverage",
+      "path_overlap": "realized.incident_conflict_coverage"
+    }
+  },
+  "analysis": {
+    "workers": 16,
+    "shell_transitions": [[8, 16], [16, 24], [24, 32]],
+    "stable_dominance_seed_mean_advantage": 0.02,
+    "stable_dominance_no_progress_must_not_increase": true,
+    "stable_dominance_both_seed_halves_must_improve": true,
+    "bounded_continuation_labels_are_diagnostic_only": true,
+    "one_step_quality_is_not_loop_avoidance": true,
+    "runtime_or_ttf_fields_used": false
+  },
+  "readiness_gates": {
+    "minimum_primary_maze_opportunity_state_recall": 0.9,
+    "minimum_primary_maze_robust_action_recall": 0.8,
+    "minimum_primary_per_map_opportunity_state_recall": 0.8,
+    "minimum_primary_pretail_beneficial_comparison_recall": 0.8,
+    "maximum_primary_non_tail_mean_current_step_regret": 0.02,
+    "minimum_non_tail_seed_half_best_size_agreement": 0.8,
+    "zero_identity_or_integrity_errors": true
+  },
+  "fallback": {
+    "when_any_primary_gate_fails": "retain_equal_four_size_grid_8_16_24_32",
+    "fixed_family_preferred_sizes_allowed": false,
+    "larger_neighborhood_is_automatically_better": false,
+    "runtime_change_allowed": false
+  },
+  "claim_boundary": {
+    "retrospective_diagnostic_only": true,
+    "outcome_enriched_development_data": true,
+    "candidate_generation_changed": false,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
