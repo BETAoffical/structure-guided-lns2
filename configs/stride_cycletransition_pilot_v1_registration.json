@@ -1,0 +1,145 @@
+{
+  "schema": "lns2.stride.cycletransition_pilot_registration.v1",
+  "scientific_status": "preregistered_pre_action_quality_constrained_cycle_transition_readiness",
+  "experiment_id": "stride-cycletransition-pilot-v1",
+  "pre_registration_head": "7c1e792d56a840a406285f0a58d44e57302dd88d",
+  "backup": {
+    "branch": "codex/backup-before-cycletransition-audit-20260813",
+    "bundle": "../backups/structure-guided-lns2-before-cycletransition-audit-20260813.bundle",
+    "bundle_sha256": "baaa8ca3b55b0a1a08cd6a3c7cbf0c13bb3fc3b58dbc2ba68567c199cba436ee"
+  },
+  "inputs": {
+    "marginalpool_registration": {
+      "path": "configs/stride_marginalpool_action_replay_v1_registration.json",
+      "sha256": "e17320d727d5c7417c5315271653360de1ba53b57b7032f5b84921050c4d7299"
+    },
+    "root_status": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_status.json",
+      "sha256": "0bde553b4ea039f3d4afc58467c8b16a88d8008f6f57472918b174eaf271eb5c"
+    },
+    "root_report": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_report.json",
+      "sha256": "8f21f709f69cba540842cbd11dcfe65c19214c7c55b5d4492d70244d90a2f483"
+    },
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "v2_runtime_registration": {
+      "path": "configs/stride_maze_tail_state_collection_runtime_v2.json",
+      "sha256": "e0af159a0dbeb8a492cf276996912dbfcd10cfdba0e297433d606d6daeed83fc"
+    }
+  },
+  "cohort": {
+    "source_checkpoint_kind": "first_structural_selection",
+    "source_logical_checkpoint_count": 45,
+    "selection_unit": "unique_state_fingerprint",
+    "maps": [
+      "maze-128-128-1",
+      "maze-128-128-2",
+      "maze-32-32-4"
+    ],
+    "states_per_map": 6,
+    "state_count": 18,
+    "selection_rule": "ascending sha256 of namespace stride-cycletransition-pilot-v1 and map_id and state_fingerprint",
+    "classification_and_all_repair_outcomes_forbidden_during_selection": true,
+    "no_result_based_exclusion": true
+  },
+  "candidate_contract": {
+    "base_pool": "complete frozen V2 proposal pool",
+    "base_neighborhood_sizes": [4, 8, 16],
+    "base_families": ["target", "collision", "random"],
+    "structural_pool": "complete raw StructPool family-by-size grid before six-candidate reduction",
+    "structural_sizes": [8, 16, 24, 32],
+    "structural_families": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary_articulation",
+      "topology_boundary_low_degree",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "exact_agent_set_deduplication": true,
+    "maximum_structural_candidates": 24,
+    "maximum_total_candidates": 48,
+    "six_candidate_reduction_allowed": false,
+    "fixed_family_preferred_size_allowed": false,
+    "v2_anchor": "score base candidates only with frozen v2-full realized_dynamic ranker",
+    "mixed_pool_selection_role": "diagnostic next-action teacher only, never the future runtime replacement rule"
+  },
+  "execution": {
+    "prepare_workers": 16,
+    "prepare_job_timeout_seconds": 600,
+    "collection_workers": 16,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "job_unit": "one state, one candidate, and one paired PP trial",
+    "per_job_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "resume": "one atomic file per state-candidate-trial; completed trial identity must match",
+    "paired_pp_seed": "sha256 namespace stride-repairability-pp-seed-v1 over repair_structure_fingerprint and trial_index",
+    "native_repair_semantics_unchanged": true,
+    "replan_algorithm": "PP",
+    "use_sipp": true,
+    "raw_ttf_timing_run": false
+  },
+  "transition_observations": {
+    "forced_action_count": 1,
+    "continuation_repair_actions": 0,
+    "shadow_next_selection_count": 1,
+    "fields": [
+      "normalized_conflict_reduction",
+      "repair_exact_noop",
+      "conflict_edge_exact_recurrence",
+      "unresolved_edge_fraction",
+      "new_edge_fraction",
+      "conflict_edge_jaccard",
+      "next_full_pool_selected_agent_jaccard",
+      "next_full_pool_selected_exact_agent_set",
+      "next_v2_anchor_agent_jaccard",
+      "exact_policy_cycle",
+      "soft_policy_cycle"
+    ],
+    "exact_policy_cycle": "repair_exact_noop and next_full_pool_selected_exact_agent_set",
+    "soft_policy_cycle": "no strict conflict decrease and unresolved_edge_fraction at least 0.8 and next_full_pool_selected_agent_jaccard at least 0.8",
+    "future_repair_trajectory_stored": false,
+    "ttf_or_runtime_label_stored": false
+  },
+  "quality_constraint": {
+    "reference": "exact base-only V2 anchor in the same state",
+    "minimum_seed_mean_delta": 0.0,
+    "maximum_no_progress_rate_delta": 0.0,
+    "minimum_each_fixed_four_seed_half_delta": -0.02,
+    "quality_is_a_hard_admissibility_constraint_not_a_weighted_risk_tradeoff": true
+  },
+  "label_readiness_gates": {
+    "minimum_half_split_soft_cycle_class_agreement": 0.8,
+    "minimum_half_split_soft_cycle_rate_rank_correlation": 0.6,
+    "minimum_each_map_half_split_soft_cycle_class_agreement": 0.7,
+    "minimum_each_map_half_split_soft_cycle_rate_rank_correlation": 0.5,
+    "minimum_state_fraction_with_quality_admissible_structural_cycle_escape": 0.6,
+    "minimum_each_map_state_fraction_with_quality_admissible_structural_cycle_escape": 0.4,
+    "minimum_soft_cycle_rate_reduction_for_escape": 0.25,
+    "maximum_exact_noop_rate_delta_for_escape": 0.0,
+    "minimum_maps_with_both_positive_and_negative_soft_cycle_actions": 3,
+    "maximum_single_size_share_among_escape_actions": 0.75,
+    "required_error_count": 0,
+    "required_timeout_count": 0
+  },
+  "decision": {
+    "if_all_gates_pass": "preregister grouped pre-action joint quality-cycle predictability audit; do not train or run TTF yet",
+    "if_any_gate_fails": "stop selector training and report exact unstable map or missing opportunity",
+    "risk_only_selector_allowed": false,
+    "online_tentative_pp_probe_allowed": false,
+    "post_stall_fallback_is_primary_solution": false
+  },
+  "claim_boundary": {
+    "outcome_enriched_mechanism_readiness_only": true,
+    "candidate_pool_runtime_promotion_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "generalization_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
