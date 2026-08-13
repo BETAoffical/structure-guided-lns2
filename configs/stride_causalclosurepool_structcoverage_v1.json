@@ -1,0 +1,61 @@
+{
+  "schema": "lns2.stride.causalclosurepool_structcoverage_registration.v1",
+  "scientific_status": "preregistered_development_posthoc_structural_coverage_diagnostic",
+  "experiment_id": "stride-causalclosurepool-structcoverage-v1",
+  "pre_registration_parent_commit": "ec904e5c4d8686a28599899bac09ee5c1b971f9a",
+  "inputs": {
+    "causalclosure_cohort": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/causalclosure_cohort.jsonl",
+      "sha256": "4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50"
+    },
+    "legacy_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "causalclosure_opportunity_report": {
+      "path": "build/stride-causalclosurepool-v2-opportunity-full-v1/collection_report.json",
+      "sha256": "c2daf6ee13a9aa53e0644c187446d112e123f79d3210b01f6ecd632df3f19c56"
+    }
+  },
+  "cohort": {
+    "state_count": 78,
+    "base_candidate_count": 1367,
+    "legacy_structural_candidate_count": 1135,
+    "causalclosure_candidate_count": 930,
+    "all_states_required": true,
+    "development_outcome_enriched": true,
+    "no_result_based_state_exclusion": true
+  },
+  "analysis": {
+    "exact_agent_set_threshold": 1.0,
+    "near_jaccard_threshold": 0.8,
+    "descriptive_jaccard_threshold": 0.6,
+    "medium_size_minimum": 8,
+    "medium_size_maximum": 17,
+    "stable_dominance_minimum_seed_mean_advantage": 0.02,
+    "no_progress_rate_must_not_increase": true,
+    "both_fixed_seed_halves_must_improve": true,
+    "family_membership_is_multi_label": true
+  },
+  "decision_gates": {
+    "minimum_old_opportunity_state_recall": 0.9,
+    "minimum_old_robust_action_jaccard_0_8_coverage": 0.9,
+    "minimum_per_map_old_opportunity_state_recall": 0.8,
+    "zero_identity_or_coverage_errors": true
+  },
+  "decision_rule": {
+    "hybrid_pool_required_when_any_gate_fails": true,
+    "hybrid_design_must_preserve_full_v2_base_pool": true,
+    "hybrid_design_may_retain_only_outcome_blind_legacy_topology_cores": true,
+    "hybrid_design_requires_independent_result_blind_confirmation": true
+  },
+  "claim_boundary": {
+    "development_posthoc_coverage_diagnostic_only": true,
+    "current_ranker_used": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "long_tail_avoidance_claim_allowed": false,
+    "current_generator_promotion_allowed": false
+  }
+}
