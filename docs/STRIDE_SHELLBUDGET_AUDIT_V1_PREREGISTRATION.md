@@ -48,6 +48,13 @@ The smallest passing budget is retained. Comparator or isolated-map results
 cannot override a primary failure. If none passes, the full
 exact-deduplicated equal four-size pool is retained.
 
+The first formal report was rejected before acceptance because the executor
+filled a budget after one size had no remaining distinct candidates, which
+could violate the already registered size-spread gate. The correction and its
+full-pool exemption are documented in
+`STRIDE_SHELLBUDGET_AUDIT_V1_EXECUTION_AMENDMENT.md`; no threshold or outcome
+rule changed.
+
 ## Claim boundary
 
 Current-step quality is only a floor, not the definition of loop avoidance.

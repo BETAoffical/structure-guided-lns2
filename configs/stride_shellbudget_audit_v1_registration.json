@@ -118,6 +118,12 @@
     "current_step_quality_is_a_floor_not_loop_avoidance": true,
     "bounded_continuation_is_membership_only": true
   },
+  "execution_amendment": {
+    "document": "docs/STRIDE_SHELLBUDGET_AUDIT_V1_EXECUTION_AMENDMENT.md",
+    "reason": "enforce_registered_size_spread_for_compressed_states_and_exempt_uncompressed_full_pool_states",
+    "rules_or_thresholds_changed": false,
+    "states_or_candidates_filtered_by_outcome": false
+  },
   "claim_boundary": {
     "retrospective_diagnostic_only": true,
     "outcome_enriched_development_data": true,

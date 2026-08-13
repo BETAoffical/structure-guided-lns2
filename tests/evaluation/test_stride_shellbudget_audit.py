@@ -98,6 +98,20 @@ class ShellBudgetAuditTest(unittest.TestCase):
             sorted(row["candidate_id"] for row in candidates),
         )
 
+    def test_reducer_stops_before_exhausted_size_breaks_balance(self) -> None:
+        sizes = (8,) * 6 + (16,) * 3 + (24,) * 3 + (32,) * 2
+        candidates = [
+            _candidate(index, size, f"family-{index % 4}")
+            for index, size in enumerate(sizes)
+        ]
+        selected = reduce_size_family_balanced_maximin(candidates, 12)
+        counts = {
+            size: sum(row["nominal_size"] == size for row in selected)
+            for size in (8, 16, 24, 32)
+        }
+        self.assertLess(len(selected), 12)
+        self.assertLessEqual(max(counts.values()) - min(counts.values()), 1)
+
     def test_candidate_view_requires_one_registered_nominal_size(self) -> None:
         row = {
             "candidate_id": "candidate",

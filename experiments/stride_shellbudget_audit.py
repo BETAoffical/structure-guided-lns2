@@ -169,6 +169,15 @@ def reduce_size_family_balanced_maximin(
     selected: list[dict[str, Any]] = []
     remaining = list(candidates)
     while remaining and len(selected) < budget:
+        balance_feasible = []
+        for candidate in remaining:
+            prospective = dict(size_counts)
+            prospective[int(candidate["nominal_size"])] += 1
+            if max(prospective.values()) - min(prospective.values()) <= 1:
+                balance_feasible.append(candidate)
+        if not balance_feasible:
+            break
+
         def key(candidate: dict[str, Any]) -> tuple[Any, ...]:
             families = tuple(map(str, candidate["families"]))
             slots = set(candidate["family_size_slots"])
@@ -190,7 +199,7 @@ def reduce_size_family_balanced_maximin(
                 str(candidate["candidate_id"]),
             )
 
-        chosen = min(remaining, key=key)
+        chosen = min(balance_feasible, key=key)
         remaining.remove(chosen)
         selected.append(chosen)
         size_counts[int(chosen["nominal_size"])] += 1
@@ -259,6 +268,7 @@ def _non_tail_state_job(
                 "selected_candidate_ids": [str(row["candidate_id"]) for row in selected],
                 "selected_size_counts": counts,
                 "size_count_spread": max(counts.values()) - min(counts.values()),
+                "size_balance_required": len(candidates) > budget,
                 "global_best_retained": bool(full_best & selected_ids),
                 "first_half_best_retained": bool(first_best & selected_ids),
                 "second_half_best_retained": bool(second_best & selected_ids),
@@ -296,6 +306,7 @@ def _maze_state_job(
                 "selected_candidate_ids": [str(row["candidate_id"]) for row in selected],
                 "selected_size_counts": counts,
                 "size_count_spread": max(counts.values()) - min(counts.values()),
+                "size_balance_required": len(candidates) > budget,
                 "robust_action_count": len(robust_ids),
                 "retained_robust_action_count": len(retained),
                 "has_structural_opportunity": bool(robust_ids),
@@ -323,6 +334,14 @@ def _summarize_non_tail(rows: list[dict[str, Any]]) -> dict[str, Any]:
             int(row["selected_candidate_count"]) for row in rows
         ),
         "maximum_size_count_spread": max(int(row["size_count_spread"]) for row in rows),
+        "maximum_required_size_count_spread": max(
+            (
+                int(row["size_count_spread"])
+                for row in rows
+                if row["size_balance_required"]
+            ),
+            default=0,
+        ),
         "global_best_retention": statistics.fmean(
             bool(row["global_best_retained"]) for row in rows
         ),
@@ -366,6 +385,14 @@ def _summarize_maze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             int(row["selected_candidate_count"]) for row in rows
         ),
         "maximum_size_count_spread": max(int(row["size_count_spread"]) for row in rows),
+        "maximum_required_size_count_spread": max(
+            (
+                int(row["size_count_spread"])
+                for row in rows
+                if row["size_balance_required"]
+            ),
+            default=0,
+        ),
         "opportunity_state_count": len(opportunity),
         "preserved_opportunity_state_count": preserved,
         "opportunity_state_recall": preserved / len(opportunity),
@@ -514,7 +541,8 @@ def analyze_shellbudget(
             for row in non_tail_rows + maze_rows
         ),
         "size_balance_respected": all(
-            int(row["size_count_spread"])
+            not row["size_balance_required"]
+            or int(row["size_count_spread"])
             <= int(config["readiness_gates"]["maximum_size_count_spread"])
             for row in non_tail_rows + maze_rows
         ),
@@ -563,8 +591,8 @@ def analyze_shellbudget(
             "pretail_beneficial_membership_recall": beneficial_recall
             >= float(thresholds["minimum_pretail_beneficial_membership_recall"]),
             "size_count_spread": max(
-                int(non_tail["maximum_size_count_spread"]),
-                int(maze["maximum_size_count_spread"]),
+                int(non_tail["maximum_required_size_count_spread"]),
+                int(maze["maximum_required_size_count_spread"]),
             )
             <= int(thresholds["maximum_size_count_spread"]),
             "zero_identity_or_integrity_errors": all(integrity.values()),
