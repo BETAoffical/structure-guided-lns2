@@ -2662,6 +2662,46 @@
       "path": "tests/evaluation/test_stride_platformentry_frontier.py",
       "role": "active",
       "contract": "Freeze paired frontier schedules, native PP order, noncausal size diagnostics and separate runtime versus registered fingerprint domains."
+    },
+    {
+      "path": "experiments/stride_platform_action_robustness.py",
+      "role": "active",
+      "purpose": "Measure whether concrete platform-entry alternatives remain beneficial across both fixed native-PP seed halves without running new solver episodes."
+    },
+    {
+      "path": "scripts/analyze_stride_platform_action_robustness.py",
+      "role": "active",
+      "purpose": "Run the zero-solver cross-seed platform-action robustness diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_platform_action_robustness.py",
+      "role": "active",
+      "contract": "Freeze stable-platform, quality-preservation and case-classification semantics for the existing 45-case frontier collection."
+    },
+    {
+      "path": "lns2_selector/runtime/hybridstructpool.py",
+      "role": "active",
+      "purpose": "Generate the outcome-blind union of the full V2 pool, symmetric four-size StructShell and compact CausalClosure actions without runtime reduction."
+    },
+    {
+      "path": "experiments/stride_hybridstructpool_audit.py",
+      "role": "active",
+      "purpose": "Audit exact candidate membership and source provenance for the frozen HybridStructPool contract without running PP."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_audit.py",
+      "role": "active",
+      "purpose": "Run the preregistered 16-process zero-solver HybridStructPool contract audit."
+    },
+    {
+      "path": "tests/runtime/test_hybridstructpool.py",
+      "role": "active",
+      "contract": "Freeze V2-authoritative exact-set merging, symmetric structural sizes, complete-union semantics and provenance retention."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_audit.py",
+      "role": "active",
+      "contract": "Freeze full-source and robust-action recall, causal-only opportunity retention and no-outcome/no-budget boundaries."
     }
   ]
 }

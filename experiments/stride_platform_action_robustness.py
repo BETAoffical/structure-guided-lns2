@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import collections
-import hashlib
 import json
 from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable
+
+from experiments._common import sha256_file
 
 
 SCHEMA = "lns2.stride.platform_action_robustness.v1"
@@ -17,14 +18,6 @@ DETERMINISTIC_ROLES = {
     "deterministic_compact_augment",
     "deterministic_same_size_exchange",
 }
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _mean(rows: Iterable[dict[str, Any]], key: str) -> float:
@@ -293,8 +286,8 @@ def analyze_action_robustness(
     }
     report = analyze_rows(list(frontier.get("episodes") or ()), causal_by_case)
     report["artifact_sha256"] = {
-        "frontier_report": _sha256(frontier_report_path),
-        "platform_entry_witnesses": _sha256(witness_path),
+        "frontier_report": sha256_file(frontier_report_path),
+        "platform_entry_witnesses": sha256_file(witness_path),
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(

@@ -1,0 +1,91 @@
+{
+  "schema": "lns2.stride.hybridstructpool_registration.v1",
+  "experiment_id": "stride-hybridstructpool-v1",
+  "scientific_status": "preregistered_zero_solver_candidate_contract_audit",
+  "pre_registration_head": "8056c15ae2cbe6157bcc3bcd55011e17964f791a",
+  "backup": {
+    "branch": "codex/backup-before-hybridstructpool-v1-20260814",
+    "bundle": "../backups/structure-guided-lns2-before-hybridstructpool-v1-20260814.bundle",
+    "bundle_sha256": "df4ff3ec93ab09ceeb6c01013b1d9d25b02251b258f6cc01ad61cb955e3a80e2"
+  },
+  "inputs": {
+    "causalclosure_cohort": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/causalclosure_cohort.jsonl",
+      "sha256": "4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50"
+    },
+    "legacy_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "structural_coverage_report": {
+      "path": "build/stride-causalclosurepool-structcoverage-v1/structural_coverage_report.json",
+      "sha256": "7cb2c7ba53766ef58d6eb4ca672841302c4161051439361ca7279f885b74c875"
+    },
+    "causalclosure_opportunity_report": {
+      "path": "build/stride-causalclosurepool-v2-opportunity-full-v1/collection_report.json",
+      "sha256": "c2daf6ee13a9aa53e0644c187446d112e123f79d3210b01f6ecd632df3f19c56"
+    },
+    "structshell_report": {
+      "path": "build/stride-structshell-audit-v1/structshell_audit_report.json",
+      "sha256": "84bfae2a26ae642da719af67559cf4f0d8ade96b8391f31b524e854939fc1883"
+    }
+  },
+  "candidate_contract": {
+    "full_v2_pool_preserved": true,
+    "v2_anchor_preserved_separately": true,
+    "structural_families_preserved": [
+      "bottleneck_crossing",
+      "conflict_component",
+      "topology_boundary_articulation",
+      "topology_boundary_low_degree",
+      "spatiotemporal_hotspot",
+      "path_overlap"
+    ],
+    "structural_sizes_exposed_symmetrically": [8, 16, 24, 32],
+    "causalclosure_id": "stride-causalclosurepool-v2",
+    "maximum_causal_candidates_per_state": 12,
+    "exact_agent_set_deduplication": true,
+    "source_provenance_merged": true,
+    "runtime_candidate_budget": null,
+    "current_ranker_used": false,
+    "candidate_outcomes_used_to_construct_pool": false
+  },
+  "cohort": {
+    "state_count": 78,
+    "map_count": 3,
+    "base_candidate_count": 1367,
+    "legacy_structural_candidate_count": 1135,
+    "causalclosure_candidate_count": 930,
+    "legacy_robust_action_count": 209,
+    "legacy_structural_opportunity_state_count": 41,
+    "causalclosure_only_opportunity_state_count": 3,
+    "all_states_required": true,
+    "no_result_based_state_exclusion": true
+  },
+  "readiness_gates": {
+    "base_candidate_recall": 1.0,
+    "legacy_structural_candidate_recall": 1.0,
+    "legacy_robust_action_recall": 1.0,
+    "causalclosure_candidate_recall": 1.0,
+    "causalclosure_only_best_action_recall": 1.0,
+    "all_maps_have_all_three_sources": true,
+    "no_fixed_family_preference": true,
+    "zero_identity_or_integrity_errors": true
+  },
+  "execution": {
+    "workers": 16,
+    "solver_calls_allowed": false,
+    "native_pp_allowed": false,
+    "future_rollout_allowed": false
+  },
+  "claim_boundary": {
+    "candidate_contract_readiness_only": true,
+    "outcome_enriched_membership_audit": true,
+    "runtime_budget_reducer_validated": false,
+    "online_selector_validated": false,
+    "platform_prevention_claim_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
