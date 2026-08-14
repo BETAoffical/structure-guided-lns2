@@ -822,6 +822,31 @@ def _frontier_diagnostics(episodes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _initial_fingerprint_integrity(
+    complete_groups: list[dict[str, dict[str, Any]]],
+    expected_repair_fingerprint: dict[str, str],
+) -> dict[str, bool]:
+    """Validate initial identity without comparing incompatible hash domains."""
+    return {
+        "same_initial_runtime_fingerprint_across_actions": all(
+            len(
+                {
+                    str(row["observed_first_action"]["before_fingerprint"])
+                    for row in value.values()
+                }
+            )
+            == 1
+            for value in complete_groups
+        ),
+        "registered_initial_repair_fingerprint": all(
+            str(row["observed_first_action"]["before_repair_fingerprint"])
+            == expected_repair_fingerprint[str(row["case_id"])]
+            for value in complete_groups
+            for row in value.values()
+        ),
+    }
+
+
 def analyze_frontier_collection(
     config_path: str | Path,
     output: str | Path,
@@ -844,35 +869,58 @@ def analyze_frontier_collection(
         case_id: str(_case_restore(root, case)["repair_structure_fingerprint"])
         for case_id, case in case_by_id.items()
     }
+    report_name = "initial_report.json" if phase == "initial" else REPORT_FILENAME
+    report_path = output / report_name
+    cached = _read_json(report_path) if report_path.is_file() else None
+    cached_episodes = list(cached.get("episodes") or ()) if cached else []
+    cache_valid = (
+        bool(cached)
+        and cached.get("schema") == REPORT_SCHEMA
+        and cached.get("phase") == phase
+        and len(cached_episodes) == len(schedule)
+        and all(
+            str(row.get("job_id")) == str(item["job_id"])
+            for row, item in zip(cached_episodes, schedule)
+        )
+        and dict(cached.get("artifact_sha256") or {}).get("frontier_cohort")
+        == sha256_file(inputs["frontier_cohort"])
+        and dict(cached.get("artifact_sha256") or {}).get("runtime_config")
+        == sha256_file(inputs["runtime_config"])
+    )
     episodes: list[dict[str, Any]] = []
-    for item in schedule:
-        manifest = _manifest_for_item(output, item)
-        if manifest is None:
-            episodes.append({**item, "missing": True})
-            continue
-        row = {**item, "manifest_status": str(manifest.get("status"))}
-        row.update(_episode_summary(manifest))
-        if manifest.get("status") == "ok":
-            decisions, _events = decision_rows(_collection_path(output, item), manifest)
-            row.update(detect_persistent_platform(decisions))
-            first = decisions[0] if decisions else None
-            row["observed_first_action"] = (
-                {
-                    "neighborhood": list(
-                        map(int, first["actual_metrics"].get("neighborhood") or ())
-                    ),
-                    "requested_pp_seed": int(
-                        first["actual_metrics"].get("requested_pp_random_seed", -1)
-                    ),
-                    "before_repair_fingerprint": str(first["before_repair_fingerprint"]),
-                    "before_fingerprint": str(first["before_fingerprint"]),
-                    "explicit_repair_order_requested": "repair_order"
-                    in dict(first["actual_action"]),
-                }
-                if first is not None
-                else None
-            )
-        episodes.append(row)
+    if cache_valid:
+        episodes = [dict(row) for row in cached_episodes]
+    else:
+        for item in schedule:
+            manifest = _manifest_for_item(output, item)
+            if manifest is None:
+                episodes.append({**item, "missing": True})
+                continue
+            row = {**item, "manifest_status": str(manifest.get("status"))}
+            row.update(_episode_summary(manifest))
+            if manifest.get("status") == "ok":
+                decisions, _events = decision_rows(_collection_path(output, item), manifest)
+                row.update(detect_persistent_platform(decisions))
+                first = decisions[0] if decisions else None
+                row["observed_first_action"] = (
+                    {
+                        "neighborhood": list(
+                            map(int, first["actual_metrics"].get("neighborhood") or ())
+                        ),
+                        "requested_pp_seed": int(
+                            first["actual_metrics"].get("requested_pp_random_seed", -1)
+                        ),
+                        "before_repair_fingerprint": str(
+                            first["before_repair_fingerprint"]
+                        ),
+                        "before_fingerprint": str(first["before_fingerprint"]),
+                        "explicit_repair_order_requested": "repair_order"
+                        in dict(first["actual_action"]),
+                    }
+                    if first is not None
+                    else None
+                )
+            episodes.append(row)
     complete = [row for row in episodes if not row.get("missing")]
     grouped: dict[tuple[str, int], dict[str, dict[str, Any]]] = collections.defaultdict(dict)
     for row in complete:
@@ -997,12 +1045,8 @@ def analyze_frontier_collection(
             == sorted(row["candidate_agents"])
             for row in complete
         ),
-        "registered_initial_state": all(
-            str(row["observed_first_action"]["before_fingerprint"])
-            == str(row["expected_source_state_fingerprint"])
-            and str(row["observed_first_action"]["before_repair_fingerprint"])
-            == expected_repair_fingerprint[str(row["case_id"])]
-            for row in complete
+        **_initial_fingerprint_integrity(
+            complete_groups, expected_repair_fingerprint
         ),
         "native_pp_order_only": all(
             row["observed_first_action"]["explicit_repair_order_requested"] is False
@@ -1052,6 +1096,7 @@ def analyze_frontier_collection(
         "integrity_passed": integrity_passed,
         "extension_allowed": extension_allowed,
         "mechanism_passed": mechanism_passed,
+        "analysis_episode_cache_reused": cache_valid,
         "claim_boundary": dict(config["claim_boundary"]),
         "artifact_sha256": {
             "frontier_cohort": sha256_file(inputs["frontier_cohort"]),
@@ -1061,8 +1106,7 @@ def analyze_frontier_collection(
         },
         "episodes": episodes,
     }
-    report_name = "initial_report.json" if phase == "initial" else REPORT_FILENAME
-    _write_json(output / report_name, report)
+    _write_json(report_path, report)
     return report
 
 

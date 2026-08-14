@@ -3,6 +3,7 @@ from __future__ import annotations
 from experiments.stride_platformentry_frontier import (
     _episode_override,
     _frontier_diagnostics,
+    _initial_fingerprint_integrity,
     frontier_schedule,
 )
 
@@ -93,3 +94,36 @@ def test_size_diagnostic_is_explicitly_noncausal() -> None:
     assert report["fraction_with_any_candidate_avoiding_platform"] == 1.0
     assert report["by_size_band"]["le24"]["platform_rate"] == 1.0
     assert "posthoc" in report["claim_boundary"]
+
+
+def test_initial_identity_keeps_hash_domains_separate() -> None:
+    groups = [
+        {
+            "action-a": {
+                "case_id": "case-a",
+                "observed_first_action": {
+                    "before_fingerprint": "runtime-a",
+                    "before_repair_fingerprint": "repair-a",
+                },
+            },
+            "action-b": {
+                "case_id": "case-a",
+                "observed_first_action": {
+                    "before_fingerprint": "runtime-a",
+                    "before_repair_fingerprint": "repair-a",
+                },
+            },
+        }
+    ]
+    integrity = _initial_fingerprint_integrity(groups, {"case-a": "repair-a"})
+    assert integrity == {
+        "same_initial_runtime_fingerprint_across_actions": True,
+        "registered_initial_repair_fingerprint": True,
+    }
+
+    groups[0]["action-b"]["observed_first_action"]["before_fingerprint"] = (
+        "runtime-b"
+    )
+    assert not _initial_fingerprint_integrity(
+        groups, {"case-a": "repair-a"}
+    )["same_initial_runtime_fingerprint_across_actions"]
