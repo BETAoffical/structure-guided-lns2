@@ -1,0 +1,92 @@
+{
+  "schema": "lns2.stride.hybridstructpool_budget_registration.v1",
+  "experiment_id": "stride-hybridstructpool-budget-v1",
+  "scientific_status": "preregistered_outcome_blind_budget_membership_audit",
+  "pre_registration_head": "56fb07de15f4e5292553b12de0a8f9fa71bf1b41",
+  "inputs": {
+    "hybrid_audit_report": {
+      "path": "build/stride-hybridstructpool-v1-audit/hybridstructpool_audit_report.json",
+      "sha256": "478e5e10a0b2eae90db55ba5750afd3777ae1a947956d20261d702d7ed56e06c"
+    },
+    "causalclosure_cohort": {
+      "path": "build/stride-causalclosurepool-v2-r3-compactness-r2/causalclosure_cohort.jsonl",
+      "sha256": "4ffaf2c4f62bbee2b8c0a54b6bbf85cccf2c530dbbd90f2c6bceb96332e9cc50"
+    },
+    "legacy_candidate_aggregates": {
+      "path": "build/stride-marginalpool-action-replay-continuation-v2/candidate_aggregates.jsonl",
+      "sha256": "4d3ba4ac580901937e20c07c2de8309e35c395e4754347520edfc47950bd2b82"
+    },
+    "structural_coverage_report": {
+      "path": "build/stride-causalclosurepool-structcoverage-v1/structural_coverage_report.json",
+      "sha256": "7cb2c7ba53766ef58d6eb4ca672841302c4161051439361ca7279f885b74c875"
+    },
+    "causalclosure_opportunity_report": {
+      "path": "build/stride-causalclosurepool-v2-opportunity-full-v1/collection_report.json",
+      "sha256": "c2daf6ee13a9aa53e0644c187446d112e123f79d3210b01f6ecd632df3f19c56"
+    },
+    "pretail_membership_rows": {
+      "path": "build/stride-structshell-audit-v1/pretail_membership_rows.jsonl",
+      "sha256": "b72082e0c8e093807c4e90219223bcce005b64d6a8a449756b748cff90f0913b"
+    }
+  },
+  "reducer": {
+    "id": "balanced-semantic-diversity-v1",
+    "budgets": [6, 8, 12],
+    "v2_pool_outside_budget": true,
+    "semantic_round_robin": [
+      "causalclosure_v2",
+      "topology_boundary",
+      "conflict_component",
+      "spatiotemporal_hotspot",
+      "bottleneck_crossing",
+      "path_overlap"
+    ],
+    "within_group_order": [
+      "pareto_rank_current_state_coverage_and_smaller_size",
+      "maximum_minimum_agent_set_distance",
+      "maximum_coverage_density",
+      "smaller_size",
+      "candidate_id"
+    ],
+    "candidate_outcomes_used": false,
+    "future_trajectory_used": false,
+    "fixed_family_size_preference_used": false
+  },
+  "cohort": {
+    "state_count": 78,
+    "map_count": 3,
+    "legacy_robust_action_count": 209,
+    "legacy_robust_opportunity_state_count": 47,
+    "causalclosure_only_opportunity_state_count": 3,
+    "pretail_beneficial_comparison_count": 47,
+    "all_states_and_budgets_required": true
+  },
+  "readiness_gates": {
+    "minimum_legacy_opportunity_state_recall": 0.9,
+    "minimum_legacy_robust_action_recall": 0.8,
+    "minimum_per_map_legacy_opportunity_recall": 0.8,
+    "minimum_pretail_beneficial_comparison_recall": 0.8,
+    "minimum_causalclosure_only_best_action_recall": 1.0,
+    "v2_base_recall": 1.0,
+    "budget_never_exceeded": true,
+    "zero_identity_or_integrity_errors": true
+  },
+  "selection_rule": {
+    "choose_smallest_passing_budget": true,
+    "when_none_pass": "retain_full_hybrid_union_as_research_contract",
+    "posthoc_rule_or_threshold_change_allowed": false
+  },
+  "execution": {
+    "workers": 16,
+    "solver_calls_allowed": false,
+    "native_pp_allowed": false
+  },
+  "claim_boundary": {
+    "membership_and_budget_readiness_only": true,
+    "runtime_selector_validated": false,
+    "platform_prevention_claim_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}

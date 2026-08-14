@@ -2702,6 +2702,21 @@
       "path": "tests/evaluation/test_stride_hybridstructpool_audit.py",
       "role": "active",
       "contract": "Freeze full-source and robust-action recall, causal-only opportunity retention and no-outcome/no-budget boundaries."
+    },
+    {
+      "path": "experiments/stride_hybridstructpool_budget.py",
+      "role": "active",
+      "purpose": "Audit ranker-free semantic-diversity budgets 6, 8 and 12 against frozen structural, causal and bounded-continuation membership."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_budget.py",
+      "role": "active",
+      "purpose": "Run the 16-process zero-solver HybridStructPool budget audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_budget.py",
+      "role": "active",
+      "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
     }
   ]
 }

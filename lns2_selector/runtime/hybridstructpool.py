@@ -12,6 +12,14 @@ from lns2_selector.runtime.topology_candidates import generate_structpool_candid
 
 HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-v1"
 STRUCTURAL_SIZES = (8, 16, 24, 32)
+HYBRID_GROUP_ORDER = (
+    "causalclosure_v2",
+    "topology_boundary",
+    "conflict_component",
+    "spatiotemporal_hotspot",
+    "bottleneck_crossing",
+    "path_overlap",
+)
 
 
 @dataclass
@@ -26,6 +34,140 @@ class HybridStructPoolResult:
     causal_candidate_count: int
     exact_duplicate_count: int
     causal_attempts: list[dict[str, Any]]
+
+
+def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
+    left_set, right_set = set(map(int, left)), set(map(int, right))
+    union = left_set | right_set
+    return len(left_set & right_set) / len(union) if union else 1.0
+
+
+def _audit_vector(row: dict[str, Any]) -> tuple[float, float, float]:
+    audit = dict(row.get("proposal_audit") or {})
+    features = dict(row.get("features") or {})
+    return (
+        float(
+            audit.get(
+                "global_event_incident_coverage",
+                features.get("realized.incident_event_coverage", 0.0),
+            )
+        ),
+        float(
+            audit.get(
+                "global_pair_internal_coverage",
+                features.get("realized.internal_conflict_coverage", 0.0),
+            )
+        ),
+        float(
+            audit.get(
+                "conflict_component_reach",
+                features.get("realized.component_coverage_max", 0.0),
+            )
+        ),
+    )
+
+
+def _semantic_groups(
+    row: dict[str, Any], provenance: Iterable[str]
+) -> tuple[str, ...]:
+    groups = set(map(str, row.get("structpool_family_groups") or ()))
+    sources = set(map(str, provenance))
+    if "causalclosure_v2" in sources:
+        groups.add("causalclosure_v2")
+    return tuple(group for group in HYBRID_GROUP_ORDER if group in groups)
+
+
+def _pareto_rank(rows: list[dict[str, Any]]) -> dict[str, int]:
+    remaining = {str(row["candidate_id"]): row for row in rows}
+    ranks: dict[str, int] = {}
+    rank = 0
+    while remaining:
+        front: list[str] = []
+        for identity, row in remaining.items():
+            vector = _audit_vector(row)
+            size = int(row["actual_size"])
+            dominated = False
+            for other_id, other in remaining.items():
+                if other_id == identity:
+                    continue
+                other_vector = _audit_vector(other)
+                other_size = int(other["actual_size"])
+                weak = all(a >= b for a, b in zip(other_vector, vector)) and other_size <= size
+                strict = any(a > b for a, b in zip(other_vector, vector)) or other_size < size
+                if weak and strict:
+                    dominated = True
+                    break
+            if not dominated:
+                front.append(identity)
+        if not front:
+            raise RuntimeError("HybridStructPool Pareto ranking produced no front")
+        for identity in sorted(front):
+            ranks[identity] = rank
+            remaining.pop(identity)
+        rank += 1
+    return ranks
+
+
+def reduce_hybridstructpool_challengers(
+    result: HybridStructPoolResult,
+    *,
+    maximum_challengers: int,
+) -> list[dict[str, Any]]:
+    """Apply outcome-blind semantic round-robin and set diversity.
+
+    V2 candidates remain outside this budget.  Every available semantic group
+    receives one turn before any group receives a second turn.  Within a group,
+    current-state coverage, smaller size, and distance from already selected
+    sets are Pareto/diversity criteria; no PP result is read.
+    """
+
+    if maximum_challengers not in {6, 8, 12}:
+        raise ValueError("HybridStructPool audit supports budgets 6, 8, and 12")
+    challengers = [copy.deepcopy(row) for row in result.challengers]
+    if not challengers:
+        return []
+    ranks = _pareto_rank(challengers)
+    by_group: dict[str, list[dict[str, Any]]] = {group: [] for group in HYBRID_GROUP_ORDER}
+    for row in challengers:
+        identity = str(row["candidate_id"])
+        for group in _semantic_groups(row, result.provenance_by_candidate_id[identity]):
+            by_group[group].append(row)
+    selected: list[dict[str, Any]] = []
+    selected_ids: set[str] = set()
+    while len(selected) < maximum_challengers:
+        added = False
+        for group in HYBRID_GROUP_ORDER:
+            choices = [
+                row
+                for row in by_group[group]
+                if str(row["candidate_id"]) not in selected_ids
+            ]
+            if not choices:
+                continue
+            chosen = min(
+                choices,
+                key=lambda row: (
+                    int(ranks[str(row["candidate_id"])]),
+                    -min(
+                        (
+                            1.0 - _jaccard(row["agents"], previous["agents"])
+                            for previous in selected
+                        ),
+                        default=1.0,
+                    ),
+                    -sum(_audit_vector(row)) / max(1, int(row["actual_size"])),
+                    int(row["actual_size"]),
+                    str(row["candidate_id"]),
+                ),
+            )
+            selected.append(copy.deepcopy(chosen))
+            selected_ids.add(str(chosen["candidate_id"]))
+            added = True
+            if len(selected) >= maximum_challengers:
+                break
+        if not added:
+            break
+    return selected
 
 
 def _normalized_candidate(row: dict[str, Any]) -> tuple[tuple[int, ...], str]:
@@ -146,4 +288,5 @@ __all__ = [
     "HybridStructPoolResult",
     "generate_hybridstructpool_candidates",
     "merge_hybridstructpool_candidates",
+    "reduce_hybridstructpool_challengers",
 ]

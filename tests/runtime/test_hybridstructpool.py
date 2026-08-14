@@ -9,6 +9,7 @@ from lns2_selector.runtime.hybridstructpool import (
     STRUCTURAL_SIZES,
     generate_hybridstructpool_candidates,
     merge_hybridstructpool_candidates,
+    reduce_hybridstructpool_challengers,
 )
 
 
@@ -18,6 +19,15 @@ def _candidate(agents: list[int], kind: str) -> dict:
         "candidate_id": candidate_id(normalized),
         "agents": normalized,
         "candidate_kind": kind,
+        "actual_size": len(normalized),
+        "proposal_audit": {
+            "global_event_incident_coverage": 0.5,
+            "global_pair_internal_coverage": 0.25,
+            "conflict_component_reach": 0.5,
+        },
+        "structpool_family_groups": (
+            [kind] if kind not in {"base", "causalclosure"} else []
+        ),
     }
 
 
@@ -100,6 +110,39 @@ class HybridStructPoolTest(unittest.TestCase):
                 v2_anchors=base,
                 structural_sizes=(8, 16, 24),
             )
+
+    def test_budget_reducer_preserves_v2_and_round_robins_semantic_groups(self) -> None:
+        base = [_candidate([0, 1], "base")]
+        structural = []
+        groups = (
+            "topology_boundary",
+            "conflict_component",
+            "spatiotemporal_hotspot",
+            "bottleneck_crossing",
+            "path_overlap",
+        )
+        for index, group in enumerate(groups):
+            structural.append(_candidate([10 + index, 20 + index], group))
+        causal = [_candidate([30, 31], "causalclosure")]
+        result = merge_hybridstructpool_candidates(base, structural, causal)
+
+        selected = reduce_hybridstructpool_challengers(
+            result, maximum_challengers=6
+        )
+
+        self.assertEqual(len(selected), 6)
+        self.assertEqual(len(result.candidates), 7)
+        self.assertEqual(
+            {row["candidate_id"] for row in selected},
+            {row["candidate_id"] for row in structural + causal},
+        )
+
+    def test_budget_reducer_rejects_unregistered_budget(self) -> None:
+        result = merge_hybridstructpool_candidates(
+            [_candidate([0, 1], "base")], [_candidate([2, 3], "path_overlap")], []
+        )
+        with self.assertRaisesRegex(ValueError, "budgets"):
+            reduce_hybridstructpool_challengers(result, maximum_challengers=7)
 
 
 if __name__ == "__main__":
