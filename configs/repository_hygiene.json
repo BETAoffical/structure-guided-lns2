@@ -55,6 +55,19 @@
         }
       ],
       "reason": "Preserve completed Successor diagnostic source hashes while documenting the shared manifest-index implementation."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_compact_nativeorder_repair.py",
+          "name": "_failed_job"
+        },
+        {
+          "path": "experiments/stride_nativeorder_transactionalrepair.py",
+          "name": "_failed_job"
+        }
+      ],
+      "reason": "Preserve the registered producer source identity of the completed Compact Native-Order experiment while documenting its intentionally compatible atomic-job failure record."
     }
   ],
   "tracked_roles": {
