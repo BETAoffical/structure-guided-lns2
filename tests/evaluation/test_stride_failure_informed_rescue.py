@@ -98,7 +98,7 @@ def test_blocker_rescue_is_deferred_to_next_decision() -> None:
         after=_state(changed=True),
         metrics={
             **_metrics(int(action["pp_random_seed"]), reason="none"),
-            "neighborhood": [0, 1, 2, 3],
+            "neighborhood": [0, 2, 1, 3],
         },
     )
     assert rescue is not None and rescue["resolved_by_rescue"] is True

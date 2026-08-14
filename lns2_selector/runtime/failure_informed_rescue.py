@@ -199,7 +199,7 @@ class FailureInformedRescueTracker:
                 raise ValueError("failure-informed rescue action has no trigger")
             snapshot = attempt_snapshot(metrics)
             expected_agents = list(map(int, self.pending_action["agents"]))
-            if snapshot["neighborhood"] != expected_agents:
+            if sorted(snapshot["neighborhood"]) != sorted(expected_agents):
                 raise ValueError("failure-informed rescue neighborhood changed")
             if int(snapshot["requested_pp_random_seed"]) != int(
                 self.pending_action["pp_random_seed"]

@@ -2793,6 +2793,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if (
                     bool(job.get("deterministic_pp_replay", False))
                     and not force_this_action
+                    and rescue_override is None
                 ):
                     # Pair the low-level PP stream across controller routes.
                     # Official neighborhood generation still consumes its
