@@ -41,7 +41,8 @@ workers.  Each episode runs to feasibility or 64 repair decisions / 180 seconds;
 the process and outer-job limits are 240 and 300 seconds.  Trial 4-7 extension
 is uniform across every state and arm and is allowed only if the blocker arm:
 
-1. lowers platform-entry point risk versus the frozen controller;
+1. lowers the probability that the next decision remains on the exact same
+   repair/conflict platform versus the frozen controller;
 2. does not lower success;
 3. resolves at least as many eligible rescues as the same-set arm; and
 4. worsens no map by more than five percentage points.
@@ -52,3 +53,14 @@ decisions, and no worse platform risk than the same-set arm.
 
 This is mechanism discovery only.  Passing does not authorize runtime
 integration, raw-TTF claims, model training, or default replacement.
+
+## Pre-formal-collection protocol correction
+
+The one-state execution smoke found that all arms can correctly report that
+they *entered* a platform before the next-decision rescue.  That historical
+event cannot be undone by a post-entry treatment, so ever-entered platform rate
+is retained only as a diagnostic.  Before any formal episode was collected,
+the primary estimand was corrected to post-trigger persistence: among paired
+shared-first-action exact rollbacks, whether decision 1 leaves the registered
+repair fingerprint plus conflict-edge signature unchanged.  No arm, candidate,
+state, trial, timeout, or quality gate was selected using a formal outcome.

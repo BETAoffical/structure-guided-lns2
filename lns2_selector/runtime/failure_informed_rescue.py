@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -9,6 +7,7 @@ from lns2_selector.runtime.bounded_native_retry import (
     attempt_snapshot,
     platform_signature,
 )
+from lns2_selector.runtime.fingerprints import semantic_fingerprint
 
 
 RESCUE_SCHEMA = "lns2.failure_informed_next_decision_rescue.v1"
@@ -18,19 +17,12 @@ BLOCKER_AUGMENTED_MODE = "blocker_augmented_fresh_seed"
 MODES = {CONTROL_MODE, SAME_SET_MODE, BLOCKER_AUGMENTED_MODE}
 
 
-def _fingerprint(value: Any) -> str:
-    encoded = json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def rescue_seed(
     *, namespace: str, episode_key: str, trial_index: int, signature: str,
     first_attempt_seed: int,
 ) -> int:
     seed = int(
-        _fingerprint(
+        semantic_fingerprint(
             {
                 "namespace": str(namespace),
                 "episode_key": str(episode_key),

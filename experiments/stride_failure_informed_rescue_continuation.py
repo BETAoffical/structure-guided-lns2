@@ -7,14 +7,12 @@ from typing import Any, Iterable, Mapping
 
 from experiments._common import (
     closed_loop_producer_identity,
-    contained_file,
     mean,
     quantile,
     registered_input,
     sha256_file,
 )
 from experiments.closed_loop_confirmation import run_closed_loop_collection
-from experiments.closed_loop_trace_storage import read_state_blob, read_trace_events
 from experiments.repair_collection import (
     _fingerprint,
     _read_json,
@@ -24,6 +22,9 @@ from experiments.repair_collection import (
     _write_jsonl,
 )
 from experiments.stride_bounded_native_retry_continuation import (
+    _collection_path,
+    _failed_job,
+    _read_restored_state,
     prepare_cases as prepare_bounded_cases,
 )
 from experiments.stride_collection import _paired_action
@@ -34,7 +35,10 @@ from experiments.stride_repairability_collection import (
     repairability_pp_seed,
     repairability_restore_seed,
 )
-from experiments.trace_replay import target_state_from_trace
+from experiments.trace_replay import (
+    decision_rows as replay_decision_rows,
+    target_state_from_trace,
+)
 from lns2_selector.runtime.failure_informed_rescue import (
     BLOCKER_AUGMENTED_MODE,
     CONTROL_MODE,
@@ -74,6 +78,8 @@ def load_registration(
         != "819e1d168e62eab813451dd9a54a191e1643f325"
         or config.get("scientific_status")
         != "preregistered_failure_informed_next_decision_mechanism"
+        or config.get("protocol_revision")
+        != "r2_post_trigger_persistence_corrected_after_protocol_smoke_before_formal_collection"
     ):
         raise ValueError("failure-informed rescue registration changed")
     inputs = {
@@ -123,12 +129,6 @@ def prepare_cases(
 ) -> tuple[tuple[Any, ...], list[dict[str, Any]]]:
     loaded = load_registration(config_path)
     return loaded, [dict(row) for row in loaded[-1]]
-
-
-def _read_restored_state(case: Mapping[str, Any]) -> dict[str, Any]:
-    state = read_state_blob(Path(str(case["state_blob"])))
-    state["context"] = dict(case["state_context"])
-    return state
 
 
 def _source_collection(case: Mapping[str, Any]) -> Path:
@@ -230,16 +230,6 @@ def _episode_override(
     }
 
 
-def _collection_path(output: Path, item: Mapping[str, Any]) -> Path:
-    return (
-        output
-        / "episodes"
-        / str(item["state_fingerprint"])[:20]
-        / f"trial_{int(item['trial_index']):02d}"
-        / str(item["arm"])
-    )
-
-
 def _manifest_for_item(
     output: Path, item: Mapping[str, Any]
 ) -> dict[str, Any] | None:
@@ -259,30 +249,21 @@ def _manifest_for_item(
 def _decision_rows(
     collection_root: Path, manifest: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
-    events = read_trace_events(
-        contained_file(collection_root, manifest.get("trace_file"), field="trace_file")
-    )
-    if (
-        len(events) < 2
-        or events[0].get("event") != "initial"
-        or events[-1].get("event") != "finish"
-    ):
-        raise ValueError("failure-informed rescue trace boundaries changed")
-    rows: list[dict[str, Any]] = []
-    for event in events[1:-1]:
-        if event.get("event") != "transition":
-            raise ValueError("failure-informed rescue trace contains invalid event")
-        rows.append(
-            {
-                "decision_index": int(event["decision_index"]),
-                "before_fingerprint": str(event["before_fingerprint"]),
-                "after_fingerprint": str(event["after_fingerprint"]),
-                "actual_action": dict(event["action"]),
-                "actual_metrics": dict(event["metrics"]),
-                "controller": dict(event.get("controller") or {}),
-            }
-        )
-    return rows
+    rows, events = replay_decision_rows(collection_root, dict(manifest))
+    transitions = events[1:-1]
+    if len(rows) != len(transitions):
+        raise ValueError("failure-informed rescue replay row count changed")
+    return [
+        {
+            "decision_index": int(row["decision_index"]),
+            "before_platform_signature": str(row["before_repair_fingerprint"]),
+            "after_platform_signature": str(row["after_repair_fingerprint"]),
+            "actual_action": dict(row["actual_action"]),
+            "actual_metrics": dict(row["actual_metrics"]),
+            "controller": dict(event["controller"]),
+        }
+        for row, event in zip(rows, transitions, strict=True)
+    ]
 
 
 def _producer(root: Path, *, native_required: bool) -> dict[str, Any]:
@@ -355,18 +336,6 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
         "collection_path": str(collection),
         "state_count": int(status == "ok"),
         "outcome_count": int(status == "ok"),
-    }
-
-
-def _failed_job(job: dict[str, Any], status: str, message: str) -> dict[str, Any]:
-    return {
-        **dict(job["item"]),
-        "status": status,
-        "manifest_status": status,
-        "error": message,
-        "collection_path": str(job["collection_path"]),
-        "state_count": 0,
-        "outcome_count": 0,
     }
 
 
@@ -525,7 +494,9 @@ def run_collection(
 
 def _entered_platform(decisions: list[dict[str, Any]]) -> tuple[bool, int]:
     streak = 2
-    signature: str | None = decisions[0]["before_fingerprint"] if decisions else None
+    signature: str | None = (
+        decisions[0]["before_platform_signature"] if decisions else None
+    )
     persistent = 0
     seen = False
     for row in decisions:
@@ -534,16 +505,17 @@ def _entered_platform(decisions: list[dict[str, Any]]) -> tuple[bool, int]:
             metrics.get("pp_failure_reason") == "conflict_bound_exceeded"
             and metrics.get("replan_success") is False
             and metrics.get("pp_rolled_back") is True
-            and row["before_fingerprint"] == row["after_fingerprint"]
+            and row["before_platform_signature"]
+            == row["after_platform_signature"]
         )
         if exact:
-            if signature == row["before_fingerprint"]:
+            if signature == row["before_platform_signature"]:
                 streak += 1
             else:
-                signature = row["before_fingerprint"]
+                signature = row["before_platform_signature"]
                 streak = 1
         else:
-            signature = row["after_fingerprint"]
+            signature = row["after_platform_signature"]
             streak = 0
         if streak >= 3:
             seen = True
@@ -551,13 +523,40 @@ def _entered_platform(decisions: list[dict[str, Any]]) -> tuple[bool, int]:
     return seen, persistent
 
 
+def _unresolved_after_next_decision(
+    decisions: list[dict[str, Any]], first_record: Mapping[str, Any]
+) -> bool | None:
+    if not bool(first_record["trigger_eligible"]):
+        return None
+    if len(decisions) < 2:
+        raise ValueError("eligible failure-informed event lacks decision 1")
+    return bool(
+        decisions[1]["after_platform_signature"]
+        == decisions[1]["before_platform_signature"]
+    )
+
+
 def _arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     selected = [row for row in rows if row["arm"] == arm]
-    triggered = [row for row in selected if row.get("triggered")]
+    eligible = [row for row in selected if row.get("trigger_eligible")]
     return {
         "episode_count": len(selected),
         "platform_count": sum(bool(row["entered_platform"]) for row in selected),
         "platform_rate": mean(bool(row["entered_platform"]) for row in selected),
+        "eligible_event_count": len(eligible),
+        "unresolved_after_next_decision_count": sum(
+            bool(row["unresolved_after_next_decision"]) for row in eligible
+        ),
+        "unresolved_after_next_decision_rate": (
+            mean(bool(row["unresolved_after_next_decision"]) for row in eligible)
+            if eligible
+            else 0.0
+        ),
+        "next_decision_escape_rate": (
+            mean(not bool(row["unresolved_after_next_decision"]) for row in eligible)
+            if eligible
+            else 0.0
+        ),
         "success_count": sum(bool(row["success"]) for row in selected),
         "success_rate": mean(bool(row["success"]) for row in selected),
         "right_censored_count": sum(
@@ -573,15 +572,10 @@ def _arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
         "mean_repair_wall_seconds": mean(
             float(row["repair_wall_seconds"]) for row in selected
         ),
-        "trigger_count": len(triggered),
+        "trigger_count": len(eligible),
         "mean_observed_external_blocker_count": mean(
             float(row.get("observed_external_blocker_count", 0))
             for row in selected
-        ),
-        "rescue_resolution_rate": (
-            mean(bool(row.get("resolved_by_rescue")) for row in triggered)
-            if triggered
-            else 0.0
         ),
     }
 
@@ -592,21 +586,34 @@ def _paired_bootstrap(
     by_state: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
     for row in rows:
         by_state[str(row["state_fingerprint"])].append(row)
-    states = sorted(by_state)
+    states = [
+        state
+        for state in sorted(by_state)
+        if any(
+            row["arm"] == baseline_arm and row.get("trigger_eligible")
+            for row in by_state[state]
+        )
+        and any(
+            row["arm"] == treatment_arm and row.get("trigger_eligible")
+            for row in by_state[state]
+        )
+    ]
+    if not states:
+        raise ValueError("failure-informed rescue has no paired eligible states")
 
     def difference(sample: list[str]) -> float:
         baseline: list[bool] = []
         treatment: list[bool] = []
         for state in sample:
             baseline.extend(
-                bool(row["entered_platform"])
+                bool(row["unresolved_after_next_decision"])
                 for row in by_state[state]
-                if row["arm"] == baseline_arm
+                if row["arm"] == baseline_arm and row.get("trigger_eligible")
             )
             treatment.extend(
-                bool(row["entered_platform"])
+                bool(row["unresolved_after_next_decision"])
                 for row in by_state[state]
-                if row["arm"] == treatment_arm
+                if row["arm"] == treatment_arm and row.get("trigger_eligible")
             )
         return mean(treatment) - mean(baseline)
 
@@ -668,12 +675,20 @@ def analyze_collection(
                 ),
                 first_record,
             )
+            trigger_eligible = bool(first_record["trigger_eligible"])
+            unresolved_after_next_decision = (
+                _unresolved_after_next_decision(decisions, first_record)
+            )
             row.update(
                 {
                     "entered_platform": entered,
                     "persistent_platform_decisions": persistent,
                     "first_record": first_record,
+                    "trigger_eligible": trigger_eligible,
                     "triggered": bool(first_record["triggered"]),
+                    "unresolved_after_next_decision": (
+                        unresolved_after_next_decision
+                    ),
                     "observed_external_blocker_count": len(
                         first_record["observed_external_blockers"]
                     ),
@@ -720,6 +735,11 @@ def analyze_collection(
         for value in paired.values()
         if set(value) == set(ARMS)
     ]
+    eligibility_parity = [
+        len({bool(value[arm]["trigger_eligible"]) for arm in ARMS}) == 1
+        for value in paired.values()
+        if set(value) == set(ARMS)
+    ]
     summaries = {arm: _arm_summary(complete, arm) for arm in ARMS}
     replicates = int(config["final_gate"]["paired_state_cluster_bootstrap_replicates"])
     blocker_vs_control = _paired_bootstrap(
@@ -734,27 +754,30 @@ def analyze_collection(
         arm_rows = {arm: _arm_summary(selected, arm) for arm in ARMS}
         maps[map_id] = {
             **arm_rows,
-            "blocker_vs_control_platform_difference": (
-                arm_rows[BLOCKER_AUGMENTED_MODE]["platform_rate"]
-                - arm_rows[CONTROL_MODE]["platform_rate"]
+            "blocker_vs_control_unresolved_difference": (
+                arm_rows[BLOCKER_AUGMENTED_MODE][
+                    "unresolved_after_next_decision_rate"
+                ]
+                - arm_rows[CONTROL_MODE]["unresolved_after_next_decision_rate"]
             ),
         }
     control = summaries[CONTROL_MODE]
     same = summaries[SAME_SET_MODE]
     blocker = summaries[BLOCKER_AUGMENTED_MODE]
     initial_gate = {
-        "blocker_platform_direction_improved": blocker_vs_control["point"] < 0.0,
+        "blocker_unresolved_direction_improved": blocker_vs_control["point"] < 0.0,
         "blocker_success_not_lower": blocker["success_rate"] >= control["success_rate"],
-        "blocker_resolution_not_lower_than_same_set": (
-            blocker["rescue_resolution_rate"] >= same["rescue_resolution_rate"]
+        "blocker_escape_not_lower_than_same_set": (
+            blocker["next_decision_escape_rate"]
+            >= same["next_decision_escape_rate"]
         ),
         "no_map_worse_over_five_points": all(
-            row["blocker_vs_control_platform_difference"] <= 0.05
+            row["blocker_vs_control_unresolved_difference"] <= 0.05
             for row in maps.values()
         ),
     }
     final_gate = {
-        "blocker_platform_bootstrap_upper_below_zero": blocker_vs_control[
+        "blocker_unresolved_bootstrap_upper_below_zero": blocker_vs_control[
             "upper_95"
         ]
         < 0.0,
@@ -765,12 +788,13 @@ def analyze_collection(
             "restricted_mean_repair_decisions"
         ]
         < control["restricted_mean_repair_decisions"],
-        "blocker_not_worse_than_same_set_platform": blocker_vs_same["point"] <= 0.0,
-        "blocker_resolution_not_lower_than_same_set": (
-            blocker["rescue_resolution_rate"] >= same["rescue_resolution_rate"]
+        "blocker_not_worse_than_same_set_unresolved": blocker_vs_same["point"] <= 0.0,
+        "blocker_escape_not_lower_than_same_set": (
+            blocker["next_decision_escape_rate"]
+            >= same["next_decision_escape_rate"]
         ),
         "no_map_worse_over_five_points": all(
-            row["blocker_vs_control_platform_difference"] <= 0.05
+            row["blocker_vs_control_unresolved_difference"] <= 0.05
             for row in maps.values()
         ),
     }
@@ -782,6 +806,13 @@ def analyze_collection(
         "paired_arms_complete": len(paired) == len(cases) * len(trials)
         and all(set(value) == set(ARMS) for value in paired.values()),
         "shared_first_attempt_paired": bool(first_parity) and all(first_parity),
+        "trigger_eligibility_paired": bool(eligibility_parity)
+        and all(eligibility_parity),
+        "eligible_next_decision_observed": all(
+            row.get("unresolved_after_next_decision") is not None
+            for row in complete
+            if row.get("trigger_eligible")
+        ),
         "native_order_only": all(
             not row.get("explicit_repair_order_requested") for row in complete
         ),
@@ -816,8 +847,8 @@ def analyze_collection(
         "integrity": integrity,
         "integrity_passed": all(integrity.values()),
         "arm_summaries": summaries,
-        "blocker_vs_control_platform_bootstrap": blocker_vs_control,
-        "blocker_vs_same_set_platform_bootstrap": blocker_vs_same,
+        "blocker_vs_control_unresolved_bootstrap": blocker_vs_control,
+        "blocker_vs_same_set_unresolved_bootstrap": blocker_vs_same,
         "by_map": maps,
         "initial_gate": initial_gate,
         "final_gate": final_gate,

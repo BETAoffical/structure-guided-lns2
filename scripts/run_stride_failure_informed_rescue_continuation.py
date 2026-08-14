@@ -19,7 +19,7 @@ from experiments.stride_failure_informed_rescue_continuation import (  # noqa: E
 )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "command",
@@ -35,28 +35,36 @@ def main() -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--limit-cases", type=int)
-    args = parser.parse_args()
-    if args.command == "dry-run":
+    args = parser.parse_args(argv)
+    collection_phases = {
+        "collect-initial": "initial",
+        "collect-extension": "extension",
+    }
+    analysis_phases = {
+        "analyze-initial": "initial",
+        "analyze-extended": "extended",
+    }
+    if args.command in collection_phases:
+        result = run_collection(
+            args.config,
+            args.output,
+            phase=collection_phases[args.command],
+            resume=args.resume,
+            limit_cases=args.limit_cases,
+        )
+    elif args.command in analysis_phases:
+        result = analyze_collection(
+            args.config,
+            args.output,
+            phase=analysis_phases[args.command],
+            limit_cases=args.limit_cases,
+        )
+    else:
         result = run_collection(
             args.config,
             args.output,
             phase="initial",
             dry_run=True,
-            limit_cases=args.limit_cases,
-        )
-    elif args.command.startswith("collect-"):
-        result = run_collection(
-            args.config,
-            args.output,
-            phase=args.command.removeprefix("collect-"),
-            resume=args.resume,
-            limit_cases=args.limit_cases,
-        )
-    else:
-        result = analyze_collection(
-            args.config,
-            args.output,
-            phase="initial" if args.command == "analyze-initial" else "extended",
             limit_cases=args.limit_cases,
         )
     print(json.dumps(result, indent=2, sort_keys=True))

@@ -3,6 +3,7 @@
   "scientific_status": "preregistered_failure_informed_next_decision_mechanism",
   "experiment_id": "stride-failure-informed-rescue-continuation-v1",
   "pre_registration_parent_commit": "819e1d168e62eab813451dd9a54a191e1643f325",
+  "protocol_revision": "r2_post_trigger_persistence_corrected_after_protocol_smoke_before_formal_collection",
   "inputs": {
     "bounded_registration": {
       "path": "configs/stride_bounded_native_retry_continuation_v1_registration.json",
@@ -55,22 +56,28 @@
     "blocker_augmented": "after an exact rollback, use the same set plus up to eight external blockers observed in that failed PP and the same fresh seed as the same-set arm",
     "intervention_limit": "one next-decision rescue only; never retry within the same decision and never repeatedly rescue later platforms"
   },
+  "primary_estimand": {
+    "eligible_event": "the shared first action returns conflict_bound_exceeded with exact rollback at initial repeat count two",
+    "outcome": "the next decision leaves the repair fingerprint plus conflict-edge platform signature unchanged",
+    "treatment_contrast": "blocker_augmented_fresh_seed minus frozen_controller unresolved-platform probability among strictly paired eligible events",
+    "diagnostic_only": "whether an episode ever entered a platform is reported but cannot be the post-entry rescue estimand"
+  },
   "initial_extension_gate": {
-    "blocker_platform_risk_difference_strictly_below": 0.0,
+    "blocker_unresolved_platform_difference_strictly_below": 0.0,
     "blocker_success_rate_difference_minimum": 0.0,
-    "blocker_resolution_rate_not_lower_than_same_set": true,
-    "maximum_per_map_platform_rate_worsening": 0.05,
+    "blocker_next_decision_escape_rate_not_lower_than_same_set": true,
+    "maximum_per_map_unresolved_rate_worsening": 0.05,
     "uniform_all_state_extension_only": true
   },
   "final_gate": {
     "paired_state_cluster_bootstrap_replicates": 10000,
-    "blocker_platform_risk_difference_95pct_upper_strictly_below": 0.0,
+    "blocker_unresolved_platform_difference_95pct_upper_strictly_below": 0.0,
     "blocker_success_rate_difference_minimum": 0.0,
     "blocker_normalized_fixed_auc_difference_strictly_below": 0.0,
     "blocker_restricted_mean_repair_decision_difference_strictly_below": 0.0,
-    "blocker_platform_rate_not_worse_than_same_set": true,
-    "blocker_resolution_rate_not_lower_than_same_set": true,
-    "maximum_per_map_platform_rate_worsening": 0.05
+    "blocker_unresolved_rate_not_worse_than_same_set": true,
+    "blocker_next_decision_escape_rate_not_lower_than_same_set": true,
+    "maximum_per_map_unresolved_rate_worsening": 0.05
   },
   "claim_boundary": {
     "mechanism_discovery_only": true,

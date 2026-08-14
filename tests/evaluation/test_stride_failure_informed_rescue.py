@@ -9,6 +9,7 @@ from lns2_selector.runtime.failure_informed_rescue import (
 from experiments.stride_failure_informed_rescue_continuation import (
     ARMS,
     _episode_override,
+    _unresolved_after_next_decision,
     continuation_schedule,
     prepare_cases,
 )
@@ -155,3 +156,27 @@ def test_registered_schedule_and_override_keep_one_native_call_per_decision() ->
     assert "repair_order" not in override["forced_first_action"]
     assert "bounded_native_retry" not in override
     assert override["failure_informed_rescue"]["maximum_added_blockers"] == 8
+
+
+def test_post_trigger_persistence_compares_decision_one_repair_signatures() -> None:
+    first = {"trigger_eligible": True}
+    unchanged = [
+        {},
+        {
+            "before_platform_signature": "repair-a",
+            "after_platform_signature": "repair-a",
+        },
+    ]
+    changed = [
+        {},
+        {
+            "before_platform_signature": "repair-a",
+            "after_platform_signature": "repair-b",
+        },
+    ]
+    assert _unresolved_after_next_decision(unchanged, first) is True
+    assert _unresolved_after_next_decision(changed, first) is False
+    assert (
+        _unresolved_after_next_decision(changed, {"trigger_eligible": False})
+        is None
+    )

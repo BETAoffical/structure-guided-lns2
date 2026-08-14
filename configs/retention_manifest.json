@@ -2767,6 +2767,26 @@
       "path": "tests/evaluation/test_stride_bounded_native_retry_continuation.py",
       "role": "active",
       "contract": "Freeze exact rollback eligibility, time-limit exclusion, signature uniqueness, and bounded intervention semantics."
+    },
+    {
+      "path": "experiments/stride_failure_informed_rescue_continuation.py",
+      "role": "active",
+      "purpose": "Measure whether external blockers observed in a shared failed PP improve a one-time next-decision native-order rescue and bounded continuation."
+    },
+    {
+      "path": "scripts/run_stride_failure_informed_rescue_continuation.py",
+      "role": "active",
+      "purpose": "Run the preregistered failure-informed next-decision rescue collection and analysis."
+    },
+    {
+      "path": "lns2_selector/runtime/failure_informed_rescue.py",
+      "role": "active",
+      "purpose": "Extract observed external PP blockers and schedule at most one same-set or blocker-augmented rescue on the following controller decision."
+    },
+    {
+      "path": "tests/evaluation/test_stride_failure_informed_rescue.py",
+      "role": "active",
+      "contract": "Freeze paired first attempts, next-decision-only intervention, native order, blocker caps, seed identity, and post-trigger persistence semantics."
     }
   ]
 }
