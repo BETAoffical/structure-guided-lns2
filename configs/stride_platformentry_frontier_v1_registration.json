@@ -1,0 +1,111 @@
+{
+  "schema": "lns2.stride.platformentry_frontier_registration.v1",
+  "scientific_status": "preregistered_bounded_first_action_frontier_set_mechanism",
+  "experiment_id": "stride-platformentry-frontier-v1",
+  "pre_registration_parent_commit": "2f97cfc0f7b1e3a74fb900b72a4aac9cc06b5834",
+  "inputs": {
+    "pretail_registration": {
+      "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
+      "sha256": "9d5588dabca7cff85470b0ea419127c7ff941f24f82bf787dd77950aaee2d00b"
+    },
+    "frontier_cohort": {
+      "path": "build/stride-frontierdependencypool-v1/frontierdependency_cohort.jsonl",
+      "sha256": "079bf77f903a3ccf3509036228f226be5a1a324a8bff199ca5f574d26c6fcf79"
+    },
+    "frontier_report": {
+      "path": "build/stride-frontierdependencypool-v1/materialization_report.json",
+      "sha256": "d9801575d935b49f890dade3aac3a9f39b786b02d174c623b140233a33d3b8a6"
+    },
+    "runtime_config": {
+      "path": "configs/stride_platformentry_order_runtime_v1.json",
+      "sha256": "18eebf90e8aa77597fceee1954fb611d1cb781bc7071193b1316f5a095c7720e"
+    },
+    "qualification_report": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/qualification_report.json",
+      "sha256": "bfb8b3e0c4df3e7316e067d4fe4dbda64e716833bbbdf282d4ecd6c1d629c32b"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/qualification_manifest.jsonl",
+      "sha256": "7a4c978c8850de4b5653b8279bdea87cc5e71b5999738732a09ec6dd1b6d5276"
+    },
+    "qualification_run_config": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/run_config.json",
+      "sha256": "de733c17e1c83f1811368490a96d964f0a034182d9d1e39a911e77565807d893"
+    },
+    "qualification_summary": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/collection_summary.json",
+      "sha256": "eb8c675e3d6c9d15c857dacb896a63e362652ec6d5bbf8a602129302f34d4116"
+    }
+  },
+  "cohort": {
+    "case_count": 45,
+    "checkpoint_kind": "first_structural_selection",
+    "selection_rule": "all frozen platform witnesses without outcome-based exclusion",
+    "frontier_candidate_count": 235,
+    "unique_forced_action_count": 325,
+    "outcome_enriched_mechanism_cohort": true,
+    "generalization_claim": false
+  },
+  "action_roles": {
+    "historical_actual": "frozen controller selected action",
+    "v2_anchor": "highest-scored non-structural frozen V2 action",
+    "frontier_candidate": "one frozen compact-augment or same-size-exchange action",
+    "deterministic_compact_augment": "preregistered deterministic candidate id, read from its frontier-candidate episode",
+    "deterministic_same_size_exchange": "preregistered deterministic candidate id, read from its frontier-candidate episode",
+    "pool_upper_bound": "post-hoc diagnostic over all frozen frontier candidates; never a promotable selector"
+  },
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "paired_first_action_pp_seed": true,
+    "native_pp_order_only": true,
+    "first_action_forced_exactly_once": true,
+    "continuation_controller": "matching_frozen_structpool_or_slotpool",
+    "reuse_registered_qualification": true,
+    "worker_count": 16,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_timeout": true,
+    "right_censoring_is_valid_state_evidence": true,
+    "external_process_timeout_is_execution_error": true,
+    "uniform_all_action_extension_only": true
+  },
+  "platform_definition": {
+    "minimum_consecutive_exact_rollbacks": 3,
+    "replan_success_required": false,
+    "repair_structure_fingerprint_unchanged": true,
+    "conflict_edge_set_unchanged": true,
+    "same_repair_structure_fingerprint_across_streak": true,
+    "maximum_observation_decisions": 64
+  },
+  "initial_extension_gate": {
+    "at_least_one_deterministic_variant_platform_risk_difference_strictly_below": 0.0,
+    "qualifying_variant_success_rate_difference_minimum": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05,
+    "all_actions_extend_if_gate_passes": true
+  },
+  "final_gate_per_deterministic_variant": {
+    "paired_case_cluster_bootstrap_replicates": 10000,
+    "paired_platform_risk_difference_95pct_upper_strictly_below": 0.0,
+    "success_rate_difference_minimum": 0.0,
+    "normalized_fixed_auc_difference_strictly_below": 0.0,
+    "kaplan_meier_restricted_mean_repair_decision_difference_strictly_below": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_improvement_claim": false,
+    "generalization_claim": false,
+    "default_controller_replacement_allowed": false,
+    "multiple_pp_runtime_retry_allowed": false,
+    "pool_upper_bound_is_not_a_selector": true,
+    "no_result_based_exclusion": true,
+    "censored_ttf_is_not_imputed": true
+  }
+}
