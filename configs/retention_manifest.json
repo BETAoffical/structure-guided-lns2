@@ -2719,16 +2719,6 @@
       "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
     },
     {
-      "path": "configs/stride_nativeorder_transactionalrepair_v1_registration.json",
-      "role": "active",
-      "contract": "Freeze two-attempt native-order retries, paired fresh retry seeds, blocker cap, phased gates and non-TTF claim boundaries."
-    },
-    {
-      "path": "docs/STRIDE_NATIVEORDER_TRANSACTIONALREPAIR_V1_PREREGISTRATION.md",
-      "role": "active",
-      "purpose": "Preregister the post-failure comparison of same-set native retry, blocker-augmented native retry and a controlled-order diagnostic upper bound."
-    },
-    {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
       "role": "active",
       "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."
@@ -2742,16 +2732,6 @@
       "path": "tests/evaluation/test_stride_nativeorder_transactionalrepair.py",
       "role": "active",
       "contract": "Freeze native retry order semantics, bounded blocker augmentation and fresh paired retry seeds."
-    },
-    {
-      "path": "configs/stride_nativeorder_transactionalrepair_v1_r2_registration.json",
-      "role": "active",
-      "contract": "Freeze the 270-second cooperative native PP transaction deadline, registered initial reuse and full extension restart."
-    },
-    {
-      "path": "docs/STRIDE_NATIVEORDER_TRANSACTIONALREPAIR_V1_EXECUTION_AMENDMENT_R2.md",
-      "role": "active",
-      "purpose": "Record the terminal process-timeout diagnosis and the no-budget-increase cooperative deadline recovery."
     }
   ]
 }

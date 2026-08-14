@@ -31,6 +31,7 @@ from experiments.stride_transactionalrepair import (
     _attempt_signature,
     _load_restored_source,
     _run_attempt,
+    _trial_files,
 )
 from experiments.trace_replay import restore_repair_state
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
@@ -508,10 +509,6 @@ def _failed_job(job: dict[str, Any], status: str, message: str) -> dict[str, Any
     }
 
 
-def _trial_files(output: Path) -> list[Path]:
-    return sorted((output / "trials").glob("*/*.json"))
-
-
 def collect_phase(
     *,
     config_path: str | Path,
@@ -740,7 +737,7 @@ def _summary(rows: list[dict[str, Any]], policy_id: str) -> dict[str, Any]:
     }
 
 
-def _group_summary(
+def _nativeorder_group_summary(
     rows: list[dict[str, Any]], policy_id: str, key: str
 ) -> dict[str, dict[str, Any]]:
     return {
@@ -916,7 +913,10 @@ def analyze(
         ),
     }
     summaries = {policy: _summary(rows, policy) for policy in POLICIES}
-    by_map = {policy: _group_summary(rows, policy, "map_id") for policy in POLICIES}
+    by_map = {
+        policy: _nativeorder_group_summary(rows, policy, "map_id")
+        for policy in POLICIES
+    }
     baseline = summaries[BASELINE_POLICY]
     initial_gates: dict[str, dict[str, bool]] = {}
     for policy in DEPLOYABLE_POLICIES:
