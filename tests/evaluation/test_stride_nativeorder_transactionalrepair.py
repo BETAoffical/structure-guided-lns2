@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from experiments.stride_nativeorder_transactionalrepair import (
+    AMENDED_CONFIG_SCHEMA,
     AUGMENTED_POLICY,
     BASELINE_POLICY,
     DEPLOYABLE_POLICIES,
@@ -18,6 +19,7 @@ from experiments.stride_repairability_collection import repairability_pp_seed
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs/stride_nativeorder_transactionalrepair_v1_registration.json"
+R2_CONFIG = ROOT / "configs/stride_nativeorder_transactionalrepair_v1_r2_registration.json"
 
 
 def test_registration_freezes_two_native_arms_and_one_order_upper_bound() -> None:
@@ -75,3 +77,18 @@ def test_retry_seed_is_fresh_deterministic_and_in_range() -> None:
         assert 0 <= retry < 2**31
         assert retry != first
         assert retry_pp_seed(fingerprint, trial) == retry
+
+
+def test_r2_registration_adds_cooperative_budget_without_extending_process_cap() -> None:
+    config = json.loads(R2_CONFIG.read_text(encoding="utf-8"))
+    assert config["schema"] == AMENDED_CONFIG_SCHEMA
+    assert config["execution"]["transaction_pp_wall_budget_seconds"] == 270
+    assert config["execution"]["process_safety_reserve_seconds"] == 30
+    assert config["execution"]["per_policy_job_timeout_seconds"] == 300
+    assert config["superseded_extension"]["reuse_allowed"] is False
+    assert (
+        config["registered_initial_reuse"][
+            "maximum_observed_total_attempt_wall_seconds"
+        ]
+        < config["execution"]["transaction_pp_wall_budget_seconds"]
+    )

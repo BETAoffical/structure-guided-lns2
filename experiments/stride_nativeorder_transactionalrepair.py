@@ -10,25 +10,37 @@ from typing import Any
 from experiments._common import mean, producer_identity, registered_input, sha256_file
 from experiments.repair_collection import (
     _fingerprint,
+    _plain,
     _read_json,
     _read_jsonl,
     _run_jobs,
     _write_json,
 )
-from experiments.stride_repairability_causal_audit import build_causal_cohort
+from experiments.stride_collection import _validate_native_repair
+from experiments.stride_repairability_causal_audit import (
+    _diagnostic_action,
+    _validate_pp_diagnostic,
+    build_causal_cohort,
+    external_blocker_order,
+)
 from experiments.stride_repairability_collection import repairability_pp_seed
 from experiments.stride_repairdependency_predictability import (
     _contained as _registered_collection_path,
 )
 from experiments.stride_transactionalrepair import (
+    _attempt_signature,
     _load_restored_source,
     _run_attempt,
 )
 from experiments.trace_replay import restore_repair_state
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
 
 CONFIG_SCHEMA = "lns2.stride.nativeorder_transactionalrepair_registration.v1"
+AMENDED_CONFIG_SCHEMA = (
+    "lns2.stride.nativeorder_transactionalrepair_registration.v1r2"
+)
 RUN_SCHEMA = "lns2.stride.nativeorder_transactionalrepair_run.v1"
 TRIAL_SCHEMA = "lns2.stride.nativeorder_transactionalrepair_trial.v1"
 POLICY_SCHEMA = "lns2.stride.nativeorder_transactionalrepair_policy_result.v1"
@@ -83,9 +95,8 @@ def load_registration(
     config_path = Path(config_path).resolve()
     root = config_path.parents[1]
     config = _read_json(config_path)
-    if (
-        config.get("schema") != CONFIG_SCHEMA
-        or config.get("experiment_id") != EXPERIMENT_ID
+    if config.get("schema") not in {CONFIG_SCHEMA, AMENDED_CONFIG_SCHEMA} or (
+        config.get("experiment_id") != EXPERIMENT_ID
     ):
         raise ValueError("NativeOrder TransactionalRepair registration changed")
     inputs = {
@@ -113,6 +124,11 @@ def load_registration(
         raise ValueError("NativeOrder worker count changed")
     if int(execution["per_policy_job_timeout_seconds"]) != 300:
         raise ValueError("NativeOrder job timeout changed")
+    transaction_budget = execution.get("transaction_pp_wall_budget_seconds")
+    if config.get("schema") == AMENDED_CONFIG_SCHEMA and float(
+        transaction_budget
+    ) != 270.0:
+        raise ValueError("NativeOrder amended transaction budget changed")
     return config_path, root, config, inputs, collection
 
 
@@ -207,9 +223,79 @@ def retry_plan(
     raise ValueError(f"unknown NativeOrder policy: {policy_id}")
 
 
-def _timed_attempt(**kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+def _run_attempt_with_time_limit(
+    *,
+    environment: Any,
+    agents: list[int],
+    repair_order: list[int] | None,
+    pp_seed: int,
+    before_repair: str,
+    before_conflicts: int,
+    attempt_index: int,
+    reason: str,
+    pp_time_limit_seconds: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = _plain(
+        environment.step_with_time_limit(
+            _diagnostic_action(agents, pp_seed, repair_order=repair_order),
+            max(0.0, float(pp_time_limit_seconds)),
+        )
+    )
+    after, metrics = _validate_native_repair(
+        result, expected_agents=agents, expected_seed=pp_seed
+    )
+    diagnostic = _validate_pp_diagnostic(metrics)
+    after_repair = repair_structure_fingerprint(after)
+    conflicts_after = int(after["num_of_colliding_pairs"])
+    blockers = external_blocker_order(
+        list(diagnostic["agents"]), agents, maximum=len(after["agents"])
+    )
+    row = {
+        "schema": "lns2.stride.transactionalrepair_attempt.v1",
+        "attempt_index": int(attempt_index),
+        "attempt_reason": reason,
+        "agents": list(map(int, agents)),
+        "repair_order": list(map(int, metrics["repair_order"])),
+        "replan_success": bool(metrics["replan_success"]),
+        "failure_reason": str(diagnostic["failure_reason"]),
+        "attempted_agent_count": int(diagnostic["attempted_agent_count"]),
+        "inserted_agent_count": int(diagnostic["inserted_agent_count"]),
+        "failed_agent": int(diagnostic["failed_agent"]),
+        "failed_order_index": int(diagnostic["failed_order_index"]),
+        "rolled_back": bool(diagnostic["rolled_back"]),
+        "external_blockers": blockers,
+        "conflicts_after": conflicts_after,
+        "after_repair_fingerprint": after_repair,
+        "repair_outcome": classify_repair_outcome(
+            before_fingerprint=before_repair,
+            after_fingerprint=after_repair,
+            replan_success=bool(metrics["replan_success"]),
+            conflicts_before=before_conflicts,
+            conflicts_after=conflicts_after,
+            feasible=bool(after.get("feasible")),
+        ),
+        "requested_pp_time_limit_seconds": float(pp_time_limit_seconds),
+    }
+    row["attempt_signature"] = _attempt_signature(row)
+    if not row["replan_success"] and (
+        not row["rolled_back"]
+        or after_repair != before_repair
+        or conflicts_after != before_conflicts
+    ):
+        raise RuntimeError("NativeOrder time-limited attempt did not roll back")
+    return row, after
+
+
+def _timed_attempt(
+    *, pp_time_limit_seconds: float | None = None, **kwargs: Any
+) -> tuple[dict[str, Any], dict[str, Any]]:
     started = time.perf_counter()
-    row, state = _run_attempt(**kwargs)
+    if pp_time_limit_seconds is None:
+        row, state = _run_attempt(**kwargs)
+    else:
+        row, state = _run_attempt_with_time_limit(
+            **kwargs, pp_time_limit_seconds=pp_time_limit_seconds
+        )
     row["attempt_wall_seconds"] = time.perf_counter() - started
     row["requested_pp_seed"] = int(kwargs["pp_seed"])
     row["explicit_repair_order_requested"] = kwargs["repair_order"] is not None
@@ -228,11 +314,22 @@ def _run_policy(
     retry_seed: int,
     policy_id: str,
     maximum_added_agents: int,
+    transaction_pp_wall_budget_seconds: float | None,
 ) -> dict[str, Any]:
     environment, restored = restore_repair_state(replay, state, seed=restore_seed)
     if repair_structure_fingerprint(restored) != before_repair:
         raise RuntimeError("NativeOrder branch restore changed")
     attempts: list[dict[str, Any]] = []
+    transaction_started = time.perf_counter()
+    first_limit = (
+        None
+        if transaction_pp_wall_budget_seconds is None
+        else max(
+            0.0,
+            float(transaction_pp_wall_budget_seconds)
+            - (time.perf_counter() - transaction_started),
+        )
+    )
     first, final_state = _timed_attempt(
         environment=environment,
         agents=base_agents,
@@ -242,6 +339,7 @@ def _run_policy(
         before_conflicts=before_conflicts,
         attempt_index=0,
         reason="selected_native_order",
+        pp_time_limit_seconds=first_limit,
     )
     attempts.append(first)
     added_agents: list[int] = []
@@ -262,6 +360,15 @@ def _run_policy(
         )
         if plan is not None:
             retry_agents, retry_order, added_agents, reason = plan
+            retry_limit = (
+                None
+                if transaction_pp_wall_budget_seconds is None
+                else max(
+                    0.0,
+                    float(transaction_pp_wall_budget_seconds)
+                    - (time.perf_counter() - transaction_started),
+                )
+            )
             second, final_state = _timed_attempt(
                 environment=environment,
                 agents=retry_agents,
@@ -271,6 +378,7 @@ def _run_policy(
                 before_conflicts=before_conflicts,
                 attempt_index=1,
                 reason=reason,
+                pp_time_limit_seconds=retry_limit,
             )
             attempts.append(second)
             termination = (
@@ -300,6 +408,13 @@ def _run_policy(
         "returned_unchanged": final_repair == before_repair,
         "total_attempt_wall_seconds": sum(
             float(row["attempt_wall_seconds"]) for row in attempts
+        ),
+        "total_transaction_wall_seconds": time.perf_counter()
+        - transaction_started,
+        "transaction_pp_wall_budget_seconds": (
+            None
+            if transaction_pp_wall_budget_seconds is None
+            else float(transaction_pp_wall_budget_seconds)
         ),
         "future_trajectory_stored": False,
     }
@@ -346,6 +461,11 @@ def _collect_job(job: dict[str, Any]) -> dict[str, Any]:
         retry_seed=second_seed,
         policy_id=policy_id,
         maximum_added_agents=int(job["maximum_added_agents"]),
+        transaction_pp_wall_budget_seconds=(
+            None
+            if job.get("transaction_pp_wall_budget_seconds") is None
+            else float(job["transaction_pp_wall_budget_seconds"])
+        ),
     )
     payload = {
         "schema": TRIAL_SCHEMA,
@@ -434,6 +554,9 @@ def collect_phase(
         "policies": list(POLICIES),
         "trial_indices": trial_indices,
         "worker_count": int(config["execution"]["worker_count"]),
+        "transaction_pp_wall_budget_seconds": config["execution"].get(
+            "transaction_pp_wall_budget_seconds"
+        ),
         "producer": producer,
     }
     run_fingerprint = _fingerprint(run_identity)
@@ -467,6 +590,9 @@ def collect_phase(
                         "maximum_added_agents": int(
                             config["policies"]["maximum_added_external_blockers"]
                         ),
+                        "transaction_pp_wall_budget_seconds": config[
+                            "execution"
+                        ].get("transaction_pp_wall_budget_seconds"),
                     }
                 )
     results = _run_jobs(
@@ -517,6 +643,7 @@ def analyze_qualification(
     _metadata, _cohort = build_nativeorder_cohort(config_path)
     _path, _root, config, _inputs, _collection = load_registration(config_path)
     output = Path(output).resolve()
+    status = _read_json(output / "collection_status.json")
     artifacts = _load_artifacts([output])
     by_policy = {str(row["policy"]["policy_id"]): row for row in artifacts}
     if set(by_policy) != set(POLICIES):
@@ -557,6 +684,12 @@ def analyze_qualification(
         and list(retry_rows[UPPER_BOUND_POLICY]["repair_order"])
         == list(baseline_first["repair_order"]) + blockers
         and retry_rows[UPPER_BOUND_POLICY]["explicit_repair_order_requested"] is True,
+        "cooperative_native_deadline_requested": all(
+            float(attempt.get("requested_pp_time_limit_seconds", -1.0)) >= 0.0
+            for artifact in artifacts
+            for attempt in artifact["policy"]["attempts"]
+        ),
+        "zero_process_timeouts": int(status["timeout_jobs"]) == 0,
     }
     report = {
         "schema": "lns2.stride.nativeorder_transactionalrepair_qualification.v1",
@@ -688,6 +821,23 @@ def analyze(
             }
         )
     expected_pairs = len(cohort) * len(trial_indices)
+    registered_initial_reuse = True
+    if config.get("schema") == AMENDED_CONFIG_SCHEMA:
+        reuse = dict(config["registered_initial_reuse"])
+        expected_initial = (
+            root / str(reuse["path"])
+        ).resolve()
+        initial_files = _trial_files(outputs[0])
+        registered_initial_reuse = (
+            outputs[0] == expected_initial
+            and len(initial_files) == int(reuse["required_artifact_count"])
+            and max(
+                float(row["policy"]["total_attempt_wall_seconds"])
+                for row in (_read_json(path) for path in initial_files)
+            )
+            <= float(reuse["maximum_observed_total_attempt_wall_seconds"])
+            < float(config["execution"]["transaction_pp_wall_budget_seconds"])
+        )
     first_attempt_parity = all(
         len(
             {
@@ -743,6 +893,25 @@ def analyze(
         "no_future_trajectory": all(
             artifact.get("future_trajectory_stored") is False
             and artifact["policy"].get("future_trajectory_stored") is False
+            for artifact in artifacts
+        ),
+        "registered_initial_reuse": registered_initial_reuse,
+        "cooperative_deadline_on_amended_extension": all(
+            config.get("schema") != AMENDED_CONFIG_SCHEMA
+            or artifact.get("phase") != "extension"
+            or (
+                float(
+                    artifact["policy"].get(
+                        "transaction_pp_wall_budget_seconds", -1.0
+                    )
+                )
+                == float(config["execution"]["transaction_pp_wall_budget_seconds"])
+                and all(
+                    float(attempt.get("requested_pp_time_limit_seconds", -1.0))
+                    >= 0.0
+                    for attempt in artifact["policy"]["attempts"]
+                )
+            )
             for artifact in artifacts
         ),
     }
