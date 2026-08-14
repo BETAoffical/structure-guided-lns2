@@ -3,6 +3,15 @@
   "scientific_status": "preregistered_bounded_first_action_frontier_set_mechanism",
   "experiment_id": "stride-platformentry-frontier-v1",
   "pre_registration_parent_commit": "2f97cfc0f7b1e3a74fb900b72a4aac9cc06b5834",
+  "execution_amendment_parent_commit": "06cd24964494282585f2bf24280c954260e3cf79",
+  "execution_amendment_reason": "the_registered_same_set_order_qualification_contains_17_keys_but_the_full_45_case_frontier_cohort_contains_19_keys_so_build_one_full_protocol_identical_qualification_before_any_candidate_PP",
+  "execution_amendment_recovery": {
+    "superseded_output": "build/stride-platformentry-frontier-v1",
+    "replacement_output": "build/stride-platformentry-frontier-v1-r2",
+    "completed_candidate_episodes_imported": 0,
+    "restart_entire_initial_schedule": true,
+    "preserve_superseded_artifacts": true
+  },
   "inputs": {
     "pretail_registration": {
       "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
@@ -61,7 +70,9 @@
     "native_pp_order_only": true,
     "first_action_forced_exactly_once": true,
     "continuation_controller": "matching_frozen_structpool_or_slotpool",
-    "reuse_registered_qualification": true,
+    "registered_qualification_protocol_reused": true,
+    "full_45_case_qualification_built_once": true,
+    "qualification_worker_count": 16,
     "worker_count": 16,
     "per_episode_maximum_repair_decisions": 64,
     "fixed_metric_horizon": 64,

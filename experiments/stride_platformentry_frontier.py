@@ -45,6 +45,7 @@ REPORT_SCHEMA = "lns2.stride.platformentry_frontier_report.v1"
 OVERRIDE_SCHEMA = "lns2.stride.platformentry_frontier_override.v1"
 EXPERIMENT_ID = "stride-platformentry-frontier-v1"
 PRE_REGISTRATION_PARENT = "2f97cfc0f7b1e3a74fb900b72a4aac9cc06b5834"
+EXECUTION_AMENDMENT_PARENT = "06cd24964494282585f2bf24280c954260e3cf79"
 INITIAL_TRIALS = (0, 1, 2, 3)
 EXTENSION_TRIALS = (4, 5, 6, 7)
 DETERMINISTIC_ROLES = (
@@ -78,8 +79,20 @@ def load_platformentry_frontier_config(
         != "preregistered_bounded_first_action_frontier_set_mechanism"
         or config.get("experiment_id") != EXPERIMENT_ID
         or config.get("pre_registration_parent_commit") != PRE_REGISTRATION_PARENT
+        or config.get("execution_amendment_parent_commit")
+        != EXECUTION_AMENDMENT_PARENT
+        or config.get("execution_amendment_reason")
+        != "the_registered_same_set_order_qualification_contains_17_keys_but_the_full_45_case_frontier_cohort_contains_19_keys_so_build_one_full_protocol_identical_qualification_before_any_candidate_PP"
     ):
         raise ValueError("Platform-entry frontier registration identity changed")
+    if dict(config.get("execution_amendment_recovery") or {}) != {
+        "superseded_output": "build/stride-platformentry-frontier-v1",
+        "replacement_output": "build/stride-platformentry-frontier-v1-r2",
+        "completed_candidate_episodes_imported": 0,
+        "restart_entire_initial_schedule": True,
+        "preserve_superseded_artifacts": True,
+    }:
+        raise ValueError("Platform-entry frontier recovery identity changed")
     expected_inputs = {
         "pretail_registration",
         "frontier_cohort",
@@ -123,7 +136,9 @@ def load_platformentry_frontier_config(
         "native_pp_order_only": True,
         "first_action_forced_exactly_once": True,
         "continuation_controller": "matching_frozen_structpool_or_slotpool",
-        "reuse_registered_qualification": True,
+        "registered_qualification_protocol_reused": True,
+        "full_45_case_qualification_built_once": True,
+        "qualification_worker_count": 16,
         "worker_count": 16,
         "per_episode_maximum_repair_decisions": 64,
         "fixed_metric_horizon": 64,
@@ -529,7 +544,7 @@ def run_frontier_collection(
     limit_cases: int | None = None,
 ) -> dict[str, Any]:
     loaded, all_cases = prepare_frontier_cases(config_path)
-    path, root, config, inputs, _pretail_inputs, parent = loaded
+    path, root, config, inputs, pretail_inputs, parent = loaded
     if phase not in {"initial", "extension"}:
         raise ValueError("Platform-entry frontier phase must be initial or extension")
     if limit_cases is not None and not dry_run:
@@ -599,7 +614,19 @@ def run_frontier_collection(
             for row in all_cases
         }
     )
-    qualification_root = inputs["qualification_report"].parent
+    qualification_root = output / "qualification"
+    run_closed_loop_collection(
+        (root / str(parent["cohort"]["dataset"])).resolve(),
+        pretail_inputs["runtime_config"],
+        qualification_root,
+        phase="qualify",
+        workers=int(config["execution"]["qualification_worker_count"]),
+        resume=qualification_root.joinpath("run_config.json").is_file(),
+        cohort_job_keys=set(all_keys),
+        job_keys=set(all_keys),
+        use_global_collection_lock=False,
+        **_fused_controller_kwargs(root, parent, "v2-full"),
+    )
     restores = {
         str(case["checkpoint"]["case_id"]): _case_restore(root, case)
         for case in cases
