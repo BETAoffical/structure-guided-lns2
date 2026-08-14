@@ -2627,6 +2627,41 @@
       "path": "tests/evaluation/test_stride_platformentry_order.py",
       "role": "active",
       "contract": "Freeze the 36-case cohort, paired action identity, explicit PP-order intervention, persistent-platform definition, censoring semantics and paired bootstrap."
+    },
+    {
+      "path": "experiments/stride_frontierdependencypool.py",
+      "role": "active",
+      "purpose": "Materialize bounded current-frontier augment and same-size exchange candidates for direct platform-entry testing."
+    },
+    {
+      "path": "lns2_selector/runtime/frontierdependencypool.py",
+      "role": "active",
+      "purpose": "Generate evidence-backed compact frontier candidates without PP probes, fixed size preferences or future outcomes."
+    },
+    {
+      "path": "scripts/run_stride_frontierdependencypool.py",
+      "role": "active",
+      "purpose": "Run the preregistered zero-solver FrontierDependencyPool readiness audit."
+    },
+    {
+      "path": "tests/runtime/test_frontierdependencypool.py",
+      "role": "active",
+      "contract": "Freeze current-frontier evidence, compact augment, same-size exchange, deduplication and deterministic selection semantics."
+    },
+    {
+      "path": "experiments/stride_platformentry_frontier.py",
+      "role": "active",
+      "purpose": "Collect and analyze the bounded native-order FrontierDependency platform-entry experiment with uniform extension gates."
+    },
+    {
+      "path": "scripts/run_stride_platformentry_frontier.py",
+      "role": "active",
+      "purpose": "Run the preregistered initial, uniform extension and parallel final FrontierDependency continuation analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_platformentry_frontier.py",
+      "role": "active",
+      "contract": "Freeze paired frontier schedules, native PP order, noncausal size diagnostics and separate runtime versus registered fingerprint domains."
     }
   ]
 }

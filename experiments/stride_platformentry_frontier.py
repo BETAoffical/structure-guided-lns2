@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import collections
+import concurrent.futures
+import multiprocessing
 import random
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -25,6 +27,7 @@ from experiments.stride_collection import _paired_action
 from experiments.stride_maze_tail_state_collection import _fused_controller_kwargs
 from experiments.stride_multivalue_collection import _base_anchor
 from experiments.stride_platformentry_order import (
+    _failed_episode_job,
     _kaplan_meier_restricted_mean,
     detect_persistent_platform,
 )
@@ -496,20 +499,6 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _failed_episode_job(
-    job: dict[str, Any], status: str, message: str
-) -> dict[str, Any]:
-    return {
-        **dict(job["item"]),
-        "status": status,
-        "manifest_status": status,
-        "error": message,
-        "collection_path": str(job["collection_path"]),
-        "state_count": 0,
-        "outcome_count": 0,
-    }
-
-
 def _status(
     *,
     phase: str,
@@ -847,6 +836,40 @@ def _initial_fingerprint_integrity(
     }
 
 
+def _analysis_episode_job(
+    arguments: tuple[Path, Mapping[str, Any]],
+) -> dict[str, Any]:
+    output, source_item = arguments
+    item = dict(source_item)
+    manifest = _manifest_for_item(output, item)
+    if manifest is None:
+        return {**item, "missing": True}
+    row = {**item, "manifest_status": str(manifest.get("status"))}
+    row.update(_episode_summary(manifest))
+    if manifest.get("status") != "ok":
+        return row
+    decisions, _events = decision_rows(_collection_path(output, item), manifest)
+    row.update(detect_persistent_platform(decisions))
+    first = decisions[0] if decisions else None
+    row["observed_first_action"] = (
+        {
+            "neighborhood": list(
+                map(int, first["actual_metrics"].get("neighborhood") or ())
+            ),
+            "requested_pp_seed": int(
+                first["actual_metrics"].get("requested_pp_random_seed", -1)
+            ),
+            "before_repair_fingerprint": str(first["before_repair_fingerprint"]),
+            "before_fingerprint": str(first["before_fingerprint"]),
+            "explicit_repair_order_requested": "repair_order"
+            in dict(first["actual_action"]),
+        }
+        if first is not None
+        else None
+    )
+    return row
+
+
 def analyze_frontier_collection(
     config_path: str | Path,
     output: str | Path,
@@ -891,36 +914,17 @@ def analyze_frontier_collection(
     if cache_valid:
         episodes = [dict(row) for row in cached_episodes]
     else:
-        for item in schedule:
-            manifest = _manifest_for_item(output, item)
-            if manifest is None:
-                episodes.append({**item, "missing": True})
-                continue
-            row = {**item, "manifest_status": str(manifest.get("status"))}
-            row.update(_episode_summary(manifest))
-            if manifest.get("status") == "ok":
-                decisions, _events = decision_rows(_collection_path(output, item), manifest)
-                row.update(detect_persistent_platform(decisions))
-                first = decisions[0] if decisions else None
-                row["observed_first_action"] = (
-                    {
-                        "neighborhood": list(
-                            map(int, first["actual_metrics"].get("neighborhood") or ())
-                        ),
-                        "requested_pp_seed": int(
-                            first["actual_metrics"].get("requested_pp_random_seed", -1)
-                        ),
-                        "before_repair_fingerprint": str(
-                            first["before_repair_fingerprint"]
-                        ),
-                        "before_fingerprint": str(first["before_fingerprint"]),
-                        "explicit_repair_order_requested": "repair_order"
-                        in dict(first["actual_action"]),
-                    }
-                    if first is not None
-                    else None
+        analysis_workers = int(config["execution"]["worker_count"])
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=analysis_workers,
+            mp_context=multiprocessing.get_context("spawn"),
+        ) as executor:
+            episodes = list(
+                executor.map(
+                    _analysis_episode_job,
+                    ((output, item) for item in schedule),
                 )
-            episodes.append(row)
+            )
     complete = [row for row in episodes if not row.get("missing")]
     grouped: dict[tuple[str, int], dict[str, dict[str, Any]]] = collections.defaultdict(dict)
     for row in complete:
@@ -1097,6 +1101,9 @@ def analyze_frontier_collection(
         "extension_allowed": extension_allowed,
         "mechanism_passed": mechanism_passed,
         "analysis_episode_cache_reused": cache_valid,
+        "analysis_worker_count": 0
+        if cache_valid
+        else int(config["execution"]["worker_count"]),
         "claim_boundary": dict(config["claim_boundary"]),
         "artifact_sha256": {
             "frontier_cohort": sha256_file(inputs["frontier_cohort"]),
