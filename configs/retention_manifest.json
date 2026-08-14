@@ -2747,6 +2747,26 @@
       "path": "tests/evaluation/test_stride_compact_nativeorder_repair.py",
       "role": "active",
       "contract": "Freeze conflict-core preservation, visible temporal-support retention, native-order policy arms and no-outcome compacting boundaries."
+    },
+    {
+      "path": "experiments/stride_bounded_native_retry_continuation.py",
+      "role": "active",
+      "purpose": "Measure full bounded continuation after a same-set fresh-seed native PP retry at each new persistent platform signature."
+    },
+    {
+      "path": "scripts/run_stride_bounded_native_retry_continuation.py",
+      "role": "active",
+      "purpose": "Run the preregistered paired bounded native retry continuation collection and analysis."
+    },
+    {
+      "path": "lns2_selector/runtime/bounded_native_retry.py",
+      "role": "active",
+      "purpose": "Track exact rollback streaks and enforce one retry per platform signature with a three-intervention episode cap."
+    },
+    {
+      "path": "tests/evaluation/test_stride_bounded_native_retry_continuation.py",
+      "role": "active",
+      "contract": "Freeze exact rollback eligibility, time-limit exclusion, signature uniqueness, and bounded intervention semantics."
     }
   ]
 }

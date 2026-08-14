@@ -1,0 +1,109 @@
+{
+  "schema": "lns2.stride.bounded_native_retry_continuation_registration.v1",
+  "scientific_status": "preregistered_bounded_native_retry_trajectory_mechanism",
+  "experiment_id": "stride-bounded-native-retry-continuation-v1",
+  "pre_registration_parent_commit": "a8763617e46c97b213ec62f57b1713ff38161423",
+  "inputs": {
+    "pretail_registration": {
+      "path": "configs/stride_pretail_forced_continuation_v1_registration.json",
+      "sha256": "9d5588dabca7cff85470b0ea419127c7ff941f24f82bf787dd77950aaee2d00b"
+    },
+    "causal_registration": {
+      "path": "configs/stride_repairability_causal_audit_v1_registration.json",
+      "sha256": "61d63da5ee33cb531149afe6adec31ea13c3883de1185b996bb419e2cf4e79a8"
+    },
+    "nativeorder_registration": {
+      "path": "configs/stride_nativeorder_transactionalrepair_v1_r2_registration.json",
+      "sha256": "012dd5865455a66b114f84182b4a8771b9eee165ceac6b1edf35db0c7f87fce8"
+    },
+    "nativeorder_report": {
+      "path": "build/stride-nativeorder-transactionalrepair-v1/extension-r2/nativeorder_transactionalrepair_extended_report.json",
+      "sha256": "377197a57910a11ae8dcc14396f8752b67ec9602045195a36c1025d74c0dc2a6"
+    },
+    "runtime_config": {
+      "path": "configs/stride_bounded_native_retry_continuation_runtime_v1.json",
+      "sha256": "9312cf515df54dccc8959a8e7936fb1edbe46656bf5c380f1b67d26e27f60183"
+    },
+    "qualification_report": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/qualification_report.json",
+      "sha256": "bfb8b3e0c4df3e7316e067d4fe4dbda64e716833bbbdf282d4ecd6c1d629c32b"
+    },
+    "qualification_manifest": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/qualification_manifest.jsonl",
+      "sha256": "7a4c978c8850de4b5653b8279bdea87cc5e71b5999738732a09ec6dd1b6d5276"
+    },
+    "qualification_run_config": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/run_config.json",
+      "sha256": "de733c17e1c83f1811368490a96d964f0a034182d9d1e39a911e77565807d893"
+    },
+    "qualification_summary": {
+      "path": "build/stride-platformentry-order-v1-r4/qualification/collection_summary.json",
+      "sha256": "eb8c675e3d6c9d15c857dacb896a63e362652ec6d5bbf8a602129302f34d4116"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "selection_rule": "all frozen NativeOrder discovery states without outcome exclusion",
+    "outcome_enriched_mechanism_cohort": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "single_native_attempt",
+    "bounded_same_set_native_retry"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "qualification_worker_count": 16,
+    "qualification_mode": "build_current_protocol_reset_only_per_controller_identity",
+    "qualification_process_timeout_seconds": 360.0,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "minimum_consecutive_exact_rollbacks": 3,
+    "initial_repeat_count": 2,
+    "maximum_interventions_per_episode": 3,
+    "maximum_interventions_per_platform_signature": 1,
+    "retry_after_failure_reason": "conflict_bound_exceeded",
+    "retry_after_time_limit": false,
+    "native_pp_order_only": true,
+    "first_transaction_matches_nativeorder_artifacts": true,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "primary_estimand": {
+    "outcome": "persistent platform entry after the complete transaction within 64 repair decisions",
+    "platform": "at least three consecutive conflict_bound_exceeded exact rollbacks with unchanged repair fingerprint and conflict edges",
+    "treatment": "one same-set fresh-seed native-order retry per new platform signature, capped at three per episode",
+    "cost_accounting": "all failed and retry PP wall time is included"
+  },
+  "initial_extension_gate": {
+    "platform_risk_difference_strictly_below": 0.0,
+    "success_rate_difference_minimum": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05,
+    "uniform_all_state_extension_only": true
+  },
+  "final_gate": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "platform_risk_difference_95pct_upper_strictly_below": 0.0,
+    "success_rate_difference_minimum": 0.0,
+    "normalized_fixed_auc_difference_strictly_below": 0.0,
+    "restricted_mean_repair_decision_difference_strictly_below": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05
+  },
+  "claim_boundary": {
+    "mechanism_discovery_only": true,
+    "reuses_prior_immediate_retry_evidence_without_retesting_its_gate": true,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "generalization_claim_allowed": false,
+    "default_controller_replacement_allowed": false,
+    "independent_result_blind_confirmation_required": true,
+    "no_result_based_exclusion": true
+  }
+}

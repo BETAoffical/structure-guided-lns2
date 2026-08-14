@@ -99,6 +99,10 @@ from lns2_selector.evaluation.trace_validation import (
     validate_closed_loop_trace,
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+from lns2_selector.runtime.bounded_native_retry import (
+    BoundedNativeRetryTracker,
+    merged_retry_metrics,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
@@ -949,6 +953,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     episode_override = dict(job.get("episode_override") or {})
     initial_restore = dict(episode_override.get("initial_restore") or {})
     forced_first_action = dict(episode_override.get("forced_first_action") or {})
+    bounded_native_retry = dict(
+        episode_override.get("bounded_native_retry") or {}
+    )
     source_state: dict[str, Any] | None = None
     source_trace_path: Path | None = None
     if initial_restore:
@@ -967,6 +974,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("episode override source conflict count changed")
     if forced_first_action and not initial_restore:
         raise ValueError("forced first action requires an initial restored state")
+    if bounded_native_retry and not initial_restore:
+        raise ValueError("bounded native retry requires an initial restored state")
     if forced_first_action:
         if (
             str(forced_first_action.get("mode")) != "explicit_neighborhood"
@@ -1201,6 +1210,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             budget_final_sum_of_costs = int(state["sum_of_costs"])
             budget_final_low_level = dict(state["low_level"])
             repair_iterations_within_budget = 0
+            native_retry_tracker = (
+                BoundedNativeRetryTracker.from_spec(state, bounded_native_retry)
+                if bounded_native_retry
+                else None
+            )
             initial_event = {
                 "schema": EPISODE_SCHEMA,
                 "schema_version": SCHEMA_VERSION,
@@ -1234,6 +1248,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             else None
                         ),
                         "forced_first_action": bool(forced_first_action),
+                        "bounded_native_retry": (
+                            native_retry_tracker.summary()
+                            if native_retry_tracker is not None
+                            else None
+                        ),
                     }
                     if episode_override
                     else None
@@ -2680,6 +2699,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         decision_index,
                         route,
                     )
+                if native_retry_tracker is not None:
+                    # Both arms collect the same native evidence.  Only the
+                    # treatment arm is allowed to execute a second PP call.
+                    action["collect_pp_diagnostics"] = True
                 if (
                     wall_budget is not None
                     and time.perf_counter() - ttf_started_wall >= wall_budget
@@ -2708,6 +2731,77 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         external_timeout = True
                         break
                     raise
+                bounded_retry_record = None
+                if native_retry_tracker is not None:
+                    first_result = result
+                    first_state = dict(first_result["observation"])
+                    first_metrics = dict(first_result["metrics"])
+                    bounded_retry_record = native_retry_tracker.observe_first_attempt(
+                        before=before,
+                        after=first_state,
+                        metrics=first_metrics,
+                        decision_index=decision_index,
+                    )
+                    if bounded_retry_record["triggered"]:
+                        retry_action = {
+                            "mode": "explicit_neighborhood",
+                            "agents": list(map(int, first_metrics["neighborhood"])),
+                            "random_seed": int(bounded_retry_record["retry_seed"]),
+                            "pp_random_seed": int(bounded_retry_record["retry_seed"]),
+                            "collect_pp_diagnostics": True,
+                        }
+                        retry_started = time.perf_counter()
+                        if wall_budget is not None and callable(timed_step):
+                            live_retry_budget = max(
+                                0.0,
+                                wall_budget - (retry_started - ttf_started_wall),
+                            )
+                            if live_retry_budget <= 0.0:
+                                bounded_retry_record = (
+                                    native_retry_tracker.cancel_retry(
+                                        bounded_retry_record,
+                                        reason="episode_wall_budget_exhausted",
+                                    )
+                                )
+                                retry_result = None
+                            else:
+                                retry_result = _plain(
+                                    timed_step(retry_action, live_retry_budget)
+                                )
+                        else:
+                            retry_result = _plain(environment.step(retry_action))
+                        if retry_result is None:
+                            result = {
+                                **first_result,
+                                "metrics": {
+                                    **first_metrics,
+                                    "bounded_native_retry": bounded_retry_record,
+                                },
+                            }
+                        else:
+                            bounded_retry_record = native_retry_tracker.observe_retry(
+                                bounded_retry_record,
+                                before=before,
+                                after=dict(retry_result["observation"]),
+                                metrics=dict(retry_result["metrics"]),
+                            )
+                            result = {
+                                **retry_result,
+                                "metrics": merged_retry_metrics(
+                                    first_metrics,
+                                    dict(retry_result["metrics"]),
+                                    bounded_retry_record,
+                                ),
+                            }
+                    else:
+                        result = {
+                            **first_result,
+                            "metrics": {
+                                **first_metrics,
+                                "bounded_native_retry": bounded_retry_record,
+                            },
+                        }
+                    native_retry_tracker.finalize_decision(bounded_retry_record)
                 step_completed_wall = time.perf_counter()
                 repair_wall_seconds = step_completed_wall - repair_started
                 transition_ttf_elapsed_seconds = (
@@ -2743,18 +2837,47 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     previous_route = route
                 if "pp_random_seed" in action:
                     requested_pp_seed = int(action["pp_random_seed"])
-                    if int(metrics.get("requested_pp_random_seed", -1)) != requested_pp_seed:
+                    retry_record = dict(metrics.get("bounded_native_retry") or {})
+                    observed_first_seed = int(
+                        dict(retry_record.get("first_attempt") or {}).get(
+                            "requested_pp_random_seed",
+                            metrics.get("requested_pp_random_seed", -1),
+                        )
+                    )
+                    if observed_first_seed != requested_pp_seed:
                         raise ClosedLoopExecutionError(
                             "pp_seed_mismatch",
                             "native transition did not retain the requested PP seed",
                         )
-                    if metrics.get("repair_order") and int(
-                        metrics.get("applied_pp_random_seed", -1)
-                    ) != requested_pp_seed:
+                    first_attempt = dict(retry_record.get("first_attempt") or {})
+                    first_repair_order = first_attempt.get(
+                        "repair_order", metrics.get("repair_order")
+                    )
+                    first_applied_seed = int(
+                        first_attempt.get(
+                            "applied_pp_random_seed",
+                            metrics.get("applied_pp_random_seed", -1),
+                        )
+                    )
+                    if first_repair_order and first_applied_seed != requested_pp_seed:
                         raise ClosedLoopExecutionError(
                             "pp_seed_not_applied",
                             "native PP did not apply the deterministic replay seed",
                         )
+                    if retry_record.get("triggered"):
+                        retry_seed = int(retry_record["retry_seed"])
+                        retry_attempt = dict(retry_record["retry_attempt"])
+                        if (
+                            int(retry_attempt["requested_pp_random_seed"])
+                            != retry_seed
+                            or retry_attempt.get("repair_order")
+                            and int(retry_attempt["applied_pp_random_seed"])
+                            != retry_seed
+                        ):
+                            raise ClosedLoopExecutionError(
+                                "bounded_retry_seed_mismatch",
+                                "native retry did not retain the registered seed",
+                            )
                 try:
                     native_timing_schema = _native_repair_timing_schema(metrics)
                 except (TypeError, ValueError) as error:
@@ -2789,6 +2912,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[f"{route_prefix}_repair_seconds"] += repair_wall_seconds
                     controller_totals[f"{route_prefix}_total_decision_seconds"] += (
                         route_controller_seconds + repair_wall_seconds
+                    )
+                if bounded_retry_record is not None:
+                    controller["bounded_native_retry"] = bounded_retry_record
+                    controller_totals["bounded_retry_trigger_count"] += int(
+                        bool(bounded_retry_record["triggered"])
+                    )
+                    controller_totals["persistent_platform_decision_count"] += int(
+                        bool(bounded_retry_record["persistent_after_transaction"])
+                    )
+                    controller_totals["bounded_retry_resolved_count"] += int(
+                        bool(bounded_retry_record["resolved_by_retry"])
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
@@ -3242,6 +3376,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "selected_family_counts": dict(sorted(selected_families.items())),
                 "invalid_action_count": invalid_actions,
                 "fingerprint_mismatch_count": fingerprint_mismatches,
+                "bounded_native_retry": (
+                    native_retry_tracker.summary()
+                    if native_retry_tracker is not None
+                    else None
+                ),
                 "final_sum_of_costs": int(state["sum_of_costs"]),
                 "budget_final_sum_of_costs": budget_final_sum_of_costs,
                 "final_low_level": state["low_level"],
@@ -3473,6 +3612,7 @@ def run_closed_loop_collection(
     wall_time_budget_seconds: float | None = None,
     episode_process_timeout_seconds: float | None = None,
     environment_time_limit_seconds: float | None = None,
+    qualification_process_timeout_seconds: float | None = None,
     stopping_rule: str = "historical",
     qualification_source: str | Path | None = None,
     use_global_collection_lock: bool = True,
@@ -3519,6 +3659,11 @@ def run_closed_loop_collection(
         environment_time_limit_seconds,
     )
     config = _with_stopping_rule(config, stopping_rule)
+    if qualification_process_timeout_seconds is not None and (
+        not math.isfinite(float(qualification_process_timeout_seconds))
+        or float(qualification_process_timeout_seconds) <= 0.0
+    ):
+        raise ValueError("qualification process timeout must be finite and positive")
     if trace_format not in TRACE_FORMATS:
         raise ValueError(f"unsupported trace format: {trace_format}")
     if feature_backend not in FEATURE_BACKENDS:
@@ -3721,6 +3866,11 @@ def run_closed_loop_collection(
                 normalized_episode_overrides.items()
             )
         },
+        "qualification_process_timeout_seconds": (
+            float(qualification_process_timeout_seconds)
+            if qualification_process_timeout_seconds is not None
+            else None
+        ),
     }
     config_fp = _fingerprint(effective)
     run_fp = _fingerprint(
@@ -3939,7 +4089,9 @@ def run_closed_loop_collection(
                         output_root=output_root,
                         run_fingerprint=run_fp,
                         timeout_seconds=(
-                            float(config["episode_process_timeout_seconds"])
+                            float(qualification_process_timeout_seconds)
+                            if qualification_process_timeout_seconds is not None
+                            else float(config["episode_process_timeout_seconds"])
                             if config.get("episode_process_timeout_seconds") is not None
                             else None
                         ),
@@ -4081,7 +4233,10 @@ def run_closed_loop_collection(
                 output_root=output_root,
                 run_fingerprint=run_fp,
                 timeout_seconds=(
-                    float(config["episode_process_timeout_seconds"])
+                    float(qualification_process_timeout_seconds)
+                    if current == "qualify"
+                    and qualification_process_timeout_seconds is not None
+                    else float(config["episode_process_timeout_seconds"])
                     if config.get("episode_process_timeout_seconds") is not None
                     else None
                 ),

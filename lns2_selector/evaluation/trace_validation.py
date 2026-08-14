@@ -361,15 +361,80 @@ def validate_closed_loop_trace(
                         "repair timing v1 metrics must be non-negative"
                     )
         action_pp_seed = int(action.get("pp_random_seed", -1))
-        requested_pp_seed = int(metrics.get("requested_pp_random_seed", -1))
-        applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
-        if action_pp_seed != requested_pp_seed:
-            raise ClosedLoopTraceError("transition requested PP seed mismatch")
-        if metrics.get("repair_order") and action_pp_seed >= 0:
-            if applied_pp_seed != action_pp_seed:
-                raise ClosedLoopTraceError("transition applied PP seed mismatch")
-        elif applied_pp_seed >= 0:
-            raise ClosedLoopTraceError("transition applied an unexpected PP seed")
+        retry_record = metrics.get("bounded_native_retry")
+        if isinstance(retry_record, dict):
+            first_attempt = retry_record.get("first_attempt")
+            if not isinstance(first_attempt, dict):
+                raise ClosedLoopTraceError(
+                    "bounded retry transition is missing first-attempt evidence"
+                )
+            first_requested = int(
+                first_attempt.get("requested_pp_random_seed", -1)
+            )
+            first_applied = int(first_attempt.get("applied_pp_random_seed", -1))
+            if action_pp_seed != first_requested:
+                raise ClosedLoopTraceError("transition requested PP seed mismatch")
+            if first_attempt.get("repair_order") and action_pp_seed >= 0:
+                if first_applied != action_pp_seed:
+                    raise ClosedLoopTraceError("transition applied PP seed mismatch")
+            elif first_applied >= 0:
+                raise ClosedLoopTraceError(
+                    "transition applied an unexpected PP seed"
+                )
+            if retry_record.get("triggered"):
+                retry_attempt = retry_record.get("retry_attempt")
+                if not isinstance(retry_attempt, dict):
+                    raise ClosedLoopTraceError(
+                        "bounded retry transition is missing retry-attempt evidence"
+                    )
+                retry_seed = int(retry_record.get("retry_seed", -1))
+                retry_requested = int(
+                    retry_attempt.get("requested_pp_random_seed", -1)
+                )
+                retry_applied = int(
+                    retry_attempt.get("applied_pp_random_seed", -1)
+                )
+                if retry_seed < 0 or retry_seed != retry_requested:
+                    raise ClosedLoopTraceError(
+                        "bounded retry requested PP seed mismatch"
+                    )
+                if retry_attempt.get("repair_order"):
+                    if retry_applied != retry_seed:
+                        raise ClosedLoopTraceError(
+                            "bounded retry applied PP seed mismatch"
+                        )
+                elif retry_applied >= 0:
+                    raise ClosedLoopTraceError(
+                        "bounded retry applied an unexpected PP seed"
+                    )
+                if (
+                    int(metrics.get("requested_pp_random_seed", -1))
+                    != retry_requested
+                    or int(metrics.get("applied_pp_random_seed", -1))
+                    != retry_applied
+                ):
+                    raise ClosedLoopTraceError(
+                        "bounded retry top-level PP seed evidence mismatch"
+                    )
+            elif (
+                int(metrics.get("requested_pp_random_seed", -1))
+                != first_requested
+                or int(metrics.get("applied_pp_random_seed", -1))
+                != first_applied
+            ):
+                raise ClosedLoopTraceError(
+                    "bounded retry first-attempt PP seed evidence mismatch"
+                )
+        else:
+            requested_pp_seed = int(metrics.get("requested_pp_random_seed", -1))
+            applied_pp_seed = int(metrics.get("applied_pp_random_seed", -1))
+            if action_pp_seed != requested_pp_seed:
+                raise ClosedLoopTraceError("transition requested PP seed mismatch")
+            if metrics.get("repair_order") and action_pp_seed >= 0:
+                if applied_pp_seed != action_pp_seed:
+                    raise ClosedLoopTraceError("transition applied PP seed mismatch")
+            elif applied_pp_seed >= 0:
+                raise ClosedLoopTraceError("transition applied an unexpected PP seed")
         if int(metrics.get("conflicts_before", -1)) != conflicts[-1]:
             raise ClosedLoopTraceError("transition conflicts_before mismatch")
         after_conflicts = int(after.get("num_of_colliding_pairs", -1))
@@ -602,7 +667,60 @@ def validate_closed_loop_trace(
                     raise ClosedLoopTraceError("learned transition neighborhood mismatch")
                 if int(action.get("random_seed", -1)) < 0:
                     raise ClosedLoopTraceError("learned transition is missing explicit random seed")
-                if int(metrics.get("requested_random_seed", -1)) != int(action["random_seed"]):
+                bounded_record = metrics.get("bounded_native_retry")
+                if isinstance(bounded_record, dict):
+                    first_attempt = bounded_record.get("first_attempt")
+                    if (
+                        not isinstance(first_attempt, dict)
+                        or int(
+                            first_attempt.get(
+                                "requested_random_seed",
+                                action.get("random_seed", -1),
+                            )
+                        )
+                        != int(action["random_seed"])
+                    ):
+                        raise ClosedLoopTraceError(
+                            "learned transition repair seed mismatch"
+                        )
+                    if bounded_record.get("triggered"):
+                        retry_attempt = bounded_record.get("retry_attempt")
+                        if (
+                            not isinstance(retry_attempt, dict)
+                            or int(
+                                retry_attempt.get(
+                                    "requested_random_seed",
+                                    retry_attempt.get(
+                                        "requested_pp_random_seed", -1
+                                    ),
+                                )
+                            )
+                            != int(bounded_record.get("retry_seed", -1))
+                            or int(metrics.get("requested_random_seed", -1))
+                            != int(
+                                retry_attempt.get(
+                                    "requested_random_seed",
+                                    retry_attempt.get(
+                                        "requested_pp_random_seed", -1
+                                    ),
+                                )
+                            )
+                        ):
+                            raise ClosedLoopTraceError(
+                                "learned bounded retry repair seed mismatch"
+                            )
+                    elif int(metrics.get("requested_random_seed", -1)) != int(
+                        first_attempt.get(
+                            "requested_random_seed",
+                            action.get("random_seed", -1),
+                        )
+                    ):
+                        raise ClosedLoopTraceError(
+                            "learned bounded retry top-level repair seed mismatch"
+                        )
+                elif int(metrics.get("requested_random_seed", -1)) != int(
+                    action["random_seed"]
+                ):
                     raise ClosedLoopTraceError("learned transition repair seed mismatch")
                 selected_id = str(controller.get("selected_candidate_id", ""))
                 matching = [
