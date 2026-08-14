@@ -103,6 +103,9 @@ from lns2_selector.runtime.bounded_native_retry import (
     BoundedNativeRetryTracker,
     merged_retry_metrics,
 )
+from lns2_selector.runtime.failure_informed_rescue import (
+    FailureInformedRescueTracker,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
@@ -956,6 +959,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     bounded_native_retry = dict(
         episode_override.get("bounded_native_retry") or {}
     )
+    failure_informed_rescue = dict(
+        episode_override.get("failure_informed_rescue") or {}
+    )
     source_state: dict[str, Any] | None = None
     source_trace_path: Path | None = None
     if initial_restore:
@@ -976,6 +982,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("forced first action requires an initial restored state")
     if bounded_native_retry and not initial_restore:
         raise ValueError("bounded native retry requires an initial restored state")
+    if failure_informed_rescue and not initial_restore:
+        raise ValueError(
+            "failure-informed rescue requires an initial restored state"
+        )
+    if bounded_native_retry and failure_informed_rescue:
+        raise ValueError(
+            "bounded native retry and failure-informed rescue are mutually exclusive"
+        )
     if forced_first_action:
         if (
             str(forced_first_action.get("mode")) != "explicit_neighborhood"
@@ -1215,6 +1229,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if bounded_native_retry
                 else None
             )
+            failure_rescue_tracker = (
+                FailureInformedRescueTracker.from_spec(failure_informed_rescue)
+                if failure_informed_rescue
+                else None
+            )
             initial_event = {
                 "schema": EPISODE_SCHEMA,
                 "schema_version": SCHEMA_VERSION,
@@ -1251,6 +1270,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "bounded_native_retry": (
                             native_retry_tracker.summary()
                             if native_retry_tracker is not None
+                            else None
+                        ),
+                        "failure_informed_rescue": (
+                            failure_rescue_tracker.summary()
+                            if failure_rescue_tracker is not None
                             else None
                         ),
                     }
@@ -1382,13 +1406,95 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 )
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
+                rescue_override = (
+                    failure_rescue_tracker.action_for_decision(
+                        decision_index, state
+                    )
+                    if failure_rescue_tracker is not None
+                    else None
+                )
                 force_this_action = bool(
                     forced_first_action and decision_index == 0
                 )
                 route = "model" if policy in LEARNED_POLICIES else "official_adaptive"
                 route_started = time.perf_counter()
                 pre_step_orchestration_seconds = route_started - iteration_started
-                if force_this_action:
+                if rescue_override is not None:
+                    route = "model"
+                    rescue_agents = list(map(int, rescue_override["agents"]))
+                    rescue_seed = int(rescue_override["pp_random_seed"])
+                    action = {
+                        "mode": "explicit_neighborhood",
+                        "agents": rescue_agents,
+                        "random_seed": rescue_seed,
+                        "pp_random_seed": rescue_seed,
+                        "collect_pp_diagnostics": True,
+                    }
+                    controller_seconds_before_repair = (
+                        time.perf_counter() - route_started
+                    )
+                    rescue_mode = str(rescue_override["mode"])
+                    rescue_family = f"failure-informed-rescue:{rescue_mode}"
+                    rescue_candidate_id = _fingerprint(
+                        {
+                            "state": before_hash,
+                            "decision_index": decision_index,
+                            "mode": rescue_mode,
+                            "agents": rescue_agents,
+                        }
+                    )
+                    controller.update(
+                        {
+                            "controller_mode": controller_mode,
+                            "controller_runtime": controller_runtime,
+                            "verification_profile": verification_profile,
+                            "route": route,
+                            "route_conflicts": int(state["num_of_colliding_pairs"]),
+                            "route_conflict_threshold": None,
+                            "forced_first_action": False,
+                            "failure_informed_rescue_action": True,
+                            "forced_candidate_role": rescue_mode,
+                            "selected_candidate_id": rescue_candidate_id,
+                            "candidate_pool": [
+                                {
+                                    "candidate_id": rescue_candidate_id,
+                                    "agents": rescue_agents,
+                                    "actual_size": len(rescue_agents),
+                                    "selection_families": [rescue_family],
+                                    "failure_informed_rescue_action": True,
+                                    "selected_blockers": list(
+                                        map(
+                                            int,
+                                            rescue_override.get(
+                                                "selected_blockers"
+                                            )
+                                            or (),
+                                        )
+                                    ),
+                                }
+                            ],
+                            "controller_seconds_before_repair": (
+                                controller_seconds_before_repair
+                            ),
+                            "candidate_generation_seconds": 0.0,
+                            "state_check_seconds": 0.0,
+                            "state_check_fingerprint_seconds": 0.0,
+                            "state_analysis_seconds": 0.0,
+                            "proposal_feature_seconds": 0.0,
+                            "realized_feature_seconds": 0.0,
+                            "ranking_inference_seconds": 0.0,
+                            "selection_residual_seconds": (
+                                controller_seconds_before_repair
+                            ),
+                        }
+                    )
+                    selected_sizes[len(rescue_agents)] += 1
+                    selected_families[rescue_family] += 1
+                    controller_totals["failure_informed_rescue_action_count"] += 1
+                    controller_totals["controller_seconds_before_repair"] += (
+                        controller_seconds_before_repair
+                    )
+                elif force_this_action:
                     route = "model"
                     action = dict(forced_first_action)
                     controller_seconds_before_repair = (
@@ -2704,6 +2810,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     # treatment arm is allowed to execute a second PP call.
                     action["collect_pp_diagnostics"] = True
                 if (
+                    failure_rescue_tracker is not None
+                    and failure_rescue_tracker.requires_diagnostics(decision_index)
+                ):
+                    # All arms observe the same first native PP call.  A
+                    # treatment, when eligible, is deferred to decision 1.
+                    action["collect_pp_diagnostics"] = True
+                if (
                     wall_budget is not None
                     and time.perf_counter() - ttf_started_wall >= wall_budget
                 ):
@@ -2802,6 +2915,26 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             },
                         }
                     native_retry_tracker.finalize_decision(bounded_retry_record)
+                failure_rescue_record = None
+                if failure_rescue_tracker is not None:
+                    failure_rescue_record = (
+                        failure_rescue_tracker.observe_decision(
+                            decision_index=decision_index,
+                            before=before,
+                            after=dict(result["observation"]),
+                            metrics=dict(result["metrics"]),
+                        )
+                    )
+                    if failure_rescue_record is not None:
+                        result = {
+                            **result,
+                            "metrics": {
+                                **dict(result["metrics"]),
+                                "failure_informed_rescue": (
+                                    failure_rescue_record
+                                ),
+                            },
+                        }
                 step_completed_wall = time.perf_counter()
                 repair_wall_seconds = step_completed_wall - repair_started
                 transition_ttf_elapsed_seconds = (
@@ -2923,6 +3056,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                     controller_totals["bounded_retry_resolved_count"] += int(
                         bool(bounded_retry_record["resolved_by_retry"])
+                    )
+                if failure_rescue_record is not None:
+                    controller["failure_informed_rescue"] = (
+                        failure_rescue_record
+                    )
+                    if decision_index == 0:
+                        controller_totals["failure_rescue_trigger_count"] += int(
+                            bool(failure_rescue_record["triggered"])
+                        )
+                    controller_totals["failure_rescue_resolved_count"] += int(
+                        bool(failure_rescue_record["resolved_by_rescue"])
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
@@ -3379,6 +3523,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "bounded_native_retry": (
                     native_retry_tracker.summary()
                     if native_retry_tracker is not None
+                    else None
+                ),
+                "failure_informed_rescue": (
+                    failure_rescue_tracker.summary()
+                    if failure_rescue_tracker is not None
                     else None
                 ),
                 "final_sum_of_costs": int(state["sum_of_costs"]),

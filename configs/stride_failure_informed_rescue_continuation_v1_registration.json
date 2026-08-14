@@ -1,0 +1,86 @@
+{
+  "schema": "lns2.stride.failure_informed_rescue_continuation_registration.v1",
+  "scientific_status": "preregistered_failure_informed_next_decision_mechanism",
+  "experiment_id": "stride-failure-informed-rescue-continuation-v1",
+  "pre_registration_parent_commit": "819e1d168e62eab813451dd9a54a191e1643f325",
+  "inputs": {
+    "bounded_registration": {
+      "path": "configs/stride_bounded_native_retry_continuation_v1_registration.json",
+      "sha256": "505b8df70770f3f5a75df304c449c4aff02e7434bd397d8e2a7b8df0d9730e3b"
+    },
+    "bounded_result_report": {
+      "path": "build/stride-bounded-native-retry-continuation-v1/initial_report.json",
+      "sha256": "9f662b58db9fedff716c04407c3129095eebb8cca995d2ff23f715461b37b41f"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "selection_rule": "all frozen NativeOrder discovery states without outcome exclusion",
+    "outcome_enriched_mechanism_cohort": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "frozen_controller",
+    "same_set_fresh_seed",
+    "blocker_augmented_fresh_seed"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "qualification_worker_count": 16,
+    "qualification_process_timeout_seconds": 360.0,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "initial_repeat_count": 2,
+    "maximum_added_external_blockers": 8,
+    "rescue_decision_offset": 1,
+    "maximum_rescues_per_episode": 1,
+    "trigger_failure_reason": "conflict_bound_exceeded",
+    "rescue_after_time_limit": false,
+    "native_pp_order_only": true,
+    "collect_diagnostics_all_decisions_all_arms": true,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "causal_contrast": {
+    "shared_first_action": "all arms execute the same candidate, PP seed, and native order once with diagnostics",
+    "control": "after an exact rollback, return to the frozen controller on the next decision",
+    "same_set": "after an exact rollback, use the same set and a fresh paired seed on the next decision",
+    "blocker_augmented": "after an exact rollback, use the same set plus up to eight external blockers observed in that failed PP and the same fresh seed as the same-set arm",
+    "intervention_limit": "one next-decision rescue only; never retry within the same decision and never repeatedly rescue later platforms"
+  },
+  "initial_extension_gate": {
+    "blocker_platform_risk_difference_strictly_below": 0.0,
+    "blocker_success_rate_difference_minimum": 0.0,
+    "blocker_resolution_rate_not_lower_than_same_set": true,
+    "maximum_per_map_platform_rate_worsening": 0.05,
+    "uniform_all_state_extension_only": true
+  },
+  "final_gate": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "blocker_platform_risk_difference_95pct_upper_strictly_below": 0.0,
+    "blocker_success_rate_difference_minimum": 0.0,
+    "blocker_normalized_fixed_auc_difference_strictly_below": 0.0,
+    "blocker_restricted_mean_repair_decision_difference_strictly_below": 0.0,
+    "blocker_platform_rate_not_worse_than_same_set": true,
+    "blocker_resolution_rate_not_lower_than_same_set": true,
+    "maximum_per_map_platform_rate_worsening": 0.05
+  },
+  "claim_boundary": {
+    "mechanism_discovery_only": true,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "generalization_claim_allowed": false,
+    "default_controller_replacement_allowed": false,
+    "independent_result_blind_confirmation_required": true,
+    "no_result_based_exclusion": true,
+    "no_future_outcome_used_for_blocker_selection": true,
+    "all_first_action_and_rescue_costs_included": true
+  }
+}
