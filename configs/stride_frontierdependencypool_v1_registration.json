@@ -1,0 +1,83 @@
+{
+  "schema": "lns2.stride.frontierdependencypool_registration.v1",
+  "scientific_status": "preregistered_platform_entry_zero_solver_frontier_composition_audit",
+  "experiment_id": "stride-frontierdependencypool-v1",
+  "pre_registration_commit": "1c80b144a0290f778e37e2d2fa78ec1bddbe07bb",
+  "inputs": {
+    "root_checkpoints": {
+      "path": "build/stride-marginalpool-root-diagnostic-v1/root_diagnostic_checkpoints.jsonl",
+      "sha256": "bbf03634a2563b3e805cdf99a33071648a08640d82605b6245fe2c16aca3ef81"
+    },
+    "platform_entry_witnesses": {
+      "path": "build/stride-repairdependencypool-v1/platform_entry_witnesses.jsonl",
+      "sha256": "202f88bc43c72f7d2c6fa48bde32dd20069906bc769e5b57d9ad238eb12cec53"
+    },
+    "causal_report": {
+      "path": "build/stride-repairability-causal-audit-v1/repairability_causal_report.json",
+      "sha256": "f2a5b0f5a99ea58382539681179b948783e1ab7c18a9bc2fc3abe775402e2ee7"
+    },
+    "causal_status": {
+      "path": "build/stride-repairability-causal-audit-v1/collection_status.json",
+      "sha256": "65203b09bb501c8e836e2270f2d27e401a078810d25b08734e3992a79b12d95e"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_structural_selection",
+    "state_count": 45,
+    "map_count": 3,
+    "outcome_enriched_mechanism_cohort": true,
+    "future_outcome_used_for_generation": false
+  },
+  "generator": {
+    "id": "stride-frontierdependencypool-v1",
+    "base": "frozen_controller_selected_candidate",
+    "motif": "one current selected-to-unselected conflict frontier pivot",
+    "semantic_variants": [
+      "compact-augment",
+      "same-size-exchange"
+    ],
+    "maximum_added_agents_per_candidate": 8,
+    "maximum_neighborhood_size": 40,
+    "maximum_candidates_per_state": 6,
+    "maximum_candidate_jaccard": 0.9,
+    "fixed_preferred_sizes": [],
+    "repair_order_controlled": false,
+    "future_outcomes_used": false,
+    "runtime_pp_probe_used": false
+  },
+  "static_readiness_gate": {
+    "minimum_states_with_candidate_fraction": 0.9,
+    "both_variants_required_on_each_map": true,
+    "same_size_exchange_must_preserve_core_size": true,
+    "compact_augment_maximum_growth": 8,
+    "maximum_neighborhood_size": 40,
+    "all_added_agents_require_current_boundary_evidence": true,
+    "minimum_converted_boundary_edges": 1,
+    "future_outcome_use_forbidden": true,
+    "pp_probe_forbidden": true
+  },
+  "execution": {
+    "workers": 16,
+    "per_state_timeout_seconds": 300,
+    "stop_on_first_error_or_timeout": true,
+    "new_solver_runs": 0
+  },
+  "next_stage_if_passed": {
+    "action": "separately_preregister_native_order_platform_entry_forced_continuation",
+    "initial_trials": [0, 1, 2, 3],
+    "maximum_repair_decisions": 64,
+    "wall_time_seconds": 180,
+    "process_timeout_seconds": 240,
+    "workers": 16,
+    "training_allowed": false,
+    "ttf_allowed": false
+  },
+  "claim_boundary": {
+    "candidate_generation_readiness_only": true,
+    "platform_prevention_claim_allowed": false,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "no_result_based_state_selection": true
+  }
+}
