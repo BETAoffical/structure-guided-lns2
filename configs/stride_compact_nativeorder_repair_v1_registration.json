@@ -1,0 +1,87 @@
+{
+  "schema": "lns2.stride.compact_nativeorder_repair_registration.v1",
+  "scientific_status": "preregistered_paired_semantic_compaction_native_pp_screen",
+  "experiment_id": "stride-compact-nativeorder-repair-v1",
+  "pre_registration_parent_commit": "59b70e5",
+  "inputs": {
+    "parent_registration": {
+      "path": "configs/stride_nativeorder_transactionalrepair_v1_r2_registration.json",
+      "sha256": "012dd5865455a66b114f84182b4a8771b9eee165ceac6b1edf35db0c7f87fce8"
+    },
+    "parent_report": {
+      "path": "build/stride-nativeorder-transactionalrepair-v1/extension-r2/nativeorder_transactionalrepair_extended_report.json",
+      "sha256": "377197a57910a11ae8dcc14396f8752b67ec9602045195a36c1025d74c0dc2a6"
+    }
+  },
+  "cohort": {
+    "source": "all_45_frozen_first_repeat_stall_states",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "initial_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "extension_trial_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "compact_eligibility": "base_contains_agent_with_no_current_conflict_edge_and_no_visible_temporal_corridor_reverse_queue_support",
+    "eligibility_is_pre_action_and_outcome_blind": true,
+    "no_result_based_state_exclusion": true
+  },
+  "policies": {
+    "ids": [
+      "full_single_attempt",
+      "full_same_set_native_retry",
+      "compact_single_attempt",
+      "compact_same_set_native_retry"
+    ],
+    "maximum_attempts": 2,
+    "retry_only_after": "conflict_bound_exceeded_with_exact_native_rollback",
+    "same_first_pp_seed_across_all_policies": true,
+    "same_fresh_retry_seed_across_retry_policies": true,
+    "native_pp_order_only": true,
+    "compact_rule": {
+      "retain_all_current_conflict_edge_endpoints_in_base": true,
+      "retain_base_agents_with_low_degree_or_articulation_temporal_overlap_and_reverse_queue_evidence": true,
+      "remove_only_base_agents_with_neither_evidence": true,
+      "fixed_target_size": null,
+      "minimum_or_maximum_size_override": null,
+      "fallback_when_no_removable_agent": "exact_full_set"
+    }
+  },
+  "execution": {
+    "worker_count": 16,
+    "task_granularity": "state_x_trial_index_x_policy",
+    "transaction_pp_wall_budget_seconds": 270,
+    "per_policy_job_timeout_seconds": 300,
+    "atomic_checkpoint": "one_unique_state_trial_policy_json",
+    "stop_on_first_execution_error_or_process_timeout": true,
+    "native_time_limit_is_valid_right_censoring": true,
+    "process_timeout_is_terminal_error": true,
+    "initial_output": "build/stride-compact-nativeorder-repair-v1/initial",
+    "extension_output": "build/stride-compact-nativeorder-repair-v1/extension"
+  },
+  "initial_gate": {
+    "minimum_eligible_state_count": 10,
+    "compact_mean_size_must_be_lower": true,
+    "compact_returned_unchanged_must_be_lower": true,
+    "compact_success_must_not_be_lower": true,
+    "compact_strict_conflict_reduction_must_not_be_lower": true,
+    "compact_mean_total_pp_wall_must_be_lower": true,
+    "maximum_per_map_returned_unchanged_increase": 0.05,
+    "uniform_extension_only": true
+  },
+  "final_gate": {
+    "bootstrap_replicates": 10000,
+    "compact_minus_full_returned_unchanged_upper_95_must_be_below_zero": true,
+    "compact_minus_full_wall_upper_95_must_be_below_zero": true,
+    "compact_success_must_not_be_lower": true,
+    "compact_strict_conflict_reduction_must_not_be_lower": true,
+    "maximum_per_map_returned_unchanged_increase": 0.05,
+    "zero_errors_and_process_timeouts": true
+  },
+  "claim_boundary": {
+    "discovery_cohort_mechanism_screen_only": true,
+    "platform_continuation_stored": false,
+    "platform_or_long_tail_claim_allowed": false,
+    "candidate_pool_replacement_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "passing_only_authorizes_separately_preregistered_bounded_platform_continuation": true
+  }
+}

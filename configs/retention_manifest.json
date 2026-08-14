@@ -2732,6 +2732,21 @@
       "path": "tests/evaluation/test_stride_nativeorder_transactionalrepair.py",
       "role": "active",
       "contract": "Freeze native retry order semantics, bounded blocker augmentation and fresh paired retry seeds."
+    },
+    {
+      "path": "experiments/stride_compact_nativeorder_repair.py",
+      "role": "active",
+      "purpose": "Measure whether evidence-preserving semantic neighborhood reduction improves native-order PP repair and retry without fixed target sizes."
+    },
+    {
+      "path": "scripts/run_stride_compact_nativeorder_repair.py",
+      "role": "active",
+      "purpose": "Run the preregistered compact-neighborhood native-order paired screen and uniform extension."
+    },
+    {
+      "path": "tests/evaluation/test_stride_compact_nativeorder_repair.py",
+      "role": "active",
+      "contract": "Freeze conflict-core preservation, visible temporal-support retention, native-order policy arms and no-outcome compacting boundaries."
     }
   ]
 }
