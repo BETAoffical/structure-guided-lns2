@@ -2717,6 +2717,31 @@
       "path": "tests/evaluation/test_stride_hybridstructpool_budget.py",
       "role": "active",
       "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
+    },
+    {
+      "path": "configs/stride_nativeorder_transactionalrepair_v1_registration.json",
+      "role": "active",
+      "contract": "Freeze two-attempt native-order retries, paired fresh retry seeds, blocker cap, phased gates and non-TTF claim boundaries."
+    },
+    {
+      "path": "docs/STRIDE_NATIVEORDER_TRANSACTIONALREPAIR_V1_PREREGISTRATION.md",
+      "role": "active",
+      "purpose": "Preregister the post-failure comparison of same-set native retry, blocker-augmented native retry and a controlled-order diagnostic upper bound."
+    },
+    {
+      "path": "experiments/stride_nativeorder_transactionalrepair.py",
+      "role": "active",
+      "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."
+    },
+    {
+      "path": "scripts/run_stride_nativeorder_transactionalrepair.py",
+      "role": "active",
+      "purpose": "Run qualification, initial collection, uniform extension and analysis for Native-Order TransactionalRepair v1."
+    },
+    {
+      "path": "tests/evaluation/test_stride_nativeorder_transactionalrepair.py",
+      "role": "active",
+      "contract": "Freeze native retry order semantics, bounded blocker augmentation and fresh paired retry seeds."
     }
   ]
 }

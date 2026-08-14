@@ -1,0 +1,120 @@
+{
+  "schema": "lns2.stride.nativeorder_transactionalrepair_registration.v1",
+  "scientific_status": "preregistered_discovery_cohort_native_order_transactional_repair_mechanism_audit",
+  "experiment_id": "stride-nativeorder-transactionalrepair-v1",
+  "pre_registration_parent_commit": "1cc35fb",
+  "inputs": {
+    "causal_registration": {
+      "path": "configs/stride_repairability_causal_audit_v1_registration.json",
+      "sha256": "61d63da5ee33cb531149afe6adec31ea13c3883de1185b996bb419e2cf4e79a8"
+    },
+    "causal_report": {
+      "path": "build/stride-repairability-causal-audit-v1/repairability_causal_report.json",
+      "sha256": "f2a5b0f5a99ea58382539681179b948783e1ab7c18a9bc2fc3abe775402e2ee7"
+    },
+    "causal_state_effects": {
+      "path": "build/stride-repairability-causal-audit-v1/state_effects.jsonl",
+      "sha256": "507746850954dd893dce939441da38cc6f41ffe6a2399c109871a38010f61c78"
+    },
+    "causal_state_manifest": {
+      "path": "build/stride-repairdependency-predictability-v1/input_state_manifest.jsonl",
+      "sha256": "45a2d484ad85797172bdae82f73e978b454c95451bb1eb7a04db88c94c32c125"
+    },
+    "predictability_report": {
+      "path": "build/stride-repairdependency-predictability-v1/predictability_report.json",
+      "sha256": "2396310b3ac75ab519aa4015442ba44880c1e159162f50c63a81fd70ea9297e8"
+    }
+  },
+  "causal_collection": {
+    "path": "build/stride-repairability-causal-audit-v1"
+  },
+  "cohort": {
+    "source": "all frozen first_repeat_stall discovery states",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "initial_trial_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "extension_trial_indices": [8, 9, 10, 11, 12, 13, 14, 15],
+    "no_result_based_exclusion": true,
+    "discovery_cohort_cannot_support_generalization": true
+  },
+  "qualification": {
+    "state_fingerprint": "006fa7aa1a26eaf611ec5ff2f354859e6027de6c0d40689c3100e14f574785a2",
+    "trial_index": 0,
+    "excluded_from_scientific_analysis": true,
+    "requires_first_attempt_conflict_bound_failure": true,
+    "requires_observed_external_blocker": true
+  },
+  "policies": {
+    "ids": [
+      "selected_single_attempt",
+      "same_set_native_retry",
+      "blocker_augmented_native_retry",
+      "preserved_prefix_blocker_tail_upper_bound"
+    ],
+    "deployable_ids": [
+      "same_set_native_retry",
+      "blocker_augmented_native_retry"
+    ],
+    "diagnostic_upper_bound": "preserved_prefix_blocker_tail_upper_bound",
+    "maximum_attempts": 2,
+    "retry_only_after": "conflict_bound_exceeded_with_exact_native_rollback",
+    "maximum_added_external_blockers": 8,
+    "blocker_order": "first_observed_failed_attempt_order_then_agent_id",
+    "same_set_retry": "same_agent_set_with_fresh_native_pp_shuffle",
+    "blocker_augmented_retry": "base_plus_observed_external_blockers_with_fresh_native_pp_shuffle",
+    "upper_bound_retry": "first_applied_order_prefix_plus_observed_external_blockers_tail",
+    "first_attempt_pp_seed_paired_across_all_policies": true,
+    "fresh_retry_pp_seed_paired_across_retry_policies": true,
+    "successful_native_attempt_is_committed_without_posthoc_rejection": true,
+    "time_limit_failure_is_not_retried": true,
+    "multiple_runtime_candidate_trials_allowed": false
+  },
+  "execution": {
+    "worker_count": 16,
+    "task_granularity": "state_x_trial_index_x_policy",
+    "per_policy_job_timeout_seconds": 300,
+    "atomic_checkpoint": "one unique state-trial-policy JSON written by its worker",
+    "resume": "rerun only missing or invalid jobs without filtering",
+    "initial_output": "build/stride-nativeorder-transactionalrepair-v1/initial",
+    "extension_output": "build/stride-nativeorder-transactionalrepair-v1/extension",
+    "qualification_output": "build/stride-nativeorder-transactionalrepair-v1/qualification",
+    "replan_algorithm": "PP",
+    "use_sipp": true
+  },
+  "initial_extension_gate": {
+    "at_least_one_deployable_arm_has_lower_returned_unchanged_rate": true,
+    "successful_replan_rate_must_not_decrease": true,
+    "strict_conflict_reduction_rate_must_not_decrease": true,
+    "maximum_per_map_returned_unchanged_rate_increase": 0.05
+  },
+  "final_readiness_gates": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "paired_returned_unchanged_risk_difference_upper_95_must_be_below_zero": true,
+    "successful_replan_rate_must_not_decrease": true,
+    "strict_conflict_reduction_rate_must_not_decrease": true,
+    "maximum_per_map_returned_unchanged_rate_increase": 0.05,
+    "maximum_mean_attempt_count": 2.0,
+    "maximum_mean_added_agent_ratio": 0.50,
+    "maximum_total_neighborhood_fraction": 0.80,
+    "zero_errors_and_timeouts": true,
+    "sixteen_worker_execution": true
+  },
+  "interpretation": {
+    "same_set_matches_augmented": "fresh native PP order or low-level randomness dominates",
+    "augmented_strictly_beats_same_set": "failure-conditioned membership addition contributes beyond a fresh native retry",
+    "only_upper_bound_passes": "benefit depends on controlled order and is not deployable with native LNS2 ordering",
+    "no_arm_passes": "stop this bounded retry mechanism and investigate another repairer"
+  },
+  "claim_boundary": {
+    "mechanism_discovery_only": true,
+    "base_candidate_still_comes_from_the_frozen_source_pool": true,
+    "retry_does_not_scan_hybridstructpool": true,
+    "failed_attempt_diagnostics_are_online_internal_feedback_not_training_labels": true,
+    "independent_result_blind_confirmation_required": true,
+    "model_training_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "generalization_claim_allowed": false,
+    "default_controller_replacement_allowed": false
+  }
+}
