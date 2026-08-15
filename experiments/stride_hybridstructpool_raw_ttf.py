@@ -33,6 +33,7 @@ EXPERIMENT_ID = "stride-hybridstructpool-raw-ttf-quick-v1"
 PRE_REGISTRATION_COMMITS = {
     "60258ba",
     "52096acb6120cc02c59a352bb7f72fdb9532fb6b",
+    "4096fa8",
 }
 CONTROLLERS = ("official_adaptive", "v2_full", "hybridstructpool_full")
 STATUS_FILENAME = "collection_status.json"
