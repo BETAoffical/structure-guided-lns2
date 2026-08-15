@@ -76,7 +76,8 @@
       "horizon_3_sustained_escape_difference_95pct_lower_strictly_above": 0.0,
       "horizon_8_sustained_escape_difference_95pct_lower_strictly_above": 0.0,
       "horizon_8_edge_retention_auc_difference_95pct_upper_strictly_below": 0.0,
-      "maximum_per_map_horizon_8_sustained_escape_worsening": 0.05
+      "maximum_per_map_horizon_8_sustained_escape_worsening": 0.05,
+      "per_map_horizon_8_without_complete_uncensored_pairs": "fails_map_safety_gate"
     },
     "transient_classification": "horizon_1 improves but either horizon_3 or horizon_8 lower confidence limit is not above zero",
     "inconclusive_classification": "horizon_1 is not stable or horizon observations are insufficient"

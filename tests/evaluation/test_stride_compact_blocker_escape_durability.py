@@ -4,6 +4,7 @@ from experiments.repair_collection import _read_json
 from experiments.stride_compact_blocker_escape_durability import (
     ARMS,
     _durability_metrics,
+    _paired_bootstrap,
     load_audit_registration,
 )
 from experiments.stride_compact_blocker_rescue_continuation import (
@@ -96,6 +97,21 @@ def test_success_is_observed_but_short_unsolved_trace_is_censored() -> None:
         "right_censored": True,
         "decision_count": 1,
     }
+
+
+def test_empty_map_pair_is_unavailable_instead_of_selected_away() -> None:
+    result = _paired_bootstrap(
+        [],
+        horizon=8,
+        field="sustained_escape",
+        replicates=10,
+        allow_empty=True,
+    )
+    assert result["paired_state_count"] == 0
+    assert result["paired_event_count"] == 0
+    assert result["point"] is None
+    assert result["lower_95"] is None
+    assert result["upper_95"] is None
 
 
 def test_registration_selects_complete_paired_compact_state_cohort() -> None:

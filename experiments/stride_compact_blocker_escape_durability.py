@@ -316,6 +316,7 @@ def _paired_bootstrap(
     horizon: int,
     field: str,
     replicates: int,
+    allow_empty: bool = False,
 ) -> dict[str, Any]:
     paired: dict[tuple[str, int], dict[str, dict[str, Any]]] = (
         collections.defaultdict(dict)
@@ -334,6 +335,16 @@ def _paired_bootstrap(
     }
     states = sorted({key[0] for key in complete})
     if not states:
+        if allow_empty:
+            return {
+                "field": field,
+                "horizon": int(horizon),
+                "paired_state_count": 0,
+                "paired_event_count": 0,
+                "point": None,
+                "lower_95": None,
+                "upper_95": None,
+            }
         raise ValueError("escape durability contrast has no complete state")
 
     def difference(sampled_states: Iterable[str]) -> float:
@@ -482,6 +493,7 @@ def run_audit(
                     horizon=horizon,
                     field="sustained_escape",
                     replicates=replicates,
+                    allow_empty=True,
                 )["point"],
             }
             for horizon in horizons
@@ -491,7 +503,8 @@ def run_audit(
     h8 = contrasts["8"]["sustained_escape"]
     edge_h8 = contrasts["8"]["original_edge_retention_auc"]
     map_safe = all(
-        float(value["8"]["sustained_escape_difference"]) >= -0.05
+        value["8"]["sustained_escape_difference"] is not None
+        and float(value["8"]["sustained_escape_difference"]) >= -0.05
         for value in by_map.values()
     )
     h1_stable = float(h1["lower_95"]) > 0.0

@@ -53,6 +53,8 @@ State-cluster paired bootstrap uses 10,000 deterministic replicates. A durable
 signal requires positive lower 95% confidence limits for sustained escape at
 both H=3 and H=8, a negative upper limit for H=8 original-edge-retention AUC,
 and no map with more than five percentage points of H=8 worsening.
+If a map has no complete uncensored H=8 arm pair, its difference is reported
+as unavailable and the per-map safety gate fails; it is never dropped.
 
 If H=1 improves but H=3 or H=8 does not, the result is classified as transient.
 If H=1 is not stable or too few paired horizons are observable, it is
