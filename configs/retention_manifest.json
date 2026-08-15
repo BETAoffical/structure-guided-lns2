@@ -2774,6 +2774,21 @@
       "contract": "Freeze source masks, strict gate identity, rotating five-arm schedule and deterministic promotion tie breakers."
     },
     {
+      "path": "experiments/stride_hybridstructpool_routed_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "Run and analyze the map-disjoint 60-key paired raw-TTF confirmation of the frozen StructShell-only route."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_routed_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "Run or analyze the preregistered HybridStructPool routed result-blind confirmation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_routed_confirmation.py",
+      "role": "reproducibility",
+      "contract": "Freeze map disjointness, 60 paired keys, rotating strict serial execution and positive-gain bootstrap semantics."
+    },
+    {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
       "role": "reproducibility",
       "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."

@@ -1,0 +1,589 @@
+from __future__ import annotations
+
+import math
+import random
+import statistics
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Mapping
+
+from experiments._common import closed_loop_producer_identity, registered_input, sha256_file
+from experiments.closed_loop_confirmation import run_closed_loop_collection
+from experiments.repair_collection import (
+    _fingerprint,
+    _read_json,
+    _read_jsonl,
+    _run_jobs,
+    _write_json,
+    _write_jsonl,
+)
+from experiments.run_output_guard import load_completed_report, prepare_resumable_output
+from experiments.stride_augcontrol_evaluation import _dataset_tasks
+from experiments.stride_bounded_native_retry_continuation import _failed_job
+from experiments.stride_hybridstructpool_source_routing import _summary
+from experiments.stride_maprank_raw_ttf import _paired_comparison
+from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.runtime.hybridstructpool_routed import (
+    validate_routed_hybridstructpool_augmentation,
+)
+
+
+CONFIG_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_config.v1"
+STATUS_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_status.v1"
+REPORT_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_report.v1"
+EXPERIMENT_ID = "stride-hybridstructpool-routed-confirmation-v1"
+CONTROLLERS = ("official_adaptive", "v2_only", "structshell_only")
+STATUS_FILENAME = "collection_status.json"
+REPORT_FILENAME = "confirmation_report.json"
+
+
+def _registered(root: Path, specification: Mapping[str, Any]) -> Path:
+    return registered_input(root, dict(specification), label="Hybrid routed confirmation")
+
+
+def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
+    path = Path(path).resolve()
+    root = path.parents[1]
+    config = _read_json(path)
+    if (
+        config.get("schema") != CONFIG_SCHEMA
+        or config.get("scientific_status")
+        != "preregistered_result_blind_paired_raw_ttf_confirmation"
+        or config.get("experiment_id") != EXPERIMENT_ID
+        or str(config.get("pre_registration_parent_commit")) != "e9cc1ec"
+        or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
+    ):
+        raise ValueError("Hybrid routed confirmation identity changed")
+    comparison = dict(config.get("comparison") or {})
+    if comparison != {
+        "primary_baseline": "official_adaptive",
+        "quality_anchor": "v2_only",
+        "challenger": "structshell_only",
+        "execution_order": "rotating_strict_three_controller_serial",
+        "paired_solver_seed_required": True,
+        "workers_for_timed_episodes": 1,
+        "workers_for_qualification": 16,
+    }:
+        raise ValueError("Hybrid routed confirmation comparison changed")
+    runtime = dict(config.get("runtime") or {})
+    if runtime != {
+        "stopping_rule": "run-to-completion",
+        "repair_seed_policy": "episode_stream",
+        "deterministic_pp_replay": False,
+        "episode_process_timeout_seconds": 300.0,
+    }:
+        raise ValueError("Hybrid routed confirmation runtime changed")
+    augmentation = validate_routed_hybridstructpool_augmentation(
+        dict(config["challenger_augmentation"])
+    )
+    if augmentation.get("source_mode") != "structshell_only":
+        raise ValueError("confirmation challenger is not frozen StructShell-only")
+    cohort = dict(config.get("cohort") or {})
+    groups = list(cohort.get("groups") or ())
+    if (
+        cohort.get("role") != "result_blind_map_disjoint_confirmation"
+        or tuple(map(int, cohort.get("solver_seeds") or ())) != (1, 2, 3)
+        or int(cohort.get("paired_key_count", -1)) != 60
+        or int(cohort.get("episode_count_per_controller", -1)) != 60
+        or cohort.get("result_based_filtering") is not False
+        or len(groups) != 10
+        or any(len(list(group.get("tasks") or ())) != 2 for group in groups)
+    ):
+        raise ValueError("Hybrid routed confirmation cohort changed")
+    map_ids = {str(group["id"]) for group in groups}
+    if map_ids & set(map(str, cohort["development_map_ids"])):
+        raise ValueError("confirmation map overlaps development")
+    families = {str(group["family"]) for group in groups}
+    if not {"maze", "room", "warehouse", "game", "dao"} <= families:
+        raise ValueError("confirmation does not cover every registered map family")
+    for specification in dict(config.get("inputs") or {}).values():
+        _registered(root, specification)
+    development = _read_json(root / str(config["inputs"]["development_report"]["path"]))
+    if (
+        development.get("development_gate_passed") is not True
+        or development.get("selected_controller") != "structshell_only"
+    ):
+        raise ValueError("development ablation did not freeze StructShell-only")
+    for group in groups:
+        tasks = _dataset_tasks((root / str(group["dataset"])).resolve(), str(group["split"]))
+        if set(map(str, group["tasks"])) - set(tasks):
+            raise ValueError(f"confirmation task absent for map {group['id']}")
+    return path, root, config
+
+
+def schedule(config: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    key_index = 0
+    for group in config["cohort"]["groups"]:
+        for task in group["tasks"]:
+            for seed in config["cohort"]["solver_seeds"]:
+                offset = key_index % len(CONTROLLERS)
+                for position, controller_index in enumerate(
+                    (offset, (offset + 1) % 3, (offset + 2) % 3)
+                ):
+                    rows.append(
+                        {
+                            "group_id": str(group["id"]),
+                            "family": str(group["family"]),
+                            "task_id": str(task),
+                            "solver_seed": int(seed),
+                            "controller": CONTROLLERS[controller_index],
+                            "within_key_position": position,
+                        }
+                    )
+                key_index += 1
+    return rows
+
+
+def _controller_kwargs(root: Path, config: Mapping[str, Any], name: str) -> dict[str, Any]:
+    common = {
+        "stopping_rule": "run-to-completion",
+        "repair_seed_policy": "episode_stream",
+        "deterministic_pp_replay": False,
+    }
+    if name == "official_adaptive":
+        return {
+            **common,
+            "controller": "official_adaptive",
+            "feature_backend": "auto",
+            "controller_runtime": "reference",
+            "verification_profile": "audit",
+        }
+    result = {
+        **common,
+        "controller": "v2-full",
+        "controller_bundle": str((root / str(config["controller_bundle"])).resolve()),
+        "feature_backend": "native",
+        "controller_runtime": "optimized",
+        "verification_profile": "deployment",
+    }
+    if name == "structshell_only":
+        result["hybridstructpool_augmentation"] = dict(config["challenger_augmentation"])
+    elif name != "v2_only":
+        raise ValueError(f"unknown confirmation controller: {name}")
+    return result
+
+
+def _group(config: Mapping[str, Any], group_id: str) -> dict[str, Any]:
+    return next(
+        dict(group)
+        for group in config["cohort"]["groups"]
+        if str(group["id"]) == group_id
+    )
+
+
+def _controller_dir(output: Path, item: Mapping[str, Any]) -> Path:
+    return output / "maps" / str(item["group_id"]) / str(item["controller"])
+
+
+def _manifest_path(output: Path, item: Mapping[str, Any]) -> Path:
+    filename = (
+        "official_adaptive_manifest.jsonl"
+        if str(item["controller"]) == "official_adaptive"
+        else "realized_dynamic_manifest.jsonl"
+    )
+    return _controller_dir(output, item) / filename
+
+
+def _manifest(output: Path, item: Mapping[str, Any]) -> dict[str, Any] | None:
+    path = _manifest_path(output, item)
+    matches = [
+        dict(row)
+        for row in (_read_jsonl(path) if path.is_file() else [])
+        if str(row.get("task_id")) == str(item["task_id"])
+        and int(row.get("solver_seed", -1)) == int(item["solver_seed"])
+    ]
+    if len(matches) > 1:
+        raise ValueError("confirmation manifest is ambiguous")
+    return matches[0] if matches else None
+
+
+def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
+    _path, root, config = load_config(job["config_path"])
+    item = dict(job["item"])
+    group = _group(config, str(item["group_id"]))
+    dataset = root / str(group["dataset"])
+    runtime = root / str(group["runtime_config"])
+    keys = {
+        (str(task), int(seed))
+        for task in group["tasks"]
+        for seed in config["cohort"]["solver_seeds"]
+    }
+    collection = _controller_dir(Path(job["output_root"]).resolve(), item)
+    kwargs = _controller_kwargs(root, config, str(item["controller"]))
+    run_closed_loop_collection(
+        dataset,
+        runtime,
+        collection,
+        phase="qualify",
+        workers=1,
+        resume=collection.joinpath("run_config.json").is_file(),
+        cohort_job_keys=keys,
+        job_keys=keys,
+        qualification_source=Path(job["qualification_source"]).resolve(),
+        use_global_collection_lock=False,
+        **kwargs,
+    )
+    run_closed_loop_collection(
+        dataset,
+        runtime,
+        collection,
+        phase=("official_adaptive" if item["controller"] == "official_adaptive" else "realized_dynamic"),
+        workers=1,
+        resume=True,
+        cohort_job_keys=keys,
+        job_keys={(str(item["task_id"]), int(item["solver_seed"]))},
+        qualification_source=Path(job["qualification_source"]).resolve(),
+        use_global_collection_lock=False,
+        **kwargs,
+    )
+    row = _manifest(Path(job["output_root"]).resolve(), item)
+    if row is None:
+        raise RuntimeError("confirmation episode completed without manifest")
+    status = str(row.get("status"))
+    return {**item, "status": status if status in {"error", "timeout"} else "ok"}
+
+
+def _status(
+    output: Path,
+    items: list[dict[str, Any]],
+    base: Mapping[str, Any],
+    *,
+    complete: bool = False,
+) -> dict[str, Any]:
+    rows = [_manifest(output, item) for item in items]
+    present = [row for row in rows if row is not None]
+    return {
+        **dict(base),
+        "completed_jobs": len(present),
+        "total_jobs": len(items),
+        "completed_by_controller": {
+            name: sum(
+                _manifest(output, item) is not None
+                for item in items
+                if item["controller"] == name
+            )
+            for name in CONTROLLERS
+        },
+        "error_jobs": sum(row.get("status") == "error" for row in present),
+        "timeout_jobs": sum(row.get("status") == "timeout" for row in present),
+        "complete": bool(complete and len(present) == len(items)),
+    }
+
+
+def run(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    resume: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    path, root, config = load_config(config_path)
+    items = schedule(config)
+    if dry_run:
+        return {
+            "schema": STATUS_SCHEMA,
+            "map_count": len(config["cohort"]["groups"]),
+            "paired_key_count": len(items) // 3,
+            "schedule_entry_count": len(items),
+            "schedule_sha256": _fingerprint(items),
+        }
+    output = Path(output).resolve()
+    prepared = prepare_resumable_output(
+        output,
+        status_filename=STATUS_FILENAME,
+        status_schema=STATUS_SCHEMA,
+        config_path=path,
+        schedule=items,
+        producer=closed_loop_producer_identity(
+            project_root=root,
+            source_files=(
+                "experiments/stride_hybridstructpool_routed_confirmation.py",
+                "experiments/closed_loop_confirmation.py",
+                "lns2_selector/runtime/hybridstructpool.py",
+                "lns2_selector/runtime/hybridstructpool_routed.py",
+                "lns2_selector/runtime/topology_candidates.py",
+            ),
+        ),
+        resume=resume,
+        report_filename=REPORT_FILENAME,
+        report_schema=REPORT_SCHEMA,
+        label="HybridStructPool routed result-blind confirmation",
+    )
+    if prepared.completed_report is not None:
+        return prepared.completed_report
+    _write_jsonl(output / "execution_schedule.jsonl", items)
+    for group in config["cohort"]["groups"]:
+        keys = {
+            (str(task), int(seed))
+            for task in group["tasks"]
+            for seed in config["cohort"]["solver_seeds"]
+        }
+        qualification = output / "maps" / str(group["id"]) / "qualification"
+        run_closed_loop_collection(
+            root / str(group["dataset"]),
+            root / str(group["runtime_config"]),
+            qualification,
+            phase="qualify",
+            workers=int(config["comparison"]["workers_for_qualification"]),
+            resume=prepared.resumed and qualification.joinpath("run_config.json").is_file(),
+            cohort_job_keys=keys,
+            job_keys=keys,
+            controller="v2-full",
+            controller_bundle=str((root / str(config["controller_bundle"])).resolve()),
+            feature_backend="native",
+            controller_runtime="optimized",
+            verification_profile="deployment",
+            stopping_rule="run-to-completion",
+            repair_seed_policy="episode_stream",
+            deterministic_pp_replay=False,
+        )
+    pending = [item for item in items if _manifest(output, item) is None]
+    jobs = [
+        {
+            "job_id": _fingerprint(item),
+            "config_path": str(path),
+            "output_root": str(output),
+            "qualification_source": str(
+                output / "maps" / str(item["group_id"]) / "qualification"
+            ),
+            "item": item,
+        }
+        for item in pending
+    ]
+    if jobs:
+        results = _run_jobs(
+            _episode_job,
+            jobs,
+            1,
+            phase="hybridstructpool-routed-confirmation",
+            output_root=output,
+            run_fingerprint=str(prepared.base_status["run_fingerprint"]),
+            timeout_seconds=float(config["runtime"]["episode_process_timeout_seconds"]),
+            failure_result=_failed_job,
+            stop_on_failure=True,
+        )
+        failures = [row for row in results if row.get("status") in {"error", "timeout"}]
+        if failures:
+            status = _status(output, items, prepared.base_status)
+            status["terminal_failure"] = failures[0]
+            _write_json(output / STATUS_FILENAME, status)
+            return status
+    report = analyze(path, output, producer=prepared.base_status["producer_identity"])
+    status = _status(output, items, prepared.base_status, complete=True)
+    status["report_sha256"] = sha256_file(output / REPORT_FILENAME)
+    _write_json(output / STATUS_FILENAME, status)
+    return report
+
+
+def _quantile(values: list[float], probability: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = probability * (len(ordered) - 1)
+    lower, upper = math.floor(position), math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _repair_tail(rows: list[dict[str, Any]]) -> dict[str, float | None]:
+    values = [float(row["summary"]["repair_iterations"]) for row in rows if row.get("status") == "ok"]
+    return {"p95": _quantile(values, 0.95), "maximum": max(values) if values else None}
+
+
+def _bootstrap_improvement(
+    baseline: Mapping[tuple[str, str, int], dict[str, Any]],
+    challenger: Mapping[tuple[str, str, int], dict[str, Any]],
+    keys: list[tuple[str, str, int]],
+    replicates: int,
+) -> dict[str, Any]:
+    pairs = [
+        (
+            float(baseline[key]["summary"]["wall_time_to_feasible"]),
+            float(challenger[key]["summary"]["wall_time_to_feasible"]),
+        )
+        for key in keys
+        if baseline[key].get("status") == "ok"
+        and challenger[key].get("status") == "ok"
+        and baseline[key]["summary"].get("success") is True
+        and challenger[key]["summary"].get("success") is True
+    ]
+    if not pairs:
+        return {"pair_count": 0, "relative_improvement": None, "ci95_lower": None, "ci95_upper": None}
+    def improvement(sample: list[tuple[float, float]]) -> float:
+        baseline_mean = statistics.fmean(value[0] for value in sample)
+        return (baseline_mean - statistics.fmean(value[1] for value in sample)) / baseline_mean
+    rng = random.Random(20260816)
+    estimates = [
+        improvement([pairs[rng.randrange(len(pairs))] for _ in pairs])
+        for _ in range(replicates)
+    ]
+    return {
+        "pair_count": len(pairs),
+        "relative_improvement": improvement(pairs),
+        "ci95_lower": _quantile(estimates, 0.025),
+        "ci95_upper": _quantile(estimates, 0.975),
+        "replicates": replicates,
+        "seed": 20260816,
+    }
+
+
+def analyze(
+    config_path: str | Path,
+    output: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    path, root, config = load_config(config_path)
+    output = Path(output).resolve()
+    completed = load_completed_report(
+        output,
+        status_filename=STATUS_FILENAME,
+        report_filename=REPORT_FILENAME,
+        status_schema=STATUS_SCHEMA,
+        report_schema=REPORT_SCHEMA,
+        config_path=path,
+    )
+    if completed is not None:
+        return completed
+    expected = {
+        (str(group["id"]), str(task), int(seed))
+        for group in config["cohort"]["groups"]
+        for task in group["tasks"]
+        for seed in config["cohort"]["solver_seeds"]
+    }
+    indexed: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
+    errors: list[str] = []
+    hashes: dict[str, dict[str, str]] = defaultdict(dict)
+    for controller in CONTROLLERS:
+        rows: dict[tuple[str, str, int], dict[str, Any]] = {}
+        for group in config["cohort"]["groups"]:
+            item = {"group_id": group["id"], "controller": controller}
+            manifest = _manifest_path(output, item)
+            if not manifest.is_file():
+                errors.append(f"{controller}/{group['id']}: missing manifest")
+                continue
+            hashes[controller][str(group["id"])] = sha256_file(manifest)
+            for row in _read_jsonl(manifest):
+                key = (str(group["id"]), str(row["task_id"]), int(row["solver_seed"]))
+                if key in rows:
+                    errors.append(f"{controller}: duplicate {key}")
+                rows[key] = dict(row)
+        if set(rows) != expected:
+            errors.append(f"{controller}: incomplete paired coverage")
+        indexed[controller] = rows
+    fingerprint_mismatches = conflict_mismatches = bad_clock = capped = 0
+    for key in sorted(expected):
+        rows = [indexed[name].get(key) for name in CONTROLLERS]
+        if any(row is None or row.get("status") != "ok" for row in rows):
+            continue
+        summaries = [dict(row["summary"]) for row in rows]
+        fingerprint_mismatches += len({row.get("initial_fingerprint") for row in summaries}) != 1
+        conflict_mismatches += len({row.get("initial_conflicts") for row in summaries}) != 1
+        bad_clock += sum(row.get("ttf_clock_schema") != TTF_CLOCK_SCHEMA for row in summaries)
+        capped += sum(row.get("capped_wall_time_to_feasible") is not None for row in summaries)
+    summaries = {name: _summary(list(indexed[name].values())) for name in CONTROLLERS}
+    keys = sorted(expected)
+    comparisons = {
+        "challenger_vs_v2": _paired_comparison(indexed["v2_only"], indexed["structshell_only"], keys),
+        "challenger_vs_official": _paired_comparison(indexed["official_adaptive"], indexed["structshell_only"], keys),
+        "v2_vs_official": _paired_comparison(indexed["official_adaptive"], indexed["v2_only"], keys),
+    }
+    per_map = {
+        str(group["id"]): _paired_comparison(
+            indexed["v2_only"],
+            indexed["structshell_only"],
+            [key for key in keys if key[0] == str(group["id"])],
+        )
+        for group in config["cohort"]["groups"]
+    }
+    tails = {name: _repair_tail(list(indexed[name].values())) for name in CONTROLLERS}
+    bootstrap = _bootstrap_improvement(
+        indexed["v2_only"],
+        indexed["structshell_only"],
+        keys,
+        int(config["performance_gates"]["paired_bootstrap_replicates"]),
+    )
+    integrity = {
+        "complete_paired_coverage": not any("coverage" in error or "missing" in error for error in errors),
+        "zero_execution_errors_or_process_timeouts": all(
+            row.get("status") == "ok" for values in indexed.values() for row in values.values()
+        ),
+        "paired_initial_fingerprints": fingerprint_mismatches == 0,
+        "paired_initial_conflicts": conflict_mismatches == 0,
+        "raw_ttf_clock_registered": bad_clock == 0,
+        "no_capped_ttf_values": capped == 0,
+        "zero_invalid_actions": all(summary["invalid_action_count"] == 0 for summary in summaries.values()),
+        "zero_semantic_mismatches": all(summary["fingerprint_mismatch_count"] == 0 for summary in summaries.values()),
+    }
+    gates = dict(config["performance_gates"])
+    comparison = comparisons["challenger_vs_v2"]
+    map_regressions = {
+        name: -float(value.get("mean_raw_ttf_relative_improvement", -math.inf))
+        for name, value in per_map.items()
+        if value.get("valid")
+    }
+    performance = {
+        "success_noninferior_to_v2": summaries["structshell_only"]["success_count"]
+        >= summaries["v2_only"]["success_count"],
+        "mean_raw_ttf_lower_than_v2": bool(comparison.get("valid"))
+        and float(comparison["mean_raw_ttf_relative_improvement"])
+        > float(gates["minimum_mean_raw_ttf_improvement_vs_v2"]),
+        "paired_faster_fraction_at_least_half": bool(comparison.get("valid"))
+        and float(comparison["paired_faster_fraction"])
+        >= float(gates["minimum_paired_faster_fraction_vs_v2"]),
+        "bootstrap_supports_positive_gain": bootstrap["ci95_lower"] is not None
+        and float(bootstrap["ci95_lower"])
+        > float(gates["paired_bootstrap_relative_improvement_lower_bound"]),
+        "every_map_within_regression_limit": len(map_regressions) == len(per_map)
+        and max(map_regressions.values(), default=math.inf)
+        <= float(gates["maximum_map_raw_ttf_regression"]),
+        "p95_repair_iterations_noninferior_to_v2": tails["structshell_only"]["p95"] is not None
+        and tails["v2_only"]["p95"] is not None
+        and float(tails["structshell_only"]["p95"]) <= float(tails["v2_only"]["p95"]),
+        "maximum_repair_iterations_noninferior_to_v2": tails["structshell_only"]["maximum"] is not None
+        and tails["v2_only"]["maximum"] is not None
+        and float(tails["structshell_only"]["maximum"])
+        <= float(tails["v2_only"]["maximum"]),
+    }
+    integrity_passed = not errors and all(integrity.values())
+    passed = integrity_passed and all(performance.values())
+    if producer is None:
+        producer = closed_loop_producer_identity(
+            project_root=root,
+            source_files=("experiments/stride_hybridstructpool_routed_confirmation.py",),
+            native_required=False,
+        )
+    report = {
+        "schema": REPORT_SCHEMA,
+        "scientific_status": "result_blind_paired_raw_ttf_confirmation",
+        "map_count": len(config["cohort"]["groups"]),
+        "paired_key_count": len(expected),
+        "episode_count": sum(len(rows) for rows in indexed.values()),
+        "controller_summaries": summaries,
+        "comparisons": comparisons,
+        "per_map": per_map,
+        "repair_iteration_tails": tails,
+        "paired_bootstrap_relative_ttf_improvement": bootstrap,
+        "integrity_gates": integrity,
+        "performance_gates": performance,
+        "integrity_passed": integrity_passed,
+        "confirmation_passed": passed,
+        "formal_speed_claim": passed,
+        "default_replacement_allowed": passed,
+        "next_step": "freeze_structshell_only_runtime" if passed else "keep_v2_default_stop_hybrid_runtime_tuning",
+        "errors": errors,
+        "producer_identity": producer,
+        "inputs": {
+            "config_sha256": sha256_file(path),
+            "schedule_sha256": sha256_file(output / "execution_schedule.jsonl"),
+            "controller_manifest_sha256": dict(hashes),
+        },
+    }
+    _write_json(output / REPORT_FILENAME, report)
+    return report
+
+
+__all__ = ["CONTROLLERS", "analyze", "load_config", "run", "schedule"]

@@ -1,0 +1,183 @@
+{
+  "schema": "lns2.stride.hybridstructpool_routed_confirmation_config.v1",
+  "scientific_status": "preregistered_result_blind_paired_raw_ttf_confirmation",
+  "experiment_id": "stride-hybridstructpool-routed-confirmation-v1",
+  "pre_registration_parent_commit": "e9cc1ec",
+  "controllers": ["official_adaptive", "v2_only", "structshell_only"],
+  "comparison": {
+    "primary_baseline": "official_adaptive",
+    "quality_anchor": "v2_only",
+    "challenger": "structshell_only",
+    "execution_order": "rotating_strict_three_controller_serial",
+    "paired_solver_seed_required": true,
+    "workers_for_timed_episodes": 1,
+    "workers_for_qualification": 16
+  },
+  "runtime": {
+    "stopping_rule": "run-to-completion",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "episode_process_timeout_seconds": 300.0
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "challenger_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-hybridstructpool-routed-v1",
+    "runtime_id": "stride-hybridstructpool-routed-runtime-v1",
+    "full_union_required": false,
+    "full_union_audit_preserved": true,
+    "runtime_filter_id": "source_route_v1",
+    "structural_sizes": [8, 16, 24, 32],
+    "runtime_structural_family_sizes": {
+      "bottleneck_crossing": [8, 16, 24, 32],
+      "conflict_component": [8, 16, 24, 32],
+      "path_overlap": [8, 16, 24, 32],
+      "spatiotemporal_hotspot": [8, 16, 24, 32],
+      "topology_boundary_articulation": [8, 16, 24, 32],
+      "topology_boundary_low_degree": [8, 16, 24, 32]
+    },
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": true,
+    "source_mode": "structshell_only",
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "cohort": {
+    "role": "result_blind_map_disjoint_confirmation",
+    "solver_seeds": [1, 2, 3],
+    "paired_key_count": 60,
+    "episode_count_per_controller": 60,
+    "result_based_filtering": false,
+    "development_map_ids": ["maze-128-128-2", "room-64-64-8"],
+    "groups": [
+      {
+        "id": "maze-32-32-4",
+        "family": "maze",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["maze-32-32-4__random_04__agents_0200", "maze-32-32-4__random_05__agents_0200"]
+      },
+      {
+        "id": "maze-128-128-1",
+        "family": "maze",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["maze-128-128-1__random_04__agents_0600", "maze-128-128-1__random_05__agents_0600"]
+      },
+      {
+        "id": "maze-128-128-10",
+        "family": "maze",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["maze-128-128-10__random_04__agents_0600", "maze-128-128-10__random_05__agents_0600"]
+      },
+      {
+        "id": "room-64-64-16",
+        "family": "room",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["room-64-64-16__random_04__agents_0600", "room-64-64-16__random_05__agents_0600"]
+      },
+      {
+        "id": "warehouse-10-20-10-2-2",
+        "family": "warehouse",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["warehouse-10-20-10-2-2__random_04__agents_0500", "warehouse-10-20-10-2-2__random_05__agents_0500"]
+      },
+      {
+        "id": "warehouse-20-40-10-2-2",
+        "family": "warehouse",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["warehouse-20-40-10-2-2__random_04__agents_0600", "warehouse-20-40-10-2-2__random_05__agents_0600"]
+      },
+      {
+        "id": "den312d",
+        "family": "game",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["den312d__random_04__agents_0300", "den312d__random_05__agents_0300"]
+      },
+      {
+        "id": "lak303d",
+        "family": "game",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "split": "movingai_ood",
+        "tasks": ["lak303d__random_04__agents_0600", "lak303d__random_05__agents_0600"]
+      },
+      {
+        "id": "arena",
+        "family": "dao",
+        "dataset": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+        "runtime_config": "configs/stride_stage4r_high_load_runtime.json",
+        "split": "balanced_wall_clock",
+        "tasks": ["arena__derived_uniform_random__task_seed_0157__agents_1000", "arena__derived_uniform_random__task_seed_0181__agents_1000"]
+      },
+      {
+        "id": "den020d",
+        "family": "dao",
+        "dataset": "build/stride-topoboundary-fresh-preflight-dataset-v1",
+        "runtime_config": "configs/stride_stage4r_high_load_runtime.json",
+        "split": "balanced_wall_clock",
+        "tasks": ["den020d__derived_opposite_exchange__task_seed_0157__agents_0620", "den020d__derived_uniform_random__task_seed_0157__agents_0620"]
+      }
+    ]
+  },
+  "performance_gates": {
+    "success_noninferior_to_v2": true,
+    "minimum_mean_raw_ttf_improvement_vs_v2": 0.0,
+    "minimum_paired_faster_fraction_vs_v2": 0.5,
+    "paired_bootstrap_replicates": 10000,
+    "paired_bootstrap_relative_improvement_lower_bound": 0.0,
+    "maximum_map_raw_ttf_regression": 0.05,
+    "p95_repair_iterations_noninferior_to_v2": true,
+    "maximum_repair_iterations_noninferior_to_v2": true,
+    "maximum_confirmation_keys": 120
+  },
+  "inputs": {
+    "development_report": {
+      "path": "build/stride-hybridstructpool-source-routing-v1/source_routing_report.json",
+      "sha256": "2052837b7606f7da34d835101215e70bc7b84614390f215c4ea98c56a2d41702"
+    },
+    "movingai_manifest": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/manifest.jsonl",
+      "sha256": "cab89325c4ca62c7eefd7a0c5de38e1a700bf8384b618c399eafab876dd05742"
+    },
+    "dao_manifest": {
+      "path": "build/stride-topoboundary-fresh-preflight-dataset-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "df01c9bba9c5dd6c618140ee423fb508df879c9e71fc071f80ad7cdf320ea8ca"
+    },
+    "movingai_runtime": {
+      "path": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+      "sha256": "c38568985809ea14e41555a5b43fbde5ad86cd83c6a292c868e30709b262d9a2"
+    },
+    "dao_runtime": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  }
+}
