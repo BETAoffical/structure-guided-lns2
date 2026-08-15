@@ -1,0 +1,124 @@
+{
+  "schema": "lns2.stride.repairability_basin_audit_registration.v1",
+  "scientific_status": "posthoc_existing_trace_mechanism_audit_frozen_before_aggregate_diagnostic_computation",
+  "experiment_id": "stride-repairability-basin-audit-v1",
+  "protocol_parent_commit": "2d1dc247791eaa14e5c8dc3b1fa50ad1268043b3",
+  "known_before_freeze": {
+    "paired_trigger_event_count": 81,
+    "immediate_unresolved_count": 50,
+    "immediate_escape_count": 31,
+    "immediate_escape_h8_observed_count": 23,
+    "immediate_escape_h8_durable_count": 16,
+    "immediate_escape_h8_new_platform_count": 7,
+    "immediate_escape_h8_censored_count": 8,
+    "representative_debug_trace_count": 2,
+    "aggregate_pp_diagnostic_separation_not_previously_computed": true
+  },
+  "inputs": {
+    "source_registration": {
+      "path": "configs/stride_compact_blocker_rescue_continuation_v1_registration.json",
+      "sha256": "59a19d8b03b004e5b4ab3d099cd4cb08f54c725f5bd39a97a41a3fab3195a810"
+    },
+    "source_run_config": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_run_config.json",
+      "sha256": "c5bd8e138effb5b13225b313ee8f663b479070c064016218679515c31ad3bda9"
+    },
+    "source_schedule": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_schedule.jsonl",
+      "sha256": "d7ecb66fbf2c0bc712f72672bc93a02a104088794a5b6244feb8fa36f0f476c4"
+    },
+    "source_status": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/collection_status.json",
+      "sha256": "8bc15a20ce41ef28a05cb6ee28fb64715f6ee510ca52d4b14940183b2db23e77"
+    },
+    "source_report": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_report.json",
+      "sha256": "26502c21d448ffc7a14395ba4d6a478067498c1a8e5e4d8be3be9608f5de2d74"
+    },
+    "durability_registration": {
+      "path": "configs/stride_compact_blocker_escape_durability_v1_registration.json",
+      "sha256": "e552cf460ec61df0694e7d0cd4a80cd5ef15a21cba13c3aa5371ed7a5f4daf32"
+    },
+    "durability_run_config": {
+      "path": "build/stride-compact-blocker-escape-durability-v1/audit_run_config.json",
+      "sha256": "0d9c3b9560d47a9c0197b3ee27097a00900a7cf8115d06a9947b9c5071893d61"
+    },
+    "durability_rows": {
+      "path": "build/stride-compact-blocker-escape-durability-v1/audit_rows.jsonl",
+      "sha256": "0ac67ea48f2b5984fba1acbc46d14051203968795b3c182c8081dff398e3cadb"
+    },
+    "durability_report": {
+      "path": "build/stride-compact-blocker-escape-durability-v1/report.json",
+      "sha256": "73dc1b3a8d362d00129663db58d59df7eb2438c69728592eef2b98ff0072603a"
+    }
+  },
+  "population": {
+    "arm": "compact_blocker_augmented_fresh_seed",
+    "trial_indices": [0, 1, 2, 3],
+    "required_trigger_event_count": 81,
+    "no_event_exclusion_by_diagnostic_or_future_outcome": true
+  },
+  "diagnostics": {
+    "immediate_groups": [
+      "immediate_unresolved",
+      "immediate_escape"
+    ],
+    "escaped_h8_groups": [
+      "durable_through_h8",
+      "new_platform_by_h8",
+      "right_censored_before_h8"
+    ],
+    "rescue_features": [
+      "trial_local_compaction",
+      "neighborhood_size",
+      "removed_agent_count",
+      "selected_blocker_count",
+      "blocker_cap_reached",
+      "failed_order_fraction",
+      "residual_external_blocker_count",
+      "internal_blocker_count",
+      "new_conflict_pair_count",
+      "repair_wall_seconds"
+    ],
+    "post_escape_features": [
+      "selected_blocker_retention",
+      "candidate_set_repetition",
+      "candidate_jaccard_to_rescue",
+      "external_blockers_seen_through_h8",
+      "new_platform_window_blockers_outside_original_rescue"
+    ]
+  },
+  "mechanism_rules": {
+    "accumulated_blocker_rescue_supported_if": {
+      "minimum_immediate_unresolved_events": 40,
+      "minimum_unresolved_rescue_residual_blocker_presence_rate": 0.5,
+      "minimum_presence_rate_difference_vs_immediate_escape": 0.15
+    },
+    "new_signature_rescue_supported_if": {
+      "minimum_new_platform_events": 5,
+      "minimum_new_platform_window_new_blocker_presence_rate": 0.5
+    },
+    "otherwise": "stop_stateful_membership_branch_and_attribute_remaining_failure_to_order_internal_conflict_or_pp_instability"
+  },
+  "authorized_next_protocol_if_supported": {
+    "one_pp_call_per_decision": true,
+    "maximum_interventions_per_episode": 3,
+    "maximum_one_intervention_per_platform_signature": true,
+    "native_pp_order_only": true,
+    "never_intervene_after_time_limit": true,
+    "no_training_or_ttf": true
+  },
+  "execution": {
+    "worker_count": 16,
+    "solver_calls_allowed": false,
+    "source_files_read_only": true,
+    "atomic_output": true
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "causal_effect_claim_allowed": false,
+    "runtime_integration_allowed": false,
+    "ttf_allowed": false,
+    "new_pp_collection_allowed_in_this_stage": false
+  }
+}

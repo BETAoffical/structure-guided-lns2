@@ -2822,6 +2822,21 @@
       "path": "tests/evaluation/test_stride_compact_blocker_escape_durability.py",
       "role": "reproducibility",
       "contract": "Freeze sustained-escape, original-platform re-entry, new-platform formation, censoring and paired-cohort semantics."
+    },
+    {
+      "path": "experiments/stride_repairability_basin_audit.py",
+      "role": "reproducibility",
+      "purpose": "Explain immediate compact-blocker rescue failure and subsequent new-platform formation from existing PP diagnostics without solver calls."
+    },
+    {
+      "path": "scripts/run_stride_repairability_basin_audit.py",
+      "role": "reproducibility",
+      "purpose": "Run the frozen 16-process read-only repairability-basin mechanism audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_repairability_basin_audit.py",
+      "role": "reproducibility",
+      "contract": "Freeze blocker deduplication, failure-order localization, outcome partition and complete trigger-population semantics."
     }
   ]
 }
