@@ -5,6 +5,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from lns2_selector.runtime.contracts import (
+    require_bool,
+    require_int,
+    require_int_list,
+    require_nonempty_string,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
@@ -59,29 +65,71 @@ def bounded_retry_seed(
 
 
 def attempt_snapshot(metrics: Mapping[str, Any]) -> dict[str, Any]:
-    reason = str(metrics.get("pp_failure_reason"))
+    reason = require_nonempty_string(
+        metrics.get("pp_failure_reason"), field="native PP failure reason"
+    )
     if reason not in VALID_FAILURE_REASONS:
         raise ValueError(f"invalid native PP failure reason: {reason}")
+    raw_diagnostics = metrics.get("pp_agent_diagnostics")
+    if not isinstance(raw_diagnostics, list) or any(
+        not isinstance(row, Mapping) for row in raw_diagnostics
+    ):
+        raise ValueError("PP agent diagnostics must be an array of objects")
     return {
-        "requested_random_seed": int(metrics.get("requested_random_seed", -1)),
-        "requested_pp_random_seed": int(metrics.get("requested_pp_random_seed", -1)),
-        "applied_pp_random_seed": int(metrics.get("applied_pp_random_seed", -1)),
-        "requested_collect_pp_diagnostics": bool(
-            metrics.get("requested_collect_pp_diagnostics", False)
+        "requested_random_seed": require_int(
+            metrics.get("requested_random_seed"),
+            field="requested random seed",
+            minimum=-1,
         ),
-        "neighborhood": list(map(int, metrics.get("neighborhood") or ())),
-        "repair_order": list(map(int, metrics.get("repair_order") or ())),
-        "replan_success": bool(metrics.get("replan_success")),
+        "requested_pp_random_seed": require_int(
+            metrics.get("requested_pp_random_seed"),
+            field="requested PP random seed",
+            minimum=-1,
+        ),
+        "applied_pp_random_seed": require_int(
+            metrics.get("applied_pp_random_seed"),
+            field="applied PP random seed",
+            minimum=-1,
+        ),
+        "requested_collect_pp_diagnostics": require_bool(
+            metrics.get("requested_collect_pp_diagnostics"),
+            field="requested collect PP diagnostics",
+        ),
+        "neighborhood": require_int_list(
+            metrics.get("neighborhood"), field="neighborhood", minimum=0
+        ),
+        "repair_order": require_int_list(
+            metrics.get("repair_order"), field="repair order", minimum=0
+        ),
+        "replan_success": require_bool(
+            metrics.get("replan_success"), field="replan success"
+        ),
         "failure_reason": reason,
-        "attempted_agent_count": int(metrics.get("pp_attempted_agent_count", -1)),
-        "inserted_agent_count": int(metrics.get("pp_inserted_agent_count", -1)),
-        "failed_agent": int(metrics.get("pp_failed_agent", -1)),
-        "failed_order_index": int(metrics.get("pp_failed_order_index", -1)),
-        "rolled_back": bool(metrics.get("pp_rolled_back", False)),
-        "conflicts_after": int(metrics.get("conflicts_after", -1)),
-        "pp_agent_diagnostics": [
-            dict(row) for row in metrics.get("pp_agent_diagnostics") or ()
-        ],
+        "attempted_agent_count": require_int(
+            metrics.get("pp_attempted_agent_count"),
+            field="PP attempted agent count",
+            minimum=0,
+        ),
+        "inserted_agent_count": require_int(
+            metrics.get("pp_inserted_agent_count"),
+            field="PP inserted agent count",
+            minimum=0,
+        ),
+        "failed_agent": require_int(
+            metrics.get("pp_failed_agent"), field="PP failed agent", minimum=-1
+        ),
+        "failed_order_index": require_int(
+            metrics.get("pp_failed_order_index"),
+            field="PP failed order index",
+            minimum=-1,
+        ),
+        "rolled_back": require_bool(
+            metrics.get("pp_rolled_back"), field="PP rolled back"
+        ),
+        "conflicts_after": require_int(
+            metrics.get("conflicts_after"), field="conflicts after", minimum=0
+        ),
+        "pp_agent_diagnostics": [dict(row) for row in raw_diagnostics],
     }
 
 
@@ -151,20 +199,43 @@ class BoundedNativeRetryTracker:
         }
         if set(specification) != required:
             raise ValueError("bounded native retry specification changed")
-        minimum = int(specification["minimum_consecutive_rollbacks"])
-        maximum = int(specification["maximum_interventions"])
-        initial = int(specification["initial_repeat_count"])
+        minimum = require_int(
+            specification["minimum_consecutive_rollbacks"],
+            field="minimum consecutive rollbacks",
+            minimum=0,
+        )
+        maximum = require_int(
+            specification["maximum_interventions"],
+            field="maximum interventions",
+            minimum=0,
+        )
+        initial = require_int(
+            specification["initial_repeat_count"],
+            field="initial repeat count",
+            minimum=0,
+        )
         if minimum != 3 or maximum != 3 or initial != 2:
             raise ValueError("bounded native retry limits changed")
         return cls(
-            enabled=bool(specification["enabled"]),
+            enabled=require_bool(specification["enabled"], field="retry enabled"),
             minimum_consecutive_rollbacks=minimum,
             maximum_interventions=maximum,
             initial_repeat_count=initial,
-            seed_namespace=str(specification["seed_namespace"]),
-            episode_key=str(specification["episode_key"]),
-            trial_index=int(specification["trial_index"]),
-            first_retry_seed=int(specification["first_retry_seed"]),
+            seed_namespace=require_nonempty_string(
+                specification["seed_namespace"], field="retry seed namespace"
+            ),
+            episode_key=require_nonempty_string(
+                specification["episode_key"], field="retry episode key"
+            ),
+            trial_index=require_int(
+                specification["trial_index"], field="retry trial index", minimum=0
+            ),
+            first_retry_seed=require_int(
+                specification["first_retry_seed"],
+                field="first retry seed",
+                minimum=0,
+                maximum=2**31 - 1,
+            ),
             current_signature=platform_signature(state),
             current_streak=initial,
         )

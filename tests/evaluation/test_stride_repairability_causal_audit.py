@@ -59,4 +59,3 @@ def test_stable_effect_requires_both_fixed_halves() -> None:
     assert not stable_effect(reference, treatment, minimum=0.02)[
         "stable_effect_passed"
     ]
-

@@ -7,6 +7,11 @@ from lns2_selector.runtime.bounded_native_retry import (
     attempt_snapshot,
     platform_signature,
 )
+from lns2_selector.runtime.contracts import (
+    require_int,
+    require_int_list,
+    require_nonempty_string,
+)
 from lns2_selector.runtime.fingerprints import semantic_fingerprint
 
 
@@ -47,10 +52,17 @@ def ordered_external_blockers(
     blockers: list[int] = []
     for expected_index, raw in enumerate(rows):
         row = dict(raw)
-        if int(row.get("order_index", -1)) != expected_index:
+        if require_int(
+            row.get("order_index"),
+            field=f"PP diagnostic {expected_index} order index",
+            minimum=0,
+        ) != expected_index:
             raise ValueError("PP diagnostic order changed")
-        for raw_agent in row.get("external_blocker_agents") or ():
-            agent = int(raw_agent)
+        for agent in require_int_list(
+            row.get("external_blocker_agents"),
+            field=f"PP diagnostic {expected_index} external blockers",
+            minimum=0,
+        ):
             if agent in base or agent in seen:
                 continue
             seen.add(agent)
@@ -85,9 +97,17 @@ class FailureInformedRescueTracker:
         }
         if set(specification) != required:
             raise ValueError("failure-informed rescue specification changed")
-        mode = str(specification["mode"])
-        maximum = int(specification["maximum_added_blockers"])
-        initial = int(specification["initial_repeat_count"])
+        mode = require_nonempty_string(specification["mode"], field="rescue mode")
+        maximum = require_int(
+            specification["maximum_added_blockers"],
+            field="maximum added blockers",
+            minimum=0,
+        )
+        initial = require_int(
+            specification["initial_repeat_count"],
+            field="initial repeat count",
+            minimum=0,
+        )
         if mode not in MODES:
             raise ValueError(f"unknown failure-informed rescue mode: {mode}")
         if maximum != 8 or initial != 2:
@@ -95,9 +115,15 @@ class FailureInformedRescueTracker:
         return cls(
             mode=mode,
             maximum_added_blockers=maximum,
-            seed_namespace=str(specification["seed_namespace"]),
-            episode_key=str(specification["episode_key"]),
-            trial_index=int(specification["trial_index"]),
+            seed_namespace=require_nonempty_string(
+                specification["seed_namespace"], field="rescue seed namespace"
+            ),
+            episode_key=require_nonempty_string(
+                specification["episode_key"], field="rescue episode key"
+            ),
+            trial_index=require_int(
+                specification["trial_index"], field="rescue trial index", minimum=0
+            ),
             initial_repeat_count=initial,
         )
 

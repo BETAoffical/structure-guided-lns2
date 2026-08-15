@@ -88,4 +88,3 @@ gate before increasing the process ceiling to 16.
   `ab2a61ea4474db2a0ffe2e558350a9033a9bdc778cfe4be0e5de3e17d534a968`;
 - state-manifest SHA-256:
   `51476a171dc51719f285b9ff46355826dec6a3e484de2387f9fd094110defb9b`.
-

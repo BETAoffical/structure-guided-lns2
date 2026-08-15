@@ -120,4 +120,3 @@ after two consecutive attempts without new completed trials.
 No result permits model training, direct online blocker lookup, controller
 promotion, TTF claims, or deletion of failed/timeout states. Any deployable
 candidate rule must be preregistered later and use only pre-action state data.
-

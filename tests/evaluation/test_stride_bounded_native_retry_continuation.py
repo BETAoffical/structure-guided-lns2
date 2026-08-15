@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from lns2_selector.runtime.bounded_native_retry import (
     BoundedNativeRetryTracker,
+    attempt_snapshot,
     merged_retry_metrics,
 )
 
@@ -112,6 +115,50 @@ def test_time_limit_and_baseline_never_retry() -> None:
     )
     assert eligible["trigger_eligible"] is True
     assert eligible["triggered"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("enabled", "false"),
+        ("minimum_consecutive_rollbacks", "3"),
+        ("trial_index", True),
+        ("first_retry_seed", "22"),
+        ("seed_namespace", 7),
+        ("episode_key", False),
+    ),
+)
+def test_retry_spec_rejects_type_coercion(field: str, value: object) -> None:
+    specification = {
+        "enabled": True,
+        "minimum_consecutive_rollbacks": 3,
+        "maximum_interventions": 3,
+        "initial_repeat_count": 2,
+        "seed_namespace": "test",
+        "episode_key": "episode",
+        "trial_index": 0,
+        "first_retry_seed": 22,
+    }
+    specification[field] = value
+    with pytest.raises(ValueError):
+        BoundedNativeRetryTracker.from_spec(_state(), specification)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("requested_collect_pp_diagnostics", "false"),
+        ("replan_success", 0),
+        ("pp_attempted_agent_count", True),
+        ("neighborhood", [0, "1"]),
+        ("pp_agent_diagnostics", [False]),
+    ),
+)
+def test_attempt_snapshot_rejects_type_coercion(field: str, value: object) -> None:
+    metrics = _metrics(11)
+    metrics[field] = value
+    with pytest.raises(ValueError):
+        attempt_snapshot(metrics)
 
 
 def test_cancelled_retry_releases_signature_and_intervention_slot() -> None:

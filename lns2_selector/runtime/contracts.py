@@ -20,6 +20,53 @@ DIAGNOSTIC_CONTROLLER_IDS = (
 )
 
 
+def require_bool(value: Any, *, field: str) -> bool:
+    """Return a JSON boolean while rejecting truthy substitutes."""
+
+    if type(value) is not bool:
+        raise ValueError(f"{field} must be boolean")
+    return value
+
+
+def require_int(
+    value: Any,
+    *,
+    field: str,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    """Return a JSON integer without accepting booleans or numeric strings."""
+
+    if type(value) is not int:
+        raise ValueError(f"{field} must be an integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{field} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{field} must be at most {maximum}")
+    return value
+
+
+def require_nonempty_string(value: Any, *, field: str) -> str:
+    """Return a non-empty JSON string without coercing arbitrary objects."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field} must be a non-empty string")
+    return value
+
+
+def require_int_list(
+    value: Any, *, field: str, minimum: int | None = None
+) -> list[int]:
+    """Return a JSON integer array with strict element types."""
+
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be an array")
+    return [
+        require_int(item, field=f"{field}[{index}]", minimum=minimum)
+        for index, item in enumerate(value)
+    ]
+
+
 @dataclass(frozen=True)
 class SelectionRequest:
     """State made available to a neighborhood selector before repair."""

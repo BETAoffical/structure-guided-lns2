@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from lns2_selector.runtime.failure_informed_rescue import (
     BLOCKER_AUGMENTED_MODE,
     CONTROL_MODE,
@@ -140,6 +142,43 @@ def test_time_limit_never_schedules_rescue() -> None:
     )
     assert record is not None and record["triggered"] is False
     assert tracker.action_for_decision(1, _state()) is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("mode", 1),
+        ("maximum_added_blockers", "8"),
+        ("seed_namespace", 7),
+        ("episode_key", False),
+        ("trial_index", True),
+        ("initial_repeat_count", "2"),
+    ),
+)
+def test_rescue_spec_rejects_type_coercion(field: str, value: object) -> None:
+    specification = {
+        "mode": CONTROL_MODE,
+        "maximum_added_blockers": 8,
+        "seed_namespace": "test",
+        "episode_key": "episode",
+        "trial_index": 0,
+        "initial_repeat_count": 2,
+    }
+    specification[field] = value
+    with pytest.raises(ValueError):
+        FailureInformedRescueTracker.from_spec(specification)
+
+
+def test_rescue_rejects_coerced_diagnostic_blockers() -> None:
+    metrics = _metrics(11)
+    metrics["pp_agent_diagnostics"][0]["external_blocker_agents"] = ["2"]
+    with pytest.raises(ValueError):
+        _tracker(BLOCKER_AUGMENTED_MODE).observe_decision(
+            decision_index=0,
+            before=_state(),
+            after=_state(),
+            metrics=metrics,
+        )
 
 
 def test_registered_schedule_and_override_keep_one_native_call_per_decision() -> None:

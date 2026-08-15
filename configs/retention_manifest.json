@@ -2380,412 +2380,412 @@
     },
     {
       "path": "experiments/stride_causalclosurepool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the outcome-blind 78-state compactness and integrity audit for CausalClosurePool before any native PP quality study."
     },
     {
       "path": "scripts/run_stride_causalclosurepool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Materialize CausalClosurePool candidates with 16 workers and write the frozen compactness report."
     },
     {
       "path": "tests/runtime/test_causalclosurepool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Verify deterministic event-local causal membership, exclusion of far full-path overlap and whole-family rejection instead of cap truncation."
     },
     {
       "path": "tests/evaluation/test_stride_causalclosurepool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze 16-worker compactness-only execution, natural sizes and the no-PP/no-ranker/no-TTF claim boundary."
     },
     {
       "path": "experiments/stride_causalclosurepool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Replay every frozen CausalClosurePool action with sixteen strictly paired native PP seeds and compare opportunity against the complete V2 base pool."
     },
     {
       "path": "scripts/run_stride_causalclosurepool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the bounded 16-worker CausalClosurePool native preflight, full collection and ranker-free opportunity analysis."
     },
     {
       "path": "tests/evaluation/test_stride_causalclosurepool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze paired seeds, 300-second job bounds, complete cohort identity and no-ranker/no-TTF opportunity semantics."
     },
     {
       "path": "experiments/stride_causalclosurepool_structcoverage.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure which previously robust StructPool opportunities and agent-set geometries are absent from compact CausalClosurePool actions."
     },
     {
       "path": "scripts/run_stride_causalclosurepool_structcoverage.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered retrospective structural-coverage diagnostic without training or runtime integration."
     },
     {
       "path": "tests/evaluation/test_stride_causalclosurepool_structcoverage.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze realized-agent-set overlap, structural opportunity recall gates and the posthoc/no-TTF/no-long-tail claim boundary."
     },
     {
       "path": "lns2_selector/runtime/causaltopopool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Combine preserved causal actions with exact natural topology closures while rejecting oversized relations without truncation or fixed preferred sizes."
     },
     {
       "path": "experiments/stride_causaltopopool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Materialize and audit the outcome-blind hybrid V2 plus CausalClosure plus natural-topology candidate pool."
     },
     {
       "path": "scripts/run_stride_causaltopopool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered 16-worker CausalTopoPool compactness and integrity stage."
     },
     {
       "path": "tests/runtime/test_causaltopopool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Verify deterministic exact closures, whole-closure oversized rejection, deduplication and absence of preferred size targets."
     },
     {
       "path": "tests/evaluation/test_stride_causaltopopool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze preserved source pools, 16-worker compactness-only execution and no-training/no-TTF/no-long-tail claim boundaries."
     },
     {
       "path": "experiments/stride_causaltopopool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Replay all novel natural-topology actions with strictly paired native PP seeds and measure their added opportunity over preserved V2 and CausalClosure pools."
     },
     {
       "path": "scripts/run_stride_causaltopopool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run bounded 16-worker CausalTopoPool preflight, full collection and ranker-free opportunity analysis."
     },
     {
       "path": "tests/evaluation/test_stride_causaltopopool_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze 5,856 paired topology jobs, stronger restoration gates, generic trial schema identity and no-training/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_structshell_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit nested StructPool size shells and outcome-blind size cutpoints against frozen non-tail, Maze and bounded-continuation evidence."
     },
     {
       "path": "scripts/run_stride_structshell_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered sixteen-worker read-only StructShell audit."
     },
     {
       "path": "tests/evaluation/test_stride_structshell_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze equal four-size fallback, outcome-blind cutpoint semantics, PreTail checkpoint identity and no-training/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_shellbudget_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit deterministic ranker-free budgets 6, 8 and 12 over the exact-deduplicated equal four-size StructPool."
     },
     {
       "path": "scripts/run_stride_shellbudget_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered sixteen-worker ShellBudget audit."
     },
     {
       "path": "tests/evaluation/test_stride_shellbudget_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze size-balanced family-diverse reduction, outcome-field independence, full-pool fallback and no-ranker/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_cycletransition.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit whether a single forced neighborhood creates a quality-constrained repeatable state-action transition under the complete equal-size structural grid."
     },
     {
       "path": "scripts/run_stride_cycletransition.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the result-blind preparation and bounded 16-worker state-candidate-seed CycleTransition collection and analysis."
     },
     {
       "path": "tests/evaluation/test_stride_cycletransition.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze result-blind cohort selection, exact edge metrics, V2 quality admissibility, joint soft-cycle stability, 300-second job bounds and no-training/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_plateau_escape_witness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Reconstruct frozen first-repeat plateaus, their exact PP realizations and observed escape witnesses without new solver runs or training."
     },
     {
       "path": "scripts/run_stride_plateau_escape_witness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the 16-process existing-trajectory plateau and escape-witness mechanism audit."
     },
     {
       "path": "tests/evaluation/test_stride_plateau_escape_witness.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze pre-trigger plateau semantics, same-set and set-change exits, right censoring, repairability correlation and trigger-pool opportunity boundaries."
     },
     {
       "path": "experiments/stride_repairability_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit quality-constrained paired PP-repairability opportunity relative to each frozen V2 anchor without reading future trajectories or runtime."
     },
     {
       "path": "scripts/run_stride_repairability_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the frozen 78-state, 2,502-candidate repairability opportunity analysis."
     },
     {
       "path": "tests/evaluation/test_stride_repairability_opportunity.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze paired seed identity, two-half repairability dominance, V2 quality noninferiority and no-training/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_repairability_stability.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure fixed-half rank, Top-3, anchor-direction and cross-half regret stability for the quality-constrained PP repairability target."
     },
     {
       "path": "scripts/run_stride_repairability_stability.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the existing-data repairability label-stability audit before any independent-cohort registration or training."
     },
     {
       "path": "tests/evaluation/test_stride_repairability_stability.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze fixed seed halves, robust V2-relative quality pool, repairability direction agreement and cross-half regret semantics."
     },
     {
       "path": "experiments/stride_successor_state_inventory.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Reconstruct and audit every exact first-action successor state in the frozen bounded PreTail cohort without new solver runs."
     },
     {
       "path": "scripts/run_stride_successor_state_inventory.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered 16-worker existing-trace successor-state inventory."
     },
     {
       "path": "tests/evaluation/test_stride_successor_state_inventory.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze successor-state reconstruction, post-successor no-op streak and right-censoring semantics."
     },
     {
       "path": "experiments/stride_successor_repairability.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure the complete frozen V2 base-pool PP repairability distribution in every exact first-action successor state."
     },
     {
       "path": "scripts/run_stride_successor_repairability.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Prepare, collect and analyze the bounded 16-worker successor-repairability mechanism probe."
     },
     {
       "path": "tests/evaluation/test_stride_successor_repairability.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze outcome-blind preflight selection, semantic candidate-trial caching, full distribution metrics, seed-half stability and no-training/no-TTF boundaries."
     },
     {
       "path": "experiments/stride_repairdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Reconstruct the frozen platform-entry witnesses and materialize the bounded RepairDependencyPool cohort without new solver runs."
     },
     {
       "path": "lns2_selector/runtime/repairdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Generate compact evidence-backed repair-dependency candidates and apply the transparent V2-anchored Pareto selector."
     },
     {
       "path": "scripts/run_stride_repairdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered zero-solver RepairDependencyPool witness reconstruction and static gate."
     },
     {
       "path": "tests/evaluation/test_stride_repairdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze registration identity, separate escape and causal classifications, witness reconstruction, static gates and the no-continuation boundary."
     },
     {
       "path": "tests/runtime/test_repairdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze pre-action blocker evidence, compactness, deduplication, family rotation and conservative Pareto fallback semantics."
     },
     {
       "path": "experiments/stride_platformentry_order.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run and analyze the bounded same-neighborhood first-action PP-order platform-entry mechanism experiment."
     },
     {
       "path": "scripts/run_stride_platformentry_order.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Collect and analyze the preregistered 16-worker PlatformEntry order mechanism with uniform extension gates."
     },
     {
       "path": "tests/evaluation/test_stride_platformentry_order.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze the 36-case cohort, paired action identity, explicit PP-order intervention, persistent-platform definition, censoring semantics and paired bootstrap."
     },
     {
       "path": "experiments/stride_frontierdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Materialize bounded current-frontier augment and same-size exchange candidates for direct platform-entry testing."
     },
     {
       "path": "lns2_selector/runtime/frontierdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Generate evidence-backed compact frontier candidates without PP probes, fixed size preferences or future outcomes."
     },
     {
       "path": "scripts/run_stride_frontierdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered zero-solver FrontierDependencyPool readiness audit."
     },
     {
       "path": "tests/runtime/test_frontierdependencypool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze current-frontier evidence, compact augment, same-size exchange, deduplication and deterministic selection semantics."
     },
     {
       "path": "experiments/stride_platformentry_frontier.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Collect and analyze the bounded native-order FrontierDependency platform-entry experiment with uniform extension gates."
     },
     {
       "path": "scripts/run_stride_platformentry_frontier.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered initial, uniform extension and parallel final FrontierDependency continuation analysis."
     },
     {
       "path": "tests/evaluation/test_stride_platformentry_frontier.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze paired frontier schedules, native PP order, noncausal size diagnostics and separate runtime versus registered fingerprint domains."
     },
     {
       "path": "experiments/stride_platform_action_robustness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure whether concrete platform-entry alternatives remain beneficial across both fixed native-PP seed halves without running new solver episodes."
     },
     {
       "path": "scripts/analyze_stride_platform_action_robustness.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the zero-solver cross-seed platform-action robustness diagnostic."
     },
     {
       "path": "tests/evaluation/test_stride_platform_action_robustness.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze stable-platform, quality-preservation and case-classification semantics for the existing 45-case frontier collection."
     },
     {
       "path": "lns2_selector/runtime/hybridstructpool.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Generate the outcome-blind union of the full V2 pool, symmetric four-size StructShell and compact CausalClosure actions without runtime reduction."
     },
     {
       "path": "experiments/stride_hybridstructpool_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit exact candidate membership and source provenance for the frozen HybridStructPool contract without running PP."
     },
     {
       "path": "scripts/run_stride_hybridstructpool_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered 16-process zero-solver HybridStructPool contract audit."
     },
     {
       "path": "tests/runtime/test_hybridstructpool.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze V2-authoritative exact-set merging, symmetric structural sizes, complete-union semantics and provenance retention."
     },
     {
       "path": "tests/evaluation/test_stride_hybridstructpool_audit.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze full-source and robust-action recall, causal-only opportunity retention and no-outcome/no-budget boundaries."
     },
     {
       "path": "experiments/stride_hybridstructpool_budget.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Audit ranker-free semantic-diversity budgets 6, 8 and 12 against frozen structural, causal and bounded-continuation membership."
     },
     {
       "path": "scripts/run_stride_hybridstructpool_budget.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the 16-process zero-solver HybridStructPool budget audit."
     },
     {
       "path": "tests/evaluation/test_stride_hybridstructpool_budget.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."
     },
     {
       "path": "scripts/run_stride_nativeorder_transactionalrepair.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run qualification, initial collection, uniform extension and analysis for Native-Order TransactionalRepair v1."
     },
     {
       "path": "tests/evaluation/test_stride_nativeorder_transactionalrepair.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze native retry order semantics, bounded blocker augmentation and fresh paired retry seeds."
     },
     {
       "path": "experiments/stride_compact_nativeorder_repair.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure whether evidence-preserving semantic neighborhood reduction improves native-order PP repair and retry without fixed target sizes."
     },
     {
       "path": "scripts/run_stride_compact_nativeorder_repair.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered compact-neighborhood native-order paired screen and uniform extension."
     },
     {
       "path": "tests/evaluation/test_stride_compact_nativeorder_repair.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze conflict-core preservation, visible temporal-support retention, native-order policy arms and no-outcome compacting boundaries."
     },
     {
       "path": "experiments/stride_bounded_native_retry_continuation.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure full bounded continuation after a same-set fresh-seed native PP retry at each new persistent platform signature."
     },
     {
       "path": "scripts/run_stride_bounded_native_retry_continuation.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered paired bounded native retry continuation collection and analysis."
     },
     {
       "path": "lns2_selector/runtime/bounded_native_retry.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Track exact rollback streaks and enforce one retry per platform signature with a three-intervention episode cap."
     },
     {
       "path": "tests/evaluation/test_stride_bounded_native_retry_continuation.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze exact rollback eligibility, time-limit exclusion, signature uniqueness, and bounded intervention semantics."
     },
     {
       "path": "experiments/stride_failure_informed_rescue_continuation.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Measure whether external blockers observed in a shared failed PP improve a one-time next-decision native-order rescue and bounded continuation."
     },
     {
       "path": "scripts/run_stride_failure_informed_rescue_continuation.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Run the preregistered failure-informed next-decision rescue collection and analysis."
     },
     {
       "path": "lns2_selector/runtime/failure_informed_rescue.py",
-      "role": "active",
+      "role": "reproducibility",
       "purpose": "Extract observed external PP blockers and schedule at most one same-set or blocker-augmented rescue on the following controller decision."
     },
     {
       "path": "tests/evaluation/test_stride_failure_informed_rescue.py",
-      "role": "active",
+      "role": "reproducibility",
       "contract": "Freeze paired first attempts, next-decision-only intervention, native order, blocker caps, seed identity, and post-trigger persistence semantics."
     }
   ]

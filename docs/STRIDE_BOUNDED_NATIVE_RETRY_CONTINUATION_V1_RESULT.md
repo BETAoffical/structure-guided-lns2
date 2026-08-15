@@ -86,4 +86,3 @@ that a bounded fresh-seed retry can reduce repeated-platform incidence, but it
 does not establish a net trajectory or runtime improvement under the frozen
 protocol. A future experiment would require a new preregistration with a single
 internally consistent PP/episode budget; it must not reuse or patch this run.
-

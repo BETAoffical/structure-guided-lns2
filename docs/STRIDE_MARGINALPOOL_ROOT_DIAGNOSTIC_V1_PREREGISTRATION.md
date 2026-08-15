@@ -59,4 +59,3 @@ the two frozen checkpoint states and evaluate every candidate already present
 in each pool under 16 strictly paired PP seeds. Stage 1 cannot decide which
 candidate is best, cannot promote a controller, and cannot support a solver or
 generalization claim.
-
