@@ -83,6 +83,10 @@ def load_registration(
         != "64e1abace608eac89d763814d2364dc72f8ccf9d"
         or config.get("runtime_hash_correction_reason")
         != "restore the complete already-registered proposal_dynamic portable model SHA-256 after the first smoke stopped before qualification or any episode"
+        or config.get("smoke_metric_correction_parent_commit")
+        != "ed2082e7a68684d182e244f1225ba0f76ff1501c"
+        or config.get("smoke_metric_correction_reason")
+        != "the complete one-state smoke showed platform-entry is structurally one for a first-repeat-stall starting condition; replace it before formal collection with unresolved initial signature at decision three and post-escape re-entry"
         or tuple(map(str, config.get("arms") or ())) != ARMS
     ):
         raise ValueError("exact-state controller attribution registration changed")
@@ -489,7 +493,15 @@ def _arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     selected = [row for row in rows if row["arm"] == arm]
     return {
         "episode_count": len(selected),
-        "platform_rate": mean(bool(row["entered_platform"]) for row in selected),
+        "initial_platform_unescaped_at_three_rate": mean(
+            bool(row["initial_platform_unescaped_at_three"]) for row in selected
+        ),
+        "initial_platform_escape_rate": mean(
+            bool(row["initial_platform_escaped"]) for row in selected
+        ),
+        "post_escape_platform_reentry_rate": mean(
+            bool(row["post_escape_platform_reentry"]) for row in selected
+        ),
         "success_rate": mean(bool(row["success"]) for row in selected),
         "right_censored_count": sum(
             row["stop_reason"] in {"repair_limit", "wall_timeout"}
@@ -507,9 +519,67 @@ def _arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
         "mean_first_strict_progress_decision": mean(
             float(row["first_strict_progress_decision"]) for row in selected
         ),
+        "mean_first_platform_escape_decision": mean(
+            float(row["first_platform_escape_decision"]) for row in selected
+        ),
         "mean_unique_neighborhood_count": mean(
             float(row["unique_neighborhood_count"]) for row in selected
         ),
+    }
+
+
+def _escape_diagnostics(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    if not decisions:
+        return {
+            "initial_platform_escaped": False,
+            "initial_platform_unescaped_at_three": True,
+            "first_platform_escape_decision": 64,
+            "post_escape_platform_reentry": False,
+        }
+    initial_signature = str(decisions[0]["before_platform_signature"])
+    first_escape_position = next(
+        (
+            position
+            for position, row in enumerate(decisions, start=1)
+            if str(row["after_platform_signature"]) != initial_signature
+        ),
+        None,
+    )
+    unescaped_at_three = (
+        first_escape_position is None or first_escape_position > 3
+    )
+    reentry = False
+    if first_escape_position is not None:
+        streak = 0
+        signature: str | None = None
+        for row in decisions[first_escape_position:]:
+            metrics = dict(row["actual_metrics"])
+            exact = bool(
+                metrics.get("pp_failure_reason") == "conflict_bound_exceeded"
+                and metrics.get("replan_success") is False
+                and metrics.get("pp_rolled_back") is True
+                and row["before_platform_signature"]
+                == row["after_platform_signature"]
+            )
+            if exact:
+                if signature == str(row["before_platform_signature"]):
+                    streak += 1
+                else:
+                    signature = str(row["before_platform_signature"])
+                    streak = 1
+            else:
+                signature = str(row["after_platform_signature"])
+                streak = 0
+            if streak >= 3:
+                reentry = True
+                break
+    return {
+        "initial_platform_escaped": first_escape_position is not None,
+        "initial_platform_unescaped_at_three": unescaped_at_three,
+        "first_platform_escape_decision": (
+            int(first_escape_position) if first_escape_position is not None else 64
+        ),
+        "post_escape_platform_reentry": reentry,
     }
 
 
@@ -578,6 +648,7 @@ def analyze_collection(
         if manifest.get("status") == "ok":
             decisions = _decision_rows(_collection_path(output, item), manifest)
             entered, persistent = _entered_platform(decisions)
+            escape = _escape_diagnostics(decisions)
             initial_conflicts = int(row["initial_conflicts"])
             first_progress = next(
                 (
@@ -599,6 +670,7 @@ def analyze_collection(
                 {
                     "entered_platform": entered,
                     "persistent_platform_decisions": persistent,
+                    **escape,
                     "first_strict_progress_decision": first_progress,
                     "unique_neighborhood_count": len(neighborhoods),
                     "first_requested_pp_seed": requested_seeds[0] if requested_seeds else -1,
@@ -626,7 +698,7 @@ def analyze_collection(
         arm: {
             metric: _paired_cluster_bootstrap(complete, arm, metric, replicates)
             for metric in (
-                "entered_platform",
+                "initial_platform_unescaped_at_three",
                 "success",
                 "normalized_fixed_auc",
                 "repair_iterations",
@@ -642,9 +714,9 @@ def analyze_collection(
         by_map[map_id] = {
             **arm_rows,
             **{
-                f"{arm}_platform_difference": (
-                    arm_rows[arm]["platform_rate"]
-                    - arm_rows[FROZEN_ARM]["platform_rate"]
+                f"{arm}_unescaped_at_three_difference": (
+                    arm_rows[arm]["initial_platform_unescaped_at_three_rate"]
+                    - arm_rows[FROZEN_ARM]["initial_platform_unescaped_at_three_rate"]
                 )
                 for arm in (ADAPTIVE_ARM, TARGET_ARM)
             },
@@ -652,22 +724,23 @@ def analyze_collection(
     eligible_arms = []
     for arm in (ADAPTIVE_ARM, TARGET_ARM):
         if (
-            summaries[arm]["platform_rate"] < summaries[FROZEN_ARM]["platform_rate"]
+            summaries[arm]["initial_platform_unescaped_at_three_rate"]
+            < summaries[FROZEN_ARM]["initial_platform_unescaped_at_three_rate"]
             and summaries[arm]["success_rate"] >= summaries[FROZEN_ARM]["success_rate"]
             and all(
-                values[f"{arm}_platform_difference"] <= 0.05
+                values[f"{arm}_unescaped_at_three_difference"] <= 0.05
                 for values in by_map.values()
             )
         ):
             eligible_arms.append(arm)
     final_gate_by_arm = {
         arm: {
-            "platform_bootstrap_upper_strictly_negative": bootstraps[arm]["entered_platform"]["upper_95"] < 0.0,
+            "unescaped_at_three_bootstrap_upper_strictly_negative": bootstraps[arm]["initial_platform_unescaped_at_three"]["upper_95"] < 0.0,
             "success_bootstrap_lower_nonnegative": bootstraps[arm]["success"]["lower_95"] >= 0.0,
             "auc_bootstrap_upper_nonpositive": bootstraps[arm]["normalized_fixed_auc"]["upper_95"] <= 0.0,
             "decisions_bootstrap_upper_nonpositive": bootstraps[arm]["repair_iterations"]["upper_95"] <= 0.0,
-            "no_map_platform_worse_over_five_points": all(
-                values[f"{arm}_platform_difference"] <= 0.05
+            "no_map_unescaped_at_three_worse_over_five_points": all(
+                values[f"{arm}_unescaped_at_three_difference"] <= 0.05
                 for values in by_map.values()
             ),
         }

@@ -37,16 +37,25 @@ the first PP seed within each state/trial contrast.
 - atomic episode checkpoints and stop on the first execution error or process
   timeout.
 
+The one-state implementation smoke established that ordinary platform-entry is
+not an informative outcome here: every episode starts after two exact rollback
+observations.  Before any formal episode, the mechanism outcome was therefore
+corrected to whether the initial repair signature is still unresolved after
+three further decisions.  The report also records the first escape decision and
+whether an episode enters a new three-rollback platform after escaping.
+
 The whole cohort is extended to trial 4-7 only if at least one official arm has
-a lower platform rate than the frozen controller, no lower success rate, and no
-map platform-rate worsening above five percentage points.
+a lower three-decision unresolved rate than the frozen controller, no lower
+success rate, and no map-level unresolved-rate worsening above five percentage
+points.
 
 ## Outcomes and interpretation
 
-The primary outcomes are persistent-platform entry, success, normalized fixed
-conflict AUC, restricted mean repair decisions, repair wall time, first strict
-progress, and neighborhood diversity.  Final intervals use state-clustered
-paired bootstrap resampling.
+The primary outcomes are initial-platform unresolved-at-three, success,
+normalized fixed conflict AUC, restricted mean repair decisions, repair wall
+time, first platform escape, post-escape platform re-entry, first strict
+conflict progress, and neighborhood diversity.  Final intervals use
+state-clustered paired bootstrap resampling.
 
 - Adaptive better but Target not better: method exploration/adaptation matters.
 - Target better: the frozen controller underuses failure-based neighborhoods.

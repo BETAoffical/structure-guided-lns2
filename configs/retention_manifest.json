@@ -2862,6 +2862,21 @@
       "path": "tests/evaluation/test_stride_signature_scoped_rescue_continuation.py",
       "role": "reproducibility",
       "contract": "Freeze the three arms, paired first action, 16-worker schedule, and distinct one-shot versus signature-scoped override identities."
+    },
+    {
+      "path": "experiments/stride_exactstate_controller_attribution.py",
+      "role": "reproducibility",
+      "purpose": "Compare frozen STRIDE, official Adaptive LNS2 and fixed Target-8 PP from the same complete first-repeat-stall repair states."
+    },
+    {
+      "path": "scripts/run_stride_exactstate_controller_attribution.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered 16-worker exact-state controller attribution collection and paired analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_exactstate_controller_attribution.py",
+      "role": "reproducibility",
+      "contract": "Freeze the three controller arms, complete restored-state identity, paired trial randomness, escape semantics and 16-worker schedule."
     }
   ]
 }

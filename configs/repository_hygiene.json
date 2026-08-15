@@ -78,9 +78,13 @@
         {
           "path": "experiments/stride_signature_scoped_rescue_continuation.py",
           "name": "prepare_cases"
+        },
+        {
+          "path": "experiments/stride_exactstate_controller_attribution.py",
+          "name": "prepare_cases"
         }
       ],
-      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its compatible frozen-cohort adapter."
+      "reason": "Preserve registered producer identities while documenting the compatible frozen-cohort adapters used by the completed signature-scoped screen and exact-state attribution."
     },
     {
       "functions": [
@@ -104,9 +108,13 @@
         {
           "path": "experiments/stride_signature_scoped_rescue_continuation.py",
           "name": "_status"
+        },
+        {
+          "path": "experiments/stride_exactstate_controller_attribution.py",
+          "name": "_status"
         }
       ],
-      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its compatible atomic collection status schema."
+      "reason": "Preserve registered producer identities while documenting the compatible atomic collection status schema shared by the rescue and attribution collectors."
     },
     {
       "functions": [
@@ -117,9 +125,13 @@
         {
           "path": "scripts/run_stride_signature_scoped_rescue_continuation.py",
           "name": "main"
+        },
+        {
+          "path": "scripts/run_stride_exactstate_controller_attribution.py",
+          "name": "main"
         }
       ],
-      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its intentionally compatible command interface."
+      "reason": "Preserve registered producer identities while documenting the intentionally compatible command interfaces for bounded continuation experiments."
     }
   ],
   "tracked_roles": {

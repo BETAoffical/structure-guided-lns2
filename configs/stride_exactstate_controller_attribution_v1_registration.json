@@ -6,6 +6,8 @@
   "protocol_revision": "r1_exact_first_repeat_stall_controller_contrast",
   "runtime_hash_correction_parent_commit": "64e1abace608eac89d763814d2364dc72f8ccf9d",
   "runtime_hash_correction_reason": "restore the complete already-registered proposal_dynamic portable model SHA-256 after the first smoke stopped before qualification or any episode",
+  "smoke_metric_correction_parent_commit": "ed2082e7a68684d182e244f1225ba0f76ff1501c",
+  "smoke_metric_correction_reason": "the complete one-state smoke showed platform-entry is structurally one for a first-repeat-stall starting condition; replace it before formal collection with unresolved initial signature at decision three and post-escape re-entry",
   "inputs": {
     "failure_rescue_registration": {
       "path": "configs/stride_failure_informed_rescue_continuation_v1_registration.json",
@@ -63,18 +65,18 @@
     "forbidden": "no forced common action, no retry, no explicit repair order, no PBS or GCBS"
   },
   "initial_extension_gate": {
-    "at_least_one_official_arm_platform_rate_difference_strictly_below": 0.0,
+    "at_least_one_official_arm_initial_platform_unescaped_at_three_difference_strictly_below": 0.0,
     "same_arm_success_rate_difference_minimum": 0.0,
-    "maximum_per_map_platform_rate_worsening": 0.05,
+    "maximum_per_map_initial_platform_unescaped_at_three_worsening": 0.05,
     "uniform_all_state_extension_only": true
   },
   "final_gate": {
     "paired_state_cluster_bootstrap_replicates": 10000,
-    "platform_rate_difference_95pct_upper_strictly_below": 0.0,
+    "initial_platform_unescaped_at_three_difference_95pct_upper_strictly_below": 0.0,
     "success_rate_difference_95pct_lower_minimum": 0.0,
     "normalized_fixed_auc_difference_95pct_upper_maximum": 0.0,
     "restricted_repair_decision_difference_95pct_upper_maximum": 0.0,
-    "maximum_per_map_platform_rate_worsening": 0.05
+    "maximum_per_map_initial_platform_unescaped_at_three_worsening": 0.05
   },
   "interpretation": {
     "adaptive_better_target_not_better": "adaptive neighborhood-method exploration is material; Target alone is insufficient",
