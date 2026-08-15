@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from experiments._common import (
+    CLOSED_LOOP_IMPLEMENTATION_FILES,
     NATIVE_SEMANTICS_SCHEMA,
     contained_file,
     producer_identity,
@@ -21,6 +22,16 @@ from experiments.run_output_guard import prepare_run_output
 
 
 class ProducerIdentityResumeTest(unittest.TestCase):
+    def test_closed_loop_identity_covers_low_level_deadline_sources(self) -> None:
+        required = {
+            "third_party/mapf_lns2/inc/SIPP.h",
+            "third_party/mapf_lns2/inc/SingleAgentSolver.h",
+            "third_party/mapf_lns2/inc/SpaceTimeAStar.h",
+            "third_party/mapf_lns2/src/SIPP.cpp",
+            "third_party/mapf_lns2/src/SpaceTimeAStar.cpp",
+        }
+        self.assertTrue(required <= set(CLOSED_LOOP_IMPLEMENTATION_FILES))
+
     def test_registered_input_is_hash_bound_and_contained(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -219,6 +219,41 @@ void requireExpiredPPInvocationRollsBack()
                 "expired PP invocation changed an agent path");
 }
 
+void requireOrdinaryPPKeepsUpstreamTiming(bool collect_diagnostics)
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(0);
+    InitLNS solver(instance, agents, 30, "PP", "Adaptive", 8, 0, nullptr, nullptr, 1);
+    require(solver.initialize(), "failed to initialize ordinary PP source");
+    const RepairState before = solver.getRepairState();
+    require(!before.conflict_edges.empty(), "ordinary PP source has no conflicts");
+
+    RepairAction action;
+    action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    action.agents = {
+        before.conflict_edges.front().first,
+        before.conflict_edges.front().second,
+    };
+    action.random_seed = 123;
+    action.pp_random_seed = 456;
+    action.collect_pp_diagnostics = collect_diagnostics;
+    require(action.pp_time_limit_seconds < 0.0,
+            "ordinary PP action unexpectedly requests a low-level deadline");
+    require(solver.step(action), "ordinary PP invocation did not return cleanly");
+    const RepairTransition& transition = solver.getLastTransition();
+    require(transition.requested_action.pp_time_limit_seconds < 0.0,
+            "ordinary PP invocation changed the deadline sentinel");
+    require(transition.pp_attempted_agent_count > 0,
+            "ordinary PP invocation did not start a low-level search");
+    require(transition.pp_failure_reason != PPFailureReason::TIME_LIMIT,
+            "ordinary PP invocation opted into the experimental low-level deadline");
+}
+
 bool sameState(const RepairState& left, const RepairState& right);
 
 Snapshot stepWithActionSeed(int solver_seed, int action_seed)
@@ -432,6 +467,8 @@ int main()
     requireIncompleteInitialSolutionIsNotFeasible();
     requireLowLevelDeadlineIsEnforced();
     requireExpiredPPInvocationRollsBack();
+    requireOrdinaryPPKeepsUpstreamTiming(false);
+    requireOrdinaryPPKeepsUpstreamTiming(true);
     const Snapshot first = initializeWithSeed(7);
     const Snapshot second = initializeWithSeed(7);
     require(first.conflicts == second.conflicts, "reset conflict count is not deterministic");

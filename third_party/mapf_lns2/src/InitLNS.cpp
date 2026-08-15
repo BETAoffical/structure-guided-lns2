@@ -636,7 +636,9 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     neighbor.colliding_pairs.clear();
     runtime = ((fsec)(Time::now() - start_time)).count();
     double T = min(time_limit - runtime, replan_time_limit);
-    if (transition.requested_action.pp_time_limit_seconds >= 0.0)
+    const bool enforce_low_level_deadline =
+        transition.requested_action.pp_time_limit_seconds >= 0.0;
+    if (enforce_low_level_deadline)
         T = min(T, transition.requested_action.pp_time_limit_seconds);
     T = max(0.0, T);
     auto time = Time::now();
@@ -659,10 +661,22 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
         const Path& prior_path = neighbor.old_paths[prior_path_index];
         diagnostic.path_cost_before = (int)prior_path.size() - 1;
         const set<pair<int, int>> prior_colliding_pairs = neighbor.colliding_pairs;
-        const double elapsed = ((fsec)(Time::now() - time)).count();
-        agents[id].path = agents[id].path_planner->findPath(
-            constraint_table, max(0.0, T - elapsed));
-        if (agents[id].path_planner->last_find_path_timed_out)
+        if (enforce_low_level_deadline)
+        {
+            const double elapsed = ((fsec)(Time::now() - time)).count();
+            agents[id].path = agents[id].path_planner->findPath(
+                constraint_table, max(0.0, T - elapsed));
+        }
+        else
+        {
+            // Preserve the upstream PP contract for ordinary step() calls:
+            // the repair budget is checked between agents, not inside one
+            // single-agent search.  Only the explicit timed API opts into the
+            // cooperative low-level deadline.
+            agents[id].path = agents[id].path_planner->findPath(constraint_table);
+        }
+        if (enforce_low_level_deadline &&
+            agents[id].path_planner->last_find_path_timed_out)
         {
             transition.pp_attempted_agent_count++;
             transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
@@ -785,7 +799,9 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
     neighbor.colliding_pairs.clear();
     runtime = ((fsec)(Time::now() - start_time)).count();
     double T = min(time_limit - runtime, replan_time_limit);
-    if (transition.requested_action.pp_time_limit_seconds >= 0.0)
+    const bool enforce_low_level_deadline =
+        transition.requested_action.pp_time_limit_seconds >= 0.0;
+    if (enforce_low_level_deadline)
         T = min(T, transition.requested_action.pp_time_limit_seconds);
     T = max(0.0, T);
     auto time = Time::now();
@@ -793,11 +809,19 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
     while (p != shuffled_agents.end() && ((fsec)(Time::now() - time)).count() < T)
     {
         int id = *p;
-        const double elapsed = ((fsec)(Time::now() - time)).count();
-        agents[id].path = agents[id].path_planner->findPath(
-            constraint_table, max(0.0, T - elapsed));
+        if (enforce_low_level_deadline)
+        {
+            const double elapsed = ((fsec)(Time::now() - time)).count();
+            agents[id].path = agents[id].path_planner->findPath(
+                constraint_table, max(0.0, T - elapsed));
+        }
+        else
+        {
+            agents[id].path = agents[id].path_planner->findPath(constraint_table);
+        }
         transition.pp_attempted_agent_count++;
-        if (agents[id].path_planner->last_find_path_timed_out)
+        if (enforce_low_level_deadline &&
+            agents[id].path_planner->last_find_path_timed_out)
         {
             transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
             transition.pp_failed_agent = id;

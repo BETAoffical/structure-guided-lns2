@@ -1055,7 +1055,7 @@ PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     module.attr("native_semantics_schema") =
-        "lns2.native_semantics.upstream_compatible.v1";
+        "lns2.native_semantics.official_step_timed_extension.v2";
     module.attr("repair_timing_schema") = "lns2.repair_timing.v2";
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))

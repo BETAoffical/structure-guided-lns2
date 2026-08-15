@@ -210,3 +210,29 @@ add_test(NAME lns2_official_parity_hash COMMAND
     "${PARITY_PATH}" "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf"
 )
 set_tests_properties(lns2_official_parity_hash PROPERTIES FIXTURES_REQUIRED official_paths)
+
+# Exercise the official entry point beyond initial path generation.  This hash
+# was independently reproduced from the protected 70761ac pre-deadline build;
+# unlike the maxIterations=0 fixture above, it covers InitLNS and PP repair.
+set(REPAIR_PARITY_PATH "${CMAKE_CURRENT_BINARY_DIR}/official-repair-parity-paths.txt")
+add_test(NAME lns2_official_repair_parity_run COMMAND lns_official
+    --map "${MAPF_LNS2_ROOT}/random-32-32-20.map"
+    --agents "${MAPF_LNS2_ROOT}/random-32-32-20-random-1.scen"
+    --agentNum 200
+    --cutoffTime 20
+    --maxIterations 1
+    --seed 29
+    --outputPaths "${REPAIR_PARITY_PATH}"
+)
+set_tests_properties(
+    lns2_official_repair_parity_run
+    PROPERTIES FIXTURES_SETUP official_repair_paths
+)
+add_test(NAME lns2_official_repair_parity_hash COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_path_hash.py"
+    "${REPAIR_PARITY_PATH}" "031d1bf843ada89f03be6880809bcf7632fdaeba509fd035a15657fcc93aa83a"
+)
+set_tests_properties(
+    lns2_official_repair_parity_hash
+    PROPERTIES FIXTURES_REQUIRED official_repair_paths
+)

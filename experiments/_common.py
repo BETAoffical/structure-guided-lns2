@@ -23,7 +23,7 @@ from typing import Any, Iterable
 
 
 PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v2"
-NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.upstream_compatible.v1"
+NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.official_step_timed_extension.v2"
 CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",
@@ -66,7 +66,12 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "third_party/mapf_lns2/inc/BasicLNS.h",
     "third_party/mapf_lns2/inc/InitLNS.h",
     "third_party/mapf_lns2/inc/RepairPolicy.h",
+    "third_party/mapf_lns2/inc/SIPP.h",
+    "third_party/mapf_lns2/inc/SingleAgentSolver.h",
+    "third_party/mapf_lns2/inc/SpaceTimeAStar.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
+    "third_party/mapf_lns2/src/SIPP.cpp",
+    "third_party/mapf_lns2/src/SpaceTimeAStar.cpp",
 )
 
 

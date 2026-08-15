@@ -1903,7 +1903,7 @@ class V3S3PipelineTest(unittest.TestCase):
             native_module.PortableTreeEnsemble = _PythonPortableTreeEnsemble
             native_module.repair_timing_schema = "lns2.repair_timing.v2"
             native_module.native_semantics_schema = (
-                "lns2.native_semantics.upstream_compatible.v1"
+                "lns2.native_semantics.official_step_timed_extension.v2"
             )
             native_binary = root / "lns2_env.pyd"
             native_binary.write_bytes(b"native-audit-one")

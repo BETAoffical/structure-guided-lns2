@@ -83,7 +83,7 @@ class RepairEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(
             lns2_env.native_semantics_schema,
-            "lns2.native_semantics.upstream_compatible.v1",
+            "lns2.native_semantics.official_step_timed_extension.v2",
         )
 
     def test_portable_tree_supports_raw_and_sigmoid_outputs(self) -> None:
