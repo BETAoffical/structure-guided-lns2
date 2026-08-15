@@ -10,6 +10,7 @@ from experiments.stride_hybridstructpool_raw_ttf import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_hybridstructpool_raw_ttf_quick_v1.json"
+CONFIG_V2 = ROOT / "configs" / "stride_hybridstructpool_raw_ttf_quick_v2.json"
 
 
 def test_registration_and_schedule_are_complete_and_rotated() -> None:
@@ -38,3 +39,16 @@ def test_controller_contract_keeps_official_separate_from_learned_arms() -> None
     assert hybrid["controller"] == "v2-full"
     assert hybrid["hybridstructpool_augmentation"]["full_union_required"] is True
     assert all(not row["deterministic_pp_replay"] for row in (official, v2, hybrid))
+
+
+def test_v2_registration_reuses_the_same_strict_serial_comparison() -> None:
+    _path, _root, config = load_config(CONFIG_V2)
+    rows = schedule(config)
+    assert len(rows) == 24
+    assert config["pre_registration_parent_commit"] == (
+        "52096acb6120cc02c59a352bb7f72fdb9532fb6b"
+    )
+    assert config["inputs"]["hybrid_runtime_report"]["sha256"] == (
+        "f89cecfb57e763daa34b4e284db658206ecaf516f57b366ade8914b8e809fce8"
+    )
+    assert config["comparison"]["workers_for_timed_episodes"] == 1

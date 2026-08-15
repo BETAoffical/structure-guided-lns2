@@ -30,6 +30,10 @@ CONFIG_SCHEMA = "lns2.stride.hybridstructpool_raw_ttf_quick_config.v1"
 STATUS_SCHEMA = "lns2.stride.hybridstructpool_raw_ttf_quick_status.v1"
 REPORT_SCHEMA = "lns2.stride.hybridstructpool_raw_ttf_quick_report.v1"
 EXPERIMENT_ID = "stride-hybridstructpool-raw-ttf-quick-v1"
+PRE_REGISTRATION_COMMITS = {
+    "60258ba",
+    "52096acb6120cc02c59a352bb7f72fdb9532fb6b",
+}
 CONTROLLERS = ("official_adaptive", "v2_full", "hybridstructpool_full")
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "raw_ttf_report.json"
@@ -48,7 +52,8 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
         or config.get("scientific_status")
         != "preregistered_development_quick_before_raw_ttf"
         or config.get("experiment_id") != EXPERIMENT_ID
-        or config.get("pre_registration_parent_commit") != "60258ba"
+        or str(config.get("pre_registration_parent_commit"))
+        not in PRE_REGISTRATION_COMMITS
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("Hybrid raw-TTF registration changed")
