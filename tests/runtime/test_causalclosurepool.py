@@ -6,6 +6,10 @@ import unittest
 from experiments.state_analysis import ConflictEvent, StateAnalysis
 from lns2_selector.runtime.causalclosurepool import (
     CAUSALCLOSUREPOOL_ID,
+    CausalContactEvidence,
+    _causal_context,
+    _temporal_neighbors,
+    _with_events,
     generate_causalclosure_candidates,
 )
 
@@ -55,6 +59,90 @@ def _localized_state(extra_nearby_agents: int = 1) -> tuple[dict, StateAnalysis]
 
 
 class CausalClosurePoolTest(unittest.TestCase):
+    def test_sparse_context_materializes_terminal_waits_once(self) -> None:
+        state = {
+            "agents": [
+                {"id": 0, "path": [7]},
+                {"id": 1, "path": [8, 9, 10]},
+            ],
+            "conflict_edges": [],
+        }
+        context = _causal_context(
+            state,
+            relevant_times=frozenset({0, 1, 2}),
+            horizon=3,
+        )
+
+        self.assertEqual(context.paths[0], (7, 7, 7))
+        self.assertEqual(context.paths[1], (8, 9, 10))
+        self.assertEqual(context.occupancy[(2, 7)], frozenset({0}))
+
+    def test_integer_temporal_accumulator_matches_reference_evidence(self) -> None:
+        state, analysis = _localized_state(extra_nearby_agents=3)
+        horizon = max(len(row["path"]) for row in state["agents"])
+        times = frozenset(range(horizon))
+        context = _with_events(
+            _causal_context(state, relevant_times=times, horizon=horizon),
+            analysis,
+        )
+
+        def reference(agent: int, radius: int, bottleneck_only: bool):
+            result: dict[int, list[int]] = {}
+            path = context.paths[agent]
+            for source_time in times:
+                cell = path[source_time]
+                bottleneck = (
+                    cell in analysis.articulation
+                    or int(analysis.degrees.get(cell, 4)) <= 2
+                )
+                if bottleneck_only and not bottleneck:
+                    continue
+                for delta in range(-radius, radius + 1):
+                    other_time = source_time + delta
+                    if other_time not in times:
+                        continue
+                    for other in context.occupancy.get((other_time, cell), ()):
+                        if other == agent:
+                            continue
+                        values = result.setdefault(other, [0, 0, 0, 0, 0])
+                        values[1] += int(delta == 0)
+                        values[2] += int(delta != 0)
+                        values[4] += int(bottleneck)
+                    if source_time == 0 or other_time == 0:
+                        continue
+                    previous = path[source_time - 1]
+                    if previous == cell:
+                        continue
+                    for other in context.transitions.get(
+                        (other_time, cell, previous), ()
+                    ):
+                        if other == agent:
+                            continue
+                        values = result.setdefault(other, [0, 0, 0, 0, 0])
+                        values[1] += int(delta == 0)
+                        values[2] += int(delta != 0)
+                        values[3] += 1
+                        values[4] += int(bottleneck)
+            return {
+                other: CausalContactEvidence(*values)
+                for other, values in result.items()
+            }
+
+        for agent in range(len(state["agents"])):
+            for radius in (0, 2):
+                for bottleneck_only in (False, True):
+                    self.assertEqual(
+                        _temporal_neighbors(
+                            context,
+                            analysis,
+                            agent,
+                            times,
+                            temporal_radius=radius,
+                            bottleneck_only=bottleneck_only,
+                        ),
+                        reference(agent, radius, bottleneck_only),
+                    )
+
     def test_far_full_path_overlap_cannot_enter_local_closure(self) -> None:
         state, analysis = _localized_state()
         anchor = {"candidate_id": "v2-anchor", "agents": [0, 1]}

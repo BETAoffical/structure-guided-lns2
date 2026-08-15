@@ -36,7 +36,7 @@ HYBRID_GROUP_ORDER = (
 _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
     "enabled": True,
     "pool_id": HYBRIDSTRUCTPOOL_ID,
-    "runtime_id": "stride-hybridstructpool-full-engineered-runtime-v3",
+    "runtime_id": "stride-hybridstructpool-full-engineered-runtime-v4",
     "full_union_required": True,
     "full_union_audit_preserved": True,
     "runtime_filter_id": "none",

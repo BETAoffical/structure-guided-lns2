@@ -457,13 +457,18 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
         gate.update(
             {
                 "full_runtime_success_preserved": hybrid["success_rate"]
-                >= float(baseline["success_rate"]),
+                >= float(baseline["success_rate"])
+                - float(engineering.get("maximum_success_rate_decrease", 0.0)),
                 "full_runtime_auc_preserved": hybrid["mean_normalized_fixed_auc"]
-                <= float(baseline["mean_normalized_fixed_auc"]),
+                <= float(baseline["mean_normalized_fixed_auc"])
+                + float(engineering.get("maximum_auc_increase", 0.0)),
                 "full_runtime_repair_decisions_preserved": hybrid[
                     "restricted_mean_repair_decisions"
                 ]
-                <= float(baseline["restricted_mean_repair_decisions"]),
+                <= float(baseline["restricted_mean_repair_decisions"])
+                + float(
+                    engineering.get("maximum_repair_decision_increase", 0.0)
+                ),
                 "full_runtime_platform_preserved": hybrid["platform_entry_rate"]
                 <= float(baseline["platform_entry_rate"])
                 + float(engineering["maximum_platform_rate_worsening"]),

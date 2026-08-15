@@ -64,10 +64,6 @@ class CausalClosurePoolResult:
     core_attempt_count: int
 
 
-def _position(path: tuple[int, ...], time: int) -> int:
-    return int(path[min(int(time), len(path) - 1)])
-
-
 def _causal_context(
     state: dict[str, Any], *, relevant_times: frozenset[int], horizon: int
 ) -> _CausalContext:
@@ -76,28 +72,30 @@ def _causal_context(
         raise ValueError("CausalClosurePool requires agents")
     if not relevant_times or min(relevant_times) < 0:
         raise ValueError("CausalClosurePool requires non-negative relevant times")
-    paths = {
+    raw_paths = {
         agent: tuple(map(int, row["path"])) for agent, row in rows.items()
     }
-    if any(not path for path in paths.values()):
+    if any(not path for path in raw_paths.values()):
         raise ValueError("CausalClosurePool requires non-empty paths")
     if horizon <= max(relevant_times):
         raise ValueError("CausalClosurePool relevant times exceed the path horizon")
     ordered_times = tuple(sorted(relevant_times))
+    # PP semantics keep an agent at its terminal cell after its explicit path
+    # ends.  Materialize that extension once so the thousands of causal-contact
+    # lookups below can use direct tuple indexing instead of repeatedly taking
+    # ``min(time, len(path) - 1)``.  The padded paths are internal only and do
+    # not change candidate identity or any recorded path.
+    paths = {
+        agent: path + (path[-1],) * (horizon - len(path))
+        for agent, path in raw_paths.items()
+    }
     occupancy: dict[tuple[int, int], set[int]] = collections.defaultdict(set)
     transitions: dict[tuple[int, int, int], set[int]] = collections.defaultdict(set)
     for agent, path in paths.items():
-        path_length = len(path)
-        terminal = path[-1]
         for time in ordered_times:
-            cell = path[time] if time < path_length else terminal
+            cell = path[time]
             occupancy[(time, cell)].add(agent)
-            previous_time = time - 1
-            previous = (
-                path[previous_time]
-                if previous_time < path_length
-                else terminal
-            ) if time else cell
+            previous = path[time - 1] if time else cell
             if time and previous != cell:
                 transitions[(time, previous, cell)].add(agent)
     adjacency: dict[int, set[int]] = {agent: set() for agent in paths}
@@ -197,10 +195,14 @@ def _temporal_neighbors(
     temporal_radius: int,
     bottleneck_only: bool,
 ) -> dict[int, CausalContactEvidence]:
-    result: dict[int, CausalContactEvidence] = {}
+    # Accumulate primitive counters in place and instantiate the immutable
+    # evidence records only once per neighbor.  The former implementation
+    # rebuilt a dataclass on every reservation contact, which dominates this
+    # hot loop on long Maze paths.
+    counters: dict[int, list[int]] = {}
     path = context.paths[agent]
     for source_time in causal_times:
-        cell = _position(path, source_time)
+        cell = path[source_time]
         bottleneck = cell in analysis.articulation or int(analysis.degrees.get(cell, 4)) <= 2
         if bottleneck_only and not bottleneck:
             continue
@@ -211,28 +213,27 @@ def _temporal_neighbors(
             for other in context.occupancy.get((other_time, cell), ()):
                 if other == agent:
                     continue
-                result[other] = _merge_evidence(
-                    result.get(other),
-                    exact_reservations=int(delta == 0),
-                    nearby_reservations=int(delta != 0),
-                    bottleneck_contacts=int(bottleneck),
-                )
+                values = counters.setdefault(other, [0, 0, 0, 0, 0])
+                values[1] += int(delta == 0)
+                values[2] += int(delta != 0)
+                values[4] += int(bottleneck)
             if source_time == 0 or other_time == 0:
                 continue
-            previous = _position(path, source_time - 1)
+            previous = path[source_time - 1]
             if previous == cell:
                 continue
             for other in context.transitions.get((other_time, cell, previous), ()):
                 if other == agent:
                     continue
-                result[other] = _merge_evidence(
-                    result.get(other),
-                    exact_reservations=int(delta == 0),
-                    nearby_reservations=int(delta != 0),
-                    reverse_edges=1,
-                    bottleneck_contacts=int(bottleneck),
-                )
-    return result
+                values = counters.setdefault(other, [0, 0, 0, 0, 0])
+                values[1] += int(delta == 0)
+                values[2] += int(delta != 0)
+                values[3] += 1
+                values[4] += int(bottleneck)
+    return {
+        other: CausalContactEvidence(*values)
+        for other, values in counters.items()
+    }
 
 
 def _closure_draft(

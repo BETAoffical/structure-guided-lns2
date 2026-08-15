@@ -17,6 +17,9 @@ OPTIMIZED_CONFIG = ROOT / (
 FULL_OPTIMIZED_CONFIG = ROOT / (
     "configs/stride_hybridstructpool_runtime_optimization_v3_registration.json"
 )
+CAUSAL_HOTLOOP_CONFIG = ROOT / (
+    "configs/stride_hybridstructpool_runtime_optimization_v4_registration.json"
+)
 
 
 def test_registration_reuses_the_complete_registered_maze_cohort() -> None:
@@ -73,3 +76,19 @@ def test_full_optimized_registration_forbids_candidate_compression() -> None:
             "mean_hybrid_total_seconds"
         ]
     ) < 1e-12
+
+
+def test_causal_hotloop_registration_preserves_full_pool_and_requires_speedup() -> None:
+    _path, _root, config, _source, tasks = load_registration(CAUSAL_HOTLOOP_CONFIG)
+    assert len(tasks) == 19
+    optimization = config["runtime_optimization"]
+    assert optimization["full_union_required"]
+    assert optimization["terminal_wait_paths_materialized_once"]
+    assert optimization["integer_contact_evidence_accumulator"]
+    engineering = config["engineering_gate"]
+    baseline = engineering["registered_full_runtime_baseline"]
+    assert engineering["maximum_mean_hybrid_total_seconds"] == 0.9 * baseline[
+        "mean_hybrid_total_seconds"
+    ]
+    assert engineering["maximum_success_rate_decrease"] == 0.0
+    assert config["claim_boundary"]["not_default_pool_promotion"]
