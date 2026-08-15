@@ -37,6 +37,7 @@ class StructuralCandidateContext:
     component_seed_data: tuple[set[int], collections.Counter[int]] | None
     hotspot_seed_data: tuple[set[int], collections.Counter[int]] | None
     overlap_seed_data: tuple[list[int], dict[int, float]] | None
+    audit_index: TopologyCandidateAuditIndex
     audit_cache: dict[tuple[int, ...], dict[str, float]]
     finalized_cache: dict[tuple[int, ...], dict[str, Any]]
 
@@ -74,6 +75,17 @@ class ScalePoolGenerationResult:
     candidates: list[dict[str, Any]]
     attempts: list[dict[str, Any]]
     raw_candidate_count: int
+
+
+@dataclass(frozen=True)
+class TopologyCandidateAuditIndex:
+    """Conflict incidence reused by every candidate audited in one state."""
+
+    event_neighbors: dict[int, dict[int, int]]
+    event_incident_counts: dict[int, int]
+    pair_neighbors: dict[int, frozenset[int]]
+    event_count: int
+    pair_count: int
 
 
 def _neighborhood_context(state: dict[str, Any]) -> _NeighborhoodContext:
@@ -273,8 +285,45 @@ def generate_topology_anchor_candidates(
     return sorted(by_agents.values(), key=lambda row: str(row["candidate_id"]))
 
 
+def topology_candidate_audit_index(
+    analysis: StateAnalysis,
+) -> TopologyCandidateAuditIndex:
+    event_neighbors: dict[int, collections.Counter[int]] = collections.defaultdict(
+        collections.Counter
+    )
+    event_incident_counts: collections.Counter[int] = collections.Counter()
+    for event in analysis.events:
+        left = int(event.left)
+        right = int(event.right)
+        event_neighbors[left][right] += 1
+        event_neighbors[right][left] += 1
+        event_incident_counts[left] += 1
+        event_incident_counts[right] += 1
+    pair_neighbors: dict[int, set[int]] = collections.defaultdict(set)
+    for left, right in analysis.pair_set:
+        left = int(left)
+        right = int(right)
+        pair_neighbors[left].add(right)
+        pair_neighbors[right].add(left)
+    return TopologyCandidateAuditIndex(
+        event_neighbors={
+            agent: dict(counts) for agent, counts in event_neighbors.items()
+        },
+        event_incident_counts=dict(event_incident_counts),
+        pair_neighbors={
+            agent: frozenset(neighbors)
+            for agent, neighbors in pair_neighbors.items()
+        },
+        event_count=len(analysis.events),
+        pair_count=len(analysis.pair_set),
+    )
+
+
 def topology_candidate_audit(
-    analysis: StateAnalysis, selected_agents: Iterable[int]
+    analysis: StateAnalysis,
+    selected_agents: Iterable[int],
+    *,
+    audit_index: TopologyCandidateAuditIndex | None = None,
 ) -> dict[str, float]:
     """Return outcome-free conflict coverage diagnostics for one neighborhood."""
 
@@ -282,35 +331,39 @@ def topology_candidate_audit(
     if not selected:
         raise ValueError("topology candidate audit requires a non-empty neighborhood")
     known = set(analysis.component_id)
-    event_count = len(analysis.events)
-    pair_count = len(analysis.pair_set)
-
-    def counts(items: Iterable[Any]) -> tuple[int, int, int]:
-        internal = 0
-        incident = 0
-        boundary = 0
-        for item in items:
-            left = int(item.left if hasattr(item, "left") else item[0])
-            right = int(item.right if hasattr(item, "right") else item[1])
-            left_selected = left in selected
-            right_selected = right in selected
-            internal += int(left_selected and right_selected)
-            incident += int(left_selected or right_selected)
-            boundary += int(left_selected != right_selected)
-        return internal, incident, boundary
-
-    event_internal, event_incident, event_boundary = counts(analysis.events)
-    pair_internal, pair_incident, pair_boundary = counts(sorted(analysis.pair_set))
+    audit_index = audit_index or topology_candidate_audit_index(analysis)
+    event_internal = sum(
+        count
+        for left in selected
+        for right, count in audit_index.event_neighbors.get(left, {}).items()
+        if left < right and right in selected
+    )
+    event_degree_sum = sum(
+        audit_index.event_incident_counts.get(agent, 0) for agent in selected
+    )
+    event_boundary = event_degree_sum - 2 * event_internal
+    event_incident = event_degree_sum - event_internal
+    pair_internal = sum(
+        1
+        for left in selected
+        for right in audit_index.pair_neighbors.get(left, ())
+        if left < right and right in selected
+    )
+    pair_degree_sum = sum(
+        len(audit_index.pair_neighbors.get(agent, ())) for agent in selected
+    )
+    pair_boundary = pair_degree_sum - 2 * pair_internal
+    pair_incident = pair_degree_sum - pair_internal
     reached_components = {
         int(analysis.component_id[agent]) for agent in selected if agent in known
     }
     component_count = len(analysis.component_members)
     return {
-        "global_event_incident_coverage": event_incident / event_count if event_count else 0.0,
-        "global_event_internal_coverage": event_internal / event_count if event_count else 0.0,
+        "global_event_incident_coverage": event_incident / audit_index.event_count if audit_index.event_count else 0.0,
+        "global_event_internal_coverage": event_internal / audit_index.event_count if audit_index.event_count else 0.0,
         "global_event_boundary_ratio": event_boundary / event_incident if event_incident else 0.0,
-        "global_pair_incident_coverage": pair_incident / pair_count if pair_count else 0.0,
-        "global_pair_internal_coverage": pair_internal / pair_count if pair_count else 0.0,
+        "global_pair_incident_coverage": pair_incident / audit_index.pair_count if audit_index.pair_count else 0.0,
+        "global_pair_internal_coverage": pair_internal / audit_index.pair_count if audit_index.pair_count else 0.0,
         "global_pair_boundary_ratio": pair_boundary / pair_incident if pair_incident else 0.0,
         "conflict_component_reach": (
             len(reached_components) / component_count if component_count else 0.0
@@ -829,6 +882,7 @@ def _structural_candidate_context(
             if include_path_overlap
             else None
         ),
+        audit_index=topology_candidate_audit_index(analysis),
         audit_cache={},
         finalized_cache={},
     )
@@ -1038,7 +1092,11 @@ def _finalize_structpool_candidate(
         return cached
     audit = context.audit_cache.get(candidate.agents)
     if audit is None:
-        audit = topology_candidate_audit(context.analysis, candidate.agents)
+        audit = topology_candidate_audit(
+            context.analysis,
+            candidate.agents,
+            audit_index=context.audit_index,
+        )
         context.audit_cache[candidate.agents] = audit
     families = list(candidate.selection_families)
     family_groups = list(candidate.family_groups)
@@ -1661,6 +1719,7 @@ def merge_topology_anchor_candidates(
 __all__ = [
     "StructuralCandidateContext",
     "StructuralCandidateDraft",
+    "TopologyCandidateAuditIndex",
     "finalize_structpool_candidates",
     "generate_structpool_candidate_drafts",
     "generate_structpool_candidate_grid",
@@ -1672,4 +1731,5 @@ __all__ = [
     "merge_topology_anchor_candidates",
     "reduce_structpool_candidates",
     "topology_candidate_audit",
+    "topology_candidate_audit_index",
 ]

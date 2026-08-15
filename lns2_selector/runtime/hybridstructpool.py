@@ -320,9 +320,9 @@ def merge_hybridstructpool_candidates(
     """
 
     sources = (
-        ("v2_base", [dict(row) for row in base_candidates]),
-        ("structshell_equal_four_size", [dict(row) for row in structural_candidates]),
-        ("causalclosure_v2", [dict(row) for row in causal_candidates]),
+        ("v2_base", list(base_candidates)),
+        ("structshell_equal_four_size", list(structural_candidates)),
+        ("causalclosure_v2", list(causal_candidates)),
     )
     merged: dict[tuple[int, ...], dict[str, Any]] = {}
     provenance: dict[tuple[int, ...], set[str]] = {}
@@ -391,8 +391,8 @@ def generate_hybridstructpool_candidates(
     sizes = tuple(sorted(set(map(int, structural_sizes))))
     if sizes != STRUCTURAL_SIZES:
         raise ValueError("HybridStructPool requires symmetric sizes 8, 16, 24, and 32")
-    base = [dict(row) for row in v2_candidates]
-    anchors = [dict(row) for row in v2_anchors]
+    base = list(v2_candidates)
+    anchors = list(v2_anchors)
     if not base or not anchors:
         raise ValueError("HybridStructPool requires the full V2 pool and a V2 anchor")
     structural = generate_structpool_candidate_grid(
@@ -408,7 +408,10 @@ def generate_hybridstructpool_candidates(
         maximum_jaccard_similarity=maximum_causal_jaccard,
     )
     result = merge_hybridstructpool_candidates(base, structural, causal.candidates)
-    result.causal_attempts = copy.deepcopy(causal.attempts)
+    # ``causal`` is local to this call and its attempts are never mutated by
+    # the Hybrid result, so transferring the list avoids a large diagnostic
+    # deep copy without weakening input isolation.
+    result.causal_attempts = causal.attempts
     return result
 
 
@@ -438,8 +441,8 @@ def generate_hybridstructpool_runtime_candidates(
     }
     if normalized != RUNTIME_STRUCTURAL_FAMILY_SIZES:
         raise ValueError("unsupported HybridStructPool runtime structural mask")
-    base = [dict(row) for row in v2_candidates]
-    anchors = [dict(row) for row in v2_anchors]
+    base = list(v2_candidates)
+    anchors = list(v2_anchors)
     if not base or not anchors:
         raise ValueError("HybridStructPool requires the full V2 pool and a V2 anchor")
     structural = generate_structpool_candidate_subset(
@@ -457,7 +460,7 @@ def generate_hybridstructpool_runtime_candidates(
         maximum_jaccard_similarity=maximum_causal_jaccard,
     )
     result = merge_hybridstructpool_candidates(base, structural, causal.candidates)
-    result.causal_attempts = copy.deepcopy(causal.attempts)
+    result.causal_attempts = causal.attempts
     return result
 
 

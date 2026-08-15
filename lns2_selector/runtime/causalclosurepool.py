@@ -6,7 +6,12 @@ from typing import Any, Iterable
 
 from experiments.neighborhood_candidates import candidate_id
 from experiments.state_analysis import ConflictEvent, StateAnalysis
-from lns2_selector.runtime.topology_candidates import _jaccard, topology_candidate_audit
+from lns2_selector.runtime.topology_candidates import (
+    TopologyCandidateAuditIndex,
+    _jaccard,
+    topology_candidate_audit,
+    topology_candidate_audit_index,
+)
 
 
 CAUSALCLOSUREPOOL_ID = "stride-causalclosurepool-v2"
@@ -34,9 +39,8 @@ class CausalContactEvidence:
 class _CausalContext:
     paths: dict[int, tuple[int, ...]]
     horizon: int
-    occupancy: dict[tuple[int, int], frozenset[int]]
-    transitions: dict[tuple[int, int, int], frozenset[int]]
-    conflict_adjacency: dict[int, frozenset[int]]
+    occupancy: dict[tuple[int, int], set[int]]
+    transitions: dict[tuple[int, int, int], set[int]]
     events_by_agent: dict[int, tuple[ConflictEvent, ...]]
 
 
@@ -98,20 +102,20 @@ def _causal_context(
             previous = path[time - 1] if time else cell
             if time and previous != cell:
                 transitions[(time, previous, cell)].add(agent)
-    adjacency: dict[int, set[int]] = {agent: set() for agent in paths}
+    known_agents = set(paths)
     for edge in state.get("conflict_edges", []):
         left, right = sorted(map(int, edge))
-        if left not in paths or right not in paths:
+        if left not in known_agents or right not in known_agents:
             raise ValueError("CausalClosurePool conflict edge references unknown agent")
-        adjacency[left].add(right)
-        adjacency[right].add(left)
     events_by_agent: dict[int, list[ConflictEvent]] = collections.defaultdict(list)
     return _CausalContext(
         paths=paths,
         horizon=horizon,
-        occupancy={key: frozenset(value) for key, value in occupancy.items()},
-        transitions={key: frozenset(value) for key, value in transitions.items()},
-        conflict_adjacency={key: frozenset(value) for key, value in adjacency.items()},
+        # These indexes are private to the immutable decision context and are
+        # read-only after construction.  Keeping the already-built sets avoids
+        # copying every populated bucket into a second container.
+        occupancy=dict(occupancy),
+        transitions=dict(transitions),
         events_by_agent=events_by_agent,
     )
 
@@ -128,7 +132,6 @@ def _with_events(
         horizon=context.horizon,
         occupancy=context.occupancy,
         transitions=context.transitions,
-        conflict_adjacency=context.conflict_adjacency,
         events_by_agent={
             agent: tuple(sorted(events, key=lambda item: (item.time, item.kind, item.left, item.right)))
             for agent, events in events_by_agent.items()
@@ -213,7 +216,10 @@ def _temporal_neighbors(
             for other in context.occupancy.get((other_time, cell), ()):
                 if other == agent:
                     continue
-                values = counters.setdefault(other, [0, 0, 0, 0, 0])
+                values = counters.get(other)
+                if values is None:
+                    values = [0, 0, 0, 0, 0]
+                    counters[other] = values
                 values[1] += int(delta == 0)
                 values[2] += int(delta != 0)
                 values[4] += int(bottleneck)
@@ -225,7 +231,10 @@ def _temporal_neighbors(
             for other in context.transitions.get((other_time, cell, previous), ()):
                 if other == agent:
                     continue
-                values = counters.setdefault(other, [0, 0, 0, 0, 0])
+                values = counters.get(other)
+                if values is None:
+                    values = [0, 0, 0, 0, 0]
+                    counters[other] = values
                 values[1] += int(delta == 0)
                 values[2] += int(delta != 0)
                 values[3] += 1
@@ -291,7 +300,7 @@ def _closure_draft(
     if temporal_radius is not None and causal_times:
         frontier = set(selected)
         while frontier:
-            additions: dict[int, CausalContactEvidence] = {}
+            addition_counters: dict[int, list[int]] = {}
             for agent in sorted(frontier):
                 cache_key = (
                     int(agent),
@@ -318,16 +327,17 @@ def _closure_draft(
                 for other, support in supports.items():
                     if other in selected:
                         continue
-                    additions[other] = _merge_evidence(
-                        additions.get(other),
-                        exact_reservations=support.exact_reservations,
-                        nearby_reservations=support.nearby_reservations,
-                        reverse_edges=support.reverse_edges,
-                        bottleneck_contacts=support.bottleneck_contacts,
-                    )
-            if not additions:
+                    values = addition_counters.get(other)
+                    if values is None:
+                        values = [0, 0, 0, 0, 0]
+                        addition_counters[other] = values
+                    values[1] += int(support.exact_reservations)
+                    values[2] += int(support.nearby_reservations)
+                    values[3] += int(support.reverse_edges)
+                    values[4] += int(support.bottleneck_contacts)
+            if not addition_counters:
                 break
-            proposed = selected | set(additions)
+            proposed = selected | set(addition_counters)
             if len(proposed) > maximum_neighborhood_size:
                 return None, {
                     "core_id": core_id,
@@ -340,14 +350,14 @@ def _closure_draft(
                 }
             depth += 1
             selected = proposed
-            frontier = set(additions)
-            for other, support in additions.items():
+            frontier = set(addition_counters)
+            for other, values in addition_counters.items():
                 evidence[other] = _merge_evidence(
                     evidence.get(other),
-                    exact_reservations=support.exact_reservations,
-                    nearby_reservations=support.nearby_reservations,
-                    reverse_edges=support.reverse_edges,
-                    bottleneck_contacts=support.bottleneck_contacts,
+                    exact_reservations=values[1],
+                    nearby_reservations=values[2],
+                    reverse_edges=values[3],
+                    bottleneck_contacts=values[4],
                 )
     support_edge_count = sum(sum(value.as_tuple()) for value in evidence.values())
     return _CausalDraft(
@@ -368,6 +378,7 @@ def _materialize(
     analysis: StateAnalysis,
     drafts: list[_CausalDraft],
     agent_count: int,
+    audit_index: TopologyCandidateAuditIndex,
 ) -> dict[str, Any]:
     representative = min(
         drafts,
@@ -377,7 +388,11 @@ def _materialize(
             draft.core_id,
         ),
     )
-    audit = topology_candidate_audit(analysis, representative.agents)
+    audit = topology_candidate_audit(
+        analysis,
+        representative.agents,
+        audit_index=audit_index,
+    )
     evidence: dict[int, list[int]] = {}
     for draft in drafts:
         for agent, values in draft.evidence_by_agent:
@@ -672,6 +687,7 @@ def generate_causalclosure_candidates(
     for draft in drafts:
         grouped[draft.agents].append(draft)
     rows: list[dict[str, Any]] = []
+    audit_index = topology_candidate_audit_index(analysis)
     for agents, variants in sorted(grouped.items()):
         duplicate = base_sets.get(agents)
         if duplicate is not None:
@@ -684,7 +700,7 @@ def generate_causalclosure_candidates(
                 }
             )
             continue
-        rows.append(_materialize(analysis, variants, agent_count))
+        rows.append(_materialize(analysis, variants, agent_count, audit_index))
     if not rows:
         return CausalClosurePoolResult(
             [],

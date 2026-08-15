@@ -244,6 +244,71 @@ class TopologyCandidatesTest(unittest.TestCase):
         )
         return state, analysis
 
+    def test_indexed_candidate_audit_matches_direct_conflict_scans(self) -> None:
+        _state, analysis = self._structpool_state()
+        index = topology_candidates.topology_candidate_audit_index(analysis)
+
+        def reference(selected_agents: list[int]) -> dict[str, float]:
+            selected = set(selected_agents)
+
+            def counts(items: list[object]) -> tuple[int, int, int]:
+                internal = incident = boundary = 0
+                for item in items:
+                    if isinstance(item, ConflictEvent):
+                        left, right = int(item.left), int(item.right)
+                    else:
+                        left, right = map(int, item)
+                    left_selected = left in selected
+                    right_selected = right in selected
+                    internal += int(left_selected and right_selected)
+                    incident += int(left_selected or right_selected)
+                    boundary += int(left_selected != right_selected)
+                return internal, incident, boundary
+
+            event_internal, event_incident, event_boundary = counts(
+                list(analysis.events)
+            )
+            pair_internal, pair_incident, pair_boundary = counts(
+                list(sorted(analysis.pair_set))
+            )
+            reached = {
+                int(analysis.component_id[agent])
+                for agent in selected
+                if agent in analysis.component_id
+            }
+            return {
+                "global_event_incident_coverage": event_incident
+                / len(analysis.events),
+                "global_event_internal_coverage": event_internal
+                / len(analysis.events),
+                "global_event_boundary_ratio": event_boundary
+                / event_incident
+                if event_incident
+                else 0.0,
+                "global_pair_incident_coverage": pair_incident
+                / len(analysis.pair_set),
+                "global_pair_internal_coverage": pair_internal
+                / len(analysis.pair_set),
+                "global_pair_boundary_ratio": pair_boundary
+                / pair_incident
+                if pair_incident
+                else 0.0,
+                "conflict_component_reach": len(reached)
+                / len(analysis.component_members),
+            }
+
+        generator = random.Random(20260816)
+        for size in (1, 4, 8, 16, 32, 40):
+            selected = generator.sample(range(40), size)
+            self.assertEqual(
+                topology_candidates.topology_candidate_audit(
+                    analysis,
+                    selected,
+                    audit_index=index,
+                ),
+                reference(selected),
+            )
+
     def test_incident_index_optimization_preserves_reference_actions(self) -> None:
         for seed in range(12):
             generator = random.Random(seed)

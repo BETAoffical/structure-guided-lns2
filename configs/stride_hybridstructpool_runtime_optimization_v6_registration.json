@@ -1,0 +1,90 @@
+{
+  "schema": "lns2.stride.hybridstructpool_runtime_pilot_registration.v1",
+  "scientific_status": "preregistered_pool_only_initial_path_runtime_pilot",
+  "experiment_id": "stride-hybridstructpool-runtime-pilot-v1",
+  "preregistration_parent_commit": "de535ff15023e7b196a02a2d3c7a54d20b4cc6e2",
+  "source_registration": {
+    "path": "configs/stride_onpolicy_controller_attribution_v1_r2_registration.json",
+    "sha256": "da1e3701071f8e7bcc6f2bcee31bc02ee40c0c912af6f1f3bcb4e6e7af450905"
+  },
+  "cohort": {
+    "unique_task_solver_key_count": 19,
+    "map_counts": {"maze-128-128-1": 7, "maze-128-128-2": 3, "maze-32-32-4": 9},
+    "start_state": "registered original InitLNS path at decision_index zero",
+    "outcome_enriched": true,
+    "maze_only": true
+  },
+  "arms": ["v2_full", "hybridstructpool_full"],
+  "arm_semantics": {
+    "v2_full": "unchanged frozen V2 pool",
+    "hybridstructpool_full": "complete V2, complete 24-cell structural grid and complete retained CausalClosure frontier; only conflict-audit indexing and allocation-elision engineering changes"
+  },
+  "execution": {
+    "trial_indices": [0, 1, 2, 3],
+    "worker_count": 16,
+    "maximum_repair_decisions": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "native_pp_order_only": true,
+    "failure_rescue_enabled": false,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "runtime_optimization": {
+    "full_union_required": true,
+    "complete_structural_family_size_cell_count": 24,
+    "structural_filtering_enabled": false,
+    "v2_pool_complete": true,
+    "causal_frontier_complete": true,
+    "shared_topology_candidate_audit_index": true,
+    "event_and_pair_incidence_formula_exact": true,
+    "causal_bucket_copy_elided": true,
+    "temporal_counter_allocate_on_first_contact": true,
+    "frontier_evidence_primitive_accumulator": true,
+    "causal_diagnostic_ownership_transferred": true,
+    "complete_result_sha256_must_match_v5": true,
+    "not_cross_decision_cache": true
+  },
+  "initial_gate": {
+    "complete_paired_episode_count": 152,
+    "zero_execution_error_or_process_timeout": true,
+    "hybrid_success_rate_not_below_v2": true,
+    "hybrid_mean_normalized_fixed_auc_not_above_v2": true,
+    "hybrid_mean_repair_decisions_not_above_v2": true,
+    "hybrid_mean_capped_wall_not_above_v2": true,
+    "maximum_per_map_platform_entry_worsening": 0.05
+  },
+  "engineering_gate": {
+    "registered_full_runtime_baseline": {
+      "report_path": "build/stride-hybridstructpool-runtime-optimization-v5/initial_report.json",
+      "report_sha256": "1c31711820da7cc2bced78240f5ff62bc7288e651629699a83dde7bb63cdf7a0",
+      "success_rate": 0.7368421052631579,
+      "mean_normalized_fixed_auc": 0.16464329654909174,
+      "restricted_mean_repair_decisions": 29.46875,
+      "platform_entry_rate": 0.5263157894736842,
+      "mean_controller_seconds": 9.932913192092162,
+      "mean_candidate_generation_seconds": 7.802398490934245,
+      "mean_hybrid_total_seconds": 7.888948161802649
+    },
+    "maximum_success_rate_decrease": 0.0,
+    "maximum_auc_increase": 0.002,
+    "maximum_repair_decision_increase": 0.5,
+    "maximum_platform_rate_worsening": 0.05,
+    "maximum_mean_controller_seconds": 8.939621872882946,
+    "maximum_mean_candidate_generation_seconds": 7.022158641840821,
+    "maximum_mean_hybrid_total_seconds": 7.100053345622384,
+    "maximum_per_map_capped_wall_ratio": 1.30
+  },
+  "claim_boundary": {
+    "pool_only": true,
+    "engineering_optimization_only": true,
+    "not_candidate_compression": true,
+    "not_rescue_evidence": true,
+    "not_raw_ttf": true,
+    "not_result_blind": true,
+    "not_non_maze_generalization": true,
+    "not_default_pool_promotion": true
+  }
+}
