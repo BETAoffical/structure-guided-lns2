@@ -127,7 +127,17 @@ class CausalClosurePoolTest(unittest.TestCase):
 
         self.assertEqual(context.paths[0], (7, 7, 7))
         self.assertEqual(context.paths[1], (8, 9, 10))
-        self.assertEqual(context.occupancy[(2, 7)], frozenset({0}))
+        self.assertEqual(
+            context.occupancy[2 * context.cell_stride + 7], frozenset({0})
+        )
+
+    def test_integer_reservation_keys_reject_negative_cells(self) -> None:
+        state = {
+            "agents": [{"id": 0, "path": [0, -1]}],
+            "conflict_edges": [],
+        }
+        with self.assertRaisesRegex(ValueError, "non-negative cell ids"):
+            _causal_context(state, relevant_times=frozenset({0, 1}), horizon=2)
 
     def test_integer_temporal_accumulator_matches_reference_evidence(self) -> None:
         state, analysis = _localized_state(extra_nearby_agents=3)
@@ -153,7 +163,9 @@ class CausalClosurePoolTest(unittest.TestCase):
                     other_time = source_time + delta
                     if other_time not in times:
                         continue
-                    for other in context.occupancy.get((other_time, cell), ()):
+                    for other in context.occupancy.get(
+                        other_time * context.cell_stride + cell, ()
+                    ):
                         if other == agent:
                             continue
                         values = result.setdefault(other, [0, 0, 0, 0, 0])
@@ -165,9 +177,12 @@ class CausalClosurePoolTest(unittest.TestCase):
                     previous = path[source_time - 1]
                     if previous == cell:
                         continue
-                    for other in context.transitions.get(
-                        (other_time, cell, previous), ()
-                    ):
+                    reverse_key = (
+                        (other_time * context.cell_stride + cell)
+                        * context.cell_stride
+                        + previous
+                    )
+                    for other in context.transitions.get(reverse_key, ()):
                         if other == agent:
                             continue
                         values = result.setdefault(other, [0, 0, 0, 0, 0])

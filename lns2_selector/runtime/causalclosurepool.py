@@ -39,8 +39,9 @@ class CausalContactEvidence:
 class _CausalContext:
     paths: dict[int, tuple[int, ...]]
     horizon: int
-    occupancy: dict[tuple[int, int], set[int]]
-    transitions: dict[tuple[int, int, int], set[int]]
+    cell_stride: int
+    occupancy: dict[int, set[int]]
+    transitions: dict[int, set[int]]
     events_by_agent: dict[int, tuple[ConflictEvent, ...]]
 
 
@@ -81,6 +82,8 @@ def _causal_context(
     }
     if any(not path for path in raw_paths.values()):
         raise ValueError("CausalClosurePool requires non-empty paths")
+    if any(cell < 0 for path in raw_paths.values() for cell in path):
+        raise ValueError("CausalClosurePool requires non-negative cell ids")
     if horizon <= max(relevant_times):
         raise ValueError("CausalClosurePool relevant times exceed the path horizon")
     ordered_times = tuple(sorted(relevant_times))
@@ -93,15 +96,18 @@ def _causal_context(
         agent: path + (path[-1],) * (horizon - len(path))
         for agent, path in raw_paths.items()
     }
-    occupancy: dict[tuple[int, int], set[int]] = collections.defaultdict(set)
-    transitions: dict[tuple[int, int, int], set[int]] = collections.defaultdict(set)
+    cell_stride = max(cell for path in raw_paths.values() for cell in path) + 1
+    occupancy: dict[int, set[int]] = collections.defaultdict(set)
+    transitions: dict[int, set[int]] = collections.defaultdict(set)
     for agent, path in paths.items():
         for time in ordered_times:
             cell = path[time]
-            occupancy[(time, cell)].add(agent)
+            occupancy[time * cell_stride + cell].add(agent)
             previous = path[time - 1] if time else cell
             if time and previous != cell:
-                transitions[(time, previous, cell)].add(agent)
+                transitions[
+                    (time * cell_stride + previous) * cell_stride + cell
+                ].add(agent)
     known_agents = set(paths)
     for edge in state.get("conflict_edges", []):
         left, right = sorted(map(int, edge))
@@ -111,6 +117,7 @@ def _causal_context(
     return _CausalContext(
         paths=paths,
         horizon=horizon,
+        cell_stride=cell_stride,
         # These indexes are private to the immutable decision context and are
         # read-only after construction.  Keeping the already-built sets avoids
         # copying every populated bucket into a second container.
@@ -130,6 +137,7 @@ def _with_events(
     return _CausalContext(
         paths=context.paths,
         horizon=context.horizon,
+        cell_stride=context.cell_stride,
         occupancy=context.occupancy,
         transitions=context.transitions,
         events_by_agent={
@@ -189,6 +197,93 @@ def _merge_evidence(
     )
 
 
+def _temporal_neighbor_variants(
+    context: _CausalContext,
+    analysis: StateAnalysis,
+    agent: int,
+    causal_times: frozenset[int],
+    *,
+    temporal_radius: int,
+) -> tuple[
+    dict[int, CausalContactEvidence],
+    dict[int, CausalContactEvidence],
+]:
+    # Accumulate primitive counters in place and instantiate the immutable
+    # evidence records only once per neighbor.  Ordinary and bottleneck-only
+    # families inspect exactly the same agent/time/radius contacts.  Produce
+    # both variants in one scan so callers do not traverse every reservation
+    # twice merely to discard the non-bottleneck contacts in the second pass.
+    all_counters: dict[int, list[int]] = {}
+    bottleneck_counters: dict[int, list[int]] = {}
+    path = context.paths[agent]
+    cell_stride = context.cell_stride
+    for source_time in causal_times:
+        cell = path[source_time]
+        bottleneck = cell in analysis.articulation or int(
+            analysis.degrees.get(cell, 4)
+        ) <= 2
+        for delta in range(-temporal_radius, temporal_radius + 1):
+            other_time = source_time + delta
+            if other_time not in causal_times:
+                continue
+            for other in context.occupancy.get(other_time * cell_stride + cell, ()):
+                if other == agent:
+                    continue
+                values = all_counters.get(other)
+                if values is None:
+                    values = [0, 0, 0, 0, 0]
+                    all_counters[other] = values
+                values[1] += int(delta == 0)
+                values[2] += int(delta != 0)
+                values[4] += int(bottleneck)
+                if bottleneck:
+                    bottleneck_values = bottleneck_counters.get(other)
+                    if bottleneck_values is None:
+                        bottleneck_values = [0, 0, 0, 0, 0]
+                        bottleneck_counters[other] = bottleneck_values
+                    bottleneck_values[1] += int(delta == 0)
+                    bottleneck_values[2] += int(delta != 0)
+                    bottleneck_values[4] += 1
+            if source_time == 0 or other_time == 0:
+                continue
+            previous = path[source_time - 1]
+            if previous == cell:
+                continue
+            reverse_key = (
+                (other_time * cell_stride + cell) * cell_stride + previous
+            )
+            for other in context.transitions.get(reverse_key, ()):
+                if other == agent:
+                    continue
+                values = all_counters.get(other)
+                if values is None:
+                    values = [0, 0, 0, 0, 0]
+                    all_counters[other] = values
+                values[1] += int(delta == 0)
+                values[2] += int(delta != 0)
+                values[3] += 1
+                values[4] += int(bottleneck)
+                if bottleneck:
+                    bottleneck_values = bottleneck_counters.get(other)
+                    if bottleneck_values is None:
+                        bottleneck_values = [0, 0, 0, 0, 0]
+                        bottleneck_counters[other] = bottleneck_values
+                    bottleneck_values[1] += int(delta == 0)
+                    bottleneck_values[2] += int(delta != 0)
+                    bottleneck_values[3] += 1
+                    bottleneck_values[4] += 1
+    return (
+        {
+            other: CausalContactEvidence(*values)
+            for other, values in all_counters.items()
+        },
+        {
+            other: CausalContactEvidence(*values)
+            for other, values in bottleneck_counters.items()
+        },
+    )
+
+
 def _temporal_neighbors(
     context: _CausalContext,
     analysis: StateAnalysis,
@@ -198,51 +293,16 @@ def _temporal_neighbors(
     temporal_radius: int,
     bottleneck_only: bool,
 ) -> dict[int, CausalContactEvidence]:
-    # Accumulate primitive counters in place and instantiate the immutable
-    # evidence records only once per neighbor.  The former implementation
-    # rebuilt a dataclass on every reservation contact, which dominates this
-    # hot loop on long Maze paths.
-    counters: dict[int, list[int]] = {}
-    path = context.paths[agent]
-    for source_time in causal_times:
-        cell = path[source_time]
-        bottleneck = cell in analysis.articulation or int(analysis.degrees.get(cell, 4)) <= 2
-        if bottleneck_only and not bottleneck:
-            continue
-        for delta in range(-temporal_radius, temporal_radius + 1):
-            other_time = source_time + delta
-            if other_time not in causal_times:
-                continue
-            for other in context.occupancy.get((other_time, cell), ()):
-                if other == agent:
-                    continue
-                values = counters.get(other)
-                if values is None:
-                    values = [0, 0, 0, 0, 0]
-                    counters[other] = values
-                values[1] += int(delta == 0)
-                values[2] += int(delta != 0)
-                values[4] += int(bottleneck)
-            if source_time == 0 or other_time == 0:
-                continue
-            previous = path[source_time - 1]
-            if previous == cell:
-                continue
-            for other in context.transitions.get((other_time, cell, previous), ()):
-                if other == agent:
-                    continue
-                values = counters.get(other)
-                if values is None:
-                    values = [0, 0, 0, 0, 0]
-                    counters[other] = values
-                values[1] += int(delta == 0)
-                values[2] += int(delta != 0)
-                values[3] += 1
-                values[4] += int(bottleneck)
-    return {
-        other: CausalContactEvidence(*values)
-        for other, values in counters.items()
-    }
+    """Compatibility wrapper for one temporal-contact evidence variant."""
+
+    variants = _temporal_neighbor_variants(
+        context,
+        analysis,
+        agent,
+        causal_times,
+        temporal_radius=temporal_radius,
+    )
+    return variants[int(bool(bottleneck_only))]
 
 
 def _closure_draft(
@@ -262,8 +322,11 @@ def _closure_draft(
     ]
     | None = None,
     temporal_neighbor_cache: dict[
-        tuple[int, frozenset[int], int, bool],
-        dict[int, CausalContactEvidence],
+        tuple[int, frozenset[int], int],
+        tuple[
+            dict[int, CausalContactEvidence],
+            dict[int, CausalContactEvidence],
+        ],
     ]
     | None = None,
 ) -> tuple[_CausalDraft | None, dict[str, Any] | None]:
@@ -306,24 +369,23 @@ def _closure_draft(
                     int(agent),
                     causal_times,
                     int(temporal_radius),
-                    bool(bottleneck_only),
                 )
-                supports = (
+                variants = (
                     temporal_neighbor_cache.get(cache_key)
                     if temporal_neighbor_cache is not None
                     else None
                 )
-                if supports is None:
-                    supports = _temporal_neighbors(
+                if variants is None:
+                    variants = _temporal_neighbor_variants(
                         context,
                         analysis,
                         agent,
                         causal_times,
                         temporal_radius=temporal_radius,
-                        bottleneck_only=bottleneck_only,
                     )
                     if temporal_neighbor_cache is not None:
-                        temporal_neighbor_cache[cache_key] = supports
+                        temporal_neighbor_cache[cache_key] = variants
+                supports = variants[int(bool(bottleneck_only))]
                 for other, support in supports.items():
                     if other in selected:
                         continue
@@ -637,8 +699,11 @@ def generate_causalclosure_candidates(
     attempts: list[dict[str, Any]] = []
     drafts: list[_CausalDraft] = []
     temporal_neighbor_cache: dict[
-        tuple[int, frozenset[int], int, bool],
-        dict[int, CausalContactEvidence],
+        tuple[int, frozenset[int], int],
+        tuple[
+            dict[int, CausalContactEvidence],
+            dict[int, CausalContactEvidence],
+        ],
     ] = {}
     oversized = 0
     oversized_cores = 0
