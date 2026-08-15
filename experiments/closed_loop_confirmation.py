@@ -1471,6 +1471,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             or (),
                                         )
                                     ),
+                                    "removed_agents": list(
+                                        map(
+                                            int,
+                                            rescue_override.get("removed_agents")
+                                            or (),
+                                        )
+                                    ),
+                                    "compact_plan": dict(
+                                        rescue_override.get("compact_plan") or {}
+                                    ),
                                 }
                             ],
                             "controller_seconds_before_repair": (

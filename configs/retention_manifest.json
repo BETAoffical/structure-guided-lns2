@@ -2787,6 +2787,26 @@
       "path": "tests/evaluation/test_stride_failure_informed_rescue.py",
       "role": "reproducibility",
       "contract": "Freeze paired first attempts, next-decision-only intervention, native order, blocker caps, seed identity, and post-trigger persistence semantics."
+    },
+    {
+      "path": "lns2_selector/runtime/semantic_compaction.py",
+      "role": "reproducibility",
+      "purpose": "Provide the frozen outcome-blind conflict-core and temporal-corridor compaction rule without a target neighborhood size."
+    },
+    {
+      "path": "experiments/stride_compact_blocker_rescue_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Collect and analyze the five-arm one-call compact-by-blocker failure-informed rescue interaction screen."
+    },
+    {
+      "path": "scripts/run_stride_compact_blocker_rescue_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Run dry-run, initial, uniform extension and paired analysis for compact-blocker rescue continuation v1."
+    },
+    {
+      "path": "tests/evaluation/test_stride_compact_blocker_rescue_continuation.py",
+      "role": "reproducibility",
+      "contract": "Freeze five-arm first-attempt pairing, one-call rescue, shared fresh seed, semantic removal and observed-blocker membership semantics."
     }
   ]
 }

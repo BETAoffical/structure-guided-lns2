@@ -14,7 +14,6 @@ from experiments.repair_collection import (
     _run_jobs,
     _write_json,
 )
-from experiments.state_analysis import analyze_state
 from experiments.stride_nativeorder_transactionalrepair import (
     _load_restored_source,
     _timed_attempt,
@@ -25,10 +24,7 @@ from experiments.stride_nativeorder_transactionalrepair import (
 from experiments.stride_repairability_collection import repairability_pp_seed
 from experiments.trace_replay import restore_repair_state
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
-from lns2_selector.runtime.repairdependencypool import (
-    _serialize_evidence,
-    _temporal_corridor_evidence,
-)
+from lns2_selector.runtime.semantic_compaction import semantic_compact_plan
 
 
 CONFIG_SCHEMA = "lns2.stride.compact_nativeorder_repair_registration.v1"
@@ -133,52 +129,6 @@ def build_cohort(
             ]
         ),
     }, cohort
-
-
-def semantic_compact_plan(
-    state: dict[str, Any], base_agents: list[int]
-) -> dict[str, Any]:
-    base = set(map(int, base_agents))
-    current_core = {
-        int(agent)
-        for edge in state.get("conflict_edges", ())
-        for agent in edge
-        if int(agent) in base
-    }
-    if len(current_core) < 2:
-        return {
-            "eligible": False,
-            "rejection_reason": "fewer_than_two_current_conflict_agents",
-            "base_agents": sorted(base),
-            "compact_agents": sorted(base),
-            "current_conflict_core": sorted(current_core),
-            "temporal_corridor_support": [],
-            "temporal_corridor_evidence": {},
-            "removed_agents": [],
-            "base_size": len(base),
-            "actual_size": len(base),
-        }
-    analysis = analyze_state(state)
-    temporal = _temporal_corridor_evidence(state, analysis, current_core)
-    retained_temporal = sorted(base & set(temporal))
-    compact = current_core | set(retained_temporal)
-    removed = sorted(base - compact)
-    eligible = bool(removed)
-    return {
-        "eligible": eligible,
-        "rejection_reason": None if eligible else "no_unsupported_agent_to_remove",
-        "base_agents": sorted(base),
-        "compact_agents": sorted(compact) if eligible else sorted(base),
-        "current_conflict_core": sorted(current_core),
-        "temporal_corridor_support": retained_temporal,
-        "temporal_corridor_evidence": {
-            str(agent): _serialize_evidence(temporal[agent])
-            for agent in retained_temporal
-        },
-        "removed_agents": removed,
-        "base_size": len(base),
-        "actual_size": len(compact) if eligible else len(base),
-    }
 
 
 def _run_policy(

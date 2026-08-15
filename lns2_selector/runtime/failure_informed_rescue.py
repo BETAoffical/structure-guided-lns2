@@ -8,18 +8,30 @@ from lns2_selector.runtime.bounded_native_retry import (
     platform_signature,
 )
 from lns2_selector.runtime.contracts import (
+    require_bool,
     require_int,
     require_int_list,
     require_nonempty_string,
 )
 from lns2_selector.runtime.fingerprints import semantic_fingerprint
+from lns2_selector.runtime.semantic_compaction import semantic_compact_plan
 
 
 RESCUE_SCHEMA = "lns2.failure_informed_next_decision_rescue.v1"
 CONTROL_MODE = "frozen_controller"
 SAME_SET_MODE = "same_set_fresh_seed"
 BLOCKER_AUGMENTED_MODE = "blocker_augmented_fresh_seed"
-MODES = {CONTROL_MODE, SAME_SET_MODE, BLOCKER_AUGMENTED_MODE}
+COMPACT_SAME_SET_MODE = "compact_same_set_fresh_seed"
+COMPACT_BLOCKER_AUGMENTED_MODE = "compact_blocker_augmented_fresh_seed"
+COMPACT_MODES = {COMPACT_SAME_SET_MODE, COMPACT_BLOCKER_AUGMENTED_MODE}
+BLOCKER_MODES = {BLOCKER_AUGMENTED_MODE, COMPACT_BLOCKER_AUGMENTED_MODE}
+MODES = {
+    CONTROL_MODE,
+    SAME_SET_MODE,
+    BLOCKER_AUGMENTED_MODE,
+    COMPACT_SAME_SET_MODE,
+    COMPACT_BLOCKER_AUGMENTED_MODE,
+}
 
 
 def rescue_seed(
@@ -80,6 +92,7 @@ class FailureInformedRescueTracker:
     episode_key: str
     trial_index: int
     initial_repeat_count: int
+    enable_semantic_compaction_audit: bool = False
     initial_record: dict[str, Any] | None = None
     pending_action: dict[str, Any] | None = None
     rescue_record: dict[str, Any] | None = None
@@ -95,7 +108,10 @@ class FailureInformedRescueTracker:
             "trial_index",
             "initial_repeat_count",
         }
-        if set(specification) != required:
+        optional = {"enable_semantic_compaction_audit"}
+        if not required.issubset(specification) or not set(specification).issubset(
+            required | optional
+        ):
             raise ValueError("failure-informed rescue specification changed")
         mode = require_nonempty_string(specification["mode"], field="rescue mode")
         maximum = require_int(
@@ -112,6 +128,16 @@ class FailureInformedRescueTracker:
             raise ValueError(f"unknown failure-informed rescue mode: {mode}")
         if maximum != 8 or initial != 2:
             raise ValueError("failure-informed rescue limits changed")
+        compaction_audit = (
+            require_bool(
+                specification["enable_semantic_compaction_audit"],
+                field="enable semantic compaction audit",
+            )
+            if "enable_semantic_compaction_audit" in specification
+            else False
+        )
+        if mode in COMPACT_MODES and not compaction_audit:
+            raise ValueError("compact rescue mode requires semantic compaction audit")
         return cls(
             mode=mode,
             maximum_added_blockers=maximum,
@@ -125,6 +151,7 @@ class FailureInformedRescueTracker:
                 specification["trial_index"], field="rescue trial index", minimum=0
             ),
             initial_repeat_count=initial,
+            enable_semantic_compaction_audit=compaction_audit,
         )
 
     def requires_diagnostics(self, decision_index: int) -> bool:
@@ -173,10 +200,37 @@ class FailureInformedRescueTracker:
             blockers = ordered_external_blockers(
                 metrics, base_agents, self.maximum_added_blockers
             )
+            compact_plan = (
+                semantic_compact_plan(dict(after), base_agents)
+                if self.enable_semantic_compaction_audit
+                else {
+                    "rule_id": None,
+                    "eligible": False,
+                    "rejection_reason": "semantic_compaction_audit_disabled",
+                    "base_agents": sorted(base_agents),
+                    "compact_agents": sorted(base_agents),
+                    "current_conflict_core": [],
+                    "temporal_corridor_support": [],
+                    "temporal_corridor_evidence": {},
+                    "removed_agents": [],
+                    "base_size": len(base_agents),
+                    "actual_size": len(base_agents),
+                    "fixed_target_size": None,
+                }
+            )
             eligible = bool(exact_rollback)
             triggered = bool(eligible and self.mode != CONTROL_MODE)
-            selected_blockers = blockers if self.mode == BLOCKER_AUGMENTED_MODE else []
-            planned_agents = base_agents + selected_blockers
+            use_compaction = self.mode in COMPACT_MODES
+            compact_members = set(map(int, compact_plan["compact_agents"]))
+            planned_base = (
+                [agent for agent in base_agents if agent in compact_members]
+                if use_compaction
+                else base_agents
+            )
+            selected_blockers = blockers if self.mode in BLOCKER_MODES else []
+            planned_agents = planned_base + [
+                agent for agent in selected_blockers if agent not in set(planned_base)
+            ]
             next_seed = rescue_seed(
                 namespace=self.seed_namespace,
                 episode_key=self.episode_key,
@@ -197,6 +251,15 @@ class FailureInformedRescueTracker:
                 "first_attempt": snapshot,
                 "observed_external_blockers": blockers,
                 "selected_blockers": selected_blockers,
+                "semantic_compaction_applied": bool(
+                    use_compaction and compact_plan["eligible"]
+                ),
+                "compact_plan": compact_plan,
+                "removed_agents": (
+                    list(map(int, compact_plan["removed_agents"]))
+                    if use_compaction
+                    else []
+                ),
                 "planned_agents": planned_agents if triggered else [],
                 "rescue_seed": next_seed if triggered else None,
                 "rescue_attempt": None,
@@ -209,6 +272,12 @@ class FailureInformedRescueTracker:
                     "mode": self.mode,
                     "agents": planned_agents,
                     "selected_blockers": selected_blockers,
+                    "removed_agents": (
+                        list(map(int, compact_plan["removed_agents"]))
+                        if use_compaction
+                        else []
+                    ),
+                    "compact_plan": compact_plan,
                     "pp_random_seed": next_seed,
                 }
             return dict(self.initial_record)
@@ -242,12 +311,19 @@ class FailureInformedRescueTracker:
             "mode": self.mode,
             "maximum_added_blockers": self.maximum_added_blockers,
             "initial_repeat_count": self.initial_repeat_count,
+            "enable_semantic_compaction_audit": (
+                self.enable_semantic_compaction_audit
+            ),
             "trigger_eligible": bool(record.get("trigger_eligible", False)),
             "triggered": bool(record.get("triggered", False)),
             "observed_external_blocker_count": len(
                 record.get("observed_external_blockers") or ()
             ),
             "selected_blocker_count": len(record.get("selected_blockers") or ()),
+            "semantic_compaction_applied": bool(
+                record.get("semantic_compaction_applied", False)
+            ),
+            "removed_agent_count": len(record.get("removed_agents") or ()),
             "rescue_executed": bool(record.get("rescue_attempt")),
             "resolved_by_rescue": bool(record.get("resolved_by_rescue", False)),
         }
@@ -255,6 +331,10 @@ class FailureInformedRescueTracker:
 
 __all__ = [
     "BLOCKER_AUGMENTED_MODE",
+    "BLOCKER_MODES",
+    "COMPACT_BLOCKER_AUGMENTED_MODE",
+    "COMPACT_MODES",
+    "COMPACT_SAME_SET_MODE",
     "CONTROL_MODE",
     "FailureInformedRescueTracker",
     "MODES",

@@ -1,0 +1,117 @@
+{
+  "schema": "lns2.stride.compact_blocker_rescue_continuation_registration.v1",
+  "scientific_status": "preregistered_outcome_enriched_factorial_interaction_screen",
+  "experiment_id": "stride-compact-blocker-rescue-continuation-v1",
+  "pre_registration_parent_commit": "bb0515921a0c389151f33fbb1b6646eb57537fd2",
+  "protocol_revision": "v1_before_any_compact_blocker_continuation_episode",
+  "inputs": {
+    "failure_rescue_registration": {
+      "path": "configs/stride_failure_informed_rescue_continuation_v1_registration.json",
+      "sha256": "9c38b04df5f13c8f33a2c9c14435f2e705b9a1666dc95199f7a3969969567fa1"
+    },
+    "failure_rescue_extended_report": {
+      "path": "build/stride-failure-informed-rescue-continuation-v1/extended_report.json",
+      "sha256": "cdb9886ef1db64cb314d5ceef71c9c19ebf29bf431aef33832eed646d1d69e99"
+    },
+    "compact_registration": {
+      "path": "configs/stride_compact_nativeorder_repair_v1_registration.json",
+      "sha256": "5c82d27f5c6c5778fdea53169152d4cb879c20eb5c9f542cacf2edc484770ee7"
+    },
+    "compact_extended_report": {
+      "path": "build/stride-compact-nativeorder-repair-v1/extension/compact_nativeorder_extended_report.json",
+      "sha256": "09c06e401546f9bf6ea3a94c536e57b2aece49c07faf2abc393a1d06238ddc96"
+    }
+  },
+  "cohort": {
+    "source": "all_45_frozen_first_repeat_stall_states_from_failure_informed_rescue",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "outcome_enriched_development_cohort": true,
+    "independent_confirmation": false,
+    "no_result_based_state_exclusion": true
+  },
+  "arms": [
+    "frozen_controller",
+    "same_set_fresh_seed",
+    "compact_same_set_fresh_seed",
+    "blocker_augmented_fresh_seed",
+    "compact_blocker_augmented_fresh_seed"
+  ],
+  "membership_factorial": {
+    "base_membership": ["full", "semantic_compact"],
+    "external_blockers": ["absent", "up_to_eight_observed"],
+    "fresh_seed_shared_by_all_rescue_arms": true,
+    "compact_rule": {
+      "rule_id": "current-conflict-plus-temporal-corridor-v1",
+      "retain_all_current_conflict_edge_endpoints_in_base": true,
+      "retain_base_agents_with_low_degree_or_articulation_temporal_overlap_and_reverse_queue_evidence": true,
+      "remove_only_base_agents_with_neither_evidence": true,
+      "fixed_target_size": null,
+      "fallback_when_no_removable_agent": "exact_full_set"
+    }
+  },
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "qualification_worker_count": 16,
+    "qualification_process_timeout_seconds": 360.0,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "initial_repeat_count": 2,
+    "maximum_added_external_blockers": 8,
+    "rescue_decision_offset": 1,
+    "maximum_rescues_per_episode": 1,
+    "trigger_failure_reason": "conflict_bound_exceeded",
+    "rescue_after_time_limit": false,
+    "native_pp_order_only": true,
+    "explicit_timed_native_api_required": true,
+    "collect_diagnostics_all_decisions_all_arms": true,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "primary_estimand": {
+    "eligible_event": "shared first action exact-rolls back and the frozen semantic compaction rule removes at least one unsupported member",
+    "outcome": "next decision remains on the same repair fingerprint plus conflict-edge signature",
+    "treatment_contrast": "compact_blocker_augmented_fresh_seed minus blocker_augmented_fresh_seed among paired compact-eligible trigger events",
+    "cost_contrast": "decision-one native PP repair wall for the same paired compact-eligible trigger events",
+    "reproduction_contrast": "blocker_augmented_fresh_seed minus frozen_controller unresolved probability under the new native producer identity"
+  },
+  "initial_extension_gate": {
+    "minimum_compact_eligible_state_count": 10,
+    "compact_blocker_unresolved_difference_strictly_below": 0.0,
+    "compact_blocker_rescue_wall_difference_strictly_below": 0.0,
+    "compact_blocker_success_rate_difference_minimum": 0.0,
+    "compact_blocker_normalized_fixed_auc_difference_maximum": 0.0,
+    "compact_blocker_restricted_mean_repair_decision_difference_maximum": 0.0,
+    "blocker_vs_control_unresolved_difference_strictly_below": 0.0,
+    "maximum_per_map_compact_blocker_unresolved_rate_worsening": 0.05,
+    "uniform_all_state_and_arm_extension_only": true
+  },
+  "final_gate": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "compact_blocker_unresolved_difference_95pct_upper_strictly_below": 0.0,
+    "compact_blocker_rescue_wall_difference_95pct_upper_strictly_below": 0.0,
+    "compact_blocker_success_rate_difference_minimum": 0.0,
+    "compact_blocker_normalized_fixed_auc_difference_strictly_below": 0.0,
+    "compact_blocker_restricted_mean_repair_decision_difference_strictly_below": 0.0,
+    "blocker_vs_control_unresolved_difference_95pct_upper_strictly_below": 0.0,
+    "maximum_per_map_compact_blocker_unresolved_rate_worsening": 0.05,
+    "zero_execution_errors_and_process_timeouts": true
+  },
+  "claim_boundary": {
+    "development_interaction_screen_only": true,
+    "independent_result_blind_confirmation": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "generalization_claim_allowed": false,
+    "default_controller_replacement_allowed": false,
+    "no_result_based_exclusion": true,
+    "no_future_outcome_used_for_membership": true,
+    "one_rescue_call_only": true,
+    "all_first_action_and_rescue_costs_included": true
+  }
+}
