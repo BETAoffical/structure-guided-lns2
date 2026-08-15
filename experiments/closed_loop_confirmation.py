@@ -968,6 +968,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     signature_scoped_rescue = dict(
         episode_override.get("signature_scoped_rescue") or {}
     )
+    pp_replay_seed_salt = episode_override.get("pp_replay_seed_salt")
+    if pp_replay_seed_salt is not None and (
+        not isinstance(pp_replay_seed_salt, str) or not pp_replay_seed_salt
+    ):
+        raise ValueError("pp_replay_seed_salt must be a non-empty string")
     source_state: dict[str, Any] | None = None
     source_trace_path: Path | None = None
     if initial_restore:
@@ -2871,13 +2876,24 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     # Official neighborhood generation still consumes its
                     # upstream RNG stream before PP is reseeded; explicit
                     # learned actions differ only in the selected agent set.
+                    replay_state_hash = (
+                        before_hash
+                        if pp_replay_seed_salt is None
+                        else _fingerprint(
+                            {
+                                "state_hash": before_hash,
+                                "seed_salt": pp_replay_seed_salt,
+                            }
+                        )
+                    )
                     action["pp_random_seed"] = pp_replay_random_seed(
                         str(row["task_id"]),
                         solver_seed,
-                        before_hash,
+                        replay_state_hash,
                         decision_index,
                         route,
                     )
+                    controller["pp_replay_seed_salt"] = pp_replay_seed_salt
                 if native_retry_tracker is not None:
                     # Both arms collect the same native evidence.  Only the
                     # treatment arm is allowed to execute a second PP call.

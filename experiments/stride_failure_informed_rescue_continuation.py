@@ -258,6 +258,10 @@ def _decision_rows(
             "decision_index": int(row["decision_index"]),
             "before_platform_signature": str(row["before_repair_fingerprint"]),
             "after_platform_signature": str(row["after_repair_fingerprint"]),
+            "before_conflicts": int(row["before_conflicts"]),
+            "after_conflicts": int(
+                row["actual_lns2"]["outcome"]["conflicts_after"]
+            ),
             "actual_action": dict(row["actual_action"]),
             "actual_metrics": dict(row["actual_metrics"]),
             "controller": dict(event["controller"]),

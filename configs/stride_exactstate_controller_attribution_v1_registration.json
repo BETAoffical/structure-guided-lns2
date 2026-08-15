@@ -1,0 +1,98 @@
+{
+  "schema": "lns2.stride.exactstate_controller_attribution_registration.v1",
+  "scientific_status": "preregistered_exact_state_controller_attribution_diagnostic",
+  "experiment_id": "stride-exactstate-controller-attribution-v1",
+  "pre_registration_parent_commit": "70894a1dab3ada0c572265df0bed6588f66d759c",
+  "protocol_revision": "r1_exact_first_repeat_stall_controller_contrast",
+  "inputs": {
+    "failure_rescue_registration": {
+      "path": "configs/stride_failure_informed_rescue_continuation_v1_registration.json",
+      "sha256": "9c38b04df5f13c8f33a2c9c14435f2e705b9a1666dc95199f7a3969969567fa1"
+    },
+    "runtime_config": {
+      "path": "configs/stride_exactstate_controller_attribution_runtime_v1.json",
+      "sha256": "41ff134fc51fa694838a4252de29dfc7a2867bd7c601e2d8b9172534c511c8da"
+    },
+    "official_lns2_warm_start_status": {
+      "path": "build/initlns-maze600-lns2-warm-start-extension-14400-v1/status.json",
+      "sha256": "314a34810f46324844cd5ce441704ad8fc2e82d8b668319357e7d994ce512a32"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "selection_rule": "all frozen first-repeat-stall states; no outcome filtering",
+    "outcome_enriched_mechanism_cohort": true,
+    "maze_only": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "frozen_controller",
+    "official_adaptive_n8",
+    "fixed_target_n8"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "qualification_worker_count": 16,
+    "qualification_process_timeout_seconds": 360.0,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "native_pp_order_only": true,
+    "deterministic_pp_replay": true,
+    "forced_first_action": false,
+    "runtime_retry": false,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "causal_contrast": {
+    "shared_state": "all arms restore the same complete path state and repair fingerprint",
+    "shared_randomness": "the same task, solver seed, state fingerprint and decision index produce the same PP replay seed",
+    "frozen_controller": "the registered v2-plus-StructPool or v2-plus-SlotPool controller associated with the frozen case",
+    "official_adaptive_n8": "native Adaptive LNS2 with neighborhood size eight and PP",
+    "fixed_target_n8": "native Target failure-based neighborhood generation fixed at size eight with PP",
+    "forbidden": "no forced common action, no retry, no explicit repair order, no PBS or GCBS"
+  },
+  "initial_extension_gate": {
+    "at_least_one_official_arm_platform_rate_difference_strictly_below": 0.0,
+    "same_arm_success_rate_difference_minimum": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05,
+    "uniform_all_state_extension_only": true
+  },
+  "final_gate": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "platform_rate_difference_95pct_upper_strictly_below": 0.0,
+    "success_rate_difference_95pct_lower_minimum": 0.0,
+    "normalized_fixed_auc_difference_95pct_upper_maximum": 0.0,
+    "restricted_repair_decision_difference_95pct_upper_maximum": 0.0,
+    "maximum_per_map_platform_rate_worsening": 0.05
+  },
+  "interpretation": {
+    "adaptive_better_target_not_better": "adaptive neighborhood-method exploration is material; Target alone is insufficient",
+    "target_better": "the frozen selector underuses the original failure-based Target neighborhood mechanism",
+    "both_official_better": "the frozen proposal or selection policy is the dominant exact-state gap",
+    "neither_official_better": "the state basin and native PP are the dominant exact-state bottleneck; qualify a stronger repairer separately"
+  },
+  "stronger_repairer_boundary": {
+    "pbs_in_this_experiment": false,
+    "reason": "PBS exact rollback and restored-state integrity must pass an independent qualification before paired use",
+    "next_if_needed": "preregister same-agent-set PP versus PBS rollback-integrity qualification"
+  },
+  "claim_boundary": {
+    "diagnostic_only": true,
+    "not_runtime_integration": true,
+    "not_ttf_evidence": true,
+    "not_candidate_pool_replacement": true,
+    "not_non_maze_evidence": true,
+    "not_ood_confirmation": true,
+    "no_result_based_exclusion": true,
+    "no_training": true
+  }
+}
