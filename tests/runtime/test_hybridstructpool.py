@@ -8,8 +8,11 @@ from lns2_selector.runtime.causalclosurepool import CausalClosurePoolResult
 from lns2_selector.runtime.hybridstructpool import (
     STRUCTURAL_SIZES,
     generate_hybridstructpool_candidates,
+    hybridstructpool_high_stress_gate,
+    hybridstructpool_runtime_augmentation,
     merge_hybridstructpool_candidates,
     reduce_hybridstructpool_challengers,
+    validate_hybridstructpool_augmentation,
 )
 
 
@@ -32,6 +35,27 @@ def _candidate(agents: list[int], kind: str) -> dict:
 
 
 class HybridStructPoolTest(unittest.TestCase):
+    def test_runtime_contract_is_full_union_and_immutable(self) -> None:
+        config = hybridstructpool_runtime_augmentation()
+        self.assertTrue(config["full_union_required"])
+        self.assertEqual(config["structural_sizes"], [8, 16, 24, 32])
+        self.assertEqual(validate_hybridstructpool_augmentation(config), config)
+        config["maximum_total_candidates"] = 12
+        with self.assertRaisesRegex(ValueError, "unsupported HybridStructPool"):
+            validate_hybridstructpool_augmentation(config)
+
+    def test_runtime_gate_matches_registered_high_stress_identity(self) -> None:
+        state = {
+            "agents": [{"id": index} for index in range(96)],
+            "conflict_edges": [[index, index + 1] for index in range(16)],
+            "num_of_colliding_pairs": 16,
+        }
+        result = hybridstructpool_high_stress_gate(
+            state, hybridstructpool_runtime_augmentation()
+        )
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["reason"], "high_stress_state")
+
     def test_exact_sets_merge_with_v2_authoritative_and_full_provenance(self) -> None:
         base = [_candidate([1, 2], "base"), _candidate([3, 4], "base")]
         structural = [_candidate([1, 2], "structural"), _candidate([5, 6], "structural")]

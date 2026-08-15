@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import json
+import time
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -20,6 +22,114 @@ HYBRID_GROUP_ORDER = (
     "bottleneck_crossing",
     "path_overlap",
 )
+_HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
+    "enabled": True,
+    "pool_id": HYBRIDSTRUCTPOOL_ID,
+    "runtime_id": "stride-hybridstructpool-full-runtime-v1",
+    "full_union_required": True,
+    "structural_sizes": list(STRUCTURAL_SIZES),
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": True,
+    "activation_gate": {
+        "gate_id": "stride-highstress-state-v1",
+        "minimum_conflict_pair_count": 16,
+        "any_of": {
+            "minimum_agent_count": 96,
+            "minimum_active_conflict_agent_count": 32,
+            "minimum_largest_conflict_component_size": 16,
+        },
+    },
+}
+
+
+def hybridstructpool_runtime_augmentation() -> dict[str, Any]:
+    """Return the immutable full-union experimental runtime contract."""
+
+    return json.loads(json.dumps(_HYBRIDSTRUCTPOOL_RUNTIME_CONFIG))
+
+
+def validate_hybridstructpool_augmentation(
+    value: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    result = dict(value)
+    if result != _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG:
+        raise ValueError("unsupported HybridStructPool runtime augmentation")
+    return result
+
+
+def hybridstructpool_high_stress_gate(
+    state: dict[str, Any], value: dict[str, Any]
+) -> dict[str, Any]:
+    """Evaluate the registered outcome-blind activation gate."""
+
+    config = validate_hybridstructpool_augmentation(value)
+    assert config is not None
+    started = time.perf_counter()
+    agent_ids = {int(agent["id"]) for agent in state.get("agents", [])}
+    if not agent_ids:
+        raise ValueError("HybridStructPool gate requires at least one agent")
+    edges = {
+        tuple(sorted((int(edge[0]), int(edge[1]))))
+        for edge in state.get("conflict_edges", [])
+    }
+    if any(
+        left == right or left not in agent_ids or right not in agent_ids
+        for left, right in edges
+    ):
+        raise ValueError("HybridStructPool gate received an invalid conflict edge")
+    conflict_pairs = int(state.get("num_of_colliding_pairs", -1))
+    if conflict_pairs != len(edges):
+        raise ValueError("HybridStructPool gate conflict count differs from edges")
+    active = {agent for edge in edges for agent in edge}
+    adjacency = {agent: set() for agent in active}
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    largest = 0
+    remaining = set(active)
+    while remaining:
+        root = min(remaining)
+        component = {root}
+        frontier = [root]
+        remaining.remove(root)
+        while frontier:
+            current = frontier.pop()
+            for neighbor in adjacency[current]:
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    component.add(neighbor)
+                    frontier.append(neighbor)
+        largest = max(largest, len(component))
+    gate = dict(config["activation_gate"])
+    any_of = dict(gate["any_of"])
+    conflict_ok = conflict_pairs >= int(gate["minimum_conflict_pair_count"])
+    stress_ok = bool(
+        len(agent_ids) >= int(any_of["minimum_agent_count"])
+        or len(active) >= int(any_of["minimum_active_conflict_agent_count"])
+        or largest >= int(any_of["minimum_largest_conflict_component_size"])
+    )
+    passed = bool(conflict_ok and stress_ok)
+    return {
+        "passed": passed,
+        "reason": (
+            "high_stress_state"
+            if passed
+            else "conflict_pair_count_below_threshold"
+            if not conflict_ok
+            else "stress_indicator_below_threshold"
+        ),
+        "seconds": time.perf_counter() - started,
+        "agent_count": len(agent_ids),
+        "conflict_pair_count": conflict_pairs,
+        "active_conflict_agent_count": len(active),
+        "largest_conflict_component_size": largest,
+    }
 
 
 @dataclass
@@ -287,6 +397,9 @@ __all__ = [
     "STRUCTURAL_SIZES",
     "HybridStructPoolResult",
     "generate_hybridstructpool_candidates",
+    "hybridstructpool_high_stress_gate",
+    "hybridstructpool_runtime_augmentation",
     "merge_hybridstructpool_candidates",
     "reduce_hybridstructpool_challengers",
+    "validate_hybridstructpool_augmentation",
 ]

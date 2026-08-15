@@ -106,6 +106,11 @@ from lns2_selector.runtime.bounded_native_retry import (
 from lns2_selector.runtime.failure_informed_rescue import (
     FailureInformedRescueTracker,
 )
+from lns2_selector.runtime.hybridstructpool import (
+    generate_hybridstructpool_candidates,
+    hybridstructpool_high_stress_gate,
+    validate_hybridstructpool_augmentation,
+)
 from lns2_selector.runtime.signature_scoped_rescue import (
     SignatureScopedRescueTracker,
 )
@@ -118,6 +123,7 @@ from lns2_selector.runtime.contracts import (
 )
 from lns2_selector.runtime.online_selection import (
     ClosedLoopExecutionError,
+    EpisodeRepairSeedStream,
     feature_range_diagnostic,
     generate_online_candidates,
     online_candidate_rows,
@@ -127,6 +133,7 @@ from lns2_selector.runtime.online_selection import (
     repair_random_seed,
     score_online_candidates,
     structpool_high_stress_gate,
+    validate_repair_seed_policy,
     validate_structpool_augmentation,
     validate_topology_boundary_augmentation,
 )
@@ -150,7 +157,7 @@ def _proposal_uses_static_grid_cache(proposal_config: Mapping[str, Any]) -> bool
 
     return any(
         dict(proposal_config.get(name) or {}).get("static_grid_cache") is True
-        for name in ("topology_boundary", "structpool")
+        for name in ("topology_boundary", "structpool", "hybridstructpool")
     )
 
 
@@ -973,6 +980,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         not isinstance(pp_replay_seed_salt, str) or not pp_replay_seed_salt
     ):
         raise ValueError("pp_replay_seed_salt must be a non-empty string")
+    repair_seed_policy = validate_repair_seed_policy(
+        job.get("repair_seed_policy")
+    )
     source_state: dict[str, Any] | None = None
     source_trace_path: Path | None = None
     if initial_restore:
@@ -1055,6 +1065,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     structpool_runtime_config = dict(
         dict(job.get("proposal") or {}).get("structpool") or {}
     )
+    hybridstructpool_runtime_config = dict(
+        dict(job.get("proposal") or {}).get("hybridstructpool") or {}
+    )
+    validate_hybridstructpool_augmentation(
+        hybridstructpool_runtime_config or None
+    )
+    if hybridstructpool_runtime_config and (
+        policy != "realized_dynamic" or controller_mode != "v2-full"
+    ):
+        raise ValueError(
+            "HybridStructPool requires a realized_dynamic v2-full episode"
+        )
     slotpool_runtime_enabled, guardpool_runtime_enabled = _pool_runtime_modes(
         structpool_runtime_config
     )
@@ -1238,6 +1260,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             # agent path at the top of the next loop.  This changes neither the
             # fingerprint definition nor any controller/random-seed semantics.
             current_state_fingerprint = initial_fingerprint
+            episode_repair_seed_stream = (
+                EpisodeRepairSeedStream.from_episode(
+                    task_id=str(row["task_id"]),
+                    solver_seed=solver_seed,
+                    episode_id=episode_id,
+                )
+                if repair_seed_policy == "episode_stream"
+                else None
+            )
             initial_fingerprint_seconds = (
                 time.perf_counter() - initial_fingerprint_started
             )
@@ -1273,6 +1304,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "episode_id": episode_id,
                 "policy": policy,
                 "solver_seed": solver_seed,
+                "repair_seed_policy": repair_seed_policy,
+                "repair_seed_stream_root": (
+                    episode_repair_seed_stream.root_seed
+                    if episode_repair_seed_stream is not None
+                    else None
+                ),
                 "state_fingerprint": initial_fingerprint,
                 "state": state,
                 "episode_override": (
@@ -1733,6 +1770,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         structpool_runtime = dict(
                             effective_proposal.get("structpool") or {}
                         )
+                        hybridstructpool_runtime = dict(
+                            effective_proposal.get("hybridstructpool") or {}
+                        )
                         guard_config = dict(
                             structpool_runtime.get("stall_guard") or {}
                         )
@@ -1782,11 +1822,22 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             structpool_gate_result
                             and structpool_gate_result["passed"]
                         )
+                        hybridstructpool_gate_result = (
+                            hybridstructpool_high_stress_gate(
+                                state, hybridstructpool_runtime
+                            )
+                            if hybridstructpool_runtime
+                            else None
+                        )
+                        hybridstructpool_gate_passed = bool(
+                            hybridstructpool_gate_result
+                            and hybridstructpool_gate_result["passed"]
+                        )
                         if (
                             topology_runtime
                             and not topology_runtime.get("activation_gate")
                             and not topology_runtime.get("phase_guard")
-                        ) or structpool_gate_passed:
+                        ) or structpool_gate_passed or hybridstructpool_gate_passed:
                             if topology_analysis_cache is None:
                                 topology_analysis_cache = TopologyAnalysisCache(
                                     state,
@@ -1935,6 +1986,150 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         "realized_feature_seconds", 0.0
                                     )
                                 )
+                            )
+                        if hybridstructpool_runtime:
+                            proposal_metrics.update(
+                                {
+                                    "hybridstructpool_enabled": True,
+                                    "hybridstructpool_gate_evaluated": True,
+                                    "hybridstructpool_gate_passed": (
+                                        hybridstructpool_gate_passed
+                                    ),
+                                    "hybridstructpool_gate_reason": str(
+                                        hybridstructpool_gate_result["reason"]
+                                    ),
+                                    "hybridstructpool_gate_seconds": float(
+                                        hybridstructpool_gate_result["seconds"]
+                                    ),
+                                }
+                            )
+                            if hybridstructpool_gate_passed:
+                                if topology_state_analysis is None:
+                                    raise ClosedLoopExecutionError(
+                                        "hybridstructpool_analysis_missing",
+                                        "HybridStructPool gate passed without state analysis",
+                                    )
+                                if feature_engine is None:
+                                    raise ClosedLoopExecutionError(
+                                        "hybridstructpool_feature_engine_missing",
+                                        "HybridStructPool requires realized V2 features",
+                                    )
+                                hybrid_started = time.perf_counter()
+                                base_candidates = list(candidates)
+                                base_candidate_rows = list(candidate_rows)
+                                (
+                                    v2_anchor_index,
+                                    _v2_anchor_scores,
+                                    _v2_anchor_margin,
+                                ) = score_online_candidates(
+                                    base_candidate_rows, runtime_models[policy]
+                                )
+                                hybrid_result = generate_hybridstructpool_candidates(
+                                    state,
+                                    topology_state_analysis,
+                                    v2_candidates=base_candidates,
+                                    v2_anchors=[base_candidates[v2_anchor_index]],
+                                    structural_sizes=hybridstructpool_runtime[
+                                        "structural_sizes"
+                                    ],
+                                    maximum_causal_candidates=int(
+                                        hybridstructpool_runtime[
+                                            "maximum_causal_candidates"
+                                        ]
+                                    ),
+                                    maximum_causal_neighborhood_size=int(
+                                        hybridstructpool_runtime[
+                                            "maximum_causal_neighborhood_size"
+                                        ]
+                                    ),
+                                    causal_temporal_window=int(
+                                        hybridstructpool_runtime[
+                                            "causal_temporal_window"
+                                        ]
+                                    ),
+                                    maximum_causal_jaccard=float(
+                                        hybridstructpool_runtime[
+                                            "maximum_causal_jaccard_similarity"
+                                        ]
+                                    ),
+                                )
+                                candidates = list(hybrid_result.candidates)
+                                if len(candidates) > int(
+                                    hybridstructpool_runtime[
+                                        "maximum_total_candidates"
+                                    ]
+                                ):
+                                    raise ClosedLoopExecutionError(
+                                        "hybridstructpool_candidate_cap_exceeded",
+                                        "full HybridStructPool exceeded its registered cap",
+                                        details={"candidate_count": len(candidates)},
+                                    )
+                                for candidate in candidates:
+                                    candidate["hybridstructpool_provenance"] = list(
+                                        hybrid_result.provenance_by_candidate_id[
+                                            str(candidate["candidate_id"])
+                                        ]
+                                    )
+                                (
+                                    candidate_rows,
+                                    hybrid_feature_metrics,
+                                ) = feature_engine.realized_rows(
+                                    candidates, state_hash=before_hash
+                                )
+                                hybrid_seconds = time.perf_counter() - hybrid_started
+                                feature_seconds += sum(
+                                    float(value)
+                                    for key, value in hybrid_feature_metrics.items()
+                                    if key.endswith("_seconds")
+                                )
+                                proposal_metrics.update(
+                                    {
+                                        "hybridstructpool_full_union_required": True,
+                                        "hybridstructpool_v2_anchor_candidate_id": str(
+                                            base_candidates[v2_anchor_index][
+                                                "candidate_id"
+                                            ]
+                                        ),
+                                        "hybridstructpool_base_candidate_count": (
+                                            hybrid_result.base_candidate_count
+                                        ),
+                                        "hybridstructpool_structural_candidate_count": (
+                                            hybrid_result.structural_candidate_count
+                                        ),
+                                        "hybridstructpool_causal_candidate_count": (
+                                            hybrid_result.causal_candidate_count
+                                        ),
+                                        "hybridstructpool_challenger_count": len(
+                                            hybrid_result.challengers
+                                        ),
+                                        "hybridstructpool_exact_duplicate_count": (
+                                            hybrid_result.exact_duplicate_count
+                                        ),
+                                        "hybridstructpool_causal_attempt_count": len(
+                                            hybrid_result.causal_attempts
+                                        ),
+                                        "hybridstructpool_candidate_count": len(
+                                            candidates
+                                        ),
+                                        "hybridstructpool_seconds": hybrid_seconds,
+                                        "candidate_count": len(candidates),
+                                        "candidate_generation_seconds": float(
+                                            proposal_metrics.get(
+                                                "candidate_generation_seconds", 0.0
+                                            )
+                                        )
+                                        + hybrid_seconds,
+                                    }
+                                )
+                        else:
+                            proposal_metrics.update(
+                                {
+                                    "hybridstructpool_enabled": False,
+                                    "hybridstructpool_gate_evaluated": False,
+                                    "hybridstructpool_gate_passed": False,
+                                    "hybridstructpool_gate_reason": "not_enabled",
+                                    "hybridstructpool_gate_seconds": 0.0,
+                                }
                             )
                         if (
                             slotpool_model_payload is not None
@@ -2424,19 +2619,28 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     else:
                         selected = candidates[selected_local_index]
                         selected_row = candidate_rows[selected_local_index]
-                        random_seed = repair_random_seed(
-                            str(row["task_id"]),
-                            solver_seed,
-                            before_hash,
-                            decision_index,
-                            str(selected["candidate_id"]),
-                            selected["proposal_seeds"],
-                        )
+                        seed_draw_index = None
+                        if episode_repair_seed_stream is not None:
+                            seed_draw_index = episode_repair_seed_stream.draw_count
+                            random_seed = episode_repair_seed_stream.next_seed(
+                                selected["proposal_seeds"]
+                            )
+                        else:
+                            random_seed = repair_random_seed(
+                                str(row["task_id"]),
+                                solver_seed,
+                                before_hash,
+                                decision_index,
+                                str(selected["candidate_id"]),
+                                selected["proposal_seeds"],
+                            )
                         action = {
                             "mode": "explicit_neighborhood",
                             "agents": selected["agents"],
                             "random_seed": random_seed,
                         }
+                        controller["repair_seed_policy"] = repair_seed_policy
+                        controller["repair_seed_draw_index"] = seed_draw_index
                         diagnostic = feature_range_diagnostic(
                             selected_row, policy, runtime_ranges[policy]
                         )
@@ -3894,6 +4098,8 @@ def run_closed_loop_collection(
     use_global_collection_lock: bool = True,
     topology_boundary_augmentation: dict[str, Any] | None = None,
     structpool_augmentation: dict[str, Any] | None = None,
+    hybridstructpool_augmentation: dict[str, Any] | None = None,
+    repair_seed_policy: str | None = None,
     episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
@@ -3910,8 +4116,23 @@ def run_closed_loop_collection(
     structpool_augmentation = validate_structpool_augmentation(
         structpool_augmentation
     )
-    if topology_boundary_augmentation is not None and structpool_augmentation is not None:
-        raise ValueError("topology-boundary and StructPool augmentations are exclusive")
+    hybridstructpool_augmentation = validate_hybridstructpool_augmentation(
+        hybridstructpool_augmentation
+    )
+    repair_seed_policy = validate_repair_seed_policy(
+        repair_seed_policy
+        if repair_seed_policy is not None
+        else config.get("repair_seed_policy")
+    )
+    if sum(
+        value is not None
+        for value in (
+            topology_boundary_augmentation,
+            structpool_augmentation,
+            hybridstructpool_augmentation,
+        )
+    ) > 1:
+        raise ValueError("topology, StructPool, and HybridStructPool are exclusive")
     if topology_boundary_augmentation is not None:
         config = {
             **config,
@@ -3926,6 +4147,14 @@ def run_closed_loop_collection(
             "proposal": {
                 **dict(config["proposal"]),
                 "structpool": structpool_augmentation,
+            },
+        }
+    if hybridstructpool_augmentation is not None:
+        config = {
+            **config,
+            "proposal": {
+                **dict(config["proposal"]),
+                "hybridstructpool": hybridstructpool_augmentation,
             },
         }
     config = _with_time_budget_overrides(
@@ -3962,6 +4191,8 @@ def run_closed_loop_collection(
         )
     if structpool_augmentation is not None and controller_mode != "v2-full":
         raise ValueError("StructPool augmentation requires frozen v2-full")
+    if hybridstructpool_augmentation is not None and controller_mode != "v2-full":
+        raise ValueError("HybridStructPool augmentation requires frozen v2-full")
     diagnostic_shadow_roots: dict[str, Path] = {}
     diagnostic_shadow_manifests: dict[str, dict[str, Any]] = {}
     if diagnostic_shadow_bundles:
@@ -4123,6 +4354,7 @@ def run_closed_loop_collection(
         "deterministic_pp_replay": bool(
             config.get("deterministic_pp_replay", False)
         ),
+        "repair_seed_policy": repair_seed_policy,
         "controller_bundle": str(controller_root),
         "diagnostic_shadow_bundles": {
             shadow_id: str(path)
@@ -4483,6 +4715,7 @@ def run_closed_loop_collection(
                 "deterministic_pp_replay": bool(
                     config.get("deterministic_pp_replay", False)
                 ),
+                "repair_seed_policy": repair_seed_policy,
                 "existing_manifest_row": existing_by_key.get(
                     (str(row["task_id"]), int(solver_seed))
                 ),

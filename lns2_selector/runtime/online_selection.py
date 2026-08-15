@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import random
 import time
+from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from experiments.context_audit import _pair_vector
@@ -39,6 +41,64 @@ from lns2_selector.runtime.topology_candidates import (
 
 
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
+REPAIR_SEED_POLICIES = ("state_derived", "episode_stream")
+
+
+@dataclass
+class EpisodeRepairSeedStream:
+    """Episode-scoped pseudo-random stream for explicit native PP actions.
+
+    Official LNS2 seeds its pseudo-random generator once and then advances the
+    stream as decisions are executed.  Learned explicit-neighborhood actions
+    historically derived a new seed from the state and candidate identity.
+    That remains available for paired replay, while this class supplies the
+    deployment-equivalent advancing stream without introducing OS entropy.
+    """
+
+    root_seed: int
+    draw_count: int = 0
+    _generator: random.Random = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if not 0 <= int(self.root_seed) < 2**31:
+            raise ValueError("episode repair root seed must be in [0, 2**31)")
+        self.root_seed = int(self.root_seed)
+        self._generator = random.Random(self.root_seed)
+
+    @classmethod
+    def from_episode(
+        cls, *, task_id: str, solver_seed: int, episode_id: str
+    ) -> "EpisodeRepairSeedStream":
+        if not str(task_id) or not str(episode_id):
+            raise ValueError("episode repair seed identity must be non-empty")
+        root_seed = int(
+            _fingerprint(
+                {
+                    "namespace": "closed-loop-explicit-repair-stream-v1",
+                    "task_id": str(task_id),
+                    "solver_seed": int(solver_seed),
+                    "episode_id": str(episode_id),
+                }
+            )[:16],
+            16,
+        ) % (2**31)
+        return cls(root_seed=root_seed)
+
+    def next_seed(self, forbidden: Iterable[int] = ()) -> int:
+        excluded = set(map(int, forbidden))
+        for _ in range(2**16):
+            value = self._generator.randrange(2**31)
+            self.draw_count += 1
+            if value not in excluded:
+                return value
+        raise RuntimeError("episode repair seed stream exhausted its rejection bound")
+
+
+def validate_repair_seed_policy(value: str | None) -> str:
+    policy = "state_derived" if value is None else str(value)
+    if policy not in REPAIR_SEED_POLICIES:
+        raise ValueError(f"unsupported repair seed policy: {policy}")
+    return policy
 
 _TOPOLOGY_BOUNDARY_LEGACY_CONFIG = {
     "enabled": True,
@@ -1292,6 +1352,8 @@ def generate_online_candidates(
 
 __all__ = [
     "ClosedLoopExecutionError",
+    "EpisodeRepairSeedStream",
+    "REPAIR_SEED_POLICIES",
     "feature_range_diagnostic",
     "generate_online_candidates",
     "online_candidate_rows",
@@ -1306,4 +1368,5 @@ __all__ = [
     "validate_topology_boundary_augmentation",
     "validate_structpool_augmentation",
     "structpool_high_stress_gate",
+    "validate_repair_seed_policy",
 ]

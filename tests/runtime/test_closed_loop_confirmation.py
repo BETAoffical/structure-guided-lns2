@@ -56,11 +56,13 @@ from experiments.neighborhood_features import _feature_profiles
 from experiments.state_analysis import analyze_state, analyze_static_grid
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.runtime.online_selection import (
+    EpisodeRepairSeedStream,
     filter_structpool_lean_candidates,
     guardpool_runtime_augmentation,
     slotpool_runtime_augmentation,
     structpool_high_stress_gate,
     validate_structpool_augmentation,
+    validate_repair_seed_policy,
 )
 
 
@@ -1945,6 +1947,34 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             repair,
             repair_random_seed("task", 0, "state", 1, "candidate", [proposal]),
         )
+
+    def test_episode_repair_seed_stream_advances_and_replays(self) -> None:
+        first = EpisodeRepairSeedStream.from_episode(
+            task_id="task", solver_seed=7, episode_id="episode"
+        )
+        second = EpisodeRepairSeedStream.from_episode(
+            task_id="task", solver_seed=7, episode_id="episode"
+        )
+        values = [first.next_seed() for _ in range(4)]
+        self.assertEqual(values, [second.next_seed() for _ in range(4)])
+        self.assertEqual(len(set(values)), 4)
+        self.assertEqual(first.draw_count, 4)
+
+    def test_episode_repair_seed_stream_rejects_forbidden_draw(self) -> None:
+        source = EpisodeRepairSeedStream(root_seed=19)
+        forbidden = source.next_seed()
+        replay = EpisodeRepairSeedStream(root_seed=19)
+        chosen = replay.next_seed([forbidden])
+        self.assertNotEqual(chosen, forbidden)
+        self.assertEqual(replay.draw_count, 2)
+
+    def test_repair_seed_policy_is_explicit(self) -> None:
+        self.assertEqual(validate_repair_seed_policy(None), "state_derived")
+        self.assertEqual(
+            validate_repair_seed_policy("episode_stream"), "episode_stream"
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported repair seed policy"):
+            validate_repair_seed_policy("os_random")
 
     def test_batched_proposal_seeds_match_the_historical_fingerprint(self) -> None:
         requests = [
