@@ -68,6 +68,58 @@
         }
       ],
       "reason": "Preserve the registered producer source identity of the completed Compact Native-Order experiment while documenting its intentionally compatible atomic-job failure record."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_failure_informed_rescue_continuation.py",
+          "name": "prepare_cases"
+        },
+        {
+          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
+          "name": "prepare_cases"
+        }
+      ],
+      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its compatible frozen-cohort adapter."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_failure_informed_rescue_continuation.py",
+          "name": "continuation_schedule"
+        },
+        {
+          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
+          "name": "continuation_schedule"
+        }
+      ],
+      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its intentionally compatible paired schedule construction."
+    },
+    {
+      "functions": [
+        {
+          "path": "experiments/stride_failure_informed_rescue_continuation.py",
+          "name": "_status"
+        },
+        {
+          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
+          "name": "_status"
+        }
+      ],
+      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its compatible atomic collection status schema."
+    },
+    {
+      "functions": [
+        {
+          "path": "scripts/run_stride_failure_informed_rescue_continuation.py",
+          "name": "main"
+        },
+        {
+          "path": "scripts/run_stride_signature_scoped_rescue_continuation.py",
+          "name": "main"
+        }
+      ],
+      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its intentionally compatible command interface."
     }
   ],
   "tracked_roles": {
