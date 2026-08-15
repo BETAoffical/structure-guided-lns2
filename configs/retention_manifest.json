@@ -2739,6 +2739,21 @@
       "contract": "Freeze the paired Maze cohort, episode-stream PP semantics, baseline artifact identity, complete-union runtime semantics and engineering gates."
     },
     {
+      "path": "experiments/stride_hybridstructpool_raw_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Collect and analyze strictly serial reset-inclusive raw TTF evidence for official Adaptive LNS2, frozen V2 and full HybridStructPool."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_raw_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered HybridStructPool raw TTF quick comparison and integrity analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_raw_ttf.py",
+      "role": "reproducibility",
+      "contract": "Freeze task identity, rotating serial arm order, official Adaptive comparison, raw timing boundaries and promotion gates."
+    },
+    {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
       "role": "reproducibility",
       "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."
