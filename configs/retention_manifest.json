@@ -2807,6 +2807,21 @@
       "path": "tests/evaluation/test_stride_compact_blocker_rescue_continuation.py",
       "role": "reproducibility",
       "contract": "Freeze five-arm first-attempt pairing, one-call rescue, shared fresh seed, semantic removal and observed-blocker membership semantics."
+    },
+    {
+      "path": "experiments/stride_compact_blocker_escape_durability.py",
+      "role": "reproducibility",
+      "purpose": "Audit whether the compact-blocker one-decision escape signal persists through horizons 3 and 8 without invoking the solver."
+    },
+    {
+      "path": "scripts/run_stride_compact_blocker_escape_durability.py",
+      "role": "reproducibility",
+      "purpose": "Run the registered 16-process read-only escape-durability audit over existing compact-blocker traces."
+    },
+    {
+      "path": "tests/evaluation/test_stride_compact_blocker_escape_durability.py",
+      "role": "reproducibility",
+      "contract": "Freeze sustained-escape, original-platform re-entry, new-platform formation, censoring and paired-cohort semantics."
     }
   ]
 }

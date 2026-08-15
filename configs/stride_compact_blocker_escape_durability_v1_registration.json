@@ -1,0 +1,99 @@
+{
+  "schema": "lns2.stride.compact_blocker_escape_durability_audit_registration.v1",
+  "scientific_status": "posthoc_existing_trace_protocol_frozen_before_durability_computation",
+  "experiment_id": "stride-compact-blocker-escape-durability-v1",
+  "protocol_parent_commit": "ab38d50ef89f1173fc6fd09cbe867df77b263ea8",
+  "known_before_freeze": {
+    "one_step_compact_blocker_effect_known": true,
+    "horizon_3_or_8_durability_not_previously_computed": true,
+    "source_collection_complete": true,
+    "source_initial_gate_failed_on_rescue_wall": true,
+    "implementation_debug_samples_inspected_after_metric_freeze": [
+      {
+        "state_fingerprint": "006fa7aa1a26eaf611ec5ff2f354859e6027de6c0d40689c3100e14f574785a2",
+        "trial_index": 0,
+        "arm": "blocker_augmented_fresh_seed"
+      },
+      {
+        "state_fingerprint": "008224076406ce74e7da313ebc3bfa2a9c26d2f3a2ce59fc22cefe9828b0484d",
+        "trial_index": 0,
+        "arm": "blocker_augmented_fresh_seed"
+      }
+    ],
+    "debug_samples_changed_metrics_or_gates": false
+  },
+  "inputs": {
+    "source_registration": {
+      "path": "configs/stride_compact_blocker_rescue_continuation_v1_registration.json",
+      "sha256": "59a19d8b03b004e5b4ab3d099cd4cb08f54c725f5bd39a97a41a3fab3195a810"
+    },
+    "source_run_config": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_run_config.json",
+      "sha256": "c5bd8e138effb5b13225b313ee8f663b479070c064016218679515c31ad3bda9"
+    },
+    "source_schedule": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_schedule.jsonl",
+      "sha256": "d7ecb66fbf2c0bc712f72672bc93a02a104088794a5b6244feb8fa36f0f476c4"
+    },
+    "source_status": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/collection_status.json",
+      "sha256": "8bc15a20ce41ef28a05cb6ee28fb64715f6ee510ca52d4b14940183b2db23e77"
+    },
+    "source_report": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_report.json",
+      "sha256": "26502c21d448ffc7a14395ba4d6a478067498c1a8e5e4d8be3be9608f5de2d74"
+    }
+  },
+  "population": {
+    "required_source_state_count": 45,
+    "required_compact_eligible_state_count": 35,
+    "required_trigger_pair_count": 81,
+    "required_trial_indices": [0, 1, 2, 3],
+    "paired_arms": [
+      "blocker_augmented_fresh_seed",
+      "compact_blocker_augmented_fresh_seed"
+    ],
+    "eligible_event": "state belongs to the registered 35-state compact cohort and the paired first action exact-rolls back with conflict_bound_exceeded; trial-local compact-ineligible fallback events remain paired zero-effect observations",
+    "no_state_or_trial_exclusion_by_durability_outcome": true
+  },
+  "durability": {
+    "horizons": [1, 3, 8],
+    "horizon_origin": "decision one is the single rescue decision after the shared failed decision zero",
+    "sustained_escape_requires": [
+      "rescue decision changes the repair fingerprint",
+      "original platform repair fingerprint is not revisited through the horizon",
+      "no three-consecutive exact rollbacks form a new platform through the horizon"
+    ],
+    "successful_termination_before_horizon": "observed and platform-free",
+    "non_success_termination_before_horizon": "right_censored_and_masked",
+    "original_edge_retention": "intersection of original platform conflict edges and after-state conflict edges divided by original edge count",
+    "normalized_conflict_auc": "mean after-state conflicts divided by original platform conflicts over observed decisions through horizon"
+  },
+  "contrasts": {
+    "treatment_minus_baseline": "compact_blocker_augmented_fresh_seed minus blocker_augmented_fresh_seed",
+    "state_cluster_bootstrap_replicates": 10000,
+    "durable_signal_requires": {
+      "horizon_3_sustained_escape_difference_95pct_lower_strictly_above": 0.0,
+      "horizon_8_sustained_escape_difference_95pct_lower_strictly_above": 0.0,
+      "horizon_8_edge_retention_auc_difference_95pct_upper_strictly_below": 0.0,
+      "maximum_per_map_horizon_8_sustained_escape_worsening": 0.05
+    },
+    "transient_classification": "horizon_1 improves but either horizon_3 or horizon_8 lower confidence limit is not above zero",
+    "inconclusive_classification": "horizon_1 is not stable or horizon observations are insufficient"
+  },
+  "execution": {
+    "worker_count": 16,
+    "solver_calls_allowed": false,
+    "source_files_read_only": true,
+    "atomic_report_write": true
+  },
+  "claim_boundary": {
+    "posthoc_diagnostic_only": true,
+    "reopens_failed_wall_gate": false,
+    "runtime_integration_allowed": false,
+    "ttf_experiment_allowed": false,
+    "new_pp_collection_allowed": false,
+    "selector_training_allowed": false,
+    "fresh_confirmation_required_for_any_new_mechanism": true
+  }
+}
