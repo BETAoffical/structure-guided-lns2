@@ -344,6 +344,9 @@ def run(
             "job_id": _fingerprint(item),
             "config_path": str(path),
             "output_root": str(output),
+            "collection_path": str(
+                _controller_dir(output, item)
+            ),
             "qualification_source": str(
                 output / "maps" / str(item["group_id"]) / "qualification"
             ),

@@ -169,7 +169,7 @@
     },
     "movingai_runtime": {
       "path": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
-      "sha256": "c38568985809ea14e41555a5b43fbde5ad86cd83c6a292c868e30709b262d9a2"
+      "sha256": "27c6cc29cc59c1cf00fc29d6220a790d212d7634c139afbdc476c69768e2a936"
     },
     "dao_runtime": {
       "path": "configs/stride_stage4r_high_load_runtime.json",
