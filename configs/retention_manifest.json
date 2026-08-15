@@ -2877,6 +2877,21 @@
       "path": "tests/evaluation/test_stride_exactstate_controller_attribution.py",
       "role": "reproducibility",
       "contract": "Freeze the three controller arms, complete restored-state identity, paired trial randomness, escape semantics and 16-worker schedule."
+    },
+    {
+      "path": "experiments/stride_onpolicy_controller_attribution.py",
+      "role": "reproducibility",
+      "purpose": "Compare frozen STRIDE, official Adaptive LNS2 and fixed Target-8 from the same registered original InitLNS paths without recomputing InitLNS."
+    },
+    {
+      "path": "scripts/run_stride_onpolicy_controller_attribution.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered initial-path controller attribution collection and paired analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_onpolicy_controller_attribution.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four controller arms, decision-zero path replay, complete restart identity, paired randomness, platform-entry semantics and 16-worker schedule."
     }
   ]
 }
