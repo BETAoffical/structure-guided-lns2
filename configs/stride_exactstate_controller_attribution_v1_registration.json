@@ -4,6 +4,8 @@
   "experiment_id": "stride-exactstate-controller-attribution-v1",
   "pre_registration_parent_commit": "70894a1dab3ada0c572265df0bed6588f66d759c",
   "protocol_revision": "r1_exact_first_repeat_stall_controller_contrast",
+  "runtime_hash_correction_parent_commit": "64e1abace608eac89d763814d2364dc72f8ccf9d",
+  "runtime_hash_correction_reason": "restore the complete already-registered proposal_dynamic portable model SHA-256 after the first smoke stopped before qualification or any episode",
   "inputs": {
     "failure_rescue_registration": {
       "path": "configs/stride_failure_informed_rescue_continuation_v1_registration.json",
@@ -11,7 +13,7 @@
     },
     "runtime_config": {
       "path": "configs/stride_exactstate_controller_attribution_runtime_v1.json",
-      "sha256": "41ff134fc51fa694838a4252de29dfc7a2867bd7c601e2d8b9172534c511c8da"
+      "sha256": "580a5618fce1df6182e7b4ed20f024187733264b2d04edc91846de5226e3f0f5"
     },
     "official_lns2_warm_start_status": {
       "path": "build/initlns-maze600-lns2-warm-start-extension-14400-v1/status.json",

@@ -53,7 +53,7 @@
     "development_candidates_sha256": "6faef4cd6bcba0e79c30790a287142cee4ce580163d02e40cd740e16ac77ebd2",
     "portable_models": "artifacts/initlns-closed-loop-policy-v1",
     "portable_model_sha256": {
-      "proposal_dynamic": "b252c5312984d8c590cba605a7d368576be4ccda426659f",
+      "proposal_dynamic": "b252c5312984d8c590cba605a7d3685762c6b7334a37dbb576be4ccda426659f",
       "realized_dynamic": "11d0ad6cbbde0f7f6c598e7ba48026d9e5caabb8046a6c2adf602a99d3b77ee3"
     },
     "model_sha256": {

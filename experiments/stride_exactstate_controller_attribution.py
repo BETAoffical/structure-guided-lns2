@@ -79,6 +79,10 @@ def load_registration(
         != "70894a1dab3ada0c572265df0bed6588f66d759c"
         or config.get("protocol_revision")
         != "r1_exact_first_repeat_stall_controller_contrast"
+        or config.get("runtime_hash_correction_parent_commit")
+        != "64e1abace608eac89d763814d2364dc72f8ccf9d"
+        or config.get("runtime_hash_correction_reason")
+        != "restore the complete already-registered proposal_dynamic portable model SHA-256 after the first smoke stopped before qualification or any episode"
         or tuple(map(str, config.get("arms") or ())) != ARMS
     ):
         raise ValueError("exact-state controller attribution registration changed")
