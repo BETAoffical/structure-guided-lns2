@@ -372,13 +372,32 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
                 "environment": {"replan_algorithm": "PP", "time_limit": 45.0},
             },
             "seed_isolation": {"passed": True},
-            "controller_implementation": {"native": "sha"},
+            "controller_implementation": {
+                "files": {"controller.py": "old"},
+                "native_module": {"sha256": "native"},
+            },
             "controller": "v2-full",
         }
         another_controller = {**base, "controller": "mixed-full-v2"}
         self.assertEqual(
             _qualification_reuse_fingerprint(base),
             _qualification_reuse_fingerprint(another_controller),
+        )
+        changed_python = json.loads(json.dumps(base))
+        changed_python["controller_implementation"]["files"] = {
+            "controller.py": "new"
+        }
+        self.assertEqual(
+            _qualification_reuse_fingerprint(base),
+            _qualification_reuse_fingerprint(changed_python),
+        )
+        changed_native = json.loads(json.dumps(base))
+        changed_native["controller_implementation"]["native_module"][
+            "sha256"
+        ] = "different"
+        self.assertNotEqual(
+            _qualification_reuse_fingerprint(base),
+            _qualification_reuse_fingerprint(changed_native),
         )
         changed = json.loads(json.dumps(base))
         changed["configuration"]["environment"]["time_limit"] = 46.0
@@ -448,7 +467,6 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertEqual(
             provenance["source_model_sha256"], source_model_sha256
         )
-
     def test_qualification_accepts_an_explicit_partial_task_seed_cohort(self) -> None:
         rows = [
             {

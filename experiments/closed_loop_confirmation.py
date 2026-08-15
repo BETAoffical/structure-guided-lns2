@@ -580,6 +580,7 @@ def _qualification_reuse_fingerprint(run_config: dict[str, Any]) -> str:
     """Fingerprint the state-reset inputs that qualification depends on."""
 
     configuration = dict(run_config.get("configuration") or {})
+    implementation = dict(run_config.get("controller_implementation") or {})
     return _fingerprint(
         {
             "dataset_fingerprint": str(run_config.get("dataset_fingerprint", "")),
@@ -587,9 +588,11 @@ def _qualification_reuse_fingerprint(run_config: dict[str, Any]) -> str:
             "solver_seeds": list(configured_solver_seeds(configuration)),
             "environment": dict(configuration.get("environment") or {}),
             "seed_isolation": dict(run_config.get("seed_isolation") or {}),
-            "controller_implementation": dict(
-                run_config.get("controller_implementation") or {}
-            ),
+            # Qualification performs environment reset only.  Controller and
+            # candidate-generator Python hashes must not invalidate otherwise
+            # identical reset evidence; the loaded native producer still must
+            # match exactly.
+            "native_module": dict(implementation.get("native_module") or {}),
         }
     )
 
@@ -4100,6 +4103,7 @@ def run_closed_loop_collection(
     structpool_augmentation: dict[str, Any] | None = None,
     hybridstructpool_augmentation: dict[str, Any] | None = None,
     repair_seed_policy: str | None = None,
+    deterministic_pp_replay: bool | None = None,
     episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parents[1]
@@ -4110,6 +4114,10 @@ def run_closed_loop_collection(
         raise ValueError("unsupported closed-loop config")
     if not isinstance(config.get("deterministic_pp_replay", False), bool):
         raise ValueError("deterministic_pp_replay must be boolean")
+    if deterministic_pp_replay is not None:
+        if not isinstance(deterministic_pp_replay, bool):
+            raise ValueError("deterministic_pp_replay override must be boolean")
+        config = {**config, "deterministic_pp_replay": deterministic_pp_replay}
     topology_boundary_augmentation = validate_topology_boundary_augmentation(
         topology_boundary_augmentation
     )

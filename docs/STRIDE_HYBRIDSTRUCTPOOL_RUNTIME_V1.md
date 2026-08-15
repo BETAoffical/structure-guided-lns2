@@ -45,3 +45,17 @@ repair-order intervention is enabled in this milestone.  Those mechanisms are
 the second, separately testable step and may only be composed after this Pool
 passes its own closed-loop validation.
 
+## Runtime smoke
+
+`build/stride-hybridstructpool-runtime-smoke-v1-r5` executed one registered
+Maze decision-zero path with `episode_stream` and paired PP replay disabled.
+Both arms succeeded and no trace action contained `pp_random_seed`.
+
+| arm | decisions | normalized fixed AUC | capped wall | controller | PP/repair |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| V2 full | 41 | 0.15925 | 7.99 s | 1.18 s | 6.25 s |
+| Hybrid full | 20 | 0.06791 | 5.33 s | 1.33 s | 3.64 s |
+
+Hybrid selected six structural actions and was better on every listed outcome
+in this one episode.  This is execution and directionality evidence only; one
+outcome-enriched Maze key is not a Pool promotion or generalization result.
