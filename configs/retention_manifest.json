@@ -2681,7 +2681,7 @@
     {
       "path": "lns2_selector/runtime/hybridstructpool.py",
       "role": "reproducibility",
-      "purpose": "Generate the outcome-blind union of the full V2 pool, symmetric four-size StructShell and compact CausalClosure actions without runtime reduction."
+      "purpose": "Preserve the complete audited HybridStructPool union and expose a separately frozen lean runtime view with the complete V2 pool and CausalClosure frontier."
     },
     {
       "path": "experiments/stride_hybridstructpool_audit.py",
@@ -2717,6 +2717,21 @@
       "path": "tests/evaluation/test_stride_hybridstructpool_budget.py",
       "role": "reproducibility",
       "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
+    },
+    {
+      "path": "experiments/stride_hybridstructpool_runtime_pilot.py",
+      "role": "reproducibility",
+      "purpose": "Collect and analyze paired full-versus-lean HybridStructPool initial-path runtime evidence with explicit controller-cost gates."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_runtime_pilot.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered HybridStructPool pool-only runtime and engineering pilot."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_runtime_pilot.py",
+      "role": "reproducibility",
+      "contract": "Freeze the paired Maze cohort, episode-stream PP semantics, baseline artifact identity, and lean-runtime engineering gates."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",

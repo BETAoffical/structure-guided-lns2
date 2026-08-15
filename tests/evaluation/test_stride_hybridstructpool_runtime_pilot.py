@@ -11,6 +11,9 @@ from experiments.stride_hybridstructpool_runtime_pilot import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs/stride_hybridstructpool_runtime_pilot_v1_registration.json"
+OPTIMIZED_CONFIG = (
+    ROOT / "configs/stride_hybridstructpool_runtime_optimization_v2_registration.json"
+)
 
 
 def test_registration_reuses_the_complete_registered_maze_cohort() -> None:
@@ -32,3 +35,20 @@ def test_schedule_is_strictly_paired_and_pool_only() -> None:
     assert len(paired) == 76
     assert all(value == set(ARMS) for value in paired.values())
 
+
+def test_optimized_registration_freezes_engineering_and_quality_gates() -> None:
+    _path, _root, config, _source, tasks = load_registration(OPTIMIZED_CONFIG)
+    assert len(tasks) == 19
+    assert config["runtime_optimization"]["full_union_audit_api_preserved"]
+    assert config["runtime_optimization"]["v2_pool_complete"]
+    assert config["runtime_optimization"]["causal_frontier_complete"]
+    assert len(
+        config["runtime_optimization"]["removed_structural_family_size_cells"]
+    ) == 12
+    engineering = config["engineering_gate"]
+    assert engineering["maximum_mean_controller_seconds"] < engineering[
+        "registered_full_runtime_baseline"
+    ]["mean_controller_seconds"]
+    assert engineering["maximum_mean_candidate_generation_seconds"] < engineering[
+        "registered_full_runtime_baseline"
+    ]["mean_candidate_generation_seconds"]

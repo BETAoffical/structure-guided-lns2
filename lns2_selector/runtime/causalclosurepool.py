@@ -64,26 +64,42 @@ class CausalClosurePoolResult:
     core_attempt_count: int
 
 
-def _positions(path: Iterable[int], horizon: int) -> tuple[int, ...]:
-    values = tuple(map(int, path))
-    if not values:
-        raise ValueError("CausalClosurePool requires non-empty paths")
-    return tuple(values[min(index, len(values) - 1)] for index in range(horizon))
+def _position(path: tuple[int, ...], time: int) -> int:
+    return int(path[min(int(time), len(path) - 1)])
 
 
-def _causal_context(state: dict[str, Any]) -> _CausalContext:
+def _causal_context(
+    state: dict[str, Any], *, relevant_times: frozenset[int], horizon: int
+) -> _CausalContext:
     rows = {int(row["id"]): row for row in state["agents"]}
     if not rows:
         raise ValueError("CausalClosurePool requires agents")
-    horizon = max(len(row["path"]) for row in rows.values())
-    paths = {agent: _positions(row["path"], horizon) for agent, row in rows.items()}
+    if not relevant_times or min(relevant_times) < 0:
+        raise ValueError("CausalClosurePool requires non-negative relevant times")
+    paths = {
+        agent: tuple(map(int, row["path"])) for agent, row in rows.items()
+    }
+    if any(not path for path in paths.values()):
+        raise ValueError("CausalClosurePool requires non-empty paths")
+    if horizon <= max(relevant_times):
+        raise ValueError("CausalClosurePool relevant times exceed the path horizon")
+    ordered_times = tuple(sorted(relevant_times))
     occupancy: dict[tuple[int, int], set[int]] = collections.defaultdict(set)
     transitions: dict[tuple[int, int, int], set[int]] = collections.defaultdict(set)
     for agent, path in paths.items():
-        for time, cell in enumerate(path):
+        path_length = len(path)
+        terminal = path[-1]
+        for time in ordered_times:
+            cell = path[time] if time < path_length else terminal
             occupancy[(time, cell)].add(agent)
-            if time and path[time - 1] != cell:
-                transitions[(time, path[time - 1], cell)].add(agent)
+            previous_time = time - 1
+            previous = (
+                path[previous_time]
+                if previous_time < path_length
+                else terminal
+            ) if time else cell
+            if time and previous != cell:
+                transitions[(time, previous, cell)].add(agent)
     adjacency: dict[int, set[int]] = {agent: set() for agent in paths}
     for edge in state.get("conflict_edges", []):
         left, right = sorted(map(int, edge))
@@ -128,11 +144,12 @@ def _localized_conflict_closure(
     seed_time: int,
     event_window: int,
 ) -> tuple[set[int], frozenset[int], dict[int, CausalContactEvidence]]:
-    eligible_times = {
-        time
-        for time in range(context.horizon)
-        if abs(time - seed_time) <= event_window
-    }
+    eligible_times = set(
+        range(
+            max(0, int(seed_time) - int(event_window)),
+            min(context.horizon, int(seed_time) + int(event_window) + 1),
+        )
+    )
     selected = set(core)
     stack = list(core)
     evidence: dict[int, CausalContactEvidence] = {}
@@ -183,7 +200,7 @@ def _temporal_neighbors(
     result: dict[int, CausalContactEvidence] = {}
     path = context.paths[agent]
     for source_time in causal_times:
-        cell = path[source_time]
+        cell = _position(path, source_time)
         bottleneck = cell in analysis.articulation or int(analysis.degrees.get(cell, 4)) <= 2
         if bottleneck_only and not bottleneck:
             continue
@@ -202,7 +219,7 @@ def _temporal_neighbors(
                 )
             if source_time == 0 or other_time == 0:
                 continue
-            previous = path[source_time - 1]
+            previous = _position(path, source_time - 1)
             if previous == cell:
                 continue
             for other in context.transitions.get((other_time, cell, previous), ()):
@@ -230,11 +247,24 @@ def _closure_draft(
     bottleneck_only: bool,
     event_window: int,
     maximum_neighborhood_size: int,
+    localized: tuple[
+        set[int], frozenset[int], dict[int, CausalContactEvidence]
+    ]
+    | None = None,
+    temporal_neighbor_cache: dict[
+        tuple[int, frozenset[int], int, bool],
+        dict[int, CausalContactEvidence],
+    ]
+    | None = None,
 ) -> tuple[_CausalDraft | None, dict[str, Any] | None]:
     core = set(core_agents)
-    selected, causal_times, evidence = _localized_conflict_closure(
-        context, core, seed_time, event_window
-    )
+    if localized is None:
+        localized = _localized_conflict_closure(
+            context, core, seed_time, event_window
+        )
+    selected = set(localized[0])
+    causal_times = localized[1]
+    evidence = dict(localized[2])
     if len(selected) > maximum_neighborhood_size:
         return None, {
             "core_id": core_id,
@@ -262,14 +292,29 @@ def _closure_draft(
         while frontier:
             additions: dict[int, CausalContactEvidence] = {}
             for agent in sorted(frontier):
-                for other, support in _temporal_neighbors(
-                    context,
-                    analysis,
-                    agent,
+                cache_key = (
+                    int(agent),
                     causal_times,
-                    temporal_radius=temporal_radius,
-                    bottleneck_only=bottleneck_only,
-                ).items():
+                    int(temporal_radius),
+                    bool(bottleneck_only),
+                )
+                supports = (
+                    temporal_neighbor_cache.get(cache_key)
+                    if temporal_neighbor_cache is not None
+                    else None
+                )
+                if supports is None:
+                    supports = _temporal_neighbors(
+                        context,
+                        analysis,
+                        agent,
+                        causal_times,
+                        temporal_radius=temporal_radius,
+                        bottleneck_only=bottleneck_only,
+                    )
+                    if temporal_neighbor_cache is not None:
+                        temporal_neighbor_cache[cache_key] = supports
+                for other, support in supports.items():
                     if other in selected:
                         continue
                     additions[other] = _merge_evidence(
@@ -408,24 +453,36 @@ def _candidate_dominates(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 
 def _front_ranks(rows: list[dict[str, Any]]) -> dict[str, int]:
-    remaining = {str(row["candidate_id"]): row for row in rows}
+    identities = [str(row["candidate_id"]) for row in rows]
+    dominates: list[list[int]] = [[] for _ in rows]
+    dominated_count = [0 for _ in rows]
+    for left_index, left in enumerate(rows):
+        for right_index in range(left_index + 1, len(rows)):
+            right = rows[right_index]
+            if _candidate_dominates(left, right):
+                dominates[left_index].append(right_index)
+                dominated_count[right_index] += 1
+            elif _candidate_dominates(right, left):
+                dominates[right_index].append(left_index)
+                dominated_count[left_index] += 1
+
+    front = [index for index, count in enumerate(dominated_count) if count == 0]
     ranks: dict[str, int] = {}
     rank = 0
-    while remaining:
-        front = [
-            identity
-            for identity, row in remaining.items()
-            if not any(
-                other_id != identity and _candidate_dominates(other, row)
-                for other_id, other in remaining.items()
-            )
-        ]
-        if not front:
-            raise RuntimeError("CausalClosurePool candidate dominance produced no front")
-        for identity in sorted(front):
-            ranks[identity] = rank
-            remaining.pop(identity)
+    assigned = 0
+    while front:
+        next_front: list[int] = []
+        for index in front:
+            ranks[identities[index]] = rank
+            assigned += 1
+            for dominated in dominates[index]:
+                dominated_count[dominated] -= 1
+                if dominated_count[dominated] == 0:
+                    next_front.append(dominated)
+        front = next_front
         rank += 1
+    if assigned != len(rows):
+        raise RuntimeError("CausalClosurePool candidate dominance produced no front")
     return ranks
 
 
@@ -447,7 +504,30 @@ def generate_causalclosure_candidates(
         raise ValueError("CausalClosurePool Jaccard threshold must be in [0, 1)")
     if not analysis.events:
         return CausalClosurePoolResult([], [], 0, 0, 0, 0, 0, 0)
-    context = _with_events(_causal_context(state), analysis)
+    event_times = {int(event.time) for event in analysis.events}
+    horizon = max(len(row["path"]) for row in state["agents"])
+    # A localized conflict closure first spans ``temporal_window`` around an
+    # event.  The near-temporal families can then inspect another
+    # ``temporal_window`` around every time in that closure.  Index the full
+    # composed window so the sparse context remains semantically identical to
+    # the former all-horizon context.
+    indexed_radius = 2 * temporal_window
+    relevant_times = frozenset(
+        time
+        for seed_time in event_times
+        for time in range(
+            max(0, seed_time - indexed_radius),
+            min(horizon, seed_time + indexed_radius + 1),
+        )
+    )
+    context = _with_events(
+        _causal_context(
+            state,
+            relevant_times=relevant_times,
+            horizon=horizon,
+        ),
+        analysis,
+    )
     agent_count = len(state["agents"])
     base_sets: dict[tuple[int, ...], str] = {}
     cores: list[tuple[str, tuple[int, ...], int]] = []
@@ -511,6 +591,10 @@ def generate_causalclosure_candidates(
     )
     attempts: list[dict[str, Any]] = []
     drafts: list[_CausalDraft] = []
+    temporal_neighbor_cache: dict[
+        tuple[int, frozenset[int], int, bool],
+        dict[int, CausalContactEvidence],
+    ] = {}
     oversized = 0
     oversized_cores = 0
     feasible_core_count = 0
@@ -528,6 +612,12 @@ def generate_causalclosure_candidates(
             )
             continue
         feasible_core_count += 1
+        localized = _localized_conflict_closure(
+            context,
+            set(core_agents),
+            seed_time,
+            temporal_window,
+        )
         for family, radius, bottleneck_only in family_specs:
             draft, rejection = _closure_draft(
                 context,
@@ -540,6 +630,8 @@ def generate_causalclosure_candidates(
                 bottleneck_only=bottleneck_only,
                 event_window=temporal_window,
                 maximum_neighborhood_size=maximum_neighborhood_size,
+                localized=localized,
+                temporal_neighbor_cache=temporal_neighbor_cache,
             )
             if rejection is not None:
                 attempts.append(rejection)

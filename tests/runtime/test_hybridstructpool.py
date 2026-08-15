@@ -6,8 +6,10 @@ from unittest.mock import patch
 from experiments.neighborhood_candidates import candidate_id
 from lns2_selector.runtime.causalclosurepool import CausalClosurePoolResult
 from lns2_selector.runtime.hybridstructpool import (
+    RUNTIME_STRUCTURAL_FAMILY_SIZES,
     STRUCTURAL_SIZES,
     generate_hybridstructpool_candidates,
+    generate_hybridstructpool_runtime_candidates,
     hybridstructpool_high_stress_gate,
     hybridstructpool_runtime_augmentation,
     merge_hybridstructpool_candidates,
@@ -35,10 +37,18 @@ def _candidate(agents: list[int], kind: str) -> dict:
 
 
 class HybridStructPoolTest(unittest.TestCase):
-    def test_runtime_contract_is_full_union_and_immutable(self) -> None:
+    def test_runtime_contract_preserves_full_audit_and_freezes_lean_mask(self) -> None:
         config = hybridstructpool_runtime_augmentation()
-        self.assertTrue(config["full_union_required"])
+        self.assertFalse(config["full_union_required"])
+        self.assertTrue(config["full_union_audit_preserved"])
         self.assertEqual(config["structural_sizes"], [8, 16, 24, 32])
+        self.assertEqual(
+            config["runtime_structural_family_sizes"],
+            {
+                family: list(sizes)
+                for family, sizes in RUNTIME_STRUCTURAL_FAMILY_SIZES.items()
+            },
+        )
         self.assertEqual(validate_hybridstructpool_augmentation(config), config)
         config["maximum_total_candidates"] = 12
         with self.assertRaisesRegex(ValueError, "unsupported HybridStructPool"):
@@ -133,6 +143,46 @@ class HybridStructPoolTest(unittest.TestCase):
                 v2_candidates=base,
                 v2_anchors=base,
                 structural_sizes=(8, 16, 24),
+            )
+
+    @patch("lns2_selector.runtime.hybridstructpool.generate_causalclosure_candidates")
+    @patch("lns2_selector.runtime.hybridstructpool.generate_structpool_candidate_subset")
+    def test_runtime_generator_uses_only_the_registered_structural_mask(
+        self, subset_mock, causal_mock
+    ) -> None:
+        base = [_candidate([1, 2], "base")]
+        subset_mock.return_value = [_candidate([3, 4], "structural")]
+        causal_mock.return_value = CausalClosurePoolResult(
+            candidates=[_candidate([5, 6], "causalclosure")],
+            attempts=[],
+            raw_candidate_count=1,
+            pareto_front_count=1,
+            oversized_family_count=0,
+            family_attempt_count=1,
+            oversized_core_count=0,
+            core_attempt_count=1,
+        )
+
+        result = generate_hybridstructpool_runtime_candidates(
+            {"agents": [{"id": 1}, {"id": 2}]},
+            object(),
+            v2_candidates=base,
+            v2_anchors=base,
+            structural_family_sizes=RUNTIME_STRUCTURAL_FAMILY_SIZES,
+        )
+
+        self.assertEqual(len(result.candidates), 3)
+        self.assertEqual(
+            subset_mock.call_args.kwargs["family_sizes"],
+            RUNTIME_STRUCTURAL_FAMILY_SIZES,
+        )
+        with self.assertRaisesRegex(ValueError, "runtime structural mask"):
+            generate_hybridstructpool_runtime_candidates(
+                {"agents": [{"id": 1}, {"id": 2}]},
+                object(),
+                v2_candidates=base,
+                v2_anchors=base,
+                structural_family_sizes={"conflict_component": (24,)},
             )
 
     def test_budget_reducer_preserves_v2_and_round_robins_semantic_groups(self) -> None:

@@ -4,7 +4,7 @@ import collections
 import copy
 import heapq
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from experiments.neighborhood_candidates import candidate_id
 from experiments.state_analysis import ConflictEvent, StateAnalysis
@@ -771,7 +771,10 @@ def _path_overlap_seed_data(
 
 
 def _structural_candidate_context(
-    state: dict[str, Any], analysis: StateAnalysis
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    include_path_overlap: bool = True,
 ) -> StructuralCandidateContext:
     neighborhood = _neighborhood_context(state)
     path_sets = {
@@ -821,8 +824,10 @@ def _structural_candidate_context(
             component_internal_events=dict(component_internal_events),
         ),
         hotspot_seed_data=_hotspot_seed_data(analysis),
-        overlap_seed_data=_path_overlap_seed_data(
-            state, analysis, path_sets=path_sets
+        overlap_seed_data=(
+            _path_overlap_seed_data(state, analysis, path_sets=path_sets)
+            if include_path_overlap
+            else None
         ),
         audit_cache={},
         finalized_cache={},
@@ -1154,6 +1159,77 @@ def generate_structpool_candidate_grid(
             len(row["structpool_family_groups"]) == 1
         )
         row["structpool_grid_duplicate_provenance_count"] = len(families)
+    return rows
+
+
+def generate_structpool_candidate_subset(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    family_sizes: Mapping[str, Iterable[int]],
+) -> list[dict[str, Any]]:
+    """Materialize a registered subset of the complete StructPool grid.
+
+    This is a runtime engineering API.  It never changes the complete
+    four-size audit contract exposed by :func:`generate_structpool_candidate_grid`.
+    Every retained draft is bit-for-bit the same agent set as its full-grid
+    counterpart; omitted family/size cells are not constructed or finalized.
+    """
+
+    unknown = set(map(str, family_sizes)) - set(_STRUCTPOOL_DRAFT_VARIANT_ORDER)
+    if unknown:
+        raise ValueError(f"unknown StructPool runtime variants: {sorted(unknown)}")
+    normalized = {
+        str(variant): tuple(sorted(set(map(int, sizes))))
+        for variant, sizes in family_sizes.items()
+    }
+    if not normalized or any(
+        not sizes or any(size not in {8, 16, 24, 32} for size in sizes)
+        for sizes in normalized.values()
+    ):
+        raise ValueError("StructPool runtime family sizes must use 8/16/24/32")
+    if not analysis.events:
+        return []
+
+    context = _structural_candidate_context(
+        state,
+        analysis,
+        include_path_overlap="path_overlap" in normalized,
+    )
+    drafts: list[StructuralCandidateDraft] = []
+    for variant in _STRUCTPOOL_DRAFT_VARIANT_ORDER:
+        for size in normalized.get(variant, ()):
+            draft = _generate_structpool_variant_draft(
+                context,
+                variant=variant,
+                size=size,
+            )
+            if draft is not None:
+                drafts.append(draft)
+    merged = _merge_structpool_drafts(drafts)
+    rows = finalize_structpool_candidates(context, merged)
+    support = _structpool_support_by_family(
+        context,
+        sorted({size for sizes in normalized.values() for size in sizes}),
+    )
+    agent_count = len(state["agents"])
+    for row in rows:
+        families = list(map(str, row["selection_families"]))
+        row["structpool_support_count_by_family"] = {
+            family: len(support[family]) for family in families
+        }
+        row["structpool_support_ratio_by_family"] = {
+            family: len(support[family]) / max(1, agent_count)
+            for family in families
+        }
+        row["structpool_nominal_size_by_family"] = {
+            family: int(family.rsplit(":", 1)[1]) for family in families
+        }
+        row["structpool_grid_pure_family"] = (
+            len(row["structpool_family_groups"]) == 1
+        )
+        row["structpool_grid_duplicate_provenance_count"] = len(families)
+        row["structpool_runtime_subset"] = True
     return rows
 
 
@@ -1588,6 +1664,7 @@ __all__ = [
     "finalize_structpool_candidates",
     "generate_structpool_candidate_drafts",
     "generate_structpool_candidate_grid",
+    "generate_structpool_candidate_subset",
     "generate_topology_anchor_candidates",
     "generate_topology_boundary_candidates",
     "generate_structpool_candidates",

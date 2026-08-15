@@ -14,6 +14,7 @@ from lns2_selector.runtime.topology_candidates import (
     generate_scalepool_candidates,
     generate_structpool_candidates,
     generate_structpool_candidate_grid,
+    generate_structpool_candidate_subset,
     generate_topology_anchor_candidates,
     generate_topology_boundary_candidates,
     merge_structpool_candidates,
@@ -611,6 +612,28 @@ class TopologyCandidatesTest(unittest.TestCase):
                 row["structpool_grid_duplicate_provenance_count"],
                 len(row["selection_families"]),
             )
+
+    def test_structpool_runtime_subset_skips_omitted_path_overlap_work(self) -> None:
+        state, analysis = self._structpool_state()
+        full = generate_structpool_candidate_grid(state, analysis)
+        with patch.object(
+            topology_candidates,
+            "_path_overlap_seed_data",
+            wraps=topology_candidates._path_overlap_seed_data,
+        ) as overlap:
+            subset = generate_structpool_candidate_subset(
+                state,
+                analysis,
+                family_sizes={
+                    "conflict_component": (24, 32),
+                    "topology_boundary_articulation": (16, 24, 32),
+                },
+            )
+        self.assertEqual(overlap.call_count, 0)
+        self.assertTrue(subset)
+        full_sets = {tuple(row["agents"]) for row in full}
+        self.assertTrue({tuple(row["agents"]) for row in subset} <= full_sets)
+        self.assertTrue(all(row["structpool_runtime_subset"] for row in subset))
 
     def test_scalepool_orders_sizes_by_support_with_smaller_tie_break(self) -> None:
         self.assertEqual(scalepool_size_attempt_order(2), (8, 16, 24, 32))

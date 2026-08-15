@@ -107,7 +107,7 @@ from lns2_selector.runtime.failure_informed_rescue import (
     FailureInformedRescueTracker,
 )
 from lns2_selector.runtime.hybridstructpool import (
-    generate_hybridstructpool_candidates,
+    generate_hybridstructpool_runtime_candidates,
     hybridstructpool_high_stress_gate,
     validate_hybridstructpool_augmentation,
 )
@@ -2027,13 +2027,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ) = score_online_candidates(
                                     base_candidate_rows, runtime_models[policy]
                                 )
-                                hybrid_result = generate_hybridstructpool_candidates(
+                                hybrid_result = generate_hybridstructpool_runtime_candidates(
                                     state,
                                     topology_state_analysis,
                                     v2_candidates=base_candidates,
                                     v2_anchors=[base_candidates[v2_anchor_index]],
-                                    structural_sizes=hybridstructpool_runtime[
-                                        "structural_sizes"
+                                    structural_family_sizes=hybridstructpool_runtime[
+                                        "runtime_structural_family_sizes"
                                     ],
                                     maximum_causal_candidates=int(
                                         hybridstructpool_runtime[
@@ -2064,7 +2064,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ):
                                     raise ClosedLoopExecutionError(
                                         "hybridstructpool_candidate_cap_exceeded",
-                                        "full HybridStructPool exceeded its registered cap",
+                                        "HybridStructPool runtime exceeded its registered cap",
                                         details={"candidate_count": len(candidates)},
                                     )
                                 for candidate in candidates:
@@ -2073,12 +2073,42 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             str(candidate["candidate_id"])
                                         ]
                                     )
-                                (
-                                    candidate_rows,
-                                    hybrid_feature_metrics,
-                                ) = feature_engine.realized_rows(
-                                    candidates, state_hash=before_hash
-                                )
+                                base_rows_by_id = {
+                                    str(candidate["candidate_id"]): row
+                                    for candidate, row in zip(
+                                        base_candidates, base_candidate_rows
+                                    )
+                                }
+                                challenger_candidates = [
+                                    candidate
+                                    for candidate in candidates
+                                    if str(candidate["candidate_id"])
+                                    not in base_rows_by_id
+                                ]
+                                if challenger_candidates:
+                                    (
+                                        challenger_rows,
+                                        hybrid_feature_metrics,
+                                    ) = feature_engine.realized_rows(
+                                        challenger_candidates,
+                                        state_hash=before_hash,
+                                    )
+                                else:
+                                    challenger_rows = []
+                                    hybrid_feature_metrics = {}
+                                challenger_rows_by_id = {
+                                    str(candidate["candidate_id"]): row
+                                    for candidate, row in zip(
+                                        challenger_candidates, challenger_rows
+                                    )
+                                }
+                                candidate_rows = [
+                                    base_rows_by_id.get(str(candidate["candidate_id"]))
+                                    or challenger_rows_by_id[
+                                        str(candidate["candidate_id"])
+                                    ]
+                                    for candidate in candidates
+                                ]
                                 hybrid_seconds = time.perf_counter() - hybrid_started
                                 feature_seconds += sum(
                                     float(value)
@@ -2087,7 +2117,27 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 )
                                 proposal_metrics.update(
                                     {
-                                        "hybridstructpool_full_union_required": True,
+                                        "hybridstructpool_full_union_required": bool(
+                                            hybridstructpool_runtime[
+                                                "full_union_required"
+                                            ]
+                                        ),
+                                        "hybridstructpool_full_union_audit_preserved": bool(
+                                            hybridstructpool_runtime[
+                                                "full_union_audit_preserved"
+                                            ]
+                                        ),
+                                        "hybridstructpool_runtime_filter_id": str(
+                                            hybridstructpool_runtime[
+                                                "runtime_filter_id"
+                                            ]
+                                        ),
+                                        "hybridstructpool_reused_base_feature_count": len(
+                                            base_rows_by_id
+                                        ),
+                                        "hybridstructpool_computed_challenger_feature_count": len(
+                                            challenger_candidates
+                                        ),
                                         "hybridstructpool_v2_anchor_candidate_id": str(
                                             base_candidates[v2_anchor_index][
                                                 "candidate_id"

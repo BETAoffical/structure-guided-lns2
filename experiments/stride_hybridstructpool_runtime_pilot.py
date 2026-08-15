@@ -15,9 +15,9 @@ from experiments.repair_collection import (
     _write_jsonl,
 )
 from experiments.stride_bounded_native_retry_continuation import _failed_job
-from experiments.stride_maze_tail_state_collection import _fused_controller_kwargs
 from experiments.stride_onpolicy_controller_attribution import (
     _arm_summary,
+    _collection_path,
     _decision_rows,
     _episode_override,
     _episode_summary,
@@ -55,6 +55,15 @@ def load_registration(path: str | Path) -> tuple[Any, ...]:
         or sha256_file(source_path) != str(source.get("sha256"))
     ):
         raise ValueError("HybridStructPool runtime pilot registration changed")
+    engineering = dict(config.get("engineering_gate") or {})
+    if engineering:
+        baseline = dict(engineering.get("registered_full_runtime_baseline") or {})
+        baseline_path = (root / str(baseline.get("report_path"))).resolve()
+        if (
+            not baseline_path.is_file()
+            or sha256_file(baseline_path) != str(baseline.get("report_sha256"))
+        ):
+            raise ValueError("HybridStructPool full-runtime baseline changed")
     execution = dict(config["execution"])
     if execution != {
         "trial_indices": [0, 1, 2, 3],
@@ -103,16 +112,6 @@ def schedule(tasks: Iterable[Mapping[str, Any]], trials: Iterable[int]) -> list[
                 )
                 rows.append(item)
     return rows
-
-
-def _collection_path(output: Path, item: Mapping[str, Any]) -> Path:
-    return (
-        output
-        / "episodes"
-        / str(item["task_fingerprint"])[:20]
-        / f"trial_{int(item['trial_index']):02d}"
-        / str(item["arm"])
-    )
 
 
 def _manifest(output: Path, item: Mapping[str, Any]) -> dict | None:
@@ -228,6 +227,28 @@ def _status(output: Path, items: list[dict], run_fp: str) -> dict:
     }
 
 
+def _pilot_arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
+    result = _arm_summary(rows, arm)
+    selected = [row for row in rows if str(row["arm"]) == arm]
+    result.update(
+        {
+            "mean_controller_seconds": mean(
+                float(row["controller_seconds"]) for row in selected
+            ),
+            "mean_candidate_generation_seconds": mean(
+                float(row["candidate_generation_seconds"]) for row in selected
+            ),
+            "mean_feature_seconds": mean(
+                float(row["feature_seconds"]) for row in selected
+            ),
+            "mean_inference_seconds": mean(
+                float(row["inference_seconds"]) for row in selected
+            ),
+        }
+    )
+    return result
+
+
 def collect(
     config_path: str | Path, output: str | Path, *, resume: bool = False
 ) -> dict:
@@ -240,8 +261,10 @@ def collect(
             "experiments/stride_hybridstructpool_runtime_pilot.py",
             "scripts/run_stride_hybridstructpool_runtime_pilot.py",
             "experiments/closed_loop_confirmation.py",
+            "lns2_selector/runtime/causalclosurepool.py",
             "lns2_selector/runtime/hybridstructpool.py",
             "lns2_selector/runtime/online_selection.py",
+            "lns2_selector/runtime/topology_candidates.py",
         ),
     )
     run_fp = _fingerprint(
@@ -326,12 +349,25 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
         row = {**item, "manifest_status": str(manifest.get("status"))}
         row.update(_episode_summary(manifest))
         summary = dict(manifest.get("summary") or {})
+        controller_totals = dict(summary.get("controller_totals") or {})
         row.update(
             {
                 "initial_fingerprint": str(summary.get("initial_fingerprint")),
                 "repair_wall_seconds": float(summary.get("repair_wall_seconds", 0.0)),
                 "capped_ttf_seconds": float(
                     summary.get("capped_wall_time_to_feasible", 180.0)
+                ),
+                "controller_seconds": float(
+                    controller_totals.get("controller_seconds_before_repair", 0.0)
+                ),
+                "candidate_generation_seconds": float(
+                    controller_totals.get("candidate_generation_seconds", 0.0)
+                ),
+                "feature_seconds": float(
+                    controller_totals.get("feature_seconds", 0.0)
+                ),
+                "inference_seconds": float(
+                    controller_totals.get("inference_seconds", 0.0)
                 ),
             }
         )
@@ -357,10 +393,10 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
             )
         rows.append(row)
     complete = [row for row in rows if not row.get("missing")]
-    summaries = {arm: _arm_summary(complete, arm) for arm in ARMS}
+    summaries = {arm: _pilot_arm_summary(complete, arm) for arm in ARMS}
     by_map = {
         map_id: {
-            arm: _arm_summary(
+            arm: _pilot_arm_summary(
                 [row for row in complete if str(row["map_id"]) == map_id], arm
             )
             for arm in ARMS
@@ -392,6 +428,39 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
             for values in by_map.values()
         ),
     }
+    engineering = dict(config.get("engineering_gate") or {})
+    if engineering:
+        baseline = dict(engineering["registered_full_runtime_baseline"])
+        hybrid = summaries[HYBRID_ARM]
+        gate.update(
+            {
+                "full_runtime_success_preserved": hybrid["success_rate"]
+                >= float(baseline["success_rate"]),
+                "full_runtime_auc_preserved": hybrid["mean_normalized_fixed_auc"]
+                <= float(baseline["mean_normalized_fixed_auc"]),
+                "full_runtime_repair_decisions_preserved": hybrid[
+                    "restricted_mean_repair_decisions"
+                ]
+                <= float(baseline["restricted_mean_repair_decisions"]),
+                "full_runtime_platform_preserved": hybrid["platform_entry_rate"]
+                <= float(baseline["platform_entry_rate"])
+                + float(engineering["maximum_platform_rate_worsening"]),
+                "controller_seconds_reduced": hybrid["mean_controller_seconds"]
+                <= float(engineering["maximum_mean_controller_seconds"]),
+                "candidate_generation_seconds_reduced": hybrid[
+                    "mean_candidate_generation_seconds"
+                ]
+                <= float(
+                    engineering["maximum_mean_candidate_generation_seconds"]
+                ),
+                "per_map_capped_wall_preserved": all(
+                    values[HYBRID_ARM]["mean_capped_ttf_seconds"]
+                    <= values[V2_ARM]["mean_capped_ttf_seconds"]
+                    * float(engineering["maximum_per_map_capped_wall_ratio"])
+                    for values in by_map.values()
+                ),
+            }
+        )
     report = {
         "schema": REPORT_SCHEMA,
         "integrity_passed": gate["complete"]
@@ -409,4 +478,3 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
 
 
 __all__ = ["analyze", "collect", "load_registration", "schedule"]
-

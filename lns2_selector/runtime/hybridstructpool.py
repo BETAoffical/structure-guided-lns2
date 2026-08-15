@@ -9,11 +9,21 @@ from typing import Any, Iterable
 from experiments.neighborhood_candidates import candidate_id
 from experiments.state_analysis import StateAnalysis
 from lns2_selector.runtime.causalclosurepool import generate_causalclosure_candidates
-from lns2_selector.runtime.topology_candidates import generate_structpool_candidate_grid
+from lns2_selector.runtime.topology_candidates import (
+    generate_structpool_candidate_grid,
+    generate_structpool_candidate_subset,
+)
 
 
 HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-v1"
 STRUCTURAL_SIZES = (8, 16, 24, 32)
+RUNTIME_STRUCTURAL_FAMILY_SIZES = {
+    "bottleneck_crossing": (24, 32),
+    "conflict_component": (24, 32),
+    "spatiotemporal_hotspot": (24, 32),
+    "topology_boundary_articulation": (16, 24, 32),
+    "topology_boundary_low_degree": (16, 24, 32),
+}
 HYBRID_GROUP_ORDER = (
     "causalclosure_v2",
     "topology_boundary",
@@ -25,9 +35,15 @@ HYBRID_GROUP_ORDER = (
 _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
     "enabled": True,
     "pool_id": HYBRIDSTRUCTPOOL_ID,
-    "runtime_id": "stride-hybridstructpool-full-runtime-v1",
-    "full_union_required": True,
+    "runtime_id": "stride-hybridstructpool-lean-runtime-v2",
+    "full_union_required": False,
+    "full_union_audit_preserved": True,
+    "runtime_filter_id": "stride-hybridstructpool-zero-selection-mask-v1",
     "structural_sizes": list(STRUCTURAL_SIZES),
+    "runtime_structural_family_sizes": {
+        family: list(sizes)
+        for family, sizes in RUNTIME_STRUCTURAL_FAMILY_SIZES.items()
+    },
     "maximum_causal_candidates": 12,
     "maximum_causal_neighborhood_size": 64,
     "causal_temporal_window": 2,
@@ -47,7 +63,7 @@ _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
 
 
 def hybridstructpool_runtime_augmentation() -> dict[str, Any]:
-    """Return the immutable full-union experimental runtime contract."""
+    """Return the immutable lean-runtime experimental contract."""
 
     return json.loads(json.dumps(_HYBRIDSTRUCTPOOL_RUNTIME_CONFIG))
 
@@ -392,11 +408,62 @@ def generate_hybridstructpool_candidates(
     return result
 
 
+def generate_hybridstructpool_runtime_candidates(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    v2_candidates: Iterable[dict[str, Any]],
+    v2_anchors: Iterable[dict[str, Any]],
+    structural_family_sizes: dict[str, Iterable[int]],
+    maximum_causal_candidates: int = 12,
+    maximum_causal_neighborhood_size: int = 64,
+    causal_temporal_window: int = 2,
+    maximum_causal_jaccard: float = 0.9,
+) -> HybridStructPoolResult:
+    """Generate the lean runtime union while preserving the full audit API.
+
+    The mask removes only structural family/size cells that were never chosen
+    in the registered full-union runtime trace.  V2 remains complete and the
+    complete CausalClosure frontier remains available.  No repair outcome is
+    consulted online.
+    """
+
+    normalized = {
+        str(family): tuple(sorted(set(map(int, sizes))))
+        for family, sizes in structural_family_sizes.items()
+    }
+    if normalized != RUNTIME_STRUCTURAL_FAMILY_SIZES:
+        raise ValueError("unsupported HybridStructPool runtime structural mask")
+    base = [dict(row) for row in v2_candidates]
+    anchors = [dict(row) for row in v2_anchors]
+    if not base or not anchors:
+        raise ValueError("HybridStructPool requires the full V2 pool and a V2 anchor")
+    structural = generate_structpool_candidate_subset(
+        state,
+        analysis,
+        family_sizes=normalized,
+    )
+    causal = generate_causalclosure_candidates(
+        state,
+        analysis,
+        v2_anchors=anchors,
+        maximum_candidates=maximum_causal_candidates,
+        maximum_neighborhood_size=maximum_causal_neighborhood_size,
+        temporal_window=causal_temporal_window,
+        maximum_jaccard_similarity=maximum_causal_jaccard,
+    )
+    result = merge_hybridstructpool_candidates(base, structural, causal.candidates)
+    result.causal_attempts = copy.deepcopy(causal.attempts)
+    return result
+
+
 __all__ = [
     "HYBRIDSTRUCTPOOL_ID",
     "STRUCTURAL_SIZES",
+    "RUNTIME_STRUCTURAL_FAMILY_SIZES",
     "HybridStructPoolResult",
     "generate_hybridstructpool_candidates",
+    "generate_hybridstructpool_runtime_candidates",
     "hybridstructpool_high_stress_gate",
     "hybridstructpool_runtime_augmentation",
     "merge_hybridstructpool_candidates",
