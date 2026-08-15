@@ -2754,6 +2754,26 @@
       "contract": "Freeze task identity, rotating serial arm order, official Adaptive comparison, raw timing boundaries and promotion gates."
     },
     {
+      "path": "lns2_selector/runtime/hybridstructpool_routed.py",
+      "role": "reproducibility",
+      "purpose": "Expose immutable StructShell-only, Causal-only and strict-gated StructShell runtime routes without changing the frozen full-union contract."
+    },
+    {
+      "path": "experiments/stride_hybridstructpool_source_routing.py",
+      "role": "reproducibility",
+      "purpose": "Audit source-mask identity and run the preregistered five-arm serial raw-TTF source attribution."
+    },
+    {
+      "path": "scripts/run_stride_hybridstructpool_source_routing.py",
+      "role": "reproducibility",
+      "purpose": "Run the zero-solver audit, paired collection and frozen source-routing analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_hybridstructpool_source_routing.py",
+      "role": "reproducibility",
+      "contract": "Freeze source masks, strict gate identity, rotating five-arm schedule and deterministic promotion tie breakers."
+    },
+    {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
       "role": "reproducibility",
       "purpose": "Collect and analyze paired bounded native-order TransactionalRepair attempts with exact rollback and atomic policy checkpoints."

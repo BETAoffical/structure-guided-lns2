@@ -109,7 +109,12 @@ from lns2_selector.runtime.failure_informed_rescue import (
 from lns2_selector.runtime.hybridstructpool import (
     generate_hybridstructpool_runtime_candidates,
     hybridstructpool_high_stress_gate,
-    validate_hybridstructpool_augmentation,
+)
+from lns2_selector.runtime.hybridstructpool_routed import (
+    ROUTED_HYBRIDSTRUCTPOOL_ID,
+    generate_routed_hybridstructpool_runtime_candidates,
+    routed_hybridstructpool_high_stress_gate,
+    validate_any_hybridstructpool_augmentation,
 )
 from lns2_selector.runtime.signature_scoped_rescue import (
     SignatureScopedRescueTracker,
@@ -1071,7 +1076,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     hybridstructpool_runtime_config = dict(
         dict(job.get("proposal") or {}).get("hybridstructpool") or {}
     )
-    validate_hybridstructpool_augmentation(
+    validate_any_hybridstructpool_augmentation(
         hybridstructpool_runtime_config or None
     )
     if hybridstructpool_runtime_config and (
@@ -1825,13 +1830,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             structpool_gate_result
                             and structpool_gate_result["passed"]
                         )
-                        hybridstructpool_gate_result = (
-                            hybridstructpool_high_stress_gate(
-                                state, hybridstructpool_runtime
+                        hybridstructpool_gate_result = None
+                        if hybridstructpool_runtime:
+                            hybridstructpool_gate_result = (
+                                routed_hybridstructpool_high_stress_gate(
+                                    state, hybridstructpool_runtime
+                                )
+                                if str(hybridstructpool_runtime.get("pool_id"))
+                                == ROUTED_HYBRIDSTRUCTPOOL_ID
+                                else hybridstructpool_high_stress_gate(
+                                    state, hybridstructpool_runtime
+                                )
                             )
-                            if hybridstructpool_runtime
-                            else None
-                        )
                         hybridstructpool_gate_passed = bool(
                             hybridstructpool_gate_result
                             and hybridstructpool_gate_result["passed"]
@@ -2004,6 +2014,35 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "hybridstructpool_gate_seconds": float(
                                         hybridstructpool_gate_result["seconds"]
                                     ),
+                                    "hybridstructpool_gate_id": str(
+                                        hybridstructpool_gate_result.get(
+                                            "gate_id",
+                                            hybridstructpool_runtime[
+                                                "activation_gate"
+                                            ]["gate_id"],
+                                        )
+                                    ),
+                                    "hybridstructpool_gate_conflict_pair_count": int(
+                                        hybridstructpool_gate_result.get(
+                                            "conflict_pair_count",
+                                            state["num_of_colliding_pairs"],
+                                        )
+                                    ),
+                                    "hybridstructpool_gate_active_conflict_agent_count": int(
+                                        hybridstructpool_gate_result.get(
+                                            "active_conflict_agent_count", 0
+                                        )
+                                    ),
+                                    "hybridstructpool_gate_largest_conflict_component_size": int(
+                                        hybridstructpool_gate_result.get(
+                                            "largest_conflict_component_size", 0
+                                        )
+                                    ),
+                                    "hybridstructpool_source_mode": str(
+                                        hybridstructpool_runtime.get(
+                                            "source_mode", "full_v8"
+                                        )
+                                    ),
                                 }
                             )
                             if hybridstructpool_gate_passed:
@@ -2027,35 +2066,51 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ) = score_online_candidates(
                                     base_candidate_rows, runtime_models[policy]
                                 )
-                                hybrid_result = generate_hybridstructpool_runtime_candidates(
-                                    state,
-                                    topology_state_analysis,
-                                    v2_candidates=base_candidates,
-                                    v2_anchors=[base_candidates[v2_anchor_index]],
-                                    structural_family_sizes=hybridstructpool_runtime[
-                                        "runtime_structural_family_sizes"
-                                    ],
-                                    maximum_causal_candidates=int(
-                                        hybridstructpool_runtime[
-                                            "maximum_causal_candidates"
-                                        ]
-                                    ),
-                                    maximum_causal_neighborhood_size=int(
-                                        hybridstructpool_runtime[
-                                            "maximum_causal_neighborhood_size"
-                                        ]
-                                    ),
-                                    causal_temporal_window=int(
-                                        hybridstructpool_runtime[
-                                            "causal_temporal_window"
-                                        ]
-                                    ),
-                                    maximum_causal_jaccard=float(
-                                        hybridstructpool_runtime[
-                                            "maximum_causal_jaccard_similarity"
-                                        ]
-                                    ),
-                                )
+                                if (
+                                    str(hybridstructpool_runtime.get("pool_id"))
+                                    == ROUTED_HYBRIDSTRUCTPOOL_ID
+                                ):
+                                    hybrid_result = (
+                                        generate_routed_hybridstructpool_runtime_candidates(
+                                            state,
+                                            topology_state_analysis,
+                                            v2_candidates=base_candidates,
+                                            v2_anchors=[
+                                                base_candidates[v2_anchor_index]
+                                            ],
+                                            config=hybridstructpool_runtime,
+                                        )
+                                    )
+                                else:
+                                    hybrid_result = generate_hybridstructpool_runtime_candidates(
+                                        state,
+                                        topology_state_analysis,
+                                        v2_candidates=base_candidates,
+                                        v2_anchors=[base_candidates[v2_anchor_index]],
+                                        structural_family_sizes=hybridstructpool_runtime[
+                                            "runtime_structural_family_sizes"
+                                        ],
+                                        maximum_causal_candidates=int(
+                                            hybridstructpool_runtime[
+                                                "maximum_causal_candidates"
+                                            ]
+                                        ),
+                                        maximum_causal_neighborhood_size=int(
+                                            hybridstructpool_runtime[
+                                                "maximum_causal_neighborhood_size"
+                                            ]
+                                        ),
+                                        causal_temporal_window=int(
+                                            hybridstructpool_runtime[
+                                                "causal_temporal_window"
+                                            ]
+                                        ),
+                                        maximum_causal_jaccard=float(
+                                            hybridstructpool_runtime[
+                                                "maximum_causal_jaccard_similarity"
+                                            ]
+                                        ),
+                                    )
                                 candidates = list(hybrid_result.candidates)
                                 if len(candidates) > int(
                                     hybridstructpool_runtime[
@@ -2170,6 +2225,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         "hybridstructpool_seconds": hybrid_seconds,
                                         "hybridstructpool_generation_seconds": (
                                             hybrid_generation_seconds
+                                        ),
+                                        "hybridstructpool_structural_generation_seconds": float(
+                                            hybrid_result.structural_generation_seconds
+                                        ),
+                                        "hybridstructpool_causal_generation_seconds": float(
+                                            hybrid_result.causal_generation_seconds
                                         ),
                                         "candidate_count": len(candidates),
                                         "candidate_generation_seconds": float(
@@ -2708,6 +2769,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             and selected is not None
                             and selected.get("structpool_family_groups")
                         )
+                        if hybridstructpool_runtime:
+                            provenance = list(
+                                selected.get("hybridstructpool_provenance") or ()
+                            )
+                            proposal_metrics.update(
+                                {
+                                    "hybridstructpool_selected_provenance": provenance,
+                                    "hybridstructpool_selected_actual_size": len(
+                                        selected["agents"]
+                                    ),
+                                    "hybridstructpool_selected_candidate_id": str(
+                                        selected["candidate_id"]
+                                    ),
+                                }
+                            )
                     retained_positions = {
                         str(candidate["candidate_id"]): local_index
                         for local_index, candidate in enumerate(candidates)
@@ -3046,6 +3122,58 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         controller_totals[slotpool_metric] += float(
                             proposal_metrics.get(slotpool_metric, 0.0)
                         )
+                    for hybrid_metric in (
+                        "hybridstructpool_gate_seconds",
+                        "hybridstructpool_seconds",
+                        "hybridstructpool_generation_seconds",
+                        "hybridstructpool_structural_generation_seconds",
+                        "hybridstructpool_causal_generation_seconds",
+                    ):
+                        controller_totals[hybrid_metric] += float(
+                            proposal_metrics.get(hybrid_metric, 0.0)
+                        )
+                    controller_totals[
+                        "hybridstructpool_gate_evaluated_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_gate_evaluated", False
+                            )
+                        )
+                    )
+                    controller_totals[
+                        "hybridstructpool_gate_passed_count"
+                    ] += int(
+                        bool(proposal_metrics.get("hybridstructpool_gate_passed", False))
+                    )
+                    controller_totals[
+                        "hybridstructpool_structural_candidate_count"
+                    ] += int(
+                        proposal_metrics.get(
+                            "hybridstructpool_structural_candidate_count", 0
+                        )
+                    )
+                    controller_totals[
+                        "hybridstructpool_causal_candidate_count"
+                    ] += int(
+                        proposal_metrics.get(
+                            "hybridstructpool_causal_candidate_count", 0
+                        )
+                    )
+                    selected_provenance = set(
+                        map(
+                            str,
+                            proposal_metrics.get(
+                                "hybridstructpool_selected_provenance", ()
+                            ),
+                        )
+                    )
+                    controller_totals[
+                        "hybridstructpool_selected_structural_count"
+                    ] += int("structshell_equal_four_size" in selected_provenance)
+                    controller_totals[
+                        "hybridstructpool_selected_causal_count"
+                    ] += int("causalclosure_v2" in selected_provenance)
                     controller_totals["guardpool_active_decision_count"] += int(
                         bool(proposal_metrics.get("guardpool_active", False))
                     )
@@ -4180,7 +4308,7 @@ def run_closed_loop_collection(
     structpool_augmentation = validate_structpool_augmentation(
         structpool_augmentation
     )
-    hybridstructpool_augmentation = validate_hybridstructpool_augmentation(
+    hybridstructpool_augmentation = validate_any_hybridstructpool_augmentation(
         hybridstructpool_augmentation
     )
     repair_seed_policy = validate_repair_seed_policy(

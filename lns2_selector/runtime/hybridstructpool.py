@@ -161,6 +161,8 @@ class HybridStructPoolResult:
     causal_candidate_count: int
     exact_duplicate_count: int
     causal_attempts: list[dict[str, Any]]
+    structural_generation_seconds: float = 0.0
+    causal_generation_seconds: float = 0.0
 
 
 def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
@@ -395,9 +397,12 @@ def generate_hybridstructpool_candidates(
     anchors = list(v2_anchors)
     if not base or not anchors:
         raise ValueError("HybridStructPool requires the full V2 pool and a V2 anchor")
+    structural_started = time.perf_counter()
     structural = generate_structpool_candidate_grid(
         state, analysis, neighborhood_sizes=sizes
     )
+    structural_seconds = time.perf_counter() - structural_started
+    causal_started = time.perf_counter()
     causal = generate_causalclosure_candidates(
         state,
         analysis,
@@ -407,11 +412,14 @@ def generate_hybridstructpool_candidates(
         temporal_window=causal_temporal_window,
         maximum_jaccard_similarity=maximum_causal_jaccard,
     )
+    causal_seconds = time.perf_counter() - causal_started
     result = merge_hybridstructpool_candidates(base, structural, causal.candidates)
     # ``causal`` is local to this call and its attempts are never mutated by
     # the Hybrid result, so transferring the list avoids a large diagnostic
     # deep copy without weakening input isolation.
     result.causal_attempts = causal.attempts
+    result.structural_generation_seconds = structural_seconds
+    result.causal_generation_seconds = causal_seconds
     return result
 
 
@@ -445,11 +453,14 @@ def generate_hybridstructpool_runtime_candidates(
     anchors = list(v2_anchors)
     if not base or not anchors:
         raise ValueError("HybridStructPool requires the full V2 pool and a V2 anchor")
+    structural_started = time.perf_counter()
     structural = generate_structpool_candidate_subset(
         state,
         analysis,
         family_sizes=normalized,
     )
+    structural_seconds = time.perf_counter() - structural_started
+    causal_started = time.perf_counter()
     causal = generate_causalclosure_candidates(
         state,
         analysis,
@@ -459,8 +470,11 @@ def generate_hybridstructpool_runtime_candidates(
         temporal_window=causal_temporal_window,
         maximum_jaccard_similarity=maximum_causal_jaccard,
     )
+    causal_seconds = time.perf_counter() - causal_started
     result = merge_hybridstructpool_candidates(base, structural, causal.candidates)
     result.causal_attempts = causal.attempts
+    result.structural_generation_seconds = structural_seconds
+    result.causal_generation_seconds = causal_seconds
     return result
 
 
