@@ -106,6 +106,9 @@ from lns2_selector.runtime.bounded_native_retry import (
 from lns2_selector.runtime.failure_informed_rescue import (
     FailureInformedRescueTracker,
 )
+from lns2_selector.runtime.signature_scoped_rescue import (
+    SignatureScopedRescueTracker,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
@@ -962,6 +965,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     failure_informed_rescue = dict(
         episode_override.get("failure_informed_rescue") or {}
     )
+    signature_scoped_rescue = dict(
+        episode_override.get("signature_scoped_rescue") or {}
+    )
     source_state: dict[str, Any] | None = None
     source_trace_path: Path | None = None
     if initial_restore:
@@ -986,9 +992,22 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "failure-informed rescue requires an initial restored state"
         )
-    if bounded_native_retry and failure_informed_rescue:
+    if signature_scoped_rescue and not initial_restore:
         raise ValueError(
-            "bounded native retry and failure-informed rescue are mutually exclusive"
+            "signature-scoped rescue requires an initial restored state"
+        )
+    enabled_repair_overrides = sum(
+        bool(value)
+        for value in (
+            bounded_native_retry,
+            failure_informed_rescue,
+            signature_scoped_rescue,
+        )
+    )
+    if enabled_repair_overrides > 1:
+        raise ValueError(
+            "bounded retry, failure-informed rescue, and signature-scoped rescue "
+            "are mutually exclusive"
         )
     if forced_first_action:
         if (
@@ -1234,6 +1253,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if failure_informed_rescue
                 else None
             )
+            signature_rescue_tracker = (
+                SignatureScopedRescueTracker.from_spec(
+                    state, signature_scoped_rescue
+                )
+                if signature_scoped_rescue
+                else None
+            )
             initial_event = {
                 "schema": EPISODE_SCHEMA,
                 "schema_version": SCHEMA_VERSION,
@@ -1275,6 +1301,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "failure_informed_rescue": (
                             failure_rescue_tracker.summary()
                             if failure_rescue_tracker is not None
+                            else None
+                        ),
+                        "signature_scoped_rescue": (
+                            signature_rescue_tracker.summary()
+                            if signature_rescue_tracker is not None
                             else None
                         ),
                     }
@@ -1413,6 +1444,18 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     if failure_rescue_tracker is not None
                     else None
                 )
+                signature_rescue_override = (
+                    signature_rescue_tracker.action_for_decision(
+                        decision_index, state
+                    )
+                    if signature_rescue_tracker is not None
+                    else None
+                )
+                if rescue_override is not None and signature_rescue_override is not None:
+                    raise ValueError("multiple deferred rescue actions were scheduled")
+                if signature_rescue_override is not None:
+                    rescue_override = signature_rescue_override
+                signature_scoped_action = signature_rescue_override is not None
                 force_this_action = bool(
                     forced_first_action and decision_index == 0
                 )
@@ -1434,7 +1477,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         time.perf_counter() - route_started
                     )
                     rescue_mode = str(rescue_override["mode"])
-                    rescue_family = f"failure-informed-rescue:{rescue_mode}"
+                    rescue_prefix = (
+                        "signature-scoped-rescue"
+                        if signature_scoped_action
+                        else "failure-informed-rescue"
+                    )
+                    rescue_family = f"{rescue_prefix}:{rescue_mode}"
                     rescue_candidate_id = _fingerprint(
                         {
                             "state": before_hash,
@@ -1452,7 +1500,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "route_conflicts": int(state["num_of_colliding_pairs"]),
                             "route_conflict_threshold": None,
                             "forced_first_action": False,
-                            "failure_informed_rescue_action": True,
+                            "failure_informed_rescue_action": (
+                                not signature_scoped_action
+                            ),
+                            "signature_scoped_rescue_action": signature_scoped_action,
                             "forced_candidate_role": rescue_mode,
                             "selected_candidate_id": rescue_candidate_id,
                             "candidate_pool": [
@@ -1461,7 +1512,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "agents": rescue_agents,
                                     "actual_size": len(rescue_agents),
                                     "selection_families": [rescue_family],
-                                    "failure_informed_rescue_action": True,
+                                    "failure_informed_rescue_action": (
+                                        not signature_scoped_action
+                                    ),
+                                    "signature_scoped_rescue_action": (
+                                        signature_scoped_action
+                                    ),
                                     "selected_blockers": list(
                                         map(
                                             int,
@@ -1500,7 +1556,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                     selected_sizes[len(rescue_agents)] += 1
                     selected_families[rescue_family] += 1
-                    controller_totals["failure_informed_rescue_action_count"] += 1
+                    controller_totals[
+                        (
+                            "signature_scoped_rescue_action_count"
+                            if signature_scoped_action
+                            else "failure_informed_rescue_action_count"
+                        )
+                    ] += 1
                     controller_totals["controller_seconds_before_repair"] += (
                         controller_seconds_before_repair
                     )
@@ -2828,6 +2890,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     # treatment, when eligible, is deferred to decision 1.
                     action["collect_pp_diagnostics"] = True
                 if (
+                    signature_rescue_tracker is not None
+                    and signature_rescue_tracker.requires_diagnostics(decision_index)
+                ):
+                    action["collect_pp_diagnostics"] = True
+                if (
                     wall_budget is not None
                     and time.perf_counter() - ttf_started_wall >= wall_budget
                 ):
@@ -2946,6 +3013,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ),
                             },
                         }
+                signature_rescue_record = None
+                if signature_rescue_tracker is not None:
+                    signature_rescue_record = (
+                        signature_rescue_tracker.observe_decision(
+                            decision_index=decision_index,
+                            before=before,
+                            after=dict(result["observation"]),
+                            metrics=dict(result["metrics"]),
+                        )
+                    )
+                    result = {
+                        **result,
+                        "metrics": {
+                            **dict(result["metrics"]),
+                            "signature_scoped_rescue": signature_rescue_record,
+                        },
+                    }
                 step_completed_wall = time.perf_counter()
                 repair_wall_seconds = step_completed_wall - repair_started
                 transition_ttf_elapsed_seconds = (
@@ -3078,6 +3162,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                     controller_totals["failure_rescue_resolved_count"] += int(
                         bool(failure_rescue_record["resolved_by_rescue"])
+                    )
+                if signature_rescue_record is not None:
+                    controller["signature_scoped_rescue"] = signature_rescue_record
+                    controller_totals["signature_rescue_scheduled_count"] += int(
+                        bool(signature_rescue_record["scheduled"])
+                    )
+                    controller_totals["signature_rescue_executed_count"] += int(
+                        bool(signature_rescue_record["intervention_executed"])
+                    )
+                    controller_totals["signature_rescue_resolved_count"] += int(
+                        bool(signature_rescue_record["resolved_by_rescue"])
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
@@ -3539,6 +3634,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "failure_informed_rescue": (
                     failure_rescue_tracker.summary()
                     if failure_rescue_tracker is not None
+                    else None
+                ),
+                "signature_scoped_rescue": (
+                    signature_rescue_tracker.summary()
+                    if signature_rescue_tracker is not None
                     else None
                 ),
                 "final_sum_of_costs": int(state["sum_of_costs"]),

@@ -1,0 +1,90 @@
+{
+  "schema": "lns2.stride.signature_scoped_rescue_continuation_registration.v1",
+  "scientific_status": "preregistered_new_platform_signature_rescue_mechanism",
+  "experiment_id": "stride-signature-scoped-rescue-continuation-v1",
+  "pre_registration_parent_commit": "fc3b3995b592793384d5c24b5df3490eab32a047",
+  "protocol_revision": "r1_repairability_basin_audit_frozen",
+  "inputs": {
+    "failure_rescue_registration": {
+      "path": "configs/stride_failure_informed_rescue_continuation_v1_registration.json",
+      "sha256": "9c38b04df5f13c8f33a2c9c14435f2e705b9a1666dc95199f7a3969969567fa1"
+    },
+    "repairability_basin_report": {
+      "path": "build/stride-repairability-basin-audit-v1/report.json",
+      "sha256": "4bd3aaaf1b48a6eb6ade75965100124846f9d923b262dc01e48affcf3711cf56"
+    },
+    "compact_blocker_initial_report": {
+      "path": "build/stride-compact-blocker-rescue-continuation-v1/initial_report.json",
+      "sha256": "26502c21d448ffc7a14395ba4d6a478067498c1a8e5e4d8be3be9608f5de2d74"
+    }
+  },
+  "cohort": {
+    "checkpoint_kind": "first_repeat_stall",
+    "required_state_count": 45,
+    "required_map_count": 3,
+    "selection_rule": "all frozen first-repeat-stall states; no outcome filtering",
+    "outcome_enriched_mechanism_cohort": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "frozen_controller",
+    "one_shot_compact_blocker",
+    "signature_scoped_compact_blocker"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "qualification_worker_count": 16,
+    "qualification_process_timeout_seconds": 360.0,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "minimum_consecutive_exact_rollbacks": 3,
+    "initial_repeat_count": 2,
+    "maximum_added_external_blockers": 8,
+    "maximum_signature_scoped_rescues_per_episode": 3,
+    "same_signature_rescue_limit": 1,
+    "rescue_decision_offset": 1,
+    "native_pp_order_only": true,
+    "one_pp_call_per_decision": true,
+    "rescue_after_time_limit": false,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "causal_contrast": {
+    "shared_first_action": "all arms execute the same candidate and paired PP seed at the frozen first-repeat-stall state",
+    "frozen_controller": "never substitutes a rescue action",
+    "one_shot": "one compact plus observed-blocker action at the next decision after the initial exact rollback",
+    "signature_scoped": "the same first rescue, then at most one compact plus current observed-blocker rescue for each later distinct signature after three exact rollbacks",
+    "forbidden": "no same-signature accumulation, no within-decision retry, no explicit repair order"
+  },
+  "initial_extension_gate": {
+    "new_signature_rescue_executed_minimum": 1,
+    "success_rate_difference_vs_one_shot_minimum": 0.0,
+    "normalized_fixed_auc_difference_vs_one_shot_maximum": 0.0,
+    "restricted_mean_repair_decision_difference_vs_one_shot_maximum": 0.0,
+    "mean_repair_wall_difference_vs_one_shot_maximum": 0.0,
+    "maximum_per_map_success_rate_worsening": 0.05,
+    "uniform_all_state_extension_only": true
+  },
+  "final_gate": {
+    "paired_state_cluster_bootstrap_replicates": 10000,
+    "success_rate_difference_95pct_lower_minimum": 0.0,
+    "normalized_fixed_auc_difference_95pct_upper_maximum": 0.0,
+    "restricted_repair_decision_difference_95pct_upper_maximum": 0.0,
+    "repair_wall_difference_95pct_upper_maximum": 0.0,
+    "maximum_per_map_success_rate_worsening": 0.05
+  },
+  "claim_boundary": {
+    "mechanism_only": true,
+    "not_runtime_integration": true,
+    "not_ttf_evidence": true,
+    "not_candidate_pool_replacement": true,
+    "not_ood_confirmation": true,
+    "next_if_passed": "preregister an independent result-blind bounded continuation",
+    "next_if_failed": "stop repeated-signature rescue development and retain one-shot rescue only as diagnostic evidence"
+  }
+}

@@ -2837,6 +2837,31 @@
       "path": "tests/evaluation/test_stride_repairability_basin_audit.py",
       "role": "reproducibility",
       "contract": "Freeze blocker deduplication, failure-order localization, outcome partition and complete trigger-population semantics."
+    },
+    {
+      "path": "lns2_selector/runtime/signature_scoped_rescue.py",
+      "role": "reproducibility",
+      "purpose": "Schedule one compact-plus-current-blocker next-decision rescue per distinct three-rollback platform signature, with no within-decision retry."
+    },
+    {
+      "path": "experiments/stride_signature_scoped_rescue_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Compare frozen control, one-shot compact-blocker rescue, and bounded distinct-signature rescue over complete paired continuations."
+    },
+    {
+      "path": "scripts/run_stride_signature_scoped_rescue_continuation.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered 16-worker signature-scoped rescue screen and analysis."
+    },
+    {
+      "path": "tests/evaluation/test_signature_scoped_rescue.py",
+      "role": "reproducibility",
+      "contract": "Freeze deferred rescue, same-signature uniqueness, new-signature threshold, time-limit exclusion, and hard intervention caps."
+    },
+    {
+      "path": "tests/evaluation/test_stride_signature_scoped_rescue_continuation.py",
+      "role": "reproducibility",
+      "contract": "Freeze the three arms, paired first action, 16-worker schedule, and distinct one-shot versus signature-scoped override identities."
     }
   ]
 }
