@@ -36,7 +36,7 @@ HYBRID_GROUP_ORDER = (
 _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
     "enabled": True,
     "pool_id": HYBRIDSTRUCTPOOL_ID,
-    "runtime_id": "stride-hybridstructpool-full-engineered-runtime-v4",
+    "runtime_id": "stride-hybridstructpool-full-engineered-runtime-v5",
     "full_union_required": True,
     "full_union_audit_preserved": True,
     "runtime_filter_id": "none",
@@ -355,7 +355,10 @@ def merge_hybridstructpool_candidates(
         if "v2_base" not in provenance_by_id[str(row["candidate_id"])]
     ]
     return HybridStructPoolResult(
-        candidates=copy.deepcopy(ordered),
+        # Every merged row was already deep-copied from its source above.
+        # Returning the private ordered list avoids a second full-pool copy;
+        # callers may still annotate it without mutating any input candidate.
+        candidates=ordered,
         challengers=challengers,
         provenance_by_candidate_id=provenance_by_id,
         base_candidate_count=source_counts["v2_base"],

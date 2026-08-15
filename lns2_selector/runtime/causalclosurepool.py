@@ -453,17 +453,46 @@ def _candidate_dominates(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return all(comparisons) and strict
 
 
+def _dominance_vector(row: dict[str, Any]) -> tuple[int, float, float, float]:
+    """Return minimization coordinates for the frozen causal Pareto order."""
+
+    audit = row["proposal_audit"]
+    return (
+        int(row["actual_size"]),
+        -float(row["causalclosure_support_per_added_agent"]),
+        -float(audit["global_event_incident_coverage"]),
+        -float(audit["global_pair_internal_coverage"]),
+    )
+
+
 def _front_ranks(rows: list[dict[str, Any]]) -> dict[str, int]:
     identities = [str(row["candidate_id"]) for row in rows]
+    # Extract the four immutable comparison coordinates once.  The former
+    # pair loop repeatedly traversed nested dictionaries and called
+    # ``_candidate_dominates`` up to twice for every pair.  Tuple coordinates
+    # preserve the exact weak/strict Pareto relation while keeping the O(n^2)
+    # contract deterministic and substantially reducing Python overhead.
+    vectors = [_dominance_vector(row) for row in rows]
     dominates: list[list[int]] = [[] for _ in rows]
     dominated_count = [0 for _ in rows]
-    for left_index, left in enumerate(rows):
+    for left_index, left in enumerate(vectors):
         for right_index in range(left_index + 1, len(rows)):
-            right = rows[right_index]
-            if _candidate_dominates(left, right):
+            right = vectors[right_index]
+            different = left != right
+            if different and (
+                left[0] <= right[0]
+                and left[1] <= right[1]
+                and left[2] <= right[2]
+                and left[3] <= right[3]
+            ):
                 dominates[left_index].append(right_index)
                 dominated_count[right_index] += 1
-            elif _candidate_dominates(right, left):
+            elif different and (
+                right[0] <= left[0]
+                and right[1] <= left[1]
+                and right[2] <= left[2]
+                and right[3] <= left[3]
+            ):
                 dominates[right_index].append(left_index)
                 dominated_count[left_index] += 1
 

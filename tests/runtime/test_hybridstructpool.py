@@ -90,6 +90,11 @@ class HybridStructPoolTest(unittest.TestCase):
             "base",
         )
         self.assertNotIn(first_id, {row["candidate_id"] for row in result.challengers})
+        result.candidates[0]["agents"].append(999)
+        self.assertEqual(base, frozen_base)
+        self.assertTrue(
+            all(999 not in row["agents"] for row in result.challengers)
+        )
 
     def test_duplicate_within_one_source_is_rejected(self) -> None:
         row = _candidate([1, 2], "base")

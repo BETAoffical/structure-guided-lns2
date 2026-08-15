@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import collections
+import random
 import unittest
 
 from experiments.state_analysis import ConflictEvent, StateAnalysis
 from lns2_selector.runtime.causalclosurepool import (
     CAUSALCLOSUREPOOL_ID,
     CausalContactEvidence,
+    _candidate_dominates,
     _causal_context,
+    _front_ranks,
     _temporal_neighbors,
     _with_events,
     generate_causalclosure_candidates,
@@ -59,6 +62,55 @@ def _localized_state(extra_nearby_agents: int = 1) -> tuple[dict, StateAnalysis]
 
 
 class CausalClosurePoolTest(unittest.TestCase):
+    def test_coordinate_pareto_ranks_match_reference_pairwise_order(self) -> None:
+        rng = random.Random(4319)
+        rows = []
+        for index in range(80):
+            rows.append(
+                {
+                    "candidate_id": f"candidate-{index:03d}",
+                    "actual_size": rng.choice((8, 16, 24, 32, 48, 64)),
+                    "causalclosure_support_per_added_agent": rng.choice(
+                        (0.0, 0.5, 1.0, 2.0, 4.0)
+                    ),
+                    "proposal_audit": {
+                        "global_event_incident_coverage": rng.choice(
+                            (0.0, 0.25, 0.5, 0.75, 1.0)
+                        ),
+                        "global_pair_internal_coverage": rng.choice(
+                            (0.0, 0.25, 0.5, 0.75, 1.0)
+                        ),
+                    },
+                }
+            )
+
+        dominates: list[list[int]] = [[] for _ in rows]
+        dominated_count = [0 for _ in rows]
+        for left_index, left in enumerate(rows):
+            for right_index in range(left_index + 1, len(rows)):
+                right = rows[right_index]
+                if _candidate_dominates(left, right):
+                    dominates[left_index].append(right_index)
+                    dominated_count[right_index] += 1
+                elif _candidate_dominates(right, left):
+                    dominates[right_index].append(left_index)
+                    dominated_count[left_index] += 1
+        front = [index for index, count in enumerate(dominated_count) if count == 0]
+        expected: dict[str, int] = {}
+        rank = 0
+        while front:
+            next_front: list[int] = []
+            for index in front:
+                expected[str(rows[index]["candidate_id"])] = rank
+                for dominated in dominates[index]:
+                    dominated_count[dominated] -= 1
+                    if dominated_count[dominated] == 0:
+                        next_front.append(dominated)
+            front = next_front
+            rank += 1
+
+        self.assertEqual(_front_ranks(rows), expected)
+
     def test_sparse_context_materializes_terminal_waits_once(self) -> None:
         state = {
             "agents": [

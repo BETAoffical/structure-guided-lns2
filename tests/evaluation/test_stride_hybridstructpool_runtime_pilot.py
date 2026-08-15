@@ -20,6 +20,9 @@ FULL_OPTIMIZED_CONFIG = ROOT / (
 CAUSAL_HOTLOOP_CONFIG = ROOT / (
     "configs/stride_hybridstructpool_runtime_optimization_v4_registration.json"
 )
+PARETO_HOTLOOP_CONFIG = ROOT / (
+    "configs/stride_hybridstructpool_runtime_optimization_v5_registration.json"
+)
 
 
 def test_registration_reuses_the_complete_registered_maze_cohort() -> None:
@@ -92,3 +95,20 @@ def test_causal_hotloop_registration_preserves_full_pool_and_requires_speedup() 
     ]
     assert engineering["maximum_success_rate_decrease"] == 0.0
     assert config["claim_boundary"]["not_default_pool_promotion"]
+
+
+def test_pareto_hotloop_registration_keeps_v4_engineering_gates() -> None:
+    _path, _root, config, _source, tasks = load_registration(PARETO_HOTLOOP_CONFIG)
+    assert len(tasks) == 19
+    optimization = config["runtime_optimization"]
+    assert optimization["full_union_required"]
+    assert optimization["pareto_coordinates_extracted_once"]
+    assert optimization["redundant_final_candidate_deepcopy_removed"]
+    engineering = config["engineering_gate"]
+    assert abs(
+        engineering["maximum_mean_controller_seconds"]
+        - 0.9
+        * engineering["registered_full_runtime_baseline"][
+            "mean_controller_seconds"
+        ]
+    ) < 1e-12
