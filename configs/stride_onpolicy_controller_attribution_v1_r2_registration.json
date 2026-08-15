@@ -1,0 +1,109 @@
+{
+  "schema": "lns2.stride.onpolicy_controller_attribution_registration.v2",
+  "scientific_status": "preregistered_initial_path_replay_controller_attribution_diagnostic",
+  "experiment_id": "stride-onpolicy-controller-attribution-v1",
+  "r2_amendment_parent_commit": "43358e9e86a6fe32793dde8951d7e7be6ac17c5e",
+  "protocol_revision": "r2_registered_decision_zero_path_replay_after_reset_fuse",
+  "amendment_reason": "r1 stopped at the first terminal process fuse after a 600-agent environment.reset produced no trace event; replay the already-registered original InitLNS decision-zero paths so the experiment starts before the first LNS repair without recomputing InitLNS under 16-way contention",
+  "inputs": {
+    "r1_registration": {
+      "path": "configs/stride_onpolicy_controller_attribution_v1_registration.json",
+      "sha256": "e53bcd2ee8f9a9d7efae55b381491e789b425ec661503abf10112b61f4e8fd57"
+    },
+    "r1_terminal_status": {
+      "path": "build/stride-onpolicy-controller-attribution-v1/collection_status.json",
+      "sha256": "90f409ebec3b79dda3154c6743b6256144da968d98e64f587707762505b2a468"
+    },
+    "r1_terminal_progress": {
+      "path": "build/stride-onpolicy-controller-attribution-v1/collection_progress.json",
+      "sha256": "83c45513148dfa5d027ad8aff1c1dfb1cae45c3c62e731ff68932872e04c9217"
+    },
+    "r1_timeout_manifest": {
+      "path": "build/stride-onpolicy-controller-attribution-v1/episodes/5ab153cda960de9ad0f4/trial_00/frozen_slotpool/realized_dynamic_manifest.jsonl",
+      "sha256": "a399ae46b1bfd68fb02c2249130d15306aaff381ad6953b7d4980004716da37d"
+    }
+  },
+  "cohort": {
+    "source_checkpoint_count": 45,
+    "unique_task_solver_key_count": 19,
+    "map_counts": {
+      "maze-128-128-1": 7,
+      "maze-128-128-2": 3,
+      "maze-32-32-4": 9
+    },
+    "selection_rule": "same complete 19 unique task_id plus solver_seed keys as r1; no task or controller removed after the r1 fuse",
+    "start_state": "registered original InitLNS path at decision_index zero before any LNS repair",
+    "outcome_enriched_task_cohort": true,
+    "maze_only": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "frozen_slotpool",
+    "frozen_structpool",
+    "official_adaptive_n8",
+    "fixed_target_n8"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "native_pp_order_only": true,
+    "deterministic_pp_replay": true,
+    "trial_specific_pp_seed_salt": true,
+    "initial_path_replay": true,
+    "initial_path_decision_index": 0,
+    "platform_checkpoint_restore": false,
+    "forced_first_action": false,
+    "runtime_retry": false,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "timing_boundary": {
+    "included": "decision-zero reset_paths replay, controller, candidate generation, native PP repair and episode orchestration",
+    "excluded_common_cost": "the original InitLNS path-generation time already paid identically before controller attribution",
+    "metric_name": "capped controller-continuation wall from the registered initial path",
+    "raw_end_to_end_ttf_claim": false
+  },
+  "platform_definition": {
+    "historical_streak_at_start": 0,
+    "entry": "three consecutive conflict_bound_exceeded exact rollbacks with unchanged repair fingerprint and conflict-edge signature",
+    "escape": "a later decision changes the entry platform signature",
+    "reentry": "after escape, any later signature reaches the same three-consecutive-exact-rollback definition"
+  },
+  "initial_extension_gate": {
+    "official_platform_entry_rate_strictly_below_each_frozen_arm": true,
+    "official_success_rate_not_below_best_frozen_arm": true,
+    "official_mean_capped_continuation_wall_not_above_best_frozen_arm": true,
+    "maximum_per_map_platform_entry_worsening_vs_best_frozen": 0.05,
+    "uniform_all_task_extension_only": true
+  },
+  "final_gate": {
+    "paired_task_cluster_bootstrap_replicates": 10000,
+    "platform_entry_difference_95pct_upper_strictly_below_zero_against_each_frozen": true,
+    "success_difference_95pct_lower_nonnegative_against_each_frozen": true,
+    "capped_continuation_wall_difference_95pct_upper_nonpositive_against_each_frozen": true,
+    "repair_decision_difference_95pct_upper_nonpositive_against_each_frozen": true,
+    "maximum_per_map_platform_entry_worsening_vs_best_frozen": 0.05
+  },
+  "claim_boundary": {
+    "diagnostic_only": true,
+    "answers_initial_path_platform_incidence_on_registered_maze_tasks": true,
+    "conditional_post_entry_metrics_are_descriptive_not_cross_arm_causal": true,
+    "r1_outcomes_imported": false,
+    "not_raw_end_to_end_ttf": true,
+    "not_result_blind": true,
+    "not_non_maze_evidence": true,
+    "not_ood_confirmation": true,
+    "not_runtime_integration": true,
+    "not_candidate_pool_replacement": true,
+    "not_training": true,
+    "not_default_controller_promotion": true
+  }
+}

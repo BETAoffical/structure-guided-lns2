@@ -26,12 +26,17 @@ from experiments.stride_exactstate_controller_attribution import (
     prepare_cases as prepare_exact_cases,
 )
 from experiments.stride_failure_informed_rescue_continuation import _decision_rows
+from experiments.stride_failure_informed_rescue_continuation import _source_collection
 from experiments.stride_maze_tail_state_collection import _fused_controller_kwargs
 from experiments.stride_platformentry_order import _kaplan_meier_restricted_mean
+from experiments.stride_repairability_collection import repairability_restore_seed
 from experiments.stride_tailswitch import _episode_summary
+from experiments.trace_replay import target_state_from_trace
+from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
 CONFIG_SCHEMA = "lns2.stride.onpolicy_controller_attribution_registration.v1"
+R2_CONFIG_SCHEMA = "lns2.stride.onpolicy_controller_attribution_registration.v2"
 STATUS_SCHEMA = "lns2.stride.onpolicy_controller_attribution_status.v1"
 REPORT_SCHEMA = "lns2.stride.onpolicy_controller_attribution_report.v1"
 OVERRIDE_SCHEMA = "lns2.stride.onpolicy_controller_attribution_override.v1"
@@ -60,7 +65,24 @@ EXTENSION_TRIALS = (4, 5, 6, 7)
 STATUS_FILENAME = "collection_status.json"
 
 
-def _collapse_tasks(cases: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _source_manifest(case: Mapping[str, Any]) -> tuple[Path, dict[str, Any]]:
+    source_root = _source_collection(case)
+    manifests = _read_jsonl(source_root / "realized_dynamic_manifest.jsonl")
+    matches = [
+        dict(row)
+        for row in manifests
+        if str(row.get("task_id")) == str(case["task_id"])
+        and int(row.get("solver_seed", -1)) == int(case["solver_seed"])
+        and str(row.get("status")) == "ok"
+    ]
+    if len(matches) != 1:
+        raise ValueError("on-policy source manifest is missing or ambiguous")
+    return source_root, matches[0]
+
+
+def _collapse_tasks(
+    cases: Iterable[Mapping[str, Any]], *, initial_path_replay: bool = False
+) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, int], list[Mapping[str, Any]]] = collections.defaultdict(list)
     for case in cases:
         grouped[(str(case["task_id"]), int(case["solver_seed"]))].append(case)
@@ -72,25 +94,40 @@ def _collapse_tasks(cases: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         task_fingerprint = _fingerprint(
             {"task_id": task_id, "solver_seed": solver_seed}
         )
-        tasks.append(
-            {
-                "task_fingerprint": task_fingerprint,
-                "state_fingerprint": task_fingerprint,
-                "task_id": task_id,
-                "solver_seed": solver_seed,
-                "map_id": next(iter(maps)),
-                "source_checkpoint_count": len(rows),
-                "source_challengers": sorted(
-                    {
-                        str(
-                            row.get("challenger")
-                            or dict(row["logical_checkpoint"])["challenger"]
-                        )
-                        for row in rows
-                    }
-                ),
-            }
-        )
+        task = {
+            "task_fingerprint": task_fingerprint,
+            "state_fingerprint": task_fingerprint,
+            "task_id": task_id,
+            "solver_seed": solver_seed,
+            "map_id": next(iter(maps)),
+            "source_checkpoint_count": len(rows),
+            "source_challengers": sorted(
+                {
+                    str(
+                        row.get("challenger")
+                        or dict(row["logical_checkpoint"])["challenger"]
+                    )
+                    for row in rows
+                }
+            ),
+        }
+        if initial_path_replay:
+            source_rows = sorted(rows, key=lambda row: str(row["state_fingerprint"]))
+            fingerprints: set[str] = set()
+            for row in source_rows:
+                _source_root, manifest = _source_manifest(row)
+                fingerprints.add(str(dict(manifest["summary"])["initial_fingerprint"]))
+            if len(fingerprints) != 1:
+                raise ValueError("registered source controllers changed the initial path")
+            task.update(
+                {
+                    "initial_source_case_fingerprint": str(
+                        source_rows[0]["state_fingerprint"]
+                    ),
+                    "initial_state_fingerprint": next(iter(fingerprints)),
+                }
+            )
+        tasks.append(task)
     return tasks
 
 
@@ -133,6 +170,8 @@ def load_registration(
     path = Path(path).resolve()
     root = path.parents[1]
     config = _read_json(path)
+    if config.get("schema") == R2_CONFIG_SCHEMA:
+        return _load_r2_registration(path, root, config)
     if (
         config.get("schema") != CONFIG_SCHEMA
         or config.get("scientific_status")
@@ -202,6 +241,84 @@ def load_registration(
     return path, root, config, inputs, exact_loaded, tasks
 
 
+def _load_r2_registration(
+    path: Path, root: Path, config: dict[str, Any]
+) -> tuple[
+    Path,
+    Path,
+    dict[str, Any],
+    dict[str, Path],
+    tuple[Any, ...],
+    list[dict[str, Any]],
+]:
+    if (
+        config.get("scientific_status")
+        != "preregistered_initial_path_replay_controller_attribution_diagnostic"
+        or config.get("experiment_id") != EXPERIMENT_ID
+        or config.get("r2_amendment_parent_commit")
+        != "43358e9e86a6fe32793dde8951d7e7be6ac17c5e"
+        or config.get("protocol_revision")
+        != "r2_registered_decision_zero_path_replay_after_reset_fuse"
+        or tuple(map(str, config.get("arms") or ())) != ARMS
+    ):
+        raise ValueError("on-policy r2 registration changed")
+    r2_inputs = {
+        name: registered_input(root, row, label=f"on-policy r2 {name}")
+        for name, row in dict(config["inputs"]).items()
+    }
+    r1_loaded = load_registration(r2_inputs["r1_registration"])
+    _r1_path, _r1_root, _r1_config, r1_inputs, exact_loaded, _r1_tasks = r1_loaded
+    r1_status = _read_json(r2_inputs["r1_terminal_status"])
+    r1_progress = _read_json(r2_inputs["r1_terminal_progress"])
+    failure_rows = _read_jsonl(r2_inputs["r1_timeout_manifest"])
+    if (
+        int(r1_status.get("completed_jobs", -1)) != 113
+        or int(r1_status.get("timeout_jobs", -1)) != 1
+        or str(dict(r1_status["terminal_failure"]).get("status")) != "timeout"
+        or int(r1_progress.get("outcome_count", -1)) != 112
+        or len(failure_rows) != 1
+        or str(failure_rows[0].get("status")) != "timeout"
+        or "exceeded 240.000 seconds" not in str(failure_rows[0].get("error"))
+    ):
+        raise ValueError("on-policy r1 terminal reset-fuse evidence changed")
+    expected_execution = {
+        "initial_trial_indices": list(INITIAL_TRIALS),
+        "extension_trial_indices": list(EXTENSION_TRIALS),
+        "worker_count": 16,
+        "per_episode_maximum_repair_decisions": 64,
+        "fixed_metric_horizon": 64,
+        "wall_time_fuse_seconds": 180.0,
+        "process_timeout_seconds": 240.0,
+        "outer_job_timeout_seconds": 300.0,
+        "neighborhood_size": 8,
+        "replan_algorithm": "PP",
+        "native_pp_order_only": True,
+        "deterministic_pp_replay": True,
+        "trial_specific_pp_seed_salt": True,
+        "initial_path_replay": True,
+        "initial_path_decision_index": 0,
+        "platform_checkpoint_restore": False,
+        "forced_first_action": False,
+        "runtime_retry": False,
+        "episode_atomic_checkpoints": True,
+        "stop_on_first_execution_error_or_process_timeout": True,
+    }
+    if dict(config["execution"]) != expected_execution:
+        raise ValueError("on-policy r2 execution changed")
+    cases = list(exact_loaded[-1])
+    tasks = _collapse_tasks(cases, initial_path_replay=True)
+    map_counts = collections.Counter(str(row["map_id"]) for row in tasks)
+    if (
+        len(tasks) != 19
+        or dict(sorted(map_counts.items()))
+        != dict(sorted(dict(config["cohort"]["map_counts"]).items()))
+    ):
+        raise ValueError("on-policy r2 unique task cohort changed")
+    inputs = {**r1_inputs, **r2_inputs}
+    _qualification_roots(inputs)
+    return path, root, config, inputs, exact_loaded, tasks
+
+
 def prepare_tasks(
     config_path: str | Path,
 ) -> tuple[tuple[Any, ...], list[dict[str, Any]]]:
@@ -237,13 +354,58 @@ def continuation_schedule(
 
 
 def _episode_override(
-    task: Mapping[str, Any], *, trial_index: int
+    task: Mapping[str, Any],
+    *,
+    trial_index: int,
+    source_cases: Iterable[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    return {
+    override: dict[str, Any] = {
         "schema": OVERRIDE_SCHEMA,
         "state_id": str(task["task_fingerprint"]),
         "pp_replay_seed_salt": f"{EXPERIMENT_ID}:trial:{int(trial_index)}",
     }
+    source_case_fingerprint = task.get("initial_source_case_fingerprint")
+    if source_case_fingerprint is None:
+        return override
+    if source_cases is None:
+        raise ValueError("initial path replay requires registered source cases")
+    matches = [
+        row
+        for row in source_cases
+        if str(row["state_fingerprint"]) == str(source_case_fingerprint)
+    ]
+    if len(matches) != 1:
+        raise ValueError("initial path replay source case changed")
+    source_root, manifest = _source_manifest(matches[0])
+    initial_fingerprint = str(task["initial_state_fingerprint"])
+    state, _trace = target_state_from_trace(
+        source_root,
+        manifest,
+        decision_index=0,
+        expected_fingerprint=initial_fingerprint,
+    )
+    repair_fingerprint = repair_structure_fingerprint(state)
+    initial_conflicts = int(dict(manifest["summary"])["initial_conflicts"])
+    if int(state["num_of_colliding_pairs"]) != initial_conflicts:
+        raise ValueError("initial path replay conflict count changed")
+    override["initial_restore"] = {
+        "collection_root": str(source_root),
+        "manifest": manifest,
+        "decision_index": 0,
+        "expected_fingerprint": initial_fingerprint,
+        "repair_structure_fingerprint": repair_fingerprint,
+        "expected_conflicts": initial_conflicts,
+        "restore_seed": repairability_restore_seed(
+            _fingerprint(
+                {
+                    "initial_fingerprint": initial_fingerprint,
+                    "trial_index": int(trial_index),
+                    "experiment": f"{EXPERIMENT_ID}-r2",
+                }
+            )
+        ),
+    }
+    return override
 
 
 def _parent_from_exact(exact_loaded: tuple[Any, ...]) -> Mapping[str, Any]:
@@ -317,7 +479,11 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
     collection = Path(str(job["collection_path"])).resolve()
     key = (str(item["task_id"]), int(item["solver_seed"]))
     all_keys = {(str(row["task_id"]), int(row["solver_seed"])) for row in tasks}
-    override = _episode_override(task, trial_index=int(item["trial_index"]))
+    override = _episode_override(
+        task,
+        trial_index=int(item["trial_index"]),
+        source_cases=list(exact_loaded[-1]),
+    )
     kwargs = _arm_controller_kwargs(root, parent, item)
     dataset = (root / str(parent["cohort"]["dataset"])).resolve()
     common = {

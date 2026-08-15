@@ -15,6 +15,7 @@ from experiments.stride_onpolicy_controller_attribution import (
 
 
 CONFIG = "configs/stride_onpolicy_controller_attribution_v1_registration.json"
+R2_CONFIG = "configs/stride_onpolicy_controller_attribution_v1_r2_registration.json"
 
 
 def _row(index: int, before: str, after: str, *, rollback: bool) -> dict:
@@ -47,6 +48,39 @@ def test_initial_override_changes_trial_seed_without_restoring_a_state() -> None
     assert "forced_first_action" not in trial0
     assert "bounded_native_retry" not in trial0
     assert trial0["pp_replay_seed_salt"] != trial1["pp_replay_seed_salt"]
+
+
+def test_r2_replays_the_registered_decision_zero_path() -> None:
+    loaded, tasks = prepare_tasks(R2_CONFIG)
+    assert loaded[2]["execution"]["initial_path_replay"] is True
+    assert len(tasks) == 19
+    task = tasks[0]
+    assert task["initial_source_case_fingerprint"]
+    assert task["initial_state_fingerprint"]
+
+    override = _episode_override(
+        task,
+        trial_index=0,
+        source_cases=list(loaded[4][-1]),
+    )
+    restore = override["initial_restore"]
+    assert restore["decision_index"] == 0
+    assert restore["expected_fingerprint"] == task["initial_state_fingerprint"]
+    assert restore["expected_conflicts"] > 0
+    assert "forced_first_action" not in override
+    assert "bounded_native_retry" not in override
+
+
+def test_r2_dry_run_is_a_full_restart_with_sixteen_workers() -> None:
+    result = run_collection(
+        R2_CONFIG,
+        "build/test-stride-onpolicy-controller-attribution-r2-dry-run",
+        phase="initial",
+        dry_run=True,
+    )
+    assert result["task_count"] == 19
+    assert result["schedule_entry_count"] == 304
+    assert result["worker_count"] == 16
 
 
 def test_platform_diagnostics_start_with_zero_historical_streak() -> None:
