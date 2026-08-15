@@ -1,0 +1,135 @@
+{
+  "schema": "lns2.stride.onpolicy_controller_attribution_registration.v1",
+  "scientific_status": "preregistered_initial_state_controller_attribution_diagnostic",
+  "experiment_id": "stride-onpolicy-controller-attribution-v1",
+  "pre_registration_parent_commit": "669df94a43eb14d7bc6578a69e5c0a9a0cddd67f",
+  "protocol_revision": "r1_unique_task_seed_initial_solution_four_arm_contrast",
+  "inputs": {
+    "exactstate_registration": {
+      "path": "configs/stride_exactstate_controller_attribution_v1_registration.json",
+      "sha256": "10c905a38139029ac79e9f6f4be8137a31d867f2adfe4cd6bbb7dc5c2fa90f24"
+    },
+    "exactstate_initial_report": {
+      "path": "build/stride-exactstate-controller-attribution-v1/initial_report.json",
+      "sha256": "4427ed5b717ee18ad1133f717919cc74f0f14c8627710cc90c4faac63e77b43a"
+    },
+    "runtime_config": {
+      "path": "configs/stride_exactstate_controller_attribution_runtime_v1.json",
+      "sha256": "580a5618fce1df6182e7b4ed20f024187733264b2d04edc91846de5226e3f0f5"
+    },
+    "slot_qualification_manifest": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-slotpool/qualification_manifest.jsonl",
+      "sha256": "25f7f91fff80aa0d9b78ed4e5bda07d760c69e5edee70622703743f925c66ef6"
+    },
+    "slot_qualification_report": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-slotpool/qualification_report.json",
+      "sha256": "005bad2bf7119c12ae0647f541203b2a9df64da54a1ddfc0ff05c352179f51e6"
+    },
+    "slot_qualification_run_config": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-slotpool/run_config.json",
+      "sha256": "8feb78903351782c7d8114192cdc00b81b36e0ea2f2e331ac1bdcd2ead5259d8"
+    },
+    "slot_qualification_summary": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-slotpool/collection_summary.json",
+      "sha256": "d1ae80388f3ebeabf34ef029b73ee8b3b2efc74282fc2cac02ae5f942257e649"
+    },
+    "struct_qualification_manifest": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-structpool/qualification_manifest.jsonl",
+      "sha256": "25f7f91fff80aa0d9b78ed4e5bda07d760c69e5edee70622703743f925c66ef6"
+    },
+    "struct_qualification_report": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-structpool/qualification_report.json",
+      "sha256": "005bad2bf7119c12ae0647f541203b2a9df64da54a1ddfc0ff05c352179f51e6"
+    },
+    "struct_qualification_run_config": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-structpool/run_config.json",
+      "sha256": "2ba120f1f19559a0084c5cbe36c215159a0f6ddc810b08c7d8417d556e10e1c5"
+    },
+    "struct_qualification_summary": {
+      "path": "build/stride-exactstate-controller-attribution-v1/qualification/v2-plus-structpool/collection_summary.json",
+      "sha256": "9b08fad83d31a1685c82bd2e21beac04c1615175e6ffa1f888577d66b5d4e3b9"
+    }
+  },
+  "cohort": {
+    "source_checkpoint_count": 45,
+    "unique_task_solver_key_count": 19,
+    "map_counts": {
+      "maze-128-128-1": 7,
+      "maze-128-128-2": 3,
+      "maze-32-32-4": 9
+    },
+    "selection_rule": "collapse all 45 registered first-repeat-stall cases to every unique task_id plus solver_seed key; no outcome-based controller or key selection",
+    "start_state": "original InitLNS initial path state before any LNS repair decision",
+    "outcome_enriched_task_cohort": true,
+    "maze_only": true,
+    "generalization_claim": false
+  },
+  "arms": [
+    "frozen_slotpool",
+    "frozen_structpool",
+    "official_adaptive_n8",
+    "fixed_target_n8"
+  ],
+  "execution": {
+    "initial_trial_indices": [0, 1, 2, 3],
+    "extension_trial_indices": [4, 5, 6, 7],
+    "worker_count": 16,
+    "per_episode_maximum_repair_decisions": 64,
+    "fixed_metric_horizon": 64,
+    "wall_time_fuse_seconds": 180.0,
+    "process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "neighborhood_size": 8,
+    "replan_algorithm": "PP",
+    "native_pp_order_only": true,
+    "deterministic_pp_replay": true,
+    "trial_specific_pp_seed_salt": true,
+    "initial_state_restore": false,
+    "forced_first_action": false,
+    "runtime_retry": false,
+    "episode_atomic_checkpoints": true,
+    "stop_on_first_execution_error_or_process_timeout": true
+  },
+  "causal_contrast": {
+    "shared_start": "same task, solver seed and original initial path fingerprint within each trial",
+    "shared_first_pp_randomness": "same initial state and trial salt produce the same controller-independent first PP seed",
+    "after_divergence": "each controller follows its own on-policy states and neighborhoods; later PP streams are not falsely paired across different states",
+    "frozen_slotpool": "registered v2-plus-SlotPool controller from the original initial state",
+    "frozen_structpool": "registered v2-plus-StructPool controller from the original initial state",
+    "official_adaptive_n8": "native official Adaptive neighborhood selection at N=8 with PP",
+    "fixed_target_n8": "native fixed Target neighborhood selection at N=8 with PP"
+  },
+  "platform_definition": {
+    "historical_streak_at_start": 0,
+    "entry": "three consecutive conflict_bound_exceeded exact rollbacks with unchanged repair fingerprint and conflict-edge signature",
+    "escape": "a later decision changes the entry platform signature",
+    "reentry": "after escape, any later signature reaches the same three-consecutive-exact-rollback definition"
+  },
+  "initial_extension_gate": {
+    "official_platform_entry_rate_strictly_below_each_frozen_arm": true,
+    "official_success_rate_not_below_best_frozen_arm": true,
+    "official_mean_capped_ttf_not_above_best_frozen_arm": true,
+    "maximum_per_map_platform_entry_worsening_vs_best_frozen": 0.05,
+    "uniform_all_task_extension_only": true
+  },
+  "final_gate": {
+    "paired_task_cluster_bootstrap_replicates": 10000,
+    "platform_entry_difference_95pct_upper_strictly_below_zero_against_each_frozen": true,
+    "success_difference_95pct_lower_nonnegative_against_each_frozen": true,
+    "capped_ttf_difference_95pct_upper_nonpositive_against_each_frozen": true,
+    "repair_decision_difference_95pct_upper_nonpositive_against_each_frozen": true,
+    "maximum_per_map_platform_entry_worsening_vs_best_frozen": 0.05
+  },
+  "claim_boundary": {
+    "diagnostic_only": true,
+    "answers_initial_state_platform_incidence_on_registered_maze_tasks": true,
+    "conditional_post_entry_metrics_are_descriptive_not_cross_arm_causal": true,
+    "not_result_blind": true,
+    "not_non_maze_evidence": true,
+    "not_ood_confirmation": true,
+    "not_runtime_integration": true,
+    "not_candidate_pool_replacement": true,
+    "not_training": true,
+    "not_default_controller_promotion": true
+  }
+}
