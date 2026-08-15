@@ -2721,7 +2721,7 @@
     {
       "path": "experiments/stride_hybridstructpool_runtime_pilot.py",
       "role": "reproducibility",
-      "purpose": "Collect and analyze paired full-versus-lean HybridStructPool initial-path runtime evidence with explicit controller-cost gates."
+      "purpose": "Collect and analyze paired complete-union HybridStructPool engineering-runtime evidence with explicit controller, generation, Hybrid-total and quality gates."
     },
     {
       "path": "scripts/run_stride_hybridstructpool_runtime_pilot.py",
@@ -2729,9 +2729,14 @@
       "purpose": "Run the preregistered HybridStructPool pool-only runtime and engineering pilot."
     },
     {
+      "path": "scripts/run_stride_hybridstructpool_runtime_smoke.py",
+      "role": "reproducibility",
+      "purpose": "Run the bounded HybridStructPool runtime smoke check without replacing the paired engineering pilot."
+    },
+    {
       "path": "tests/evaluation/test_stride_hybridstructpool_runtime_pilot.py",
       "role": "reproducibility",
-      "contract": "Freeze the paired Maze cohort, episode-stream PP semantics, baseline artifact identity, and lean-runtime engineering gates."
+      "contract": "Freeze the paired Maze cohort, episode-stream PP semantics, baseline artifact identity, complete-union runtime semantics and engineering gates."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
