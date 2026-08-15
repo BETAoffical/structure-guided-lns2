@@ -37,10 +37,11 @@ def _candidate(agents: list[int], kind: str) -> dict:
 
 
 class HybridStructPoolTest(unittest.TestCase):
-    def test_runtime_contract_preserves_full_audit_and_freezes_lean_mask(self) -> None:
+    def test_runtime_contract_preserves_the_complete_structural_grid(self) -> None:
         config = hybridstructpool_runtime_augmentation()
-        self.assertFalse(config["full_union_required"])
+        self.assertTrue(config["full_union_required"])
         self.assertTrue(config["full_union_audit_preserved"])
+        self.assertEqual(config["runtime_filter_id"], "none")
         self.assertEqual(config["structural_sizes"], [8, 16, 24, 32])
         self.assertEqual(
             config["runtime_structural_family_sizes"],
@@ -147,7 +148,7 @@ class HybridStructPoolTest(unittest.TestCase):
 
     @patch("lns2_selector.runtime.hybridstructpool.generate_causalclosure_candidates")
     @patch("lns2_selector.runtime.hybridstructpool.generate_structpool_candidate_subset")
-    def test_runtime_generator_uses_only_the_registered_structural_mask(
+    def test_runtime_generator_uses_the_registered_complete_structural_grid(
         self, subset_mock, causal_mock
     ) -> None:
         base = [_candidate([1, 2], "base")]

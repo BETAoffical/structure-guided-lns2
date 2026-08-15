@@ -2073,6 +2073,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             str(candidate["candidate_id"])
                                         ]
                                     )
+                                hybrid_generation_seconds = (
+                                    time.perf_counter() - hybrid_started
+                                )
                                 base_rows_by_id = {
                                     str(candidate["candidate_id"]): row
                                     for candidate, row in zip(
@@ -2165,13 +2168,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             candidates
                                         ),
                                         "hybridstructpool_seconds": hybrid_seconds,
+                                        "hybridstructpool_generation_seconds": (
+                                            hybrid_generation_seconds
+                                        ),
                                         "candidate_count": len(candidates),
                                         "candidate_generation_seconds": float(
                                             proposal_metrics.get(
                                                 "candidate_generation_seconds", 0.0
                                             )
                                         )
-                                        + hybrid_seconds,
+                                        + hybrid_generation_seconds,
                                     }
                                 )
                         else:

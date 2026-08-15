@@ -635,6 +635,30 @@ class TopologyCandidatesTest(unittest.TestCase):
         self.assertTrue({tuple(row["agents"]) for row in subset} <= full_sets)
         self.assertTrue(all(row["structpool_runtime_subset"] for row in subset))
 
+    def test_complete_runtime_subset_matches_the_full_structpool_grid(self) -> None:
+        state, analysis = self._structpool_state()
+        full = generate_structpool_candidate_grid(state, analysis)
+        subset = generate_structpool_candidate_subset(
+            state,
+            analysis,
+            family_sizes={
+                "bottleneck_crossing": (8, 16, 24, 32),
+                "conflict_component": (8, 16, 24, 32),
+                "path_overlap": (8, 16, 24, 32),
+                "spatiotemporal_hotspot": (8, 16, 24, 32),
+                "topology_boundary_articulation": (8, 16, 24, 32),
+                "topology_boundary_low_degree": (8, 16, 24, 32),
+            },
+        )
+        self.assertEqual(
+            [row["candidate_id"] for row in subset],
+            [row["candidate_id"] for row in full],
+        )
+        self.assertEqual(
+            [row["agents"] for row in subset],
+            [row["agents"] for row in full],
+        )
+
     def test_scalepool_orders_sizes_by_support_with_smaller_tie_break(self) -> None:
         self.assertEqual(scalepool_size_attempt_order(2), (8, 16, 24, 32))
         self.assertEqual(scalepool_size_attempt_order(12), (8, 16, 24, 32))

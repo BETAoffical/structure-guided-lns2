@@ -2681,7 +2681,7 @@
     {
       "path": "lns2_selector/runtime/hybridstructpool.py",
       "role": "reproducibility",
-      "purpose": "Preserve the complete audited HybridStructPool union and expose a separately frozen lean runtime view with the complete V2 pool and CausalClosure frontier."
+      "purpose": "Preserve the complete audited HybridStructPool union and expose a full-membership engineered runtime with complete V2, structural and CausalClosure sources."
     },
     {
       "path": "experiments/stride_hybridstructpool_audit.py",

@@ -11,8 +11,11 @@ from experiments.stride_hybridstructpool_runtime_pilot import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs/stride_hybridstructpool_runtime_pilot_v1_registration.json"
-OPTIMIZED_CONFIG = (
-    ROOT / "configs/stride_hybridstructpool_runtime_optimization_v2_registration.json"
+OPTIMIZED_CONFIG = ROOT / (
+    "configs/stride_hybridstructpool_runtime_optimization_v2_registration.json"
+)
+FULL_OPTIMIZED_CONFIG = ROOT / (
+    "configs/stride_hybridstructpool_runtime_optimization_v3_registration.json"
 )
 
 
@@ -52,3 +55,21 @@ def test_optimized_registration_freezes_engineering_and_quality_gates() -> None:
     assert engineering["maximum_mean_candidate_generation_seconds"] < engineering[
         "registered_full_runtime_baseline"
     ]["mean_candidate_generation_seconds"]
+
+
+def test_full_optimized_registration_forbids_candidate_compression() -> None:
+    _path, _root, config, _source, tasks = load_registration(FULL_OPTIMIZED_CONFIG)
+    assert len(tasks) == 19
+    optimization = config["runtime_optimization"]
+    assert optimization["full_union_required"]
+    assert optimization["complete_structural_family_size_cell_count"] == 24
+    assert optimization["structural_filtering_enabled"] is False
+    assert config["claim_boundary"]["not_candidate_compression"]
+    engineering = config["engineering_gate"]
+    assert abs(
+        engineering["maximum_mean_hybrid_total_seconds"]
+        - 0.75
+        * engineering["registered_full_runtime_baseline"][
+            "mean_hybrid_total_seconds"
+        ]
+    ) < 1e-12

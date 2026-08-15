@@ -18,11 +18,12 @@ from lns2_selector.runtime.topology_candidates import (
 HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-v1"
 STRUCTURAL_SIZES = (8, 16, 24, 32)
 RUNTIME_STRUCTURAL_FAMILY_SIZES = {
-    "bottleneck_crossing": (24, 32),
-    "conflict_component": (24, 32),
-    "spatiotemporal_hotspot": (24, 32),
-    "topology_boundary_articulation": (16, 24, 32),
-    "topology_boundary_low_degree": (16, 24, 32),
+    "bottleneck_crossing": STRUCTURAL_SIZES,
+    "conflict_component": STRUCTURAL_SIZES,
+    "path_overlap": STRUCTURAL_SIZES,
+    "spatiotemporal_hotspot": STRUCTURAL_SIZES,
+    "topology_boundary_articulation": STRUCTURAL_SIZES,
+    "topology_boundary_low_degree": STRUCTURAL_SIZES,
 }
 HYBRID_GROUP_ORDER = (
     "causalclosure_v2",
@@ -35,10 +36,10 @@ HYBRID_GROUP_ORDER = (
 _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
     "enabled": True,
     "pool_id": HYBRIDSTRUCTPOOL_ID,
-    "runtime_id": "stride-hybridstructpool-lean-runtime-v2",
-    "full_union_required": False,
+    "runtime_id": "stride-hybridstructpool-full-engineered-runtime-v3",
+    "full_union_required": True,
     "full_union_audit_preserved": True,
-    "runtime_filter_id": "stride-hybridstructpool-zero-selection-mask-v1",
+    "runtime_filter_id": "none",
     "structural_sizes": list(STRUCTURAL_SIZES),
     "runtime_structural_family_sizes": {
         family: list(sizes)
@@ -63,7 +64,7 @@ _HYBRIDSTRUCTPOOL_RUNTIME_CONFIG = {
 
 
 def hybridstructpool_runtime_augmentation() -> dict[str, Any]:
-    """Return the immutable lean-runtime experimental contract."""
+    """Return the immutable full-union engineered runtime contract."""
 
     return json.loads(json.dumps(_HYBRIDSTRUCTPOOL_RUNTIME_CONFIG))
 
@@ -420,12 +421,12 @@ def generate_hybridstructpool_runtime_candidates(
     causal_temporal_window: int = 2,
     maximum_causal_jaccard: float = 0.9,
 ) -> HybridStructPoolResult:
-    """Generate the lean runtime union while preserving the full audit API.
+    """Generate the full runtime union through the subset-capable API.
 
-    The mask removes only structural family/size cells that were never chosen
-    in the registered full-union runtime trace.  V2 remains complete and the
-    complete CausalClosure frontier remains available.  No repair outcome is
-    consulted online.
+    Runtime acceleration must not alter candidate membership.  The registered
+    mapping therefore contains every structural family/size cell; the
+    subset-capable implementation is retained only so a future, separately
+    validated selector can use it without changing the complete audit API.
     """
 
     normalized = {

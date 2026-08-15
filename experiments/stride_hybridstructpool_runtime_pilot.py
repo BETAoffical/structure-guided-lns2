@@ -244,6 +244,12 @@ def _pilot_arm_summary(rows: list[dict[str, Any]], arm: str) -> dict[str, Any]:
             "mean_inference_seconds": mean(
                 float(row["inference_seconds"]) for row in selected
             ),
+            "mean_hybrid_total_seconds": mean(
+                float(row["hybrid_total_seconds"]) for row in selected
+            ),
+            "mean_hybrid_generation_seconds": mean(
+                float(row["hybrid_generation_seconds"]) for row in selected
+            ),
         }
     )
     return result
@@ -374,6 +380,22 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
         if manifest.get("status") == "ok":
             decisions = _decision_rows(_collection_path(output, item), manifest)
             row.update(_platform_diagnostics(decisions))
+            row["hybrid_total_seconds"] = sum(
+                float(
+                    dict(
+                        dict(decision.get("controller") or {}).get("proposal") or {}
+                    ).get("hybridstructpool_seconds", 0.0)
+                )
+                for decision in decisions
+            )
+            row["hybrid_generation_seconds"] = sum(
+                float(
+                    dict(
+                        dict(decision.get("controller") or {}).get("proposal") or {}
+                    ).get("hybridstructpool_generation_seconds", 0.0)
+                )
+                for decision in decisions
+            )
             row["unique_neighborhood_count"] = len(
                 {
                     tuple(
@@ -461,6 +483,10 @@ def analyze(config_path: str | Path, output: str | Path) -> dict:
                 ),
             }
         )
+        if "maximum_mean_hybrid_total_seconds" in engineering:
+            gate["hybrid_total_seconds_reduced"] = hybrid[
+                "mean_hybrid_total_seconds"
+            ] <= float(engineering["maximum_mean_hybrid_total_seconds"])
     report = {
         "schema": REPORT_SCHEMA,
         "integrity_passed": gate["complete"]
