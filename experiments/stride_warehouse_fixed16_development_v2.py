@@ -796,11 +796,27 @@ def _audit_qualification_evidence(
             raise ValueError(
                 f"Warehouse fixed16 v2 qualification manifest row changed: {key}"
             )
+        # The qualification manifest is the raw reset record and does not carry
+        # ``initial_state_consistent``.  That field is computed by the report
+        # builder after cross-seed fingerprint auditing, so require it directly
+        # on the report instead of comparing it with a missing manifest field.
+        if anchor.get("initial_state_consistent") is not True:
+            raise ValueError(
+                "Warehouse fixed16 v2 qualification report marks an "
+                f"inconsistent initial state: {key}"
+            )
+        if (
+            "initial_state_consistent" in row
+            and row.get("initial_state_consistent") is not True
+        ):
+            raise ValueError(
+                "Warehouse fixed16 v2 qualification manifest carries an "
+                f"inconsistent initial state: {key}"
+            )
         for field in (
             "initial_conflicts",
             "initial_feasible",
             "initial_complete",
-            "initial_state_consistent",
             "state_fingerprint",
         ):
             if row.get(field) != anchor.get(field):

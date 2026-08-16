@@ -184,9 +184,11 @@ def test_q1_manifest_and_report_are_cross_checked(tmp_path: Path) -> None:
     rows = []
     for item in subject.qualification_schedule(config):
         anchor = anchors[(item["task_id"], item["solver_seed"])]
+        raw_anchor = dict(anchor)
+        raw_anchor.pop("initial_state_consistent")
         rows.append(
             {
-                **anchor,
+                **raw_anchor,
                 "status": "ok",
                 "error": None,
                 "map_id": subject.MAP_ID,
@@ -209,6 +211,13 @@ def test_q1_manifest_and_report_are_cross_checked(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="report/manifest mismatch"):
+        subject._audit_qualification_evidence(config, qualification)
+    rows[0]["initial_conflicts"] -= 1
+    report["natural_distribution"]["tasks"][0]["initial_state_consistent"] = False
+    (qualification / "qualification_report.json").write_text(
+        json.dumps(report), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="inconsistent initial state"):
         subject._audit_qualification_evidence(config, qualification)
     report = _qualification_report(config)
     next(
