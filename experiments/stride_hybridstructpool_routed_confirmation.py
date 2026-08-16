@@ -89,6 +89,30 @@ _IDENTITIES = {
             "workers_for_qualification": 16,
         },
     },
+    "lns2.stride.hybridstructpool_routed_confirmation_config.v4": {
+        "experiment_id": "stride-structshell-v2-official-bounded-confirmation-v1",
+        "pre_registration_parent_commit": "114dc63",
+        "episode_process_timeout_seconds": 240.0,
+        "outer_job_timeout_seconds": 300.0,
+        "wall_time_budget_seconds": 180.0,
+        "environment_time_limit_seconds": 180.0,
+        "stopping_rule": "wall-clock",
+        "scientific_status": "preregistered_result_blind_paired_bounded_ttf_confirmation",
+        "status_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_status.v1",
+        "report_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_report.v1",
+        "controllers": CONTROLLERS,
+        "solver_seeds": (7, 8, 9),
+        "comparison": {
+            "primary_baseline": "v2_only",
+            "secondary_baseline": "official_adaptive",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_three_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
+    },
 }
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "confirmation_report.json"
@@ -117,7 +141,10 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     identity = _identity(config)
     if (
         config.get("scientific_status")
-        != "preregistered_result_blind_paired_raw_ttf_confirmation"
+        != identity.get(
+            "scientific_status",
+            "preregistered_result_blind_paired_raw_ttf_confirmation",
+        )
         or config.get("experiment_id") != identity["experiment_id"]
         or str(config.get("pre_registration_parent_commit"))
         != identity["pre_registration_parent_commit"]
@@ -129,14 +156,25 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     if comparison != identity["comparison"]:
         raise ValueError("Hybrid routed confirmation comparison changed")
     runtime = dict(config.get("runtime") or {})
-    if runtime != {
-        "stopping_rule": "run-to-completion",
+    expected_runtime = {
+        "stopping_rule": str(identity.get("stopping_rule", "run-to-completion")),
         "repair_seed_policy": "episode_stream",
         "deterministic_pp_replay": False,
         "episode_process_timeout_seconds": identity[
             "episode_process_timeout_seconds"
         ],
-    }:
+    }
+    if "wall_time_budget_seconds" in identity:
+        expected_runtime.update(
+            {
+                "wall_time_budget_seconds": identity["wall_time_budget_seconds"],
+                "environment_time_limit_seconds": identity[
+                    "environment_time_limit_seconds"
+                ],
+                "outer_job_timeout_seconds": identity["outer_job_timeout_seconds"],
+            }
+        )
+    if runtime != expected_runtime:
         raise ValueError("Hybrid routed confirmation runtime changed")
     augmentation = validate_routed_hybridstructpool_augmentation(
         dict(config["challenger_augmentation"])
@@ -202,11 +240,26 @@ def schedule(config: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _controller_kwargs(root: Path, config: Mapping[str, Any], name: str) -> dict[str, Any]:
+    runtime = dict(config["runtime"])
     common = {
-        "stopping_rule": "run-to-completion",
+        "stopping_rule": str(runtime["stopping_rule"]),
         "repair_seed_policy": "episode_stream",
         "deterministic_pp_replay": False,
     }
+    if common["stopping_rule"] != "run-to-completion":
+        common.update(
+            {
+                "wall_time_budget_seconds": float(
+                    runtime["wall_time_budget_seconds"]
+                ),
+                "episode_process_timeout_seconds": float(
+                    runtime["episode_process_timeout_seconds"]
+                ),
+                "environment_time_limit_seconds": float(
+                    runtime["environment_time_limit_seconds"]
+                ),
+            }
+        )
     if name == "official_adaptive":
         return {
             **common,
@@ -245,17 +298,20 @@ def _runtime_config_path(
     group: Mapping[str, Any],
 ) -> Path:
     source = (root / str(group["runtime_config"])).resolve()
-    if (
-        str(config.get("schema"))
-        != "lns2.stride.hybridstructpool_routed_confirmation_config.v3"
-    ):
+    schema = str(config.get("schema"))
+    if schema not in {
+        "lns2.stride.hybridstructpool_routed_confirmation_config.v3",
+        "lns2.stride.hybridstructpool_routed_confirmation_config.v4",
+    }:
         return source
     payload = _read_json(source)
-    payload["solver_seeds"] = list(map(int, config["cohort"]["solver_seeds"]))
+    solver_seeds = list(map(int, config["cohort"]["solver_seeds"]))
+    payload["solver_seeds"] = solver_seeds
+    seed_suffix = "_".join(map(str, solver_seeds))
     destination = (
         output
         / "runtime_configs"
-        / f"{str(group['id'])}__solver_seeds_4_5_6.json"
+        / f"{str(group['id'])}__solver_seeds_{seed_suffix}.json"
     )
     _write_json(destination, payload)
     return destination
@@ -528,7 +584,12 @@ def run(
             phase="hybridstructpool-routed-confirmation",
             output_root=output,
             run_fingerprint=str(prepared.base_status["run_fingerprint"]),
-            timeout_seconds=float(config["runtime"]["episode_process_timeout_seconds"]),
+            timeout_seconds=float(
+                config["runtime"].get(
+                    "outer_job_timeout_seconds",
+                    config["runtime"]["episode_process_timeout_seconds"],
+                )
+            ),
             failure_result=_failed_job,
             stop_on_failure=True,
         )
@@ -562,22 +623,147 @@ def _repair_tail(rows: list[dict[str, Any]]) -> dict[str, float | None]:
     return {"p95": _quantile(values, 0.95), "maximum": max(values) if values else None}
 
 
+def _bounded_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    result = _summary(rows)
+    episodes = [
+        dict(row.get("summary") or {})
+        for row in rows
+        if row.get("status") == "ok" and isinstance(row.get("summary"), dict)
+    ]
+    successes = [row for row in episodes if row.get("success") is True]
+    capped = [float(row["capped_wall_time_to_feasible"]) for row in episodes]
+    result.update(
+        {
+            "success_rate": len(successes) / len(episodes) if episodes else 0.0,
+            "right_censored_count": sum(
+                str(row.get("stop_reason")) == "wall_timeout" for row in episodes
+            ),
+            "mean_restricted_wall_time_to_feasible": (
+                statistics.fmean(capped) if capped else None
+            ),
+            "mean_common_success_raw_ttf": (
+                statistics.fmean(
+                    float(row["wall_time_to_feasible"]) for row in successes
+                )
+                if successes
+                else None
+            ),
+            "mean_normalized_wall_clock_conflict_auc": (
+                statistics.fmean(
+                    float(row["normalized_wall_clock_conflict_auc"])
+                    for row in episodes
+                )
+                if episodes
+                else None
+            ),
+        }
+    )
+    return result
+
+
+def _bounded_paired_comparison(
+    baseline: Mapping[tuple[str, str, int], dict[str, Any]],
+    challenger: Mapping[tuple[str, str, int], dict[str, Any]],
+    keys: list[tuple[str, str, int]],
+) -> dict[str, Any]:
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for key in keys:
+        left = baseline.get(key)
+        right = challenger.get(key)
+        if (
+            left is None
+            or right is None
+            or left.get("status") != "ok"
+            or right.get("status") != "ok"
+            or not isinstance(left.get("summary"), dict)
+            or not isinstance(right.get("summary"), dict)
+        ):
+            return {"valid": False, "paired_episode_count": len(pairs)}
+        pairs.append((dict(left["summary"]), dict(right["summary"])))
+    baseline_capped = [
+        float(left["capped_wall_time_to_feasible"]) for left, _right in pairs
+    ]
+    challenger_capped = [
+        float(right["capped_wall_time_to_feasible"]) for _left, right in pairs
+    ]
+    baseline_mean = statistics.fmean(baseline_capped) if pairs else 0.0
+    challenger_mean = statistics.fmean(challenger_capped) if pairs else 0.0
+    deltas = [
+        right - left for left, right in zip(baseline_capped, challenger_capped)
+    ]
+    common_success = [
+        (float(left["wall_time_to_feasible"]), float(right["wall_time_to_feasible"]))
+        for left, right in pairs
+        if left.get("success") is True and right.get("success") is True
+    ]
+    return {
+        "valid": True,
+        "paired_episode_count": len(pairs),
+        "baseline_success_count": sum(left.get("success") is True for left, _ in pairs),
+        "challenger_success_count": sum(right.get("success") is True for _, right in pairs),
+        "baseline_mean_restricted_ttf": baseline_mean,
+        "challenger_mean_restricted_ttf": challenger_mean,
+        "mean_restricted_ttf_delta_seconds": challenger_mean - baseline_mean,
+        "mean_restricted_ttf_relative_improvement": (
+            (baseline_mean - challenger_mean) / baseline_mean
+            if baseline_mean
+            else 0.0
+        ),
+        "faster_count": sum(value < -1e-9 for value in deltas),
+        "slower_count": sum(value > 1e-9 for value in deltas),
+        "tied_count": sum(abs(value) <= 1e-9 for value in deltas),
+        "paired_faster_fraction": (
+            sum(value < -1e-9 for value in deltas) / len(deltas) if deltas else 0.0
+        ),
+        "common_success_count": len(common_success),
+        "baseline_common_success_mean_raw_ttf": (
+            statistics.fmean(left for left, _right in common_success)
+            if common_success
+            else None
+        ),
+        "challenger_common_success_mean_raw_ttf": (
+            statistics.fmean(right for _left, right in common_success)
+            if common_success
+            else None
+        ),
+        "mean_normalized_wall_auc_delta": (
+            statistics.fmean(
+                float(right["normalized_wall_clock_conflict_auc"])
+                - float(left["normalized_wall_clock_conflict_auc"])
+                for left, right in pairs
+            )
+            if pairs
+            else None
+        ),
+    }
+
+
 def _bootstrap_improvement(
     baseline: Mapping[tuple[str, str, int], dict[str, Any]],
     challenger: Mapping[tuple[str, str, int], dict[str, Any]],
     keys: list[tuple[str, str, int]],
     replicates: int,
+    *,
+    bounded: bool = False,
 ) -> dict[str, Any]:
+    metric = (
+        "capped_wall_time_to_feasible" if bounded else "wall_time_to_feasible"
+    )
     pairs = [
         (
-            float(baseline[key]["summary"]["wall_time_to_feasible"]),
-            float(challenger[key]["summary"]["wall_time_to_feasible"]),
+            float(baseline[key]["summary"][metric]),
+            float(challenger[key]["summary"][metric]),
         )
         for key in keys
         if baseline[key].get("status") == "ok"
         and challenger[key].get("status") == "ok"
-        and baseline[key]["summary"].get("success") is True
-        and challenger[key]["summary"].get("success") is True
+        and (
+            bounded
+            or (
+                baseline[key]["summary"].get("success") is True
+                and challenger[key]["summary"].get("success") is True
+            )
+        )
     ]
     if not pairs:
         return {"pair_count": 0, "relative_improvement": None, "ci95_lower": None, "ci95_upper": None}
@@ -596,6 +782,7 @@ def _bootstrap_improvement(
         "ci95_upper": _quantile(estimates, 0.975),
         "replicates": replicates,
         "seed": 20260816,
+        "metric": metric,
     }
 
 
@@ -608,6 +795,7 @@ def analyze(
     path, root, config = load_config(config_path)
     identity = _identity(config)
     controllers = _controllers(config)
+    bounded = str(config["runtime"]["stopping_rule"]) == "wall-clock"
     output = Path(output).resolve()
     completed = load_completed_report(
         output,
@@ -655,24 +843,28 @@ def analyze(
         conflict_mismatches += len({row.get("initial_conflicts") for row in summaries}) != 1
         bad_clock += sum(row.get("ttf_clock_schema") != TTF_CLOCK_SCHEMA for row in summaries)
         capped += sum(row.get("capped_wall_time_to_feasible") is not None for row in summaries)
-    summaries = {name: _summary(list(indexed[name].values())) for name in controllers}
+    summarize = _bounded_summary if bounded else _summary
+    summaries = {name: summarize(list(indexed[name].values())) for name in controllers}
     keys = sorted(expected)
+    compare = _bounded_paired_comparison if bounded else _paired_comparison
     comparisons = {
-        "challenger_vs_v2": _paired_comparison(indexed["v2_only"], indexed["structshell_only"], keys),
+        "challenger_vs_v2": compare(
+            indexed["v2_only"], indexed["structshell_only"], keys
+        ),
     }
     if "official_adaptive" in controllers:
         comparisons.update(
             {
-                "challenger_vs_official": _paired_comparison(
+                "challenger_vs_official": compare(
                     indexed["official_adaptive"], indexed["structshell_only"], keys
                 ),
-                "v2_vs_official": _paired_comparison(
+                "v2_vs_official": compare(
                     indexed["official_adaptive"], indexed["v2_only"], keys
                 ),
             }
         )
     per_map = {
-        str(group["id"]): _paired_comparison(
+        str(group["id"]): compare(
             indexed["v2_only"],
             indexed["structshell_only"],
             [key for key in keys if key[0] == str(group["id"])],
@@ -685,7 +877,14 @@ def analyze(
         indexed["structshell_only"],
         keys,
         int(config["performance_gates"]["paired_bootstrap_replicates"]),
+        bounded=bounded,
     )
+    accepted_bounded_stop_reasons = {
+        "success",
+        "wall_timeout",
+        "controller_stalled",
+        "native_terminal",
+    }
     integrity = {
         "complete_paired_coverage": not any("coverage" in error or "missing" in error for error in errors),
         "zero_execution_errors_or_process_timeouts": all(
@@ -694,40 +893,99 @@ def analyze(
         "paired_initial_fingerprints": fingerprint_mismatches == 0,
         "paired_initial_conflicts": conflict_mismatches == 0,
         "raw_ttf_clock_registered": bad_clock == 0,
-        "no_capped_ttf_values": capped == 0,
+        (
+            "bounded_ttf_values_complete"
+            if bounded
+            else "no_capped_ttf_values"
+        ): (
+            capped == len(expected) * len(controllers)
+            if bounded
+            else capped == 0
+        ),
+        **(
+            {
+                "valid_bounded_stop_reasons": all(
+                    str(dict(row.get("summary") or {}).get("stop_reason"))
+                    in accepted_bounded_stop_reasons
+                    for values in indexed.values()
+                    for row in values.values()
+                    if row.get("status") == "ok"
+                )
+            }
+            if bounded
+            else {}
+        ),
         "zero_invalid_actions": all(summary["invalid_action_count"] == 0 for summary in summaries.values()),
         "zero_semantic_mismatches": all(summary["fingerprint_mismatch_count"] == 0 for summary in summaries.values()),
     }
     gates = dict(config["performance_gates"])
     comparison = comparisons["challenger_vs_v2"]
+    improvement_field = (
+        "mean_restricted_ttf_relative_improvement"
+        if bounded
+        else "mean_raw_ttf_relative_improvement"
+    )
     map_regressions = {
-        name: -float(value.get("mean_raw_ttf_relative_improvement", -math.inf))
+        name: -float(value.get(improvement_field, -math.inf))
         for name, value in per_map.items()
         if value.get("valid")
     }
-    performance = {
-        "success_noninferior_to_v2": summaries["structshell_only"]["success_count"]
-        >= summaries["v2_only"]["success_count"],
-        "mean_raw_ttf_lower_than_v2": bool(comparison.get("valid"))
-        and float(comparison["mean_raw_ttf_relative_improvement"])
-        > float(gates["minimum_mean_raw_ttf_improvement_vs_v2"]),
-        "paired_faster_fraction_at_least_half": bool(comparison.get("valid"))
-        and float(comparison["paired_faster_fraction"])
-        >= float(gates["minimum_paired_faster_fraction_vs_v2"]),
-        "bootstrap_supports_positive_gain": bootstrap["ci95_lower"] is not None
-        and float(bootstrap["ci95_lower"])
-        > float(gates["paired_bootstrap_relative_improvement_lower_bound"]),
-        "every_map_within_regression_limit": len(map_regressions) == len(per_map)
-        and max(map_regressions.values(), default=math.inf)
-        <= float(gates["maximum_map_raw_ttf_regression"]),
-        "p95_repair_iterations_noninferior_to_v2": tails["structshell_only"]["p95"] is not None
-        and tails["v2_only"]["p95"] is not None
-        and float(tails["structshell_only"]["p95"]) <= float(tails["v2_only"]["p95"]),
-        "maximum_repair_iterations_noninferior_to_v2": tails["structshell_only"]["maximum"] is not None
-        and tails["v2_only"]["maximum"] is not None
-        and float(tails["structshell_only"]["maximum"])
-        <= float(tails["v2_only"]["maximum"]),
-    }
+    if bounded:
+        performance = {
+            "success_noninferior_to_v2": summaries["structshell_only"]["success_count"]
+            >= summaries["v2_only"]["success_count"],
+            "mean_restricted_ttf_lower_than_v2": bool(comparison.get("valid"))
+            and float(comparison[improvement_field])
+            > float(gates["minimum_mean_restricted_ttf_improvement_vs_v2"]),
+            "paired_faster_fraction_at_least_half": bool(comparison.get("valid"))
+            and float(comparison["paired_faster_fraction"])
+            >= float(gates["minimum_paired_faster_fraction_vs_v2"]),
+            "bootstrap_supports_positive_restricted_gain": bootstrap["ci95_lower"]
+            is not None
+            and float(bootstrap["ci95_lower"])
+            > float(gates["paired_bootstrap_relative_improvement_lower_bound"]),
+            "every_map_within_restricted_ttf_regression_limit": len(map_regressions)
+            == len(per_map)
+            and max(map_regressions.values(), default=math.inf)
+            <= float(gates["maximum_map_restricted_ttf_regression"]),
+            "normalized_wall_auc_noninferior_to_v2": float(
+                summaries["structshell_only"][
+                    "mean_normalized_wall_clock_conflict_auc"
+                ]
+            )
+            <= float(
+                summaries["v2_only"]["mean_normalized_wall_clock_conflict_auc"]
+            ),
+        }
+    else:
+        performance = {
+            "success_noninferior_to_v2": summaries["structshell_only"]["success_count"]
+            >= summaries["v2_only"]["success_count"],
+            "mean_raw_ttf_lower_than_v2": bool(comparison.get("valid"))
+            and float(comparison[improvement_field])
+            > float(gates["minimum_mean_raw_ttf_improvement_vs_v2"]),
+            "paired_faster_fraction_at_least_half": bool(comparison.get("valid"))
+            and float(comparison["paired_faster_fraction"])
+            >= float(gates["minimum_paired_faster_fraction_vs_v2"]),
+            "bootstrap_supports_positive_gain": bootstrap["ci95_lower"] is not None
+            and float(bootstrap["ci95_lower"])
+            > float(gates["paired_bootstrap_relative_improvement_lower_bound"]),
+            "every_map_within_regression_limit": len(map_regressions) == len(per_map)
+            and max(map_regressions.values(), default=math.inf)
+            <= float(gates["maximum_map_raw_ttf_regression"]),
+            "p95_repair_iterations_noninferior_to_v2": tails["structshell_only"]["p95"]
+            is not None
+            and tails["v2_only"]["p95"] is not None
+            and float(tails["structshell_only"]["p95"])
+            <= float(tails["v2_only"]["p95"]),
+            "maximum_repair_iterations_noninferior_to_v2": tails["structshell_only"][
+                "maximum"
+            ]
+            is not None
+            and tails["v2_only"]["maximum"] is not None
+            and float(tails["structshell_only"]["maximum"])
+            <= float(tails["v2_only"]["maximum"]),
+        }
     integrity_passed = not errors and all(integrity.values())
     passed = integrity_passed and all(performance.values())
     if producer is None:
@@ -738,7 +996,15 @@ def analyze(
         )
     report = {
         "schema": identity["report_schema"],
-        "scientific_status": "result_blind_paired_raw_ttf_confirmation",
+        "scientific_status": (
+            "result_blind_paired_bounded_ttf_confirmation"
+            if bounded
+            else "result_blind_paired_raw_ttf_confirmation"
+        ),
+        "stopping_rule": str(config["runtime"]["stopping_rule"]),
+        "wall_time_budget_seconds": config["runtime"].get(
+            "wall_time_budget_seconds"
+        ),
         "map_count": len(config["cohort"]["groups"]),
         "paired_key_count": len(expected),
         "episode_count": sum(len(rows) for rows in indexed.values()),
@@ -751,9 +1017,18 @@ def analyze(
         "performance_gates": performance,
         "integrity_passed": integrity_passed,
         "confirmation_passed": passed,
-        "formal_speed_claim": passed,
-        "default_replacement_allowed": passed,
-        "next_step": "freeze_structshell_only_runtime" if passed else "keep_v2_default_stop_hybrid_runtime_tuning",
+        "formal_speed_claim": bool(passed and not bounded),
+        "default_replacement_allowed": bool(passed and not bounded),
+        "bounded_runtime_replacement_allowed": bool(passed and bounded),
+        "official_adaptive_is_secondary_comparator": bounded
+        and "official_adaptive" in controllers,
+        "next_step": (
+            "freeze_structshell_only_for_bounded_runtime_then_validate_rescue"
+            if passed and bounded
+            else "freeze_structshell_only_runtime"
+            if passed
+            else "keep_v2_default_stop_hybrid_runtime_tuning"
+        ),
         "errors": errors,
         "producer_identity": producer,
         "inputs": {

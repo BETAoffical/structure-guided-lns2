@@ -5,6 +5,7 @@ from pathlib import Path
 
 from experiments.stride_hybridstructpool_routed_confirmation import (
     CONTROLLERS,
+    _bounded_paired_comparison,
     _bootstrap_improvement,
     _qualification_summary,
     _runtime_config_path,
@@ -17,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_hybridstructpool_routed_confirmation_v1.json"
 CONFIG_V2 = ROOT / "configs" / "stride_hybridstructpool_routed_confirmation_v2.json"
 POOL_CONFIG = ROOT / "configs" / "stride_structshell_v2_paired_confirmation_v1.json"
+BOUNDED_CONFIG = (
+    ROOT / "configs" / "stride_structshell_v2_official_bounded_confirmation_v1.json"
+)
 
 
 def test_confirmation_config_is_map_disjoint_and_complete() -> None:
@@ -95,6 +99,42 @@ def test_pool_confirmation_materializes_registered_fresh_seed_runtime(
     assert payload["dataset_design"]["map_count"] == 12
 
 
+def test_bounded_confirmation_adds_official_lns2_with_fresh_seeds() -> None:
+    _path, _root, config = load_config(BOUNDED_CONFIG)
+    assert config["controllers"] == [
+        "official_adaptive",
+        "v2_only",
+        "structshell_only",
+    ]
+    assert config["cohort"]["solver_seeds"] == [7, 8, 9]
+    assert config["runtime"] == {
+        "stopping_rule": "wall-clock",
+        "repair_seed_policy": "episode_stream",
+        "deterministic_pp_replay": False,
+        "wall_time_budget_seconds": 180.0,
+        "environment_time_limit_seconds": 180.0,
+        "episode_process_timeout_seconds": 240.0,
+        "outer_job_timeout_seconds": 300.0,
+    }
+    rows = schedule(config)
+    assert len(rows) == 180
+    for offset in range(0, len(rows), 3):
+        assert {row["controller"] for row in rows[offset : offset + 3]} == set(
+            CONTROLLERS
+        )
+
+
+def test_bounded_confirmation_materializes_registered_seed_runtime(
+    tmp_path: Path,
+) -> None:
+    _path, root, config = load_config(BOUNDED_CONFIG)
+    group = config["cohort"]["groups"][0]
+    runtime = _runtime_config_path(root, tmp_path, config, group)
+    payload = json.loads(runtime.read_text(encoding="utf-8"))
+    assert payload["solver_seeds"] == [7, 8, 9]
+    assert runtime.name.endswith("solver_seeds_7_8_9.json")
+
+
 def test_qualification_is_a_hard_all_map_gate(tmp_path: Path) -> None:
     _path, _root, config = load_config(CONFIG_V2)
     for group in config["cohort"]["groups"]:
@@ -139,3 +179,44 @@ def test_bootstrap_requires_positive_paired_gain() -> None:
     report = _bootstrap_improvement(baseline, challenger, keys, 200)
     assert report["relative_improvement"] == 0.2
     assert report["ci95_lower"] == 0.2
+
+
+def test_bounded_comparison_keeps_right_censored_pairs() -> None:
+    keys = [("map", f"task-{index}", 7) for index in range(4)]
+    baseline = {
+        key: {
+            "status": "ok",
+            "summary": {
+                "success": index < 2,
+                "wall_time_to_feasible": 100.0 if index < 2 else None,
+                "capped_wall_time_to_feasible": 100.0 if index < 2 else 180.0,
+                "normalized_wall_clock_conflict_auc": 0.5,
+            },
+        }
+        for index, key in enumerate(keys)
+    }
+    challenger = {
+        key: {
+            "status": "ok",
+            "summary": {
+                "success": index < 3,
+                "wall_time_to_feasible": 80.0 if index < 3 else None,
+                "capped_wall_time_to_feasible": 80.0 if index < 3 else 180.0,
+                "normalized_wall_clock_conflict_auc": 0.4,
+            },
+        }
+        for index, key in enumerate(keys)
+    }
+    comparison = _bounded_paired_comparison(baseline, challenger, keys)
+    assert comparison["valid"] is True
+    assert comparison["paired_episode_count"] == 4
+    assert comparison["baseline_success_count"] == 2
+    assert comparison["challenger_success_count"] == 3
+    assert comparison["challenger_mean_restricted_ttf"] < comparison[
+        "baseline_mean_restricted_ttf"
+    ]
+    bootstrap = _bootstrap_improvement(
+        baseline, challenger, keys, 200, bounded=True
+    )
+    assert bootstrap["pair_count"] == 4
+    assert bootstrap["metric"] == "capped_wall_time_to_feasible"

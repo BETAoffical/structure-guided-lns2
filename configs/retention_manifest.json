@@ -2776,7 +2776,7 @@
     {
       "path": "experiments/stride_hybridstructpool_routed_confirmation.py",
       "role": "reproducibility",
-      "purpose": "Run and analyze the map-disjoint 60-key paired raw-TTF confirmation of the frozen StructShell-only route."
+      "purpose": "Run and analyze map-disjoint paired raw or right-censored bounded-TTF confirmations of the frozen StructShell-only route, with official Adaptive as an optional comparator."
     },
     {
       "path": "scripts/run_stride_hybridstructpool_routed_confirmation.py",
@@ -2786,7 +2786,7 @@
     {
       "path": "tests/evaluation/test_stride_hybridstructpool_routed_confirmation.py",
       "role": "reproducibility",
-      "contract": "Freeze map disjointness, 60 paired keys, rotating strict serial execution and positive-gain bootstrap semantics."
+      "contract": "Freeze map disjointness, 60 paired keys, rotating strict serial execution, fresh solver seeds and raw versus bounded positive-gain bootstrap semantics."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
