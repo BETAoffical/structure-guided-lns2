@@ -16,6 +16,10 @@ from lns2_selector.runtime.hybridstructpool import (
 from lns2_selector.runtime.topology_candidates import (
     generate_structpool_candidate_subset,
 )
+from lns2_selector.runtime.structshell_single_family import (
+    STRUCTSHELL_SINGLE_FAMILY_POOL_ID,
+    validate_structshell_single_family_augmentation,
+)
 
 
 ROUTED_HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-routed-v1"
@@ -186,6 +190,8 @@ def validate_any_hybridstructpool_augmentation(
         return validate_rollback_aware_routed_hybridstructpool_augmentation(value)
     if pool_id == OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID:
         return validate_overall_rollback_routed_hybridstructpool_augmentation(value)
+    if pool_id == STRUCTSHELL_SINGLE_FAMILY_POOL_ID:
+        return validate_structshell_single_family_augmentation(value)
     raise ValueError("unsupported HybridStructPool runtime augmentation")
 
 

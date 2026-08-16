@@ -129,6 +129,11 @@ from lns2_selector.runtime.overall_rollback_selection import (
 from lns2_selector.runtime.signature_scoped_rescue import (
     SignatureScopedRescueTracker,
 )
+from lns2_selector.runtime.structshell_single_family import (
+    STRUCTSHELL_SINGLE_FAMILY_POOL_ID,
+    generate_structshell_single_family_runtime_candidates,
+    structshell_single_family_ablation_gate,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
@@ -2047,20 +2052,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "pre_guard_passed": None,
                                 }
                             else:
-                                hybridstructpool_gate_result = (
-                                    routed_hybridstructpool_high_stress_gate(
-                                        state, hybridstructpool_runtime
-                                    )
-                                    if str(hybridstructpool_runtime.get("pool_id"))
-                                    in {
-                                        ROUTED_HYBRIDSTRUCTPOOL_ID,
-                                        ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
-                                        OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
-                                    }
-                                    else hybridstructpool_high_stress_gate(
-                                        state, hybridstructpool_runtime
-                                    )
+                                hybrid_pool_id = str(
+                                    hybridstructpool_runtime.get("pool_id")
                                 )
+                                if (
+                                    hybrid_pool_id
+                                    == STRUCTSHELL_SINGLE_FAMILY_POOL_ID
+                                ):
+                                    hybridstructpool_gate_result = (
+                                        structshell_single_family_ablation_gate(
+                                            state, hybridstructpool_runtime
+                                        )
+                                    )
+                                elif hybrid_pool_id in {
+                                    ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                }:
+                                    hybridstructpool_gate_result = (
+                                        routed_hybridstructpool_high_stress_gate(
+                                            state, hybridstructpool_runtime
+                                        )
+                                    )
+                                else:
+                                    hybridstructpool_gate_result = (
+                                        hybridstructpool_high_stress_gate(
+                                            state, hybridstructpool_runtime
+                                        )
+                                    )
                         hybridstructpool_gate_passed = bool(
                             hybridstructpool_gate_result
                             and hybridstructpool_gate_result["passed"]
@@ -2294,7 +2313,25 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ) = score_online_candidates(
                                     base_candidate_rows, runtime_models[policy]
                                 )
-                                if str(hybridstructpool_runtime.get("pool_id")) in {
+                                hybrid_pool_id = str(
+                                    hybridstructpool_runtime.get("pool_id")
+                                )
+                                if (
+                                    hybrid_pool_id
+                                    == STRUCTSHELL_SINGLE_FAMILY_POOL_ID
+                                ):
+                                    hybrid_result = (
+                                        generate_structshell_single_family_runtime_candidates(
+                                            state,
+                                            topology_state_analysis,
+                                            v2_candidates=base_candidates,
+                                            v2_anchors=[
+                                                base_candidates[v2_anchor_index]
+                                            ],
+                                            config=hybridstructpool_runtime,
+                                        )
+                                    )
+                                elif hybrid_pool_id in {
                                     ROUTED_HYBRIDSTRUCTPOOL_ID,
                                     ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
                                     OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,

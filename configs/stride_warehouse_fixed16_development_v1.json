@@ -1,0 +1,156 @@
+{
+  "schema": "lns2.stride.warehouse_fixed16_development_config.v1",
+  "experiment_id": "stride-warehouse-fixed16-development-v1",
+  "scientific_status": "preregistered_development_screen_not_a_speed_or_runtime_claim",
+  "pre_registration_parent_commit": "b2806fb4b9092aae1489ee1dc1e73cbe4920a1f0",
+  "controllers": [
+    "v2_only",
+    "boundary16_static_cache",
+    "bottleneck16",
+    "component16",
+    "hotspot16",
+    "path_overlap16"
+  ],
+  "controller_contract": {
+    "base": "frozen_v2_full_native_features_optimized_copeland",
+    "single_family_semantics": "all_state_fixed_family_ablation",
+    "nominal_size": 16,
+    "maximum_added_candidates_per_decision": 1,
+    "controller_output_codes": {
+      "v2_only": "v2",
+      "boundary16_static_cache": "b16",
+      "bottleneck16": "bn16",
+      "component16": "cc16",
+      "hotspot16": "hs16",
+      "path_overlap16": "po16"
+    },
+    "profiles": {
+      "bottleneck16": "bottleneck",
+      "component16": "conflict_component",
+      "hotspot16": "hotspot",
+      "path_overlap16": "path_overlap"
+    },
+    "boundary16_static_cache": {
+      "enabled": true,
+      "generator_id": "stride-topoboundary-v1",
+      "neighborhood_size": 16,
+      "core_budget": 4,
+      "maximum_added_candidates": 2,
+      "runtime_id": "stride-boundary-static-cache-v1",
+      "static_grid_cache": true
+    },
+    "forbidden_interpretations": [
+      "high_stress_router",
+      "map_or_conflict_structure_classifier",
+      "structshell_boundary_subset"
+    ]
+  },
+  "runtime": {
+    "stopping_rule": "wall-clock",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "wall_time_budget_seconds": 180.0,
+    "environment_time_limit_seconds": 180.0,
+    "episode_process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "workers_for_qualification": 16,
+    "workers_for_timed_episodes": 1,
+    "execution_order": "rotating_strict_six_controller_serial"
+  },
+  "cohort": {
+    "split": "balanced_wall_clock",
+    "master_seed": 20260808,
+    "task_seeds": [233, 277],
+    "task_variants": ["opposite_exchange", "uniform_random"],
+    "agent_count_ladder": [400, 600, 800, 1000],
+    "solver_seeds": [19, 20, 21, 22],
+    "paired_key_halves": {
+      "A": [[233, 19], [277, 21]],
+      "B": [[233, 20], [277, 22]]
+    },
+    "maps": [
+      {
+        "id": "warehouse-10-20-10-2-1",
+        "code": "w1020a",
+        "path": "build/movingai-dev/maps/warehouse-10-20-10-2-1.map",
+        "sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0"
+      },
+      {
+        "id": "warehouse-10-20-10-2-2",
+        "code": "w1020b",
+        "path": "build/movingai-ood-dev/maps/warehouse-10-20-10-2-2.map",
+        "sha256": "4f06e82c2b87238daa8e308086afdba701112bf023e94e740e5bf9508a6adec3"
+      },
+      {
+        "id": "warehouse-20-40-10-2-1",
+        "code": "w2040a",
+        "path": "build/movingai-dev/maps/warehouse-20-40-10-2-1.map",
+        "sha256": "bd3bec2d1c20a8bbf900583cb4c2cf9dc16101470fbfae93b272ee0fb575d3ec"
+      },
+      {
+        "id": "warehouse-20-40-10-2-2",
+        "code": "w2040b",
+        "path": "build/movingai-ood-dev/maps/warehouse-20-40-10-2-2.map",
+        "sha256": "eae2a3f5298b1e113bfc32b5b4404f5de5105365d237df63cc9dc9e2d1c73713"
+      }
+    ],
+    "qualification": {
+      "mode": "reset_only",
+      "selection": "per_map_lowest_common_load_for_both_variants",
+      "opposite_exchange_minimum_initial_conflicts": 16,
+      "uniform_random_minimum_initial_conflicts": 1,
+      "all_task_seed_solver_seed_resets_required": true,
+      "no_map_or_load_replacement": true
+    },
+    "claim_boundary": "variants_are_matched_by_map_and_load_but_endpoint_generation_is_variant_specific_and_not_same_start"
+  },
+  "performance_gates": {
+    "integrity_and_zero_execution_errors_required": true,
+    "success_count_not_lower_than_v2": true,
+    "mean_restricted_ttf_strictly_lower_than_v2": true,
+    "half_a_mean_restricted_ttf_strictly_lower_than_v2": true,
+    "half_b_mean_restricted_ttf_strictly_lower_than_v2": true,
+    "report_only_not_gates": [
+      "normalized_wall_clock_conflict_auc",
+      "repair_iterations",
+      "pp_replan_seconds",
+      "neighborhood_selection_seconds",
+      "paired_faster_fraction"
+    ],
+    "winner": "lowest_mean_restricted_ttf",
+    "near_tie_relative_margin": 0.01,
+    "near_tie_breakers": [
+      "lowest_mean_added_candidate_count",
+      "lowest_mean_neighborhood_selection_seconds",
+      "controller_name"
+    ],
+    "tie_metric_definitions": {
+      "mean_added_candidate_count": "total_source_candidate_count_divided_by_controller_decisions",
+      "mean_neighborhood_selection_seconds": "episode_mean_of_total_neighborhood_selection_seconds"
+    }
+  },
+  "final_namespace": {
+    "status": "strictly_reserved_not_generated_not_reset",
+    "master_seed": 20260831,
+    "task_seeds": [941, 977, 1013],
+    "solver_seeds": [1201, 1301, 1409],
+    "planned_task_definition_count": 20,
+    "planned_paired_key_count": 60,
+    "exact_task_selection": "deferred_until_development_winner_then_frozen_before_any_generation_or_reset",
+    "generated": false,
+    "reset": false,
+    "may_be_touched_by_this_runner": false,
+    "map_disjointness_available": false,
+    "claim_boundary": "future_confirmation_is_task_and_solver_result_blind_on_the_same_four_available_standard_warehouse_layouts"
+  },
+  "inputs": {
+    "runtime_config": {
+      "path": "configs/stride_warehouse_fixed16_development_runtime_v1.json",
+      "sha256": "b01ff409e2aeadc413654e80f13f3c59533bd4e583510875127ddd7942d633e1"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  }
+}

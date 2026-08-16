@@ -69,6 +69,9 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     rollback_aware_routed_hybridstructpool_augmentation,
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+from lns2_selector.runtime.structshell_single_family import (
+    structshell_single_family_augmentation,
+)
 
 
 STRUCTPOOL_RUNTIME = {
@@ -643,6 +646,117 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             )
         )
         self.assertFalse(_proposal_uses_static_grid_cache({}))
+
+    def test_single_family_structshell_uses_its_own_gate_and_generator(self) -> None:
+        environment = RollbackPlatformEnvironment()
+        candidates = RollbackCandidateFixture()
+        model = RollbackDirectCandidateModel()
+
+        def generate_single(*_args, v2_candidates, **_kwargs):
+            rows = [
+                *v2_candidates,
+                make_candidate("struct-one", [0, 1, 2], "struct-one"),
+            ]
+            return SimpleNamespace(
+                candidates=rows,
+                challengers=rows[1:],
+                provenance_by_candidate_id={
+                    "v2-anchor": ("v2_base",),
+                    "struct-one": ("structshell_equal_four_size",),
+                },
+                base_candidate_count=1,
+                structural_candidate_count=1,
+                causal_candidate_count=0,
+                exact_duplicate_count=0,
+                causal_attempts=[],
+                structural_generation_seconds=0.0,
+                causal_generation_seconds=0.0,
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            job = rollback_worker_job(directory, max_decisions=1)
+            job["run_fingerprint"] = "single-family-structshell"
+            job["proposal"]["hybridstructpool"] = (
+                structshell_single_family_augmentation("hotspot")
+            )
+            RollbackFeatureEngine.instances.clear()
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=environment,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+                    return_value=rollback_bundle(model),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.compact_runtime_model",
+                    side_effect=lambda value: value,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    RollbackFeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.TopologyAnalysisCache",
+                    RollbackTopologyCache,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=candidates.generate_base,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation."
+                    "structshell_single_family_ablation_gate",
+                    return_value={
+                        "passed": True,
+                        "reason": "single_family_ablation_all_states",
+                        "seconds": 0.0,
+                        "gate_id": "fixture",
+                        "agent_count": 4,
+                        "conflict_pair_count": 1,
+                        "active_conflict_agent_count": 2,
+                        "largest_conflict_component_size": 2,
+                    },
+                ) as gate,
+                patch(
+                    "experiments.closed_loop_confirmation."
+                    "generate_structshell_single_family_runtime_candidates",
+                    side_effect=generate_single,
+                ) as generator,
+                patch(
+                    "experiments.closed_loop_confirmation."
+                    "routed_hybridstructpool_high_stress_gate",
+                    side_effect=AssertionError("old routed gate used"),
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation."
+                    "generate_routed_hybridstructpool_runtime_candidates",
+                    side_effect=AssertionError("old routed generator used"),
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            events = [
+                json.loads(line)
+                for line in (Path(directory) / result["trace_file"])
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(result["status"], "ok", result)
+        gate.assert_called_once()
+        generator.assert_called_once()
+        transition = next(event for event in events if event["event"] == "transition")
+        proposal = transition["controller"]["proposal"]
+        self.assertEqual(
+            proposal["hybridstructpool_source_mode"],
+            "structshell_single_family",
+        )
+        self.assertEqual(proposal["hybridstructpool_structural_candidate_count"], 1)
+        self.assertEqual(proposal["hybridstructpool_causal_candidate_count"], 0)
+        self.assertEqual(
+            proposal["hybridstructpool_selected_candidate_id"], "struct-one"
+        )
 
     def test_selector_required_features_include_guard_anchor_union(self) -> None:
         selector = SimpleNamespace(

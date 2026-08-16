@@ -3042,6 +3042,31 @@
       "path": "tests/evaluation/test_stride_structshell_overall_rollback_screen.py",
       "role": "reproducibility",
       "contract": "Freeze the ten paired keys, four-arm serial rotation, state-guard trace audit and no-promotion screen gates."
+    },
+    {
+      "path": "lns2_selector/runtime/structshell_single_family.py",
+      "role": "reproducibility",
+      "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."
+    },
+    {
+      "path": "experiments/stride_warehouse_fixed16_development.py",
+      "role": "reproducibility",
+      "purpose": "Run the preregistered Warehouse fixed16 six-arm development screen with reset-only load qualification and strict serial timing."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_fixed16_development.py",
+      "role": "reproducibility",
+      "purpose": "Expose read-only planning, qualification, collection, analysis and resumable execution for the Warehouse fixed16 development screen."
+    },
+    {
+      "path": "tests/runtime/test_structshell_single_family.py",
+      "role": "reproducibility",
+      "contract": "Freeze the single-family single-size configuration, all-state ablation gate, one-candidate cap and V2-authoritative merge semantics."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_fixed16_development.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 256-reset qualification, 32-key six-arm serial schedule, identity audits, TTF-only gates and reserved final namespace."
     }
   ]
 }
