@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from experiments.stride_hybridstructpool_routed_confirmation import (
     CONTROLLERS,
     _bootstrap_improvement,
     _qualification_summary,
+    _runtime_config_path,
     load_config,
     schedule,
 )
@@ -80,6 +82,17 @@ def test_pool_confirmation_uses_fresh_seeds_and_two_rotating_arms() -> None:
         "v2_only",
         "structshell_only",
     ]
+
+
+def test_pool_confirmation_materializes_registered_fresh_seed_runtime(
+    tmp_path: Path,
+) -> None:
+    _path, root, config = load_config(POOL_CONFIG)
+    group = config["cohort"]["groups"][0]
+    runtime = _runtime_config_path(root, tmp_path, config, group)
+    payload = json.loads(runtime.read_text(encoding="utf-8"))
+    assert payload["solver_seeds"] == [4, 5, 6]
+    assert payload["dataset_design"]["map_count"] == 12
 
 
 def test_qualification_is_a_hard_all_map_gate(tmp_path: Path) -> None:

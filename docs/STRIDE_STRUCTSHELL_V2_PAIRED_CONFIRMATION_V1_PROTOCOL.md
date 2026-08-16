@@ -10,6 +10,10 @@ confirmation v2, but every timed episode is new: solver seeds 4, 5, and 6
 replace the observed seeds 1, 2, and 3. No timed artifact from either previous
 confirmation is imported. Every map must first pass six fresh qualification
 resets. Failure stops before formal timing and cannot trigger map replacement.
+The runner materializes an output-local copy of each registered runtime config
+whose only change is the declared solver-seed list `[4, 5, 6]`; dataset design,
+tasks, environment, models, and controller settings remain byte-for-byte values
+from the registered source configuration.
 
 The formal schedule contains 60 paired keys and 120 episodes. V2 and
 StructShell alternate first position and run strictly serially. Raw TTF is

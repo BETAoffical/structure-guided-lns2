@@ -238,6 +238,29 @@ def _group(config: Mapping[str, Any], group_id: str) -> dict[str, Any]:
     )
 
 
+def _runtime_config_path(
+    root: Path,
+    output: Path,
+    config: Mapping[str, Any],
+    group: Mapping[str, Any],
+) -> Path:
+    source = (root / str(group["runtime_config"])).resolve()
+    if (
+        str(config.get("schema"))
+        != "lns2.stride.hybridstructpool_routed_confirmation_config.v3"
+    ):
+        return source
+    payload = _read_json(source)
+    payload["solver_seeds"] = list(map(int, config["cohort"]["solver_seeds"]))
+    destination = (
+        output
+        / "runtime_configs"
+        / f"{str(group['id'])}__solver_seeds_4_5_6.json"
+    )
+    _write_json(destination, payload)
+    return destination
+
+
 def _controller_dir(output: Path, item: Mapping[str, Any]) -> Path:
     return output / "maps" / str(item["group_id"]) / str(item["controller"])
 
@@ -269,13 +292,14 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
     item = dict(job["item"])
     group = _group(config, str(item["group_id"]))
     dataset = root / str(group["dataset"])
-    runtime = root / str(group["runtime_config"])
+    output = Path(job["output_root"]).resolve()
+    runtime = _runtime_config_path(root, output, config, group)
     keys = {
         (str(task), int(seed))
         for task in group["tasks"]
         for seed in config["cohort"]["solver_seeds"]
     }
-    collection = _controller_dir(Path(job["output_root"]).resolve(), item)
+    collection = _controller_dir(output, item)
     kwargs = _controller_kwargs(root, config, str(item["controller"]))
     run_closed_loop_collection(
         dataset,
@@ -303,7 +327,7 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
         use_global_collection_lock=False,
         **kwargs,
     )
-    row = _manifest(Path(job["output_root"]).resolve(), item)
+    row = _manifest(output, item)
     if row is None:
         raise RuntimeError("confirmation episode completed without manifest")
     status = str(row.get("status"))
@@ -446,9 +470,10 @@ def run(
             for seed in config["cohort"]["solver_seeds"]
         }
         qualification = output / "maps" / str(group["id"]) / "qualification"
+        runtime = _runtime_config_path(root, output, config, group)
         run_closed_loop_collection(
             root / str(group["dataset"]),
-            root / str(group["runtime_config"]),
+            runtime,
             qualification,
             phase="qualify",
             workers=int(config["comparison"]["workers_for_qualification"]),
