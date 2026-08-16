@@ -87,6 +87,22 @@ def test_config_freezes_development_and_final_namespaces() -> None:
     assert config["final_namespace"]["reset"] is False
 
 
+def test_runtime_reuses_the_registered_frozen_v2_model_provenance() -> None:
+    runtime = json.loads(
+        (
+            ROOT / "configs" / "stride_warehouse_fixed16_development_runtime_v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    registered_reference = json.loads(
+        (ROOT / "configs" / "stride_stage4r_high_load_runtime.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert runtime["model_registration"] == registered_reference[
+        "model_registration"
+    ]
+
+
 def test_plan_and_reset_schedule_have_registered_dimensions() -> None:
     _path, _root, config = load_config(CONFIG)
     tasks = development_task_specs(config)

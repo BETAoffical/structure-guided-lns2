@@ -146,7 +146,7 @@
   "inputs": {
     "runtime_config": {
       "path": "configs/stride_warehouse_fixed16_development_runtime_v1.json",
-      "sha256": "b01ff409e2aeadc413654e80f13f3c59533bd4e583510875127ddd7942d633e1"
+      "sha256": "d8be827e3c97768d2093cc20af5ca5c2497c412bfa2271bd913167651a1acc78"
     },
     "controller_manifest": {
       "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
