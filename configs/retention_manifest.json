@@ -2962,6 +2962,31 @@
       "path": "tests/evaluation/test_stride_onpolicy_controller_attribution.py",
       "role": "reproducibility",
       "contract": "Freeze the four controller arms, decision-zero path replay, complete restart identity, paired randomness, platform-entry semantics and 16-worker schedule."
+    },
+    {
+      "path": "lns2_selector/runtime/rollback_aware_selection.py",
+      "role": "reproducibility",
+      "purpose": "Bound repeated exact native rollback of pure StructShell challengers while preserving one PP call per decision and a V2 fallback."
+    },
+    {
+      "path": "experiments/stride_structshell_rollback_aware_platform_replay.py",
+      "role": "reproducibility",
+      "purpose": "Replay and audit the exact-rollback StructShell guard on two registered known-platform development cases."
+    },
+    {
+      "path": "scripts/run_stride_structshell_rollback_aware_platform_replay.py",
+      "role": "reproducibility",
+      "purpose": "Run or analyze the registered serial known-platform rollback-aware mechanism replay."
+    },
+    {
+      "path": "tests/runtime/test_rollback_aware_selection.py",
+      "role": "reproducibility",
+      "contract": "Freeze exact-rollback detection, three-failure banning, state reset, bounded StructShell scanning and V2 fallback semantics."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_rollback_aware_platform_replay.py",
+      "role": "reproducibility",
+      "contract": "Freeze the two known-platform keys, strict serial arm rotation, bounded timing identity, repair-fingerprint escape and post-escape platform gates."
     }
   ]
 }
