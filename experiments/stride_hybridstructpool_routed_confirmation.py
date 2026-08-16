@@ -32,6 +32,22 @@ CONFIG_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_config.v1"
 STATUS_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_status.v1"
 REPORT_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_report.v1"
 EXPERIMENT_ID = "stride-hybridstructpool-routed-confirmation-v1"
+_IDENTITIES = {
+    CONFIG_SCHEMA: {
+        "experiment_id": EXPERIMENT_ID,
+        "pre_registration_parent_commit": "e9cc1ec",
+        "episode_process_timeout_seconds": 300.0,
+        "status_schema": STATUS_SCHEMA,
+        "report_schema": REPORT_SCHEMA,
+    },
+    "lns2.stride.hybridstructpool_routed_confirmation_config.v2": {
+        "experiment_id": "stride-hybridstructpool-routed-confirmation-v2",
+        "pre_registration_parent_commit": "87742ae",
+        "episode_process_timeout_seconds": 900.0,
+        "status_schema": "lns2.stride.hybridstructpool_routed_confirmation_status.v2",
+        "report_schema": "lns2.stride.hybridstructpool_routed_confirmation_report.v2",
+    },
+}
 CONTROLLERS = ("official_adaptive", "v2_only", "structshell_only")
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "confirmation_report.json"
@@ -41,16 +57,25 @@ def _registered(root: Path, specification: Mapping[str, Any]) -> Path:
     return registered_input(root, dict(specification), label="Hybrid routed confirmation")
 
 
+def _identity(config: Mapping[str, Any]) -> dict[str, Any]:
+    schema = str(config.get("schema") or "")
+    try:
+        return dict(_IDENTITIES[schema])
+    except KeyError as error:
+        raise ValueError("unsupported Hybrid routed confirmation schema") from error
+
+
 def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     path = Path(path).resolve()
     root = path.parents[1]
     config = _read_json(path)
+    identity = _identity(config)
     if (
-        config.get("schema") != CONFIG_SCHEMA
-        or config.get("scientific_status")
+        config.get("scientific_status")
         != "preregistered_result_blind_paired_raw_ttf_confirmation"
-        or config.get("experiment_id") != EXPERIMENT_ID
-        or str(config.get("pre_registration_parent_commit")) != "e9cc1ec"
+        or config.get("experiment_id") != identity["experiment_id"]
+        or str(config.get("pre_registration_parent_commit"))
+        != identity["pre_registration_parent_commit"]
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("Hybrid routed confirmation identity changed")
@@ -70,7 +95,9 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
         "stopping_rule": "run-to-completion",
         "repair_seed_policy": "episode_stream",
         "deterministic_pp_replay": False,
-        "episode_process_timeout_seconds": 300.0,
+        "episode_process_timeout_seconds": identity[
+            "episode_process_timeout_seconds"
+        ],
     }:
         raise ValueError("Hybrid routed confirmation runtime changed")
     augmentation = validate_routed_hybridstructpool_augmentation(
@@ -271,6 +298,63 @@ def _status(
     }
 
 
+def _qualification_summary(
+    output: Path, config: Mapping[str, Any]
+) -> dict[str, Any]:
+    details: list[dict[str, Any]] = []
+    for group in config["cohort"]["groups"]:
+        expected = len(group["tasks"]) * len(config["cohort"]["solver_seeds"])
+        path = (
+            output
+            / "maps"
+            / str(group["id"])
+            / "qualification"
+            / "qualification_report.json"
+        )
+        if not path.is_file():
+            details.append(
+                {
+                    "group_id": str(group["id"]),
+                    "expected_count": expected,
+                    "valid_count": 0,
+                    "passed": False,
+                    "decision": "missing_qualification_report",
+                }
+            )
+            continue
+        report = _read_json(path)
+        valid = int(report.get("valid_count", -1))
+        incomplete = int(report.get("incomplete_reset_count", -1))
+        passed = bool(
+            report.get("passed") is True
+            and valid == expected
+            and incomplete == 0
+        )
+        details.append(
+            {
+                "group_id": str(group["id"]),
+                "expected_count": expected,
+                "valid_count": valid,
+                "incomplete_reset_count": incomplete,
+                "passed": passed,
+                "decision": str(report.get("decision") or ""),
+                "nonzero_state_count": int(report.get("nonzero_state_count", 0)),
+                "initial_feasible_count": int(
+                    report.get("initial_feasible_count", 0)
+                ),
+            }
+        )
+    return {
+        "completed_map_count": sum(
+            row["valid_count"] == row["expected_count"] for row in details
+        ),
+        "passed_map_count": sum(row["passed"] for row in details),
+        "total_map_count": len(details),
+        "all_maps_passed": bool(details and all(row["passed"] for row in details)),
+        "details": details,
+    }
+
+
 def run(
     config_path: str | Path,
     output: str | Path,
@@ -279,10 +363,11 @@ def run(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     path, root, config = load_config(config_path)
+    identity = _identity(config)
     items = schedule(config)
     if dry_run:
         return {
-            "schema": STATUS_SCHEMA,
+            "schema": identity["status_schema"],
             "map_count": len(config["cohort"]["groups"]),
             "paired_key_count": len(items) // 3,
             "schedule_entry_count": len(items),
@@ -292,7 +377,7 @@ def run(
     prepared = prepare_resumable_output(
         output,
         status_filename=STATUS_FILENAME,
-        status_schema=STATUS_SCHEMA,
+        status_schema=str(identity["status_schema"]),
         config_path=path,
         schedule=items,
         producer=closed_loop_producer_identity(
@@ -307,7 +392,7 @@ def run(
         ),
         resume=resume,
         report_filename=REPORT_FILENAME,
-        report_schema=REPORT_SCHEMA,
+        report_schema=str(identity["report_schema"]),
         label="HybridStructPool routed result-blind confirmation",
     )
     if prepared.completed_report is not None:
@@ -338,6 +423,21 @@ def run(
             repair_seed_policy="episode_stream",
             deterministic_pp_replay=False,
         )
+    qualification = _qualification_summary(output, config)
+    if not qualification["all_maps_passed"]:
+        status = _status(output, items, prepared.base_status)
+        status["qualification"] = qualification
+        status["terminal_failure"] = {
+            "status": "qualification_failed",
+            "failed_group_ids": [
+                row["group_id"]
+                for row in qualification["details"]
+                if not row["passed"]
+            ],
+            "error": "not all preregistered maps passed qualification",
+        }
+        _write_json(output / STATUS_FILENAME, status)
+        return status
     pending = [item for item in items if _manifest(output, item) is None]
     jobs = [
         {
@@ -440,13 +540,14 @@ def analyze(
     producer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     path, root, config = load_config(config_path)
+    identity = _identity(config)
     output = Path(output).resolve()
     completed = load_completed_report(
         output,
         status_filename=STATUS_FILENAME,
         report_filename=REPORT_FILENAME,
-        status_schema=STATUS_SCHEMA,
-        report_schema=REPORT_SCHEMA,
+        status_schema=str(identity["status_schema"]),
+        report_schema=str(identity["report_schema"]),
         config_path=path,
     )
     if completed is not None:
@@ -560,7 +661,7 @@ def analyze(
             native_required=False,
         )
     report = {
-        "schema": REPORT_SCHEMA,
+        "schema": identity["report_schema"],
         "scientific_status": "result_blind_paired_raw_ttf_confirmation",
         "map_count": len(config["cohort"]["groups"]),
         "paired_key_count": len(expected),
