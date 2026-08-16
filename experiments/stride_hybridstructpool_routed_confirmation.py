@@ -364,6 +364,14 @@ def _controller_kwargs(root: Path, config: Mapping[str, Any], name: str) -> dict
     return result
 
 
+def _qualification_controller_kwargs(
+    root: Path, config: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Use the V2 arm's exact reset-time protocol for qualification evidence."""
+
+    return _controller_kwargs(root, config, "v2_only")
+
+
 def _group(config: Mapping[str, Any], group_id: str) -> dict[str, Any]:
     return next(
         dict(group)
@@ -619,14 +627,7 @@ def run(
             resume=prepared.resumed and qualification.joinpath("run_config.json").is_file(),
             cohort_job_keys=keys,
             job_keys=keys,
-            controller="v2-full",
-            controller_bundle=str((root / str(config["controller_bundle"])).resolve()),
-            feature_backend="native",
-            controller_runtime="optimized",
-            verification_profile="deployment",
-            stopping_rule="run-to-completion",
-            repair_seed_policy="episode_stream",
-            deterministic_pp_replay=False,
+            **_qualification_controller_kwargs(root, config),
         )
     qualification = _qualification_summary(output, config)
     if not qualification["all_maps_passed"]:

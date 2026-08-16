@@ -7,6 +7,8 @@ from experiments.stride_hybridstructpool_routed_confirmation import (
     CONTROLLERS,
     _bounded_paired_comparison,
     _bootstrap_improvement,
+    _controller_kwargs,
+    _qualification_controller_kwargs,
     _qualification_summary,
     _runtime_config_path,
     load_config,
@@ -139,6 +141,17 @@ def test_bounded_confirmation_materializes_registered_seed_runtime(
     payload = json.loads(runtime.read_text(encoding="utf-8"))
     assert payload["solver_seeds"] == [7, 8, 9]
     assert runtime.name.endswith("solver_seeds_7_8_9.json")
+
+
+def test_bounded_qualification_uses_the_formal_v2_reset_protocol() -> None:
+    _path, root, config = load_config(BOUNDED_CONFIG_V3)
+    qualification = _qualification_controller_kwargs(root, config)
+    formal_v2 = _controller_kwargs(root, config, "v2_only")
+    assert qualification == formal_v2
+    assert qualification["stopping_rule"] == "wall-clock"
+    assert qualification["wall_time_budget_seconds"] == 180.0
+    assert qualification["environment_time_limit_seconds"] == 180.0
+    assert qualification["episode_process_timeout_seconds"] == 240.0
 
 
 def test_bounded_confirmation_v2_replaces_only_the_ineligible_warehouse_group() -> None:
