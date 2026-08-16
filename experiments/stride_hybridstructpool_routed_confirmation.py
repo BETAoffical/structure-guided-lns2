@@ -32,6 +32,8 @@ CONFIG_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_config.v1"
 STATUS_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_status.v1"
 REPORT_SCHEMA = "lns2.stride.hybridstructpool_routed_confirmation_report.v1"
 EXPERIMENT_ID = "stride-hybridstructpool-routed-confirmation-v1"
+CONTROLLERS = ("official_adaptive", "v2_only", "structshell_only")
+POOL_CONTROLLERS = ("v2_only", "structshell_only")
 _IDENTITIES = {
     CONFIG_SCHEMA: {
         "experiment_id": EXPERIMENT_ID,
@@ -39,6 +41,17 @@ _IDENTITIES = {
         "episode_process_timeout_seconds": 300.0,
         "status_schema": STATUS_SCHEMA,
         "report_schema": REPORT_SCHEMA,
+        "controllers": CONTROLLERS,
+        "solver_seeds": (1, 2, 3),
+        "comparison": {
+            "primary_baseline": "official_adaptive",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_three_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
     },
     "lns2.stride.hybridstructpool_routed_confirmation_config.v2": {
         "experiment_id": "stride-hybridstructpool-routed-confirmation-v2",
@@ -46,9 +59,37 @@ _IDENTITIES = {
         "episode_process_timeout_seconds": 900.0,
         "status_schema": "lns2.stride.hybridstructpool_routed_confirmation_status.v2",
         "report_schema": "lns2.stride.hybridstructpool_routed_confirmation_report.v2",
+        "controllers": CONTROLLERS,
+        "solver_seeds": (1, 2, 3),
+        "comparison": {
+            "primary_baseline": "official_adaptive",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_three_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
+    },
+    "lns2.stride.hybridstructpool_routed_confirmation_config.v3": {
+        "experiment_id": "stride-structshell-v2-paired-confirmation-v1",
+        "pre_registration_parent_commit": "5d89c4f",
+        "episode_process_timeout_seconds": 900.0,
+        "status_schema": "lns2.stride.structshell_v2_confirmation_status.v1",
+        "report_schema": "lns2.stride.structshell_v2_confirmation_report.v1",
+        "controllers": POOL_CONTROLLERS,
+        "solver_seeds": (4, 5, 6),
+        "comparison": {
+            "primary_baseline": "v2_only",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_two_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
     },
 }
-CONTROLLERS = ("official_adaptive", "v2_only", "structshell_only")
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "confirmation_report.json"
 
@@ -65,6 +106,10 @@ def _identity(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("unsupported Hybrid routed confirmation schema") from error
 
 
+def _controllers(config: Mapping[str, Any]) -> tuple[str, ...]:
+    return tuple(map(str, _identity(config)["controllers"]))
+
+
 def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     path = Path(path).resolve()
     root = path.parents[1]
@@ -76,19 +121,12 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
         or config.get("experiment_id") != identity["experiment_id"]
         or str(config.get("pre_registration_parent_commit"))
         != identity["pre_registration_parent_commit"]
-        or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
+        or tuple(map(str, config.get("controllers") or ()))
+        != tuple(identity["controllers"])
     ):
         raise ValueError("Hybrid routed confirmation identity changed")
     comparison = dict(config.get("comparison") or {})
-    if comparison != {
-        "primary_baseline": "official_adaptive",
-        "quality_anchor": "v2_only",
-        "challenger": "structshell_only",
-        "execution_order": "rotating_strict_three_controller_serial",
-        "paired_solver_seed_required": True,
-        "workers_for_timed_episodes": 1,
-        "workers_for_qualification": 16,
-    }:
+    if comparison != identity["comparison"]:
         raise ValueError("Hybrid routed confirmation comparison changed")
     runtime = dict(config.get("runtime") or {})
     if runtime != {
@@ -109,7 +147,8 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     groups = list(cohort.get("groups") or ())
     if (
         cohort.get("role") != "result_blind_map_disjoint_confirmation"
-        or tuple(map(int, cohort.get("solver_seeds") or ())) != (1, 2, 3)
+        or tuple(map(int, cohort.get("solver_seeds") or ()))
+        != tuple(identity["solver_seeds"])
         or int(cohort.get("paired_key_count", -1)) != 60
         or int(cohort.get("episode_count_per_controller", -1)) != 60
         or cohort.get("result_based_filtering") is not False
@@ -140,21 +179,21 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
 
 def schedule(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    controllers = _controllers(config)
     key_index = 0
     for group in config["cohort"]["groups"]:
         for task in group["tasks"]:
             for seed in config["cohort"]["solver_seeds"]:
-                offset = key_index % len(CONTROLLERS)
-                for position, controller_index in enumerate(
-                    (offset, (offset + 1) % 3, (offset + 2) % 3)
-                ):
+                offset = key_index % len(controllers)
+                for position in range(len(controllers)):
+                    controller_index = (offset + position) % len(controllers)
                     rows.append(
                         {
                             "group_id": str(group["id"]),
                             "family": str(group["family"]),
                             "task_id": str(task),
                             "solver_seed": int(seed),
-                            "controller": CONTROLLERS[controller_index],
+                            "controller": controllers[controller_index],
                             "within_key_position": position,
                         }
                     )
@@ -280,6 +319,7 @@ def _status(
 ) -> dict[str, Any]:
     rows = [_manifest(output, item) for item in items]
     present = [row for row in rows if row is not None]
+    controllers = tuple(dict.fromkeys(str(item["controller"]) for item in items))
     return {
         **dict(base),
         "completed_jobs": len(present),
@@ -290,7 +330,7 @@ def _status(
                 for item in items
                 if item["controller"] == name
             )
-            for name in CONTROLLERS
+            for name in controllers
         },
         "error_jobs": sum(row.get("status") == "error" for row in present),
         "timeout_jobs": sum(row.get("status") == "timeout" for row in present),
@@ -366,10 +406,11 @@ def run(
     identity = _identity(config)
     items = schedule(config)
     if dry_run:
+        controllers = _controllers(config)
         return {
             "schema": identity["status_schema"],
             "map_count": len(config["cohort"]["groups"]),
-            "paired_key_count": len(items) // 3,
+            "paired_key_count": len(items) // len(controllers),
             "schedule_entry_count": len(items),
             "schedule_sha256": _fingerprint(items),
         }
@@ -541,6 +582,7 @@ def analyze(
 ) -> dict[str, Any]:
     path, root, config = load_config(config_path)
     identity = _identity(config)
+    controllers = _controllers(config)
     output = Path(output).resolve()
     completed = load_completed_report(
         output,
@@ -561,7 +603,7 @@ def analyze(
     indexed: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
     errors: list[str] = []
     hashes: dict[str, dict[str, str]] = defaultdict(dict)
-    for controller in CONTROLLERS:
+    for controller in controllers:
         rows: dict[tuple[str, str, int], dict[str, Any]] = {}
         for group in config["cohort"]["groups"]:
             item = {"group_id": group["id"], "controller": controller}
@@ -580,7 +622,7 @@ def analyze(
         indexed[controller] = rows
     fingerprint_mismatches = conflict_mismatches = bad_clock = capped = 0
     for key in sorted(expected):
-        rows = [indexed[name].get(key) for name in CONTROLLERS]
+        rows = [indexed[name].get(key) for name in controllers]
         if any(row is None or row.get("status") != "ok" for row in rows):
             continue
         summaries = [dict(row["summary"]) for row in rows]
@@ -588,13 +630,22 @@ def analyze(
         conflict_mismatches += len({row.get("initial_conflicts") for row in summaries}) != 1
         bad_clock += sum(row.get("ttf_clock_schema") != TTF_CLOCK_SCHEMA for row in summaries)
         capped += sum(row.get("capped_wall_time_to_feasible") is not None for row in summaries)
-    summaries = {name: _summary(list(indexed[name].values())) for name in CONTROLLERS}
+    summaries = {name: _summary(list(indexed[name].values())) for name in controllers}
     keys = sorted(expected)
     comparisons = {
         "challenger_vs_v2": _paired_comparison(indexed["v2_only"], indexed["structshell_only"], keys),
-        "challenger_vs_official": _paired_comparison(indexed["official_adaptive"], indexed["structshell_only"], keys),
-        "v2_vs_official": _paired_comparison(indexed["official_adaptive"], indexed["v2_only"], keys),
     }
+    if "official_adaptive" in controllers:
+        comparisons.update(
+            {
+                "challenger_vs_official": _paired_comparison(
+                    indexed["official_adaptive"], indexed["structshell_only"], keys
+                ),
+                "v2_vs_official": _paired_comparison(
+                    indexed["official_adaptive"], indexed["v2_only"], keys
+                ),
+            }
+        )
     per_map = {
         str(group["id"]): _paired_comparison(
             indexed["v2_only"],
@@ -603,7 +654,7 @@ def analyze(
         )
         for group in config["cohort"]["groups"]
     }
-    tails = {name: _repair_tail(list(indexed[name].values())) for name in CONTROLLERS}
+    tails = {name: _repair_tail(list(indexed[name].values())) for name in controllers}
     bootstrap = _bootstrap_improvement(
         indexed["v2_only"],
         indexed["structshell_only"],

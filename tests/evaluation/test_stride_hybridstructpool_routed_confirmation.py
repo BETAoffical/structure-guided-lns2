@@ -14,6 +14,7 @@ from experiments.stride_hybridstructpool_routed_confirmation import (
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_hybridstructpool_routed_confirmation_v1.json"
 CONFIG_V2 = ROOT / "configs" / "stride_hybridstructpool_routed_confirmation_v2.json"
+POOL_CONFIG = ROOT / "configs" / "stride_structshell_v2_paired_confirmation_v1.json"
 
 
 def test_confirmation_config_is_map_disjoint_and_complete() -> None:
@@ -54,6 +55,31 @@ def test_v2_replaces_ineligible_maps_without_changing_the_contract() -> None:
     }
     assert len(schedule(config)) == 180
     assert config["runtime"]["episode_process_timeout_seconds"] == 900.0
+
+
+def test_pool_confirmation_uses_fresh_seeds_and_two_rotating_arms() -> None:
+    _path, _root, config = load_config(POOL_CONFIG)
+    assert config["controllers"] == ["v2_only", "structshell_only"]
+    assert config["cohort"]["solver_seeds"] == [4, 5, 6]
+    rows = schedule(config)
+    assert len(rows) == 120
+    assert len(
+        {(row["group_id"], row["task_id"], row["solver_seed"]) for row in rows}
+    ) == 60
+    for offset in range(0, len(rows), 2):
+        block = rows[offset : offset + 2]
+        assert {row["controller"] for row in block} == {
+            "v2_only",
+            "structshell_only",
+        }
+        assert [row["within_key_position"] for row in block] == [0, 1]
+    first = [rows[offset]["controller"] for offset in range(0, len(rows), 2)]
+    assert first[:4] == [
+        "v2_only",
+        "structshell_only",
+        "v2_only",
+        "structshell_only",
+    ]
 
 
 def test_qualification_is_a_hard_all_map_gate(tmp_path: Path) -> None:
