@@ -3002,6 +3002,21 @@
       "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf.py",
       "role": "reproducibility",
       "contract": "Freeze the 10+50 key partition, three-arm serial rotation, controller identity, qualification reuse and map-cluster bootstrap."
+    },
+    {
+      "path": "experiments/stride_structshell_rollback_aware_ttf_analysis_recovery.py",
+      "role": "reproducibility",
+      "purpose": "Recover a completed rollback-aware TTF screen with passive observed-delta platform diagnostics and separate collection/analyzer identities."
+    },
+    {
+      "path": "scripts/recover_stride_structshell_rollback_aware_ttf_analysis.py",
+      "role": "reproducibility",
+      "purpose": "Generate the hash-bound analysis-only recovery report without reexecuting solver episodes."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf_analysis_recovery.py",
+      "role": "reproducibility",
+      "contract": "Verify unseeded official PP transitions can be passively audited while tampered observed fingerprints are rejected."
     }
   ]
 }
