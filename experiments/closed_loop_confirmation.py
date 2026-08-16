@@ -111,10 +111,14 @@ from lns2_selector.runtime.hybridstructpool import (
     hybridstructpool_high_stress_gate,
 )
 from lns2_selector.runtime.hybridstructpool_routed import (
+    ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
     ROUTED_HYBRIDSTRUCTPOOL_ID,
     generate_routed_hybridstructpool_runtime_candidates,
     routed_hybridstructpool_high_stress_gate,
     validate_any_hybridstructpool_augmentation,
+)
+from lns2_selector.runtime.rollback_aware_selection import (
+    ExactRollbackCandidateGuard,
 )
 from lns2_selector.runtime.signature_scoped_rescue import (
     SignatureScopedRescueTracker,
@@ -1304,6 +1308,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if signature_scoped_rescue
                 else None
             )
+            episode_hybrid_runtime = dict(
+                dict(job.get("proposal") or {}).get("hybridstructpool") or {}
+            )
+            exact_rollback_guard_config = dict(
+                episode_hybrid_runtime.get("exact_rollback_guard") or {}
+            )
+            exact_rollback_guard = (
+                ExactRollbackCandidateGuard(
+                    exact_rollback_limit=int(
+                        exact_rollback_guard_config["exact_rollback_limit"]
+                    )
+                )
+                if exact_rollback_guard_config
+                else None
+            )
+            if exact_rollback_guard is not None and (
+                native_retry_tracker is not None
+                or failure_rescue_tracker is not None
+                or signature_rescue_tracker is not None
+                or forced_first_action
+                or controller_mode != "v2-full"
+                or policy != "realized_dynamic"
+            ):
+                raise ValueError(
+                    "rollback-aware selection requires an unmodified realized V2 "
+                    "decision stream without retry, rescue, or forced actions"
+                )
+            rollback_selection_cache: dict[str, Any] | None = None
             initial_event = {
                 "schema": EPISODE_SCHEMA,
                 "schema_version": SCHEMA_VERSION,
@@ -1478,7 +1510,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before = state
                 before_fingerprint_started = time.perf_counter()
                 before_hash = current_state_fingerprint
-                if v3_s3_state is not None:
+                if v3_s3_state is not None or exact_rollback_guard is not None:
                     before_repair_hash = repair_structure_fingerprint(before)
                 else:
                     before_repair_hash = before_hash
@@ -1487,6 +1519,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 )
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
+                rollback_guard_selected_candidate_id: str | None = None
+                rollback_guard_bannable_candidate_ids: set[str] = set()
                 rescue_override = (
                     failure_rescue_tracker.action_for_decision(
                         decision_index, state
@@ -1724,10 +1758,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         int(solver_seed),
                     )
                     stateful_controller = v3_s3_state
-                    cache_hit = bool(
+                    stateful_cache_hit = bool(
                         stateful_controller is not None
                         and stateful_cache is not None
                         and stateful_cache.get("key") == cache_key
+                    )
+                    rollback_cache_hit = bool(
+                        exact_rollback_guard is not None
+                        and exact_rollback_guard_config.get("repair_state_cache") is True
+                        and exact_rollback_guard.cache_reuse_allowed
+                        and rollback_selection_cache is not None
+                        and rollback_selection_cache.get("key") == cache_key
+                    )
+                    cache_hit = stateful_cache_hit or rollback_cache_hit
+                    active_selection_cache = (
+                        stateful_cache if stateful_cache_hit else rollback_selection_cache
                     )
                     state_feature_metrics: dict[str, Any] = {}
                     proposal_feature_metrics = {"proposal_feature_seconds": 0.0}
@@ -1738,29 +1783,141 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     slotpool_raw_candidate_rows: list[dict[str, Any]] | None = None
                     slotpool_retained_raw_indices: list[int] | None = None
                     if cache_hit:
-                        assert stateful_cache is not None
-                        candidates = stateful_cache["candidates"]
-                        candidate_rows = stateful_cache["candidate_rows"]
-                        scores = stateful_cache["scores"]
-                        margin = float(stateful_cache["margin"])
-                        selected_local_index = int(
-                            stateful_cache["base_selected_local_index"]
-                        )
+                        assert active_selection_cache is not None
+                        candidates = active_selection_cache["candidates"]
                         proposal_metrics = {
-                            **dict(stateful_cache["proposal_metrics"]),
+                            **dict(active_selection_cache["proposal_metrics"]),
                             "proposal_seconds": 0.0,
                             "candidate_generation_seconds": 0.0,
                             "state_check_seconds": 0.0,
                             "state_check_fingerprint_seconds": 0.0,
-                            "backend": "v3-s3-cache",
+                            "hybridstructpool_seconds": 0.0,
+                            "hybridstructpool_generation_seconds": 0.0,
+                            "hybridstructpool_structural_generation_seconds": 0.0,
+                            "hybridstructpool_causal_generation_seconds": 0.0,
+                            "hybridstructpool_gate_seconds": 0.0,
+                            "hybridstructpool_gate_evaluated": False,
+                            "hybridstructpool_gate_result_reused": True,
+                            "backend": (
+                                "v3-s3-cache"
+                                if stateful_cache_hit
+                                else "repair-state-cache"
+                            ),
                             "state_check_backend": "cached-state-fingerprint",
                             "full_state_verified": False,
-                            "v3_s3_cache_hit": True,
+                            "v3_s3_cache_hit": stateful_cache_hit,
+                            "repair_state_cache_hit": rollback_cache_hit,
+                            "repair_state_cache_generation_decision_index": int(
+                                active_selection_cache["generation_decision_index"]
+                            ),
                         }
-                        feature_seconds = 0.0
-                        inference_seconds = 0.0
-                        assert stateful_controller is not None
-                        stateful_controller.note_cache_hit()
+                        if rollback_cache_hit:
+                            # A repair fingerprint deliberately excludes attempt
+                            # counters.  The frozen V2 feature schema does not:
+                            # state.iteration and cumulative low-level work are
+                            # model inputs.  Reuse only the expensive candidate
+                            # structure, then recompute features, the V2 anchor,
+                            # and Copeland scores for the current decision.
+                            feature_engine_created = False
+                            if feature_engine is None:
+                                feature_engine = make_feature_engine(state)
+                                feature_engine_created = True
+                            if feature_engine_created:
+                                state_feature_metrics = dict(
+                                    feature_engine.last_prepare_metrics
+                                )
+                            else:
+                                state_feature_metrics = feature_engine.prepare(
+                                    state,
+                                    changed_agents=sorted(pending_changed_agents),
+                                )
+                            pending_changed_agents.clear()
+                            (
+                                candidate_rows,
+                                realized_feature_metrics,
+                            ) = feature_engine.realized_rows(
+                                candidates, state_hash=before_hash
+                            )
+                            state_analysis_seconds = float(
+                                state_feature_metrics.get(
+                                    "state_analysis_seconds", 0.0
+                                )
+                            ) + float(
+                                realized_feature_metrics.get(
+                                    "state_analysis_seconds", 0.0
+                                )
+                            )
+                            feature_seconds = state_analysis_seconds + float(
+                                realized_feature_metrics.get(
+                                    "realized_feature_seconds", 0.0
+                                )
+                            )
+                            v2_base_indices = [
+                                index
+                                for index, candidate in enumerate(candidates)
+                                if "v2_base"
+                                in set(
+                                    map(
+                                        str,
+                                        candidate.get(
+                                            "hybridstructpool_provenance"
+                                        )
+                                        or (),
+                                    )
+                                )
+                            ]
+                            if not v2_base_indices:
+                                raise ClosedLoopExecutionError(
+                                    "repair_state_cache_missing_v2_anchor_pool",
+                                    "cached HybridStructPool contains no V2 base candidate",
+                                )
+                            inference_started = time.perf_counter()
+                            (
+                                v2_anchor_base_index,
+                                _v2_anchor_scores,
+                                _v2_anchor_margin,
+                            ) = score_online_candidates(
+                                [candidate_rows[index] for index in v2_base_indices],
+                                runtime_models[policy],
+                            )
+                            proposal_metrics[
+                                "hybridstructpool_v2_anchor_candidate_id"
+                            ] = str(
+                                candidates[
+                                    v2_base_indices[v2_anchor_base_index]
+                                ]["candidate_id"]
+                            )
+                            (
+                                selected_local_index,
+                                scores,
+                                margin,
+                            ) = score_online_candidates(
+                                candidate_rows, runtime_models[policy]
+                            )
+                            inference_seconds = (
+                                time.perf_counter() - inference_started
+                            )
+                            proposal_metrics.update(
+                                {
+                                    "repair_state_cache_candidate_pool_reused": True,
+                                    "repair_state_cache_feature_rows_recomputed": True,
+                                    "repair_state_cache_scores_recomputed": True,
+                                    "repair_state_cache_v2_anchor_refreshed": True,
+                                }
+                            )
+                        else:
+                            candidate_rows = active_selection_cache["candidate_rows"]
+                            scores = active_selection_cache["scores"]
+                            margin = float(active_selection_cache["margin"])
+                            selected_local_index = int(
+                                active_selection_cache[
+                                    "base_selected_local_index"
+                                ]
+                            )
+                            feature_seconds = 0.0
+                            inference_seconds = 0.0
+                        if stateful_controller is not None:
+                            stateful_controller.note_cache_hit()
                     else:
                         verification_mode = str(
                             job.get("proposal_state_verification", "always")
@@ -1837,7 +1994,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     state, hybridstructpool_runtime
                                 )
                                 if str(hybridstructpool_runtime.get("pool_id"))
-                                == ROUTED_HYBRIDSTRUCTPOOL_ID
+                                in {
+                                    ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                }
                                 else hybridstructpool_high_stress_gate(
                                     state, hybridstructpool_runtime
                                 )
@@ -1924,6 +2084,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             }
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
+                        proposal_metrics["repair_state_cache_hit"] = False
                         if controller_mode == "official_adaptive":
                             feature_started = time.perf_counter()
                             candidate_rows = online_candidate_rows(
@@ -2066,10 +2227,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 ) = score_online_candidates(
                                     base_candidate_rows, runtime_models[policy]
                                 )
-                                if (
-                                    str(hybridstructpool_runtime.get("pool_id"))
-                                    == ROUTED_HYBRIDSTRUCTPOOL_ID
-                                ):
+                                if str(hybridstructpool_runtime.get("pool_id")) in {
+                                    ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                }:
                                     hybrid_result = (
                                         generate_routed_hybridstructpool_runtime_candidates(
                                             state,
@@ -2436,6 +2597,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "proposal_metrics": dict(proposal_metrics),
                                 "generation_decision_index": decision_index,
                             }
+                        if exact_rollback_guard is not None:
+                            rollback_selection_cache = {
+                                "key": cache_key,
+                                "candidates": candidates,
+                                "candidate_rows": candidate_rows,
+                                "scores": scores,
+                                "margin": margin,
+                                "base_selected_local_index": selected_local_index,
+                                "proposal_metrics": dict(proposal_metrics),
+                                "generation_decision_index": decision_index,
+                            }
                     controller["proposal"] = proposal_metrics
                     pruning_metrics = no_pruning_metrics(len(candidates))
                     base_selected_local_index = selected_local_index
@@ -2719,6 +2891,72 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         selected_local_index = v3_s3_selected_index
                         controller["v3_s3"] = v3_s3_diagnostic
                         controller_totals["v3_s3_seconds"] += v3_s3_seconds
+                    if exact_rollback_guard is not None:
+                        rollback_guard_select_started = time.perf_counter()
+                        rollback_guard_bannable_candidate_ids = {
+                            str(candidate["candidate_id"])
+                            for candidate in candidates
+                            if "structshell_equal_four_size"
+                            in set(
+                                map(
+                                    str,
+                                    candidate.get("hybridstructpool_provenance") or (),
+                                )
+                            )
+                            and "v2_base"
+                            not in set(
+                                map(
+                                    str,
+                                    candidate.get("hybridstructpool_provenance") or (),
+                                )
+                            )
+                        }
+                        v2_anchor_candidate_id = str(
+                            proposal_metrics.get(
+                                "hybridstructpool_v2_anchor_candidate_id",
+                                candidates[base_selected_local_index]["candidate_id"],
+                            )
+                        )
+                        (
+                            selected_local_index,
+                            rollback_guard_selection,
+                        ) = exact_rollback_guard.select(
+                            repair_fingerprint=before_repair_hash,
+                            candidates=candidates,
+                            candidate_rows=candidate_rows,
+                            scores=scores,
+                            v2_anchor_candidate_id=v2_anchor_candidate_id,
+                            bannable_candidate_ids=(
+                                rollback_guard_bannable_candidate_ids
+                            ),
+                        )
+                        rollback_guard_selected_candidate_id = str(
+                            candidates[selected_local_index]["candidate_id"]
+                        )
+                        controller["exact_rollback_candidate_guard"] = {
+                            "selection": rollback_guard_selection,
+                            "observation": None,
+                            "selection_seconds": (
+                                time.perf_counter() - rollback_guard_select_started
+                            ),
+                            "observation_seconds": None,
+                        }
+                        controller_totals["exact_rollback_guard_seconds"] += float(
+                            controller["exact_rollback_candidate_guard"][
+                                "selection_seconds"
+                            ]
+                        )
+                        controller_totals[
+                            "exact_rollback_guard_evaluated_count"
+                        ] += 1
+                        controller_totals[
+                            "exact_rollback_guard_override_count"
+                        ] += int(
+                            bool(rollback_guard_selection["selection_overridden"])
+                        )
+                        controller_totals["repair_state_cache_hit_count"] += int(
+                            bool(proposal_metrics.get("repair_state_cache_hit", False))
+                        )
                     base_diagnostic = (
                         None
                         if v3_s3_bundle is not None
@@ -3144,7 +3382,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         "hybridstructpool_gate_passed_count"
                     ] += int(
-                        bool(proposal_metrics.get("hybridstructpool_gate_passed", False))
+                        bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_gate_evaluated", False
+                            )
+                        )
+                        and bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_gate_passed", False
+                            )
+                        )
                     )
                     controller_totals[
                         "hybridstructpool_structural_candidate_count"
@@ -3669,13 +3916,50 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 after_fingerprint_started = time.perf_counter()
                 after_hash = state_fingerprint(state)
                 current_state_fingerprint = after_hash
-                if v3_s3_state is not None:
+                if v3_s3_state is not None or exact_rollback_guard is not None:
                     after_repair_hash = repair_structure_fingerprint(state)
                 else:
                     after_repair_hash = after_hash
                 state_fingerprint_seconds = before_fingerprint_seconds + (
                     time.perf_counter() - after_fingerprint_started
                 ) + float(controller.get("state_check_fingerprint_seconds", 0.0))
+                if (
+                    exact_rollback_guard is not None
+                    and rollback_guard_selected_candidate_id is not None
+                ):
+                    rollback_guard_observe_started = time.perf_counter()
+                    rollback_guard_observation = exact_rollback_guard.observe(
+                        before_repair_fingerprint=before_repair_hash,
+                        after_repair_fingerprint=after_repair_hash,
+                        selected_candidate_id=rollback_guard_selected_candidate_id,
+                        metrics=metrics,
+                        bannable_candidate_ids=(
+                            rollback_guard_bannable_candidate_ids
+                        ),
+                    )
+                    guard_record = dict(
+                        controller.get("exact_rollback_candidate_guard") or {}
+                    )
+                    guard_record["observation"] = rollback_guard_observation
+                    guard_record["observation_seconds"] = (
+                        time.perf_counter() - rollback_guard_observe_started
+                    )
+                    controller["exact_rollback_candidate_guard"] = guard_record
+                    controller_totals["exact_rollback_guard_seconds"] += float(
+                        guard_record["observation_seconds"]
+                    )
+                    controller_totals[
+                        "exact_rollback_guard_exact_rollback_count"
+                    ] += int(
+                        bool(
+                            rollback_guard_observation[
+                                "exact_conflict_bound_rollback"
+                            ]
+                        )
+                    )
+                    controller_totals[
+                        "exact_rollback_guard_new_ban_count"
+                    ] += int(bool(rollback_guard_observation["newly_banned"]))
                 if v3_s3_state is not None:
                     v3_s3_observe_started = time.perf_counter()
                     repair_outcome = classify_repair_outcome(

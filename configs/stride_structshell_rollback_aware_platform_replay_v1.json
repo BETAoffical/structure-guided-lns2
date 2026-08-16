@@ -1,0 +1,143 @@
+{
+  "schema": "lns2.stride.structshell_rollback_aware_platform_replay_config.v1",
+  "scientific_status": "diagnostic_known_platform_mechanism_replay",
+  "experiment_id": "stride-structshell-rollback-aware-platform-replay-v1",
+  "pre_registration_parent_commit": "d6a43f314ed9670c3d3435f5a47a7b8286452b6f",
+  "arms": ["structshell_routed_v1", "structshell_rollback_aware_v2"],
+  "runtime": {
+    "stopping_rule": "wall-clock",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "wall_time_budget_seconds": 180.0,
+    "environment_time_limit_seconds": 180.0,
+    "episode_process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "workers_for_qualification": 16,
+    "workers_for_timed_episodes": 1,
+    "native_pp_order_only": true,
+    "maximum_pp_calls_per_decision": 1,
+    "runtime_retry_or_rescue": false
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "baseline_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-hybridstructpool-routed-v1",
+    "runtime_id": "stride-hybridstructpool-routed-runtime-v1",
+    "full_union_required": false,
+    "full_union_audit_preserved": true,
+    "runtime_filter_id": "source_route_v1",
+    "structural_sizes": [8, 16, 24, 32],
+    "runtime_structural_family_sizes": {
+      "bottleneck_crossing": [8, 16, 24, 32],
+      "conflict_component": [8, 16, 24, 32],
+      "path_overlap": [8, 16, 24, 32],
+      "spatiotemporal_hotspot": [8, 16, 24, 32],
+      "topology_boundary_articulation": [8, 16, 24, 32],
+      "topology_boundary_low_degree": [8, 16, 24, 32]
+    },
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": true,
+    "source_mode": "structshell_only",
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "challenger_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-hybridstructpool-routed-v2",
+    "runtime_id": "stride-hybridstructpool-routed-runtime-v2",
+    "full_union_required": false,
+    "full_union_audit_preserved": true,
+    "runtime_filter_id": "source_route_exact_rollback_guard_v1",
+    "structural_sizes": [8, 16, 24, 32],
+    "runtime_structural_family_sizes": {
+      "bottleneck_crossing": [8, 16, 24, 32],
+      "conflict_component": [8, 16, 24, 32],
+      "path_overlap": [8, 16, 24, 32],
+      "spatiotemporal_hotspot": [8, 16, 24, 32],
+      "topology_boundary_articulation": [8, 16, 24, 32],
+      "topology_boundary_low_degree": [8, 16, 24, 32]
+    },
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": true,
+    "source_mode": "structshell_only",
+    "activation_gate": {
+      "gate_id": "stride-highstress-state-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_agent_count": 96,
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    },
+    "exact_rollback_guard": {
+      "guard_id": "stride-exact-rollback-candidate-guard-v1",
+      "exact_rollback_limit": 3,
+      "candidate_scope": "hybrid_challenger_only",
+      "fallback": "v2_anchor",
+      "repair_state_cache": true,
+      "maximum_pp_calls_per_decision": 1
+    }
+  },
+  "cohort": {
+    "role": "known_platform_development_mechanism_replay",
+    "promotion_evidence": false,
+    "known_failure_selection": true,
+    "dataset": "build/stride-stage2-movingai-v1",
+    "split": "balanced_wall_clock",
+    "solver_seeds": [14],
+    "paired_key_count": 2,
+    "known_platform_cases": [
+      {
+        "task_id": "random-32-32-20__random_01__agents_0400",
+        "solver_seed": 14,
+        "registered_initial_fingerprint": "7acf92af4cd89c619e5984103368f78a9a567060436c8154a95c08737ecf9df0",
+        "registered_initial_conflicts": 527,
+        "registered_trace_sha256": "b27872051c3f5f538f826c7ddb2ce8670194cb1031d09d3d1f59c972051ac95b"
+      },
+      {
+        "task_id": "random-32-32-20__random_02__agents_0400",
+        "solver_seed": 14,
+        "registered_initial_fingerprint": "38a591cecd922fa84cf3c6d977841cf32aa4607195dc94b84c89c34a16cd92d0",
+        "registered_initial_conflicts": 418,
+        "registered_trace_sha256": "234c6b0d7a90d839c0945a5ae924daf423e4ff085a7216806041f37088d4d1a5"
+      }
+    ]
+  },
+  "inputs": {
+    "source_confirmation_report": {
+      "path": "build/stride-structshell-v2-official-bounded-confirmation-v3-r2/confirmation_report.json",
+      "sha256": "b2fa3b600473ef52ca127e73368fd559ee8ae74a993af3be69163afa1001e84f"
+    },
+    "source_structshell_manifest": {
+      "path": "build/stride-structshell-v2-official-bounded-confirmation-v3-r2/maps/random-32-32-20-high-load/structshell_only/realized_dynamic_manifest.jsonl",
+      "sha256": "74e1c1dd527aafd54229e3c7a0f35d9dbcb13a47ea363e158ea5ac6fdaeda2d5"
+    },
+    "dataset_manifest": {
+      "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "efe524b6397642f85964bc47124c348ed8280dd083170e0b33b5c2741573b132"
+    },
+    "runtime_config": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  }
+}

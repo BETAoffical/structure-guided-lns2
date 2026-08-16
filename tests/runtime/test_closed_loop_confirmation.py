@@ -52,7 +52,7 @@ from experiments.closed_loop_confirmation_analysis import (
     summarize_policy,
 )
 from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
-from experiments.neighborhood_features import _feature_profiles
+from experiments.neighborhood_features import _feature_profiles, state_dynamic_features
 from experiments.state_analysis import analyze_state, analyze_static_grid
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.runtime.online_selection import (
@@ -64,6 +64,10 @@ from lns2_selector.runtime.online_selection import (
     validate_structpool_augmentation,
     validate_repair_seed_policy,
 )
+from lns2_selector.runtime.hybridstructpool_routed import (
+    rollback_aware_routed_hybridstructpool_augmentation,
+)
+from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
 STRUCTPOOL_RUNTIME = {
@@ -327,6 +331,304 @@ class DirectCandidateModel:
 
     def score_candidates(self, rows: list[dict]) -> list[float]:
         return [float(index) for index, _row in enumerate(rows)]
+
+
+class RollbackDirectCandidateModel(DirectCandidateModel):
+    feature_names = ("actual_size", "state.low_level_generated_per_agent")
+    base_feature_names = ("actual_size", "state.low_level_generated_per_agent")
+
+    def __init__(self) -> None:
+        self.score_calls = 0
+        self.generated_per_agent_seen: list[float] = []
+
+    def score_candidates(self, rows: list[dict]) -> list[float]:
+        self.score_calls += 1
+        features = dict(rows[0]["features"][self.profile])
+        self.generated_per_agent_seen.append(
+            float(features["state.low_level_generated_per_agent"])
+        )
+        return [float(index) for index, _row in enumerate(rows)]
+
+
+class RollbackPlatformEnvironment:
+    def __init__(self, *, solve_anchor: bool = True) -> None:
+        self.state = make_state(1)
+        self.step_calls = 0
+        self.solve_anchor = bool(solve_anchor)
+
+    def reset(self, seed: int) -> dict:
+        del seed
+        return self.state
+
+    def get_state(self) -> dict:
+        return self.state
+
+    def reset_paths(self, _paths: list[list[int]], seed: int) -> dict:
+        del seed
+        return self.state
+
+    def step(self, action: dict) -> dict:
+        self.step_calls += 1
+        agents = list(map(int, action["agents"]))
+        solved = self.solve_anchor and agents == [0, 1]
+        self.state = {
+            **self.state,
+            "iteration": self.step_calls,
+            "runtime": self.step_calls * 0.001,
+            "low_level": {
+                **dict(self.state["low_level"]),
+                "expanded": int(self.state["low_level"]["expanded"]) + 5,
+                "generated": int(self.state["low_level"]["generated"]) + 10,
+                "runs": int(self.state["low_level"]["runs"]) + 1,
+            },
+            "feasible": solved,
+            "done": solved,
+            "num_of_colliding_pairs": 0 if solved else 1,
+            "conflict_edges": [] if solved else [[0, 1]],
+        }
+        return {
+            "observation": self.state,
+            "terminated": solved,
+            "truncated": False,
+            "metrics": {
+                "iteration": self.step_calls,
+                "action_valid": True,
+                "generated": True,
+                "replan_success": solved,
+                "neighborhood": agents,
+                "conflicts_before": 1,
+                "conflicts_after": 0 if solved else 1,
+                "requested_random_seed": int(action["random_seed"]),
+                "pp_failure_reason": (
+                    "none" if solved else "conflict_bound_exceeded"
+                ),
+                "pp_rolled_back": not solved,
+                "native_step_seconds": 0.0,
+                "native_neighborhood_generation_seconds": 0.0,
+                "native_replan_seconds": 0.0,
+                "pp_replan_seconds": 0.0,
+                "native_repair_bookkeeping_seconds": 0.0,
+                "native_state_snapshot_seconds": 0.0,
+                "native_residual_seconds": 0.0,
+                "binding_solver_call_seconds": 0.0,
+                "binding_state_snapshot_seconds": 0.0,
+                "state_to_python_seconds": 0.0,
+                "metrics_to_python_seconds": 0.0,
+                "binding_total_seconds": 0.0,
+                "binding_residual_seconds": 0.0,
+                "step_runtime": 0.0,
+            },
+        }
+
+
+class RollbackFeatureEngine:
+    backend = "reference-v1"
+    static_grid = None
+    instances: list["RollbackFeatureEngine"] = []
+
+    def __init__(self, state: dict, *_args, **_kwargs) -> None:
+        self.state = state
+        self.last_prepare_metrics: dict = {}
+        self.prepared_iterations: list[int] = []
+        self.realized_iterations: list[int] = []
+        self.realized_state_hashes: list[str] = []
+        self.instances.append(self)
+
+    def prepare(self, state: dict, *_args, **_kwargs) -> dict:
+        self.state = state
+        self.prepared_iterations.append(int(state.get("iteration", 0)))
+        return {}
+
+    def realized_rows(self, candidates: list[dict], **_kwargs) -> tuple[list[dict], dict]:
+        iteration = int(self.state.get("iteration", 0))
+        state_hash = str(_kwargs["state_hash"])
+        self.realized_iterations.append(iteration)
+        self.realized_state_hashes.append(state_hash)
+        return (
+            [
+                {
+                    "state_id": state_hash,
+                    "candidate_key": str(candidate["candidate_id"]),
+                    "actual_size": len(candidate["agents"]),
+                    "features": {
+                        "realized_dynamic": {
+                            "actual_size": float(len(candidate["agents"])),
+                            "state.iteration": float(iteration),
+                            "state.low_level_generated_per_agent": float(
+                                self.state["low_level"]["generated"]
+                            )
+                            / float(len(self.state["agents"])),
+                            "state.low_level_runs_per_agent": float(
+                                self.state["low_level"]["runs"]
+                            )
+                            / float(len(self.state["agents"])),
+                        }
+                    },
+                }
+                for candidate in candidates
+            ],
+            {"realized_feature_seconds": 0.0},
+        )
+
+
+def rollback_bundle(model: RollbackDirectCandidateModel) -> SimpleNamespace:
+    ranges = {
+        "actual_size": (0.0, 64.0),
+        "state.low_level_generated_per_agent": (0.0, 1_000.0),
+    }
+    return SimpleNamespace(
+        models={"proposal_dynamic": model, "realized_dynamic": model},
+        ranges={"proposal_dynamic": ranges, "realized_dynamic": ranges},
+        manifest={},
+    )
+
+
+class RollbackCandidateFixture:
+    def __init__(self) -> None:
+        self.generation_calls = 0
+
+    def generate_base(self, *_args, **_kwargs):
+        self.generation_calls += 1
+        return [make_candidate("v2-anchor", [0, 1], "v2")], {
+            "proposal_seconds": 0.0,
+            "candidate_generation_seconds": 0.0,
+            "state_check_seconds": 0.0,
+            "state_check_fingerprint_seconds": 0.0,
+            "backend": "fixture",
+            "state_check_backend": "fixture",
+            "full_state_verified": True,
+            "proposal_count": 1,
+            "candidate_count": 1,
+        }
+
+    @staticmethod
+    def generate_hybrid(*_args, v2_candidates, **_kwargs):
+        candidates = [
+            *v2_candidates,
+            make_candidate("struct-a", [0, 1, 2], "struct-a"),
+            make_candidate("struct-b", [0, 1, 2, 3], "struct-b"),
+        ]
+        return SimpleNamespace(
+            candidates=candidates,
+            challengers=candidates[1:],
+            provenance_by_candidate_id={
+                "v2-anchor": ("v2_base",),
+                "struct-a": ("structshell_equal_four_size",),
+                "struct-b": ("structshell_equal_four_size",),
+            },
+            base_candidate_count=1,
+            structural_candidate_count=2,
+            causal_candidate_count=0,
+            exact_duplicate_count=0,
+            causal_attempts=[],
+            structural_generation_seconds=0.0,
+            causal_generation_seconds=0.0,
+        )
+
+
+class RollbackTopologyCache:
+    def __init__(self, *_args, **_kwargs) -> None:
+        self.analysis = object()
+        self.last_native_prepared = None
+        self.last_prepare_seconds = 0.0
+
+    def prepare(self, *_args, **_kwargs) -> None:
+        self.last_prepare_seconds = 0.0
+
+
+def rollback_worker_job(
+    directory: str, *, max_decisions: int, episode_override: dict | None = None
+) -> dict:
+    return {
+        "row": {
+            "split": "closed_loop",
+            "map_id": "map-a",
+            "task_id": "task-a",
+            "layout_mode": "regular_beltway",
+            "task_variant": "balanced_80",
+            "agent_count": 4,
+        },
+        "policy": "realized_dynamic",
+        "solver_seed": 0,
+        "output_root": directory,
+        "run_fingerprint": "rollback-aware",
+        "resume": False,
+        "dataset_root": directory,
+        "environment": {},
+        "max_decisions": max_decisions,
+        "metric_iteration_budget": max_decisions,
+        "proposal": {
+            "hybridstructpool": rollback_aware_routed_hybridstructpool_augmentation()
+        },
+        "frozen_models": directory,
+        "model_registration": {},
+        "controller_bundle": str(Path(directory) / "controller"),
+        "controller": "v2-full",
+        "trace_format": TRACE_FORMAT_FULL_V1,
+        "repair_seed_policy": "episode_stream",
+        "episode_override": dict(episode_override or {}),
+    }
+
+
+def run_rollback_worker_fixture(
+    job: dict, environment: RollbackPlatformEnvironment
+) -> tuple[dict, list[dict], RollbackCandidateFixture, RollbackDirectCandidateModel]:
+    RollbackFeatureEngine.instances.clear()
+    model = RollbackDirectCandidateModel()
+    candidates = RollbackCandidateFixture()
+    with (
+        patch(
+            "experiments.closed_loop_confirmation._make_environment",
+            return_value=environment,
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+            return_value=rollback_bundle(model),
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.compact_runtime_model",
+            side_effect=lambda value: value,
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+            RollbackFeatureEngine,
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.TopologyAnalysisCache",
+            RollbackTopologyCache,
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.generate_online_candidates",
+            side_effect=candidates.generate_base,
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.routed_hybridstructpool_high_stress_gate",
+            return_value={
+                "passed": True,
+                "reason": "high_stress_state",
+                "seconds": 0.0,
+                "gate_id": "fixture",
+                "agent_count": 4,
+                "conflict_pair_count": 1,
+                "active_conflict_agent_count": 2,
+                "largest_conflict_component_size": 2,
+            },
+        ),
+        patch(
+            "experiments.closed_loop_confirmation.generate_routed_hybridstructpool_runtime_candidates",
+            side_effect=candidates.generate_hybrid,
+        ),
+    ):
+        result = _closed_loop_episode_worker(job)
+    events = []
+    if result.get("trace_file"):
+        events = [
+            json.loads(line)
+            for line in (Path(job["output_root"]) / result["trace_file"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+    return result, events, candidates, model
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
@@ -2217,6 +2519,410 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertGreaterEqual(
             finalization["episode_process_wall_seconds"],
             result["summary"]["episode_observed_wall_seconds"],
+        )
+
+    def test_rollback_aware_hybrid_reuses_pool_and_reaches_v2_anchor(self) -> None:
+        environment = RollbackPlatformEnvironment()
+        RollbackFeatureEngine.instances.clear()
+        model = RollbackDirectCandidateModel()
+        bundle = SimpleNamespace(
+            models={"proposal_dynamic": model, "realized_dynamic": model},
+            ranges={
+                "proposal_dynamic": {
+                    "actual_size": (0.0, 64.0),
+                    "state.low_level_generated_per_agent": (0.0, 1_000.0),
+                },
+                "realized_dynamic": {
+                    "actual_size": (0.0, 64.0),
+                    "state.low_level_generated_per_agent": (0.0, 1_000.0),
+                },
+            },
+            manifest={},
+        )
+        generation_calls = 0
+
+        def generate_base(*_args, **_kwargs):
+            nonlocal generation_calls
+            generation_calls += 1
+            return [make_candidate("v2-anchor", [0, 1], "v2")], {
+                "proposal_seconds": 0.0,
+                "candidate_generation_seconds": 0.0,
+                "state_check_seconds": 0.0,
+                "state_check_fingerprint_seconds": 0.0,
+                "backend": "fixture",
+                "state_check_backend": "fixture",
+                "full_state_verified": True,
+                "proposal_count": 1,
+                "candidate_count": 1,
+            }
+
+        def generate_hybrid(*_args, v2_candidates, **_kwargs):
+            candidates = [
+                *v2_candidates,
+                make_candidate("struct-a", [0, 1, 2], "struct-a"),
+                make_candidate("struct-b", [0, 1, 2, 3], "struct-b"),
+            ]
+            return SimpleNamespace(
+                candidates=candidates,
+                challengers=candidates[1:],
+                provenance_by_candidate_id={
+                    "v2-anchor": ("v2_base",),
+                    "struct-a": ("structshell_equal_four_size",),
+                    "struct-b": ("structshell_equal_four_size",),
+                },
+                base_candidate_count=1,
+                structural_candidate_count=2,
+                causal_candidate_count=0,
+                exact_duplicate_count=0,
+                causal_attempts=[],
+                structural_generation_seconds=0.0,
+                causal_generation_seconds=0.0,
+            )
+
+        class FakeTopologyCache:
+            def __init__(self, *_args, **_kwargs) -> None:
+                self.analysis = object()
+                self.last_native_prepared = None
+                self.last_prepare_seconds = 0.0
+
+            def prepare(self, *_args, **_kwargs) -> None:
+                self.last_prepare_seconds = 0.0
+
+        with tempfile.TemporaryDirectory() as directory:
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "rollback-aware",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {},
+                "max_decisions": 10,
+                "metric_iteration_budget": 10,
+                "proposal": {
+                    "hybridstructpool": (
+                        rollback_aware_routed_hybridstructpool_augmentation()
+                    )
+                },
+                "frozen_models": directory,
+                "model_registration": {},
+                "controller_bundle": str(Path(directory) / "controller"),
+                "controller": "v2-full",
+                "trace_format": TRACE_FORMAT_FULL_V1,
+                "repair_seed_policy": "episode_stream",
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=environment,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+                    return_value=bundle,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.compact_runtime_model",
+                    side_effect=lambda value: value,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    RollbackFeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.TopologyAnalysisCache",
+                    FakeTopologyCache,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generate_base,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.routed_hybridstructpool_high_stress_gate",
+                    return_value={
+                        "passed": True,
+                        "reason": "high_stress_state",
+                        "seconds": 0.0,
+                        "gate_id": "fixture",
+                        "agent_count": 4,
+                        "conflict_pair_count": 1,
+                        "active_conflict_agent_count": 2,
+                        "largest_conflict_component_size": 2,
+                    },
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_routed_hybridstructpool_runtime_candidates",
+                    side_effect=generate_hybrid,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+
+            self.assertEqual(result["status"], "ok", result)
+            events = [
+                json.loads(line)
+                for line in (Path(directory) / result["trace_file"])
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        transitions = [event for event in events if event["event"] == "transition"]
+        self.assertTrue(result["summary"]["success"])
+        self.assertEqual(environment.step_calls, 7)
+        self.assertEqual(generation_calls, 1)
+        self.assertEqual(model.score_calls, 14)
+        self.assertEqual(
+            model.generated_per_agent_seen,
+            [2.0, 2.0, 4.5, 4.5, 7.0, 7.0, 9.5, 9.5, 12.0, 12.0, 14.5, 14.5, 17.0, 17.0],
+        )
+        self.assertEqual(len(RollbackFeatureEngine.instances), 1)
+        feature_engine = RollbackFeatureEngine.instances[0]
+        self.assertEqual(feature_engine.prepared_iterations, [1, 2, 3, 4, 5, 6])
+        # Decision zero fills V2 and StructShell rows separately; every cached
+        # decision thereafter still computes a fresh realized feature batch.
+        self.assertEqual(
+            feature_engine.realized_iterations, [0, 0, 1, 2, 3, 4, 5, 6]
+        )
+        self.assertEqual(len(set(feature_engine.realized_state_hashes)), 7)
+        self.assertEqual(
+            feature_engine.realized_state_hashes[0],
+            feature_engine.realized_state_hashes[1],
+        )
+        self.assertEqual(
+            [event["controller"]["selected_candidate_id"] for event in transitions],
+            [
+                "struct-b",
+                "struct-b",
+                "struct-b",
+                "struct-a",
+                "struct-a",
+                "struct-a",
+                "v2-anchor",
+            ],
+        )
+        self.assertEqual(
+            result["summary"]["controller_totals"][
+                "exact_rollback_guard_new_ban_count"
+            ],
+            2,
+        )
+        self.assertEqual(
+            result["summary"]["controller_totals"]["repair_state_cache_hit_count"],
+            6,
+        )
+        self.assertEqual(
+            result["summary"]["controller_totals"][
+                "hybridstructpool_gate_evaluated_count"
+            ],
+            1,
+        )
+        self.assertGreaterEqual(
+            result["summary"]["controller_totals"][
+                "exact_rollback_guard_seconds"
+            ],
+            0.0,
+        )
+        for index, event in enumerate(transitions):
+            proposal = event["controller"]["proposal"]
+            if index == 0:
+                self.assertFalse(proposal["repair_state_cache_hit"])
+            else:
+                self.assertTrue(proposal["repair_state_cache_hit"])
+                self.assertFalse(proposal["hybridstructpool_gate_evaluated"])
+                self.assertTrue(proposal["hybridstructpool_gate_result_reused"])
+                self.assertEqual(proposal["hybridstructpool_gate_seconds"], 0.0)
+                self.assertTrue(
+                    proposal["repair_state_cache_candidate_pool_reused"]
+                )
+                self.assertTrue(
+                    proposal["repair_state_cache_feature_rows_recomputed"]
+                )
+                self.assertTrue(proposal["repair_state_cache_scores_recomputed"])
+                self.assertTrue(proposal["repair_state_cache_v2_anchor_refreshed"])
+
+    def test_failed_v2_anchor_forces_worker_cache_miss_and_regeneration(self) -> None:
+        environment = RollbackPlatformEnvironment(solve_anchor=False)
+        with tempfile.TemporaryDirectory() as directory:
+            job = rollback_worker_job(directory, max_decisions=8)
+            result, events, candidates, _model = run_rollback_worker_fixture(
+                job, environment
+            )
+
+        self.assertEqual(result["status"], "ok", result)
+        self.assertFalse(result["summary"]["success"])
+        self.assertEqual(result["summary"]["stop_reason"], "repair_limit")
+        self.assertEqual(environment.step_calls, 8)
+        self.assertEqual(candidates.generation_calls, 2)
+        transitions = [event for event in events if event["event"] == "transition"]
+        self.assertEqual(len(transitions), 8)
+        anchor = transitions[6]
+        regenerated = transitions[7]
+        self.assertEqual(anchor["controller"]["selected_candidate_id"], "v2-anchor")
+        self.assertTrue(anchor["controller"]["proposal"]["repair_state_cache_hit"])
+        anchor_observation = anchor["controller"][
+            "exact_rollback_candidate_guard"
+        ]["observation"]
+        self.assertTrue(anchor_observation["exact_conflict_bound_rollback"])
+        self.assertTrue(anchor_observation["fallback_cycle_reset"])
+        self.assertEqual(anchor_observation["banned_candidate_ids"], [])
+        self.assertFalse(anchor_observation["cache_reuse_allowed"])
+        regenerated_proposal = regenerated["controller"]["proposal"]
+        self.assertFalse(regenerated_proposal["repair_state_cache_hit"])
+        self.assertTrue(regenerated_proposal["hybridstructpool_gate_evaluated"])
+        self.assertEqual(
+            result["summary"]["controller_totals"][
+                "hybridstructpool_gate_evaluated_count"
+            ],
+            2,
+        )
+
+    def test_rollback_aware_hybrid_rejects_repair_overlays(self) -> None:
+        source_state = make_state(1)
+        source_repair_fingerprint = repair_structure_fingerprint(source_state)
+        initial_restore = {
+            "collection_root": "unused",
+            "manifest": {},
+            "decision_index": 0,
+            "expected_fingerprint": state_fingerprint(source_state),
+            "repair_structure_fingerprint": source_repair_fingerprint,
+            "expected_conflicts": 1,
+            "restore_seed": 0,
+        }
+        overlays = {
+            "bounded_native_retry": {
+                "bounded_native_retry": {
+                    "enabled": True,
+                    "minimum_consecutive_rollbacks": 3,
+                    "maximum_interventions": 3,
+                    "initial_repeat_count": 2,
+                    "seed_namespace": "test-retry",
+                    "episode_key": "test-episode",
+                    "trial_index": 0,
+                    "first_retry_seed": 1,
+                }
+            },
+            "failure_informed_rescue": {
+                "failure_informed_rescue": {
+                    "mode": "same_set_fresh_seed",
+                    "maximum_added_blockers": 8,
+                    "seed_namespace": "test-rescue",
+                    "episode_key": "test-episode",
+                    "trial_index": 0,
+                    "initial_repeat_count": 2,
+                }
+            },
+            "signature_scoped_rescue": {
+                "signature_scoped_rescue": {
+                    "maximum_added_blockers": 8,
+                    "minimum_consecutive_rollbacks": 3,
+                    "maximum_interventions": 3,
+                    "initial_repeat_count": 2,
+                    "seed_namespace": "test-signature-rescue",
+                    "episode_key": "test-episode",
+                    "trial_index": 0,
+                    "enable_semantic_compaction_audit": True,
+                }
+            },
+            "forced_first_action": {
+                "forced_first_action": {
+                    "mode": "explicit_neighborhood",
+                    "agents": [0, 1],
+                    "pp_random_seed": 1,
+                }
+            },
+        }
+        for name, overlay in overlays.items():
+            with self.subTest(overlay=name), tempfile.TemporaryDirectory() as directory:
+                episode_override = {"initial_restore": initial_restore, **overlay}
+                job = rollback_worker_job(
+                    directory, max_decisions=1, episode_override=episode_override
+                )
+                model = RollbackDirectCandidateModel()
+                with (
+                    patch(
+                        "experiments.closed_loop_confirmation.target_state_from_trace",
+                        return_value=(source_state, Path("source-trace.jsonl")),
+                    ),
+                    patch(
+                        "experiments.closed_loop_confirmation._make_environment",
+                        return_value=RollbackPlatformEnvironment(),
+                    ),
+                    patch(
+                        "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+                        return_value=rollback_bundle(model),
+                    ),
+                    patch(
+                        "experiments.closed_loop_confirmation.compact_runtime_model",
+                        side_effect=lambda value: value,
+                    ),
+                ):
+                    result = _closed_loop_episode_worker(job)
+                self.assertEqual(result["status"], "error", result)
+                self.assertEqual(result["error_kind"], "ValueError")
+                self.assertIn(
+                    "rollback-aware selection requires an unmodified realized V2",
+                    result["error"],
+                )
+
+    def test_rollback_aware_hybrid_rejects_v3_controller_overlay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            job = rollback_worker_job(directory, max_decisions=1)
+            job["controller"] = "v3-s3"
+            job["v3_s3_bundle"] = "unused"
+            fake_v3_bundle = SimpleNamespace(
+                manifest={"schema": "lns2.v3_s3_controller_bundle.v2"}
+            )
+            with patch(
+                "experiments.closed_loop_confirmation.load_v3_s3_bundle",
+                return_value=fake_v3_bundle,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "HybridStructPool requires a realized_dynamic v2-full episode",
+                ):
+                    _closed_loop_episode_worker(job)
+
+    def test_repair_state_pool_freeze_is_explicit_not_v2_equivalent_cache(self) -> None:
+        before = make_state(1)
+        later = json.loads(json.dumps(before))
+        later["iteration"] = 1
+        later["low_level"]["generated"] += 10
+        later["low_level"]["runs"] += 1
+        self.assertEqual(
+            repair_structure_fingerprint(before),
+            repair_structure_fingerprint(later),
+        )
+        before_hash = state_fingerprint(before)
+        later_hash = state_fingerprint(later)
+        self.assertNotEqual(before_hash, later_hash)
+        before_features = state_dynamic_features(before, analyze_state(before))
+        later_features = state_dynamic_features(later, analyze_state(later))
+        self.assertEqual(
+            {
+                name
+                for name in before_features
+                if before_features[name] != later_features[name]
+            },
+            {
+                "state.iteration",
+                "state.low_level_generated_per_agent",
+                "state.low_level_runs_per_agent",
+            },
+        )
+        request_specs = [(0, "random", 8, 0)]
+        self.assertNotEqual(
+            proposal_random_seeds(
+                "task-a", 14, before_hash, 0, request_specs
+            ),
+            proposal_random_seeds(
+                "task-a", 14, later_hash, 1, request_specs
+            ),
         )
 
     def test_run_to_completion_reports_raw_ttf_without_capped_score(self) -> None:

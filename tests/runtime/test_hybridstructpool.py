@@ -19,9 +19,11 @@ from lns2_selector.runtime.hybridstructpool import (
 )
 from lns2_selector.runtime.hybridstructpool_routed import (
     generate_routed_hybridstructpool_runtime_candidates,
+    rollback_aware_routed_hybridstructpool_augmentation,
     routed_hybridstructpool_augmentation,
     routed_hybridstructpool_high_stress_gate,
     validate_any_hybridstructpool_augmentation,
+    validate_rollback_aware_routed_hybridstructpool_augmentation,
     validate_routed_hybridstructpool_augmentation,
 )
 
@@ -90,6 +92,20 @@ class HybridStructPoolTest(unittest.TestCase):
         self.assertEqual(
             hybridstructpool_runtime_augmentation(), legacy
         )
+
+    def test_rollback_aware_contract_is_separately_versioned_and_frozen(self) -> None:
+        config = rollback_aware_routed_hybridstructpool_augmentation()
+        self.assertEqual(config["pool_id"], "stride-hybridstructpool-routed-v2")
+        self.assertEqual(config["source_mode"], "structshell_only")
+        self.assertEqual(config["exact_rollback_guard"]["exact_rollback_limit"], 3)
+        self.assertEqual(
+            validate_rollback_aware_routed_hybridstructpool_augmentation(config),
+            config,
+        )
+        self.assertEqual(validate_any_hybridstructpool_augmentation(config), config)
+        config["exact_rollback_guard"]["exact_rollback_limit"] = 2
+        with self.assertRaisesRegex(ValueError, "rollback-aware"):
+            validate_any_hybridstructpool_augmentation(config)
 
     def test_routed_gate_removes_total_agent_shortcut(self) -> None:
         sparse_edges = [
