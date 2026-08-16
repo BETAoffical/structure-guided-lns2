@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import statistics
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -34,6 +33,9 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     routed_hybridstructpool_augmentation,
     validate_rollback_aware_routed_hybridstructpool_augmentation,
     validate_routed_hybridstructpool_augmentation,
+)
+from lns2_selector.runtime.rollback_aware_selection import (
+    is_exact_conflict_bound_rollback,
 )
 
 
@@ -473,12 +475,10 @@ def run(
 
 
 def _exact_rollback(row: Mapping[str, Any]) -> bool:
-    metrics = dict(row["actual_metrics"])
-    return bool(
-        metrics.get("pp_failure_reason") == "conflict_bound_exceeded"
-        and metrics.get("replan_success") is False
-        and metrics.get("pp_rolled_back") is True
-        and row["before_platform_signature"] == row["after_platform_signature"]
+    return is_exact_conflict_bound_rollback(
+        dict(row["actual_metrics"]),
+        before_repair_fingerprint=str(row["before_platform_signature"]),
+        after_repair_fingerprint=str(row["after_platform_signature"]),
     )
 
 
