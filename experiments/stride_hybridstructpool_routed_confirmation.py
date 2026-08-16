@@ -113,6 +113,40 @@ _IDENTITIES = {
             "workers_for_qualification": 16,
         },
     },
+    "lns2.stride.hybridstructpool_routed_confirmation_config.v5": {
+        "experiment_id": "stride-structshell-v2-official-bounded-confirmation-v2",
+        "pre_registration_parent_commit": "a832132",
+        "episode_process_timeout_seconds": 240.0,
+        "outer_job_timeout_seconds": 300.0,
+        "wall_time_budget_seconds": 180.0,
+        "environment_time_limit_seconds": 180.0,
+        "stopping_rule": "wall-clock",
+        "scientific_status": "preregistered_result_blind_paired_bounded_ttf_confirmation",
+        "status_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_status.v2",
+        "report_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_report.v2",
+        "controllers": CONTROLLERS,
+        "solver_seeds": (10, 11, 12),
+        "comparison": {
+            "primary_baseline": "v2_only",
+            "secondary_baseline": "official_adaptive",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_three_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
+        "cohort_repair": {
+            "predecessor_experiment_id": "stride-structshell-v2-official-bounded-confirmation-v1",
+            "predecessor_run_fingerprint": "173b89c247d6c7adaa84bf196f6786e0309b9884e118353fd49f990bafc3610c",
+            "replaced_group_id": "warehouse-10-20-10-2-2",
+            "replacement_group_id": "warehouse-20-40-10-2-2-congestion",
+            "selection_basis": "registered_metadata_forced_congestion_and_maximum_agent_load",
+            "controller_outcomes_consulted": False,
+            "fresh_solver_seeds_required": True,
+            "old_formal_episode_count": 0,
+        },
+    },
 }
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "confirmation_report.json"
@@ -155,6 +189,10 @@ def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     comparison = dict(config.get("comparison") or {})
     if comparison != identity["comparison"]:
         raise ValueError("Hybrid routed confirmation comparison changed")
+    if "cohort_repair" in identity and dict(config.get("cohort_repair") or {}) != dict(
+        identity["cohort_repair"]
+    ):
+        raise ValueError("Hybrid routed confirmation cohort repair changed")
     runtime = dict(config.get("runtime") or {})
     expected_runtime = {
         "stopping_rule": str(identity.get("stopping_rule", "run-to-completion")),
@@ -302,6 +340,7 @@ def _runtime_config_path(
     if schema not in {
         "lns2.stride.hybridstructpool_routed_confirmation_config.v3",
         "lns2.stride.hybridstructpool_routed_confirmation_config.v4",
+        "lns2.stride.hybridstructpool_routed_confirmation_config.v5",
     }:
         return source
     payload = _read_json(source)

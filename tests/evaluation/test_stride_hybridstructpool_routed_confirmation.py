@@ -21,6 +21,9 @@ POOL_CONFIG = ROOT / "configs" / "stride_structshell_v2_paired_confirmation_v1.j
 BOUNDED_CONFIG = (
     ROOT / "configs" / "stride_structshell_v2_official_bounded_confirmation_v1.json"
 )
+BOUNDED_CONFIG_V2 = (
+    ROOT / "configs" / "stride_structshell_v2_official_bounded_confirmation_v2.json"
+)
 
 
 def test_confirmation_config_is_map_disjoint_and_complete() -> None:
@@ -133,6 +136,23 @@ def test_bounded_confirmation_materializes_registered_seed_runtime(
     payload = json.loads(runtime.read_text(encoding="utf-8"))
     assert payload["solver_seeds"] == [7, 8, 9]
     assert runtime.name.endswith("solver_seeds_7_8_9.json")
+
+
+def test_bounded_confirmation_v2_replaces_only_the_ineligible_warehouse_group() -> None:
+    _path, _root, predecessor = load_config(BOUNDED_CONFIG)
+    _path, _root, replacement = load_config(BOUNDED_CONFIG_V2)
+    assert replacement["cohort"]["solver_seeds"] == [10, 11, 12]
+    assert replacement["cohort_repair"]["controller_outcomes_consulted"] is False
+    assert replacement["cohort_repair"]["old_formal_episode_count"] == 0
+    old_groups = {group["id"]: group for group in predecessor["cohort"]["groups"]}
+    new_groups = {group["id"]: group for group in replacement["cohort"]["groups"]}
+    old_groups.pop("warehouse-10-20-10-2-2")
+    warehouse = new_groups.pop("warehouse-20-40-10-2-2-congestion")
+    assert new_groups == old_groups
+    assert warehouse["family"] == "warehouse"
+    assert all("opposite_exchange" in task for task in warehouse["tasks"])
+    assert all("agents_0600" in task for task in warehouse["tasks"])
+    assert len(schedule(replacement)) == 180
 
 
 def test_qualification_is_a_hard_all_map_gate(tmp_path: Path) -> None:
