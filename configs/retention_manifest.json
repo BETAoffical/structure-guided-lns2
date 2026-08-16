@@ -3067,6 +3067,21 @@
       "path": "tests/evaluation/test_stride_warehouse_fixed16_development.py",
       "role": "reproducibility",
       "contract": "Freeze the 256-reset qualification, 32-key six-arm serial schedule, identity audits, TTF-only gates and reserved final namespace."
+    },
+    {
+      "path": "experiments/stride_warehouse_fixed16_development_v2.py",
+      "role": "reproducibility",
+      "purpose": "Run the independently identified four-task Warehouse qualification and eight-key six-arm fixed16 development screen without importing failed r2 artifacts."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_fixed16_development_v2.py",
+      "role": "reproducibility",
+      "purpose": "Expose planning, qualification, strict serial collection and analysis for the Warehouse fixed16 v2 development identity."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_fixed16_development_v2.py",
+      "role": "reproducibility",
+      "contract": "Freeze four registered task hashes, fresh sixteen-reset qualification, eight paired keys, six-arm rotation, trace identity and conditional next-step semantics."
     }
   ]
 }
