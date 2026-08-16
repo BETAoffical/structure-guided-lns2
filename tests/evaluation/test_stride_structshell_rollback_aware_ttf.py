@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from experiments.stride_structshell_rollback_aware_ttf import (
     CONTROLLERS,
     _cluster_bootstrap,
     _controller_kwargs,
+    _episode_job,
+    _failed_episode_job,
     _qualification_resume,
     _status,
     extension_keys,
@@ -158,6 +161,63 @@ def test_second_stage_reuses_the_shared_qualification_without_outer_resume() -> 
         assert _qualification_resume(qualification) is False
         qualification.joinpath("run_config.json").write_text("{}", encoding="utf-8")
         assert _qualification_resume(qualification) is True
+
+
+def test_episode_job_qualifies_the_complete_group_before_a_single_timed_key() -> None:
+    _path, _root, config = load_config(CONFIG)
+    item = next(
+        row
+        for row in schedule(config, "screen")
+        if row["group_id"] == "den312d" and row["controller"] == "v2_only"
+    )
+    calls: list[dict] = []
+
+    def record_collection(*_args, **kwargs):
+        calls.append(kwargs)
+
+    with tempfile.TemporaryDirectory() as directory, patch(
+        "experiments.stride_structshell_rollback_aware_ttf.run_closed_loop_collection",
+        side_effect=record_collection,
+    ), patch(
+        "experiments.stride_structshell_rollback_aware_ttf._manifest",
+        return_value={"status": "ok"},
+    ):
+        result = _episode_job(
+            {
+                "config_path": str(CONFIG),
+                "output_root": directory,
+                "stage": "screen",
+                "item": item,
+            }
+        )
+
+    expected_qualification_keys = {
+        (task, seed)
+        for task in next(
+            group for group in config["cohort"]["groups"] if group["id"] == "den312d"
+        )["tasks"]
+        for seed in config["cohort"]["solver_seeds"]
+    }
+    assert result["status"] == "ok"
+    assert len(calls) == 2
+    assert calls[0]["job_keys"] == expected_qualification_keys
+    assert calls[0]["cohort_job_keys"] == expected_qualification_keys
+    assert calls[1]["job_keys"] == {(item["task_id"], item["solver_seed"])}
+    assert calls[1]["cohort_job_keys"] == expected_qualification_keys
+
+
+def test_outer_worker_failure_uses_the_ttf_job_schema() -> None:
+    item = {
+        "group_id": "den312d",
+        "task_id": "den312d__random_04__agents_0300",
+        "solver_seed": 16,
+        "controller": "v2_only",
+    }
+    result = _failed_episode_job({"item": item}, "error", "boom")
+    assert result["status"] == "error"
+    assert result["error"] == "boom"
+    assert result["state_count"] == 0
+    assert result["outcome_count"] == 0
 
 
 def test_platforms_are_diagnostic_not_a_promotion_gate() -> None:

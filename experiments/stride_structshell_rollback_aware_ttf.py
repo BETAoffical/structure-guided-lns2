@@ -19,7 +19,6 @@ from experiments.repair_collection import (
 )
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.stride_augcontrol_evaluation import _dataset_tasks
-from experiments.stride_bounded_native_retry_continuation import _failed_job
 from experiments.stride_failure_informed_rescue_continuation import _decision_rows
 from experiments.stride_hybridstructpool_routed_confirmation import (
     _bounded_paired_comparison,
@@ -433,10 +432,15 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
     stage = str(job["stage"])
     item = dict(job["item"])
     group = _group(config, str(item["group_id"]))
+    # Each controller collection must be qualified against the complete frozen
+    # map cohort, not just the one timed stage/item.  A timed key may already be
+    # feasible at reset; that is a valid zero-repair success, but a one-key
+    # qualification would incorrectly reject it for containing no repairable
+    # state before the timed episode can write its manifest.
     keys = {
-        (key[1], key[2])
-        for key in (screen_keys(config) if stage == "screen" else extension_keys(config))
-        if key[0] == str(group["id"])
+        (str(task), int(seed))
+        for task in group["tasks"]
+        for seed in config["cohort"]["solver_seeds"]
     }
     collection = _controller_dir(output, stage, item)
     kwargs = _controller_kwargs(root, config, str(item["controller"]))
@@ -481,6 +485,21 @@ def _episode_job(job: dict[str, Any]) -> dict[str, Any]:
     return {
         **item,
         "status": status if status in {"error", "timeout"} else "ok",
+    }
+
+
+def _failed_episode_job(
+    job: dict[str, Any], status: str, message: str
+) -> dict[str, Any]:
+    """Serialize an outer worker failure without assuming another runner's job schema."""
+
+    return {
+        **dict(job["item"]),
+        "status": status,
+        "manifest_status": status,
+        "error": message,
+        "state_count": 0,
+        "outcome_count": 0,
     }
 
 
@@ -618,7 +637,7 @@ def _collect_stage(
             output_root=stage_output,
             run_fingerprint=str(prepared.base_status["run_fingerprint"]),
             timeout_seconds=300.0,
-            failure_result=_failed_job,
+            failure_result=_failed_episode_job,
             stop_on_failure=True,
         )
         failures = [row for row in results if row.get("status") in {"error", "timeout"}]
