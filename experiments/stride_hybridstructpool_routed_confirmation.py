@@ -147,6 +147,49 @@ _IDENTITIES = {
             "old_formal_episode_count": 0,
         },
     },
+    "lns2.stride.hybridstructpool_routed_confirmation_config.v6": {
+        "experiment_id": "stride-structshell-v2-official-bounded-confirmation-v3",
+        "pre_registration_parent_commit": "4d44225",
+        "episode_process_timeout_seconds": 240.0,
+        "outer_job_timeout_seconds": 300.0,
+        "wall_time_budget_seconds": 180.0,
+        "environment_time_limit_seconds": 180.0,
+        "stopping_rule": "wall-clock",
+        "scientific_status": "preregistered_result_blind_paired_bounded_ttf_confirmation",
+        "status_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_status.v3",
+        "report_schema": "lns2.stride.structshell_v2_official_bounded_confirmation_report.v3",
+        "controllers": CONTROLLERS,
+        "solver_seeds": (13, 14, 15),
+        "comparison": {
+            "primary_baseline": "v2_only",
+            "secondary_baseline": "official_adaptive",
+            "quality_anchor": "v2_only",
+            "challenger": "structshell_only",
+            "execution_order": "rotating_strict_three_controller_serial",
+            "paired_solver_seed_required": True,
+            "workers_for_timed_episodes": 1,
+            "workers_for_qualification": 16,
+        },
+        "cohort_repair": {
+            "predecessor_experiment_id": "stride-structshell-v2-official-bounded-confirmation-v2",
+            "predecessor_run_fingerprint": "dd793fb94255bd6f1adaba3f3441a0a90fe591ea02ed61e02a2774796aa11e90",
+            "replaced_group_ids": [
+                "random-32-32-10",
+                "warehouse-20-40-10-2-2-congestion",
+            ],
+            "replacement_group_ids": [
+                "random-32-32-20-high-load",
+                "warehouse-10-20-10-2-1-congestion",
+            ],
+            "selection_basis": "registered_metadata_smaller_denser_topology_and_higher_agent_load",
+            "controller_outcomes_consulted": False,
+            "fresh_solver_seeds_required": True,
+            "old_formal_episode_count": 0,
+            "repair_round": 2,
+            "maximum_repair_rounds": 2,
+            "final_replacement_attempt": True,
+        },
+    },
 }
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "confirmation_report.json"
@@ -341,6 +384,7 @@ def _runtime_config_path(
         "lns2.stride.hybridstructpool_routed_confirmation_config.v3",
         "lns2.stride.hybridstructpool_routed_confirmation_config.v4",
         "lns2.stride.hybridstructpool_routed_confirmation_config.v5",
+        "lns2.stride.hybridstructpool_routed_confirmation_config.v6",
     }:
         return source
     payload = _read_json(source)

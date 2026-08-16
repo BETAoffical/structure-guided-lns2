@@ -24,6 +24,9 @@ BOUNDED_CONFIG = (
 BOUNDED_CONFIG_V2 = (
     ROOT / "configs" / "stride_structshell_v2_official_bounded_confirmation_v2.json"
 )
+BOUNDED_CONFIG_V3 = (
+    ROOT / "configs" / "stride_structshell_v2_official_bounded_confirmation_v3.json"
+)
 
 
 def test_confirmation_config_is_map_disjoint_and_complete() -> None:
@@ -152,6 +155,32 @@ def test_bounded_confirmation_v2_replaces_only_the_ineligible_warehouse_group() 
     assert warehouse["family"] == "warehouse"
     assert all("opposite_exchange" in task for task in warehouse["tasks"])
     assert all("agents_0600" in task for task in warehouse["tasks"])
+    assert len(schedule(replacement)) == 180
+
+
+def test_bounded_confirmation_v3_is_the_final_metadata_only_cohort_repair() -> None:
+    _path, _root, predecessor = load_config(BOUNDED_CONFIG_V2)
+    _path, _root, replacement = load_config(BOUNDED_CONFIG_V3)
+    repair = replacement["cohort_repair"]
+    assert replacement["cohort"]["solver_seeds"] == [13, 14, 15]
+    assert repair["controller_outcomes_consulted"] is False
+    assert repair["old_formal_episode_count"] == 0
+    assert repair["repair_round"] == repair["maximum_repair_rounds"] == 2
+    assert repair["final_replacement_attempt"] is True
+    old_groups = {group["id"]: group for group in predecessor["cohort"]["groups"]}
+    new_groups = {group["id"]: group for group in replacement["cohort"]["groups"]}
+    old_groups.pop("random-32-32-10")
+    old_groups.pop("warehouse-20-40-10-2-2-congestion")
+    random_group = new_groups.pop("random-32-32-20-high-load")
+    warehouse_group = new_groups.pop("warehouse-10-20-10-2-1-congestion")
+    assert new_groups == old_groups
+    assert random_group["family"] == "random"
+    assert all("random-32-32-20" in task for task in random_group["tasks"])
+    assert all("agents_0400" in task for task in random_group["tasks"])
+    assert warehouse_group["family"] == "warehouse"
+    assert all("warehouse-10-20-10-2-1" in task for task in warehouse_group["tasks"])
+    assert all("opposite_exchange" in task for task in warehouse_group["tasks"])
+    assert all("agents_0600" in task for task in warehouse_group["tasks"])
     assert len(schedule(replacement)) == 180
 
 
