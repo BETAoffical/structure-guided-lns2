@@ -6,6 +6,7 @@ from pathlib import Path
 from experiments.stride_hybridstructpool_routed_confirmation import (
     CONTROLLERS,
     _bounded_paired_comparison,
+    _bounded_summary,
     _bootstrap_improvement,
     _controller_kwargs,
     _qualification_controller_kwargs,
@@ -282,3 +283,46 @@ def test_bounded_comparison_keeps_right_censored_pairs() -> None:
     )
     assert bootstrap["pair_count"] == 4
     assert bootstrap["metric"] == "capped_wall_time_to_feasible"
+
+
+def test_bounded_metrics_mask_undefined_initial_feasible_normalized_auc() -> None:
+    rows = [
+        {
+            "status": "ok",
+            "summary": {
+                "success": True,
+                "stop_reason": "success",
+                "capped_wall_time_to_feasible": 0.2,
+                "wall_time_to_feasible": 0.2,
+                "normalized_wall_clock_conflict_auc": None,
+                "initial_conflicts": 0,
+                "repair_iterations": 0,
+                "invalid_action_count": 0,
+                "fingerprint_mismatch_count": 0,
+            },
+        },
+        {
+            "status": "ok",
+            "summary": {
+                "success": True,
+                "stop_reason": "success",
+                "capped_wall_time_to_feasible": 2.0,
+                "wall_time_to_feasible": 2.0,
+                "normalized_wall_clock_conflict_auc": 0.25,
+                "initial_conflicts": 10,
+                "repair_iterations": 4,
+                "invalid_action_count": 0,
+                "fingerprint_mismatch_count": 0,
+            },
+        },
+    ]
+    summary = _bounded_summary(rows)
+    assert summary["mean_normalized_wall_clock_conflict_auc"] == 0.25
+    assert summary["normalized_wall_auc_observed_count"] == 1
+    assert summary["normalized_wall_auc_undefined_initial_feasible_count"] == 1
+    keys = [("map", "initial-feasible", 1), ("map", "repairable", 1)]
+    baseline = {key: row for key, row in zip(keys, rows)}
+    challenger = {key: row for key, row in zip(keys, rows)}
+    comparison = _bounded_paired_comparison(baseline, challenger, keys)
+    assert comparison["normalized_wall_auc_pair_count"] == 1
+    assert comparison["mean_normalized_wall_auc_delta"] == 0.0

@@ -716,6 +716,11 @@ def _bounded_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     successes = [row for row in episodes if row.get("success") is True]
     capped = [float(row["capped_wall_time_to_feasible"]) for row in episodes]
+    normalized_wall_auc = [
+        float(value)
+        for row in episodes
+        if (value := row.get("normalized_wall_clock_conflict_auc")) is not None
+    ]
     result.update(
         {
             "success_rate": len(successes) / len(episodes) if episodes else 0.0,
@@ -733,12 +738,13 @@ def _bounded_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 else None
             ),
             "mean_normalized_wall_clock_conflict_auc": (
-                statistics.fmean(
-                    float(row["normalized_wall_clock_conflict_auc"])
-                    for row in episodes
-                )
-                if episodes
+                statistics.fmean(normalized_wall_auc)
+                if normalized_wall_auc
                 else None
+            ),
+            "normalized_wall_auc_observed_count": len(normalized_wall_auc),
+            "normalized_wall_auc_undefined_initial_feasible_count": (
+                len(episodes) - len(normalized_wall_auc)
             ),
         }
     )
@@ -780,6 +786,15 @@ def _bounded_paired_comparison(
         for left, right in pairs
         if left.get("success") is True and right.get("success") is True
     ]
+    normalized_wall_auc_pairs = [
+        (
+            float(left["normalized_wall_clock_conflict_auc"]),
+            float(right["normalized_wall_clock_conflict_auc"]),
+        )
+        for left, right in pairs
+        if left.get("normalized_wall_clock_conflict_auc") is not None
+        and right.get("normalized_wall_clock_conflict_auc") is not None
+    ]
     return {
         "valid": True,
         "paired_episode_count": len(pairs),
@@ -812,13 +827,12 @@ def _bounded_paired_comparison(
         ),
         "mean_normalized_wall_auc_delta": (
             statistics.fmean(
-                float(right["normalized_wall_clock_conflict_auc"])
-                - float(left["normalized_wall_clock_conflict_auc"])
-                for left, right in pairs
+                right - left for left, right in normalized_wall_auc_pairs
             )
-            if pairs
+            if normalized_wall_auc_pairs
             else None
         ),
+        "normalized_wall_auc_pair_count": len(normalized_wall_auc_pairs),
     }
 
 
@@ -1015,6 +1029,12 @@ def analyze(
         if value.get("valid")
     }
     if bounded:
+        challenger_normalized_auc = summaries["structshell_only"][
+            "mean_normalized_wall_clock_conflict_auc"
+        ]
+        v2_normalized_auc = summaries["v2_only"][
+            "mean_normalized_wall_clock_conflict_auc"
+        ]
         performance = {
             "success_noninferior_to_v2": summaries["structshell_only"]["success_count"]
             >= summaries["v2_only"]["success_count"],
@@ -1032,13 +1052,10 @@ def analyze(
             == len(per_map)
             and max(map_regressions.values(), default=math.inf)
             <= float(gates["maximum_map_restricted_ttf_regression"]),
-            "normalized_wall_auc_noninferior_to_v2": float(
-                summaries["structshell_only"][
-                    "mean_normalized_wall_clock_conflict_auc"
-                ]
-            )
-            <= float(
-                summaries["v2_only"]["mean_normalized_wall_clock_conflict_auc"]
+            "normalized_wall_auc_noninferior_to_v2": (
+                challenger_normalized_auc is not None
+                and v2_normalized_auc is not None
+                and float(challenger_normalized_auc) <= float(v2_normalized_auc)
             ),
         }
     else:
