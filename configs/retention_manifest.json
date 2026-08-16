@@ -3017,6 +3017,31 @@
       "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf_analysis_recovery.py",
       "role": "reproducibility",
       "contract": "Verify unseeded official PP transitions can be passively audited while tampered observed fingerprints are rejected."
+    },
+    {
+      "path": "lns2_selector/runtime/overall_rollback_selection.py",
+      "role": "reproducibility",
+      "purpose": "Bound all pure StructShell exact rollbacks per repair fingerprint before switching to freshly generated V2-only decisions."
+    },
+    {
+      "path": "tests/runtime/test_overall_rollback_selection.py",
+      "role": "reproducibility",
+      "contract": "Freeze the three-rollback state budget, persistent StructShell suppression and fresh V2 fallback semantics."
+    },
+    {
+      "path": "experiments/stride_structshell_overall_rollback_screen.py",
+      "role": "reproducibility",
+      "purpose": "Run the same-key four-arm bounded TTF screen for the state-bounded StructShell rollback policy."
+    },
+    {
+      "path": "scripts/run_stride_structshell_overall_rollback_screen.py",
+      "role": "reproducibility",
+      "purpose": "Expose dry-run, collection and analysis commands for the registered state-bounded rollback screen."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_overall_rollback_screen.py",
+      "role": "reproducibility",
+      "contract": "Freeze the ten paired keys, four-arm serial rotation, state-guard trace audit and no-promotion screen gates."
     }
   ]
 }

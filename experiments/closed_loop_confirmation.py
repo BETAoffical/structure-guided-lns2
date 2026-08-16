@@ -111,6 +111,7 @@ from lns2_selector.runtime.hybridstructpool import (
     hybridstructpool_high_stress_gate,
 )
 from lns2_selector.runtime.hybridstructpool_routed import (
+    OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
     ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
     ROUTED_HYBRIDSTRUCTPOOL_ID,
     generate_routed_hybridstructpool_runtime_candidates,
@@ -118,7 +119,12 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     validate_any_hybridstructpool_augmentation,
 )
 from lns2_selector.runtime.rollback_aware_selection import (
+    ROLLBACK_AWARE_SELECTION_ID,
     ExactRollbackCandidateGuard,
+)
+from lns2_selector.runtime.overall_rollback_selection import (
+    OVERALL_ROLLBACK_SELECTION_ID,
+    ExactRollbackStateGuard,
 )
 from lns2_selector.runtime.signature_scoped_rescue import (
     SignatureScopedRescueTracker,
@@ -1314,14 +1320,39 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             exact_rollback_guard_config = dict(
                 episode_hybrid_runtime.get("exact_rollback_guard") or {}
             )
-            exact_rollback_guard = (
-                ExactRollbackCandidateGuard(
+            exact_rollback_guard_id = str(
+                exact_rollback_guard_config.get("guard_id") or ""
+            )
+            if exact_rollback_guard_id == ROLLBACK_AWARE_SELECTION_ID:
+                exact_rollback_guard = ExactRollbackCandidateGuard(
                     exact_rollback_limit=int(
                         exact_rollback_guard_config["exact_rollback_limit"]
                     )
                 )
-                if exact_rollback_guard_config
-                else None
+            elif exact_rollback_guard_id == OVERALL_ROLLBACK_SELECTION_ID:
+                exact_rollback_guard = ExactRollbackStateGuard(
+                    exact_rollback_limit=int(
+                        exact_rollback_guard_config["exact_rollback_limit"]
+                    )
+                )
+            elif exact_rollback_guard_config:
+                raise ValueError("unsupported exact rollback guard identity")
+            else:
+                exact_rollback_guard = None
+            state_bounded_rollback_guard = isinstance(
+                exact_rollback_guard, ExactRollbackStateGuard
+            )
+            rollback_guard_trace_key = (
+                "exact_rollback_state_guard"
+                if state_bounded_rollback_guard
+                else "exact_rollback_candidate_guard"
+            )
+            repair_state_cache_mode = exact_rollback_guard_config.get(
+                "repair_state_cache"
+            )
+            repair_state_cache_enabled = bool(
+                repair_state_cache_mode is True
+                or repair_state_cache_mode == "pre_budget_only"
             )
             if exact_rollback_guard is not None and (
                 native_retry_tracker is not None
@@ -1758,6 +1789,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         int(solver_seed),
                     )
                     stateful_controller = v3_s3_state
+                    state_bounded_v2_fallback = bool(
+                        state_bounded_rollback_guard
+                        and exact_rollback_guard is not None
+                        and exact_rollback_guard.requires_fresh_v2_fallback(
+                            before_repair_hash
+                        )
+                    )
                     stateful_cache_hit = bool(
                         stateful_controller is not None
                         and stateful_cache is not None
@@ -1765,7 +1803,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     )
                     rollback_cache_hit = bool(
                         exact_rollback_guard is not None
-                        and exact_rollback_guard_config.get("repair_state_cache") is True
+                        and repair_state_cache_enabled
                         and exact_rollback_guard.cache_reuse_allowed
                         and rollback_selection_cache is not None
                         and rollback_selection_cache.get("key") == cache_key
@@ -1989,19 +2027,40 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                         hybridstructpool_gate_result = None
                         if hybridstructpool_runtime:
-                            hybridstructpool_gate_result = (
-                                routed_hybridstructpool_high_stress_gate(
-                                    state, hybridstructpool_runtime
-                                )
-                                if str(hybridstructpool_runtime.get("pool_id"))
-                                in {
-                                    ROUTED_HYBRIDSTRUCTPOOL_ID,
-                                    ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                            if state_bounded_v2_fallback:
+                                hybridstructpool_gate_result = {
+                                    "passed": False,
+                                    "reason": "state_exact_rollback_budget_exhausted",
+                                    "seconds": 0.0,
+                                    "evaluated": False,
+                                    "gate_id": str(
+                                        hybridstructpool_runtime["activation_gate"][
+                                            "gate_id"
+                                        ]
+                                    ),
+                                    "agent_count": len(state.get("agents", [])),
+                                    "conflict_pair_count": int(
+                                        state["num_of_colliding_pairs"]
+                                    ),
+                                    "active_conflict_agent_count": 0,
+                                    "largest_conflict_component_size": 0,
+                                    "pre_guard_passed": None,
                                 }
-                                else hybridstructpool_high_stress_gate(
-                                    state, hybridstructpool_runtime
+                            else:
+                                hybridstructpool_gate_result = (
+                                    routed_hybridstructpool_high_stress_gate(
+                                        state, hybridstructpool_runtime
+                                    )
+                                    if str(hybridstructpool_runtime.get("pool_id"))
+                                    in {
+                                        ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                        ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                        OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    }
+                                    else hybridstructpool_high_stress_gate(
+                                        state, hybridstructpool_runtime
+                                    )
                                 )
-                            )
                         hybridstructpool_gate_passed = bool(
                             hybridstructpool_gate_result
                             and hybridstructpool_gate_result["passed"]
@@ -2165,7 +2224,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             proposal_metrics.update(
                                 {
                                     "hybridstructpool_enabled": True,
-                                    "hybridstructpool_gate_evaluated": True,
+                                    "hybridstructpool_gate_evaluated": bool(
+                                        hybridstructpool_gate_result.get(
+                                            "evaluated", True
+                                        )
+                                    ),
                                     "hybridstructpool_gate_passed": (
                                         hybridstructpool_gate_passed
                                     ),
@@ -2206,6 +2269,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     ),
                                 }
                             )
+                            if state_bounded_rollback_guard:
+                                proposal_metrics[
+                                    "hybridstructpool_state_bounded_v2_fallback"
+                                ] = state_bounded_v2_fallback
                             if hybridstructpool_gate_passed:
                                 if topology_state_analysis is None:
                                     raise ClosedLoopExecutionError(
@@ -2230,6 +2297,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 if str(hybridstructpool_runtime.get("pool_id")) in {
                                     ROUTED_HYBRIDSTRUCTPOOL_ID,
                                     ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
+                                    OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
                                 }:
                                     hybrid_result = (
                                         generate_routed_hybridstructpool_runtime_candidates(
@@ -2597,7 +2665,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "proposal_metrics": dict(proposal_metrics),
                                 "generation_decision_index": decision_index,
                             }
-                        if exact_rollback_guard is not None:
+                        if (
+                            exact_rollback_guard is not None
+                            and not state_bounded_v2_fallback
+                        ):
                             rollback_selection_cache = {
                                 "key": cache_key,
                                 "candidates": candidates,
@@ -2917,23 +2988,57 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 candidates[base_selected_local_index]["candidate_id"],
                             )
                         )
-                        (
-                            selected_local_index,
-                            rollback_guard_selection,
-                        ) = exact_rollback_guard.select(
-                            repair_fingerprint=before_repair_hash,
-                            candidates=candidates,
-                            candidate_rows=candidate_rows,
-                            scores=scores,
-                            v2_anchor_candidate_id=v2_anchor_candidate_id,
-                            bannable_candidate_ids=(
-                                rollback_guard_bannable_candidate_ids
-                            ),
-                        )
+                        if state_bounded_v2_fallback:
+                            if rollback_guard_bannable_candidate_ids:
+                                raise ClosedLoopExecutionError(
+                                    "state_bounded_fallback_contains_structshell",
+                                    "fresh V2 fallback unexpectedly contains a pure StructShell candidate",
+                                )
+                            selected_local_index = base_selected_local_index
+                            rollback_guard_selection = exact_rollback_guard.snapshot(
+                                before_repair_hash
+                            )
+                            rollback_guard_selection.update(
+                                {
+                                    "base_selected_candidate_id": str(
+                                        candidates[base_selected_local_index][
+                                            "candidate_id"
+                                        ]
+                                    ),
+                                    "selected_candidate_id": str(
+                                        candidates[selected_local_index]["candidate_id"]
+                                    ),
+                                    "selected_candidate_is_pure_structshell": False,
+                                    "pure_structshell_candidate_count": 0,
+                                    "v2_anchor_candidate_id": v2_anchor_candidate_id,
+                                    "selection_phase": "fresh_v2_only",
+                                    "selection_overridden": False,
+                                    "newly_suppressed": False,
+                                }
+                            )
+                        else:
+                            (
+                                selected_local_index,
+                                rollback_guard_selection,
+                            ) = exact_rollback_guard.select(
+                                repair_fingerprint=before_repair_hash,
+                                candidates=candidates,
+                                candidate_rows=candidate_rows,
+                                scores=scores,
+                                v2_anchor_candidate_id=v2_anchor_candidate_id,
+                                bannable_candidate_ids=(
+                                    rollback_guard_bannable_candidate_ids
+                                ),
+                            )
+                            if selected_local_index is None:
+                                raise ClosedLoopExecutionError(
+                                    "state_bounded_fallback_not_fresh",
+                                    "state-bounded guard requested V2 fallback after Hybrid generation",
+                                )
                         rollback_guard_selected_candidate_id = str(
                             candidates[selected_local_index]["candidate_id"]
                         )
-                        controller["exact_rollback_candidate_guard"] = {
+                        controller[rollback_guard_trace_key] = {
                             "selection": rollback_guard_selection,
                             "observation": None,
                             "selection_seconds": (
@@ -2942,7 +3047,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "observation_seconds": None,
                         }
                         controller_totals["exact_rollback_guard_seconds"] += float(
-                            controller["exact_rollback_candidate_guard"][
+                            controller[rollback_guard_trace_key][
                                 "selection_seconds"
                             ]
                         )
@@ -3938,13 +4043,22 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         ),
                     )
                     guard_record = dict(
-                        controller.get("exact_rollback_candidate_guard") or {}
+                        controller.get(rollback_guard_trace_key) or {}
                     )
                     guard_record["observation"] = rollback_guard_observation
                     guard_record["observation_seconds"] = (
                         time.perf_counter() - rollback_guard_observe_started
                     )
-                    controller["exact_rollback_candidate_guard"] = guard_record
+                    controller[rollback_guard_trace_key] = guard_record
+                    if (
+                        state_bounded_rollback_guard
+                        and bool(
+                            rollback_guard_observation.get(
+                                "structshell_suppressed", False
+                            )
+                        )
+                    ):
+                        rollback_selection_cache = None
                     controller_totals["exact_rollback_guard_seconds"] += float(
                         guard_record["observation_seconds"]
                     )
@@ -3960,6 +4074,16 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         "exact_rollback_guard_new_ban_count"
                     ] += int(bool(rollback_guard_observation["newly_banned"]))
+                    if state_bounded_rollback_guard:
+                        controller_totals[
+                            "exact_rollback_guard_new_state_suppression_count"
+                        ] += int(
+                            bool(
+                                rollback_guard_observation.get(
+                                    "newly_suppressed", False
+                                )
+                            )
+                        )
                 if v3_s3_state is not None:
                     v3_s3_observe_started = time.perf_counter()
                     repair_outcome = classify_repair_outcome(

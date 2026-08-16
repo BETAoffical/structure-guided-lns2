@@ -1,0 +1,130 @@
+{
+  "schema": "lns2.stride.structshell_overall_rollback_screen_config.v1",
+  "scientific_status": "preregistered_seen_key_overall_rollback_mechanism_cost_screen",
+  "experiment_id": "stride-structshell-overall-rollback-screen-v1",
+  "pre_registration_parent_commit": "1d16a15489c005cc6b816db5211cac8746628135",
+  "controllers": [
+    "official_adaptive",
+    "v2_only",
+    "structshell_routed_v1",
+    "structshell_rollback_overall_v3"
+  ],
+  "comparison": {
+    "primary_baseline": "v2_only",
+    "mechanism_baseline": "structshell_routed_v1",
+    "external_baseline": "official_adaptive",
+    "challenger": "structshell_rollback_overall_v3",
+    "execution_order": "rotating_strict_four_controller_serial",
+    "paired_solver_seed_required": true,
+    "workers_for_timed_episodes": 1,
+    "workers_for_qualification": 16
+  },
+  "runtime": {
+    "stopping_rule": "wall-clock",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "wall_time_budget_seconds": 180.0,
+    "environment_time_limit_seconds": 180.0,
+    "episode_process_timeout_seconds": 240.0,
+    "outer_job_timeout_seconds": 300.0,
+    "native_pp_order_only": true,
+    "maximum_pp_calls_per_decision": 1,
+    "runtime_retry_or_rescue": false
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "no_guard_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-hybridstructpool-routed-v1",
+    "runtime_id": "stride-hybridstructpool-routed-runtime-v1",
+    "full_union_required": false,
+    "full_union_audit_preserved": true,
+    "runtime_filter_id": "source_route_v1",
+    "structural_sizes": [8, 16, 24, 32],
+    "runtime_structural_family_sizes": {
+      "bottleneck_crossing": [8, 16, 24, 32],
+      "conflict_component": [8, 16, 24, 32],
+      "path_overlap": [8, 16, 24, 32],
+      "spatiotemporal_hotspot": [8, 16, 24, 32],
+      "topology_boundary_articulation": [8, 16, 24, 32],
+      "topology_boundary_low_degree": [8, 16, 24, 32]
+    },
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": true,
+    "source_mode": "routed_structshell",
+    "activation_gate": {
+      "gate_id": "stride-highstress-conflict-structure-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    }
+  },
+  "challenger_augmentation": {
+    "enabled": true,
+    "pool_id": "stride-hybridstructpool-routed-v3",
+    "runtime_id": "stride-hybridstructpool-routed-runtime-v3",
+    "full_union_required": false,
+    "full_union_audit_preserved": true,
+    "runtime_filter_id": "source_route_state_rollback_guard_v1",
+    "structural_sizes": [8, 16, 24, 32],
+    "runtime_structural_family_sizes": {
+      "bottleneck_crossing": [8, 16, 24, 32],
+      "conflict_component": [8, 16, 24, 32],
+      "path_overlap": [8, 16, 24, 32],
+      "spatiotemporal_hotspot": [8, 16, 24, 32],
+      "topology_boundary_articulation": [8, 16, 24, 32],
+      "topology_boundary_low_degree": [8, 16, 24, 32]
+    },
+    "maximum_causal_candidates": 12,
+    "maximum_causal_neighborhood_size": 64,
+    "causal_temporal_window": 2,
+    "maximum_causal_jaccard_similarity": 0.9,
+    "maximum_total_candidates": 64,
+    "static_grid_cache": true,
+    "source_mode": "routed_structshell",
+    "activation_gate": {
+      "gate_id": "stride-highstress-conflict-structure-v1",
+      "minimum_conflict_pair_count": 16,
+      "any_of": {
+        "minimum_active_conflict_agent_count": 32,
+        "minimum_largest_conflict_component_size": 16
+      }
+    },
+    "exact_rollback_guard": {
+      "guard_id": "stride-exact-rollback-state-guard-v1",
+      "exact_rollback_limit": 3,
+      "candidate_scope": "all_pure_structshell_per_repair_fingerprint",
+      "fallback": "fresh_v2_only",
+      "repair_state_cache": "pre_budget_only",
+      "state_history": "persistent_per_repair_fingerprint",
+      "maximum_pp_calls_per_decision": 1
+    }
+  },
+  "cohort": {
+    "role": "seen_key_mechanism_and_cost_screen_no_promotion_claim",
+    "source_config_input": "rollback_aware_ttf_source_config",
+    "source_stage": "screen",
+    "solver_seed": 16,
+    "task_selection": "first_registered_task_per_group",
+    "map_count": 10,
+    "paired_key_count": 10,
+    "episode_count_per_controller": 10,
+    "episode_count": 40,
+    "result_based_filtering": false
+  },
+  "inputs": {
+    "rollback_aware_ttf_source_config": {
+      "path": "configs/stride_structshell_rollback_aware_ttf_v1.json",
+      "sha256": "f15099c14e57a78834c413c8222429ac5da2e2f5f50b87db786891ba091009b0"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  }
+}

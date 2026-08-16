@@ -65,6 +65,7 @@ from lns2_selector.runtime.online_selection import (
     validate_repair_seed_policy,
 )
 from lns2_selector.runtime.hybridstructpool_routed import (
+    overall_rollback_routed_hybridstructpool_augmentation,
     rollback_aware_routed_hybridstructpool_augmentation,
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
@@ -2712,6 +2713,10 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             ],
             2,
         )
+        self.assertNotIn(
+            "exact_rollback_guard_new_state_suppression_count",
+            result["summary"]["controller_totals"],
+        )
         self.assertEqual(
             result["summary"]["controller_totals"]["repair_state_cache_hit_count"],
             6,
@@ -2730,6 +2735,9 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         )
         for index, event in enumerate(transitions):
             proposal = event["controller"]["proposal"]
+            self.assertNotIn(
+                "hybridstructpool_state_bounded_v2_fallback", proposal
+            )
             if index == 0:
                 self.assertFalse(proposal["repair_state_cache_hit"])
             else:
@@ -2781,6 +2789,109 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             ],
             2,
         )
+
+    def test_state_bounded_guard_stops_structshell_scan_and_runs_fresh_v2(self) -> None:
+        environment = RollbackPlatformEnvironment()
+        with tempfile.TemporaryDirectory() as directory:
+            job = rollback_worker_job(directory, max_decisions=6)
+            job["run_fingerprint"] = "state-bounded-rollback"
+            job["proposal"]["hybridstructpool"] = (
+                overall_rollback_routed_hybridstructpool_augmentation()
+            )
+            result, events, candidates, _model = run_rollback_worker_fixture(
+                job, environment
+            )
+
+        self.assertEqual(result["status"], "ok", result)
+        self.assertTrue(result["summary"]["success"])
+        self.assertEqual(environment.step_calls, 4)
+        self.assertEqual(candidates.generation_calls, 2)
+        transitions = [event for event in events if event["event"] == "transition"]
+        self.assertEqual(
+            [event["controller"]["selected_candidate_id"] for event in transitions],
+            ["struct-b", "struct-b", "struct-b", "v2-anchor"],
+        )
+        observations = [
+            event["controller"]["exact_rollback_state_guard"]["observation"]
+            for event in transitions
+        ]
+        self.assertEqual(
+            [row["state_exact_rollbacks"] for row in observations],
+            [1, 2, 3, 3],
+        )
+        self.assertTrue(observations[2]["newly_suppressed"])
+        self.assertTrue(observations[3]["structshell_suppressed"])
+        fallback = transitions[3]["controller"]
+        self.assertEqual(
+            fallback["exact_rollback_state_guard"]["selection"]["selection_phase"],
+            "fresh_v2_only",
+        )
+        self.assertFalse(fallback["proposal"]["repair_state_cache_hit"])
+        self.assertFalse(fallback["proposal"]["hybridstructpool_gate_evaluated"])
+        self.assertEqual(
+            fallback["proposal"]["hybridstructpool_gate_reason"],
+            "state_exact_rollback_budget_exhausted",
+        )
+        self.assertTrue(
+            fallback["proposal"]["hybridstructpool_state_bounded_v2_fallback"]
+        )
+        self.assertEqual(
+            result["summary"]["controller_totals"][
+                "exact_rollback_guard_new_state_suppression_count"
+            ],
+            1,
+        )
+        self.assertEqual(
+            result["summary"]["controller_totals"][
+                "exact_rollback_guard_new_ban_count"
+            ],
+            0,
+        )
+
+    def test_state_bounded_v2_fallback_regenerates_after_each_v2_rollback(self) -> None:
+        environment = RollbackPlatformEnvironment(solve_anchor=False)
+        with tempfile.TemporaryDirectory() as directory:
+            job = rollback_worker_job(directory, max_decisions=6)
+            job["run_fingerprint"] = "state-bounded-v2-regeneration"
+            job["proposal"]["hybridstructpool"] = (
+                overall_rollback_routed_hybridstructpool_augmentation()
+            )
+            result, events, candidates, _model = run_rollback_worker_fixture(
+                job, environment
+            )
+
+        self.assertEqual(result["status"], "ok", result)
+        self.assertFalse(result["summary"]["success"])
+        self.assertEqual(environment.step_calls, 6)
+        self.assertEqual(candidates.generation_calls, 4)
+        transitions = [event for event in events if event["event"] == "transition"]
+        self.assertEqual(
+            [event["controller"]["selected_candidate_id"] for event in transitions],
+            ["struct-b", "struct-b", "struct-b", "v2-anchor", "v2-anchor", "v2-anchor"],
+        )
+        self.assertEqual(
+            [
+                event["controller"]["proposal"]["repair_state_cache_hit"]
+                for event in transitions
+            ],
+            [False, True, True, False, False, False],
+        )
+        for event in transitions[3:]:
+            controller = event["controller"]
+            self.assertEqual(
+                controller["exact_rollback_state_guard"]["selection"][
+                    "selection_phase"
+                ],
+                "fresh_v2_only",
+            )
+            self.assertTrue(
+                controller["exact_rollback_state_guard"]["observation"][
+                    "structshell_suppressed"
+                ]
+            )
+            self.assertFalse(
+                controller["proposal"]["hybridstructpool_gate_evaluated"]
+            )
 
     def test_rollback_aware_hybrid_rejects_repair_overlays(self) -> None:
         source_state = make_state(1)

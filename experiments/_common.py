@@ -56,6 +56,7 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/hybridstructpool_routed.py",
     "lns2_selector/runtime/metrics.py",
     "lns2_selector/runtime/online_selection.py",
+    "lns2_selector/runtime/overall_rollback_selection.py",
     "lns2_selector/runtime/portable_scalar.py",
     "lns2_selector/runtime/rollback_aware_selection.py",
     "lns2_selector/runtime/repair_outcomes.py",
