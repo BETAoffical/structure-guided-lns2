@@ -2987,6 +2987,21 @@
       "path": "tests/evaluation/test_stride_structshell_rollback_aware_platform_replay.py",
       "role": "reproducibility",
       "contract": "Freeze the two known-platform keys, strict serial arm rotation, bounded timing identity, repair-fingerprint escape and post-escape platform gates."
+    },
+    {
+      "path": "experiments/stride_structshell_rollback_aware_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Run and analyze the atomic two-stage official, V2 and rollback-aware StructShell bounded TTF comparison."
+    },
+    {
+      "path": "scripts/run_stride_structshell_rollback_aware_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Expose resumable screen, extension and analysis commands for the rollback-aware bounded TTF protocol."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 10+50 key partition, three-arm serial rotation, controller identity, qualification reuse and map-cluster bootstrap."
     }
   ]
 }
