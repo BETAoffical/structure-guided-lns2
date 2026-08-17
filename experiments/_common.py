@@ -61,6 +61,7 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/rollback_aware_selection.py",
     "lns2_selector/runtime/repair_outcomes.py",
     "lns2_selector/runtime/slotpool_selection.py",
+    "lns2_selector/runtime/structshell_dual16.py",
     "lns2_selector/runtime/structshell_single_family.py",
     "lns2_selector/runtime/topology_candidates.py",
     "lns2_selector/solver/native.py",

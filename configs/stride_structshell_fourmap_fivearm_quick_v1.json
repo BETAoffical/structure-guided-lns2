@@ -1,0 +1,174 @@
+{
+  "schema": "lns2.stride.structshell_fourmap_fivearm_quick_config.v1",
+  "experiment_id": "stride-structshell-fourmap-fivearm-quick-v1",
+  "scientific_status": "exploratory_single_seed_crossmap_runtime_triage_not_confirmation_or_promotion",
+  "controllers": [
+    "official_adaptive",
+    "v2_only",
+    "component16",
+    "hotspot16",
+    "dual16"
+  ],
+  "controller_contract": {
+    "v2_base": "frozen_v2_full_native_features_optimized_copeland",
+    "single_family_nominal_size": 16,
+    "single_family_maximum_added_candidates": 1,
+    "single_family_profiles": {
+      "component16": "conflict_component",
+      "hotspot16": "hotspot"
+    },
+    "dual16": {
+      "pool_id": "stride-structshell-dual16-v1",
+      "runtime_id": "stride-structshell-dual16-runtime-v1",
+      "source_mode": "structshell_dual16",
+      "runtime_structural_family_sizes": {
+        "conflict_component": [16],
+        "spatiotemporal_hotspot": [16]
+      },
+      "maximum_added_candidates": 2,
+      "maximum_total_candidates": 65
+    },
+    "frozen_copeland": true,
+    "full_v2_pool_retained": true,
+    "no_router_or_new_ranker": true
+  },
+  "runtime": {
+    "stopping_rule": "wall-clock",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "wall_time_budget_seconds": 60.0,
+    "environment_time_limit_seconds": 60.0,
+    "episode_process_timeout_seconds": 75.0,
+    "workers_for_reset_anchor": 1,
+    "workers_for_timed_episodes": 1,
+    "execution_order": "rotating_strict_five_controller_serial",
+    "timing_boundary": "reset_inclusive_ttf"
+  },
+  "cohort": {
+    "solver_seed": 23,
+    "paired_key_count": 4,
+    "episode_count": 20,
+    "selection_basis": "four_exact_preexisting_tasks_no_map_generation_or_outcome_filtering",
+    "groups": [
+      {
+        "id": "maze-32-32-4",
+        "map_id": "maze-32-32-4",
+        "family": "maze",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "movingai_runtime",
+        "manifest": "movingai_manifest",
+        "task_input": "maze_task",
+        "split": "movingai_ood",
+        "task": "maze-32-32-4__random_04__agents_0200"
+      },
+      {
+        "id": "random-32-32-20-high-load",
+        "map_id": "random-32-32-20",
+        "family": "random",
+        "dataset": "build/stride-stage2-movingai-v1",
+        "runtime_config": "high_load_runtime",
+        "manifest": "random_manifest",
+        "task_input": "random_task",
+        "split": "balanced_wall_clock",
+        "task": "random-32-32-20__random_01__agents_0400"
+      },
+      {
+        "id": "room-64-64-16",
+        "map_id": "room-64-64-16",
+        "family": "room",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "movingai_runtime",
+        "manifest": "movingai_manifest",
+        "task_input": "room_task",
+        "split": "movingai_ood",
+        "task": "room-64-64-16__random_04__agents_0600"
+      },
+      {
+        "id": "warehouse-w1020a-opposite-exchange",
+        "map_id": "warehouse-10-20-10-2-1",
+        "family": "warehouse",
+        "dataset": "build/wh-f16-v2-r2/dataset",
+        "runtime_config": "warehouse_runtime",
+        "manifest": "warehouse_manifest",
+        "task_input": "warehouse_task",
+        "split": "balanced_wall_clock",
+        "task": "w1020a__oe__t0233__n0600"
+      }
+    ]
+  },
+  "solver_seed_identity_audit": {
+    "candidate_seed": 23,
+    "selected_solver_seed": 23,
+    "audit_scope": "four_exact_task_ids_controller_episode_paths_and_manifest_rows_only",
+    "global_freshness_scan": false,
+    "outcome_fields_read": false,
+    "exact_task_count": 4,
+    "controller_result_match_count": 0,
+    "completed_before_runner_registration": true
+  },
+  "report_contract": {
+    "content": "per_map_and_overall_success_restricted_ttf_with_runtime_cost_diagnostics",
+    "selection_gate": null,
+    "bootstrap": false,
+    "auc_gate": false,
+    "formal_speed_claim": false,
+    "default_replacement_allowed": false
+  },
+  "explicitly_omitted": [
+    "global_freshness_scan",
+    "map_generation",
+    "q0_geometry_audit",
+    "q1_state_supply_audit",
+    "bootstrap",
+    "auc_gate",
+    "multi_seed_confirmation",
+    "long_form_report"
+  ],
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "inputs": {
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "movingai_runtime": {
+      "path": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+      "sha256": "27c6cc29cc59c1cf00fc29d6220a790d212d7634c139afbdc476c69768e2a936"
+    },
+    "high_load_runtime": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "warehouse_runtime": {
+      "path": "configs/stride_warehouse_fixed16_development_runtime_v2.json",
+      "sha256": "4a7376f428338abedf8a7defb645588b59fdda081f575918ea2a7abb278f673a"
+    },
+    "movingai_manifest": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/manifest.jsonl",
+      "sha256": "cab89325c4ca62c7eefd7a0c5de38e1a700bf8384b618c399eafab876dd05742"
+    },
+    "random_manifest": {
+      "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "efe524b6397642f85964bc47124c348ed8280dd083170e0b33b5c2741573b132"
+    },
+    "warehouse_manifest": {
+      "path": "build/wh-f16-v2-r2/dataset/balanced_wall_clock/manifest.jsonl",
+      "sha256": "59081567b23178bc8d8fc2457e4aa018711a1ec94b54ec9fcf7dfde798f5622e"
+    },
+    "maze_task": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/tasks/maze-32-32-4__random_04__agents_0200.json",
+      "sha256": "c441ca5a2f7e5178bba952d80ec8769c6e123df88d772a1c1293213733c4abd7"
+    },
+    "random_task": {
+      "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/tasks/random-32-32-20__random_01__agents_0400.json",
+      "sha256": "5fc8509b1c2415a88ec021e6a225f84b79b7b027ef98ed3fad6bf1d058999b54"
+    },
+    "room_task": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/tasks/room-64-64-16__random_04__agents_0600.json",
+      "sha256": "0e4a14b9ba0a801f40f932e64d15b2c55bc6e26ee7bbbf50957e31e3d6e3297c"
+    },
+    "warehouse_task": {
+      "path": "build/wh-f16-v2-r2/dataset/balanced_wall_clock/tasks/w1020a__oe__t0233__n0600.json",
+      "sha256": "9770356c056a691dfa4c903d3b1e4821744232fd2c465201b36aa5c45f1949cc"
+    }
+  }
+}

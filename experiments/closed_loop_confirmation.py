@@ -42,6 +42,7 @@ from experiments.feature_schema_v2 import (
     PROFILE_FEATURE_NAMES,
 )
 from experiments.state_analysis import (
+    StateAnalysis,
     analyze_static_grid,
 )
 from experiments.trace_replay import target_state_from_trace
@@ -107,6 +108,7 @@ from lns2_selector.runtime.failure_informed_rescue import (
     FailureInformedRescueTracker,
 )
 from lns2_selector.runtime.hybridstructpool import (
+    HybridStructPoolResult,
     generate_hybridstructpool_runtime_candidates,
     hybridstructpool_high_stress_gate,
 )
@@ -133,6 +135,11 @@ from lns2_selector.runtime.structshell_single_family import (
     STRUCTSHELL_SINGLE_FAMILY_POOL_ID,
     generate_structshell_single_family_runtime_candidates,
     structshell_single_family_ablation_gate,
+)
+from lns2_selector.runtime.structshell_dual16 import (
+    STRUCTSHELL_DUAL16_POOL_ID,
+    generate_structshell_dual16_runtime_candidates,
+    structshell_dual16_ablation_gate,
 )
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
@@ -179,6 +186,36 @@ def _proposal_uses_static_grid_cache(proposal_config: Mapping[str, Any]) -> bool
         dict(proposal_config.get(name) or {}).get("static_grid_cache") is True
         for name in ("topology_boundary", "structpool", "hybridstructpool")
     )
+
+
+def _generate_fixed_structshell_runtime_candidates(
+    state: dict[str, Any],
+    analysis: StateAnalysis,
+    *,
+    v2_candidates: Iterable[dict[str, Any]],
+    v2_anchors: Iterable[dict[str, Any]],
+    config: dict[str, Any],
+) -> HybridStructPoolResult | None:
+    """Dispatch separately registered fixed StructShell runtime contracts."""
+
+    pool_id = str(config.get("pool_id") or "")
+    if pool_id == STRUCTSHELL_SINGLE_FAMILY_POOL_ID:
+        return generate_structshell_single_family_runtime_candidates(
+            state,
+            analysis,
+            v2_candidates=v2_candidates,
+            v2_anchors=v2_anchors,
+            config=config,
+        )
+    if pool_id == STRUCTSHELL_DUAL16_POOL_ID:
+        return generate_structshell_dual16_runtime_candidates(
+            state,
+            analysis,
+            v2_candidates=v2_candidates,
+            v2_anchors=v2_anchors,
+            config=config,
+        )
+    return None
 
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
@@ -2064,6 +2101,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             state, hybridstructpool_runtime
                                         )
                                     )
+                                elif hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
+                                    hybridstructpool_gate_result = (
+                                        structshell_dual16_ablation_gate(
+                                            state, hybridstructpool_runtime
+                                        )
+                                    )
                                 elif hybrid_pool_id in {
                                     ROUTED_HYBRIDSTRUCTPOOL_ID,
                                     ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
@@ -2316,21 +2359,19 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 hybrid_pool_id = str(
                                     hybridstructpool_runtime.get("pool_id")
                                 )
-                                if (
-                                    hybrid_pool_id
-                                    == STRUCTSHELL_SINGLE_FAMILY_POOL_ID
-                                ):
-                                    hybrid_result = (
-                                        generate_structshell_single_family_runtime_candidates(
-                                            state,
-                                            topology_state_analysis,
-                                            v2_candidates=base_candidates,
-                                            v2_anchors=[
-                                                base_candidates[v2_anchor_index]
-                                            ],
-                                            config=hybridstructpool_runtime,
-                                        )
+                                fixed_structshell_result = (
+                                    _generate_fixed_structshell_runtime_candidates(
+                                        state,
+                                        topology_state_analysis,
+                                        v2_candidates=base_candidates,
+                                        v2_anchors=[
+                                            base_candidates[v2_anchor_index]
+                                        ],
+                                        config=hybridstructpool_runtime,
                                     )
+                                )
+                                if fixed_structshell_result is not None:
+                                    hybrid_result = fixed_structshell_result
                                 elif hybrid_pool_id in {
                                     ROUTED_HYBRIDSTRUCTPOOL_ID,
                                     ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
