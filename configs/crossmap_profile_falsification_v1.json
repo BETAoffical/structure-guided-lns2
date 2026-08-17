@@ -110,6 +110,29 @@
       303
     ],
     "output_root_excluded": true,
+    "registration_time_full_workspace_audit": {
+      "backend": "ripgrep_path_executable",
+      "completed_before_any_reset_or_controller": true,
+      "excluded_output_root": "build/crossmap-profile-falsification-v1-r2",
+      "future_rerun_policy": "new_experiment_identity_and_new_registration_audit_required",
+      "identity_scope": "single_immediate_experiment_identity",
+      "inventory_file_count": 39,
+      "inventory_sha256": "b6b19666c4f866c685af751e1129f958c0ec8e6498a23192880b44bf564f8b75",
+      "match_count": 0,
+      "matches": [],
+      "resume_policy": "current_r2_only",
+      "scan_errors": [],
+      "solver_seeds": [
+        19,
+        20
+      ],
+      "task_ids": [
+        "maze-32-32-4__random_04__agents_0200",
+        "random-32-32-20__random_01__agents_0400"
+      ],
+      "tool_sha256": "0f5f7e6473e5374344ca8a895b89a79d7f25f68493d977ed539ddd825ccd0ffb",
+      "version": "ripgrep 15.2.0 (rev e89fff89ac)"
+    },
     "pre_controller_identity_correction": {
       "excluded": [
         {

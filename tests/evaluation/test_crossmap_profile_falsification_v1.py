@@ -230,10 +230,55 @@ def test_seed_freshness_and_task_hashes_are_frozen() -> None:
     assert payload["inputs"]["random_task"]["sha256"] == (
         "5fc8509b1c2415a88ec021e6a225f84b79b7b027ef98ed3fad6bf1d058999b54"
     )
+    registered = audit["registration_time_full_workspace_audit"]
+    assert registered == subject.REGISTRATION_TIME_FULL_WORKSPACE_AUDIT
+    assert registered["inventory_file_count"] == 39
+    assert registered["match_count"] == 0
+    assert registered["identity_scope"] == "single_immediate_experiment_identity"
+    assert registered["resume_policy"] == "current_r2_only"
+
+
+def test_run_preparation_uses_only_frozen_registration_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    _path, _root, config = subject.load_config(CONFIG)
+    output = tmp_path / str(
+        subject.REGISTRATION_TIME_FULL_WORKSPACE_AUDIT["excluded_output_root"]
+    )
+    output.mkdir(parents=True)
+
+    def forbidden_scan(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("runtime workspace scan must not run")
+
+    monkeypatch.setattr(subject, "scan_freshness_artifacts", forbidden_scan)
+    audit = subject._prepare_freshness_audit(
+        tmp_path,
+        output,
+        config,
+        config_sha256="0" * 64,
+        resumed=False,
+    )
+    assert audit["passed"] is True
+    assert audit["inventory_file_count"] == 39
+    assert audit["registration_time_full_workspace_audit"] == (
+        subject.REGISTRATION_TIME_FULL_WORKSPACE_AUDIT
+    )
+    assert (output / subject.FRESHNESS_FILENAME).is_file()
+
+    wrong_output = tmp_path / "build" / "crossmap-profile-falsification-v1-r3"
+    wrong_output.mkdir()
+    with pytest.raises(ValueError, match="frozen r2 output"):
+        subject._prepare_freshness_audit(
+            tmp_path,
+            wrong_output,
+            config,
+            config_sha256="0" * 64,
+            resumed=False,
+        )
 
 
 def test_machine_freshness_scan_finds_exact_artifact_and_excludes_output(
-    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     task_id = "maze-32-32-4__random_04__agents_0200"
     old = tmp_path / "build" / "old" / "qualification_manifest.jsonl"
@@ -254,6 +299,36 @@ def test_machine_freshness_scan_finds_exact_artifact_and_excludes_output(
     ignored = output / "qualification_manifest.jsonl"
     ignored.parent.mkdir(parents=True)
     ignored.write_text(old.read_text(encoding="utf-8"), encoding="utf-8")
+    pruned = tmp_path / "build" / "old" / "state_blobs" / "qualification_manifest.jsonl"
+    pruned.parent.mkdir(parents=True)
+    pruned.write_text(old.read_text(encoding="utf-8"), encoding="utf-8")
+
+    tool = {
+        "backend": "ripgrep_path_executable",
+        "source_path": "/verified/rg",
+        "executable_path": "/verified/rg",
+        "tool_sha256": "1" * 64,
+        "version": "ripgrep test",
+        "packaged_elf_copied": False,
+    }
+    monkeypatch.setattr(
+        subject, "_discover_ripgrep", lambda: (Path("/verified/rg"), tool)
+    )
+
+    def fake_search(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if "-l" in arguments:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "build/old/qualification_manifest.jsonl\n"
+                    "build/old/state_blobs/qualification_manifest.jsonl\n"
+                    "build/current/qualification_manifest.jsonl\n"
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(subject.subprocess, "run", fake_search)
 
     audit = subject.scan_freshness_artifacts(
         tmp_path,
@@ -263,11 +338,61 @@ def test_machine_freshness_scan_finds_exact_artifact_and_excludes_output(
         config_sha256="0" * 64,
     )
     assert audit["passed"] is False
-    assert audit["match_count"] == 1
-    assert audit["matches"][0]["path"] == (
-        "build/old/qualification_manifest.jsonl"
-    )
+    assert audit["search_backend"] in {
+        "ripgrep_path_executable",
+        "ripgrep_packaged_elf_copy",
+    }
+    assert audit["search_tool"]["tool_sha256"]
+    assert audit["match_count"] == 2
+    assert {row["path"] for row in audit["matches"]} == {
+        "build/old/qualification_manifest.jsonl",
+        "build/old/state_blobs/qualification_manifest.jsonl",
+    }
+    assert all("build/current" not in row["path"] for row in audit["matches"])
     assert audit["inventory_sha256"]
+
+
+def test_packaged_nonexecutable_elf_is_copied_and_verified(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    packaged = tmp_path / "packaged"
+    packaged.mkdir()
+    source = packaged / "rg"
+    source.write_bytes(b"\x7fELF" + b"mock-ripgrep")
+    source.chmod(0o600)
+    copied = tmp_path / "system-tmp"
+    copied.mkdir()
+
+    monkeypatch.setattr(subject.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("PATH", str(packaged))
+    monkeypatch.setattr(subject.tempfile, "gettempdir", lambda: str(copied))
+    monkeypatch.setattr(
+        subject.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout="ripgrep 14.1.0\n", stderr=""
+        ),
+    )
+
+    executable, tool = subject._discover_ripgrep()
+
+    assert tool["backend"] == "ripgrep_packaged_elf_copy"
+    assert tool["source_path"] == str(source)
+    assert executable == copied / f"crossmap-profile-rg-{tool['tool_sha256']}"
+    assert executable.read_bytes() == source.read_bytes()
+    assert executable.stat().st_mode & 0o777 == 0o700
+    assert tool["elf_magic_hex"] == "7f454c46"
+    assert tool["copy_mode_octal"] == "0700"
+
+
+def test_no_verified_ripgrep_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(subject.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="fails closed before reset"):
+        subject._discover_ripgrep()
 
 
 def test_inner_run_identity_recomputes_expected_augmentation_and_fingerprint(

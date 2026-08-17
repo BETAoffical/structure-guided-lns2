@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import statistics
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -123,6 +125,44 @@ FRESHNESS_SEARCH_SCOPE = (
     "workspace/build/**/episodes/**/*",
     "workspace/build/**/*manifest*.jsonl",
 )
+REGISTRATION_TIME_FULL_WORKSPACE_AUDIT = {
+    "backend": "ripgrep_path_executable",
+    "tool_sha256": (
+        "0f5f7e6473e5374344ca8a895b89a79d7f25f68493d977ed539ddd825ccd0ffb"
+    ),
+    "version": "ripgrep 15.2.0 (rev e89fff89ac)",
+    "inventory_file_count": 39,
+    "inventory_sha256": (
+        "b6b19666c4f866c685af751e1129f958c0ec8e6498a23192880b44bf564f8b75"
+    ),
+    "match_count": 0,
+    "matches": [],
+    "scan_errors": [],
+    "task_ids": [
+        "maze-32-32-4__random_04__agents_0200",
+        "random-32-32-20__random_01__agents_0400",
+    ],
+    "solver_seeds": [19, 20],
+    "excluded_output_root": "build/crossmap-profile-falsification-v1-r2",
+    "completed_before_any_reset_or_controller": True,
+    "identity_scope": "single_immediate_experiment_identity",
+    "future_rerun_policy": (
+        "new_experiment_identity_and_new_registration_audit_required"
+    ),
+    "resume_policy": "current_r2_only",
+}
+RIPGREP_DISCOVERY_CONTRACT = {
+    "standard_executable_names": ["rg.exe", "rg"],
+    "packaged_path_filename": "rg",
+    "packaged_magic_hex": "7f454c46",
+    "posix_standard_requires_elf": True,
+    "copy_directory": "system_temporary_directory",
+    "copy_name_template": "crossmap-profile-rg-<sha256>",
+    "copy_mode_octal": "0700",
+    "version_probe_timeout_seconds": 2.0,
+    "search_timeout_seconds": 30.0,
+    "no_verified_tool_policy": "fail_closed_before_reset",
+}
 
 
 def load_config(
@@ -220,6 +260,8 @@ def load_config(
         or int(freshness.get("required_match_count", -1)) != 0
         or dict(freshness.get("pre_controller_identity_correction") or {})
         != EXPECTED_SEED_CORRECTION
+        or dict(freshness.get("registration_time_full_workspace_audit") or {})
+        != REGISTRATION_TIME_FULL_WORKSPACE_AUDIT
     ):
         raise ValueError("cross-map profile solver-seed freshness audit changed")
 
@@ -421,23 +463,6 @@ def controller_kwargs(
     return result
 
 
-def _is_within(path: Path, parent: Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True
-
-
-def _is_scoped_artifact(path: Path) -> bool:
-    lower_parts = {part.lower() for part in path.parts}
-    if "build" not in lower_parts:
-        return False
-    if "episodes" in lower_parts:
-        return True
-    return path.suffix.lower() == ".jsonl" and "manifest" in path.name.lower()
-
-
 def _nested_objects(value: Any, location: str = "$") -> list[tuple[str, dict[str, Any]]]:
     rows: list[tuple[str, dict[str, Any]]] = []
     if isinstance(value, dict):
@@ -474,6 +499,123 @@ def _artifact_object_match(
     return task_id, solver_seed
 
 
+def _ripgrep_version(executable: Path) -> str | None:
+    try:
+        checked = subprocess.run(
+            [str(executable), "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=float(
+                RIPGREP_DISCOVERY_CONTRACT["version_probe_timeout_seconds"]
+            ),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if checked.returncode != 0:
+        return None
+    lines = checked.stdout.splitlines()
+    return lines[0].strip() if lines else "verified-ripgrep"
+
+
+def _copy_packaged_ripgrep(source: Path, digest: str) -> Path:
+    destination = Path(tempfile.gettempdir()) / f"crossmap-profile-rg-{digest}"
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        if not destination.is_file() or sha256_file(destination) != digest:
+            shutil.copyfile(source, temporary)
+            os.chmod(temporary, 0o700)
+            if sha256_file(temporary) != digest:
+                raise RuntimeError("copied packaged ripgrep hash mismatch")
+            os.replace(temporary, destination)
+        os.chmod(destination, 0o700)
+        if sha256_file(destination) != digest:
+            raise RuntimeError("verified packaged ripgrep hash mismatch")
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return destination
+
+
+def _discover_ripgrep() -> tuple[Path, dict[str, Any]]:
+    """Return a verified ripgrep or fail closed before any solver reset."""
+
+    seen: set[str] = set()
+    for name in RIPGREP_DISCOVERY_CONTRACT["standard_executable_names"]:
+        candidate_value = shutil.which(str(name))
+        if candidate_value is None or candidate_value in seen:
+            continue
+        seen.add(candidate_value)
+        candidate = Path(candidate_value)
+        if os.name == "posix" and RIPGREP_DISCOVERY_CONTRACT[
+            "posix_standard_requires_elf"
+        ]:
+            try:
+                with candidate.open("rb") as stream:
+                    if stream.read(4).hex() != RIPGREP_DISCOVERY_CONTRACT[
+                        "packaged_magic_hex"
+                    ]:
+                        continue
+            except OSError:
+                continue
+        version = _ripgrep_version(candidate)
+        if version is None:
+            continue
+        try:
+            digest = sha256_file(candidate)
+        except OSError:
+            continue
+        return candidate, {
+            "backend": "ripgrep_path_executable",
+            "source_path": str(candidate),
+            "executable_path": str(candidate),
+            "tool_sha256": digest,
+            "version": version,
+            "packaged_elf_copied": False,
+        }
+
+    path_entries = os.environ.get("PATH", "").split(os.pathsep)
+    for entry in path_entries:
+        if not entry:
+            continue
+        source = Path(entry.strip('"')) / str(
+            RIPGREP_DISCOVERY_CONTRACT["packaged_path_filename"]
+        )
+        try:
+            if not source.is_file():
+                continue
+            with source.open("rb") as stream:
+                magic = stream.read(4)
+        except OSError:
+            continue
+        if magic.hex() != RIPGREP_DISCOVERY_CONTRACT["packaged_magic_hex"]:
+            continue
+        try:
+            digest = sha256_file(source)
+            executable = _copy_packaged_ripgrep(source, digest)
+        except OSError:
+            continue
+        version = _ripgrep_version(executable)
+        if version is None:
+            continue
+        return executable, {
+            "backend": "ripgrep_packaged_elf_copy",
+            "source_path": str(source),
+            "executable_path": str(executable),
+            "tool_sha256": digest,
+            "version": version,
+            "packaged_elf_copied": True,
+            "elf_magic_hex": magic.hex(),
+            "copy_mode_octal": "0700",
+        }
+
+    raise RuntimeError(
+        "no verified ripgrep is available; freshness audit fails closed before reset"
+    )
+
+
 def scan_freshness_artifacts(
     workspace: str | Path,
     output: str | Path,
@@ -490,73 +632,64 @@ def scan_freshness_artifacts(
     inventory_count = 0
     matches: list[dict[str, Any]] = []
     scan_errors: list[dict[str, str]] = []
-    rg = shutil.which("rg")
-    search_backend = "ripgrep"
-    if rg is not None:
-        common_args = [
-            "--hidden",
-            "--no-ignore",
-            "-g",
-            "!.git/**",
-        ]
-        manifest_args = [
-            *common_args,
-            "-g",
-            "build/**/*manifest*.jsonl",
-        ]
-        seed_pattern = (
-            r'"solver_seed"\s*:\s*('
-            + "|".join(map(str, sorted(solver_seeds)))
-            + r")([^0-9]|$)"
+    rg, search_tool = _discover_ripgrep()
+    search_backend = str(search_tool["backend"])
+    common_args = [
+        "--hidden",
+        "--no-ignore",
+        "-g",
+        "!**/.git/**",
+    ]
+    manifest_args = [
+        *common_args,
+        "-g",
+        "**/*manifest*.jsonl",
+    ]
+    seed_pattern = (
+        r'"solver_seed"\s*:\s*('
+        + "|".join(map(str, sorted(solver_seeds)))
+        + r")([^0-9]|$)"
+    )
+    searched = subprocess.run(
+        [str(rg), "-l", seed_pattern, *manifest_args, "build"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=float(RIPGREP_DISCOVERY_CONTRACT["search_timeout_seconds"]),
+    )
+    if searched.returncode not in {0, 1}:
+        raise RuntimeError(
+            f"freshness ripgrep search failed: {searched.stderr.strip()}"
         )
-        searched = subprocess.run(
-            [rg, "-l", seed_pattern, *manifest_args, "."],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
+    relevant_text = {
+        root / line.strip()
+        for line in searched.stdout.splitlines()
+        if line.strip()
+    }
+    episode_args = list(common_args)
+    for seed in sorted(solver_seeds):
+        episode_args.extend(
+            ["-g", f"**/episodes/**/*__seed_{seed:04d}__*"]
         )
-        if searched.returncode not in {0, 1}:
-            raise RuntimeError(
-                f"freshness ripgrep search failed: {searched.stderr.strip()}"
-            )
-        relevant_text = {
-            root / line.strip()
-            for line in searched.stdout.splitlines()
-            if line.strip()
-        }
-        episode_args = list(common_args)
-        for seed in sorted(solver_seeds):
-            episode_args.extend(
-                ["-g", f"build/**/episodes/**/*__seed_{seed:04d}__*"]
-            )
-        listed_episodes = subprocess.run(
-            [rg, "--files", *episode_args, "."],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
+    listed_episodes = subprocess.run(
+        [str(rg), "--files", *episode_args, "build"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=float(RIPGREP_DISCOVERY_CONTRACT["search_timeout_seconds"]),
+    )
+    if listed_episodes.returncode not in {0, 1}:
+        raise RuntimeError(
+            "freshness ripgrep episode inventory failed: "
+            f"{listed_episodes.stderr.strip()}"
         )
-        if listed_episodes.returncode not in {0, 1}:
-            raise RuntimeError(
-                "freshness ripgrep episode inventory failed: "
-                f"{listed_episodes.stderr.strip()}"
-            )
-        raw_candidates = list(relevant_text) + [
-            root / line.strip()
-            for line in listed_episodes.stdout.splitlines()
-            if line.strip()
-        ]
-    else:
-        search_backend = "python_fallback"
-        raw_candidates = [
-            path
-            for path in root.rglob("*")
-            if path.is_file()
-            and ".git" not in {part.lower() for part in path.parts}
-            and _is_scoped_artifact(path)
-        ]
-        relevant_text = set(raw_candidates)
+    raw_candidates = list(relevant_text) + [
+        root / line.strip()
+        for line in listed_episodes.stdout.splitlines()
+        if line.strip()
+    ]
     try:
         output_relative = output_root.relative_to(root)
     except ValueError:
@@ -668,6 +801,7 @@ def scan_freshness_artifacts(
         "excluded_output_root": str(output_root),
         "search_scope": list(FRESHNESS_SEARCH_SCOPE),
         "search_backend": search_backend,
+        "search_tool": search_tool,
         "task_ids": sorted(task_ids),
         "solver_seeds": sorted(solver_seeds),
         "inventory_definition": (
@@ -681,9 +815,89 @@ def scan_freshness_artifacts(
         "passed": not matches and not scan_errors,
         "resume_policy": "read_and_verify_frozen_audit_without_workspace_rescan",
         "pre_controller_identity_correction": EXPECTED_SEED_CORRECTION,
+        "ripgrep_discovery": RIPGREP_DISCOVERY_CONTRACT,
     }
     payload["audit_payload_fingerprint"] = json_fingerprint(payload)
     return payload
+
+
+def _valid_sha256(value: Any) -> bool:
+    text = str(value)
+    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+
+def _valid_freshness_search_tool(audit: Mapping[str, Any]) -> bool:
+    tool = audit.get("search_tool")
+    if not isinstance(tool, dict):
+        return False
+    backend = str(tool.get("backend", ""))
+    if (
+        backend != audit.get("search_backend")
+        or backend
+        not in {"ripgrep_path_executable", "ripgrep_packaged_elf_copy"}
+        or not str(tool.get("source_path", ""))
+        or not str(tool.get("executable_path", ""))
+        or not _valid_sha256(tool.get("tool_sha256"))
+        or not str(tool.get("version", ""))
+    ):
+        return False
+    if backend == "ripgrep_path_executable":
+        return (
+            tool.get("packaged_elf_copied") is False
+            and tool.get("source_path") == tool.get("executable_path")
+        )
+    digest = str(tool["tool_sha256"])
+    executable = Path(str(tool["executable_path"]))
+    return (
+        tool.get("packaged_elf_copied") is True
+        and tool.get("elf_magic_hex")
+        == RIPGREP_DISCOVERY_CONTRACT["packaged_magic_hex"]
+        and tool.get("copy_mode_octal")
+        == RIPGREP_DISCOVERY_CONTRACT["copy_mode_octal"]
+        and executable.name == f"crossmap-profile-rg-{digest}"
+        and executable.parent == Path(tempfile.gettempdir())
+    )
+
+
+def _registration_freshness_payload(
+    root: Path,
+    output: Path,
+    config: Mapping[str, Any],
+    config_sha256: str,
+) -> dict[str, Any]:
+    registered = dict(
+        config["freshness_audit"]["registration_time_full_workspace_audit"]
+    )
+    expected_output = (root / str(registered["excluded_output_root"])).resolve()
+    if output.resolve() != expected_output:
+        raise ValueError(
+            "registration-time freshness audit is valid only for the frozen r2 output"
+        )
+    return {
+        "schema": FRESHNESS_SCHEMA,
+        "experiment_id": EXPERIMENT_ID,
+        "config_sha256": config_sha256,
+        "workspace_root": str(root.resolve()),
+        "excluded_output_root": str(expected_output),
+        "search_scope": list(FRESHNESS_SEARCH_SCOPE),
+        "search_backend": str(registered["backend"]),
+        "search_tool_sha256": str(registered["tool_sha256"]),
+        "search_tool_version": str(registered["version"]),
+        "task_ids": list(registered["task_ids"]),
+        "solver_seeds": list(registered["solver_seeds"]),
+        "inventory_definition": (
+            "sha256_of_sorted_exact_seed_artifact_candidate_paths"
+        ),
+        "inventory_file_count": int(registered["inventory_file_count"]),
+        "inventory_sha256": str(registered["inventory_sha256"]),
+        "matches": list(registered["matches"]),
+        "match_count": int(registered["match_count"]),
+        "scan_errors": list(registered["scan_errors"]),
+        "passed": True,
+        "resume_policy": "current_r2_only_without_workspace_rescan",
+        "pre_controller_identity_correction": EXPECTED_SEED_CORRECTION,
+        "registration_time_full_workspace_audit": registered,
+    }
 
 
 def _validate_freshness_audit(
@@ -696,39 +910,10 @@ def _validate_freshness_audit(
 ) -> dict[str, Any]:
     payload = dict(audit)
     fingerprint = payload.pop("audit_payload_fingerprint", None)
-    expected_tasks = sorted(
-        str(group["task"]) for group in config["cohort"]["groups"]
+    expected = _registration_freshness_payload(
+        root, output, config, config_sha256
     )
-    if (
-        audit.get("schema") != FRESHNESS_SCHEMA
-        or audit.get("experiment_id") != EXPERIMENT_ID
-        or audit.get("config_sha256") != config_sha256
-        or audit.get("workspace_root") != str(root.resolve())
-        or audit.get("excluded_output_root") != str(output.resolve())
-        or tuple(map(str, audit.get("search_scope") or ()))
-        != FRESHNESS_SEARCH_SCOPE
-        or list(map(str, audit.get("task_ids") or ())) != expected_tasks
-        or list(map(int, audit.get("solver_seeds") or ())) != list(SOLVER_SEEDS)
-        or audit.get("inventory_definition")
-        != "sha256_of_sorted_exact_seed_artifact_candidate_paths"
-        or audit.get("search_backend") not in {"ripgrep", "python_fallback"}
-        or not isinstance(audit.get("inventory_file_count"), int)
-        or int(audit.get("inventory_file_count", -1)) < 0
-        or not isinstance(audit.get("inventory_sha256"), str)
-        or len(str(audit.get("inventory_sha256"))) != 64
-        or audit.get("resume_policy")
-        != "read_and_verify_frozen_audit_without_workspace_rescan"
-        or dict(audit.get("pre_controller_identity_correction") or {})
-        != EXPECTED_SEED_CORRECTION
-        or int(audit.get("match_count", -1))
-        != len(list(audit.get("matches") or ()))
-        or bool(audit.get("passed"))
-        != (
-            int(audit.get("match_count", -1)) == 0
-            and not list(audit.get("scan_errors") or ())
-        )
-        or fingerprint != json_fingerprint(payload)
-    ):
+    if payload != expected or fingerprint != json_fingerprint(payload):
         raise ValueError("cross-map profile frozen freshness audit is invalid")
     return dict(audit)
 
@@ -761,13 +946,8 @@ def _prepare_freshness_audit(
         raise ValueError(
             "resumed cross-map profile output is missing its frozen freshness audit"
         )
-    audit = scan_freshness_artifacts(
-        root,
-        output,
-        task_ids={str(group["task"]) for group in config["cohort"]["groups"]},
-        solver_seeds=set(SOLVER_SEEDS),
-        config_sha256=config_sha256,
-    )
+    audit = _registration_freshness_payload(root, output, config, config_sha256)
+    audit["audit_payload_fingerprint"] = json_fingerprint(audit)
     write_json(path, audit)
     return _validate_freshness_audit(
         read_json(path),
@@ -1492,6 +1672,9 @@ def analyze(
                 "inventory_sha256": str(freshness["inventory_sha256"]),
                 "inventory_file_count": int(freshness["inventory_file_count"]),
                 "match_count": int(freshness["match_count"]),
+                "registration_time_full_workspace_audit": dict(
+                    freshness["registration_time_full_workspace_audit"]
+                ),
             }
             if freshness is not None and freshness_path.is_file()
             else None
