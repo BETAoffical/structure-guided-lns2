@@ -3044,6 +3044,21 @@
       "contract": "Freeze the ten paired keys, four-arm serial rotation, state-guard trace audit and no-promotion screen gates."
     },
     {
+      "path": "experiments/stride_structshell_crossmap_quick_screen.py",
+      "role": "reproducibility",
+      "purpose": "Run the bounded four-map fixed16 StructShell development quick screen with one task and one seed per map."
+    },
+    {
+      "path": "scripts/run_stride_structshell_crossmap_quick_screen.py",
+      "role": "reproducibility",
+      "purpose": "Expose plan, dry-run, strict serial execution and minimal TTF analysis for the cross-map quick screen."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_crossmap_quick_screen.py",
+      "role": "reproducibility",
+      "contract": "Freeze four non-Warehouse keys, three-arm rotation, five-percent and three-of-four TTF gates, complete qualification-plus-episode process bounds and no-Official/no-Q0/no-bootstrap boundaries."
+    },
+    {
       "path": "lns2_selector/runtime/structshell_single_family.py",
       "role": "reproducibility",
       "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."
