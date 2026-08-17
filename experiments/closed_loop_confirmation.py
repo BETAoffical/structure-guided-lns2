@@ -1548,6 +1548,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
             guard_was_active = False
+            hybrid_stall_guard_was_active = False
             previous_route: str | None = None
             v3_s3_selector = (
                 V3S3Selector(v3_s3_bundle)
@@ -2018,6 +2019,29 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         hybridstructpool_runtime = dict(
                             effective_proposal.get("hybridstructpool") or {}
                         )
+                        hybrid_stall_guard_config = dict(
+                            hybridstructpool_runtime.get("stall_guard") or {}
+                        )
+                        hybrid_stall_guard_active_for_decision = bool(
+                            hybrid_stall_guard_config
+                            and no_progress_streak
+                            >= int(
+                                hybrid_stall_guard_config[
+                                    "no_progress_limit"
+                                ]
+                            )
+                        )
+                        hybrid_stall_guard_triggered_now = bool(
+                            hybrid_stall_guard_active_for_decision
+                            and not hybrid_stall_guard_was_active
+                        )
+                        hybrid_stall_guard_released_now = bool(
+                            hybrid_stall_guard_was_active
+                            and not hybrid_stall_guard_active_for_decision
+                        )
+                        hybrid_stall_guard_was_active = (
+                            hybrid_stall_guard_active_for_decision
+                        )
                         guard_config = dict(
                             structpool_runtime.get("stall_guard") or {}
                         )
@@ -2069,7 +2093,28 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         )
                         hybridstructpool_gate_result = None
                         if hybridstructpool_runtime:
-                            if state_bounded_v2_fallback:
+                            if hybrid_stall_guard_active_for_decision:
+                                hybridstructpool_gate_result = {
+                                    "passed": False,
+                                    "reason": "plateau_guard_active",
+                                    "seconds": 0.0,
+                                    "evaluated": False,
+                                    "gate_id": str(
+                                        hybridstructpool_runtime[
+                                            "activation_gate"
+                                        ]["gate_id"]
+                                    ),
+                                    "agent_count": len(
+                                        state.get("agents", [])
+                                    ),
+                                    "conflict_pair_count": int(
+                                        state["num_of_colliding_pairs"]
+                                    ),
+                                    "active_conflict_agent_count": 0,
+                                    "largest_conflict_component_size": 0,
+                                    "pre_guard_passed": None,
+                                }
+                            elif state_bounded_v2_fallback:
                                 hybridstructpool_gate_result = {
                                     "passed": False,
                                     "reason": "state_exact_rollback_budget_exhausted",
@@ -2204,6 +2249,32 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 "guardpool_conflict_signature": conflict_signature,
                             }
                         )
+                        if hybrid_stall_guard_config:
+                            proposal_metrics.update(
+                                {
+                                    "hybridstructpool_stall_guard_enabled": True,
+                                    "hybridstructpool_stall_guard_id": str(
+                                        hybrid_stall_guard_config["guard_id"]
+                                    ),
+                                    "hybridstructpool_stall_guard_limit": int(
+                                        hybrid_stall_guard_config[
+                                            "no_progress_limit"
+                                        ]
+                                    ),
+                                    "hybridstructpool_stall_guard_no_progress_streak": (
+                                        no_progress_streak
+                                    ),
+                                    "hybridstructpool_stall_guard_active": (
+                                        hybrid_stall_guard_active_for_decision
+                                    ),
+                                    "hybridstructpool_stall_guard_triggered": (
+                                        hybrid_stall_guard_triggered_now
+                                    ),
+                                    "hybridstructpool_stall_guard_released": (
+                                        hybrid_stall_guard_released_now
+                                    ),
+                                }
+                            )
                         proposal_metrics["v3_s3_cache_hit"] = False
                         proposal_metrics["repair_state_cache_hit"] = False
                         if controller_mode == "official_adaptive":
@@ -3604,6 +3675,33 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         "hybridstructpool_selected_causal_count"
                     ] += int("causalclosure_v2" in selected_provenance)
+                    controller_totals[
+                        "hybridstructpool_stall_guard_active_decision_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_stall_guard_active", False
+                            )
+                        )
+                    )
+                    controller_totals[
+                        "hybridstructpool_stall_guard_trigger_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_stall_guard_triggered", False
+                            )
+                        )
+                    )
+                    controller_totals[
+                        "hybridstructpool_stall_guard_release_count"
+                    ] += int(
+                        bool(
+                            proposal_metrics.get(
+                                "hybridstructpool_stall_guard_released", False
+                            )
+                        )
+                    )
                     controller_totals["guardpool_active_decision_count"] += int(
                         bool(proposal_metrics.get("guardpool_active", False))
                     )

@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.stride.structshell_maze32_n300_dataset_source.v1",
+  "experiment_id": "stride-structshell-maze32-n300-dataset-v1",
+  "allow_fetched_superset": true,
+  "scenario_indices": [4],
+  "benchmarks": [
+    {
+      "id": "maze-32-32-4",
+      "layout_family": "maze",
+      "agent_counts": [300]
+    }
+  ]
+}
