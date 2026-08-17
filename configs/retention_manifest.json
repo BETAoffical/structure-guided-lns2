@@ -3059,6 +3059,26 @@
       "contract": "Freeze four non-Warehouse keys, three-arm rotation, five-percent and three-of-four TTF gates, complete qualification-plus-episode process bounds and no-Official/no-Q0/no-bootstrap boundaries."
     },
     {
+      "path": "experiments/stride_structshell_crossmap_offline_profile.py",
+      "role": "reproducibility",
+      "purpose": "Profile three frozen V2 pre-action states per cross-map trace with pure state analysis and fixed16 candidate generation only."
+    },
+    {
+      "path": "scripts/run_stride_structshell_crossmap_offline_profile.py",
+      "role": "reproducibility",
+      "purpose": "Expose the source-only cross-map offline profile audit without adding native solver paths or runtime actions."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_crossmap_offline_profile.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four V2 traces, initial-middle-last checkpoint contract, twelve-state cap and no-native/no-PP/no-controller boundary."
+    },
+    {
+      "path": "docs/STRIDE_STRUCTSHELL_CROSSMAP_OFFLINE_PROFILE_V1_RESULT.md",
+      "role": "historical-evidence",
+      "purpose": "Record the source-only cross-map family-profile result, its implementation identity, and the explicit prohibition on treating retrospective checkpoints as Router labels."
+    },
+    {
       "path": "lns2_selector/runtime/structshell_single_family.py",
       "role": "reproducibility",
       "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."
