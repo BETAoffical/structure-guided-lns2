@@ -3106,7 +3106,7 @@
     {
       "path": "experiments/stride_structshell_maze32_n300_fourmap_quick.py",
       "role": "reproducibility",
-      "purpose": "Run the seed25 four-map plateau-guard triage with the independently materialized Maze32 N300 task, 90-second timing and strict four-arm rotation."
+      "purpose": "Run the seed25 four-map plateau-guard triage with the independently materialized Maze32 N300 task, versioned 90/200-second timing identities and strict four-arm rotation."
     },
     {
       "path": "scripts/run_stride_structshell_maze32_n300_fourmap_quick.py",
@@ -3116,7 +3116,7 @@
     {
       "path": "tests/evaluation/test_stride_structshell_maze32_n300_fourmap_quick.py",
       "role": "reproducibility",
-      "contract": "Freeze the exact four tasks, seed25 identity, sixteen-entry serial schedule, Official phase, Dual16 plateau fallback and 90-second runtime contract."
+      "contract": "Freeze the exact four tasks, seed25 identity, sixteen-entry serial schedule, Official phase, Dual16 plateau fallback and versioned 90/200-second runtime contracts."
     },
     {
       "path": "lns2_selector/runtime/structshell_single_family.py",
