@@ -1,0 +1,154 @@
+{
+  "schema": "lns2.stride.warehouse_compactcut_config.v1",
+  "experiment_id": "stride-warehouse-compactcut-v1",
+  "scientific_status": "preregistered_q0_task_hash_frozen_q1_reset_only_benchmark_qualification",
+  "pre_registration_parent_commit": "88cb35e79ce4c907b71f5306c3d0e961f13d029c",
+  "phase_contract": {
+    "allowed_phases": ["q0_geometry_and_task_registration", "q1_reset_only"],
+    "controller_step_allowed": false,
+    "policy_episode_allowed": false,
+    "formal_ttf_allowed": false,
+    "formal_schedule_allowed": false,
+    "q1_requires_frozen_task_registry": true
+  },
+  "runtime": {
+    "workers": 16,
+    "qualification_process_timeout_seconds": 240.0,
+    "stop_on_first_execution_error_or_process_timeout": true,
+    "resume_only_after_zero_execution_errors_and_zero_process_timeouts": true
+  },
+  "q0_byte_reproducibility": {
+    "assignment_backend": "scipy.optimize.linear_sum_assignment",
+    "task_generator_sha256": "0d3f8d07bcdcdc60a412accbb1a4966f920c107834c58f5b68f767354002f2b4",
+    "accepted_toolchains": [
+      {"name": "ubuntu_22_04_wsl", "python_major_minor": "3.10", "python_version_observed": "3.10.12", "numpy_version": "1.21.5", "scipy_version": "1.8.0"},
+      {"name": "windows_native", "python_major_minor": "3.12", "python_version_observed": "3.12.3", "numpy_version": "1.26.4", "scipy_version": "1.13.1"}
+    ],
+    "cohort_payload_hash_parity": {
+      "task_pair_count": 16,
+      "identical_payload_sha256_count": 16,
+      "all_identical": true,
+      "claim_boundary": "registered_8_map_2_task_seed_compactcut_q0_cohort_only",
+      "pair_payload_sha256": {
+        "whcc_cfg_01/t0521": "49f1e004927a6542214498faf44edab06aec865588c6b2cb6be9f60fd7a5eb39",
+        "whcc_cfg_01/t0557": "30911e93039ae4022001c8859d3b49169ccfb4a7b624818b315a1e7f4809bb8e",
+        "whcc_cfg_02/t0521": "a886c1101ff0bdcbe1e70e6af5c7d75a84e7f6616c1fcf9bce77dd6ddd3aff95",
+        "whcc_cfg_02/t0557": "2827b056f3d44b0de5c33f4dc0e3e4c7c1c746dd8625bf3705f220ed905cd0bc",
+        "whcc_cfg_03/t0521": "20f7d25d104b54847a25e9cb3c5c295aef3b31d884f4570549155d04ac1e7123",
+        "whcc_cfg_03/t0557": "55cc90d0f894b3e17c91396cf06ff8a64a86e38a67c8aac7d4aa2c3aedbaee0a",
+        "whcc_cfg_04/t0521": "c9b137884eceda95cb650359e62e2e023cfcf9f4649afc78ef6225ebcd6352a3",
+        "whcc_cfg_04/t0557": "e5e78200d6233b63dcbb0a491a895575730783597d02b3497e08d7c2899948be",
+        "whcc_dh_01/t0521": "8224d4ee3068c0b7777d06f60b818d30092dd864b694edd79fb20c5cd3340756",
+        "whcc_dh_01/t0557": "8de1148d1a5b42c5e94b6d7db8832e323d2a0e727177afbf133bc3ad162c001c",
+        "whcc_dh_02/t0521": "186c711e456e83b54a6917aa6e6133492afa429830a9e9a6a7f8e0de872e6d59",
+        "whcc_dh_02/t0557": "b704f9719b9e8fc3eb91b3ac9abaa9a36555b370df066f1cedfcb252ae095c83",
+        "whcc_dh_03/t0521": "17c36c8b46085ca3203ce60dae3534965306e8c3cfcc13fb9d935d14017f5998",
+        "whcc_dh_03/t0557": "ef592423706c30e438fee69e10e6a1f39d8ada73b38328f298b078e8e1efc6c8",
+        "whcc_dh_04/t0521": "65c998ecc0764ce1be93c8639ce9b6432407fdc3b056760913dd70e691abbc9e",
+        "whcc_dh_04/t0557": "5624d420490151eb236a311f40edfd31238010ee6d31f729af293ebbd8019a7a"
+      }
+    },
+    "registered_byte_policy": "map_task_scenario_and_endpoint_hashes_require_an_accepted_toolchain_and_are_supported_by_16_of_16_registered_pair_payload_hash_parity_only"
+  },
+  "static_pre_registration_record": {
+    "map_id": "whcc_dh_04",
+    "divider_template": "double_horizontal",
+    "gate": "minimum_partition_size_at_least_120_on_realised_grid",
+    "selection_rule": "first_subsequent_integer_seed_passing_the_same_static_geometry_gate",
+    "candidates": [
+      {"map_seed": 2026081714, "minimum_partition_size": 96, "passed": false},
+      {"map_seed": 2026081715, "minimum_partition_size": 288, "passed": true}
+    ],
+    "selected_map_seed": 2026081715,
+    "task_or_solver_result_observed": false,
+    "native_reset_observed": false,
+    "controller_observed": false
+  },
+  "cohort": {
+    "split": "balanced_wall_clock",
+    "agent_count": 120,
+    "task_seeds": [521, 557],
+    "task_variants": [
+      "bidirectional_mandatory_cut_exchange",
+      "diagnostic_within_partition_exchange"
+    ],
+    "solver_seeds": [71, 72, 73, 74],
+    "maps": [
+      {"id": "whcc_cfg_01", "template": "cross_four_gate", "map_seed": 2026081701, "map_role": "development"},
+      {"id": "whcc_cfg_02", "template": "cross_four_gate", "map_seed": 2026081702, "map_role": "controller_held_out"},
+      {"id": "whcc_cfg_03", "template": "cross_four_gate", "map_seed": 2026081703, "map_role": "development"},
+      {"id": "whcc_cfg_04", "template": "cross_four_gate", "map_seed": 2026081704, "map_role": "controller_held_out"},
+      {"id": "whcc_dh_01", "template": "double_horizontal", "map_seed": 2026081711, "map_role": "development"},
+      {"id": "whcc_dh_02", "template": "double_horizontal", "map_seed": 2026081712, "map_role": "controller_held_out"},
+      {"id": "whcc_dh_03", "template": "double_horizontal", "map_seed": 2026081713, "map_role": "development"},
+      {"id": "whcc_dh_04", "template": "double_horizontal", "map_seed": 2026081715, "map_role": "controller_held_out"}
+    ],
+    "expected_task_count": 32,
+    "expected_reset_count": 128,
+    "claim_boundary": "eight_registered_generated_compact_warehouse_maps_and_two_preregistered_cut_task_families_only"
+  },
+  "q0_gates": {
+    "all_8_maps_required": true,
+    "all_8_map_grid_sha256_unique_required": true,
+    "all_32_tasks_required": true,
+    "fixed_agent_count": 120,
+    "unique_starts_required": true,
+    "unique_goals_required": true,
+    "zero_fixed_points_required": true,
+    "all_endpoints_reachable_required": true,
+    "structured_all_agents_cross_registered_mandatory_cut_required": true,
+    "structured_exact_30_agents_per_direction_per_cut_cell_required": true,
+    "structured_no_cut_bypass_required": true,
+    "control_all_agents_remain_within_registered_partition_required": true,
+    "pairing_semantics": "independent_registered_endpoints_distance_near_matched_secondary_control",
+    "causal_control_claim_allowed": false,
+    "maximum_relative_mean_shortest_distance_difference": 0.05,
+    "maximum_relative_p95_shortest_distance_difference": 0.10,
+    "deterministic_collision_free_prioritized_joint_mapf_witness_required": true,
+    "solver_or_controller_invocation_allowed": false
+  },
+  "q1_gates": {
+    "all_128_resets_required": true,
+    "all_initial_solutions_complete_and_consistent": true,
+    "structured": {
+      "variant": "bidirectional_mandatory_cut_exchange",
+      "required_reset_count": 64,
+      "minimum_initial_conflicts": 16,
+      "minimum_active_conflict_agents": 32,
+      "minimum_largest_conflict_component_size": 16,
+      "initial_feasible": false,
+      "all_resets_must_pass": true
+    },
+    "diagnostic_control": {
+      "variant": "diagnostic_within_partition_exchange",
+      "required_reset_count": 64,
+      "all_resets_must_complete_without_execution_error_or_process_timeout": true,
+      "structure_thresholds_gate_benchmark_ready": false
+    },
+    "no_map_task_variant_or_seed_replacement": true,
+    "failure_decision": "stop_do_not_resample_replace_or_run_controller"
+  },
+  "registration": {
+    "status": "frozen_q0_task_hash_registration",
+    "task_registry_path": "configs/stride_warehouse_compactcut_tasks_v1.json",
+    "task_registry_sha256": "368ed483fec21875f34f0acbf888bb28562b0bce0f7a00fd4356813284aab7b9",
+    "q1_allowed": true
+  },
+  "inputs": {
+    "runtime_config": {
+      "path": "configs/stride_warehouse_compactcut_runtime_v1.json",
+      "sha256": "f24d29dda5d94aea10574e7320beb696b7140c2ed6ac694b40f113cdc52c76aa"
+    },
+    "task_generator": {
+      "path": "experiments/warehouse_compactcut_tasks.py",
+      "sha256": "0d3f8d07bcdcdc60a412accbb1a4966f920c107834c58f5b68f767354002f2b4"
+    }
+  },
+  "result_interpretation": {
+    "control_label": "independent_registered_endpoints_distance_near_matched_within_partition_diagnostic_control_not_a_causal_or_difficulty_matched_baseline",
+    "control_structure_thresholds_gate_benchmark_ready": false,
+    "controller_performance_claim_allowed": false,
+    "ttf_claim_allowed": false,
+    "benchmark_ready_means": "q0_passed_all_128_resets_complete_error_free_and_all_64_structured_resets_pass_16_32_16"
+  }
+}

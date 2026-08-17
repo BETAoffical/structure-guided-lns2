@@ -3107,6 +3107,31 @@
       "path": "tests/evaluation/test_stride_warehouse_crossaisle_paired.py",
       "role": "reproducibility",
       "contract": "Freeze the two-stage task registry, exact 128-reset schedule, scenario and manifest identity, terminal failure and same-fingerprint resume contracts."
+    },
+    {
+      "path": "experiments/warehouse_compactcut_tasks.py",
+      "role": "reproducibility",
+      "purpose": "Generate and independently audit the eight-map compact-cut Warehouse task bank, direction-balanced mandatory-gate routing and deterministic joint feasibility witnesses without invoking a solver."
+    },
+    {
+      "path": "experiments/stride_warehouse_compactcut.py",
+      "role": "reproducibility",
+      "purpose": "Freeze Q0 bytes and run the independent 128-key compact-cut Warehouse reset-only qualification with preregistered development and controller-held-out map roles."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_compactcut.py",
+      "role": "reproducibility",
+      "purpose": "Expose compact-cut planning, Q0 generation and Q1 reset-only qualification without any controller, policy episode or TTF command."
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_compactcut_tasks.py",
+      "role": "reproducibility",
+      "contract": "Freeze compact-cut geometry, mandatory direction-balanced gate routing, independent diagnostic endpoints, distance gates and tamper-safe joint feasibility witnesses."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_compactcut.py",
+      "role": "reproducibility",
+      "contract": "Freeze the exact Q0 registry, map-role separation, eight unique map hashes, 128 reset-only keys, identity audit, terminal failure and same-fingerprint resume contracts."
     }
   ]
 }
