@@ -13,6 +13,11 @@ CONFIG = (
     / "configs"
     / "stride_structshell_maze32_n300_fourmap_quick_v1.json"
 )
+CONFIG_V2 = (
+    ROOT
+    / "configs"
+    / "stride_structshell_maze32_n300_fourmap_quick_v2.json"
+)
 
 
 def test_schedule_is_seed25_four_maps_four_arms_strict_serial() -> None:
@@ -125,9 +130,10 @@ def test_materialized_runtime_uses_each_groups_registered_split(
     _path, _root, config = subject.load_config(CONFIG)
     observed = {}
     for group in config["cohort"]["groups"]:
-        runtime = subject._runtime_config_path(tmp_path, group, 25)
+        runtime = subject._runtime_config_path(tmp_path, config, group, 25)
         payload = subject.read_json(runtime)
         observed[str(group["id"])] = payload["split"]
+        assert runtime.name == f"{group['id']}__seed_0025.json"
         assert payload["solver_seeds"] == [25]
     assert observed == {
         "maze-32-32-4-n300": "balanced_wall_clock",
@@ -185,3 +191,41 @@ def test_analyze_reports_timing_and_plateau_diagnostics_without_gate(
     assert per_map["pp_replan_seconds"] == pytest.approx(1.2)
     assert per_map["hybridstructpool_stall_guard_active_decision_count"] == 4
     assert report["selection_gate"] is None
+
+
+def test_v2_changes_budgets_and_run_identity_only(tmp_path: Path) -> None:
+    v1 = subject.plan(CONFIG)
+    v2 = subject.plan(CONFIG_V2)
+    assert v1["experiment_id"] == subject.EXPERIMENT_ID
+    assert v1["config_schema"] == subject.CONFIG_SCHEMA
+    assert v1["episode_process_fuse_seconds"] == 105.0
+    assert v2["experiment_id"] == subject.EXPERIMENT_ID_V2
+    assert v2["config_schema"] == subject.CONFIG_SCHEMA_V2
+    assert v2["schema"] == subject.STATUS_SCHEMA_V2
+    assert v2["registered_output_root"] == (
+        "build/stride-structshell-maze32-n300-fourmap-quick-v2"
+    )
+    assert v2["episode_process_fuse_seconds"] == 300.0
+    assert v2["wall_time_budget_seconds"] == 200.0
+    assert v2["maximum_registered_timed_seconds"] == 3200.0
+    assert v2["maximum_timed_process_fuse_seconds"] == 4800.0
+    assert v2["keys"] == v1["keys"]
+    assert v2["controllers"] == v1["controllers"]
+
+    _path, root, config = subject.load_config(CONFIG_V2)
+    assert config["cohort"]["solver_seed"] == 25
+    for controller in subject.CONTROLLERS:
+        kwargs = subject.controller_kwargs(root, config, controller)
+        assert kwargs["wall_time_budget_seconds"] == 200.0
+        assert kwargs["environment_time_limit_seconds"] == 200.0
+        assert kwargs["episode_process_timeout_seconds"] == 300.0
+    runtime = subject._runtime_config_path(
+        tmp_path, config, config["cohort"]["groups"][0], 25
+    )
+    assert runtime.name == (
+        "maze-32-32-4-n300__seed_0025__wall_0200__fuse_0300.json"
+    )
+    payload = subject.read_json(runtime)
+    assert payload["wall_time_budget_seconds"] == 200.0
+    assert payload["environment"]["time_limit"] == 200.0
+    assert payload["episode_process_timeout_seconds"] == 300.0

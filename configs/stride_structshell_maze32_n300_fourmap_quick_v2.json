@@ -1,0 +1,11 @@
+{
+  "schema": "lns2.stride.structshell_maze32_n300_fourmap_quick_config.v2",
+  "experiment_id": "stride-structshell-maze32-n300-fourmap-quick-v2",
+  "wall_time_budget_seconds": 200.0,
+  "episode_process_timeout_seconds": 300.0,
+  "output_root": "build/stride-structshell-maze32-n300-fourmap-quick-v2",
+  "base_config": {
+    "path": "configs/stride_structshell_maze32_n300_fourmap_quick_v1.json",
+    "sha256": "049f6e652960181b5c22e664df22b518c0ef9c8ecd90bc45ba06f9a88157d796"
+  }
+}

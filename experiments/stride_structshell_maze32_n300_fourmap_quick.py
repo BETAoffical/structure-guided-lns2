@@ -23,9 +23,13 @@ from lns2_selector.runtime.structshell_dual16 import (
 
 
 CONFIG_SCHEMA = "lns2.stride.structshell_maze32_n300_fourmap_quick_config.v1"
+CONFIG_SCHEMA_V2 = "lns2.stride.structshell_maze32_n300_fourmap_quick_config.v2"
 STATUS_SCHEMA = "lns2.stride.structshell_maze32_n300_fourmap_quick_status.v1"
+STATUS_SCHEMA_V2 = "lns2.stride.structshell_maze32_n300_fourmap_quick_status.v2"
 REPORT_SCHEMA = "lns2.stride.structshell_maze32_n300_fourmap_quick_report.v1"
+REPORT_SCHEMA_V2 = "lns2.stride.structshell_maze32_n300_fourmap_quick_report.v2"
 EXPERIMENT_ID = "stride-structshell-maze32-n300-fourmap-quick-v1"
+EXPERIMENT_ID_V2 = "stride-structshell-maze32-n300-fourmap-quick-v2"
 CONTROLLERS = (
     "official_adaptive",
     "v2_only",
@@ -35,6 +39,9 @@ CONTROLLERS = (
 SOLVER_SEED = 25
 WALL_TIME_SECONDS = 90.0
 PROCESS_FUSE_SECONDS = 105.0
+WALL_TIME_SECONDS_V2 = 200.0
+PROCESS_FUSE_SECONDS_V2 = 300.0
+V2_OUTPUT_ROOT = "build/stride-structshell-maze32-n300-fourmap-quick-v2"
 STATUS_FILENAME = "collection_status.json"
 REPORT_FILENAME = "quick_report.json"
 EXPECTED_GROUPS = (
@@ -103,27 +110,102 @@ def _contract_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _identity(config: Mapping[str, Any]) -> tuple[str, str]:
+    return str(config["schema"]), str(config["experiment_id"])
+
+
+def _process_fuse_seconds(config: Mapping[str, Any]) -> float:
+    return float(config["runtime"]["episode_process_timeout_seconds"])
+
+
+def _wall_time_seconds(config: Mapping[str, Any]) -> float:
+    return float(config["runtime"]["wall_time_budget_seconds"])
+
+
+def _status_schema(config: Mapping[str, Any]) -> str:
+    return STATUS_SCHEMA_V2 if _identity(config)[0] == CONFIG_SCHEMA_V2 else STATUS_SCHEMA
+
+
+def _report_schema(config: Mapping[str, Any]) -> str:
+    return REPORT_SCHEMA_V2 if _identity(config)[0] == CONFIG_SCHEMA_V2 else REPORT_SCHEMA
+
+
+def _validate_registered_output_root(
+    root: Path, config: Mapping[str, Any], output: Path
+) -> None:
+    registered = config.get("_registered_output_root")
+    if registered is not None and output.resolve() != (
+        root / str(registered)
+    ).resolve():
+        raise ValueError(
+            f"{config['experiment_id']} requires output root {registered}"
+        )
+
+
 def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     path = Path(config_path).resolve()
     root = Path(__file__).resolve().parents[1]
-    config = read_json(path)
-    if not isinstance(config, dict):
+    raw_config = read_json(path)
+    if not isinstance(raw_config, dict):
         raise ValueError("Maze32 N300 four-map quick config must be an object")
+    if raw_config.get("schema") == CONFIG_SCHEMA_V2:
+        if (
+            raw_config.get("experiment_id") != EXPERIMENT_ID_V2
+            or float(raw_config.get("wall_time_budget_seconds", -1.0))
+            != WALL_TIME_SECONDS_V2
+            or float(raw_config.get("episode_process_timeout_seconds", -1.0))
+            != PROCESS_FUSE_SECONDS_V2
+            or raw_config.get("output_root") != V2_OUTPUT_ROOT
+        ):
+            raise ValueError("Maze32 N300 four-map v2 overlay identity changed")
+        base_path = registered_input(
+            root,
+            dict(raw_config.get("base_config") or {}),
+            label="Maze32 N300 four-map v1 base config",
+        )
+        config = read_json(base_path)
+        if not isinstance(config, dict):
+            raise ValueError("Maze32 N300 four-map v1 base config must be an object")
+        config = dict(config)
+        config["schema"] = CONFIG_SCHEMA_V2
+        config["experiment_id"] = EXPERIMENT_ID_V2
+        config["runtime"] = dict(config.get("runtime") or {})
+        config["runtime"]["wall_time_budget_seconds"] = WALL_TIME_SECONDS_V2
+        config["runtime"]["environment_time_limit_seconds"] = (
+            WALL_TIME_SECONDS_V2
+        )
+        config["runtime"]["episode_process_timeout_seconds"] = (
+            PROCESS_FUSE_SECONDS_V2
+        )
+        config["_registered_output_root"] = V2_OUTPUT_ROOT
+    else:
+        config = raw_config
     if (
-        config.get("schema") != CONFIG_SCHEMA
-        or config.get("experiment_id") != EXPERIMENT_ID
+        _identity(config)
+        not in {
+            (CONFIG_SCHEMA, EXPERIMENT_ID),
+            (CONFIG_SCHEMA_V2, EXPERIMENT_ID_V2),
+        }
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("Maze32 N300 four-map quick identity changed")
 
     runtime = dict(config.get("runtime") or {})
+    expected_wall = {
+        (CONFIG_SCHEMA, EXPERIMENT_ID): WALL_TIME_SECONDS,
+        (CONFIG_SCHEMA_V2, EXPERIMENT_ID_V2): WALL_TIME_SECONDS_V2,
+    }[_identity(config)]
+    expected_fuse = {
+        (CONFIG_SCHEMA, EXPERIMENT_ID): PROCESS_FUSE_SECONDS,
+        (CONFIG_SCHEMA_V2, EXPERIMENT_ID_V2): PROCESS_FUSE_SECONDS_V2,
+    }[_identity(config)]
     if runtime != {
         "stopping_rule": "wall-clock",
         "repair_seed_policy": "episode_stream",
         "deterministic_pp_replay": False,
-        "wall_time_budget_seconds": WALL_TIME_SECONDS,
-        "environment_time_limit_seconds": WALL_TIME_SECONDS,
-        "episode_process_timeout_seconds": PROCESS_FUSE_SECONDS,
+        "wall_time_budget_seconds": expected_wall,
+        "environment_time_limit_seconds": expected_wall,
+        "episode_process_timeout_seconds": expected_fuse,
         "workers_for_reset_anchor": 1,
         "workers_for_timed_episodes": 1,
         "execution_order": "rotating_strict_four_controller_serial",
@@ -249,9 +331,13 @@ def schedule(config: Mapping[str, Any]) -> list[dict[str, Any]]:
 def plan(config_path: str | Path) -> dict[str, Any]:
     _path, _root, config = load_config(config_path)
     rows = schedule(config)
+    wall_time_seconds = _wall_time_seconds(config)
+    process_fuse_seconds = _process_fuse_seconds(config)
     return {
-        "schema": STATUS_SCHEMA,
-        "experiment_id": EXPERIMENT_ID,
+        "schema": _status_schema(config),
+        "experiment_id": str(config["experiment_id"]),
+        "config_schema": str(config["schema"]),
+        "registered_output_root": config.get("_registered_output_root"),
         "map_count": 4,
         "task_count": 4,
         "paired_key_count": 4,
@@ -270,13 +356,13 @@ def plan(config_path: str | Path) -> dict[str, Any]:
             for row in rows
             if int(row["within_key_position"]) == 0
         ],
-        "wall_time_budget_seconds": WALL_TIME_SECONDS,
-        "episode_process_fuse_seconds": PROCESS_FUSE_SECONDS,
-        "maximum_registered_timed_seconds": 16 * WALL_TIME_SECONDS,
-        "maximum_timed_process_fuse_seconds": 16 * PROCESS_FUSE_SECONDS,
-        "maximum_reset_anchor_process_fuse_seconds": 4 * PROCESS_FUSE_SECONDS,
+        "wall_time_budget_seconds": wall_time_seconds,
+        "episode_process_fuse_seconds": process_fuse_seconds,
+        "maximum_registered_timed_seconds": 16 * wall_time_seconds,
+        "maximum_timed_process_fuse_seconds": 16 * process_fuse_seconds,
+        "maximum_reset_anchor_process_fuse_seconds": 4 * process_fuse_seconds,
         "maximum_reset_plus_timed_process_fuse_seconds": 20
-        * PROCESS_FUSE_SECONDS,
+        * process_fuse_seconds,
         "strict_serial_timing": True,
         "reset_inclusive_ttf": True,
         "seed_identity_audit": dict(SEED_IDENTITY_AUDIT),
@@ -292,13 +378,15 @@ def plan(config_path: str | Path) -> dict[str, Any]:
 def controller_kwargs(
     root: Path, config: Mapping[str, Any], controller: str
 ) -> dict[str, Any]:
+    wall_time_seconds = _wall_time_seconds(config)
+    process_fuse_seconds = _process_fuse_seconds(config)
     common: dict[str, Any] = {
         "stopping_rule": "wall-clock",
         "repair_seed_policy": "episode_stream",
         "deterministic_pp_replay": False,
-        "wall_time_budget_seconds": WALL_TIME_SECONDS,
-        "environment_time_limit_seconds": WALL_TIME_SECONDS,
-        "episode_process_timeout_seconds": PROCESS_FUSE_SECONDS,
+        "wall_time_budget_seconds": wall_time_seconds,
+        "environment_time_limit_seconds": wall_time_seconds,
+        "episode_process_timeout_seconds": process_fuse_seconds,
     }
     if controller == "official_adaptive":
         return {
@@ -341,22 +429,32 @@ def _group(config: Mapping[str, Any], group_id: str) -> dict[str, Any]:
 
 
 def _runtime_config_path(
-    output: Path, group: Mapping[str, Any], solver_seed: int
+    output: Path,
+    config: Mapping[str, Any],
+    group: Mapping[str, Any],
+    solver_seed: int,
 ) -> Path:
     payload = read_json(Path(str(group["_runtime_path"])).resolve())
     if not isinstance(payload, dict):
         raise ValueError(f"{group['id']} runtime config must be an object")
     payload["split"] = str(group["split"])
     payload["solver_seeds"] = [solver_seed]
-    payload["wall_time_budget_seconds"] = WALL_TIME_SECONDS
-    payload["episode_process_timeout_seconds"] = PROCESS_FUSE_SECONDS
+    wall_time_seconds = _wall_time_seconds(config)
+    payload["wall_time_budget_seconds"] = wall_time_seconds
+    process_fuse_seconds = _process_fuse_seconds(config)
+    payload["episode_process_timeout_seconds"] = process_fuse_seconds
     payload["workers"] = 1
     environment = dict(payload.get("environment") or {})
-    environment["time_limit"] = WALL_TIME_SECONDS
+    environment["time_limit"] = wall_time_seconds
     payload["environment"] = environment
-    destination = (
-        output / "runtime_configs" / f"{group['id']}__seed_{solver_seed:04d}.json"
-    )
+    filename = f"{group['id']}__seed_{solver_seed:04d}.json"
+    if _identity(config)[0] == CONFIG_SCHEMA_V2:
+        filename = (
+            f"{group['id']}__seed_{solver_seed:04d}"
+            f"__wall_{int(wall_time_seconds):04d}"
+            f"__fuse_{int(process_fuse_seconds):04d}.json"
+        )
+    destination = output / "runtime_configs" / filename
     if destination.is_file():
         if read_json(destination) != payload:
             raise ValueError(f"{group['id']} materialized runtime changed")
@@ -420,11 +518,12 @@ def _qualify_group(
 ) -> Path:
     task_id = str(group["task"])
     seed = int(config["cohort"]["solver_seed"])
+    process_fuse_seconds = _process_fuse_seconds(config)
     key = {(task_id, seed)}
     qualification = output / "maps" / str(group["id"]) / "reset_anchor"
     run_closed_loop_collection(
         root / str(group["dataset"]),
-        _runtime_config_path(output, group, seed),
+        _runtime_config_path(output, config, group, seed),
         qualification,
         phase="qualify",
         workers=1,
@@ -432,7 +531,7 @@ def _qualify_group(
         task_ids=[task_id],
         cohort_job_keys=key,
         job_keys=key,
-        qualification_process_timeout_seconds=PROCESS_FUSE_SECONDS,
+        qualification_process_timeout_seconds=process_fuse_seconds,
         use_global_collection_lock=False,
         **controller_kwargs(root, config, "v2_only"),
     )
@@ -455,16 +554,17 @@ def _run_episode(
     key = {(task_id, seed)}
     collection = _controller_root(output, item)
     kwargs = controller_kwargs(root, config, str(item["controller"]))
+    process_fuse_seconds = _process_fuse_seconds(config)
     common = {
         "workers": 1,
         "task_ids": [task_id],
         "cohort_job_keys": key,
         "job_keys": key,
         "qualification_source": qualification,
-        "qualification_process_timeout_seconds": PROCESS_FUSE_SECONDS,
+        "qualification_process_timeout_seconds": process_fuse_seconds,
         "use_global_collection_lock": False,
     }
-    runtime = _runtime_config_path(output, group, seed)
+    runtime = _runtime_config_path(output, config, group, seed)
     run_closed_loop_collection(
         root / str(group["dataset"]),
         runtime,
@@ -499,8 +599,10 @@ def analyze(
     *,
     producer: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, _root, config = load_config(config_path)
+    path, root, config = load_config(config_path)
     output_path = Path(output).resolve()
+    _validate_registered_output_root(root, config, output_path)
+    wall_time_seconds = _wall_time_seconds(config)
     rows = schedule(config)
     indexed: dict[tuple[str, str], dict[str, Any]] = {}
     errors: list[str] = []
@@ -516,7 +618,7 @@ def analyze(
             continue
         if (
             float(summary.get("wall_time_budget_seconds", -1.0))
-            != WALL_TIME_SECONDS
+            != wall_time_seconds
             or summary.get("ttf_clock_schema")
             != "lns2.ttf.reset_inclusive_wall.v1"
             or summary.get("capped_wall_time_to_feasible") is None
@@ -623,16 +725,16 @@ def analyze(
             }
 
     report = {
-        "schema": REPORT_SCHEMA,
-        "experiment_id": EXPERIMENT_ID,
+        "schema": _report_schema(config),
+        "experiment_id": str(config["experiment_id"]),
         "scientific_status": "exploratory_single_seed_runtime_triage",
         "integrity_passed": not errors,
         "errors": errors,
         "map_count": 4,
         "paired_key_count": 4,
         "episode_count": len(indexed),
-        "solver_seed": SOLVER_SEED,
-        "wall_time_budget_seconds": WALL_TIME_SECONDS,
+        "solver_seed": int(config["cohort"]["solver_seed"]),
+        "wall_time_budget_seconds": wall_time_seconds,
         "per_map": per_map,
         "controller_summaries": controller_summaries,
         "selection_gate": None,
@@ -659,6 +761,7 @@ def run(
     path, root, config = load_config(config_path)
     rows = schedule(config)
     output_path = Path(output).resolve()
+    _validate_registered_output_root(root, config, output_path)
     producer = closed_loop_producer_identity(
         project_root=root,
         source_files=(
@@ -672,13 +775,13 @@ def run(
     prepared = prepare_resumable_output(
         output_path,
         status_filename=STATUS_FILENAME,
-        status_schema=STATUS_SCHEMA,
+        status_schema=_status_schema(config),
         config_path=path,
         schedule=rows,
         producer=producer,
         resume=resume,
         report_filename=REPORT_FILENAME,
-        report_schema=REPORT_SCHEMA,
+        report_schema=_report_schema(config),
         label="Maze32 N300 four-map StructShell quick triage",
     )
     if prepared.completed_report is not None:
@@ -755,13 +858,19 @@ def run(
 
 __all__ = [
     "CONFIG_SCHEMA",
+    "CONFIG_SCHEMA_V2",
     "CONTROLLERS",
     "EXPERIMENT_ID",
+    "EXPERIMENT_ID_V2",
     "PROCESS_FUSE_SECONDS",
+    "PROCESS_FUSE_SECONDS_V2",
     "REPORT_SCHEMA",
+    "REPORT_SCHEMA_V2",
     "SOLVER_SEED",
     "STATUS_SCHEMA",
+    "STATUS_SCHEMA_V2",
     "WALL_TIME_SECONDS",
+    "WALL_TIME_SECONDS_V2",
     "analyze",
     "controller_kwargs",
     "load_config",
