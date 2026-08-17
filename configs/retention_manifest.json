@@ -3082,6 +3082,31 @@
       "path": "tests/evaluation/test_stride_warehouse_fixed16_development_v2.py",
       "role": "reproducibility",
       "contract": "Freeze four registered task hashes, fresh sixteen-reset qualification, eight paired keys, six-arm rotation, trace identity and conditional next-step semantics."
+    },
+    {
+      "path": "experiments/warehouse_crossaisle_tasks.py",
+      "role": "reproducibility",
+      "purpose": "Generate and audit the checksum-pinned, paired central cross-aisle Warehouse task family without invoking a solver or controller."
+    },
+    {
+      "path": "experiments/stride_warehouse_crossaisle_paired.py",
+      "role": "reproducibility",
+      "purpose": "Freeze the 32-task cross-aisle registry and run the independent 128-key reset-only Warehouse benchmark qualification."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_crossaisle_paired.py",
+      "role": "reproducibility",
+      "purpose": "Expose planning, Q0 task generation and Q1 reset-only qualification while providing no controller or TTF command."
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_crossaisle_tasks.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four-map cross-aisle geometry, paired endpoint construction, distance gates and tamper-safe Q0 audit."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_crossaisle_paired.py",
+      "role": "reproducibility",
+      "contract": "Freeze the two-stage task registry, exact 128-reset schedule, scenario and manifest identity, terminal failure and same-fingerprint resume contracts."
     }
   ]
 }

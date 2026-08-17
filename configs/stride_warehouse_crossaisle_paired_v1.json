@@ -1,0 +1,128 @@
+{
+  "schema": "lns2.stride.warehouse_crossaisle_paired_config.v1",
+  "experiment_id": "stride-warehouse-crossaisle-paired-v1",
+  "scientific_status": "preregistered_hash_frozen_q0_q1_reset_only_benchmark_qualification",
+  "pre_registration_parent_commit": "3f9548b8206fd449f0ea1ce6f897cdd620701da0",
+  "phase_contract": {
+    "allowed_phases": ["q0_geometry_and_task_registration", "q1_reset_only"],
+    "controller_step_allowed": false,
+    "policy_episode_allowed": false,
+    "formal_ttf_allowed": false,
+    "formal_schedule_allowed": false,
+    "q1_requires_frozen_task_registry": true
+  },
+  "runtime": {
+    "workers": 16,
+    "qualification_process_timeout_seconds": 240.0,
+    "stop_on_first_execution_error_or_process_timeout": true,
+    "resume_only_after_zero_execution_errors_and_zero_process_timeouts": true
+  },
+  "cohort": {
+    "split": "balanced_wall_clock",
+    "task_seeds": [419, 463],
+    "task_variants": [
+      "reciprocal_cross_aisle_exchange",
+      "matched_shifted_exchange"
+    ],
+    "q_values": [16, 20],
+    "solver_seeds": [61, 62, 63, 64],
+    "maps": [
+      {
+        "id": "warehouse-10-20-10-2-1",
+        "code": "w1020a",
+        "path": "build/movingai-dev/maps/warehouse-10-20-10-2-1.map",
+        "sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0",
+        "expected_internal_group_count": 19,
+        "expected_aisle_width": 1,
+        "expected_agent_count_by_q": {"16": 384, "20": 480}
+      },
+      {
+        "id": "warehouse-10-20-10-2-2",
+        "code": "w1020b",
+        "path": "build/movingai-ood-dev/maps/warehouse-10-20-10-2-2.map",
+        "sha256": "4f06e82c2b87238daa8e308086afdba701112bf023e94e740e5bf9508a6adec3",
+        "expected_internal_group_count": 19,
+        "expected_aisle_width": 2,
+        "expected_agent_count_by_q": {"16": 768, "20": 960}
+      },
+      {
+        "id": "warehouse-20-40-10-2-1",
+        "code": "w2040a",
+        "path": "build/movingai-dev/maps/warehouse-20-40-10-2-1.map",
+        "sha256": "bd3bec2d1c20a8bbf900583cb4c2cf9dc16101470fbfae93b272ee0fb575d3ec",
+        "expected_internal_group_count": 39,
+        "expected_aisle_width": 1,
+        "expected_agent_count_by_q": {"16": 384, "20": 480}
+      },
+      {
+        "id": "warehouse-20-40-10-2-2",
+        "code": "w2040b",
+        "path": "build/movingai-ood-dev/maps/warehouse-20-40-10-2-2.map",
+        "sha256": "eae2a3f5298b1e113bfc32b5b4404f5de5105365d237df63cc9dc9e2d1c73713",
+        "expected_internal_group_count": 39,
+        "expected_aisle_width": 2,
+        "expected_agent_count_by_q": {"16": 768, "20": 960}
+      }
+    ],
+    "expected_task_count": 32,
+    "expected_reset_count": 128,
+    "claim_boundary": "four_registered_standard_warehouse_maps_and_two_preregistered_cross_aisle_task_families_only"
+  },
+  "q0_gates": {
+    "required_chosen_cross_aisle_group_count_per_map": 12,
+    "exclude_map_boundary_groups": true,
+    "exclude_central_group": true,
+    "chosen_group_balance": "six_above_and_six_below_the_excluded_central_group",
+    "unique_starts_required": true,
+    "unique_goals_required": true,
+    "zero_fixed_points_required": true,
+    "all_endpoints_reachable_required": true,
+    "same_start_multiset_between_variants_required": true,
+    "same_goal_multiset_between_variants_required": true,
+    "maximum_relative_mean_shortest_distance_difference": 0.05,
+    "maximum_relative_p95_shortest_distance_difference": 0.10,
+    "all_32_tasks_required": true
+  },
+  "q1_gates": {
+    "all_128_resets_required": true,
+    "all_initial_solutions_complete_and_consistent": true,
+    "structured": {
+      "variant": "reciprocal_cross_aisle_exchange",
+      "minimum_initial_conflicts": 16,
+      "minimum_active_conflict_agents": 32,
+      "minimum_largest_conflict_component_size": 16,
+      "initial_feasible": false
+    },
+    "matched": {
+      "variant": "matched_shifted_exchange",
+      "minimum_initial_conflicts": 1,
+      "initial_feasible": false
+    },
+    "selection": "per_map_lowest_q_where_both_variants_pass_every_task_seed_solver_seed_reset",
+    "all_four_maps_must_select_a_q": true,
+    "no_map_q_task_variant_or_seed_replacement": true
+  },
+  "registration": {
+    "status": "frozen_before_q1",
+    "task_registry_path": "configs/stride_warehouse_crossaisle_paired_tasks_v1.json",
+    "task_registry_sha256": "72a089c5145b77b4d4f4d2e467b7c3e26d8b6f0155608dbc1fe0f1669480e49d",
+    "q1_allowed": true
+  },
+  "inputs": {
+    "runtime_config": {
+      "path": "configs/stride_warehouse_crossaisle_paired_runtime_v1.json",
+      "sha256": "83fcf0af571c02c8269371fb8de46f47402a03dbaf0a5283f2b39d83cb7809f3"
+    },
+    "task_generator": {
+      "path": "experiments/warehouse_crossaisle_tasks.py",
+      "sha256": "72eea3f2d915e3bd8304816777832e2baf899e922b9b379d02ea3666786fd7bc"
+    }
+  },
+  "result_interpretation": {
+    "matched_control_label": "same_start_and_goal_multisets_distance_near_matched_secondary_control",
+    "fully_difficulty_matched_control_claim_allowed": false,
+    "controller_performance_claim_allowed": false,
+    "ttf_claim_allowed": false,
+    "benchmark_ready_means": "q0_passed_and_all_four_maps_selected_a_common_q_in_q1_only"
+  }
+}

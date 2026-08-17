@@ -1,0 +1,509 @@
+{
+  "experiment_id": "stride-warehouse-crossaisle-paired-v1",
+  "geometry_summary": {
+    "warehouse-10-20-10-2-1": {
+      "aisle_width": 1,
+      "chosen_group_count": 12,
+      "chosen_groups": [
+        [
+          13
+        ],
+        [
+          16
+        ],
+        [
+          19
+        ],
+        [
+          22
+        ],
+        [
+          25
+        ],
+        [
+          28
+        ],
+        [
+          34
+        ],
+        [
+          37
+        ],
+        [
+          40
+        ],
+        [
+          43
+        ],
+        [
+          46
+        ],
+        [
+          49
+        ]
+      ],
+      "excluded_central_group": [
+        31
+      ],
+      "internal_group_count": 19
+    },
+    "warehouse-10-20-10-2-2": {
+      "aisle_width": 2,
+      "chosen_group_count": 12,
+      "chosen_groups": [
+        [
+          17,
+          18
+        ],
+        [
+          21,
+          22
+        ],
+        [
+          25,
+          26
+        ],
+        [
+          29,
+          30
+        ],
+        [
+          33,
+          34
+        ],
+        [
+          37,
+          38
+        ],
+        [
+          45,
+          46
+        ],
+        [
+          49,
+          50
+        ],
+        [
+          53,
+          54
+        ],
+        [
+          57,
+          58
+        ],
+        [
+          61,
+          62
+        ],
+        [
+          65,
+          66
+        ]
+      ],
+      "excluded_central_group": [
+        41,
+        42
+      ],
+      "internal_group_count": 19
+    },
+    "warehouse-20-40-10-2-1": {
+      "aisle_width": 1,
+      "chosen_group_count": 12,
+      "chosen_groups": [
+        [
+          43
+        ],
+        [
+          46
+        ],
+        [
+          49
+        ],
+        [
+          52
+        ],
+        [
+          55
+        ],
+        [
+          58
+        ],
+        [
+          64
+        ],
+        [
+          67
+        ],
+        [
+          70
+        ],
+        [
+          73
+        ],
+        [
+          76
+        ],
+        [
+          79
+        ]
+      ],
+      "excluded_central_group": [
+        61
+      ],
+      "internal_group_count": 39
+    },
+    "warehouse-20-40-10-2-2": {
+      "aisle_width": 2,
+      "chosen_group_count": 12,
+      "chosen_groups": [
+        [
+          57,
+          58
+        ],
+        [
+          61,
+          62
+        ],
+        [
+          65,
+          66
+        ],
+        [
+          69,
+          70
+        ],
+        [
+          73,
+          74
+        ],
+        [
+          77,
+          78
+        ],
+        [
+          85,
+          86
+        ],
+        [
+          89,
+          90
+        ],
+        [
+          93,
+          94
+        ],
+        [
+          97,
+          98
+        ],
+        [
+          101,
+          102
+        ],
+        [
+          105,
+          106
+        ]
+      ],
+      "excluded_central_group": [
+        81,
+        82
+      ],
+      "internal_group_count": 39
+    }
+  },
+  "q0_manifest_sha256": "fa084691b492655a9e70ab7f2b7bbe6e049fa78c66986a43de755ff3022d0ee8",
+  "schema": "lns2.stride.warehouse_crossaisle_task_registry.v1",
+  "task_count": 32,
+  "task_generator_sha256": "72eea3f2d915e3bd8304816777832e2baf899e922b9b379d02ea3666786fd7bc",
+  "tasks": {
+    "w1020a__msx__t0419__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 16,
+      "scenario_sha256": "8e26950e1af4c9b6669ffe15f9527831b06317454c462de1bc075aba315d17a3",
+      "task_seed": 419,
+      "task_sha256": "06224fdcb32472269d7b6801023c75f06683691bc38c8916a260012118061b40",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020a__msx__t0419__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 20,
+      "scenario_sha256": "3be23637a796a5a05b59b7f9120bb2e8936f1de2705f705a451cd73f68509939",
+      "task_seed": 419,
+      "task_sha256": "d278fc8db77e8e2710977757049ebf029aedba655808b86abca73afe5cc712e4",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020a__msx__t0463__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 16,
+      "scenario_sha256": "96b5693ada79c7f3ae56996a3198cc4e1d1e216b14d866e8dda67ba874c00b04",
+      "task_seed": 463,
+      "task_sha256": "a3c7d1fbf992d9340251dfca6e313eefda7e7dbfab0abfa0bc7b8e91a3aa6c26",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020a__msx__t0463__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 20,
+      "scenario_sha256": "74bb0d82c724f333ddc5a2e5be33a00378e9d070538bcecd423cd7e1a7995f46",
+      "task_seed": 463,
+      "task_sha256": "64de130a5e261c7044eaf6a6c3431ae52e45cf29bcbfa022cfda6b895fdd866d",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020a__rcx__t0419__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 16,
+      "scenario_sha256": "a703485fb9204db74a5ed1a5557ada0e5a533ae712de1fddf94f99ae9987743e",
+      "task_seed": 419,
+      "task_sha256": "d41a7efe3a6f367a93dceb2f61dfc195f04c79ebf8af7a6abb4c05eff9dc3bc7",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020a__rcx__t0419__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 20,
+      "scenario_sha256": "3e371dbeeb9e8a3b3472d98bf120f7fe62d6075decab11c22968dfa8722f76dd",
+      "task_seed": 419,
+      "task_sha256": "b55a4c37ff43c9d5487e77a4a4aa3c0e64a70c9eebcd8016884211c85fa91b47",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020a__rcx__t0463__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 16,
+      "scenario_sha256": "3c71719a8021413c5fade4ae92f06e9f8eb07fa588c54fada82ba24efd041c41",
+      "task_seed": 463,
+      "task_sha256": "7b5195348f5d4b10c63c8f2969391348d622b667bc15a0eadf316dd962479fcc",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020a__rcx__t0463__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-10-20-10-2-1",
+      "q": 20,
+      "scenario_sha256": "33e8ec8afd6c071ee7209e5dcce06b2d35b64d97e44a9742c3c021e08f53cb50",
+      "task_seed": 463,
+      "task_sha256": "dc89dbd0534af2cf34eda916b82da31ffb6a22bc9904a9cd74d03b5186a66a93",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020b__msx__t0419__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 16,
+      "scenario_sha256": "0fa391643fe1631a448aedfebc8e5606bda49c8eb6027b37e0e86d06efa4e973",
+      "task_seed": 419,
+      "task_sha256": "ef1929d1ec5e322c8e4a1a368d0ecb62a0687bc1cd3a2f90153d0c4f8dbb5598",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020b__msx__t0419__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 20,
+      "scenario_sha256": "e77753bf471fb4fd9e7345533e83ea8edb5419cd52f8f3e501959d1f4f5897ec",
+      "task_seed": 419,
+      "task_sha256": "dbf55aaf1eed33ade30980b389d0eb10bb4bfbd9ab8d8ba97e80a0db981654d8",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020b__msx__t0463__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 16,
+      "scenario_sha256": "16c69d176612a19693a3478f0593528923734cd751b427fab991e13d660d7d10",
+      "task_seed": 463,
+      "task_sha256": "2da77dff1705f5f8f30e377e7f7dd2b70ee8232b4765babc8e3ff5566aba4567",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020b__msx__t0463__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 20,
+      "scenario_sha256": "fab1b6df41ee5315a63ad6b814a48f68f1867a3d02f0a5421408caa46213c647",
+      "task_seed": 463,
+      "task_sha256": "b285ca1b254253c00970d58b5e2c7325733b48d43a39ff5e03068cac72ef5489",
+      "variant": "matched_shifted_exchange"
+    },
+    "w1020b__rcx__t0419__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 16,
+      "scenario_sha256": "1bfa110f19cd9c06e5ed1dbfec612b03803ea71465617b52b41a8d1dccaae42b",
+      "task_seed": 419,
+      "task_sha256": "3aa836a447dd5ce5a33f2a156dc5ec9f6440b2d178cf5874100ead2e3de96072",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020b__rcx__t0419__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 20,
+      "scenario_sha256": "51a96e30e0f55d927da3be4a0bc32cb3903a8c63197eecc5b4ff068d73df8b3d",
+      "task_seed": 419,
+      "task_sha256": "a7e9f0a24ce79fc47f38c1f06e2998943054d815ae1d17ef324e463ba6cc9a39",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020b__rcx__t0463__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 16,
+      "scenario_sha256": "b92d35fb49aae5ecd16d1c83c90763f712b3bbe4b4f746f170c3cb3a6bc514a7",
+      "task_seed": 463,
+      "task_sha256": "9125659c9ea1b8cb043cc6164f15673b71e39116a331dfc1bffb8134a62a63c7",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w1020b__rcx__t0463__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-10-20-10-2-2",
+      "q": 20,
+      "scenario_sha256": "c204e2c94f355f8098dc9b9f57e3accb55ff2bab7b135548d0cb8026cf8b51cb",
+      "task_seed": 463,
+      "task_sha256": "d32acbfa9ce03b04695a0591e50f7b4ebe20469ae14028c3cbae04cd8ecb34ee",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040a__msx__t0419__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 16,
+      "scenario_sha256": "91b6ea558bac576681e454db3fa2c8072c095cbca4e630359f18ab139f9a05fd",
+      "task_seed": 419,
+      "task_sha256": "61fa325baef2197c6bed1eae8b1e0b6e4f2ca4a58f1d3dcb33c8e01f9b251dfb",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040a__msx__t0419__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 20,
+      "scenario_sha256": "a6f1e6c12cf727916b2effc4dcaddd685cb48cc828a401f998e154e4ad3b2ef2",
+      "task_seed": 419,
+      "task_sha256": "c0c9dee496b5f3206f09c8e7d6574d4261d3264c06fcd75a3763ae7e5ae75dac",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040a__msx__t0463__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 16,
+      "scenario_sha256": "0fa4ea21fc48132740b52f3ccd6e365e0520d1a37bb9ec574f0d9c1879b015da",
+      "task_seed": 463,
+      "task_sha256": "b9073f6e7de8db1889845b5c0eb4c5c501559cb623ebc0aabdc3f3a7daf6e4d5",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040a__msx__t0463__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 20,
+      "scenario_sha256": "6a38c24877a60997c66fbaafd8705958414a52f8fe5a5a03838093be77a014df",
+      "task_seed": 463,
+      "task_sha256": "b53daf0888bf38f52306f836be0cd7496849b8b4d50274aa7967eebb4b2bb197",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040a__rcx__t0419__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 16,
+      "scenario_sha256": "b784748f4212697d07a9597be23344ab3b9ef06c8c1ce1c1517bf369da688b25",
+      "task_seed": 419,
+      "task_sha256": "e2470ad544282341bec9b21f114c1453a4968297b683906bdc0ca6bac6919d29",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040a__rcx__t0419__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 20,
+      "scenario_sha256": "01f2473779593e8a83a0143cfcc0574701725a8fd12f37a82b48be5c739c46a0",
+      "task_seed": 419,
+      "task_sha256": "8bfd44b5a13335eb6199fba80c5073a6eb36154b8b2fd78b4b9e95dd043a6e88",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040a__rcx__t0463__q16__n0384": {
+      "agent_count": 384,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 16,
+      "scenario_sha256": "a796d3db8b717e44aa97a6baf63ae7fecec012c779aae278512c9c17cb69f549",
+      "task_seed": 463,
+      "task_sha256": "bd0168ff2a15c97763d5eb3af9021cc241bb099ae5932f6ae7f7b2986f374a0b",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040a__rcx__t0463__q20__n0480": {
+      "agent_count": 480,
+      "map_id": "warehouse-20-40-10-2-1",
+      "q": 20,
+      "scenario_sha256": "db9cbd1d5f3d6ab6b4851b4102016fdc945d4f41e8d90aef17b17acaa6d960ec",
+      "task_seed": 463,
+      "task_sha256": "5022594226ffb97f3ac9d9b2008fcd8fa0cf3808ab63bf43ae72d5bb0e663076",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040b__msx__t0419__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 16,
+      "scenario_sha256": "d908872d04ae3dc78d444cb9a221396788b735a00e2b5152c5bb07fe0df980aa",
+      "task_seed": 419,
+      "task_sha256": "050d898afbe5ca9c1039308d713e23e905afeef6258a3fb476f4bb8b9ae56a9e",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040b__msx__t0419__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 20,
+      "scenario_sha256": "547471550c100b75d679c005c6298eb4e2084363597fcd7bd85f5a493d476e74",
+      "task_seed": 419,
+      "task_sha256": "443e7479318d0d05fa15c23d87568f1d4c81339a4e6258f700fddc7d274f4165",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040b__msx__t0463__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 16,
+      "scenario_sha256": "0007e92442f5cbc901850dc91c838c5c029690eef774cfb7f4f6d4ba857a7739",
+      "task_seed": 463,
+      "task_sha256": "d46fb576626aa6f54426f6070f93d9b445b258fcf89f9a7e4207bd55068df37e",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040b__msx__t0463__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 20,
+      "scenario_sha256": "9ee62c3be321d4ca8f524c8818d1186d21dd4f44104e0a99996426acbe702f00",
+      "task_seed": 463,
+      "task_sha256": "7e798985a26248bd68fc86adb7882ffcbf7653ebd92a8a2cc6b9cb7a89916220",
+      "variant": "matched_shifted_exchange"
+    },
+    "w2040b__rcx__t0419__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 16,
+      "scenario_sha256": "6c3439c0270c0dae417e5c16330cb7ea9c8ee4a51f04c607b0055ccd9d0abcb2",
+      "task_seed": 419,
+      "task_sha256": "95b0c1cbe65bf2b239ef0e3bcbdf165a7d80c9968c8598a23743e3006e7826da",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040b__rcx__t0419__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 20,
+      "scenario_sha256": "da4edc638dfb30e50dbe80880db9e684eb9d91ec5d199f2adebf8a67997c7670",
+      "task_seed": 419,
+      "task_sha256": "bf23c1a0eff7d28e5b5a2f015029f50df5ccd963a92acf922185d9516aab709d",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040b__rcx__t0463__q16__n0768": {
+      "agent_count": 768,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 16,
+      "scenario_sha256": "58c7caca8bfef616dd36806ee5d818f8a82777947667723c4c448070d3bc8935",
+      "task_seed": 463,
+      "task_sha256": "265e8bffb3271edc9e137eb0721339e2d8dab9412b8af6323697ce6903c6e6e8",
+      "variant": "reciprocal_cross_aisle_exchange"
+    },
+    "w2040b__rcx__t0463__q20__n0960": {
+      "agent_count": 960,
+      "map_id": "warehouse-20-40-10-2-2",
+      "q": 20,
+      "scenario_sha256": "7157c86e4d2ea8f036d58c647cf63dbf7eb541a2a163741a55c4668451d26658",
+      "task_seed": 463,
+      "task_sha256": "780d14048b7939136b8e0eb76233c4d9d227f8aac4b3331228250c8b6ac72722",
+      "variant": "reciprocal_cross_aisle_exchange"
+    }
+  }
+}
