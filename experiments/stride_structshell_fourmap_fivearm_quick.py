@@ -80,17 +80,17 @@ EXPECTED_GROUPS = (
 )
 def _seed_identity_audit(seed: int) -> dict[str, Any]:
     return {
-    "candidate_seed": seed,
-    "selected_solver_seed": seed,
-    "audit_scope": (
-        "four_exact_task_ids_controller_episode_paths_and_manifest_rows_only"
-    ),
-    "global_freshness_scan": False,
-    "outcome_fields_read": False,
-    "exact_task_count": 4,
-    "controller_result_match_count": 0,
-    "completed_before_runner_registration": True,
-}
+        "candidate_seed": seed,
+        "selected_solver_seed": seed,
+        "audit_scope": (
+            "four_exact_task_ids_controller_episode_paths_and_manifest_rows_only"
+        ),
+        "global_freshness_scan": False,
+        "outcome_fields_read": False,
+        "exact_task_count": 4,
+        "controller_result_match_count": 0,
+        "completed_before_runner_registration": True,
+    }
 
 
 SEED_IDENTITY_AUDIT = _seed_identity_audit(SOLVER_SEED)
@@ -190,7 +190,10 @@ def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
         for group in groups
     )
     solver_seed = int(cohort.get("solver_seed", -1))
-    expected_seed = 24 if config.get("schema") == CONFIG_SCHEMA_V2 else SOLVER_SEED
+    expected_seed = {
+        (CONFIG_SCHEMA, EXPERIMENT_ID): 23,
+        (CONFIG_SCHEMA_V2, EXPERIMENT_ID_V2): 24,
+    }[(str(config["schema"]), str(config["experiment_id"]))]
     if (
         solver_seed != expected_seed
         or int(cohort.get("paired_key_count", -1)) != 4
