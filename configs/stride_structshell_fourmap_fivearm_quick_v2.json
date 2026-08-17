@@ -1,0 +1,9 @@
+{
+  "schema": "lns2.stride.structshell_fourmap_fivearm_quick_config.v2",
+  "experiment_id": "stride-structshell-fourmap-fivearm-quick-v2",
+  "solver_seed": 24,
+  "base_config": {
+    "path": "configs/stride_structshell_fourmap_fivearm_quick_v1.json",
+    "sha256": "cb74e6a1ef4a808efed54b7c1997ae14851d2f4f9136c02c68fea276a76eebd3"
+  }
+}

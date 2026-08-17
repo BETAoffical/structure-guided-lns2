@@ -10,6 +10,7 @@ import experiments.stride_structshell_fourmap_fivearm_quick as subject
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stride_structshell_fourmap_fivearm_quick_v1.json"
+CONFIG_V2 = ROOT / "configs" / "stride_structshell_fourmap_fivearm_quick_v2.json"
 
 
 def test_plan_is_exactly_four_maps_five_arms_and_invokes_nothing() -> None:
@@ -158,7 +159,7 @@ def test_materialized_runtime_is_bounded_without_touching_source(
     for group in config["cohort"]["groups"]:
         source = Path(str(group["_runtime_path"]))
         before = subject.sha256_file(source)
-        runtime = subject._runtime_config_path(tmp_path, group)
+        runtime = subject._runtime_config_path(tmp_path, group, 23)
         payload = subject.read_json(runtime)
         assert payload["solver_seeds"] == [23]
         assert payload["wall_time_budget_seconds"] == 60.0
@@ -166,6 +167,24 @@ def test_materialized_runtime_is_bounded_without_touching_source(
         assert payload["environment"]["time_limit"] == 60.0
         assert payload["workers"] == 1
         assert subject.sha256_file(source) == before
+
+
+def test_seed24_v2_schedule_and_runtime_identity(tmp_path: Path) -> None:
+    result = subject.plan(CONFIG_V2)
+    assert result["experiment_id"] == subject.EXPERIMENT_ID_V2
+    assert result["solver_seed"] == 24
+    assert result["timed_episode_count"] == 20
+    assert all(key.endswith("@24") for key in result["keys"])
+
+    _path, _root, config = subject.load_config(CONFIG_V2)
+    rows = subject.schedule(config)
+    assert len(rows) == 20
+    assert {row["solver_seed"] for row in rows} == {24}
+    runtime = subject._runtime_config_path(
+        tmp_path, config["cohort"]["groups"][0], 24
+    )
+    assert runtime.name.endswith("__seed_0024.json")
+    assert subject.read_json(runtime)["solver_seeds"] == [24]
 
 
 def test_dry_run_cannot_call_solver(

@@ -26,9 +26,11 @@ from lns2_selector.runtime.structshell_single_family import (
 
 
 CONFIG_SCHEMA = "lns2.stride.structshell_fourmap_fivearm_quick_config.v1"
+CONFIG_SCHEMA_V2 = "lns2.stride.structshell_fourmap_fivearm_quick_config.v2"
 STATUS_SCHEMA = "lns2.stride.structshell_fourmap_fivearm_quick_status.v1"
 REPORT_SCHEMA = "lns2.stride.structshell_fourmap_fivearm_quick_report.v1"
 EXPERIMENT_ID = "stride-structshell-fourmap-fivearm-quick-v1"
+EXPERIMENT_ID_V2 = "stride-structshell-fourmap-fivearm-quick-v2"
 CONTROLLERS = (
     "official_adaptive",
     "v2_only",
@@ -76,9 +78,10 @@ EXPECTED_GROUPS = (
         "w1020a__oe__t0233__n0600",
     ),
 )
-SEED_IDENTITY_AUDIT = {
-    "candidate_seed": 23,
-    "selected_solver_seed": 23,
+def _seed_identity_audit(seed: int) -> dict[str, Any]:
+    return {
+    "candidate_seed": seed,
+    "selected_solver_seed": seed,
     "audit_scope": (
         "four_exact_task_ids_controller_episode_paths_and_manifest_rows_only"
     ),
@@ -90,15 +93,43 @@ SEED_IDENTITY_AUDIT = {
 }
 
 
+SEED_IDENTITY_AUDIT = _seed_identity_audit(SOLVER_SEED)
+
+
 def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     path = Path(config_path).resolve()
     root = Path(__file__).resolve().parents[1]
-    config = read_json(path)
-    if not isinstance(config, dict):
+    raw_config = read_json(path)
+    if not isinstance(raw_config, dict):
         raise ValueError("four-map five-arm quick config must be an object")
+    if raw_config.get("schema") == CONFIG_SCHEMA_V2:
+        if (
+            raw_config.get("experiment_id") != EXPERIMENT_ID_V2
+            or int(raw_config.get("solver_seed", -1)) != 24
+        ):
+            raise ValueError("four-map five-arm v2 overlay identity changed")
+        base_path = registered_input(
+            root,
+            dict(raw_config.get("base_config") or {}),
+            label="four-map five-arm v1 base config",
+        )
+        config = read_json(base_path)
+        if not isinstance(config, dict):
+            raise ValueError("four-map five-arm v1 base config must be an object")
+        config = dict(config)
+        config["schema"] = CONFIG_SCHEMA_V2
+        config["experiment_id"] = EXPERIMENT_ID_V2
+        config["cohort"] = dict(config.get("cohort") or {})
+        config["cohort"]["solver_seed"] = 24
+        config["solver_seed_identity_audit"] = _seed_identity_audit(24)
+    else:
+        config = raw_config
     if (
-        config.get("schema") != CONFIG_SCHEMA
-        or config.get("experiment_id") != EXPERIMENT_ID
+        (config.get("schema"), config.get("experiment_id"))
+        not in {
+            (CONFIG_SCHEMA, EXPERIMENT_ID),
+            (CONFIG_SCHEMA_V2, EXPERIMENT_ID_V2),
+        }
         or tuple(map(str, config.get("controllers") or ())) != CONTROLLERS
     ):
         raise ValueError("four-map five-arm quick identity changed")
@@ -158,13 +189,15 @@ def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
         )
         for group in groups
     )
+    solver_seed = int(cohort.get("solver_seed", -1))
+    expected_seed = 24 if config.get("schema") == CONFIG_SCHEMA_V2 else SOLVER_SEED
     if (
-        int(cohort.get("solver_seed", -1)) != SOLVER_SEED
+        solver_seed != expected_seed
         or int(cohort.get("paired_key_count", -1)) != 4
         or int(cohort.get("episode_count", -1)) != 20
         or observed_groups != EXPECTED_GROUPS
         or dict(config.get("solver_seed_identity_audit") or {})
-        != SEED_IDENTITY_AUDIT
+        != _seed_identity_audit(expected_seed)
     ):
         raise ValueError("four-map five-arm cohort changed")
 
@@ -220,19 +253,20 @@ def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
 
 def schedule(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    solver_seed = int(config["cohort"]["solver_seed"])
     for key_index, group in enumerate(config["cohort"]["groups"]):
         order = CONTROLLERS[key_index:] + CONTROLLERS[:key_index]
         for position, controller in enumerate(order):
             rows.append(
                 {
                     "key_index": key_index,
-                    "key_id": f"{group['id']}@{SOLVER_SEED}",
+                    "key_id": f"{group['id']}@{solver_seed}",
                     "within_key_position": position,
                     "group_id": str(group["id"]),
                     "map_id": str(group["map_id"]),
                     "family": str(group["family"]),
                     "task_id": str(group["task"]),
-                    "solver_seed": SOLVER_SEED,
+                    "solver_seed": solver_seed,
                     "controller": controller,
                 }
             )
@@ -244,14 +278,14 @@ def plan(config_path: str | Path) -> dict[str, Any]:
     rows = schedule(config)
     return {
         "schema": STATUS_SCHEMA,
-        "experiment_id": EXPERIMENT_ID,
+        "experiment_id": str(config["experiment_id"]),
         "map_count": 4,
         "task_count": 4,
         "paired_key_count": 4,
         "controller_count": 5,
         "timed_episode_count": 20,
         "paired_reset_anchor_count": 4,
-        "solver_seed": SOLVER_SEED,
+        "solver_seed": int(config["cohort"]["solver_seed"]),
         "controllers": list(CONTROLLERS),
         "keys": [
             str(row["key_id"])
@@ -272,7 +306,7 @@ def plan(config_path: str | Path) -> dict[str, Any]:
         * PROCESS_FUSE_SECONDS,
         "strict_serial_timing": True,
         "reset_inclusive_ttf": True,
-        "seed_identity_audit": dict(SEED_IDENTITY_AUDIT),
+        "seed_identity_audit": dict(config["solver_seed_identity_audit"]),
         "solver_or_controller_invoked": False,
         "map_generation": False,
         "global_freshness_scan": False,
@@ -337,18 +371,22 @@ def _group(config: Mapping[str, Any], group_id: str) -> dict[str, Any]:
     )
 
 
-def _runtime_config_path(output: Path, group: Mapping[str, Any]) -> Path:
+def _runtime_config_path(
+    output: Path, group: Mapping[str, Any], solver_seed: int
+) -> Path:
     payload = read_json(Path(str(group["_runtime_path"])).resolve())
     if not isinstance(payload, dict):
         raise ValueError(f"{group['id']} runtime config must be an object")
-    payload["solver_seeds"] = [SOLVER_SEED]
+    payload["solver_seeds"] = [solver_seed]
     payload["wall_time_budget_seconds"] = WALL_TIME_SECONDS
     payload["episode_process_timeout_seconds"] = PROCESS_FUSE_SECONDS
     payload["workers"] = 1
     environment = dict(payload.get("environment") or {})
     environment["time_limit"] = WALL_TIME_SECONDS
     payload["environment"] = environment
-    destination = output / "runtime_configs" / f"{group['id']}__seed_0023.json"
+    destination = (
+        output / "runtime_configs" / f"{group['id']}__seed_{solver_seed:04d}.json"
+    )
     if destination.is_file():
         if read_json(destination) != payload:
             raise ValueError(f"{group['id']} materialized runtime changed")
@@ -376,7 +414,7 @@ def _manifest_row(output: Path, item: Mapping[str, Any]) -> dict[str, Any] | Non
         dict(row)
         for row in (read_jsonl(path) if path.is_file() else [])
         if str(row.get("task_id")) == str(item["task_id"])
-        and int(row.get("solver_seed", -1)) == SOLVER_SEED
+        and int(row.get("solver_seed", -1)) == int(item["solver_seed"])
     ]
     if len(matches) > 1:
         raise ValueError("four-map five-arm manifest is ambiguous")
@@ -411,11 +449,12 @@ def _qualify_group(
     resume: bool,
 ) -> Path:
     task_id = str(group["task"])
-    key = {(task_id, SOLVER_SEED)}
+    solver_seed = int(config["cohort"]["solver_seed"])
+    key = {(task_id, solver_seed)}
     qualification = output / "maps" / str(group["id"]) / "reset_anchor"
     run_closed_loop_collection(
         root / str(group["dataset"]),
-        _runtime_config_path(output, group),
+        _runtime_config_path(output, group, solver_seed),
         qualification,
         phase="qualify",
         workers=1,
@@ -442,7 +481,8 @@ def _run_episode(
 ) -> dict[str, Any]:
     group = _group(config, str(item["group_id"]))
     task_id = str(item["task_id"])
-    key = {(task_id, SOLVER_SEED)}
+    solver_seed = int(item["solver_seed"])
+    key = {(task_id, solver_seed)}
     collection = _controller_root(output, item)
     kwargs = controller_kwargs(root, config, str(item["controller"]))
     common = {
@@ -456,7 +496,7 @@ def _run_episode(
     }
     run_closed_loop_collection(
         root / str(group["dataset"]),
-        _runtime_config_path(output, group),
+        _runtime_config_path(output, group, solver_seed),
         collection,
         phase="qualify",
         resume=collection.joinpath("run_config.json").is_file(),
@@ -465,7 +505,7 @@ def _run_episode(
     )
     run_closed_loop_collection(
         root / str(group["dataset"]),
-        _runtime_config_path(output, group),
+        _runtime_config_path(output, group, solver_seed),
         collection,
         phase=(
             "official_adaptive"
@@ -586,14 +626,14 @@ def analyze(
 
     report = {
         "schema": REPORT_SCHEMA,
-        "experiment_id": EXPERIMENT_ID,
+        "experiment_id": str(config["experiment_id"]),
         "scientific_status": "exploratory_single_seed_runtime_triage",
         "integrity_passed": not errors,
         "errors": errors,
         "map_count": 4,
         "paired_key_count": 4,
         "episode_count": len(indexed),
-        "solver_seed": SOLVER_SEED,
+        "solver_seed": int(config["cohort"]["solver_seed"]),
         "wall_time_budget_seconds": WALL_TIME_SECONDS,
         "per_map": per_map,
         "controller_summaries": controller_summaries,
@@ -718,8 +758,10 @@ def run(
 
 __all__ = [
     "CONFIG_SCHEMA",
+    "CONFIG_SCHEMA_V2",
     "CONTROLLERS",
     "EXPERIMENT_ID",
+    "EXPERIMENT_ID_V2",
     "PROCESS_FUSE_SECONDS",
     "REPORT_SCHEMA",
     "SOLVER_SEED",
