@@ -3074,16 +3074,6 @@
       "contract": "Freeze the four V2 traces, initial-middle-last checkpoint contract, twelve-state cap and no-native/no-PP/no-controller boundary."
     },
     {
-      "path": "docs/STRIDE_STRUCTSHELL_CROSSMAP_OFFLINE_PROFILE_V1_RESULT.md",
-      "role": "historical-evidence",
-      "purpose": "Record the source-only cross-map family-profile result, its implementation identity, and the explicit prohibition on treating retrospective checkpoints as Router labels."
-    },
-    {
-      "path": "configs/crossmap_profile_falsification_v1.json",
-      "role": "reproducibility",
-      "contract": "Freeze the two tasks, solver seeds 19/20, fifteen-second budget, strict per-key family crossover gates, machine freshness audit, and no-Router/no-promotion claim boundary."
-    },
-    {
       "path": "experiments/crossmap_profile_falsification_v1.py",
       "role": "reproducibility",
       "purpose": "Run the four-key Component16 versus Hotspot16 crossover falsification with first-failure stopping and complete inner trace/controller identity validation."
