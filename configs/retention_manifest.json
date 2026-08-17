@@ -3079,6 +3079,26 @@
       "purpose": "Record the source-only cross-map family-profile result, its implementation identity, and the explicit prohibition on treating retrospective checkpoints as Router labels."
     },
     {
+      "path": "configs/crossmap_profile_falsification_v1.json",
+      "role": "reproducibility",
+      "contract": "Freeze the two tasks, solver seeds 19/20, fifteen-second budget, strict per-key family crossover gates, machine freshness audit, and no-Router/no-promotion claim boundary."
+    },
+    {
+      "path": "experiments/crossmap_profile_falsification_v1.py",
+      "role": "reproducibility",
+      "purpose": "Run the four-key Component16 versus Hotspot16 crossover falsification with first-failure stopping and complete inner trace/controller identity validation."
+    },
+    {
+      "path": "scripts/run_crossmap_profile_falsification_v1.py",
+      "role": "reproducibility",
+      "purpose": "Expose plan, run and analysis commands for the bounded cross-map profile falsification."
+    },
+    {
+      "path": "tests/evaluation/test_crossmap_profile_falsification_v1.py",
+      "role": "reproducibility",
+      "contract": "Freeze schedule rotation, single-family size16 semantics, strict-fastest gates, pre-reset freshness, trace identity validation, early stop and invalid-resume behavior."
+    },
+    {
       "path": "lns2_selector/runtime/structshell_single_family.py",
       "role": "reproducibility",
       "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."

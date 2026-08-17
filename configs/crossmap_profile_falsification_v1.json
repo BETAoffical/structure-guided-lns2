@@ -1,0 +1,215 @@
+{
+  "schema": "lns2.crossmap_profile_falsification_config.v1",
+  "experiment_id": "crossmap-profile-falsification-v1",
+  "scientific_status": "preregistered_minimal_independent_falsification_not_confirmation_or_promotion",
+  "controllers": [
+    "v2_only",
+    "component16",
+    "hotspot16"
+  ],
+  "controller_contract": {
+    "base": "frozen_v2_full_native_features_optimized_copeland",
+    "nominal_size": 16,
+    "single_family_maximum_added_candidates_per_decision": 1,
+    "profiles": {
+      "component16": "conflict_component",
+      "hotspot16": "hotspot"
+    },
+    "excluded": [
+      "official_adaptive",
+      "multi_size_pool",
+      "router_implementation",
+      "rollback",
+      "retry",
+      "threshold_tuning"
+    ]
+  },
+  "runtime": {
+    "stopping_rule": "wall-clock",
+    "repair_seed_policy": "episode_stream",
+    "deterministic_pp_replay": false,
+    "wall_time_budget_seconds": 15.0,
+    "environment_time_limit_seconds": 15.0,
+    "episode_process_timeout_seconds": 30.0,
+    "workers_for_qualification": 1,
+    "workers_for_timed_episodes": 1,
+    "execution_order": "rotating_strict_three_controller_serial",
+    "stop_after_first_failed_completed_key": true
+  },
+  "cohort": {
+    "solver_seeds": [
+      19,
+      20
+    ],
+    "paired_key_count": 4,
+    "episode_count": 12,
+    "key_order": [
+      "maze-32-32-4@19",
+      "random-32-32-20-high-load@19",
+      "maze-32-32-4@20",
+      "random-32-32-20-high-load@20"
+    ],
+    "selection_basis": "pre_controller_identity_correction_uses_ascending_zero_artifact_rule_without_reading_ttf_or_controller_outcomes",
+    "groups": [
+      {
+        "id": "maze-32-32-4",
+        "map_id": "maze-32-32-4",
+        "family": "maze",
+        "dataset": "build/initlns-movingai-ood-dataset-v1",
+        "runtime_config": "movingai_runtime",
+        "manifest": "movingai_manifest",
+        "task_input": "maze_task",
+        "split": "movingai_ood",
+        "task": "maze-32-32-4__random_04__agents_0200",
+        "expected_winner": "component16"
+      },
+      {
+        "id": "random-32-32-20-high-load",
+        "map_id": "random-32-32-20",
+        "family": "random",
+        "dataset": "build/stride-stage2-movingai-v1",
+        "runtime_config": "high_load_runtime",
+        "manifest": "random_high_load_manifest",
+        "task_input": "random_task",
+        "split": "balanced_wall_clock",
+        "task": "random-32-32-20__random_01__agents_0400",
+        "expected_winner": "hotspot16"
+      }
+    ]
+  },
+  "freshness_audit": {
+    "artifact_search_scope": [
+      "workspace/build/**/episodes/**/*",
+      "workspace/build/**/*manifest*.jsonl"
+    ],
+    "definition": "no_existing_episode_artifact_for_the_exact_task_and_solver_seed_before_registration",
+    "inventory_hash_definition": "sha256_of_sorted_exact_seed_artifact_candidate_paths",
+    "maze_consumed_solver_seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "random_consumed_solver_seeds": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      101,
+      202,
+      303
+    ],
+    "output_root_excluded": true,
+    "pre_controller_identity_correction": {
+      "excluded": [
+        {
+          "controller_episode_match_count": 0,
+          "exact_manifest_match_count": 20,
+          "matches": [
+            {
+              "qualification_manifest_match_count": 10,
+              "source_experiment_id": "stride-structshell-overall-rollback-screen-v1"
+            },
+            {
+              "qualification_manifest_match_count": 2,
+              "source_experiment_id": "stride-structshell-rollback-aware-ttf-v1"
+            },
+            {
+              "qualification_manifest_match_count": 8,
+              "source_experiment_id": "stride-structshell-rollback-aware-ttf-v1-r2"
+            }
+          ],
+          "reason": "qualification_only_exact_task_artifacts",
+          "solver_seed": 18,
+          "source_experiment_ids": [
+            "stride-structshell-overall-rollback-screen-v1",
+            "stride-structshell-rollback-aware-ttf-v1",
+            "stride-structshell-rollback-aware-ttf-v1-r2"
+          ]
+        }
+      ],
+      "outcome_fields_read": false,
+      "rule": "ascending_from_18_choose_first_two_seeds_with_zero_exact_task_artifacts_for_both_registered_tasks",
+      "selected_solver_seeds": [
+        19,
+        20
+      ]
+    },
+    "required_match_count": 0,
+    "resume_policy": "read_and_verify_frozen_audit_without_workspace_rescan",
+    "selected_solver_seeds": [
+      19,
+      20
+    ]
+  },
+  "frozen_profile_hypothesis": {
+    "diagnostic_only_not_executed_by_this_runner": true,
+    "active_conflict_agent_ratio_abstain_below": 0.35,
+    "component16_minimum_fixed_size_to_lcc_ratio": 0.15,
+    "hotspot16_minimum_active_conflict_agent_ratio": 0.60,
+    "hotspot16_maximum_fixed_size_to_lcc_ratio": 0.10,
+    "hotspot16_minimum_conflict_event_to_pair_ratio": 2.0,
+    "otherwise": "v2_only",
+    "post_result_threshold_changes_allowed": false
+  },
+  "falsification_gate": {
+    "maze_expected_winner": "component16",
+    "random_expected_winner": "hotspot16",
+    "expected_winner_must_be_strictly_fastest_on_each_key": true,
+    "expected_winner_success_must_be_noninferior_on_each_key": true,
+    "tie_is_failure": true,
+    "first_failed_key_stops_remaining_schedule": true,
+    "threshold_changes_after_failure_allowed": false,
+    "claim_boundary": "survival_only_allows_a_larger_fresh_test_and_never_a_speed_or_default_claim"
+  },
+  "explicitly_omitted": [
+    "map_generation",
+    "new_task_generation",
+    "official_adaptive",
+    "bootstrap",
+    "auc_gate",
+    "router_execution",
+    "full_test_suite"
+  ],
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "inputs": {
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    },
+    "movingai_runtime": {
+      "path": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+      "sha256": "27c6cc29cc59c1cf00fc29d6220a790d212d7634c139afbdc476c69768e2a936"
+    },
+    "high_load_runtime": {
+      "path": "configs/stride_stage4r_high_load_runtime.json",
+      "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+    },
+    "movingai_manifest": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/manifest.jsonl",
+      "sha256": "cab89325c4ca62c7eefd7a0c5de38e1a700bf8384b618c399eafab876dd05742"
+    },
+    "random_high_load_manifest": {
+      "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/manifest.jsonl",
+      "sha256": "efe524b6397642f85964bc47124c348ed8280dd083170e0b33b5c2741573b132"
+    },
+    "maze_task": {
+      "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/tasks/maze-32-32-4__random_04__agents_0200.json",
+      "sha256": "c441ca5a2f7e5178bba952d80ec8769c6e123df88d772a1c1293213733c4abd7"
+    },
+    "random_task": {
+      "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/tasks/random-32-32-20__random_01__agents_0400.json",
+      "sha256": "5fc8509b1c2415a88ec021e6a225f84b79b7b027ef98ed3fad6bf1d058999b54"
+    }
+  }
+}
