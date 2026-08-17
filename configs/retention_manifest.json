@@ -3119,6 +3119,21 @@
       "contract": "Freeze the exact four tasks, seed25 identity, sixteen-entry serial schedule, Official phase, Dual16 plateau fallback and versioned 90/200-second runtime contracts."
     },
     {
+      "path": "experiments/stride_structshell_seed25_replay_diagnostic.py",
+      "role": "reproducibility",
+      "purpose": "Replay mechanically selected seed25 repair states with paired bounded PP seeds to separate candidate ranking, local repairability and short-horizon trajectory effects without running full TTF episodes."
+    },
+    {
+      "path": "scripts/run_stride_structshell_seed25_replay_diagnostic.py",
+      "role": "reproducibility",
+      "purpose": "Expose dry-run and bounded WSL execution for the thirteen-branch seed25 restored-state replay diagnostic."
+    },
+    {
+      "path": "tests/evaluation/test_stride_structshell_seed25_replay_diagnostic.py",
+      "role": "reproducibility",
+      "contract": "Freeze outcome-blind checkpoint selection, the V2-anchor Component16 Hotspot16 action set, the Random choice-set exception, paired seeds and bounded seven-transition branches."
+    },
+    {
       "path": "lns2_selector/runtime/structshell_single_family.py",
       "role": "reproducibility",
       "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."

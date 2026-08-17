@@ -1,0 +1,53 @@
+{
+  "schema": "lns2.stride.structshell_seed25_replay_diagnostic_registration.v1",
+  "experiment_id": "stride-structshell-seed25-replay-diagnostic-v1",
+  "scientific_status": "restored_state_short_horizon_mechanism_diagnostic_only",
+  "source": {
+    "output_root": "build/stride-structshell-maze32-n300-fourmap-quick-v2",
+    "quick_report": "build/stride-structshell-maze32-n300-fourmap-quick-v2/quick_report.json",
+    "quick_report_sha256": "a35a15680e4bb228e5682975b44e1aabe56669e6b49d9e5fcaa296cd0cc8c4e1",
+    "solver_seed": 25,
+    "dual_arm": "dual16",
+    "guard_arm": "dual16_plateau",
+    "maps": [
+      "maze-32-32-4-n300",
+      "random-32-32-20-high-load",
+      "room-64-64-16",
+      "warehouse-w1020a-opposite-exchange"
+    ]
+  },
+  "selection": {
+    "primary_rule": "first_equal_pre_action_fingerprint_with_different_executed_agent_set",
+    "first_fallback": "first_registered_plateau_guard_trigger",
+    "second_fallback": "decision_zero",
+    "result_fields_forbidden": true,
+    "required_candidates": [
+      "v2_anchor",
+      "component16",
+      "hotspot16"
+    ],
+    "include_distinct_observed_dual_winner": true
+  },
+  "execution": {
+    "continuation_controller": "v2-full",
+    "continuation_decisions": 6,
+    "per_action_time_limit_seconds": 5.0,
+    "total_process_time_limit_seconds": 600.0,
+    "controller_runtime": "optimized",
+    "feature_backend": "native",
+    "workers": 1,
+    "strict_serial": true,
+    "same_first_action_pp_seed_across_arms": true,
+    "same_continuation_step_pp_seed_across_arms": true,
+    "stop_when_terminal": true,
+    "full_ttf_run": false,
+    "official_adaptive_arm": false
+  },
+  "claim_boundary": {
+    "restored_paths_reset_adaptive_history_and_runtime_counters": true,
+    "official_counterfactual_allowed": false,
+    "ttf_claim_allowed": false,
+    "controller_replacement_allowed": false,
+    "ranker_or_controller_semantics_changed": false
+  }
+}
