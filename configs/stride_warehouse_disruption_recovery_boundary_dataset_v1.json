@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "master_seed": 20260831,
+  "map_id_prefix": "boundary_confirmation_v1",
+  "output_dir": "build/stride-warehouse-disruption-recovery-boundary-v1/dataset",
+  "tasks_per_map": 2,
+  "task_variants": [
+    {
+      "name": "balanced_od_d10",
+      "load_band": "medium_high",
+      "task": {
+        "agent_density": 0.1,
+        "od_matrix": {
+          "storage->station": 0.35,
+          "station->storage": 0.35,
+          "left->right": 0.15,
+          "right->left": 0.15
+        },
+        "hotspot_skew": 0.0
+      }
+    },
+    {
+      "name": "balanced_od_d125",
+      "load_band": "high",
+      "task": {
+        "agent_density": 0.125,
+        "od_matrix": {
+          "storage->station": 0.35,
+          "station->storage": 0.35,
+          "left->right": 0.15,
+          "right->left": 0.15
+        },
+        "hotspot_skew": 0.0
+      }
+    }
+  ],
+  "map": {
+    "layout_mode": "station_centric",
+    "rows": 48,
+    "cols": 72,
+    "shelf_block_height": [6, 9],
+    "shelf_block_width": [4, 7],
+    "horizontal_aisle_width": [2, 3],
+    "vertical_aisle_width": [1, 2],
+    "outer_beltway_width": 2,
+    "beltway_mode": "full",
+    "wall_clearance": 0,
+    "buffer_zone_count": [0, 1],
+    "station_count": 6,
+    "station_sides": ["left", "right"],
+    "station_centric_placement": "clustered",
+    "station_cluster_count": 2,
+    "station_clearance": 5,
+    "station_entrance_width": 2,
+    "station_queue_depth": 8,
+    "station_queue_width": 5,
+    "station_demand_distribution": "zipf",
+    "layout_jitter": [0.02, 0.08],
+    "combine_layout_features": true,
+    "dead_end_aisle_probability": [0.05, 0.12],
+    "cross_aisle_removal_probability": [0.08, 0.15],
+    "narrow_aisle_probability": [0.2, 0.35],
+    "narrow_segment_length": [6, 12],
+    "shelf_wall_contact_probability": 0.0,
+    "generation_attempts": 80,
+    "topology_constraints": {
+      "minimum_average_degree": 1.5
+    }
+  },
+  "task": {
+    "density_reference": "free_cells",
+    "hotspot_distribution": "zipf",
+    "minimum_shortest_distance": 8,
+    "maximum_shortest_distance": 100,
+    "max_sampling_attempts": 100000
+  },
+  "splits": {
+    "boundary_confirmation": {
+      "layout_counts": {
+        "station_centric": 6
+      }
+    }
+  }
+}
