@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import statistics
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -18,6 +17,7 @@ from experiments.stride_warehouse_disruption_recovery_ttf import (
     TTF_OVERRIDE_SCHEMA,
     _common_kwargs,
     _controller_summary,
+    _lane_root,
     _mean,
 )
 from experiments.warehouse_disruption_checkpoints import compute_checkpoint_identity_sha256
@@ -230,10 +230,6 @@ def _controller_kwargs(root: Path, config: Mapping[str, Any], controller: str) -
         "feature_backend": "native", "controller_runtime": "optimized",
         "verification_profile": "deployment", "hybridstructpool_augmentation": augmentation,
     }
-
-
-def _lane_root(ttf_root: Path, item: Mapping[str, Any]) -> Path:
-    return ttf_root / "lanes" / f"key_{int(item['key_index']):02d}" / f"pos_{int(item['within_key_position'])}_{item['controller']}"
 
 
 def collect_ttf(config_path: str | Path, output: str | Path, *, resume: bool = False) -> dict[str, Any]:
