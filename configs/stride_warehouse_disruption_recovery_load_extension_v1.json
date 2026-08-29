@@ -1,0 +1,36 @@
+{
+  "schema": "lns2.stride.warehouse_disruption_recovery_load_extension_config.v1",
+  "experiment_id": "stride-warehouse-disruption-recovery-load-extension-v1",
+  "dataset": {
+    "config_path": "configs/stride_warehouse_disruption_recovery_load_extension_dataset_v1.json",
+    "config_sha256": "acd253f1ee38903f4700b8c61fac610d5e343b4804bec27a8e268b3c82b37739",
+    "output_path": "build/stride-warehouse-disruption-recovery-load-extension-v1/dataset",
+    "split": "load_extension", "expected_map_count": 6, "expected_task_count": 18,
+    "load_bands": {"balanced_od_d10": "medium_high", "balanced_od_d125": "high", "balanced_od_d15": "very_high"}
+  },
+  "excluded_map_sha256": [
+    "465d3f0cdaacb16adb6b9fc5c9025448c39c478b759460cf5b694c224d0f0f4d", "479dcf4590e00913baf5e0a0bd5a49a6c45cb2b838343006096fcaa4b5dbc6e4",
+    "8eb8862920614823513e2b86c567790c480eafdd23ed9fff0c039e31a0833310", "1d6c6625ce151a07facd49c3159c77798644a1a5364022b93e73dcc76e4025ec",
+    "5e7c8c5836b346a998d82a91b4aeafdd24f44ed833227cb2bcacfc68bae471f3", "31883b50d534a6e5869b246e446c70396a94ba56638bbcb26762faba67fdaaef",
+    "9648d0f80701930474772c827978a69d296da3291608090051dc3c98c0b9a9d5", "1a0d6907a60aae853d376af55ed10cc643057a9ac4bd450efb4b4edd0a82a776",
+    "6209f4667066d0eaf54ca66ec03e275790fb5208b533d4207d1dfe72e5ee3a3a", "6b03e62c413e225c9336befac50b597e7d917f0295db7dea31bb17c66c0946a8",
+    "6763976088fe1881640f754ce4f8b318904ed88cf461df89e36f157646b47bc3", "f85877a86c124cbcd97c371e3fcbc8c928f188bb2cb4a68e09af8ffe5d0988f9"
+  ],
+  "checkpoint_generation": {
+    "expected_candidate_count": 36, "disturbance_replicas_per_task": 2,
+    "minimum_qualified_count": 30, "minimum_qualified_per_load_band": 10,
+    "minimum_qualified_map_count": 6, "minimum_qualified_per_map_band_cell": 1,
+    "workers": 8, "process_timeout_seconds": 180.0,
+    "incumbent_solver_seed_base": 2026091200, "incumbent_time_limit_seconds": 120.0,
+    "incumbent_max_repair_iterations": 0, "selection_seed_base": 2026091300,
+    "delay_ticks": 4, "delayed_agent_fraction": 0.15, "hotspot_neighborhood_radius": 1,
+    "global_time_rule": "earliest_maximum_hotspot_occupancy_after_t0",
+    "gate": {"minimum_conflict_pair_count": 16, "minimum_active_conflict_agent_count": 32, "minimum_largest_conflict_component_size": 16},
+    "selection_blind_to_controller_outcomes": true, "no_failed_candidate_replacement": true
+  },
+  "controllers": ["official_adaptive", "dual16"],
+  "controller_contract": {"v2_bundle": "artifacts/initlns-closed-loop-controller-v2", "v2_manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8", "dual16": "stride-structshell-dual16-v1", "frozen": true},
+  "runtime": {"template_path": "configs/stride_warehouse_fixed16_development_runtime_v2.json", "template_sha256": "4a7376f428338abedf8a7defb645588b59fdda081f575918ea2a7abb278f673a", "screen_solver_seed_base": 2026091400, "wall_time_budget_seconds": 60.0, "environment_time_limit_seconds": 60.0, "episode_process_timeout_seconds": 90.0, "qualification_workers": 8, "timed_workers": 1, "execution_order": "rotating_strict_two_controller_serial", "timing_boundary": "checkpoint_restore_inclusive_ttf", "repair_seed_policy": "episode_stream"},
+  "screen_gate": {"minimum_paired_win_rate": 0.70, "minimum_mean_capped_ttf_improvement": 0.15, "minimum_successes_per_hour_improvement": 0.20, "maximum_success_rate_loss": 0.0, "no_additional_timeout_or_censor": true, "cluster_unit": "map_id", "bandwise_independent": true},
+  "claim_boundary": "fresh_map_disjoint_station_centric_three_band_targeted_expert_extension_only"
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "lns2.stride.dual16_room_maze_highload_extension_config.v1",
+  "experiment_id": "stride-dual16-room-maze-highload-extension-v1",
+  "scientific_status": "sequential_family_diagnostic_not_map_disjoint",
+  "dataset_root": "build/initlns-movingai-ood-dataset-v1",
+  "split": "movingai_ood",
+  "runtime_template": "configs/stride_warehouse_fixed16_development_runtime_v2.json",
+  "runtime_template_sha256": "4a7376f428338abedf8a7defb645588b59fdda081f575918ea2a7abb278f673a",
+  "v2_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "v2_manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8",
+  "maps": {
+    "maze": ["maze-32-32-4", "maze-128-128-1"],
+    "room": ["room-64-64-8", "room-64-64-16"]
+  },
+  "map_agent_counts": {
+    "maze-32-32-4": 200,
+    "maze-128-128-1": 400,
+    "room-64-64-8": 600,
+    "room-64-64-16": 600
+  },
+  "diagnostic_roles": {
+    "maze-128-128-1": "high_conflict_pressure_negative_control"
+  },
+  "scenario_indices": [4, 5],
+  "solver_seeds": [51, 52],
+  "qualification": {
+    "workers": 8,
+    "minimum_conflict_pair_count": 16,
+    "minimum_active_conflict_agent_count": 32,
+    "minimum_largest_conflict_component_size": 16,
+    "minimum_initial_conflicts": 101,
+    "minimum_qualified_per_family": 4
+  },
+  "runtime": {"wall_time_seconds": 60.0, "environment_time_limit_seconds": 60.0, "process_fuse_seconds": 90.0, "timed_workers": 1},
+  "controllers": ["official_adaptive", "dual16"],
+  "controller_blind_preregistration": true,
+  "global_or_default_promotion_allowed": false
+}
