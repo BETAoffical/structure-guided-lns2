@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
-from experiments._common import contained_file
+from experiments._common import contained_file, sha256_file
 from experiments.closed_loop_trace_storage import (
     EPISODE_SCHEMA_V2,
     apply_extras_delta,
@@ -18,6 +18,87 @@ from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 TRACE_REPLAY_CONTRACT = "lns2.trace_replay.pp-seeded-neighborhood.v2"
 TARGET_STATE_RESTORE_CONTRACT = "lns2.trace_replay.target-path-restore.v1"
+CHECKPOINT_BLOB_RESTORE_CONTRACT = "lns2.trace_replay.checkpoint-blob-restore.v1"
+
+
+def _required_text(value: Mapping[str, Any], field: str) -> str:
+    raw = value.get(field)
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"checkpoint {field} must be a non-empty string")
+    return raw
+
+
+def _required_sha256(value: Mapping[str, Any], field: str) -> str:
+    digest = _required_text(value, field)
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError(f"checkpoint {field} must be a lowercase SHA-256 digest")
+    return digest
+
+
+def _required_integer(value: Mapping[str, Any], field: str) -> int:
+    raw = value.get(field)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(f"checkpoint {field} must be an integer")
+    return int(raw)
+
+
+def target_state_from_checkpoint_blob(
+    collection_root: Path,
+    checkpoint: Mapping[str, Any],
+    *,
+    expected_map_id: str,
+    expected_task_id: str,
+    expected_agent_count: int,
+) -> tuple[dict[str, Any], Path]:
+    """Load and authenticate one frozen repair state for a current job.
+
+    The manifest row is intentionally supplied by the caller.  Its canonical
+    identity digest binds that row into the episode override/run fingerprint;
+    this generic loader authenticates the contained state blob and rejects a
+    checkpoint copied onto a different map, task, or agent-count job.
+    """
+
+    if checkpoint.get("source_kind") != "checkpoint_blob_v1":
+        raise ValueError("checkpoint source_kind must be checkpoint_blob_v1")
+    _required_text(checkpoint, "checkpoint_id")
+    _required_sha256(checkpoint, "checkpoint_identity_sha256")
+
+    checkpoint_map_id = _required_text(checkpoint, "map_id")
+    checkpoint_task_id = _required_text(checkpoint, "task_id")
+    checkpoint_agent_count = _required_integer(checkpoint, "agent_count")
+    if checkpoint_map_id != str(expected_map_id):
+        raise ValueError("checkpoint map_id does not match the current job")
+    if checkpoint_task_id != str(expected_task_id):
+        raise ValueError("checkpoint task_id does not match the current job")
+    if checkpoint_agent_count != int(expected_agent_count):
+        raise ValueError("checkpoint agent_count does not match the current job")
+
+    state_path = contained_file(
+        collection_root,
+        checkpoint.get("state_blob"),
+        field="checkpoint state_blob",
+    )
+    expected_blob_sha256 = _required_sha256(checkpoint, "state_blob_sha256")
+    if sha256_file(state_path) != expected_blob_sha256:
+        raise ValueError("checkpoint state blob SHA-256 changed")
+
+    state = read_state_blob(state_path)
+    expected_fingerprint = _required_sha256(checkpoint, "expected_fingerprint")
+    if state_fingerprint(state) != expected_fingerprint:
+        raise ValueError("checkpoint state fingerprint changed")
+    expected_repair_fingerprint = _required_sha256(
+        checkpoint, "repair_structure_fingerprint"
+    )
+    if repair_structure_fingerprint(state) != expected_repair_fingerprint:
+        raise ValueError("checkpoint repair fingerprint changed")
+    expected_conflicts = _required_integer(checkpoint, "expected_conflicts")
+    if int(state["num_of_colliding_pairs"]) != expected_conflicts:
+        raise ValueError("checkpoint conflict count changed")
+
+    agents = state.get("agents")
+    if not isinstance(agents, list) or len(agents) != checkpoint_agent_count:
+        raise ValueError("checkpoint state agent_count changed")
+    return state, state_path
 
 
 def recorded_replay_action(event: dict[str, Any]) -> dict[str, Any]:

@@ -45,7 +45,10 @@ from experiments.state_analysis import (
     StateAnalysis,
     analyze_static_grid,
 )
-from experiments.trace_replay import target_state_from_trace
+from experiments.trace_replay import (
+    target_state_from_checkpoint_blob,
+    target_state_from_trace,
+)
 from experiments.neighborhood_candidates import (
     _seed_isolation,
     conflict_density,
@@ -952,6 +955,48 @@ def _pool_runtime_modes(value: dict[str, Any] | None) -> tuple[bool, bool]:
     return slotpool, guardpool
 
 
+def _load_initial_restore_source(
+    initial_restore: Mapping[str, Any],
+    row: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, Path | None, Path | None, str | None]:
+    """Dispatch an episode restore while preserving legacy trace overrides."""
+
+    if not initial_restore:
+        return None, None, None, None
+    raw_source_kind = initial_restore.get("source_kind", "trace")
+    if not isinstance(raw_source_kind, str) or not raw_source_kind:
+        raise ValueError("initial_restore source_kind must be a non-empty string")
+    source_kind = raw_source_kind
+    source_trace_path: Path | None = None
+    source_checkpoint_path: Path | None = None
+    if source_kind == "trace":
+        source_state, source_trace_path = target_state_from_trace(
+            Path(str(initial_restore["collection_root"])),
+            dict(initial_restore["manifest"]),
+            decision_index=int(initial_restore["decision_index"]),
+            expected_fingerprint=str(initial_restore["expected_fingerprint"]),
+        )
+    elif source_kind == "checkpoint_blob_v1":
+        source_state, source_checkpoint_path = target_state_from_checkpoint_blob(
+            Path(str(initial_restore["collection_root"])),
+            initial_restore,
+            expected_map_id=str(row["map_id"]),
+            expected_task_id=str(row["task_id"]),
+            expected_agent_count=int(row["agent_count"]),
+        )
+    else:
+        raise ValueError(f"unsupported initial_restore source_kind: {source_kind}")
+
+    expected_repair = str(initial_restore["repair_structure_fingerprint"])
+    if repair_structure_fingerprint(source_state) != expected_repair:
+        raise ValueError("episode override source repair fingerprint changed")
+    if int(source_state["num_of_colliding_pairs"]) != int(
+        initial_restore["expected_conflicts"]
+    ):
+        raise ValueError("episode override source conflict count changed")
+    return source_state, source_trace_path, source_checkpoint_path, source_kind
+
+
 def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     row = job["row"]
     policy = str(job["policy"])
@@ -1043,22 +1088,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     repair_seed_policy = validate_repair_seed_policy(
         job.get("repair_seed_policy")
     )
-    source_state: dict[str, Any] | None = None
-    source_trace_path: Path | None = None
-    if initial_restore:
-        source_state, source_trace_path = target_state_from_trace(
-            Path(str(initial_restore["collection_root"])),
-            dict(initial_restore["manifest"]),
-            decision_index=int(initial_restore["decision_index"]),
-            expected_fingerprint=str(initial_restore["expected_fingerprint"]),
-        )
-        expected_repair = str(initial_restore["repair_structure_fingerprint"])
-        if repair_structure_fingerprint(source_state) != expected_repair:
-            raise ValueError("episode override source repair fingerprint changed")
-        if int(source_state["num_of_colliding_pairs"]) != int(
-            initial_restore["expected_conflicts"]
-        ):
-            raise ValueError("episode override source conflict count changed")
+    (
+        source_state,
+        source_trace_path,
+        source_checkpoint_path,
+        initial_restore_source_kind,
+    ) = _load_initial_restore_source(initial_restore, row)
     if forced_first_action and not initial_restore:
         raise ValueError("forced first action requires an initial restored state")
     if bounded_native_retry and not initial_restore:
@@ -1304,6 +1339,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     raise RuntimeError(
                         "episode override restored conflict count differs from source"
                     )
+                if (
+                    initial_restore_source_kind == "checkpoint_blob_v1"
+                    and state_fingerprint(state)
+                    != str(initial_restore["expected_fingerprint"])
+                ):
+                    raise RuntimeError(
+                        "episode override restored checkpoint state differs from source"
+                    )
             reset_completed_wall = time.perf_counter()
             reset_wall_seconds = reset_completed_wall - reset_started
             initial_state_elapsed_seconds = reset_completed_wall - ttf_started_wall
@@ -1432,9 +1475,25 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "source_trace_file": (
                             str(source_trace_path) if source_trace_path is not None else None
                         ),
+                        "source_checkpoint_file": (
+                            str(source_checkpoint_path)
+                            if source_checkpoint_path is not None
+                            else None
+                        ),
+                        "source_kind": initial_restore_source_kind,
+                        "source_checkpoint_id": (
+                            str(initial_restore["checkpoint_id"])
+                            if source_checkpoint_path is not None
+                            else None
+                        ),
+                        "source_checkpoint_identity_sha256": (
+                            str(initial_restore["checkpoint_identity_sha256"])
+                            if source_checkpoint_path is not None
+                            else None
+                        ),
                         "source_decision_index": (
                             int(initial_restore["decision_index"])
-                            if initial_restore
+                            if source_trace_path is not None
                             else None
                         ),
                         "source_full_fingerprint": (
