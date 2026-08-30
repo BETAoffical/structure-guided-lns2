@@ -1,0 +1,39 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_h1_collection_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_h1_collection_v1",
+  "inputs": {
+    "selected_states": "build/stride-hierarchical-ch-compact-flow-h1-state-selection-v1/selected_states.jsonl",
+    "selection_trust_report": "build/stride-hierarchical-ch-compact-flow-h1-state-selection-v1/state_selection_trust_report.json",
+    "selected_state_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_selected_state.v1",
+    "selection_trust_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_state_selection_trust.v1",
+    "controller_bundle": {
+      "path": "artifacts/initlns-closed-loop-controller-v2",
+      "manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "h1": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "workers": 16,
+    "maximum_workers": 20,
+    "per_action_time_limit_seconds": 5.0,
+    "per_state_process_fuse_seconds": 420.0,
+    "same_state_trial_seed_across_unique_actions": true,
+    "execute_each_unique_set_once_per_paired_seed": true,
+    "failure_backfill_allowed": false
+  },
+  "hierarchy": {
+    "exact_agent_tuple_deduplication": true,
+    "stage1": "v2_vs_each_distinct_structural_action",
+    "stage2": "component_vs_hotspot_only_when_exact_sets_differ",
+    "all_equal_excluded": true
+  },
+  "claim_boundary": {
+    "sequential_design_only": true,
+    "outcome_based_selection_allowed": false,
+    "reserve_or_replacement_backfill_allowed": false,
+    "training_authorized": false,
+    "final_claim_authorized": false,
+    "runtime_or_ttf_claim_authorized": false,
+    "map_disjoint_confirmation_required": true
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "schema": "lns2.stride.temporal_anchor_incremental_readiness_config.v1",
+  "scientific_status": "preregistered_minimal_offline_readiness_audit",
+  "implementation_id": "temporal-anchor-incremental-readiness-v1",
+  "inputs": {
+    "safeslot_config": {"path": "configs/stride_safeslot_gate_v1.json", "sha256": "b6e9c925373502b44f837a3431f102a5c69aa0df2a688a3baada89d5538404f2"},
+    "safeslot_oof_predictions": {"path": "build/stride-safeslot-gate-training-v1/oof_candidate_predictions.jsonl", "sha256": "4dabcee0c89aa29a37a13706dc330211b0d3dfa1b3fb279b07cd484e7ecc61a8"},
+    "state_selection": {"path": "build/stride-robustaction-combined-state-selection-v2/state_selection.jsonl", "sha256": "17e54f13f2c026daee2cf65967c9960092ecfd24493b53972407c33bd0b460fb"},
+    "state_selection_report": {"path": "build/stride-robustaction-combined-state-selection-v2/state_selection_report.json", "sha256": "8619c5b8b3be36574f31e737db8c4a65c6649235d6474db112a4b3a7167f2d07"},
+    "source_v4_official_manifest": {"path": "build/stride-robustaction-structpool-source-episodes-v4/official_adaptive_manifest.jsonl", "sha256": "fac89f3ffc81c364ff3c35ddfdc571cb0c62a3f62febdfc8e03ea583e0b566db"},
+    "source_v4_v2_manifest": {"path": "build/stride-robustaction-structpool-source-episodes-v4/realized_dynamic_manifest.jsonl", "sha256": "1e4788d92bd04d161f7f378d6b49d2dc88e1c7c9de00dcfd8a9fe516ff4e4a96"},
+    "da2_v2_official_manifest": {"path": "build/stride-robustaction-da2-source-stability-episodes-v2/official_adaptive_manifest.jsonl", "sha256": "93b17db5def913681dd986b46abf312ed7e06e69af41bbc49a279e7be7306326"},
+    "da2_v2_v2_manifest": {"path": "build/stride-robustaction-da2-source-stability-episodes-v2/realized_dynamic_manifest.jsonl", "sha256": "ec811e15db5db62055c1be28ac9c48e8caa3eea3dd30f28fd3e3642ef0778ff4"}
+  },
+  "source_roots": {
+    "source-v4": "build/stride-robustaction-structpool-source-episodes-v4",
+    "da2-stability-v2": "build/stride-robustaction-da2-source-stability-episodes-v2"
+  },
+  "cohort": {
+    "state_count": 98, "map_count": 16, "candidate_count": 587,
+    "positive_candidate_count": 201, "decision0_state_count": 30,
+    "history_state_count": 68, "history_map_count": 15,
+    "history_candidate_count": 407, "history_positive_candidate_count": 149,
+    "source_trace_count": 80, "history_unique_source_trace_count": 56
+  },
+  "features": {
+    "static_dimension": 193, "history_dimension": 16, "augmented_dimension": 209,
+    "history_window": 4,
+    "history_feature_names": [
+      "history.available_steps", "history.replan_failure_count4",
+      "history.accepted_nondecrease_count4", "history.strict_decrease_count4",
+      "history.consecutive_replan_failure", "history.consecutive_no_strict_decrease",
+      "history.last_normalized_conflict_reduction", "history.mean4_normalized_conflict_reduction",
+      "delta:last_attempt_jaccard", "delta:max_failure_jaccard",
+      "delta:max_progress_jaccard", "delta:failure_union_coverage",
+      "delta:progress_union_coverage", "delta:mean_recent_repair_exposure",
+      "delta:exact_prior_neighborhood_repeat_count", "delta:outcome_signed_agent_exposure"
+    ],
+    "occurrence_key": ["episode_id", "decision_index", "before_fingerprint"],
+    "historical_union_coverage_denominator": "historical_union_size",
+    "candidate_exposure_denominator": "available_prefix_steps",
+    "candidate_relative_representation": "challenger_minus_exact_v2_anchor",
+    "forbidden_inputs": ["map_id", "source_policy", "pp_seconds", "pp_seed", "repair_order", "ttf", "current_outcome", "future_transition"]
+  },
+  "model": {
+    "class": "sklearn.ensemble.HistGradientBoostingClassifier",
+    "fixed_parameters": {"early_stopping": false, "learning_rate": 0.05, "max_iter": 100, "min_samples_leaf": 20, "random_state": 20260809},
+    "parameter_grid": [
+      {"max_leaf_nodes": 7, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 7, "l2_regularization": 1.0},
+      {"max_leaf_nodes": 15, "l2_regularization": 0.1},
+      {"max_leaf_nodes": 15, "l2_regularization": 1.0}
+    ],
+    "outer_map_folds": [
+      ["ca_cave", "ca_caverns2", "dr_primevalentrance", "lak106d", "lt_hangedman"],
+      ["den900d", "lak203d", "lgt604d", "lt_undercitydungeon", "orz201d"],
+      ["hrt001d", "lak250d", "orz601d"],
+      ["ht_bartrand_n", "lak526d", "w_encounter3"]
+    ],
+    "inner_map_folds": 3,
+    "threshold_grid": [0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01]
+  },
+  "policy": {
+    "decision0_action": "force_abstain_to_exact_v2_anchor",
+    "calibration_population": "history_bearing_states_only",
+    "minimum_safe_replace_precision": 0.80,
+    "minimum_replacement_state_fraction": 0.10,
+    "minimum_selected_map_fraction": 0.50,
+    "minimum_mean_current_step_advantage": 0.0,
+    "minimum_first_fixed_half_advantage": 0.0,
+    "minimum_second_fixed_half_advantage": 0.0,
+    "maximum_mean_no_progress_rate_delta": 0.0,
+    "maximum_mean_residual_risk_delta": 0.0,
+    "maximum_map_mean_current_step_regret": 0.02,
+    "maximum_map_mean_residual_risk_degradation": 0.02
+  },
+  "offline_acceptance": {
+    "minimum_history_candidate_roc_auc": 0.68,
+    "minimum_history_auc_gain_over_static": 0.03,
+    "minimum_each_fold_history_roc_auc": 0.55,
+    "minimum_each_fold_auc_gain_over_static": -0.02,
+    "minimum_selected_safe_replace_precision": 0.80,
+    "minimum_history_replacement_state_fraction": 0.10,
+    "minimum_selected_map_count": 8,
+    "minimum_source_policy_mean_current_step_advantage": 0.0,
+    "require_all_outer_calibrations_feasible": true,
+    "maximum_static_probability_reproduction_error": 1e-12
+  },
+  "claim_boundary": {
+    "offline_readiness_only": true,
+    "solver_native_or_pp_executed": false,
+    "runtime_integration_allowed": false,
+    "model_export_allowed": false,
+    "formal_ttf_claim": false,
+    "plateau_or_repeated_rollback_claim": false,
+    "component_hotspot_policy_history_matched": false,
+    "pass_allows_only": "fresh_matched_component_hotspot_history_collection",
+    "fail_action": "stop_without_window_feature_threshold_retuning"
+  },
+  "analysis_wall_fuse_seconds": 600,
+  "outputs": {"readiness": "build/stride-temporal-anchor-incremental-readiness-v1"}
+}

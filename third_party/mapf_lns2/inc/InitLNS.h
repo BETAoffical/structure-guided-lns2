@@ -81,7 +81,7 @@ private:
                RepairTransition& transition, int pp_random_seed = -1);
     bool runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
                                  RepairTransition& transition);
-    bool runGCBS();
+    bool runGCBS(RepairTransition& transition);
     bool runPBS();
 
     bool updateCollidingPairs(set<pair<int, int>>& colliding_pairs, int agent_id, const Path& path) const;

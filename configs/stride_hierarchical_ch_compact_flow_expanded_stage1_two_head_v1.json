@@ -1,0 +1,203 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_expanded_stage1_two_head_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_expanded_stage1_two_head_v1",
+  "scientific_status": "preregistered_expanded_train_stage1_two_head_oof_challenger",
+  "registration_status": "REGISTERED",
+  "inputs": {
+    "expanded_train_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_train_report.json",
+      "sha256": "f7c2cc3f1e6246b0d7b8a9af4634e2a0ef99f2ff09ae8aacaedccaa96677d4a0"
+    },
+    "expanded_stage1_pair_labels": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_stage1_pair_labels.jsonl",
+      "sha256": "54e92207b42c2b63b663156379d56150694c398142243ddc5f60f3a801d019e7"
+    }
+  },
+  "input_semantics": {
+    "required_adapter_report_schema": "lns2.stride.hierarchical_ch_compact_flow_expanded_train_report.v1",
+    "required_label_schema": "lns2.stride.hierarchical_ch_compact_flow_expanded_stage1_pair_label.v1",
+    "required_research_split": "expanded_train",
+    "expected_map_count": 16,
+    "gate_target": "decisive_vs_ambiguous",
+    "gate_fit_population": "all_stage1_pairs",
+    "direction_target": "structural_win_vs_v2_win",
+    "direction_fit_population": "decisive_stage1_pairs_only",
+    "stage2_rows_loaded": false
+  },
+  "expanded_map_folds": {
+    "fold0": ["den404d", "den408d", "den207d", "den203d"],
+    "fold1": ["lak101d", "den202d", "den998d", "den308d"],
+    "fold2": ["lak108d", "den201d", "den009d", "den020d"],
+    "fold3": ["lak110d", "ost102d", "hrt002d", "den101d"]
+  },
+  "feature_contract": {
+    "source": "expanded_row.model_feature_vector",
+    "feature_names": [
+      "context:state.agent_count",
+      "context:state.colliding_pairs",
+      "context:state.conflict_edge_density",
+      "context:state.conflict_event_count",
+      "context:state.conflicting_agent_ratio",
+      "context:state.degree_max",
+      "context:state.largest_component_ratio",
+      "context:state.path_wait_ratio_mean",
+      "delta_structural_minus_v2:realized.incident_conflict_coverage",
+      "delta_structural_minus_v2:realized.internal_conflict_coverage",
+      "delta_structural_minus_v2:realized.boundary_conflict_edges",
+      "delta_structural_minus_v2:realized.conflict_degree_mean",
+      "delta_structural_minus_v2:realized.delay_mean",
+      "delta_structural_minus_v2:realized.path_overlap_mean",
+      "delta_structural_minus_v2:realized.path_wait_ratio_mean",
+      "relation:intersection_ratio",
+      "relation:jaccard",
+      "relation:symmetric_difference_ratio"
+    ],
+    "dimension": 18,
+    "identifier_values_used_as_features": false,
+    "repair_outcome_or_runtime_used_as_features": false,
+    "map_task_seed_fields_used_for_grouping_only": true,
+    "forbidden_input_tokens": [
+      "after_",
+      "final_",
+      "map_id",
+      "native_step_seconds",
+      "no_progress",
+      "normalized_conflict_reduction",
+      "outcome",
+      "pair_id",
+      "pp_seconds",
+      "result",
+      "rollback",
+      "runtime",
+      "solver_seed",
+      "source_",
+      "task_id",
+      "time_limit",
+      "trial"
+    ]
+  },
+  "head_models": [
+    {
+      "model_id": "regularized_logistic",
+      "class": "sklearn.linear_model.LogisticRegression",
+      "preprocessing": "StandardScaler",
+      "parameters": {
+        "C": 0.25,
+        "class_weight": null,
+        "max_iter": 1000,
+        "random_state": 20260826,
+        "solver": "liblinear"
+      }
+    },
+    {
+      "model_id": "low_capacity_hist_gradient_boosting",
+      "class": "sklearn.ensemble.HistGradientBoostingClassifier",
+      "preprocessing": "none",
+      "parameters": {
+        "early_stopping": false,
+        "l2_regularization": 1.0,
+        "learning_rate": 0.05,
+        "max_iter": 60,
+        "max_leaf_nodes": 5,
+        "min_samples_leaf": 8,
+        "random_state": 20260826
+      }
+    }
+  ],
+  "candidate_combinations": [
+    {
+      "combination_id": "gate_logistic__direction_logistic",
+      "gate_model_id": "regularized_logistic",
+      "direction_model_id": "regularized_logistic"
+    },
+    {
+      "combination_id": "gate_logistic__direction_hgb",
+      "gate_model_id": "regularized_logistic",
+      "direction_model_id": "low_capacity_hist_gradient_boosting"
+    },
+    {
+      "combination_id": "gate_hgb__direction_logistic",
+      "gate_model_id": "low_capacity_hist_gradient_boosting",
+      "direction_model_id": "regularized_logistic"
+    },
+    {
+      "combination_id": "gate_hgb__direction_hgb",
+      "gate_model_id": "low_capacity_hist_gradient_boosting",
+      "direction_model_id": "low_capacity_hist_gradient_boosting"
+    }
+  ],
+  "sample_weighting": {
+    "gate": {
+      "unit": "state_occurrence_id",
+      "base_weight": "1_over_all_pairs_in_state",
+      "class_balance": false
+    },
+    "direction": {
+      "unit": "state_occurrence_id",
+      "base_weight": "1_over_decisive_pairs_in_state",
+      "balance_structural_vs_v2": true,
+      "ambiguous_rows_in_fit": false
+    }
+  },
+  "threshold_calibration": {
+    "gate_threshold_grid": [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "direction_confidence_grid": [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "maximum_ambiguous_structural_override_rate": 0.25,
+    "minimum_decisive_structural_override_coverage": 0.25,
+    "selection_rule": [
+      "feasible_constraints_first",
+      "maximum_final_action_balanced_accuracy",
+      "maximum_structural_override_precision",
+      "maximum_decisive_structural_override_coverage",
+      "lower_gate_threshold",
+      "lower_direction_threshold"
+    ]
+  },
+  "hard_gates": {
+    "minimum_oof_balanced_accuracy": 0.55,
+    "minimum_structural_win_override_recall": 0.35,
+    "minimum_v2_win_protection_recall": 0.35,
+    "minimum_decisive_structural_override_coverage": 0.25,
+    "minimum_structural_override_precision": 0.60,
+    "maximum_ambiguous_structural_override_rate": 0.25,
+    "minimum_each_fold_balanced_accuracy": 0.45,
+    "minimum_each_fold_structural_win_override_recall": 0.10,
+    "maximum_fold_balanced_accuracy_spread": 0.35
+  },
+  "model_selection_rule": [
+    "all_hard_gates_first",
+    "maximum_minimum_fold_balanced_accuracy",
+    "maximum_oof_balanced_accuracy",
+    "maximum_structural_override_precision",
+    "maximum_decisive_structural_override_coverage",
+    "config_order"
+  ],
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "parallel_head_jobs": 4,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "outputs": {
+    "root": "build/stride-hierarchical-ch-compact-flow-expanded-stage1-two-head-v1",
+    "feature_manifest": "feature_manifest.json",
+    "oof_predictions": "two_head_stage1_oof_predictions.jsonl",
+    "evaluation_report": "two_head_stage1_evaluation_report.json"
+  },
+  "claim_boundary": {
+    "stage1_only": true,
+    "stage2_rows_loaded": false,
+    "expanded_train_oof_only": true,
+    "development_partition_present": false,
+    "full_fit_model_export_allowed": false,
+    "sequential_design_only": true,
+    "passing_status": "TRAIN_OOF_CHALLENGER_ONLY",
+    "failure_status": "NO_GO",
+    "v2_replacement_allowed": false,
+    "promotion_or_default_export_allowed": false,
+    "runtime_or_ttf_claim_authorized": false,
+    "final_claim_authorized": false,
+    "external_map_disjoint_confirmation_required": true
+  }
+}

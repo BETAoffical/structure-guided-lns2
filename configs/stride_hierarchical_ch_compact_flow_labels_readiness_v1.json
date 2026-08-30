@@ -1,0 +1,97 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_labels_readiness_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_labels_readiness_v1",
+  "input": {
+    "collection_root": "build/stride-hierarchical-ch-compact-flow-h1-collection-v1",
+    "collection_report": "h1_collection_report.json",
+    "collection_report_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_collection_report.v1",
+    "collection_experiment_id": "stride_hierarchical_ch_compact_flow_h1_collection_v1",
+    "manifest_file": "h1_state_manifest.jsonl",
+    "raw_outcomes_file": "raw_unique_action_outcomes.jsonl",
+    "manifest_row_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_manifest_row.v1",
+    "state_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_state.v1",
+    "trial_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_trial.v1"
+  },
+  "map_splits": {
+    "train": [
+      "den404d",
+      "lak101d",
+      "den201d",
+      "hrt002d",
+      "den009d",
+      "den101d",
+      "den203d",
+      "den308d"
+    ],
+    "development": [
+      "lak108d",
+      "lak110d",
+      "ost102d",
+      "den408d",
+      "den202d",
+      "den207d",
+      "den998d",
+      "den020d"
+    ]
+  },
+  "train_map_folds": {
+    "fold0": ["den404d", "den009d"],
+    "fold1": ["lak101d", "den101d"],
+    "fold2": ["den201d", "den203d"],
+    "fold3": ["hrt002d", "den308d"]
+  },
+  "depth_bands": ["d0", "d1_3", "d4plus"],
+  "readiness_thresholds": {
+    "train": {
+      "stage1": {
+        "minimum_rows_per_decisive_direction": 4,
+        "minimum_maps_per_decisive_direction": 2,
+        "minimum_depth_bands_per_decisive_direction": 2,
+        "minimum_active_partitions": 1,
+        "each_fold_requires_both_decisive_directions": true
+      },
+      "stage2": {
+        "minimum_rows_per_decisive_direction": 2,
+        "minimum_maps_per_decisive_direction": 2,
+        "minimum_depth_bands_per_decisive_direction": 2,
+        "minimum_active_partitions": 1,
+        "each_fold_requires_both_decisive_directions": true
+      }
+    },
+    "development": {
+      "stage1": {
+        "minimum_rows_per_decisive_direction": 2,
+        "minimum_maps_per_decisive_direction": 2,
+        "minimum_depth_bands_per_decisive_direction": 2,
+        "minimum_active_partitions": 1
+      },
+      "stage2": {
+        "minimum_rows_per_decisive_direction": 2,
+        "minimum_maps_per_decisive_direction": 2,
+        "minimum_depth_bands_per_decisive_direction": 2,
+        "minimum_active_partitions": 1
+      }
+    }
+  },
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "sealed_final": {
+    "status": "SEALED",
+    "semantic_access_allowed": false,
+    "labeling_allowed": false,
+    "readiness_access_allowed": false
+  },
+  "claim_boundary": {
+    "sequential_design_only": true,
+    "development_is_sequential_diagnostic_only": true,
+    "map_disjoint_final_confirmation_required": true,
+    "training_authorized": false,
+    "model_fit_executed": false,
+    "model_exported": false,
+    "runtime_or_ttf_claim_authorized": false
+  }
+}

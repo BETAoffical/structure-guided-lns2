@@ -1,0 +1,48 @@
+{
+  "schema": "lns2.stride.warehouse_n700_supply_dataset_config.v1",
+  "experiment_id": "stride-warehouse-n700-supply-dataset-v1",
+  "scientific_status": "preregistered_geometry_only_n700_supply_before_any_reset_screen_or_controller",
+  "pre_registration_parent_commit": "4b0ffa7dabd341044230d5ad988b9d60a89d0a1c",
+  "cohort": {
+    "split": "balanced_wall_clock",
+    "map_id": "warehouse-10-20-10-2-1",
+    "map_code": "w1020a",
+    "master_seed": 20260808,
+    "task_seeds": [233, 277],
+    "task_variants": ["opposite_exchange", "uniform_random"],
+    "agent_count": 700,
+    "task_ids": [
+      "w1020a__oe__t0233__n0700",
+      "w1020a__oe__t0277__n0700",
+      "w1020a__ur__t0233__n0700",
+      "w1020a__ur__t0277__n0700"
+    ],
+    "endpoint_seed_contract": "sha256_compact_json_first_8_bytes_big_endian",
+    "endpoint_seeds": {
+      "w1020a__oe__t0233__n0700": 898049359781102072,
+      "w1020a__oe__t0277__n0700": 9814746312160663332,
+      "w1020a__ur__t0233__n0700": 3565506677784553453,
+      "w1020a__ur__t0277__n0700": 17835522936825645677
+    }
+  },
+  "inputs": {
+    "map": {
+      "path": "build/movingai-dev/maps/warehouse-10-20-10-2-1.map",
+      "sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0"
+    },
+    "map_archive": {
+      "path": "build/movingai-dev/_archives/warehouse-10-20-10-2-1.map.zip",
+      "sha256": "96db9e07ca14986a2786e1771a7eab7686b89d628e67700bb4b3c02b84c4c462",
+      "member": "warehouse-10-20-10-2-1.map"
+    },
+    "official_scenario_archive_used": false
+  },
+  "output_contract": {
+    "dataset_subdirectory": "dataset",
+    "same_identity_is_idempotent": true,
+    "foreign_or_partial_dataset_rejected": true,
+    "old_r2_or_n800_output_reuse_forbidden": true,
+    "reset_or_controller_invocation": false
+  },
+  "claim_boundary": "geometry_only_four_task_n700_state_supply_not_reset_repair_ttf_or_performance_evidence"
+}

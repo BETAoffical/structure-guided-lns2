@@ -1,4 +1,5 @@
 #include "InitLNS.h"
+#include "GCBS.h"
 
 #include <algorithm>
 #include <cmath>
@@ -120,6 +121,58 @@ struct Snapshot
     vector<int> neighborhood;
 };
 
+struct RecordingSolver : public SingleAgentSolver
+{
+    bool untimed_called = false;
+    bool timed_called = false;
+    bool return_empty = false;
+
+    RecordingSolver(const Instance& instance, int agent,
+                    bool return_empty = false) :
+        SingleAgentSolver(instance, agent), return_empty(return_empty) {}
+
+    Path resultPath() const
+    {
+        Path path;
+        if (return_empty)
+            return path;
+        path.emplace_back(start_location);
+        if (goal_location != start_location)
+            path.emplace_back(goal_location);
+        return path;
+    }
+
+    Path findOptimalPath(const HLNode&, const ConstraintTable&,
+                         const vector<Path*>&, int, int) override
+    {
+        return resultPath();
+    }
+
+    pair<Path, int> findSuboptimalPath(const HLNode&, const ConstraintTable&,
+                                       const vector<Path*>&, int, int,
+                                       double) override
+    {
+        return {resultPath(), 0};
+    }
+
+    Path findPath(const ConstraintTable&) override
+    {
+        untimed_called = true;
+        last_find_path_timed_out = false;
+        return resultPath();
+    }
+
+    Path findPath(const ConstraintTable&, double) override
+    {
+        timed_called = true;
+        last_find_path_timed_out = false;
+        return resultPath();
+    }
+
+    int getTravelTime(int, int, const ConstraintTable&, int) override { return 1; }
+    string getName() const override { return "RecordingSolver"; }
+};
+
 Snapshot initializeWithSeed(int seed)
 {
     Instance instance(TEST_MAP, TEST_SCEN, 80);
@@ -177,6 +230,46 @@ void requireLowLevelDeadlineIsEnforced()
             "space-time A* ignored an expired low-level deadline");
 }
 
+void requireGCBSSelectsTheMatchingLowLevelDeadlineAPI()
+{
+    Instance instance(TEST_MAP, TEST_SCEN, 1);
+    vector<PathTable> path_tables;
+    path_tables.emplace_back(instance.map_size);
+
+    RecordingSolver ordinary(instance, 0);
+    vector<SingleAgentSolver*> ordinary_engines = {&ordinary};
+    GCBS unbounded(ordinary_engines, 0, &path_tables);
+    require(unbounded.solve(1.0), "ordinary GCBS root did not complete");
+    require(ordinary.untimed_called && !ordinary.timed_called,
+            "ordinary GCBS changed the upstream untimed low-level call");
+    require(!unbounded.timedOut(), "ordinary GCBS reported a cooperative deadline");
+
+    RecordingSolver bounded(instance, 0);
+    vector<SingleAgentSolver*> bounded_engines = {&bounded};
+    GCBS timed(bounded_engines, 0, &path_tables);
+    require(timed.solve(1.0, true), "bounded GCBS root did not complete");
+    require(!bounded.untimed_called && bounded.timed_called,
+            "bounded GCBS did not propagate its live low-level remainder");
+
+    RecordingSolver expired_solver(instance, 0);
+    vector<SingleAgentSolver*> expired_engines = {&expired_solver};
+    GCBS expired(expired_engines, 0, &path_tables);
+    require(!expired.solve(0.0, true), "expired GCBS unexpectedly completed a root");
+    require(expired.timedOut() && !expired.rootFailed() &&
+                expired.best_node == nullptr,
+            "expired GCBS did not retain a safe root TIME_LIMIT outcome");
+    require(!expired_solver.untimed_called && !expired_solver.timed_called,
+            "expired GCBS started a low-level root search");
+
+    RecordingSolver no_path_solver(instance, 0, true);
+    vector<SingleAgentSolver*> no_path_engines = {&no_path_solver};
+    GCBS no_root(no_path_engines, 0, &path_tables);
+    require(!no_root.solve(1.0), "pathless GCBS unexpectedly built a root");
+    require(!no_root.timedOut() && no_root.rootFailed() &&
+                no_root.best_node == nullptr,
+            "pathless GCBS did not retain a safe non-timeout root failure");
+}
+
 void requireExpiredPPInvocationRollsBack()
 {
     constexpr int AGENT_COUNT = 100;
@@ -217,6 +310,58 @@ void requireExpiredPPInvocationRollsBack()
     for (size_t index = 0; index < before.agents.size(); index++)
         require(before.agents[index].path == after.agents[index].path,
                 "expired PP invocation changed an agent path");
+}
+
+void requireExpiredGCBSInvocationRollsBack()
+{
+    constexpr int AGENT_COUNT = 100;
+    Instance instance(PROPOSAL_TEST_MAP, PROPOSAL_TEST_SCEN, AGENT_COUNT);
+    vector<Agent> agents;
+    agents.reserve(AGENT_COUNT);
+    for (int id = 0; id < AGENT_COUNT; id++)
+        agents.emplace_back(instance, id, true);
+    srand(0);
+    InitLNS solver(instance, agents, 30, "GCBS", "Adaptive", 8, 0,
+                   nullptr, nullptr, 2);
+    require(solver.initialize(), "failed to initialize GCBS-budget source");
+    RepairState state = solver.getRepairState();
+    require(!state.conflict_edges.empty(), "GCBS-budget source has no conflicts");
+
+    RepairAction action;
+    action.mode = RepairActionMode::EXPLICIT_NEIGHBORHOOD;
+    action.agents = {
+        state.conflict_edges.front().first,
+        state.conflict_edges.front().second,
+    };
+    action.random_seed = 123;
+    action.pp_random_seed = 456;
+    action.pp_time_limit_seconds = 0.0;
+
+    // Repeat once so a missing/duplicated selected path-table entry left by
+    // the first rollback is exercised immediately by the next GCBS action.
+    for (int attempt = 0; attempt < 2; attempt++)
+    {
+        const RepairState before = solver.getRepairState();
+        action.random_seed += attempt;
+        require(solver.step(action), "expired GCBS invocation did not return cleanly");
+        const RepairTransition& transition = solver.getLastTransition();
+        const RepairState after = solver.getRepairState();
+        require(transition.action_valid && transition.generated,
+                "expired GCBS invocation changed the explicit neighborhood");
+        require(!transition.replan_success && transition.pp_rolled_back,
+                "expired GCBS invocation did not roll back");
+        require(transition.pp_failure_reason == PPFailureReason::TIME_LIMIT,
+                "expired GCBS invocation has the wrong failure reason");
+        require(before.num_of_colliding_pairs == after.num_of_colliding_pairs &&
+                    before.sum_of_costs == after.sum_of_costs &&
+                    before.conflict_edges == after.conflict_edges,
+                "expired GCBS invocation changed aggregate repair state");
+        require(before.agents.size() == after.agents.size(),
+                "expired GCBS invocation changed agent cardinality");
+        for (size_t index = 0; index < before.agents.size(); index++)
+            require(before.agents[index].path == after.agents[index].path,
+                    "expired GCBS invocation changed an agent path");
+    }
 }
 
 void requireOrdinaryPPKeepsUpstreamTiming(bool collect_diagnostics)
@@ -466,7 +611,9 @@ int main()
 {
     requireIncompleteInitialSolutionIsNotFeasible();
     requireLowLevelDeadlineIsEnforced();
+    requireGCBSSelectsTheMatchingLowLevelDeadlineAPI();
     requireExpiredPPInvocationRollsBack();
+    requireExpiredGCBSInvocationRollsBack();
     requireOrdinaryPPKeepsUpstreamTiming(false);
     requireOrdinaryPPKeepsUpstreamTiming(true);
     const Snapshot first = initializeWithSeed(7);

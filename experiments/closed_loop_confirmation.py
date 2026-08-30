@@ -144,6 +144,16 @@ from lns2_selector.runtime.structshell_dual16 import (
     generate_structshell_dual16_runtime_candidates,
     structshell_dual16_ablation_gate,
 )
+from lns2_selector.runtime.v2_first_single_family_rescue import (
+    V2_FIRST_SINGLE_FAMILY_RESCUE_POOL_ID,
+    V2FirstSingleFamilyRescueTracker,
+    generate_v2_first_single_family_rescue_candidate,
+)
+from lns2_selector.runtime.v2_first_consensus_rescue import (
+    V2_FIRST_CONSENSUS16_RESCUE_POOL_ID,
+    V2FirstConsensusRescueTracker,
+    generate_v2_first_consensus_rescue_candidate,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
@@ -1172,6 +1182,26 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "HybridStructPool requires a realized_dynamic v2-full episode"
         )
+    v2_first_rescue_pool_id = str(
+        hybridstructpool_runtime_config.get("pool_id") or ""
+    )
+    v2_first_rescue_configured = bool(
+        v2_first_rescue_pool_id
+        in {
+            V2_FIRST_SINGLE_FAMILY_RESCUE_POOL_ID,
+            V2_FIRST_CONSENSUS16_RESCUE_POOL_ID,
+        }
+    )
+    if v2_first_rescue_configured and (
+        bounded_native_retry
+        or failure_informed_rescue
+        or signature_scoped_rescue
+        or forced_first_action
+    ):
+        raise ValueError(
+            "V2-first rescue requires an unmodified V2 stream without repair "
+            "overlays or forced actions"
+        )
     slotpool_runtime_enabled, guardpool_runtime_enabled = _pool_runtime_modes(
         structpool_runtime_config
     )
@@ -1402,6 +1432,36 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             episode_hybrid_runtime = dict(
                 dict(job.get("proposal") or {}).get("hybridstructpool") or {}
             )
+            episode_v2_first_pool_id = str(
+                episode_hybrid_runtime.get("pool_id") or ""
+            )
+            if (
+                episode_v2_first_pool_id
+                == V2_FIRST_SINGLE_FAMILY_RESCUE_POOL_ID
+            ):
+                v2_first_rescue_tracker = (
+                    V2FirstSingleFamilyRescueTracker.from_spec(
+                        episode_hybrid_runtime
+                    )
+                )
+                v2_first_rescue_trace_key = (
+                    "v2_first_single_family_rescue"
+                )
+            elif (
+                episode_v2_first_pool_id
+                == V2_FIRST_CONSENSUS16_RESCUE_POOL_ID
+            ):
+                v2_first_rescue_tracker = (
+                    V2FirstConsensusRescueTracker.from_spec(
+                        episode_hybrid_runtime
+                    )
+                )
+                v2_first_rescue_trace_key = "v2_first_consensus_rescue"
+            else:
+                v2_first_rescue_tracker = None
+                v2_first_rescue_trace_key = (
+                    "v2_first_single_family_rescue"
+                )
             exact_rollback_guard_config = dict(
                 episode_hybrid_runtime.get("exact_rollback_guard") or {}
             )
@@ -1643,7 +1703,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 before = state
                 before_fingerprint_started = time.perf_counter()
                 before_hash = current_state_fingerprint
-                if v3_s3_state is not None or exact_rollback_guard is not None:
+                if (
+                    v3_s3_state is not None
+                    or exact_rollback_guard is not None
+                    or v2_first_rescue_tracker is not None
+                ):
                     before_repair_hash = repair_structure_fingerprint(before)
                 else:
                     before_repair_hash = before_hash
@@ -1654,6 +1718,30 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 controller: dict[str, Any] = {}
                 rollback_guard_selected_candidate_id: str | None = None
                 rollback_guard_bannable_candidate_ids: set[str] = set()
+                v2_first_rescue_selection = (
+                    v2_first_rescue_tracker.selection(before_repair_hash)
+                    if v2_first_rescue_tracker is not None
+                    else None
+                )
+                if v2_first_rescue_selection is not None:
+                    v2_first_rescue_selection = {
+                        **v2_first_rescue_selection,
+                        "decision_index": decision_index,
+                        "before_repair_fingerprint": before_repair_hash,
+                    }
+                v2_first_rescue_due = bool(
+                    v2_first_rescue_selection
+                    and v2_first_rescue_selection["rescue_due"]
+                )
+                v2_first_rescue_executing = False
+                v2_first_rescue_generation: dict[str, Any] | None = None
+                if v2_first_rescue_selection is not None:
+                    controller[v2_first_rescue_trace_key] = {
+                        "selection": v2_first_rescue_selection,
+                        "generation": None,
+                        "execution": None,
+                        "observation": None,
+                    }
                 rescue_override = (
                     failure_rescue_tracker.action_for_decision(
                         decision_index, state
@@ -1865,6 +1953,12 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else:
                     proposal_started = time.perf_counter()
                     effective_proposal = dict(job["proposal"])
+                    if v2_first_rescue_tracker is not None:
+                        # The registered rescue is orchestration, not a mixed
+                        # candidate-pool augmentation.  Ordinary decisions see
+                        # the byte-for-byte V2 proposal, and a due rescue uses
+                        # the isolated structural generator below.
+                        effective_proposal.pop("hybridstructpool", None)
                     if v3_s3_state is not None:
                         generation_request = (
                             v3_s3_state.candidate_generation_request()
@@ -2235,7 +2329,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             topology_runtime
                             and not topology_runtime.get("activation_gate")
                             and not topology_runtime.get("phase_guard")
-                        ) or structpool_gate_passed or hybridstructpool_gate_passed:
+                        ) or (
+                            structpool_gate_passed
+                            or hybridstructpool_gate_passed
+                            or v2_first_rescue_due
+                        ):
                             if topology_analysis_cache is None:
                                 topology_analysis_cache = TopologyAnalysisCache(
                                     state,
@@ -2260,44 +2358,273 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             topology_state_analysis_seconds = (
                                 topology_analysis_cache.last_prepare_seconds
                             )
-                        candidates, proposal_metrics = generate_online_candidates(
-                            environment,
-                            state,
-                            task_id=str(row["task_id"]),
-                            solver_seed=solver_seed,
-                            decision_index=decision_index,
-                            proposal_config=effective_proposal,
-                            state_hash=before_hash,
-                            verify_full_state=verify_full_state,
-                            proposal_backend=controller_runtime,
-                            shadow_validation=bool(
-                                job.get("proposal_shadow_validation", False)
-                                and optimized_runtime_available
-                            ),
-                            topology_static_grid=(
-                                feature_engine.static_grid
-                                if feature_engine is not None
-                                and _proposal_uses_static_grid_cache(
-                                    effective_proposal
+                        if v2_first_rescue_due:
+                            if (
+                                v2_first_rescue_tracker is None
+                                or topology_state_analysis is None
+                            ):
+                                raise ClosedLoopExecutionError(
+                                    "v2_first_rescue_analysis_missing",
+                                    "V2-first rescue was due without state analysis",
                                 )
-                                else None
-                            ),
-                            topology_state_analysis=topology_state_analysis,
-                            topology_state_analysis_seconds=(
-                                topology_state_analysis_seconds
-                            ),
-                            topology_no_progress_streak=no_progress_streak,
-                            topology_remaining_wall_seconds=(
-                                max(
-                                    0.0,
-                                    wall_budget
-                                    - (time.perf_counter() - ttf_started_wall),
+                            direct_state_check_started = time.perf_counter()
+                            if (
+                                episode_v2_first_pool_id
+                                == V2_FIRST_CONSENSUS16_RESCUE_POOL_ID
+                            ):
+                                (
+                                    rescue_candidate,
+                                    rescue_generation_seconds,
+                                    consensus_audit,
+                                ) = generate_v2_first_consensus_rescue_candidate(
+                                    state,
+                                    topology_state_analysis,
+                                    config=episode_hybrid_runtime,
                                 )
-                                if wall_budget is not None
-                                else None
-                            ),
-                            structpool_gate_result=structpool_gate_result,
-                        )
+                            else:
+                                consensus_audit = None
+                                (
+                                    rescue_candidate,
+                                    rescue_generation_seconds,
+                                ) = generate_v2_first_single_family_rescue_candidate(
+                                    state,
+                                    topology_state_analysis,
+                                    config=episode_hybrid_runtime,
+                                )
+                            direct_state_check_fingerprint_started = (
+                                time.perf_counter()
+                            )
+                            if state_fingerprint(state) != before_hash:
+                                raise ClosedLoopExecutionError(
+                                    "v2_first_rescue_fingerprint_mismatch",
+                                    "structural rescue generation changed the repair state",
+                                )
+                            direct_state_check_fingerprint_seconds = (
+                                time.perf_counter()
+                                - direct_state_check_fingerprint_started
+                            )
+                            direct_state_check_seconds = (
+                                time.perf_counter() - direct_state_check_started
+                            )
+                            if consensus_audit is not None:
+                                v2_first_rescue_generation = (
+                                    v2_first_rescue_tracker.record_generation(
+                                        repair_fingerprint=before_repair_hash,
+                                        candidate_id=(
+                                            None
+                                            if rescue_candidate is None
+                                            else str(
+                                                rescue_candidate["candidate_id"]
+                                            )
+                                        ),
+                                        consensus_audit=consensus_audit,
+                                    )
+                                )
+                            else:
+                                v2_first_rescue_generation = (
+                                    v2_first_rescue_tracker.record_generation(
+                                        repair_fingerprint=before_repair_hash,
+                                        candidate_id=(
+                                            None
+                                            if rescue_candidate is None
+                                            else str(
+                                                rescue_candidate["candidate_id"]
+                                            )
+                                        ),
+                                    )
+                                )
+                            v2_first_rescue_generation = {
+                                **v2_first_rescue_generation,
+                                "decision_index": decision_index,
+                                "before_repair_fingerprint": before_repair_hash,
+                            }
+                            controller_totals[
+                                "v2_first_rescue_trigger_count"
+                            ] += 1
+                            controller_totals[
+                                "v2_first_rescue_offer_count"
+                            ] += 1
+                            controller_totals[
+                                "v2_first_rescue_consumed_count"
+                            ] += 1
+                            controller_totals[
+                                "v2_first_rescue_generation_attempt_count"
+                            ] += 1
+                            controller_totals[
+                                "v2_first_rescue_unavailable_count"
+                            ] += int(rescue_candidate is None)
+                            if rescue_candidate is not None:
+                                candidates = [rescue_candidate]
+                                v2_first_rescue_executing = True
+                                proposal_metrics = {
+                                    "proposal_count": 0,
+                                    "unique_neighborhood_count": 1,
+                                    "candidate_count": 1,
+                                    "base_candidate_count": 0,
+                                    "raw_candidate_count": 1,
+                                    "proposal_seconds": rescue_generation_seconds,
+                                    "candidate_generation_seconds": (
+                                        rescue_generation_seconds
+                                    ),
+                                    "state_check_seconds": (
+                                        direct_state_check_seconds
+                                    ),
+                                    "state_check_fingerprint_seconds": (
+                                        direct_state_check_fingerprint_seconds
+                                    ),
+                                    "backend": (
+                                        "v2-first-consensus-structural-direct"
+                                        if consensus_audit is not None
+                                        else "v2-first-structural-direct"
+                                    ),
+                                    "state_check_backend": "python-full-state",
+                                    "full_state_verified": True,
+                                    "v2_first_rescue_mode": (
+                                        "consensus_rescue"
+                                        if consensus_audit is not None
+                                        else "single_family_rescue"
+                                    ),
+                                    "v2_first_rescue_generation_attempted": True,
+                                    "v2_first_rescue_candidate_available": True,
+                                    "v2_first_rescue_candidate_id": str(
+                                        rescue_candidate["candidate_id"]
+                                    ),
+                                    "v2_first_rescue_structural_generation_seconds": (
+                                        rescue_generation_seconds
+                                    ),
+                                }
+                            else:
+                                # Candidate absence is not an execution.  Run
+                                # the untouched V2 path once in this decision;
+                                # the tracker latches this fingerprint so the
+                                # structural generator cannot loop.
+                                candidates, proposal_metrics = (
+                                    generate_online_candidates(
+                                        environment,
+                                        state,
+                                        task_id=str(row["task_id"]),
+                                        solver_seed=solver_seed,
+                                        decision_index=decision_index,
+                                        proposal_config=effective_proposal,
+                                        state_hash=before_hash,
+                                        verify_full_state=verify_full_state,
+                                        proposal_backend=controller_runtime,
+                                        shadow_validation=bool(
+                                            job.get(
+                                                "proposal_shadow_validation", False
+                                            )
+                                            and optimized_runtime_available
+                                        ),
+                                        topology_static_grid=(
+                                            feature_engine.static_grid
+                                            if feature_engine is not None
+                                            and _proposal_uses_static_grid_cache(
+                                                effective_proposal
+                                            )
+                                            else None
+                                        ),
+                                        topology_state_analysis=(
+                                            topology_state_analysis
+                                        ),
+                                        topology_state_analysis_seconds=(
+                                            topology_state_analysis_seconds
+                                        ),
+                                        topology_no_progress_streak=(
+                                            no_progress_streak
+                                        ),
+                                        topology_remaining_wall_seconds=(
+                                            max(
+                                                0.0,
+                                                wall_budget
+                                                - (
+                                                    time.perf_counter()
+                                                    - ttf_started_wall
+                                                ),
+                                            )
+                                            if wall_budget is not None
+                                            else None
+                                        ),
+                                        structpool_gate_result=(
+                                            structpool_gate_result
+                                        ),
+                                    )
+                                )
+                                proposal_metrics.update(
+                                    {
+                                        "v2_first_rescue_mode": (
+                                            "fresh_v2_after_no_consensus"
+                                            if consensus_audit is not None
+                                            else "fresh_v2_after_unavailable"
+                                        ),
+                                        "v2_first_rescue_generation_attempted": True,
+                                        "v2_first_rescue_candidate_available": False,
+                                        "v2_first_rescue_candidate_id": None,
+                                        "v2_first_rescue_structural_generation_seconds": (
+                                            rescue_generation_seconds
+                                        ),
+                                    }
+                                )
+                        else:
+                            candidates, proposal_metrics = generate_online_candidates(
+                                environment,
+                                state,
+                                task_id=str(row["task_id"]),
+                                solver_seed=solver_seed,
+                                decision_index=decision_index,
+                                proposal_config=effective_proposal,
+                                state_hash=before_hash,
+                                verify_full_state=verify_full_state,
+                                proposal_backend=controller_runtime,
+                                shadow_validation=bool(
+                                    job.get("proposal_shadow_validation", False)
+                                    and optimized_runtime_available
+                                ),
+                                topology_static_grid=(
+                                    feature_engine.static_grid
+                                    if feature_engine is not None
+                                    and _proposal_uses_static_grid_cache(
+                                        effective_proposal
+                                    )
+                                    else None
+                                ),
+                                topology_state_analysis=topology_state_analysis,
+                                topology_state_analysis_seconds=(
+                                    topology_state_analysis_seconds
+                                ),
+                                topology_no_progress_streak=no_progress_streak,
+                                topology_remaining_wall_seconds=(
+                                    max(
+                                        0.0,
+                                        wall_budget
+                                        - (time.perf_counter() - ttf_started_wall),
+                                    )
+                                    if wall_budget is not None
+                                    else None
+                                ),
+                                structpool_gate_result=structpool_gate_result,
+                            )
+                            if v2_first_rescue_tracker is not None:
+                                proposal_metrics.update(
+                                    {
+                                        "v2_first_rescue_mode": str(
+                                            v2_first_rescue_selection[
+                                                "selection_phase"
+                                            ]
+                                        ),
+                                        "v2_first_rescue_generation_attempted": False,
+                                        "v2_first_rescue_candidate_available": False,
+                                        "v2_first_rescue_candidate_id": None,
+                                        "v2_first_rescue_structural_generation_seconds": 0.0,
+                                    }
+                                )
+                        if v2_first_rescue_tracker is not None:
+                            rescue_record = dict(
+                                controller[v2_first_rescue_trace_key]
+                            )
+                            rescue_record["generation"] = (
+                                v2_first_rescue_generation
+                            )
+                            controller[v2_first_rescue_trace_key] = rescue_record
                         proposal_metrics.update(
                             {
                                 "guardpool_enabled": guardpool_runtime_enabled,
@@ -2820,7 +3147,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "slotpool_total_inference_seconds": 0.0,
                                 }
                             )
-                        if v3_s3_state is not None:
+                        if v2_first_rescue_executing:
+                            if len(candidates) != 1 or len(candidate_rows) != 1:
+                                raise ClosedLoopExecutionError(
+                                    "v2_first_rescue_not_unique",
+                                    "V2-first rescue requires exactly one direct candidate",
+                                )
+                            selected_local_index = 0
+                            scores = [0.0]
+                            margin = 0.0
+                            inference_seconds = 0.0
+                        elif v3_s3_state is not None:
                             selected_local_index = 0
                             scores = [0.0] * len(candidate_rows)
                             margin = 0.0
@@ -3684,6 +4021,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             proposal_metrics.get(hybrid_metric, 0.0)
                         )
                     controller_totals[
+                        "v2_first_rescue_structural_generation_seconds"
+                    ] += float(
+                        proposal_metrics.get(
+                            "v2_first_rescue_structural_generation_seconds",
+                            0.0,
+                        )
+                    )
+                    controller_totals[
                         "hybridstructpool_gate_evaluated_count"
                     ] += int(
                         bool(
@@ -3894,6 +4239,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 ):
                     external_timeout = True
                     break
+                if v2_first_rescue_executing:
+                    assert v2_first_rescue_tracker is not None
+                    rescue_execution = v2_first_rescue_tracker.mark_executed(
+                        repair_fingerprint=before_repair_hash,
+                        candidate_id=str(selected["candidate_id"]),
+                    )
+                    rescue_record = dict(
+                        controller[v2_first_rescue_trace_key]
+                    )
+                    rescue_record["execution"] = rescue_execution
+                    controller[v2_first_rescue_trace_key] = rescue_record
+                    controller_totals[
+                        "v2_first_rescue_executed_count"
+                    ] += 1
+                    controller_totals[
+                        "v2_first_rescue_structural_selected_count"
+                    ] += 1
                 repair_started = time.perf_counter()
                 try:
                     timed_step = getattr(environment, "step_with_time_limit", None)
@@ -4256,7 +4618,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 after_fingerprint_started = time.perf_counter()
                 after_hash = state_fingerprint(state)
                 current_state_fingerprint = after_hash
-                if v3_s3_state is not None or exact_rollback_guard is not None:
+                if (
+                    v3_s3_state is not None
+                    or exact_rollback_guard is not None
+                    or v2_first_rescue_tracker is not None
+                ):
                     after_repair_hash = repair_structure_fingerprint(state)
                 else:
                     after_repair_hash = after_hash
@@ -4317,8 +4683,58 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 rollback_guard_observation.get(
                                     "newly_suppressed", False
                                 )
+                                )
+                            )
+                if v2_first_rescue_tracker is not None:
+                    v2_first_observe_started = time.perf_counter()
+                    if v2_first_rescue_executing:
+                        v2_first_observation = (
+                            v2_first_rescue_tracker.observe_rescue(
+                                before_repair_fingerprint=before_repair_hash,
+                                after_repair_fingerprint=after_repair_hash,
+                                conflicts_before=int(
+                                    before["num_of_colliding_pairs"]
+                                ),
+                                conflicts_after=int(
+                                    state["num_of_colliding_pairs"]
+                                ),
+                                metrics=metrics,
                             )
                         )
+                        controller_totals[
+                            "v2_first_rescue_strict_drop_count"
+                        ] += int(
+                            bool(v2_first_observation["strict_conflict_drop"])
+                        )
+                    else:
+                        v2_first_observation = (
+                            v2_first_rescue_tracker.observe_v2(
+                                before_repair_fingerprint=before_repair_hash,
+                                after_repair_fingerprint=after_repair_hash,
+                                metrics=metrics,
+                            )
+                        )
+                        controller_totals[
+                            "v2_first_v2_exact_rollback_count"
+                        ] += int(
+                            bool(
+                                v2_first_observation[
+                                    "v2_exact_conflict_bound_rollback"
+                                ]
+                            )
+                        )
+                    v2_first_observation = {
+                        **v2_first_observation,
+                        "decision_index": decision_index,
+                        "observation_seconds": (
+                            time.perf_counter() - v2_first_observe_started
+                        ),
+                    }
+                    rescue_record = dict(
+                        controller[v2_first_rescue_trace_key]
+                    )
+                    rescue_record["observation"] = v2_first_observation
+                    controller[v2_first_rescue_trace_key] = rescue_record
                 if v3_s3_state is not None:
                     v3_s3_observe_started = time.perf_counter()
                     repair_outcome = classify_repair_outcome(

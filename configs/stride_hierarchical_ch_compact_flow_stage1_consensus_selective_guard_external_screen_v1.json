@@ -1,0 +1,170 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_stage1_consensus_selective_guard_external_screen_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_stage1_consensus_selective_guard_external_screen_v1",
+  "scientific_status": "retrospective_current_model_map_disjoint_development_screen",
+  "registration_status": "REGISTERED_NOT_RUN",
+  "inputs": {
+    "training_controller_config": {
+      "path": "configs/stride_hierarchical_ch_compact_flow_expanded_stage1_consensus_ambiguity_gate_v1.json",
+      "sha256": "012ebbb7e4c4e5e05fe6ac1d9e17c1e2284f33a4e18fdfe2d0ab3d209bbcb068"
+    },
+    "expanded_train_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_train_report.json",
+      "sha256": "f7c2cc3f1e6246b0d7b8a9af4634e2a0ef99f2ff09ae8aacaedccaa96677d4a0"
+    },
+    "expanded_stage1_pair_labels": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_stage1_pair_labels.jsonl",
+      "sha256": "54e92207b42c2b63b663156379d56150694c398142243ddc5f60f3a801d019e7"
+    },
+    "training_h1_collection_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-h1-collection-v1/h1_collection_report.json",
+      "sha256": "56e0d87437f3a4d154ce19a04c32dd2a59c61f0d3e3fa15b35711a4cc4c51ecc"
+    },
+    "external_overlay_config": {
+      "path": "configs/stride_fresh_matched_unique_action_hierarchical_overlay_v1.json",
+      "sha256": "80430e09b0ad88f5116908ff1e51a25fe66c9e9165d25ba6b9c28172d0531768"
+    },
+    "external_selection_report": {
+      "path": "build/stride-fresh-matched-unique-action-hierarchical-overlay-v1/selection_report.json",
+      "sha256": "d73f5c7b3c9f28b4aff4f2a66908f9335d6904012962b3985f7f2d68c764c74d"
+    },
+    "external_selected_states": {
+      "path": "build/stride-fresh-matched-unique-action-hierarchical-overlay-v1/selected_states.jsonl",
+      "sha256": "3948ff19e3c5cdbeacc36d133fece7d63245dbd552ebfc670957df3f4b8055c8"
+    },
+    "external_h1_collection_report": {
+      "path": "build/stride-fresh-matched-unique-action-hierarchical-overlay-v1/h1_collection_report.json",
+      "sha256": "3f2df793bd289921fe4269212707bb1c75731b4e287c35c323527768fa606a5f"
+    },
+    "external_h1_state_manifest": {
+      "path": "build/stride-fresh-matched-unique-action-hierarchical-overlay-v1/h1_state_manifest.jsonl",
+      "sha256": "56cb83855afd8d2d30eddeee28e4df074f669311cc2c0205ac757acb73e8abdd"
+    }
+  },
+  "training_contract": {
+    "population": "current_93_exact_consensus_states",
+    "expected_state_count": 93,
+    "expected_label_counts": {
+      "ambiguous": 69,
+      "structural_win": 14,
+      "v2_win": 10
+    },
+    "full_fit_once": true,
+    "cross_validation_or_search": false,
+    "external_rows_used_for_fit_threshold_or_selection": false
+  },
+  "feature_contract": {
+    "view": "signed18",
+    "dimension": 18,
+    "feature_names": [
+      "context:state.agent_count",
+      "context:state.colliding_pairs",
+      "context:state.conflict_edge_density",
+      "context:state.conflict_event_count",
+      "context:state.conflicting_agent_ratio",
+      "context:state.degree_max",
+      "context:state.largest_component_ratio",
+      "context:state.path_wait_ratio_mean",
+      "delta_structural_minus_v2:realized.incident_conflict_coverage",
+      "delta_structural_minus_v2:realized.internal_conflict_coverage",
+      "delta_structural_minus_v2:realized.boundary_conflict_edges",
+      "delta_structural_minus_v2:realized.conflict_degree_mean",
+      "delta_structural_minus_v2:realized.delay_mean",
+      "delta_structural_minus_v2:realized.path_overlap_mean",
+      "delta_structural_minus_v2:realized.path_wait_ratio_mean",
+      "relation:intersection_ratio",
+      "relation:jaccard",
+      "relation:symmetric_difference_ratio"
+    ],
+    "repair_outcome_or_runtime_used_as_feature": false,
+    "identifier_used_as_feature": false
+  },
+  "heads": {
+    "opportunity": {
+      "target": "decisive_structural_or_v2_vs_ambiguous",
+      "fit_labels": ["structural_win", "v2_win", "ambiguous"],
+      "class_balance": false,
+      "threshold": 0.40
+    },
+    "direction": {
+      "target": "structural_win_vs_v2_win",
+      "fit_labels": ["structural_win", "v2_win"],
+      "ambiguous_rows_in_fit": false,
+      "class_balance": true,
+      "threshold": 0.75
+    }
+  },
+  "model": {
+    "model_id": "regularized_logistic",
+    "class": "sklearn.linear_model.LogisticRegression",
+    "preprocessing": "StandardScaler",
+    "parameters": {
+      "C": 0.25,
+      "class_weight": null,
+      "max_iter": 1000,
+      "random_state": 20260826,
+      "solver": "liblinear"
+    }
+  },
+  "external_contract": {
+    "source_split": "fresh_matched_development",
+    "filter": "exact_C_equals_H_not_V_consensus_only",
+    "expected_state_count": 32,
+    "expected_states_per_fold": 8,
+    "expected_map_count": 7,
+    "expected_family_count": 4,
+    "expected_label_counts_already_seen_in_feasibility_audit": {
+      "ambiguous": 21,
+      "structural_win": 8,
+      "v2_win": 3
+    },
+    "aggregate_label_support_was_known_before_registration": true,
+    "prospective_or_sealed_final": false,
+    "map_disjoint_from_training_required": true,
+    "labels_loaded_only_after_policy_and_unlabeled_predictions_frozen": true
+  },
+  "external_map_folds": {
+    "fold0": ["den520d", "maze-128-128-10", "warehouse-10-20-10-2-1", "maze-128-128-1"],
+    "fold1": ["lak303d", "random-32-32-10", "room-32-32-4", "random-32-32-20"],
+    "fold2": ["maze-32-32-2", "random-64-64-10", "warehouse-20-40-10-2-1", "maze-32-32-4"],
+    "fold3": ["random-64-64-20", "room-64-64-8", "warehouse-20-40-10-2-2", "room-64-64-16"]
+  },
+  "gates": {
+    "minimum_total_override_count": 8,
+    "minimum_override_map_count": 2,
+    "minimum_selected_action_precision": 0.60,
+    "maximum_v2_wrong_override_count": 0,
+    "maximum_ambiguous_override_rate": 0.10,
+    "minimum_structural_win_override_recall": 0.35,
+    "minimum_full_pooled_decisive_balanced_accuracy": 0.55,
+    "require_exact_v2_fallback_semantics_rate": 1.0
+  },
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "solver_invocation_allowed": false,
+    "threshold_model_or_view_search_allowed": false
+  },
+  "outputs": {
+    "root": "build/stride-hierarchical-ch-compact-flow-stage1-consensus-selective-guard-external-screen-v1",
+    "policy_manifest": "policy_manifest.json",
+    "predictions": "predictions.jsonl",
+    "report": "report.json"
+  },
+  "claim_boundary": {
+    "identity": "retrospective_current_model_map_disjoint_development_screen",
+    "current_model_fixed_guard_only": true,
+    "aggregate_label_support_already_seen": true,
+    "prospective_claim_allowed": false,
+    "sealed_final_or_confirmation_claim_allowed": false,
+    "stage2_loaded": false,
+    "model_export_allowed": false,
+    "deployment_allowed": false,
+    "runtime_or_ttf_claim_allowed": false,
+    "promotion_allowed": false,
+    "v2_replacement_allowed": false,
+    "pass_status": "RETROSPECTIVE_GUARD_SUPPORT_ONLY",
+    "failure_status": "RETROSPECTIVE_GUARD_NO_GO",
+    "insufficient_support_status": "INSUFFICIENT_SUPPORT"
+  }
+}

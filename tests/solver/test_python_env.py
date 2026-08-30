@@ -1002,6 +1002,49 @@ class RepairEnvironmentTests(unittest.TestCase):
             )
             self.assertFalse(invalid["metrics"]["action_valid"])
 
+    def test_expired_gcbs_action_reports_time_limit_and_rolls_back(self) -> None:
+        env = lns2_env.LNS2RepairEnv(
+            os.environ["LNS2_TEST_MAP"],
+            os.environ["LNS2_TEST_SCEN"],
+            agent_count=80,
+            time_limit=30.0,
+            neighborhood_size=8,
+            replan_algorithm="GCBS",
+            max_repair_iterations=1,
+            context={},
+        )
+        before = env.reset(seed=29)
+        if before["done"] or not before["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        agents = list(before["conflict_edges"][0])
+        result = env.step_with_time_limit(
+            {
+                "mode": "explicit_neighborhood",
+                "agents": agents,
+                "random_seed": 33004,
+                "pp_random_seed": 33005,
+            },
+            0.0,
+        )
+        after = result["observation"]
+        metrics = result["metrics"]
+        self.assertTrue(metrics["step_applied"])
+        self.assertTrue(metrics["action_valid"])
+        self.assertEqual(metrics["neighborhood"], sorted(agents))
+        self.assertFalse(metrics["replan_success"])
+        self.assertTrue(metrics["pp_rolled_back"])
+        self.assertEqual(metrics["pp_failure_reason"], "time_limit")
+        self.assertEqual(metrics["requested_pp_time_limit_seconds"], 0.0)
+        self.assertEqual(
+            before["num_of_colliding_pairs"], after["num_of_colliding_pairs"]
+        )
+        self.assertEqual(before["sum_of_costs"], after["sum_of_costs"])
+        self.assertEqual(before["conflict_edges"], after["conflict_edges"])
+        self.assertEqual(
+            [agent["path"] for agent in before["agents"]],
+            [agent["path"] for agent in after["agents"]],
+        )
+
     def test_replay_neighborhood_accepts_recorded_no_conflict_noop(self) -> None:
         env = self.make_env()
         state = env.reset(seed=29)

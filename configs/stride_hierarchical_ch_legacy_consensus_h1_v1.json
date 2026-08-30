@@ -1,0 +1,60 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_legacy_consensus_h1_config.v1",
+  "experiment_id": "stride_hierarchical_ch_legacy_consensus_h1_v1",
+  "scientific_status": "legacy_sequential_development_training_only_extension",
+  "research_split": "legacy_sequential_development_train_only",
+  "inputs": {
+    "active_supply_preflight_rows": {
+      "path": "build/stride-fresh-matched-v2-active-supply-overlay-v1/preflight_rows.jsonl",
+      "sha256": "c588cfbda699b782667d1bd7e85742b97bc04910e156716923d39c59a367b1dc"
+    },
+    "prior_selected_states": {
+      "path": "build/stride-fresh-matched-unique-action-hierarchical-overlay-v1/selected_states.jsonl",
+      "sha256": "3948ff19e3c5cdbeacc36d133fece7d63245dbd552ebfc670957df3f4b8055c8"
+    },
+    "mutation_allowed": false
+  },
+  "selection": {
+    "source_preaction_state_count": 380,
+    "source_consensus_structural_state_count": 92,
+    "prior_selected_state_count": 96,
+    "prior_selected_consensus_structural_state_count": 32,
+    "target_remaining_consensus_state_count": 60,
+    "expected_unique_action_count": 120,
+    "expected_logical_trial_count": 1920,
+    "required_partition": "consensus_structural",
+    "exclusion_identity": "origin_source_episode_decision_before_fingerprint",
+    "rank_rule": "all_remaining_exact_identity_sha256_ascending",
+    "deduplicate_by_exact_sorted_agent_set": true,
+    "execute_each_unique_set_once": true,
+    "preserve_all_role_aliases": true,
+    "outcome_fields_read": false,
+    "reserve_or_backfill_allowed": false
+  },
+  "h1": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "expected_selected_state_count": 60,
+    "expected_unique_action_count": 120,
+    "logical_trial_count": 1920,
+    "workers": 16,
+    "per_action_time_limit_seconds": 5.0,
+    "per_state_process_fuse_seconds": 420.0,
+    "same_state_trial_seed_across_unique_actions": true,
+    "trial_level_atomic_checkpoint": true,
+    "timed_pp_failure_requires_atomic_rollback": true,
+    "runtime_or_pp_seconds_used_in_label": false
+  },
+  "claim_boundary": {
+    "legacy_sequential_development_only": true,
+    "training_pool_only": true,
+    "development_or_final_evaluation_allowed": false,
+    "map_disjoint_claim_allowed": false,
+    "input_artifact_mutation_allowed": false,
+    "outcome_based_state_selection_allowed": false,
+    "training_authorized": false,
+    "runtime_authorized": false,
+    "ttf_or_speed_claim_allowed": false
+  }
+}

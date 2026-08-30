@@ -1,0 +1,279 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_source_v2_registration.v1",
+  "experiment_id": "stride_hierarchical_ch_source_v2",
+  "status": "REGISTERED",
+  "scientific_status": "outcome_blind_static_bucket_mix_and_load_registration",
+  "training_authorized": false,
+  "parent_h1_registration": {
+    "config": {
+      "path": "configs/stride_hierarchical_ch_h1_v2.json",
+      "sha256": "b3d53a5dfbf4145a1c4437efb6d85bcce0ca0c4322a03e707e10f3f11e8899d7"
+    },
+    "report": {
+      "path": "build/stride-hierarchical-ch-h1-v2/registration_report.json",
+      "sha256": "49d5df7af4f873b70b05fc4054007eb88cb7cc9d3668e4b0ad47ed09ee82604c"
+    },
+    "required_schema": "lns2.stride.hierarchical_ch_h1_registration_report.v2",
+    "required_status": "REGISTERED"
+  },
+  "allowed_splits": [
+    "train",
+    "development"
+  ],
+  "map_splits": {
+    "train": [
+      "brc000d",
+      "den000d",
+      "hrt000d",
+      "lak100d",
+      "lgt605d",
+      "orz999d",
+      "ost000t",
+      "rmtst03"
+    ],
+    "development": [
+      "brc203d",
+      "den400d",
+      "lak201d",
+      "lgt602d",
+      "orz302d",
+      "ost004d",
+      "brc997d",
+      "den504d"
+    ]
+  },
+  "map_groups": {
+    "brc000d": "brc",
+    "den000d": "den",
+    "hrt000d": "hrt",
+    "lak100d": "lak",
+    "lgt605d": "lgt",
+    "orz999d": "orz",
+    "ost000t": "ost",
+    "rmtst03": "rmt",
+    "brc203d": "brc",
+    "den400d": "den",
+    "lak201d": "lak",
+    "lgt602d": "lgt",
+    "orz302d": "orz",
+    "ost004d": "ost",
+    "brc997d": "brc",
+    "den504d": "den"
+  },
+  "registered_sources": {
+    "brc000d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/brc000d.map", "sha256": "c5bcb3632d83e0dffe0ebcae7e8bccc57c667006f9a2d47103f5e8de528d0245"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/brc000d.map.scen", "sha256": "d9bb9a1f16387c37e651a8cd33df944cba0146bb6a3bae70678bdb3db0a14f2e"}
+    },
+    "den000d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/den000d.map", "sha256": "42f390dfd8f424f3a80418c431b65448d47bc424a16e42117daf75c776e0f96b"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/den000d.map.scen", "sha256": "e4d0ad76ff92896e866b0379c24e06901a74a4dee789046fae31e8e52ecbfecb"}
+    },
+    "hrt000d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/hrt000d.map", "sha256": "25524f05bed5f1aa7aa9570e1a893ec611bb427867bd70b99e3efdcb38db04a0"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/hrt000d.map.scen", "sha256": "35780ce033f22194eca7b0b0833214602a776c54f44a17cd54cfca2c76caada6"}
+    },
+    "lak100d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/lak100d.map", "sha256": "5250d01fb736f69a61724a0e424877b9c8049afd5185817206571e583a24948c"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/lak100d.map.scen", "sha256": "f5eba35756568c94ce11d72e02badb9fc7f93b9cfc13562498442992e7a00e5d"}
+    },
+    "lgt605d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/lgt605d.map", "sha256": "3516885bcbee711653143d051404655af7d50e26dc339d82964638dd68650aa5"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/lgt605d.map.scen", "sha256": "8f41161fa12f286dede3c443718a3c60703c7799837696d220eff67574f1deeb"}
+    },
+    "orz999d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/orz999d.map", "sha256": "a521f238741f626eeccef531d155f18a4abfd8460cbcf1e7cec1df9e9474f25a"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/orz999d.map.scen", "sha256": "c414ace91f8fcc446d2f4bd7ebba2babb2a271e2d43b72874d3c13c576aadd33"}
+    },
+    "ost000t": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/ost000t.map", "sha256": "f968d44bcf51e6c3693c0e831c62095bbf0280779ae899265811d36b960c6c4d"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/ost000t.map.scen", "sha256": "6775f4f6426733d216b64b95db7f0e8a07825503d25ae1352c1d6cffc0ca4142"}
+    },
+    "rmtst03": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/rmtst03.map", "sha256": "c3bc8b745f5df32126c00f6e0a7614c9d8abb1f7f75ed89a4708676992b4f4ce"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/rmtst03.map.scen", "sha256": "5dba08539c209f476d65d647b3d22e0d64276e7985bfb8e631d6ccb845df2ad2"}
+    },
+    "brc203d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/brc203d.map", "sha256": "1695b540c444f8d7e3693c48bb4481dfe0333046dd8754848d6c82850941779d"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/brc203d.map.scen", "sha256": "53fcb343f843a84bed7ec26b72e46d93cd90ba1cdac2dba1b4bf846bf3ce8f5a"}
+    },
+    "den400d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/den400d.map", "sha256": "12a22ae77bdb13329d1921a72b09f0b8e5d5e9cc10ea5cd5034f15025af29184"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/den400d.map.scen", "sha256": "4cf1de8a15aaaa730099231b3b5850299a8a155e6058b20f245efda1555e4a95"}
+    },
+    "lak201d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/lak201d.map", "sha256": "7b51b615a3ae35f8011cd5c47968a6d38700b74282e9467a2520451e99709886"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/lak201d.map.scen", "sha256": "77bc4bd975d907fad683085aaf9b2a36e8da862f7812fdebe1a0e7975b728499"}
+    },
+    "lgt602d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/lgt602d.map", "sha256": "91a203b7e04ea8abd7190f53f2e3c33e91c91366b32df2a0e0c932502b07879e"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/lgt602d.map.scen", "sha256": "02f4466f520c67384dc3fc70592b7cb791ea94be25214d1736986f29b2a3ca81"}
+    },
+    "orz302d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/orz302d.map", "sha256": "db87e99edff257a91aa3ee56469423eb0154a18b7b8155511271ba510a44c55f"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/orz302d.map.scen", "sha256": "a0d5920d899f433a972e539d1dda63c53a1880c0615f96d25188760d33d169d4"}
+    },
+    "ost004d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/ost004d.map", "sha256": "43008462b1e960053bfbe46fa01dbb28930f1bf9e3abae28665486985e020b31"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/ost004d.map.scen", "sha256": "a32486b90e5b10992892497f46c4e3830bd65539da3e733e22c153ae78e8bed0"}
+    },
+    "brc997d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/brc997d.map", "sha256": "d9b5ace8e4008c5d4442f21c0c6cb8767cf9fab90dcaf5e3d20a3d4e80ad26a9"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/brc997d.map.scen", "sha256": "c40fe24febe55341d3999a273136b82904c078554c366cddf3f24fd3fbdc6454"}
+    },
+    "den504d": {
+      "map": {"path": "build/movingai-dao-compact-source-v1/maps-all/den504d.map", "sha256": "4c76f876dfed2427be71c53a9322a7b2fa2fe49cd797622200c3f570fabf48c1"},
+      "scenario": {"path": "build/movingai-dao-compact-source-v1/scenarios-all/den504d.map.scen", "sha256": "a04ae58978bdb346cc9f483d537d1216e6ba4ad0f3259126b7f5829e4169d91c"}
+    }
+  },
+  "task_materialization": {
+    "algorithm_schema": "lns2.stride.hierarchical_ch_bucket_mix.v2",
+    "task_schema": "lns2.stride.hierarchical_ch_bucket_mix_task.v2",
+    "algorithm": "movingai_full_bucket_round_robin_sha256_unique_endpoints_v2",
+    "variant_ids": [
+      "bucket_mix_00",
+      "bucket_mix_01"
+    ],
+    "variant_salt_is_registered": true,
+    "read_entire_registered_scenario": true,
+    "bucket_order": "integer_bucket_ascending_round_robin_one_row_per_bucket_per_pass",
+    "within_bucket_order": "sha256_of_algorithm_variant_map_and_canonical_row_then_source_line",
+    "endpoint_rule": "greedy_unique_start_and_unique_goal",
+    "load_rule": "each_load_is_an_exact_prefix_of_one_variant_max_load_sequence",
+    "source_distance_or_bucket_used_for_sampling": true,
+    "repair_outcome_used_for_sampling": false,
+    "qualification_outcome_used_for_sampling": false,
+    "runtime_or_pp_seconds_used_for_sampling": false
+  },
+  "static_load_design": {
+    "design_inputs": [
+      "registered_map_walkable_cell_count",
+      "registered_full_scenario_row_count",
+      "registered_full_scenario_median_shortest_distance",
+      "source_v1_preregistered_load_floor"
+    ],
+    "forbidden_inputs": [
+      "source_v1_qualification_outcome",
+      "repair_outcome",
+      "h1_label",
+      "runtime_seconds",
+      "pp_seconds"
+    ],
+    "target_agent_time_density": {
+      "middle": 4.0,
+      "high": 6.0,
+      "formula": "agent_count * full_scenario_median_shortest_distance / walkable_cells"
+    },
+    "capacity_caps": {
+      "middle_fraction_of_scenario_rows": 0.8,
+      "high_fraction_of_scenario_rows": 0.95,
+      "round_capacity_down_to_multiple": 10
+    },
+    "preserve_source_v1_load_floor_when_within_capacity_cap": true,
+    "per_map_static_metadata": {
+      "brc000d": {"walkable_cells": 28963, "scenario_rows": 850, "bucket_count": 85, "median_shortest_distance": 169.76450195},
+      "den000d": {"walkable_cells": 58085, "scenario_rows": 1310, "bucket_count": 131, "median_shortest_distance": 262.24978332},
+      "hrt000d": {"walkable_cells": 106608, "scenario_rows": 2260, "bucket_count": 226, "median_shortest_distance": 451.81832580},
+      "lak100d": {"walkable_cells": 39605, "scenario_rows": 2040, "bucket_count": 204, "median_shortest_distance": 407.77669525},
+      "lgt605d": {"walkable_cells": 2983, "scenario_rows": 220, "bucket_count": 22, "median_shortest_distance": 43.89949493},
+      "orz999d": {"walkable_cells": 43893, "scenario_rows": 2430, "bucket_count": 243, "median_shortest_distance": 486.61017303},
+      "ost000t": {"walkable_cells": 105707, "scenario_rows": 2620, "bucket_count": 262, "median_shortest_distance": 523.74725799},
+      "rmtst03": {"walkable_cells": 5630, "scenario_rows": 450, "bucket_count": 45, "median_shortest_distance": 89.89949493},
+      "brc203d": {"walkable_cells": 20712, "scenario_rows": 1290, "bucket_count": 129, "median_shortest_distance": 258.05382385},
+      "den400d": {"walkable_cells": 30182, "scenario_rows": 810, "bucket_count": 81, "median_shortest_distance": 163.12489166},
+      "lak201d": {"walkable_cells": 12614, "scenario_rows": 790, "bucket_count": 79, "median_shortest_distance": 158.55634918},
+      "lgt602d": {"walkable_cells": 32961, "scenario_rows": 980, "bucket_count": 98, "median_shortest_distance": 195.88225098},
+      "orz302d": {"walkable_cells": 5241, "scenario_rows": 490, "bucket_count": 49, "median_shortest_distance": 98.25483398},
+      "ost004d": {"walkable_cells": 4410, "scenario_rows": 210, "bucket_count": 21, "median_shortest_distance": 40.89949493},
+      "brc997d": {"walkable_cells": 23000, "scenario_rows": 660, "bucket_count": 66, "median_shortest_distance": 131.45584412},
+      "den504d": {"walkable_cells": 13428, "scenario_rows": 630, "bucket_count": 63, "median_shortest_distance": 126.39696960}
+    }
+  },
+  "variant_ids": [
+    "bucket_mix_00",
+    "bucket_mix_01"
+  ],
+  "per_map_load_grid": {
+    "brc000d": [680, 800],
+    "den000d": [900, 1240],
+    "hrt000d": [950, 1400],
+    "lak100d": [400, 600],
+    "lgt605d": [170, 200],
+    "orz999d": [400, 600],
+    "ost000t": [800, 1200],
+    "rmtst03": [250, 400],
+    "brc203d": [400, 600],
+    "den400d": [640, 760],
+    "lak201d": [300, 500],
+    "lgt602d": [650, 930],
+    "orz302d": [200, 400],
+    "ost004d": [160, 190],
+    "brc997d": [520, 620],
+    "den504d": [400, 590]
+  },
+  "solver_seeds": [
+    41,
+    42
+  ],
+  "expected_map_count": 16,
+  "expected_task_count": 64,
+  "expected_episode_count": 128,
+  "maximum_source_episodes_per_map": 8,
+  "workers": 20,
+  "reset_only_qualification": {
+    "phase_order": "materialize_then_whole_cohort_reset_only_then_realized_dynamic_if_all_gates_pass",
+    "atomic_whole_cohort_gate": true,
+    "expected_reset_count": {
+      "train": 64,
+      "development": 64,
+      "total": 128
+    },
+    "all_resets_complete": true,
+    "all_resets_valid": true,
+    "all_initial_states_consistent": true,
+    "minimum_nonzero_states": {
+      "train": 33,
+      "development": 33
+    },
+    "minimum_active_maps": {
+      "train": 8,
+      "development": 8
+    },
+    "minimum_nonzero_resets_per_map": 2,
+    "minimum_nonzero_resets_per_map_variant": 1,
+    "minimum_nonzero_high_load_resets_per_map": 1,
+    "minimum_resets_with_at_least_4_conflicts": {
+      "train": 12,
+      "development": 12
+    },
+    "minimum_resets_with_at_least_16_conflicts": {
+      "train": 4,
+      "development": 4
+    },
+    "minimum_maps_with_a_reset_at_least_4_conflicts": {
+      "train": 4,
+      "development": 4
+    },
+    "minimum_maps_with_a_reset_at_least_16_conflicts": {
+      "train": 2,
+      "development": 2
+    },
+    "required_layout_families": {
+      "train": ["brc", "den", "hrt", "lak", "lgt", "orz", "ost", "rmt"],
+      "development": ["brc", "den", "lak", "lgt", "orz", "ost"]
+    },
+    "outcome_based_subset_selection_allowed": false,
+    "per_task_or_per_map_load_adaptation_allowed": false,
+    "reserve_or_replacement_backfill_allowed": false,
+    "failure_action": "STATE_SUPPLY_FAIL_NO_BACKFILL"
+  },
+  "claim_boundary": {
+    "sealed_final_semantic_access_authorized": false,
+    "sealed_final_source_registered_here": false,
+    "outcome_blind_design": true,
+    "source_v1_outcomes_used_for_map_or_load_selection": false,
+    "model_fit_executed": false,
+    "training_authorized": false,
+    "runtime_or_ttf_claim_authorized": false
+  }
+}

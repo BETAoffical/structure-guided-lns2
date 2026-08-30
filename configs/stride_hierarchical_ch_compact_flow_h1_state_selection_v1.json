@@ -1,0 +1,108 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_h1_state_selection_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_h1_state_selection_v1",
+  "source": {
+    "root": "build/stride-hierarchical-ch-compact-flow-balanced-source-v1",
+    "experiment_id": "stride_hierarchical_ch_compact_flow_balanced_source_v1",
+    "collection_trust_schema": "lns2.stride.hierarchical_ch_compact_flow_balanced_source_collection_trust.v1",
+    "collection_trust_file": "collection_trust_report__all.json",
+    "schedule_file": "source_schedule.jsonl",
+    "realized_manifest_by_split": {
+      "train": "collection/train/realized_dynamic_manifest.jsonl",
+      "development": "collection/development/realized_dynamic_manifest.jsonl"
+    },
+    "required_status": "COLLECTED_EXACT_PRODUCT",
+    "required_policy": "realized_dynamic",
+    "solver_seeds": [41, 42],
+    "expected_episode_count": 384,
+    "expected_episodes_per_split": 192
+  },
+  "map_splits": {
+    "train": [
+      "den404d",
+      "lak101d",
+      "den201d",
+      "hrt002d",
+      "den009d",
+      "den101d",
+      "den203d",
+      "den308d"
+    ],
+    "development": [
+      "lak108d",
+      "lak110d",
+      "ost102d",
+      "den408d",
+      "den202d",
+      "den207d",
+      "den998d",
+      "den020d"
+    ]
+  },
+  "map_loads": {
+    "den404d": [80, 180, 280],
+    "lak101d": [70, 160, 240],
+    "den201d": [40, 100, 180],
+    "hrt002d": [50, 100, 180],
+    "den009d": [60, 120, 200],
+    "den101d": [80, 160, 240],
+    "den203d": [100, 200, 320],
+    "den308d": [100, 200, 320],
+    "lak108d": [60, 140, 220],
+    "lak110d": [40, 90, 140],
+    "ost102d": [50, 120, 200],
+    "den408d": [100, 240, 400],
+    "den202d": [40, 100, 180],
+    "den207d": [60, 120, 200],
+    "den998d": [80, 160, 240],
+    "den020d": [100, 200, 320]
+  },
+  "train_map_folds": {
+    "fold0": ["den404d", "den009d"],
+    "fold1": ["lak101d", "den101d"],
+    "fold2": ["den201d", "den203d"],
+    "fold3": ["hrt002d", "den308d"]
+  },
+  "selection": {
+    "depth_bands": {
+      "d0": [0, 0],
+      "d1_3": [1, 3],
+      "d4plus": [4, 11]
+    },
+    "target_states_per_depth_band_per_split": 32,
+    "minimum_active_maps_per_depth_band_per_split": 7,
+    "minimum_states_per_map": 8,
+    "maximum_states_per_episode": 2,
+    "maximum_states_per_map_load": 8,
+    "maximum_states_per_map": 16,
+    "expected_selected_states_per_split": 96,
+    "expected_selected_state_count": 192,
+    "rank_rule": "sha256_canonical_json_array_of_split_task_seed_decision_index_before_fingerprint",
+    "result_blind_extractor": "experiments.trace_replay.result_blind_decision_rows",
+    "outcome_filtering_allowed": false,
+    "reserve_or_replacement_backfill_allowed": false,
+    "under_supply_action": "STATE_SUPPLY_FAIL_NO_BACKFILL"
+  },
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "sealed_final": {
+    "status": "SEALED",
+    "source_registered": false,
+    "semantic_access_allowed": false,
+    "state_selection_allowed": false,
+    "access_requires_frozen_model_and_threshold": true
+  },
+  "claim_boundary": {
+    "train_and_development_usage": "sequential_design_only",
+    "map_disjoint_final_confirmation_required": true,
+    "target_outcomes_read_for_selection": false,
+    "h1_outcomes_collected": false,
+    "training_authorized": false,
+    "model_fit_executed": false,
+    "runtime_or_ttf_claim_authorized": false
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "schema": "lns2.stride.v2first_consensus16_warehouse_n800_supply_config.v1",
+  "experiment_id": "stride-v2first-consensus16-warehouse-n800-supply-v1",
+  "scientific_status": "preregistered_trigger_qualified_n800_warehouse_conditional_effect_screen",
+  "pre_registration_parent_commit": "4b0ffa7dabd341044230d5ad988b9d60a89d0a1c",
+  "controllers": [
+    "v2_only",
+    "consensus16_rescue"
+  ],
+  "controller_contract": {
+    "base": "frozen_v2_full_native_features_optimized_copeland",
+    "trigger": {
+      "minimum_consecutive_v2_exact_rollbacks": 3,
+      "fingerprint_scope": "same_repair_fingerprint",
+      "offer_on_next_decision": true,
+      "maximum_rescue_offers_per_episode": 1,
+      "maximum_executed_rescues_per_episode": 1,
+      "post_offer_policy": "permanent_v2_only",
+      "time_limit_triggers_rescue": false
+    },
+    "consensus16_rescue": {
+      "component_family": "conflict_component",
+      "hotspot_family": "spatiotemporal_hotspot",
+      "nominal_size": 16,
+      "agreement": "nonempty_sorted_agent_set_exact_equality",
+      "selection": "direct_unique_consensus_neighborhood_without_copeland",
+      "no_consensus_fallback": "same_decision_fresh_v2_only",
+      "maximum_pp_calls_per_decision": 1
+    }
+  },
+  "screen": {
+    "role": "non_ttf_state_supply_qualification",
+    "solver_seeds": [29, 30, 31, 32],
+    "v2_repair_outcome_prefix_k": 64,
+    "maximum_trace_decisions": 65,
+    "offer_observation_rule": "read_first_pre_action_offer_at_decision_index_at_most_64_after_only_earlier_v2_outcomes",
+    "workers": 16,
+    "stopping_rule": "historical",
+    "wall_time_safety_fuse_seconds": 60.0,
+    "environment_time_safety_fuse_seconds": 60.0,
+    "episode_process_timeout_seconds": 90.0,
+    "included_in_ttf": false,
+    "selection_read_whitelist": [
+      "trace_integrity",
+      "v2_first_consensus_rescue.selection",
+      "v2_first_consensus_rescue.generation"
+    ],
+    "selection_read_blacklist": [
+      "success",
+      "capped_wall_time_to_feasible",
+      "final_conflicts",
+      "pp_replan_seconds",
+      "offer_action_outcome",
+      "post_offer_decisions"
+    ],
+    "eligibility": {
+      "requires_three_same_fingerprint_exact_v2_rollbacks": true,
+      "requires_offer_within_prefix_boundary": true,
+      "requires_nonempty_exact_component_hotspot_agent_consensus": true
+    },
+    "selection": {
+      "maximum_selected_keys_per_task": 1,
+      "required_selected_task_count": 4,
+      "seed_priority_by_task": {
+        "w1020a__oe__t0233__n0800": [29, 30, 31, 32],
+        "w1020a__oe__t0277__n0800": [30, 31, 32, 29],
+        "w1020a__ur__t0233__n0800": [31, 32, 29, 30],
+        "w1020a__ur__t0277__n0800": [32, 29, 30, 31]
+      },
+      "cross_task_backfill": false,
+      "seed_replacement": false,
+      "prefix_extension": false,
+      "incomplete_state_supply_status": "INCONCLUSIVE_STATE_SUPPLY",
+      "any_invalid_reset_status": "INVALID"
+    }
+  },
+  "formal": {
+    "role": "prefix_screened_ttf_unseen_conditional_effect_test",
+    "paired_key_count": 4,
+    "episode_count": 8,
+    "wall_time_budget_seconds": 120.0,
+    "environment_time_limit_seconds": 120.0,
+    "episode_process_timeout_seconds": 150.0,
+    "workers": 1,
+    "strict_serial": true,
+    "included_in_ttf": true,
+    "fresh_reset_qualification": {
+      "workers": 16,
+      "reuse_screen_state_or_cache": false,
+      "included_in_ttf": false
+    },
+    "task_order": [
+      "w1020a__oe__t0233__n0800",
+      "w1020a__oe__t0277__n0800",
+      "w1020a__ur__t0233__n0800",
+      "w1020a__ur__t0277__n0800"
+    ],
+    "arm_order_by_task": {
+      "w1020a__oe__t0233__n0800": ["v2_only", "consensus16_rescue"],
+      "w1020a__oe__t0277__n0800": ["consensus16_rescue", "v2_only"],
+      "w1020a__ur__t0233__n0800": ["v2_only", "consensus16_rescue"],
+      "w1020a__ur__t0277__n0800": ["consensus16_rescue", "v2_only"]
+    }
+  },
+  "cohort": {
+    "dataset": "build/wh-f16-v1-r2/dataset",
+    "split": "balanced_wall_clock",
+    "map_id": "warehouse-10-20-10-2-1",
+    "map_code": "w1020a",
+    "agent_count": 800,
+    "tasks": [
+      {
+        "id": "w1020a__oe__t0233__n0800",
+        "variant": "opposite_exchange",
+        "task_seed": 233,
+        "task_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/tasks/w1020a__oe__t0233__n0800.json",
+          "sha256": "af532bdf6193143c37e3362d28360e36b890254688a1bdb85107886e605a4d6a"
+        },
+        "scenario_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/scenarios/w1020a__oe__t0233__n0800.scen",
+          "sha256": "a1f3e83535a5ae69185be4a7903d4ee58256e5b00d23d6577fbbfc312abe142f"
+        }
+      },
+      {
+        "id": "w1020a__oe__t0277__n0800",
+        "variant": "opposite_exchange",
+        "task_seed": 277,
+        "task_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/tasks/w1020a__oe__t0277__n0800.json",
+          "sha256": "6b211a7e7268091069e1edc09be6baae85c0b57f224f0224d9026355f785fb23"
+        },
+        "scenario_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/scenarios/w1020a__oe__t0277__n0800.scen",
+          "sha256": "af07b5f9b6a1ed21e277530a41ef3d61f9c978f8fe1093662ab17abc5982dc3d"
+        }
+      },
+      {
+        "id": "w1020a__ur__t0233__n0800",
+        "variant": "uniform_random",
+        "task_seed": 233,
+        "task_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/tasks/w1020a__ur__t0233__n0800.json",
+          "sha256": "6bc5e6b0d2a69e6589f16066e1e9db796404ff90b83612c3be202619bb8d9cb4"
+        },
+        "scenario_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/scenarios/w1020a__ur__t0233__n0800.scen",
+          "sha256": "f0a106c4e72d4caefb21859e47f1bf84702316a40dbd59bb1571a63b2b665951"
+        }
+      },
+      {
+        "id": "w1020a__ur__t0277__n0800",
+        "variant": "uniform_random",
+        "task_seed": 277,
+        "task_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/tasks/w1020a__ur__t0277__n0800.json",
+          "sha256": "4879fb34806646dcd936733ebac22babe6a35c7dedf6c431c32bc6484dd4fe9f"
+        },
+        "scenario_file": {
+          "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/scenarios/w1020a__ur__t0277__n0800.scen",
+          "sha256": "f5768da3815fd4cadfd33f4aeae7b097bb6e83190cbbbcb34b1c503edc486a78"
+        }
+      }
+    ],
+    "candidate_solver_seeds": [29, 30, 31, 32],
+    "result_based_task_or_seed_replacement": false
+  },
+  "performance_gates": {
+    "required_formal_trigger_and_exact_consensus_replay_keys": 4,
+    "success_count_must_not_be_below_v2": true,
+    "minimum_mean_restricted_ttf_reduction": 0.05,
+    "minimum_paired_faster_key_count": 3,
+    "maximum_any_key_restricted_ttf_regression": 0.20,
+    "minimum_immediate_exact_rollback_rate_reduction": 0.25
+  },
+  "claim_boundary": {
+    "maximum_claim": "conditional_effect_on_four_k64_trigger_and_exact_consensus_enriched_w1020a_n800_task_seed_pairs",
+    "prefix_screened": true,
+    "ttf_unseen_at_selection": true,
+    "unbiased_fresh_seed_confirmation": false,
+    "trigger_prevalence_claim_allowed": false,
+    "warehouse_generalization_allowed": false,
+    "n600_generalization_allowed": false,
+    "default_promotion_allowed": false
+  },
+  "controller_bundle": "artifacts/initlns-closed-loop-controller-v2",
+  "inputs": {
+    "runtime_config": {
+      "path": "configs/stride_warehouse_fixed16_development_runtime_v1.json",
+      "sha256": "d8be827e3c97768d2093cc20af5ca5c2497c412bfa2271bd913167651a1acc78"
+    },
+    "dataset_manifest": {
+      "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/manifest.jsonl",
+      "sha256": "79a6d4879db94fafd709f1625cfd6f9c0274cdce0702070b0c92a64d998fa39a"
+    },
+    "map": {
+      "path": "build/wh-f16-v1-r2/dataset/balanced_wall_clock/maps/warehouse-10-20-10-2-1.map",
+      "sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0"
+    },
+    "controller_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "explicitly_omitted": [
+    "screen_ttf_ranking",
+    "screen_success_ranking",
+    "screen_pp_time_ranking",
+    "screen_post_offer_outcome_ranking",
+    "seed_or_task_replacement",
+    "prefix_extension",
+    "parallel_formal_ttf",
+    "automatic_timeout_extension",
+    "new_ranker",
+    "gcbs",
+    "bootstrap",
+    "auc_gate",
+    "global_repository_scan"
+  ]
+}

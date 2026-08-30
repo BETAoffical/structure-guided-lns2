@@ -1,0 +1,61 @@
+{
+  "schema": "lns2.stride.seed25_same_set_pp_gcbs_multiseed_registration.v1",
+  "experiment_id": "stride-seed25-same-set-pp-gcbs-multiseed-v1",
+  "scientific_status": "outcome_enriched_same_set_repairer_repeatability_screen",
+  "source": {
+    "screen_registration": "configs/stride_seed25_same_set_pp_gcbs_screen_v1.json",
+    "screen_registration_sha256": "55a61feb9b6428dd8c0c592fcabba532e6084508bbeb8eb7c0b316bfbd86e845",
+    "selection_rule": "reuse_exact_four_frozen_states_and_dual_selected_agent_sets_without_reading_new_outcomes"
+  },
+  "execution": {
+    "repair_algorithms": ["PP", "GCBS"],
+    "trial_count_per_state_algorithm": 4,
+    "repair_seed_namespace": "stride-lns-paired-pp-v1",
+    "action_time_limit_seconds": 5.0,
+    "maximum_action_deadline_overshoot_seconds": 0.25,
+    "pair_process_fuse_seconds": 25.0,
+    "strict_serial_pairs": true,
+    "candidate_generation": false,
+    "controller_selection": false,
+    "continuation": false,
+    "ttf": false
+  },
+  "qualification": {
+    "report_path": "build/stride-gcbs-cooperative-deadline-qualification-v1/qualification_report.json",
+    "report_sha256": "dcdd15cf48335fc6e3d724fc4bf40ca0de419be9446a948a1c9476f55e10ef48",
+    "gcbs_cooperative_action_deadline_validated": true,
+    "gcbs_failure_rollback_validated": true,
+    "gcbs_root_failure_safe": true,
+    "pbs_included": false,
+    "producer_sha256": {
+      "build/linux/project/lns2_env.cpython-310-x86_64-linux-gnu.so": "1231dbc0bbca39cd5d1d2aba49bc68f8c16889ff22e16d5d7eb9afe49ec09221",
+      "src/python_bindings.cpp": "5ec777d7b05ddf282f55f0b912ed51e9b6ccf58473080973e881aa369c5443a8",
+      "third_party/mapf_lns2/inc/CBS/GCBS.h": "8f4536eb08d29b8a4aa342000c337cacf09f3da7d9f7966cb257c15ad52dfd8e",
+      "third_party/mapf_lns2/inc/InitLNS.h": "815760455a0c0efbef4d53569688e78285e733b1daaa68a5945a38dd84c45670",
+      "third_party/mapf_lns2/inc/RepairPolicy.h": "9eb7d3776147808f961185691ded1cf5d8cf275b3d0af664a1c93f28a7a00d9d",
+      "third_party/mapf_lns2/src/CBS/GCBS.cpp": "f41c9e9b0bb08680210ad430d73ea9660bab557b2d02e6f280d64d3daa045679",
+      "third_party/mapf_lns2/src/InitLNS.cpp": "8e2828002c22b81818bf16994e9a3b62c48e9e24575a305b4cb0878133c61b36"
+    }
+  },
+  "decision_gate": {
+    "hard_state_map_ids": [
+      "maze-32-32-4-n300",
+      "random-32-32-20-high-load",
+      "room-64-64-16"
+    ],
+    "minimum_gcbs_strict_drops_per_hard_state": 3,
+    "minimum_hard_states_strictly_better": 2,
+    "positive_control_map_id": "warehouse-w1020a-opposite-exchange",
+    "minimum_gcbs_positive_control_drops": 3,
+    "maximum_gcbs_time_limit_count": 4,
+    "overall_mean_normalized_reduction_must_be_strictly_higher": true
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "outcome_enriched_actions": true,
+    "repairer_runtime_promotion_allowed": false,
+    "ttf_claim_allowed": false,
+    "selector_replacement_allowed": false,
+    "generalization_claim_allowed": false
+  }
+}

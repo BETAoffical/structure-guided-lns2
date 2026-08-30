@@ -3232,6 +3232,51 @@
       "path": "tests/evaluation/test_stride_warehouse_compactcut.py",
       "role": "reproducibility",
       "contract": "Freeze the exact Q0 registry, map-role separation, eight unique map hashes, 128 reset-only keys, identity audit, terminal failure and same-fingerprint resume contracts."
+    },
+    {
+      "path": "experiments/stride_temporal_anchor_incremental_readiness.py",
+      "role": "reproducibility",
+      "purpose": "Measure whether strict-prefix temporal history adds held-out-map signal beyond the frozen SafeSlot static representation without running a solver or exporting a model."
+    },
+    {
+      "path": "scripts/run_stride_temporal_anchor_incremental_readiness.py",
+      "role": "reproducibility",
+      "purpose": "Expose the solver-free temporal-anchor incremental readiness analysis."
+    },
+    {
+      "path": "tests/evaluation/test_stride_temporal_anchor_incremental_readiness.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 16-dimensional strict-prefix feature schema, target-outcome blindness, exact-V2 decision-zero abstention and analysis boundary."
+    },
+    {
+      "path": "experiments/stride_seed25_same_set_pp_gcbs_screen.py",
+      "role": "reproducibility",
+      "purpose": "Compare PP and GCBS on four frozen seed25 states using the exact Dual-selected neighborhood in isolated one-step processes without candidate generation, continuation or TTF."
+    },
+    {
+      "path": "scripts/run_stride_seed25_same_set_pp_gcbs_screen.py",
+      "role": "reproducibility",
+      "purpose": "Expose the fail-closed plan, dry-run and eight-branch WSL mechanism screen with per-job process fuses."
+    },
+    {
+      "path": "tests/evaluation/test_stride_seed25_same_set_pp_gcbs_screen.py",
+      "role": "reproducibility",
+      "contract": "Freeze the four outcome-enriched selected actions, PP and GCBS-only repairer set, one-step boundary, external-fuse requirement and no-promotion claims."
+    },
+    {
+      "path": "experiments/stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "role": "reproducibility",
+      "purpose": "Run the qualified four-state, four-repeat PP versus GCBS same-set screen with paired execution salts, cooperative deadlines and no controller or TTF."
+    },
+    {
+      "path": "scripts/run_stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "role": "reproducibility",
+      "purpose": "Expose the registered multirepeat same-set repairer plan and WSL screen."
+    },
+    {
+      "path": "tests/evaluation/test_stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "role": "reproducibility",
+      "contract": "Freeze the 32-attempt paired plan, repair salts, qualification hash gate and hard-stop scientific decision."
     }
   ]
 }

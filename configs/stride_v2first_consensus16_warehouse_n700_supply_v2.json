@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.stride.v2first_consensus16_warehouse_n700_supply_overlay.v2",
+  "experiment_id": "stride-v2first-consensus16-warehouse-n700-supply-v2",
+  "scientific_status": "post_v1_invalid_runner_resume_fix_preregistered_before_v2_controller",
+  "pre_registration_parent_commit": "4b0ffa7dabd341044230d5ad988b9d60a89d0a1c",
+  "base_config": {
+    "path": "configs/stride_v2first_consensus16_warehouse_n700_supply_v1.json",
+    "sha256": "7761da5aef07a9a13cb8aeeba22d5cd96b70abd5a1a7ade673a636a8d471073b"
+  },
+  "v1_invalid_evidence": {
+    "status": {
+      "path": "build/stride-v2first-consensus16-warehouse-n700-supply-v1/screen/collection_status.json",
+      "sha256": "b00ce3d81a9638975faa2ada56791b858bc333010a97c5c1ed9f2e6c03d9fc20"
+    },
+    "decision_status": "INVALID",
+    "completed_schedule_entries": 0,
+    "controller_episode_count": 0,
+    "resumption_allowed": false
+  },
+  "scientific_contract": {
+    "base_cohort_controller_budget_selection_and_gate_changed": false,
+    "runner_change": "realized_dynamic_recomputes_resume_after_same_root_qualification",
+    "v1_controller_episode_count": 0,
+    "v1_state_or_cache_reused": false,
+    "v2_screen_fresh_reset_required": true,
+    "formal_or_ttf_added": false
+  },
+  "output_identity": {
+    "default_output": "build/stride-v2first-consensus16-warehouse-n700-supply-v2",
+    "v1_output_resumable": false,
+    "foreign_or_nested_output_allowed": false
+  }
+}

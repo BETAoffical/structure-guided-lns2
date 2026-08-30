@@ -1,0 +1,260 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_expanded_stage1_consensus_ambiguity_gate_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_expanded_stage1_consensus_ambiguity_gate_v1",
+  "scientific_status": "preregistered_posthoc_consensus_ambiguity_gate_control",
+  "registration_status": "REGISTERED_NOT_RUN",
+  "inputs": {
+    "expanded_train_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_train_report.json",
+      "sha256": "f7c2cc3f1e6246b0d7b8a9af4634e2a0ef99f2ff09ae8aacaedccaa96677d4a0"
+    },
+    "expanded_stage1_pair_labels": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-train-v1/expanded_stage1_pair_labels.jsonl",
+      "sha256": "54e92207b42c2b63b663156379d56150694c398142243ddc5f60f3a801d019e7"
+    },
+    "h1_collection_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-h1-collection-v1/h1_collection_report.json",
+      "sha256": "56e0d87437f3a4d154ce19a04c32dd2a59c61f0d3e3fa15b35711a4cc4c51ecc"
+    },
+    "predecessor_config": {
+      "path": "configs/stride_hierarchical_ch_compact_flow_expanded_stage1_consensus_only_v1.json",
+      "sha256": "208a74d07b3adf1f2bf45b8b8e62986856cac48b7356dd03253d5c01e7ffe5e8"
+    },
+    "predecessor_evaluation_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-stage1-consensus-only-v1/consensus_only_evaluation_report.json",
+      "sha256": "ebc5c0b103e354a22fd464d884a9967d68dab89ee915fc9856e01c4ce1761122"
+    },
+    "predecessor_oof_predictions": {
+      "path": "build/stride-hierarchical-ch-compact-flow-expanded-stage1-consensus-only-v1/consensus_only_oof_predictions.jsonl",
+      "sha256": "a6f773a0f53bdfdbae0d18ed658e373b01147a4bbcd399764fa3a8cc2e591654"
+    }
+  },
+  "predecessor_contract": {
+    "study_role": "posthoc_same_cohort_ambiguity_gate_mechanism_control",
+    "predecessor_experiment_id": "stride_hierarchical_ch_compact_flow_expanded_stage1_consensus_only_v1",
+    "predecessor_config_sha256": "208a74d07b3adf1f2bf45b8b8e62986856cac48b7356dd03253d5c01e7ffe5e8",
+    "predecessor_report_sha256": "ebc5c0b103e354a22fd464d884a9967d68dab89ee915fc9856e01c4ce1761122",
+    "predecessor_oof_sha256": "a6f773a0f53bdfdbae0d18ed658e373b01147a4bbcd399764fa3a8cc2e591654",
+    "allowed_method_differences": [
+      "opportunity_target",
+      "opportunity_fit_population",
+      "opportunity_class_balance"
+    ],
+    "control_reference_used_for_fit_or_threshold_selection": false,
+    "paired_direction_probability_tolerance": 1e-12
+  },
+  "consensus_filter": {
+    "hierarchical_stratum": "consensus_structural",
+    "structural_role_aliases_exact": ["component16", "hotspot16"],
+    "canonical_partition": "consensus_structural",
+    "unique_action_count": 2,
+    "stage2_eligible": false,
+    "component_equals_hotspot": true,
+    "structural_differs_from_v2": true,
+    "exact_component_hotspot_agents_equal": true,
+    "exact_structural_v2_agents_differ": true,
+    "exactly_one_pair_per_state": true
+  },
+  "expanded_map_folds": {
+    "fold0": ["den404d", "den408d", "den207d", "den203d"],
+    "fold1": ["lak101d", "den202d", "den998d", "den308d"],
+    "fold2": ["lak108d", "den201d", "den009d", "den020d"],
+    "fold3": ["lak110d", "ost102d", "hrt002d", "den101d"]
+  },
+  "feature_contract": {
+    "source": "expanded_row.model_feature_vector",
+    "signed_feature_names": [
+      "context:state.agent_count",
+      "context:state.colliding_pairs",
+      "context:state.conflict_edge_density",
+      "context:state.conflict_event_count",
+      "context:state.conflicting_agent_ratio",
+      "context:state.degree_max",
+      "context:state.largest_component_ratio",
+      "context:state.path_wait_ratio_mean",
+      "delta_structural_minus_v2:realized.incident_conflict_coverage",
+      "delta_structural_minus_v2:realized.internal_conflict_coverage",
+      "delta_structural_minus_v2:realized.boundary_conflict_edges",
+      "delta_structural_minus_v2:realized.conflict_degree_mean",
+      "delta_structural_minus_v2:realized.delay_mean",
+      "delta_structural_minus_v2:realized.path_overlap_mean",
+      "delta_structural_minus_v2:realized.path_wait_ratio_mean",
+      "relation:intersection_ratio",
+      "relation:jaccard",
+      "relation:symmetric_difference_ratio"
+    ],
+    "dimension": 18,
+    "abs_delta_indices": [8, 9, 10, 11, 12, 13, 14],
+    "direction_view": "signed18",
+    "identifier_values_used_as_features": false,
+    "repair_outcome_or_runtime_used_as_features": false,
+    "forbidden_input_tokens": [
+      "after_",
+      "final_",
+      "map_id",
+      "native_step_seconds",
+      "no_progress",
+      "normalized_conflict_reduction",
+      "outcome",
+      "pair_id",
+      "pp_seconds",
+      "result",
+      "rollback",
+      "runtime",
+      "solver_seed",
+      "source_",
+      "task_id",
+      "time_limit",
+      "trial"
+    ]
+  },
+  "model": {
+    "model_id": "regularized_logistic",
+    "class": "sklearn.linear_model.LogisticRegression",
+    "preprocessing": "StandardScaler",
+    "parameters": {
+      "C": 0.25,
+      "class_weight": null,
+      "max_iter": 1000,
+      "random_state": 20260826,
+      "solver": "liblinear"
+    }
+  },
+  "opportunity_feature_views": [
+    {
+      "view_id": "signed18",
+      "transform": "identity",
+      "absolute_indices": []
+    },
+    {
+      "view_id": "abs_delta18",
+      "transform": "absolute_values_only_at_indices_8_through_14",
+      "absolute_indices": [8, 9, 10, 11, 12, 13, 14]
+    }
+  ],
+  "candidate_arms": [
+    {
+      "arm_id": "opportunity_signed18__direction_signed18",
+      "opportunity_view_id": "signed18",
+      "opportunity_model_id": "regularized_logistic",
+      "direction_view_id": "signed18",
+      "direction_model_id": "regularized_logistic"
+    },
+    {
+      "arm_id": "opportunity_abs_delta18__direction_signed18",
+      "opportunity_view_id": "abs_delta18",
+      "opportunity_model_id": "regularized_logistic",
+      "direction_view_id": "signed18",
+      "direction_model_id": "regularized_logistic"
+    }
+  ],
+  "head_contract": {
+    "opportunity": {
+      "target": "decisive_structural_or_v2_vs_ambiguous",
+      "fit_labels": ["structural_win", "v2_win", "ambiguous"],
+      "fit_population_count": 93,
+      "state_equal_weighting": true,
+      "class_balance": false
+    },
+    "direction": {
+      "target": "structural_win_vs_v2_win",
+      "fit_labels": ["structural_win", "v2_win"],
+      "ambiguous_rows_in_fit": false,
+      "state_equal_before_class_balance": true,
+      "class_balance": true
+    }
+  },
+  "threshold_calibration": {
+    "opportunity_threshold_grid": [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "direction_threshold_grid": [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01],
+    "selection_rule": [
+      "all_inner_gates_first",
+      "maximum_full_pooled_decisive_balanced_accuracy",
+      "maximum_selected_action_precision",
+      "maximum_structural_win_override_recall",
+      "minimum_ambiguous_override_rate",
+      "higher_opportunity_threshold",
+      "higher_direction_threshold"
+    ]
+  },
+  "inner_gates": {
+    "maximum_v2_wrong_override_count": 0,
+    "maximum_ambiguous_override_rate": 0.10,
+    "minimum_selected_action_precision": 0.60,
+    "minimum_full_pooled_decisive_balanced_accuracy": 0.55,
+    "minimum_structural_win_override_recall": 0.25,
+    "minimum_total_override_count": 5,
+    "minimum_correct_structural_override_map_count": 3,
+    "minimum_correct_structural_override_fold_count": 2
+  },
+  "final_gates": {
+    "require_exact_v2_fallback_semantics_rate": 1.0,
+    "maximum_v2_wrong_override_count": 0,
+    "maximum_ambiguous_override_rate": 0.10,
+    "minimum_selected_action_precision": 0.60,
+    "minimum_full_pooled_decisive_balanced_accuracy": 0.55,
+    "minimum_structural_win_override_recall": 0.25,
+    "minimum_total_override_count": 8,
+    "minimum_correct_structural_override_map_count": 4,
+    "minimum_correct_structural_override_fold_count": 2
+  },
+  "arm_selection_rule": [
+    "all_inner_gates_first",
+    "maximum_full_pooled_decisive_balanced_accuracy",
+    "maximum_selected_action_precision",
+    "maximum_structural_win_override_recall",
+    "minimum_ambiguous_override_rate",
+    "higher_opportunity_threshold",
+    "higher_direction_threshold",
+    "config_order"
+  ],
+  "expected_support": {
+    "row_count": 93,
+    "state_count": 93,
+    "active_map_count": 15,
+    "inactive_registered_maps": ["den408d"],
+    "label_counts": {
+      "ambiguous": 69,
+      "structural_win": 14,
+      "v2_win": 10
+    },
+    "fold_row_counts": {
+      "fold0": 17,
+      "fold1": 25,
+      "fold2": 24,
+      "fold3": 27
+    }
+  },
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "parallel_head_jobs": 3,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "outputs": {
+    "root": "build/stride-hierarchical-ch-compact-flow-expanded-stage1-consensus-ambiguity-gate-v1",
+    "feature_manifest": "feature_manifest.json",
+    "oof_predictions": "consensus_ambiguity_gate_oof_predictions.jsonl",
+    "evaluation_report": "consensus_ambiguity_gate_evaluation_report.json"
+  },
+  "claim_boundary": {
+    "stage1_only": true,
+    "consensus_only": true,
+    "expanded_train_nested_oof_only": true,
+    "development_partition_present": false,
+    "stage2_rows_loaded": false,
+    "full_fit_model_allowed": false,
+    "model_export_allowed": false,
+    "passing_status": "POSTHOC_MECHANISM_SUPPORT_ONLY",
+    "failure_status": "POSTHOC_CONTROL_NO_GO",
+    "v2_replacement_allowed": false,
+    "promotion_or_default_export_allowed": false,
+    "runtime_or_ttf_claim_authorized": false,
+    "final_claim_authorized": false,
+    "external_map_disjoint_confirmation_required": true,
+    "study_role": "posthoc_same_cohort_ambiguity_gate_mechanism_control",
+    "protocol_mismatch_status": "INVALID_CONTROL",
+    "challenger_claim_allowed": false
+  }
+}

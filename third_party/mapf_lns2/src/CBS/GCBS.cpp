@@ -47,8 +47,10 @@ void GCBS::copyConflicts(const list<shared_ptr<Conflict >>& conflicts,
 }
 
 
-void GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
+bool GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
 {
+    if (deadlineReached())
+        return false;
     int min_path_length = (int) (paths[a1]->size() < paths[a2]->size() ? paths[a1]->size() : paths[a2]->size());
     if (paths[a1]->size() != paths[a2]->size())
     {
@@ -57,6 +59,8 @@ void GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
         int loc1 = paths[a1_]->back().location;
         for (int timestep = min_path_length; timestep < (int)paths[a2_]->size(); timestep++)
         {
+            if (deadlineReached())
+                return false;
             int loc2 = paths[a2_]->at(timestep).location;
             if (loc1 == loc2)
             {
@@ -68,12 +72,14 @@ void GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
                 assert(!conflict->constraint1.empty());
                 assert(!conflict->constraint2.empty());
                 curr.conflicts.push_front(conflict);
-                return;
+                return true;
             }
         }
     }
     for (int timestep = 0; timestep < min_path_length; timestep++)
     {
+        if (deadlineReached())
+            return false;
         int loc1 = paths[a1]->at(timestep).location;
         int loc2 = paths[a2]->at(timestep).location;
         if (loc1 == loc2)
@@ -94,7 +100,7 @@ void GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
             assert(!conflict->constraint1.empty());
             assert(!conflict->constraint2.empty());
             curr.conflicts.push_back(conflict);
-            return;
+            return true;
         }
         else if (timestep < min_path_length - 1
                  && loc1 == paths[a2]->at(timestep + 1).location
@@ -105,16 +111,18 @@ void GCBS::findConflicts(GCBSNode& curr, int a1, int a2)
             assert(!conflict->constraint1.empty());
             assert(!conflict->constraint2.empty());
             curr.conflicts.push_back(conflict); // edge conflict
-            return;
+            return true;
         }
     }
-
+    return true;
 }
 
 
-void GCBS::findConflicts(GCBSNode& curr)
+bool GCBS::findConflicts(GCBSNode& curr)
 {
     clock_t t = clock();
+    if (deadlineReached())
+        return false;
     if (curr.parent != nullptr)
     {
         // Copy from parent
@@ -139,7 +147,8 @@ void GCBS::findConflicts(GCBSNode& curr)
                         break;
                     }
                 }
-                findConflicts(curr, a1, a2);
+                if (!findConflicts(curr, a1, a2))
+                    return false;
             }
         }
     }
@@ -149,12 +158,14 @@ void GCBS::findConflicts(GCBSNode& curr)
         {
             for (int a2 = a1 + 1; a2 < num_of_agents; a2++)
             {
-                findConflicts(curr, a1, a2);
+                if (!findConflicts(curr, a1, a2))
+                    return false;
             }
         }
     }
     curr.colliding_pairs = curr.conflicts.size();
     runtime_detect_conflicts += (double)(clock() - t) / CLOCKS_PER_SEC;
+    return true;
 }
 
 
@@ -174,8 +185,27 @@ shared_ptr<Conflict> GCBS::chooseConflict(const GCBSNode &node) const
     return choose;
 }
 
+double GCBS::remainingTimeSeconds() const
+{
+    if (!deadline_enabled)
+        return -1.0;
+    return time_limit - duration<double>(Time::now() - wall_start).count();
+}
+
+bool GCBS::deadlineReached()
+{
+    if (deadline_enabled && remainingTimeSeconds() <= 0.0)
+    {
+        timed_out = true;
+        return true;
+    }
+    return false;
+}
+
 bool GCBS::findPathForSingleAgent(GCBSNode* node, int agent)
 {
+    if (deadlineReached())
+        return false;
     // build constraint table
     auto t = clock();
     ConstraintTable constraint_table(search_engines[agent]->instance.num_of_cols,
@@ -187,19 +217,41 @@ bool GCBS::findPathForSingleAgent(GCBSNode* node, int agent)
         curr = curr->parent;
     }
     runtime_build_CT = (double)(clock() - t) / CLOCKS_PER_SEC;
+    if (deadlineReached())
+        return false;
 
     // build CAT
     t = clock();
     constraint_table.insert2CAT(agent, paths);
     runtime_build_CAT = (double)(clock() - t) / CLOCKS_PER_SEC;
+    if (deadlineReached())
+        return false;
 
     // find a path
     t = clock();
-    Path new_path = search_engines[agent]->findPath(constraint_table);
+    Path new_path;
+    if (deadline_enabled)
+    {
+        const double remaining = remainingTimeSeconds();
+        if (remaining <= 0.0)
+        {
+            timed_out = true;
+            return false;
+        }
+        new_path = search_engines[agent]->findPath(
+            constraint_table, max(0.0, remaining));
+    }
+    else
+        new_path = search_engines[agent]->findPath(constraint_table);
     runtime_path_finding += (double)(clock() - t) / CLOCKS_PER_SEC;
     if (screen > 1)
         cout << "\t\t\tRuntime of single-agent search = " << (double)(clock() - t) / CLOCKS_PER_SEC <<
             "s with " << search_engines[agent]->getNumExpanded() << " expanded nodes" << endl;
+    if (search_engines[agent]->last_find_path_timed_out || deadlineReached())
+    {
+        timed_out = true;
+        return false;
+    }
     if (new_path.empty())
     {
         if (screen > 1)
@@ -220,6 +272,8 @@ bool GCBS::findPathForSingleAgent(GCBSNode* node, int agent)
 bool GCBS::generateChild(GCBSNode*  node, GCBSNode* parent)
 {
     clock_t t1 = clock();
+    if (deadlineReached())
+        return false;
     node->parent = parent;
     node->sum_of_costs = parent->sum_of_costs;
     node->makespan = parent->makespan;
@@ -236,7 +290,11 @@ bool GCBS::generateChild(GCBSNode*  node, GCBSNode* parent)
         }
     }
 
-    findConflicts(*node);
+    if (!findConflicts(*node))
+    {
+        runtime_generate_child += (double)(clock() - t1) / CLOCKS_PER_SEC;
+        return false;
+    }
     runtime_generate_child += (double)(clock() - t1) / CLOCKS_PER_SEC;
     return true;
 }
@@ -352,7 +410,10 @@ void GCBS::printPaths() const
 
 void GCBS::printResults() const
 {
-    cout << best_node->colliding_pairs << "," << best_node->sum_of_costs << "," << runtime << "," << endl;
+    if (best_node == nullptr)
+        cout << "no-root,no-root," << runtime << "," << endl;
+    else
+        cout << best_node->colliding_pairs << "," << best_node->sum_of_costs << "," << runtime << "," << endl;
 }
 
 void GCBS::saveResults(const string &fileName, const string &instanceName) const
@@ -432,11 +493,19 @@ string GCBS::getSolverName() const
 
 
 // return a solution once its total collisions has fewer collisions than _collision_upperbound
-bool GCBS::solve(double _time_limit)
+bool GCBS::solve(double _time_limit, bool cooperative_deadline)
 {
-    // set timer
-    start = clock();
+    // Preserve upstream GCBS for ordinary solve() calls.  The cooperative
+    // wall deadline and timed low-level overload are an explicit action-level
+    // opt-in used by bounded repair steps only.
+    wall_start = Time::now();
+    cpu_start = clock();
     this->time_limit = _time_limit;
+    deadline_enabled = cooperative_deadline && _time_limit >= 0.0;
+    timed_out = false;
+    root_failed = false;
+    runtime = 0.0;
+    best_node = nullptr;
 
     if (screen > 0) // 1 or 2
     {
@@ -450,7 +519,13 @@ bool GCBS::solve(double _time_limit)
 
     assert(focal_list.empty());
     if(!generateRoot())
+    {
+        runtime = deadline_enabled
+            ? duration<double>(Time::now() - wall_start).count()
+            : (double)(clock() - cpu_start) / CLOCKS_PER_SEC;
+        root_failed = !timed_out;
         return false;
+    }
 
     while (!terminate())
     {
@@ -462,6 +537,12 @@ bool GCBS::solve(double _time_limit)
         bool foundBypass = false;
         GCBSNode* child[2] = { new GCBSNode() , new GCBSNode() };
         curr->conflict = chooseConflict(*curr);
+        if (curr->conflict == nullptr)
+        {
+            delete child[0];
+            delete child[1];
+            break;
+        }
         addConstraints(curr, child[0], child[1]);
 
         if (screen > 1)
@@ -476,10 +557,19 @@ bool GCBS::solve(double _time_limit)
         {
             if (i > 0)
                 paths = copy;
+            if (deadlineReached())
+                break;
             solved[i] = generateChild(child[i], curr);
             if (!solved[i])
             {
+                // A partially generated child can already own paths referenced
+                // by the working vector.  Restore parent-visible pointers
+                // before destroying it, on both ordinary failure and timeout.
+                paths = copy;
                 delete (child[i]);
+                child[i] = nullptr;
+                if (timed_out)
+                    break;
                 continue;
             }
             else if (bypass && child[i]->colliding_pairs < curr->colliding_pairs) // Bypass1
@@ -521,6 +611,16 @@ bool GCBS::solve(double _time_limit)
                 break;
             }
         }
+        if (timed_out)
+        {
+            paths = copy;
+            for (auto& node : child)
+            {
+                delete node;
+                node = nullptr;
+            }
+            break;
+        }
         if (foundBypass)
         {
             for (auto & i : child)
@@ -558,6 +658,11 @@ bool GCBS::solve(double _time_limit)
             curr->clear();
         }
     }  // end of while loop
+    runtime = deadline_enabled
+        ? duration<double>(Time::now() - wall_start).count()
+        : (double)(clock() - cpu_start) / CLOCKS_PER_SEC;
+    if (best_node == nullptr)
+        return false;
     updatePaths(best_node);
     if (screen > 0 )
         validateSolution();
@@ -639,11 +744,22 @@ bool GCBS::generateRoot()
     paths.resize(num_of_agents, nullptr);
     for (int i = 0; i < num_of_agents; i++)
     {
-        auto succ = findPathForSingleAgent(root, i);
-        assert(succ);
+        if (!findPathForSingleAgent(root, i))
+        {
+            // Root construction is a normal fallible operation under an
+            // action deadline.  Do not leave pointers into the deleted root.
+            paths.clear();
+            delete root;
+            return false;
+        }
     }
     root->depth = 0;
-    findConflicts(*root);
+    if (!findConflicts(*root))
+    {
+        paths.clear();
+        delete root;
+        return false;
+    }
 
     pushNode(root);
     if (screen >= 2) // print start and goals
@@ -748,8 +864,13 @@ void GCBS::clear()
 
 bool GCBS::terminate()
 {
-    runtime = (double)(clock() - start) / CLOCKS_PER_SEC;
-    if (focal_list.empty() || focal_list.top()->colliding_pairs == 0 || runtime > time_limit)
+    runtime = deadline_enabled
+        ? duration<double>(Time::now() - wall_start).count()
+        : (double)(clock() - cpu_start) / CLOCKS_PER_SEC;
+    const bool expired = deadline_enabled
+        ? deadlineReached()
+        : runtime > time_limit;
+    if (focal_list.empty() || focal_list.top()->colliding_pairs == 0 || expired)
     {
         if (screen > 0) // 1 or 2
             printResults();

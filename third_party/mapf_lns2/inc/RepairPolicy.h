@@ -36,7 +36,10 @@ struct RepairAction
     // the recorded neighborhood without repeating the former, so it needs an
     // independent PP seed to reproduce low-level tie breaking exactly.
     int pp_random_seed = -1;
-    // Optional wall-clock budget for this PP invocation. The Python runtime
+    // Optional wall-clock budget for this PP invocation. For GCBS this same
+    // legacy field explicitly opts the action into the cooperative GCBS
+    // deadline; an ordinary GCBS step keeps the upstream untimed low-level
+    // call. The Python runtime
     // uses it to propagate the live remainder of an outer, reset-inclusive
     // episode budget even when the native environment itself is configured
     // with the unlimited-time sentinel. A negative value keeps the upstream
@@ -96,7 +99,12 @@ enum class PPFailureReason
     NOT_RUN,
     NONE,
     CONFLICT_BOUND_EXCEEDED,
-    TIME_LIMIT
+    TIME_LIMIT,
+    // Legacy shared repair-outcome fields: GCBS uses these two values to
+    // distinguish failure before a root exists from a completed search that
+    // found no strictly improving neighborhood. Existing PP values are stable.
+    ROOT_FAILURE,
+    NO_IMPROVEMENT
 };
 
 struct PPAgentDiagnostic
@@ -199,6 +207,8 @@ inline const char* ppFailureReasonName(PPFailureReason reason)
         case PPFailureReason::NONE: return "none";
         case PPFailureReason::CONFLICT_BOUND_EXCEEDED: return "conflict_bound_exceeded";
         case PPFailureReason::TIME_LIMIT: return "time_limit";
+        case PPFailureReason::ROOT_FAILURE: return "root_failure";
+        case PPFailureReason::NO_IMPROVEMENT: return "no_improvement";
     }
     return "unknown";
 }

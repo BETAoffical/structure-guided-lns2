@@ -1,0 +1,179 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_stage1_router_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_stage1_router_v1",
+  "scientific_status": "preregistered_sequential_stage1_only_challenger",
+  "inputs": {
+    "labels_readiness_config": {
+      "path": "configs/stride_hierarchical_ch_compact_flow_labels_readiness_v1.json",
+      "sha256": "4aab2e02b130084b462729e575f57c77395366dd8b702ab73b7176e974f3f75b"
+    },
+    "readiness_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-labels-readiness-v1/readiness_report.json",
+      "sha256": "c998e3b754d71a05865e785f33cef5cd7da41372841780178bfc933b726d5491"
+    },
+    "stage1_pair_labels": {
+      "path": "build/stride-hierarchical-ch-compact-flow-labels-readiness-v1/stage1_pair_labels.jsonl",
+      "sha256": "eec63e6c93454ce73209580cfcfc4b7a359146cfcb5c911077f8d6e594df1783"
+    },
+    "h1_collection_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-h1-collection-v1/h1_collection_report.json",
+      "sha256": "56e0d87437f3a4d154ce19a04c32dd2a59c61f0d3e3fa15b35711a4cc4c51ecc"
+    }
+  },
+  "input_semantics": {
+    "required_readiness_schema": "lns2.stride.hierarchical_ch_compact_flow_sequential_readiness.v1",
+    "required_label_schema": "lns2.stride.hierarchical_ch_stage1_pair_label.v1",
+    "required_state_schema": "lns2.stride.hierarchical_ch_compact_flow_h1_state.v1",
+    "require_train_stage1_label_support_trainable": true,
+    "require_train_stage2_label_support_trainable": false,
+    "fit_labels": ["structural_win", "v2_win"],
+    "ambiguous_use": "abstention_threshold_calibration_only",
+    "stage2_rows_loaded": false,
+    "stage2_model_fit": false
+  },
+  "train_map_folds": {
+    "fold0": ["den404d", "den009d"],
+    "fold1": ["lak101d", "den101d"],
+    "fold2": ["den201d", "den203d"],
+    "fold3": ["hrt002d", "den308d"]
+  },
+  "feature_contract": {
+    "representation": "structural_minus_exact_v2_anchor_with_pre_action_context",
+    "feature_names": [
+      "context:state.agent_count",
+      "context:state.colliding_pairs",
+      "context:state.conflict_edge_density",
+      "context:state.conflict_event_count",
+      "context:state.conflicting_agent_ratio",
+      "context:state.degree_max",
+      "context:state.largest_component_ratio",
+      "context:state.path_wait_ratio_mean",
+      "delta:realized.incident_conflict_coverage",
+      "delta:realized.internal_conflict_coverage",
+      "delta:realized.boundary_conflict_edges",
+      "delta:realized.conflict_degree_mean",
+      "delta:realized.delay_mean",
+      "delta:realized.path_overlap_mean",
+      "delta:realized.path_wait_ratio_mean",
+      "relation:intersection_ratio",
+      "relation:jaccard",
+      "relation:symmetric_difference_ratio"
+    ],
+    "structural_alias_aggregation": "arithmetic_mean_for_exact_set_aliases",
+    "categorical_fields_are_evaluation_strata_not_model_inputs": ["depth_band", "canonical_partition", "structural_role_aliases"],
+    "missing_value": 0.0,
+    "forbidden_input_tokens": [
+      "after_",
+      "final_",
+      "map_id",
+      "native_step_seconds",
+      "no_progress",
+      "normalized_conflict_reduction",
+      "outcome",
+      "pair_id",
+      "pp_seconds",
+      "result",
+      "rollback",
+      "runtime",
+      "solver_seed",
+      "source_",
+      "task_id",
+      "time_limit",
+      "trial"
+    ],
+    "identifier_values_used_as_features": false,
+    "repair_outcome_or_runtime_used_as_features": false
+  },
+  "models": [
+    {
+      "model_id": "regularized_logistic",
+      "class": "sklearn.linear_model.LogisticRegression",
+      "preprocessing": "StandardScaler",
+      "parameters": {
+        "C": 0.25,
+        "class_weight": null,
+        "max_iter": 1000,
+        "random_state": 20260826,
+        "solver": "liblinear"
+      }
+    },
+    {
+      "model_id": "low_capacity_hist_gradient_boosting",
+      "class": "sklearn.ensemble.HistGradientBoostingClassifier",
+      "preprocessing": "none",
+      "parameters": {
+        "early_stopping": false,
+        "l2_regularization": 1.0,
+        "learning_rate": 0.05,
+        "max_iter": 60,
+        "max_leaf_nodes": 5,
+        "min_samples_leaf": 8,
+        "random_state": 20260826
+      }
+    }
+  ],
+  "sample_weighting": {
+    "unit": "state_occurrence_id",
+    "equal_total_weight_per_state": true,
+    "balance_decisive_classes_after_state_weighting": true
+  },
+  "abstention_calibration": {
+    "threshold_grid": [0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.01],
+    "maximum_ambiguous_selection_rate": 0.25,
+    "minimum_decisive_coverage": 0.25,
+    "selection_rule": [
+      "feasible_constraints_first",
+      "maximum_decisive_balanced_accuracy_with_abstentions_as_errors",
+      "maximum_selective_accuracy",
+      "maximum_decisive_coverage",
+      "lower_threshold"
+    ]
+  },
+  "hard_gates": {
+    "minimum_oof_balanced_accuracy": 0.55,
+    "minimum_each_class_recall": 0.35,
+    "minimum_oof_coverage": 0.25,
+    "minimum_oof_selective_accuracy": 0.6,
+    "maximum_ambiguous_selection_rate": 0.25,
+    "minimum_each_fold_balanced_accuracy": 0.45,
+    "minimum_each_fold_coverage": 0.1,
+    "maximum_fold_balanced_accuracy_spread": 0.35,
+    "maximum_supported_role_balanced_accuracy_spread": 0.35,
+    "maximum_supported_depth_balanced_accuracy_spread": 0.35,
+    "minimum_rows_for_stability_group": 3
+  },
+  "model_selection_rule": [
+    "all_hard_gates_first",
+    "maximum_minimum_fold_balanced_accuracy",
+    "maximum_oof_balanced_accuracy",
+    "maximum_oof_selective_accuracy",
+    "maximum_oof_coverage",
+    "config_order"
+  ],
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "outputs": {
+    "root": "build/stride-hierarchical-ch-compact-flow-stage1-router-v1",
+    "feature_manifest": "feature_manifest.json",
+    "oof_predictions": "stage1_oof_predictions.jsonl",
+    "development_predictions": "stage1_development_predictions.jsonl",
+    "evaluation_report": "stage1_router_evaluation_report.json",
+    "sequential_challenger_model": "sequential_challenger.pkl",
+    "sequential_challenger_manifest": "sequential_challenger_manifest.json"
+  },
+  "claim_boundary": {
+    "stage1_only": true,
+    "stage2_training_allowed": false,
+    "sequential_design_only": true,
+    "development_is_diagnostic_only": true,
+    "passing_status": "SEQUENTIAL_CHALLENGER_ONLY",
+    "failure_status": "NO_GO",
+    "promotion_or_default_export_allowed": false,
+    "runtime_or_ttf_claim_authorized": false,
+    "final_map_disjoint_confirmation_required": true
+  }
+}

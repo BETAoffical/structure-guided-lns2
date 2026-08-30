@@ -1,0 +1,132 @@
+{
+  "schema": "lns2.stride.hierarchical_ch_compact_flow_expanded_train_config.v1",
+  "experiment_id": "stride_hierarchical_ch_compact_flow_expanded_train_v1",
+  "inputs": {
+    "registration_report": {
+      "path": "build/stride-hierarchical-ch-compact-flow-source-v1-registration/registration_report.json",
+      "sha256": "181a76ab2b66d1f65b003c88683bba61117580804c5b1876c2317691d55f2899",
+      "schema": "lns2.stride.hierarchical_ch_compact_flow_source_registration_report.v1"
+    },
+    "source_labels_root": "build/stride-hierarchical-ch-compact-flow-labels-readiness-v1",
+    "label_diagnostics": {
+      "file": "label_diagnostics.json",
+      "sha256": "b7016baa2af8046326d081de206ba81b5ae6284aaddc2d40da68d6d791646692",
+      "schema": "lns2.stride.hierarchical_ch_compact_flow_label_diagnostics.v1"
+    },
+    "readiness_report": {
+      "file": "readiness_report.json",
+      "sha256": "c998e3b754d71a05865e785f33cef5cd7da41372841780178bfc933b726d5491",
+      "schema": "lns2.stride.hierarchical_ch_compact_flow_sequential_readiness.v1"
+    },
+    "stage1_pair_labels": {
+      "file": "stage1_pair_labels.jsonl",
+      "sha256": "eec63e6c93454ce73209580cfcfc4b7a359146cfcb5c911077f8d6e594df1783",
+      "row_count": 285,
+      "schema": "lns2.stride.hierarchical_ch_stage1_pair_label.v1"
+    },
+    "stage1_state_labels": {
+      "file": "stage1_state_labels.jsonl",
+      "sha256": "2c686927bd2cd139ff4dc31b6b8c0cc35a1010bacf2052a31d6b2fc3a381f52e",
+      "row_count": 189,
+      "schema": "lns2.stride.hierarchical_ch_stage1_state_label.v1"
+    },
+    "stage2_state_labels": {
+      "file": "stage2_state_labels.jsonl",
+      "sha256": "f47f3d874feb773b871145c2c32344b5d5718ebfbd0833fda0308f1e03ff117f",
+      "row_count": 96,
+      "schema": "lns2.stride.hierarchical_ch_stage2_state_label.v1"
+    },
+    "h1_collection_root": "build/stride-hierarchical-ch-compact-flow-h1-collection-v1",
+    "h1_collection_report": {
+      "file": "h1_collection_report.json",
+      "sha256": "56e0d87437f3a4d154ce19a04c32dd2a59c61f0d3e3fa15b35711a4cc4c51ecc",
+      "schema": "lns2.stride.hierarchical_ch_compact_flow_h1_collection_report.v1"
+    },
+    "h1_state_manifest": {
+      "file": "h1_state_manifest.jsonl",
+      "sha256": "91965eaca27c5042b6da78a84a6290d8ef8857901793bed4b00f71f5e373cdda",
+      "row_count": 189,
+      "schema": "lns2.stride.hierarchical_ch_compact_flow_h1_manifest_row.v1"
+    }
+  },
+  "registered_maps": [
+    "den009d",
+    "den020d",
+    "den101d",
+    "den201d",
+    "den202d",
+    "den203d",
+    "den207d",
+    "den308d",
+    "den404d",
+    "den408d",
+    "den998d",
+    "hrt002d",
+    "lak101d",
+    "lak108d",
+    "lak110d",
+    "ost102d"
+  ],
+  "fold_derivation": {
+    "policy_id": "registered_source_split_capacity_balanced_fixed_v1",
+    "inputs_allowed": [
+      "map_id",
+      "source_research_split",
+      "capacity_stratum",
+      "capacity_free_cells"
+    ],
+    "label_or_outcome_inputs_allowed": false,
+    "folds_frozen_before_label_read": true,
+    "expected_capacity_profiles": {
+      "fold0": ["ultra", "small", "medium", "large"],
+      "fold1": ["ultra", "small", "medium", "large"],
+      "fold2": ["ultra", "small", "medium", "large"],
+      "fold3": ["ultra", "ultra", "small", "medium"]
+    },
+    "expected_source_split_counts_per_fold": {
+      "train": 2,
+      "development": 2
+    },
+    "fixed_map_folds": {
+      "fold0": ["den404d", "den408d", "den207d", "den203d"],
+      "fold1": ["lak101d", "den202d", "den998d", "den308d"],
+      "fold2": ["lak108d", "den201d", "den009d", "den020d"],
+      "fold3": ["lak110d", "ost102d", "hrt002d", "den101d"]
+    }
+  },
+  "support_thresholds": {
+    "stage1_pair": {
+      "decisive_labels": ["structural_win", "v2_win"],
+      "minimum_rows_per_direction": 4,
+      "minimum_maps_per_direction": 2,
+      "minimum_depth_bands_per_direction": 2,
+      "each_fold_requires_both_directions": true
+    },
+    "stage2_state": {
+      "decisive_labels": ["component_win", "hotspot_win"],
+      "minimum_rows_per_direction": 2,
+      "minimum_maps_per_direction": 2,
+      "minimum_depth_bands_per_direction": 2,
+      "each_fold_requires_both_directions": true
+    }
+  },
+  "execution": {
+    "workers": 16,
+    "maximum_workers": 20,
+    "workers_enter_run_fingerprint": true,
+    "solver_invocation_allowed": false
+  },
+  "claim_boundary": {
+    "all_rows_are_expanded_train": true,
+    "source_research_split_preserved": true,
+    "map_or_fold_selection_by_label_allowed": false,
+    "development_evaluation_authorized": false,
+    "sealed_final_access_authorized": false,
+    "map_disjoint_final_confirmation_required": true,
+    "expanded_training_use_authorized": true,
+    "model_fit_executed": false,
+    "model_exported": false,
+    "promotion_authorized": false,
+    "runtime_or_ttf_claim_authorized": false
+  }
+}

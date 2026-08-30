@@ -1,0 +1,74 @@
+{
+  "schema": "lns2.stride.seed25_same_set_pp_gcbs_screen_registration.v1",
+  "experiment_id": "stride-seed25-same-set-pp-gcbs-screen-v1",
+  "scientific_status": "outcome_enriched_one_step_repairer_mechanism_diagnostic",
+  "source": {
+    "replay_registration": "configs/stride_structshell_seed25_replay_diagnostic_v1.json",
+    "replay_registration_sha256": "2a5531b709005d4053cd2e1420d59cec261b51131a1bb0074e4c625096ae675b",
+    "solver_seed": 25,
+    "selection_rule": "dual_actual_selected_exact_agent_set_at_each_frozen_checkpoint",
+    "states": [
+      {
+        "map_id": "maze-32-32-4-n300",
+        "decision_index": 31,
+        "state_fingerprint": "a5758395a50b72c91484c1844e5a1d6e29a5a54fbdd50b68fa2c6585c5b3596d",
+        "conflicts": 496,
+        "role": "component16",
+        "candidate_id": "neighborhood-89cfddcb8abccee7"
+      },
+      {
+        "map_id": "random-32-32-20-high-load",
+        "decision_index": 48,
+        "state_fingerprint": "badba4c0d60d33903457b8e702aae6f89bceb3aadd0d8fa1e251d25b2d4fd18a",
+        "conflicts": 264,
+        "role": "observed_dual_winner",
+        "candidate_id": "neighborhood-8adc234bceb59bb3"
+      },
+      {
+        "map_id": "room-64-64-16",
+        "decision_index": 30,
+        "state_fingerprint": "9848d70ba6b44634bd0659eeaf32882b9bf8593479960279cd73630f012a2d9d",
+        "conflicts": 72,
+        "role": "component16",
+        "candidate_id": "neighborhood-8853b4bba7a16fca"
+      },
+      {
+        "map_id": "warehouse-w1020a-opposite-exchange",
+        "decision_index": 0,
+        "state_fingerprint": "4965aed5873c2db51d17996575625bdb1361a0eb355efbe62776b96a6232fb9d",
+        "conflicts": 196,
+        "role": "component16",
+        "candidate_id": "neighborhood-4660f513e9cc8550"
+      }
+    ]
+  },
+  "execution": {
+    "repair_algorithms": ["PP", "GCBS"],
+    "one_step_only": true,
+    "environment_time_limit_seconds": 5.0,
+    "pp_action_time_limit_seconds": 5.0,
+    "process_fuse_seconds_per_job": 20.0,
+    "strict_serial": true,
+    "trial_count_per_state_algorithm": 1,
+    "candidate_generation": false,
+    "controller_selection": false,
+    "continuation": false,
+    "ttf": false
+  },
+  "qualification_boundary": {
+    "pbs_included": false,
+    "pbs_exclusion": "first restored-state explicit-neighborhood smoke terminated by native core dump",
+    "gcbs_cooperative_action_deadline_validated": false,
+    "gcbs_failure_rollback_validated": false,
+    "gcbs_external_process_fuse_required": true,
+    "uniform_acceptance_semantics": false
+  },
+  "claim_boundary": {
+    "mechanism_diagnostic_only": true,
+    "outcome_enriched_actions": true,
+    "repairer_runtime_promotion_allowed": false,
+    "ttf_claim_allowed": false,
+    "selector_replacement_allowed": false,
+    "generalization_claim_allowed": false
+  }
+}

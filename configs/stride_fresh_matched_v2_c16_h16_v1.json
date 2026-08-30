@@ -1,0 +1,340 @@
+{
+  "schema": "lns2.stride.fresh_matched_v2_c16_h16_config.v1",
+  "experiment_id": "stride_fresh_matched_v2_c16_h16_v1",
+  "scientific_status": "preregistered_fresh_exact_task_solver_state_h1_opportunity_collection",
+  "freshness": "fresh_exact_task_solver_state_cohort",
+  "research_split": "fresh_matched_development",
+  "controller_bundle": {
+    "controller": "v2-full",
+    "manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "sources": {
+    "movingai_ood": {
+      "dataset_root": "build/initlns-movingai-ood-dataset-v1/movingai_ood",
+      "manifest": {
+        "path": "build/initlns-movingai-ood-dataset-v1/movingai_ood/manifest.jsonl",
+        "sha256": "cab89325c4ca62c7eefd7a0c5de38e1a700bf8384b618c399eafab876dd05742"
+      },
+      "runtime": {
+        "path": "configs/stride_hybridstructpool_result_blind_movingai_runtime.json",
+        "sha256": "27c6cc29cc59c1cf00fc29d6220a790d212d7634c139afbdc476c69768e2a936"
+      },
+      "source_split": "movingai_ood",
+      "dataset_design": {
+        "mode": "movingai_ood",
+        "map_count": 12,
+        "task_count": 48,
+        "scenario_indices": [4, 5],
+        "layout_family_counts": {
+          "random": 3,
+          "maze": 3,
+          "room": 2,
+          "warehouse": 2,
+          "game": 2
+        },
+        "maps": [
+          {"map_id": "random-32-32-10", "layout_family": "random", "agent_counts": [100, 200]},
+          {"map_id": "random-64-64-10", "layout_family": "random", "agent_counts": [400, 600]},
+          {"map_id": "random-64-64-20", "layout_family": "random", "agent_counts": [400, 600]},
+          {"map_id": "maze-32-32-4", "layout_family": "maze", "agent_counts": [100, 200]},
+          {"map_id": "maze-128-128-1", "layout_family": "maze", "agent_counts": [400, 600]},
+          {"map_id": "maze-128-128-10", "layout_family": "maze", "agent_counts": [400, 600]},
+          {"map_id": "room-64-64-8", "layout_family": "room", "agent_counts": [400, 600]},
+          {"map_id": "room-64-64-16", "layout_family": "room", "agent_counts": [400, 600]},
+          {"map_id": "warehouse-10-20-10-2-2", "layout_family": "warehouse", "agent_counts": [300, 500]},
+          {"map_id": "warehouse-20-40-10-2-2", "layout_family": "warehouse", "agent_counts": [400, 600]},
+          {"map_id": "den312d", "layout_family": "game", "agent_counts": [200, 300]},
+          {"map_id": "lak303d", "layout_family": "game", "agent_counts": [400, 600]}
+        ],
+        "historical_map_ids": [
+          "random-32-32-20", "maze-32-32-2", "room-32-32-4",
+          "warehouse-10-20-10-2-1", "warehouse-20-40-10-2-1", "den520d"
+        ]
+      },
+      "tasks": [
+        {
+          "task_id": "lak303d__random_04__agents_0600",
+          "task_sha256": "d18dd6b2cba897969f1f6810223f225d7691859769354fd90756c975d3c3b1fe",
+          "map_id": "lak303d",
+          "map_family": "game",
+          "map_sha256": "8f4bc6c57aff59ff9650683bbfc91e0c618e30f96ef72323369cb7a055a33b26"
+        },
+        {
+          "task_id": "lak303d__random_05__agents_0600",
+          "task_sha256": "686e3a68a686a869d4efb368a848f95a6b5bda9387678c5c33dce2cda9c01235",
+          "map_id": "lak303d",
+          "map_family": "game",
+          "map_sha256": "8f4bc6c57aff59ff9650683bbfc91e0c618e30f96ef72323369cb7a055a33b26"
+        },
+        {
+          "task_id": "maze-128-128-10__random_04__agents_0600",
+          "task_sha256": "359fedde857a896bfd565a7ce65f38ab6eaaa35a0120b3475c25ff4e22854343",
+          "map_id": "maze-128-128-10",
+          "map_family": "maze",
+          "map_sha256": "2281ef15df0c94efc79b7c62f0c60ce4cb22c43c2cc584226d307c7676d53986"
+        },
+        {
+          "task_id": "maze-128-128-10__random_05__agents_0600",
+          "task_sha256": "395a4837d7ec578222c2f90b9015fd5f8c64cb5e2ec54c82daac91e3eff7ac10",
+          "map_id": "maze-128-128-10",
+          "map_family": "maze",
+          "map_sha256": "2281ef15df0c94efc79b7c62f0c60ce4cb22c43c2cc584226d307c7676d53986"
+        },
+        {
+          "task_id": "random-32-32-10__random_04__agents_0100",
+          "task_sha256": "a6edeb4242620a0c7dc5e2a1501b48731c00755511ccd044088780ff7c99038c",
+          "map_id": "random-32-32-10",
+          "map_family": "random",
+          "map_sha256": "4240fddfa77d88b72ce779e02acf46a5ff056a3b04af5a4e35f7bc86cdfba3ec"
+        },
+        {
+          "task_id": "random-32-32-10__random_05__agents_0100",
+          "task_sha256": "8de214a9f4c9640eba4c1838ac1dc6cf80cfe88dc40dabc6eff8d5d45051acc7",
+          "map_id": "random-32-32-10",
+          "map_family": "random",
+          "map_sha256": "4240fddfa77d88b72ce779e02acf46a5ff056a3b04af5a4e35f7bc86cdfba3ec"
+        },
+        {
+          "task_id": "random-64-64-10__random_04__agents_0400",
+          "task_sha256": "28424fad70a5941f1ad566527b06ead80f02722a18f9dee6f879fd8ba856a170",
+          "map_id": "random-64-64-10",
+          "map_family": "random",
+          "map_sha256": "b31c671228f884a113ca11c41b83630dc042e58e07f9b36da74ec508f82a5659"
+        },
+        {
+          "task_id": "random-64-64-10__random_05__agents_0400",
+          "task_sha256": "e89248b00a631235b1a2cb15513b204e363efa0e3e2605b917647b491f1fcb78",
+          "map_id": "random-64-64-10",
+          "map_family": "random",
+          "map_sha256": "b31c671228f884a113ca11c41b83630dc042e58e07f9b36da74ec508f82a5659"
+        },
+        {
+          "task_id": "random-64-64-20__random_04__agents_0400",
+          "task_sha256": "54f304969c11151655ba8650231d92bcfc326426523bf19c482c9cc8242f36e3",
+          "map_id": "random-64-64-20",
+          "map_family": "random",
+          "map_sha256": "0702bcc7df0529a819845c5d70050464c0946ae234881f27b9f4202b81f40c83"
+        },
+        {
+          "task_id": "random-64-64-20__random_05__agents_0400",
+          "task_sha256": "56c1c5cb90f10308f0bd634be932eb534bbec063a2302da8f409ec0d9afd3077",
+          "map_id": "random-64-64-20",
+          "map_family": "random",
+          "map_sha256": "0702bcc7df0529a819845c5d70050464c0946ae234881f27b9f4202b81f40c83"
+        },
+        {
+          "task_id": "room-64-64-8__random_04__agents_0600",
+          "task_sha256": "ea08b49d92da1381d048b4ee9a28bcba27bca3f964195555ebeff9beaa2b20dc",
+          "map_id": "room-64-64-8",
+          "map_family": "room",
+          "map_sha256": "56946a2411a64631f4ab7ca8dd17439e619ad066fc1d2bf2fd19516fc24f28dc"
+        },
+        {
+          "task_id": "room-64-64-8__random_05__agents_0600",
+          "task_sha256": "f38b39e13d33fc8d743ddf2fd350ee82e03ffa5e91994e7dd247d96876ef8c87",
+          "map_id": "room-64-64-8",
+          "map_family": "room",
+          "map_sha256": "56946a2411a64631f4ab7ca8dd17439e619ad066fc1d2bf2fd19516fc24f28dc"
+        },
+        {
+          "task_id": "warehouse-20-40-10-2-2__random_04__agents_0600",
+          "task_sha256": "5dc4cebba137331b162b10e3b3fe1bf29ecd160829d230d310ae3679df89e805",
+          "map_id": "warehouse-20-40-10-2-2",
+          "map_family": "warehouse",
+          "map_sha256": "eae2a3f5298b1e113bfc32b5b4404f5de5105365d237df63cc9dc9e2d1c73713"
+        },
+        {
+          "task_id": "warehouse-20-40-10-2-2__random_05__agents_0600",
+          "task_sha256": "9623b735844f027f2cdbb68216753774b0decd78fe3f95ad1da5ae3c4052f4c9",
+          "map_id": "warehouse-20-40-10-2-2",
+          "map_family": "warehouse",
+          "map_sha256": "eae2a3f5298b1e113bfc32b5b4404f5de5105365d237df63cc9dc9e2d1c73713"
+        }
+      ]
+    },
+    "balanced_wall_clock": {
+      "dataset_root": "build/stride-stage2-movingai-v1/balanced_wall_clock",
+      "manifest": {
+        "path": "build/stride-stage2-movingai-v1/balanced_wall_clock/manifest.jsonl",
+        "sha256": "efe524b6397642f85964bc47124c348ed8280dd083170e0b33b5c2741573b132"
+      },
+      "runtime": {
+        "path": "configs/stride_stage4r_high_load_runtime.json",
+        "sha256": "5ff9264ca8ef3cfca7bb344ca6ece8ebc34ac454561ca4558d485b24bd671aca"
+      },
+      "source_split": "balanced_wall_clock",
+      "dataset_design": {
+        "mode": "balanced_wall_clock",
+        "map_count": 6,
+        "instance_count": 24,
+        "source_counts": {"movingai": 24},
+        "layout_counts": {
+          "game": 4,
+          "maze": 4,
+          "random": 4,
+          "room": 4,
+          "warehouse": 8
+        },
+        "historical_map_ids": []
+      },
+      "tasks": [
+        {
+          "task_id": "den520d__random_01__agents_0600",
+          "task_sha256": "fcfc96acdb1de4bacf08110489188a180e911f169d07fec6e280f5e418a6dc57",
+          "map_id": "den520d",
+          "map_family": "game",
+          "map_sha256": "06575cc259ea90e6dad003a72f891ab9f82cc9f5e5de4a5f46b90125a46e5f90"
+        },
+        {
+          "task_id": "den520d__random_02__agents_0600",
+          "task_sha256": "222f157558a8bbe36a1548ac7ff3750d50c566b58164ed69227ea56de469f10f",
+          "map_id": "den520d",
+          "map_family": "game",
+          "map_sha256": "06575cc259ea90e6dad003a72f891ab9f82cc9f5e5de4a5f46b90125a46e5f90"
+        },
+        {
+          "task_id": "maze-32-32-2__random_01__agents_0200",
+          "task_sha256": "96e9530d0ab2c2cb7055855ecceb6c4686193bb5b68ca60b6fd01bc807109abf",
+          "map_id": "maze-32-32-2",
+          "map_family": "maze",
+          "map_sha256": "5c549328775ce530072cb05eda8f9010235a7e29294806d6aebb0ad667479cd3"
+        },
+        {
+          "task_id": "maze-32-32-2__random_02__agents_0200",
+          "task_sha256": "b7da9c479a0f1a2f28e90050ee676d7af740d920b97ce024a5ca88776f5b397b",
+          "map_id": "maze-32-32-2",
+          "map_family": "maze",
+          "map_sha256": "5c549328775ce530072cb05eda8f9010235a7e29294806d6aebb0ad667479cd3"
+        },
+        {
+          "task_id": "room-32-32-4__random_01__agents_0200",
+          "task_sha256": "8aacdad72c26f347da7bcbd9865d81cb5eeb5a1b94d1068d00da9a8400441d54",
+          "map_id": "room-32-32-4",
+          "map_family": "room",
+          "map_sha256": "f107fefbf63c7a1a3753e4a033452301a1cdd7043cab7f45e4ed0e7dec1e90a9"
+        },
+        {
+          "task_id": "room-32-32-4__random_02__agents_0200",
+          "task_sha256": "ef7346123fbf0f22ea6675c68e6e65ff7c6770d6d52856ce702204329dc60e40",
+          "map_id": "room-32-32-4",
+          "map_family": "room",
+          "map_sha256": "f107fefbf63c7a1a3753e4a033452301a1cdd7043cab7f45e4ed0e7dec1e90a9"
+        },
+        {
+          "task_id": "warehouse-10-20-10-2-1__random_01__agents_0400",
+          "task_sha256": "c9489b627c076ebc536ab7c39d58b896bddeaba2d7ecbb6732a5ba91e6974665",
+          "map_id": "warehouse-10-20-10-2-1",
+          "map_family": "warehouse",
+          "map_sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0"
+        },
+        {
+          "task_id": "warehouse-10-20-10-2-1__random_02__agents_0400",
+          "task_sha256": "dece6cfe0a282fd81a06659bd41c1e6c144d2964cd92be503651ed5b338c7d1b",
+          "map_id": "warehouse-10-20-10-2-1",
+          "map_family": "warehouse",
+          "map_sha256": "c8d1b2f24788ed6bd1ccf45065b96b4ce82d65f88c72de750e03e2758637bff0"
+        },
+        {
+          "task_id": "warehouse-20-40-10-2-1__random_01__agents_0600",
+          "task_sha256": "5299c96a8335eb921ebcd8b131c0e89b0521fea8445d32a77ad0a4cbc7385d6f",
+          "map_id": "warehouse-20-40-10-2-1",
+          "map_family": "warehouse",
+          "map_sha256": "bd3bec2d1c20a8bbf900583cb4c2cf9dc16101470fbfae93b272ee0fb575d3ec"
+        },
+        {
+          "task_id": "warehouse-20-40-10-2-1__random_02__agents_0600",
+          "task_sha256": "68a452cddf86f8e95946534033fa0952cafbc2edf664ed3acb53314785be4cea",
+          "map_id": "warehouse-20-40-10-2-1",
+          "map_family": "warehouse",
+          "map_sha256": "bd3bec2d1c20a8bbf900583cb4c2cf9dc16101470fbfae93b272ee0fb575d3ec"
+        }
+      ]
+    }
+  },
+  "source_collection": {
+    "policy": "v2-full",
+    "manifest_policy": "realized_dynamic",
+    "solver_seeds": [41, 42],
+    "expected_episode_count": 48,
+    "max_decisions": 12,
+    "workers": 16,
+    "environment_time_limit_seconds": 200.0,
+    "wall_time_budget_seconds": 200.0,
+    "episode_process_timeout_seconds": 240.0,
+    "deterministic_pp_replay": true,
+    "fresh_reset_qualification_required": true
+  },
+  "state_selection": {
+    "target_state_count": 96,
+    "states_per_episode": 2,
+    "eligible_before_conflicts_minimum": 1,
+    "structural_required_actual_size": 16,
+    "required_pairwise_distinct_arms": true,
+    "rank_rule": "sha256_preaction_identity_ascending",
+    "failure_action": "STATE_SUPPLY_FAIL_before_h1",
+    "target_outcome_fields_read": false,
+    "source_episode_outcome_used_to_filter": false
+  },
+  "h1": {
+    "arms": ["v2_anchor", "component16", "hotspot16"],
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "logical_trial_count": 4608,
+    "workers": 16,
+    "per_action_time_limit_seconds": 5.0,
+    "per_state_process_fuse_seconds": 420.0,
+    "same_state_trial_seed_across_arms": true,
+    "runtime_or_pp_seconds_used_in_label": false
+  },
+  "h1_label": {
+    "per_seed_score": "normalized_current_step_conflict_reduction",
+    "minimum_strict_paired_wins": 12,
+    "minimum_mean_delta": 0.02,
+    "require_positive_first_half_mean_delta": true,
+    "require_positive_second_half_mean_delta": true,
+    "require_no_progress_rate_noninferiority": true,
+    "require_rollback_rate_noninferiority": true,
+    "require_time_limit_rate_noninferiority": true,
+    "tie_epsilon": 1e-12,
+    "duplicates_or_unavailable_label": null
+  },
+  "h1_gates": {
+    "expected_state_count": 96,
+    "minimum_opportunity_state_count": 20,
+    "minimum_opportunity_map_count": 8,
+    "minimum_opportunity_family_count": 4,
+    "each_fold_requires_opportunity_and_nonopportunity": true,
+    "valid_candidate_labels_require_both_classes": true,
+    "all_integrity_gates_required": true,
+    "map_folds": {
+      "fold0": ["den520d", "maze-128-128-10", "warehouse-10-20-10-2-1"],
+      "fold1": ["lak303d", "random-32-32-10", "room-32-32-4"],
+      "fold2": ["maze-32-32-2", "random-64-64-10", "warehouse-20-40-10-2-1"],
+      "fold3": ["random-64-64-20", "room-64-64-8", "warehouse-20-40-10-2-2"]
+    }
+  },
+  "h8_future_contract": {
+    "registered_but_not_executed_in_h1_stage": true,
+    "requires_global_h1_pass": true,
+    "run_all_96_states_and_all_canonical_arms": true,
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "total_horizon_including_h1": 8,
+    "continuation_steps": 7,
+    "continuation_controller": "fresh_exact_base_only_v2",
+    "same_state_trial_step_seed_across_arms": true,
+    "positive_only_continuation_forbidden": true
+  },
+  "claim_boundary": {
+    "conditional_on_three_distinct_active_cohort": true,
+    "h1_opportunity_only": true,
+    "training_allowed": false,
+    "h8_allowed_only_on_h1_pass": true,
+    "ttf_or_speed_claim_allowed": false,
+    "fresh_map_claim_allowed": false,
+    "no_outcome_based_state_or_arm_deletion": true
+  }
+}
