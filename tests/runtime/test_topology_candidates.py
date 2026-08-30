@@ -700,6 +700,107 @@ class TopologyCandidatesTest(unittest.TestCase):
         self.assertTrue({tuple(row["agents"]) for row in subset} <= full_sets)
         self.assertTrue(all(row["structpool_runtime_subset"] for row in subset))
 
+    def test_dual16_family_aware_context_preserves_complete_candidate_rows(
+        self,
+    ) -> None:
+        state, analysis = self._structpool_state()
+        family_sizes = {
+            "conflict_component": (16,),
+            "spatiotemporal_hotspot": (16,),
+        }
+        context_builder = topology_candidates._structural_candidate_context
+
+        def full_context(state_value, analysis_value, **kwargs):
+            return context_builder(
+                state_value,
+                analysis_value,
+                include_path_overlap=kwargs["include_path_overlap"],
+            )
+
+        with patch.object(
+            topology_candidates,
+            "_structural_candidate_context",
+            side_effect=full_context,
+        ):
+            reference = generate_structpool_candidate_subset(
+                state,
+                analysis,
+                family_sizes=family_sizes,
+            )
+        with (
+            patch.object(
+                topology_candidates,
+                "_relevant_events",
+                wraps=topology_candidates._relevant_events,
+            ) as relevant,
+            patch.object(
+                topology_candidates,
+                "_path_overlap_seed_data",
+                wraps=topology_candidates._path_overlap_seed_data,
+            ) as overlap,
+        ):
+            optimized = generate_structpool_candidate_subset(
+                state,
+                analysis,
+                family_sizes=family_sizes,
+            )
+
+        self.assertEqual(optimized, reference)
+        self.assertEqual(relevant.call_count, 0)
+        self.assertEqual(overlap.call_count, 0)
+
+    def test_dual16_equal_sets_merge_both_family_provenances(self) -> None:
+        agents = [
+            {"id": agent, "path": [agent], "conflict_degree": 1}
+            for agent in range(8)
+        ]
+        events = [
+            ConflictEvent(0, "vertex", 0, 1, (0,)),
+            ConflictEvent(1, "vertex", 2, 3, (1,)),
+        ]
+        state = {
+            "agents": agents,
+            "conflict_edges": [[0, 1], [2, 3]],
+        }
+        analysis = StateAnalysis(
+            rows=2,
+            cols=4,
+            free_cells=set(range(8)),
+            degrees={cell: 2 for cell in range(8)},
+            articulation=set(),
+            obstacle_rate_2={},
+            obstacle_rate_4={},
+            visit_heat=collections.Counter({cell: 1 for cell in range(8)}),
+            agent_heat=collections.Counter({cell: 1 for cell in range(8)}),
+            events=events,
+            pair_set={(0, 1), (2, 3)},
+            component_id={agent: 0 for agent in range(8)},
+            component_members={0: set(range(8))},
+        )
+
+        rows = generate_structpool_candidate_subset(
+            state,
+            analysis,
+            family_sizes={
+                "conflict_component": (16,),
+                "spatiotemporal_hotspot": (16,),
+            },
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["agents"], list(range(8)))
+        self.assertEqual(
+            rows[0]["selection_families"],
+            [
+                "structpool-conflict-component:16",
+                "structpool-spatiotemporal-hotspot:16",
+            ],
+        )
+        self.assertEqual(
+            set(rows[0]["structpool_support_count_by_family"]),
+            set(rows[0]["selection_families"]),
+        )
+
     def test_complete_runtime_subset_matches_the_full_structpool_grid(self) -> None:
         state, analysis = self._structpool_state()
         full = generate_structpool_candidate_grid(state, analysis)

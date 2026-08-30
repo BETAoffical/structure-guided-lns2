@@ -828,14 +828,33 @@ def _structural_candidate_context(
     analysis: StateAnalysis,
     *,
     include_path_overlap: bool = True,
+    requested_variants: Iterable[str] | None = None,
 ) -> StructuralCandidateContext:
+    variants = (
+        frozenset(_STRUCTPOOL_DRAFT_VARIANT_ORDER)
+        if requested_variants is None
+        else frozenset(map(str, requested_variants))
+    )
+    needs_bottleneck = "bottleneck_crossing" in variants
+    needs_component = "conflict_component" in variants
+    needs_hotspot = "spatiotemporal_hotspot" in variants
+    needs_path_overlap = include_path_overlap and "path_overlap" in variants
+    materialize_path_sets = requested_variants is None or needs_path_overlap
+    needs_boundary = needs_bottleneck or any(
+        variant.startswith("topology_boundary_") for variant in variants
+    )
     neighborhood = _neighborhood_context(state)
-    path_sets = {
-        int(agent["id"]): frozenset(map(int, agent.get("path", [])))
-        for agent in state["agents"]
-    }
-    if any(not path for path in path_sets.values()):
-        raise ValueError("StructPool requires non-empty agent paths")
+    if materialize_path_sets:
+        path_sets = {
+            int(agent["id"]): frozenset(map(int, agent.get("path", [])))
+            for agent in state["agents"]
+        }
+        if any(not path for path in path_sets.values()):
+            raise ValueError("StructPool requires non-empty agent paths")
+    else:
+        if any(not agent.get("path", []) for agent in state["agents"]):
+            raise ValueError("StructPool requires non-empty agent paths")
+        path_sets = {}
     event_weights = _event_weights(analysis.events)
     partner_counts: dict[int, collections.Counter[int]] = collections.defaultdict(
         collections.Counter
@@ -844,22 +863,34 @@ def _structural_candidate_context(
     for event in analysis.events:
         left = int(event.left)
         right = int(event.right)
-        partner_counts[left][right] += 1
-        partner_counts[right][left] += 1
-        component = analysis.component_id.get(left)
-        if component is not None and analysis.component_id.get(right) == component:
-            component_internal_events[int(component)] += 1
+        if requested_variants is None:
+            partner_counts[left][right] += 1
+            partner_counts[right][left] += 1
+        if needs_component:
+            component = analysis.component_id.get(left)
+            if component is not None and analysis.component_id.get(right) == component:
+                component_internal_events[int(component)] += 1
     relevant_events_by_kind = {
-        kind: _relevant_events(analysis, kind)
+        kind: _relevant_events(analysis, kind) if needs_boundary else []
         for kind in ("articulation", "low_degree")
     }
-    bottleneck_events = sorted(
-        {
-            event
-            for kind in ("articulation", "low_degree")
-            for event in relevant_events_by_kind[kind]
-        },
-        key=lambda event: (event.time, event.kind, event.left, event.right, event.cells),
+    bottleneck_events = (
+        sorted(
+            {
+                event
+                for kind in ("articulation", "low_degree")
+                for event in relevant_events_by_kind[kind]
+            },
+            key=lambda event: (
+                event.time,
+                event.kind,
+                event.left,
+                event.right,
+                event.cells,
+            ),
+        )
+        if needs_bottleneck
+        else []
     )
     return StructuralCandidateContext(
         state=state,
@@ -871,15 +902,21 @@ def _structural_candidate_context(
         component_internal_events=dict(component_internal_events),
         relevant_events_by_kind=relevant_events_by_kind,
         bottleneck_events=bottleneck_events,
-        component_seed_data=_conflict_component_seed_data(
-            analysis,
-            event_weight=event_weights,
-            component_internal_events=dict(component_internal_events),
+        component_seed_data=(
+            _conflict_component_seed_data(
+                analysis,
+                event_weight=event_weights,
+                component_internal_events=dict(component_internal_events),
+            )
+            if needs_component
+            else None
         ),
-        hotspot_seed_data=_hotspot_seed_data(analysis),
+        hotspot_seed_data=(
+            _hotspot_seed_data(analysis) if needs_hotspot else None
+        ),
         overlap_seed_data=(
             _path_overlap_seed_data(state, analysis, path_sets=path_sets)
-            if include_path_overlap
+            if needs_path_overlap
             else None
         ),
         audit_index=topology_candidate_audit_index(analysis),
@@ -1253,6 +1290,15 @@ def generate_structpool_candidate_subset(
         state,
         analysis,
         include_path_overlap="path_overlap" in normalized,
+        requested_variants=(
+            normalized
+            if normalized
+            == {
+                "conflict_component": (16,),
+                "spatiotemporal_hotspot": (16,),
+            }
+            else None
+        ),
     )
     drafts: list[StructuralCandidateDraft] = []
     for variant in _STRUCTPOOL_DRAFT_VARIANT_ORDER:
