@@ -35,9 +35,7 @@ public:
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // Runs the algorithm until the problem is solved or time is exhausted
-    bool solve(double time_limit, bool cooperative_deadline = false);
-    bool timedOut() const { return timed_out; }
-    bool rootFailed() const { return root_failed; }
+    bool solve(double time_limit);
     void updatePaths(GCBSNode* curr);
 
     GCBS(vector<SingleAgentSolver*>& search_engines, int screen,
@@ -63,11 +61,7 @@ private:
     int screen;
     double time_limit = -1;
     int collision_upperbound = MAX_COST;
-    Time::time_point wall_start;
-    clock_t cpu_start;
-    bool deadline_enabled = false;
-    bool timed_out = false;
-    bool root_failed = false;
+    clock_t start;
     int num_of_agents;
 
     string getSolverName() const;
@@ -79,8 +73,8 @@ private:
     void addConstraints(const GCBSNode* curr, GCBSNode* child1, GCBSNode* child2) const;
     set<int> getInvalidAgents(const list<Constraint>& constraints); // return agents that violates the constraints
     //conflicts
-    bool findConflicts(GCBSNode& curr);
-    bool findConflicts(GCBSNode& curr, int a1, int a2);
+    void findConflicts(GCBSNode& curr);
+    void findConflicts(GCBSNode& curr, int a1, int a2);
     shared_ptr<Conflict> chooseConflict(const GCBSNode &node) const;
     static void copyConflicts(const list<shared_ptr<Conflict>>& conflicts,
                               list<shared_ptr<Conflict>>& copy, const list<int>& excluded_agent);
@@ -109,8 +103,6 @@ private:
     bool generateChild(GCBSNode* child, GCBSNode* curr);
     bool generateRoot();
     bool findPathForSingleAgent(GCBSNode* node, int ag);
-    bool deadlineReached();
-    double remainingTimeSeconds() const;
 
     void printPaths() const;
 };

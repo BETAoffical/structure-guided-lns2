@@ -64,8 +64,6 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/structshell_dual16.py",
     "lns2_selector/runtime/structshell_single_family.py",
     "lns2_selector/runtime/topology_candidates.py",
-    "lns2_selector/runtime/v2_first_consensus_rescue.py",
-    "lns2_selector/runtime/v2_first_single_family_rescue.py",
     "lns2_selector/solver/native.py",
     "lns2_selector/training/policy_bundle.py",
     "src/jsonl_observer.cpp",

@@ -3234,49 +3234,124 @@
       "contract": "Freeze the exact Q0 registry, map-role separation, eight unique map hashes, 128 reset-only keys, identity audit, terminal failure and same-fingerprint resume contracts."
     },
     {
-      "path": "experiments/stride_temporal_anchor_incremental_readiness.py",
+      "path": "experiments/mixed_full_v2_high_load_multiseed_v1.py",
       "role": "reproducibility",
-      "purpose": "Measure whether strict-prefix temporal history adds held-out-map signal beyond the frozen SafeSlot static representation without running a solver or exporting a model."
+      "purpose": "Run the non-formal high-load multiseed development comparison with explicit Official, V2 and Mixed-V2 controller identities."
     },
     {
-      "path": "scripts/run_stride_temporal_anchor_incremental_readiness.py",
+      "path": "scripts/run_mixed_full_v2_high_load_multiseed_v1.py",
       "role": "reproducibility",
-      "purpose": "Expose the solver-free temporal-anchor incremental readiness analysis."
+      "purpose": "Expose planning, serial collection and analysis for the non-formal high-load Mixed-V2 development comparison."
     },
     {
-      "path": "tests/evaluation/test_stride_temporal_anchor_incremental_readiness.py",
+      "path": "tests/evaluation/test_mixed_full_v2_high_load_multiseed_v1.py",
       "role": "reproducibility",
-      "contract": "Freeze the 16-dimensional strict-prefix feature schema, target-outcome blindness, exact-V2 decision-zero abstention and analysis boundary."
+      "contract": "Prevent controller identity collapse across Official, V2 and Mixed-V2 collection lanes."
     },
     {
-      "path": "experiments/stride_seed25_same_set_pp_gcbs_screen.py",
-      "role": "reproducibility",
-      "purpose": "Compare PP and GCBS on four frozen seed25 states using the exact Dual-selected neighborhood in isolated one-step processes without candidate generation, continuation or TTF."
+      "path": "experiments/warehouse_disruption_checkpoints.py",
+      "role": "shared",
+      "purpose": "Provide hash-bound warehouse disruption checkpoint creation, validation and restoration shared by retained recovery evaluations."
     },
     {
-      "path": "scripts/run_stride_seed25_same_set_pp_gcbs_screen.py",
+      "path": "experiments/stride_warehouse_disruption_recovery.py",
       "role": "reproducibility",
-      "purpose": "Expose the fail-closed plan, dry-run and eight-branch WSL mechanism screen with per-job process fuses."
+      "purpose": "Reproduce the retained paired warehouse disruption recovery evaluation for Official and targeted Dual16 routing."
     },
     {
-      "path": "tests/evaluation/test_stride_seed25_same_set_pp_gcbs_screen.py",
+      "path": "scripts/run_stride_warehouse_disruption_recovery.py",
       "role": "reproducibility",
-      "contract": "Freeze the four outcome-enriched selected actions, PP and GCBS-only repairer set, one-step boundary, external-fuse requirement and no-promotion claims."
+      "purpose": "Expose the retained warehouse disruption recovery qualification, collection and analysis workflow."
     },
     {
-      "path": "experiments/stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "path": "experiments/stride_warehouse_disruption_recovery_heldout.py",
       "role": "reproducibility",
-      "purpose": "Run the qualified four-state, four-repeat PP versus GCBS same-set screen with paired execution salts, cooperative deadlines and no controller or TTF."
+      "purpose": "Reproduce the held-out warehouse disruption recovery validation."
     },
     {
-      "path": "scripts/run_stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "path": "experiments/stride_warehouse_disruption_recovery_boundary.py",
       "role": "reproducibility",
-      "purpose": "Expose the registered multirepeat same-set repairer plan and WSL screen."
+      "purpose": "Reproduce the registered boundary-load warehouse disruption recovery validation."
     },
     {
-      "path": "tests/evaluation/test_stride_seed25_same_set_pp_gcbs_multiseed.py",
+      "path": "experiments/stride_warehouse_disruption_recovery_load_extension_v1.py",
       "role": "reproducibility",
-      "contract": "Freeze the 32-attempt paired plan, repair salts, qualification hash gate and hard-stop scientific decision."
+      "purpose": "Reproduce the retained warehouse recovery load-extension qualification and evaluation."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_disruption_recovery_load_extension_v1.py",
+      "role": "reproducibility",
+      "purpose": "Expose the retained warehouse recovery load-extension workflow."
+    },
+    {
+      "path": "experiments/stride_warehouse_disruption_recovery_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Compute retained paired time-to-feasibility metrics from warehouse disruption checkpoints."
+    },
+    {
+      "path": "experiments/stride_warehouse_disruption_recovery_heldout_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Compute held-out warehouse disruption time-to-feasibility evidence."
+    },
+    {
+      "path": "experiments/stride_warehouse_disruption_recovery_boundary_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Compute boundary-load warehouse disruption time-to-feasibility evidence."
+    },
+    {
+      "path": "experiments/stride_dual16_room_maze_highload_extension_v1.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce the retained room and maze high-load boundary check for targeted Dual16 routing."
+    },
+    {
+      "path": "scripts/run_stride_dual16_room_maze_highload_extension_v1.py",
+      "role": "reproducibility",
+      "purpose": "Expose the retained Dual16 room and maze high-load extension workflow."
+    },
+    {
+      "path": "tests/evaluation/test_checkpoint_blob_restore.py",
+      "role": "reproducibility",
+      "contract": "Protect hash-bound warehouse checkpoint blob restoration and tamper rejection."
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_disruption_checkpoints.py",
+      "role": "reproducibility",
+      "contract": "Protect warehouse disruption checkpoint identity, serialization and restoration contracts."
+    },
+    {
+      "path": "tests/integration/test_warehouse_disruption_dataset.py",
+      "role": "reproducibility",
+      "contract": "Protect the retained warehouse disruption dataset and registered task identities."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_disruption_recovery.py",
+      "role": "reproducibility",
+      "contract": "Protect the paired warehouse disruption recovery protocol and controller routing."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_disruption_recovery_heldout.py",
+      "role": "reproducibility",
+      "contract": "Protect held-out warehouse disruption recovery registration and evaluation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_disruption_recovery_boundary.py",
+      "role": "reproducibility",
+      "contract": "Protect boundary-load warehouse disruption recovery registration and evaluation."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_disruption_recovery_load_extension_v1.py",
+      "role": "reproducibility",
+      "contract": "Protect the retained warehouse recovery load-extension schedule and gates."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_disruption_recovery_ttf.py",
+      "role": "reproducibility",
+      "contract": "Protect paired warehouse disruption time-to-feasibility metrics and checkpoint binding."
+    },
+    {
+      "path": "tests/evaluation/test_stride_dual16_room_maze_highload_extension_v1.py",
+      "role": "reproducibility",
+      "contract": "Protect the targeted Dual16 room and maze high-load boundary protocol."
     }
   ]
 }

@@ -24,14 +24,6 @@ from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
     validate_structshell_dual16_augmentation,
 )
-from lns2_selector.runtime.v2_first_single_family_rescue import (
-    V2_FIRST_SINGLE_FAMILY_RESCUE_POOL_ID,
-    validate_v2_first_single_family_rescue_augmentation,
-)
-from lns2_selector.runtime.v2_first_consensus_rescue import (
-    V2_FIRST_CONSENSUS16_RESCUE_POOL_ID,
-    validate_v2_first_consensus_rescue_augmentation,
-)
 
 
 ROUTED_HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-routed-v1"
@@ -206,10 +198,6 @@ def validate_any_hybridstructpool_augmentation(
         return validate_structshell_single_family_augmentation(value)
     if pool_id == STRUCTSHELL_DUAL16_POOL_ID:
         return validate_structshell_dual16_augmentation(value)
-    if pool_id == V2_FIRST_SINGLE_FAMILY_RESCUE_POOL_ID:
-        return validate_v2_first_single_family_rescue_augmentation(value)
-    if pool_id == V2_FIRST_CONSENSUS16_RESCUE_POOL_ID:
-        return validate_v2_first_consensus_rescue_augmentation(value)
     raise ValueError("unsupported HybridStructPool runtime augmentation")
 
 

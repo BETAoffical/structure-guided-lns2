@@ -392,8 +392,7 @@ bool InitLNS::step(const RepairAction& action)
     for (int i = 0; i < (int)neighbor.agents.size(); i++)
     {
         int a = neighbor.agents[i];
-        if (replan_algo_name == "PP" || replan_algo_name == "GCBS" ||
-            neighbor.agents.size() == 1)
+        if (replan_algo_name == "PP" || neighbor.agents.size() == 1)
             neighbor.old_paths[i] = agents[a].path;
         path_table.deletePath(neighbor.agents[i]);
         neighbor.old_sum_of_costs += (int) agents[a].path.size() - 1;
@@ -425,7 +424,7 @@ bool InitLNS::step(const RepairAction& action)
             transition.applied_pp_random_seed = pp_random_seed;
     }
     else if (replan_algo_name == "GCBS")
-        succ = runGCBS(transition);
+        succ = runGCBS();
     else if (replan_algo_name == "PBS")
         succ = runPBS();
     else
@@ -488,48 +487,8 @@ bool InitLNS::step(const RepairAction& action)
     finishTransition();
     return true;
 }
-bool InitLNS::runGCBS(RepairTransition& transition)
+bool InitLNS::runGCBS()
 {
-    // The transition schema predates multiple bounded repairers.  Reuse its
-    // legacy pp_* outcome fields so callers can distinguish a GCBS deadline
-    // from an ordinary no-improvement failure without changing the binding.
-    transition.pp_failure_reason = PPFailureReason::NONE;
-    transition.pp_rolled_back = false;
-    neighbor.colliding_pairs.clear();
-    const bool cooperative_deadline =
-        transition.requested_action.pp_time_limit_seconds >= 0.0;
-    const double requested_action_seconds =
-        transition.requested_action.pp_time_limit_seconds;
-    const auto bounded_repair_started = Time::now();
-
-    auto rollback = [&]()
-    {
-        for (size_t index = 0; index < neighbor.agents.size(); index++)
-        {
-            const int id = neighbor.agents[index];
-            agents[id].path = neighbor.old_paths[index];
-            path_table.insertPath(id, agents[id].path);
-        }
-        neighbor.colliding_pairs = neighbor.old_colliding_pairs;
-        neighbor.sum_of_costs = neighbor.old_sum_of_costs;
-        transition.pp_rolled_back = true;
-        num_of_failures++;
-    };
-
-    auto actionDeadlineExpired = [&]()
-    {
-        return cooperative_deadline &&
-            ((fsec)(Time::now() - bounded_repair_started)).count() >=
-                requested_action_seconds;
-    };
-
-    if (actionDeadlineExpired())
-    {
-        rollback();
-        transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
-        return false;
-    }
-
     vector<SingleAgentSolver*> search_engines;
     search_engines.reserve(neighbor.agents.size());
     for (int i : neighbor.agents)
@@ -547,12 +506,6 @@ bool InitLNS::runGCBS(RepairTransition& transition)
             if (j != agent_id and collision_graph[agent_id].count(j) == 0)
                 path_tables[i].insertPath(j, agents[j].path);
         }
-        if (actionDeadlineExpired())
-        {
-            rollback();
-            transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
-            return false;
-        }
     }
 
     GCBS gcbs(search_engines, screen - 1, &path_tables);
@@ -564,28 +517,8 @@ bool InitLNS::runGCBS(RepairTransition& transition)
     double T = time_limit - runtime;
     if (!iteration_stats.empty()) // replan
         T = min(T, replan_time_limit);
-    if (cooperative_deadline)
-    {
-        const double setup_seconds =
-            ((fsec)(Time::now() - bounded_repair_started)).count();
-        T = min(T, max(0.0, requested_action_seconds - setup_seconds));
-        // GCBS still has short non-interruptible bookkeeping intervals between
-        // cooperative checks. Reserve a small part of the caller's action
-        // budget so the complete native repair, not only solve(), stays bounded.
-        constexpr double COOPERATIVE_DEADLINE_RESERVE_SECONDS = 0.1;
-        T = max(0.0, T - min(T, COOPERATIVE_DEADLINE_RESERVE_SECONDS));
-    }
-    T = max(0.0, T);
-    gcbs.solve(T, cooperative_deadline);
-    if (gcbs.timedOut())
-    {
-        rollback();
-        transition.pp_failure_reason = PPFailureReason::TIME_LIMIT;
-        return false;
-    }
-    if (gcbs.best_node != nullptr &&
-        gcbs.best_node->colliding_pairs <
-            (int) neighbor.old_colliding_pairs.size()) // accept new paths
+    gcbs.solve(T);
+    if (gcbs.best_node->colliding_pairs < (int) neighbor.old_colliding_pairs.size()) // accept new paths
     {
         auto id = neighbor.agents.begin();
         neighbor.colliding_pairs.clear();
@@ -597,16 +530,19 @@ bool InitLNS::runGCBS(RepairTransition& transition)
             ++id;
         }
         neighbor.sum_of_costs = gcbs.best_node->sum_of_costs;
-        transition.pp_failure_reason = PPFailureReason::NONE;
         return true;
     }
     else // stick to old paths
     {
-        rollback();
-        transition.pp_failure_reason =
-            (gcbs.rootFailed() || gcbs.best_node == nullptr)
-                ? PPFailureReason::ROOT_FAILURE
-                : PPFailureReason::NO_IMPROVEMENT;
+        if (!neighbor.old_paths.empty())
+        {
+            for (int id : neighbor.agents)
+            {
+                path_table.insertPath(agents[id].id, agents[id].path);
+            }
+            neighbor.sum_of_costs = neighbor.old_sum_of_costs;
+        }
+        num_of_failures++;
         return false;
     }
 }

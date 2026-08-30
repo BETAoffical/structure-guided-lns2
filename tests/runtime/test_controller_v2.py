@@ -564,6 +564,20 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(mode, "v2-full")
         self.assertIsNotNone(manifest)
 
+    def test_controller_mode_rejects_mismatched_bundle_identity(self) -> None:
+        with self.assertRaisesRegex(ValueError, "matching controller bundle"):
+            resolve_controller_mode(
+                PROJECT_ROOT,
+                "mixed-full-v2",
+                "artifacts/initlns-closed-loop-controller-v2",
+            )
+        with self.assertRaisesRegex(ValueError, "matching controller bundle"):
+            resolve_controller_mode(
+                PROJECT_ROOT,
+                "v2-full",
+                "artifacts/initlns-mixed-full-controller-v2",
+            )
+
     def test_revision_only_proposal_check_avoids_full_state_copy(self) -> None:
         state = make_state()
 

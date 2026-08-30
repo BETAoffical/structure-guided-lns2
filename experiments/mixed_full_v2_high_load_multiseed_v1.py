@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import collections
 import json
-import math
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
@@ -294,7 +293,14 @@ def _materialize_schedule(
 
 
 def _common_collection_kwargs(
-    *, dataset: Path, config: Path, output: Path, task_ids: list[str], keys: set[tuple[str, int]], bundle: Path
+    *,
+    controller: str,
+    dataset: Path,
+    config: Path,
+    output: Path,
+    task_ids: list[str],
+    keys: set[tuple[str, int]],
+    bundle: Path,
 ) -> dict[str, Any]:
     return {
         "dataset": dataset,
@@ -302,7 +308,7 @@ def _common_collection_kwargs(
         "output": output,
         "workers": 1,
         "task_ids": task_ids,
-        "controller": "v2-full",
+        "controller": controller,
         "feature_backend": "auto",
         "controller_bundle": bundle,
         "controller_runtime": "optimized",
@@ -340,6 +346,7 @@ def _collect(
         for controller_id in order:
             lane = output_root / f"order_{group_id}" / controller_id
             common = _common_collection_kwargs(
+                controller=controller_id,
                 dataset=Path(plan["dataset"]),
                 config=Path(plan["config"]),
                 output=lane,

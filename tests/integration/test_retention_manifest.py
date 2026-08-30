@@ -12,16 +12,20 @@ PRODUCTION_ROOTS = {"experiments", "generators", "lns2_selector", "scripts"}
 EXECUTABLE_ROLES = {"active", "shared", "reproducibility", "compatibility"}
 
 
-def _tracked_files() -> set[str]:
+def _repository_files() -> set[str]:
     result = subprocess.run(
-        ["git", "ls-files", "-z", "--cached"],
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
         text=True,
         encoding="utf-8",
     )
-    return {value for value in result.stdout.split("\0") if value}
+    return {
+        value
+        for value in result.stdout.split("\0")
+        if value and (PROJECT_ROOT / value).is_file()
+    }
 
 
 class RetentionManifestTests(unittest.TestCase):
@@ -34,10 +38,10 @@ class RetentionManifestTests(unittest.TestCase):
         paths = [str(entry["path"]) for entry in entries]
         self.assertEqual(len(paths), len(set(paths)), "duplicate manifest paths")
 
-        tracked = _tracked_files()
+        repository_files = _repository_files()
         expected = {
             path
-            for path in tracked
+            for path in repository_files
             if (
                 path.endswith(".py")
                 and path.split("/", 1)[0] in PRODUCTION_ROOTS
