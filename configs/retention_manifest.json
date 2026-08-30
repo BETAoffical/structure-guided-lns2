@@ -2499,21 +2499,6 @@
       "contract": "Freeze size-balanced family-diverse reduction, outcome-field independence, full-pool fallback and no-ranker/no-TTF boundaries."
     },
     {
-      "path": "experiments/stride_cycletransition.py",
-      "role": "reproducibility",
-      "purpose": "Audit whether a single forced neighborhood creates a quality-constrained repeatable state-action transition under the complete equal-size structural grid."
-    },
-    {
-      "path": "scripts/run_stride_cycletransition.py",
-      "role": "reproducibility",
-      "purpose": "Run the result-blind preparation and bounded 16-worker state-candidate-seed CycleTransition collection and analysis."
-    },
-    {
-      "path": "tests/evaluation/test_stride_cycletransition.py",
-      "role": "reproducibility",
-      "contract": "Freeze result-blind cohort selection, exact edge metrics, V2 quality admissibility, joint soft-cycle stability, 300-second job bounds and no-training/no-TTF boundaries."
-    },
-    {
       "path": "experiments/stride_plateau_escape_witness.py",
       "role": "reproducibility",
       "purpose": "Reconstruct frozen first-repeat plateaus, their exact PP realizations and observed escape witnesses without new solver runs or training."
@@ -2647,21 +2632,6 @@
       "path": "tests/runtime/test_frontierdependencypool.py",
       "role": "reproducibility",
       "contract": "Freeze current-frontier evidence, compact augment, same-size exchange, deduplication and deterministic selection semantics."
-    },
-    {
-      "path": "experiments/stride_platformentry_frontier.py",
-      "role": "reproducibility",
-      "purpose": "Collect and analyze the bounded native-order FrontierDependency platform-entry experiment with uniform extension gates."
-    },
-    {
-      "path": "scripts/run_stride_platformentry_frontier.py",
-      "role": "reproducibility",
-      "purpose": "Run the preregistered initial, uniform extension and parallel final FrontierDependency continuation analysis."
-    },
-    {
-      "path": "tests/evaluation/test_stride_platformentry_frontier.py",
-      "role": "reproducibility",
-      "contract": "Freeze paired frontier schedules, native PP order, noncausal size diagnostics and separate runtime versus registered fingerprint domains."
     },
     {
       "path": "experiments/stride_platform_action_robustness.py",
@@ -3044,51 +3014,6 @@
       "contract": "Freeze the ten paired keys, four-arm serial rotation, state-guard trace audit and no-promotion screen gates."
     },
     {
-      "path": "experiments/stride_structshell_crossmap_quick_screen.py",
-      "role": "reproducibility",
-      "purpose": "Run the bounded four-map fixed16 StructShell development quick screen with one task and one seed per map."
-    },
-    {
-      "path": "scripts/run_stride_structshell_crossmap_quick_screen.py",
-      "role": "reproducibility",
-      "purpose": "Expose plan, dry-run, strict serial execution and minimal TTF analysis for the cross-map quick screen."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_crossmap_quick_screen.py",
-      "role": "reproducibility",
-      "contract": "Freeze four non-Warehouse keys, three-arm rotation, five-percent and three-of-four TTF gates, complete qualification-plus-episode process bounds and no-Official/no-Q0/no-bootstrap boundaries."
-    },
-    {
-      "path": "experiments/stride_structshell_crossmap_offline_profile.py",
-      "role": "reproducibility",
-      "purpose": "Profile three frozen V2 pre-action states per cross-map trace with pure state analysis and fixed16 candidate generation only."
-    },
-    {
-      "path": "scripts/run_stride_structshell_crossmap_offline_profile.py",
-      "role": "reproducibility",
-      "purpose": "Expose the source-only cross-map offline profile audit without adding native solver paths or runtime actions."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_crossmap_offline_profile.py",
-      "role": "reproducibility",
-      "contract": "Freeze the four V2 traces, initial-middle-last checkpoint contract, twelve-state cap and no-native/no-PP/no-controller boundary."
-    },
-    {
-      "path": "experiments/crossmap_profile_falsification_v1.py",
-      "role": "reproducibility",
-      "purpose": "Run the four-key Component16 versus Hotspot16 crossover falsification with first-failure stopping and complete inner trace/controller identity validation."
-    },
-    {
-      "path": "scripts/run_crossmap_profile_falsification_v1.py",
-      "role": "reproducibility",
-      "purpose": "Expose plan, run and analysis commands for the bounded cross-map profile falsification."
-    },
-    {
-      "path": "tests/evaluation/test_crossmap_profile_falsification_v1.py",
-      "role": "reproducibility",
-      "contract": "Freeze schedule rotation, single-family size16 semantics, strict-fastest gates, pre-reset freshness, trace identity validation, early stop and invalid-resume behavior."
-    },
-    {
       "path": "experiments/stride_structshell_fourmap_fivearm_quick.py",
       "role": "reproducibility",
       "purpose": "Run the seed23 four-map five-arm reset-inclusive StructShell runtime triage with strict serial rotation and no promotion gate."
@@ -3117,21 +3042,6 @@
       "path": "tests/evaluation/test_stride_structshell_maze32_n300_fourmap_quick.py",
       "role": "reproducibility",
       "contract": "Freeze the exact four tasks, seed25 identity, sixteen-entry serial schedule, Official phase, Dual16 plateau fallback and versioned 90/200-second runtime contracts."
-    },
-    {
-      "path": "experiments/stride_structshell_seed25_replay_diagnostic.py",
-      "role": "reproducibility",
-      "purpose": "Replay mechanically selected seed25 repair states with paired bounded PP seeds to separate candidate ranking, local repairability and short-horizon trajectory effects without running full TTF episodes."
-    },
-    {
-      "path": "scripts/run_stride_structshell_seed25_replay_diagnostic.py",
-      "role": "reproducibility",
-      "purpose": "Expose dry-run and bounded WSL execution for the thirteen-branch seed25 restored-state replay diagnostic."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_seed25_replay_diagnostic.py",
-      "role": "reproducibility",
-      "contract": "Freeze outcome-blind checkpoint selection, the V2-anchor Component16 Hotspot16 action set, the Random choice-set exception, paired seeds and bounded seven-transition branches."
     },
     {
       "path": "lns2_selector/runtime/structshell_single_family.py",
@@ -3207,31 +3117,6 @@
       "path": "tests/evaluation/test_stride_warehouse_crossaisle_paired.py",
       "role": "reproducibility",
       "contract": "Freeze the two-stage task registry, exact 128-reset schedule, scenario and manifest identity, terminal failure and same-fingerprint resume contracts."
-    },
-    {
-      "path": "experiments/warehouse_compactcut_tasks.py",
-      "role": "reproducibility",
-      "purpose": "Generate and independently audit the eight-map compact-cut Warehouse task bank, direction-balanced mandatory-gate routing and deterministic joint feasibility witnesses without invoking a solver."
-    },
-    {
-      "path": "experiments/stride_warehouse_compactcut.py",
-      "role": "reproducibility",
-      "purpose": "Freeze Q0 bytes and run the independent 128-key compact-cut Warehouse reset-only qualification with preregistered development and controller-held-out map roles."
-    },
-    {
-      "path": "scripts/run_stride_warehouse_compactcut.py",
-      "role": "reproducibility",
-      "purpose": "Expose compact-cut planning, Q0 generation and Q1 reset-only qualification without any controller, policy episode or TTF command."
-    },
-    {
-      "path": "tests/evaluation/test_warehouse_compactcut_tasks.py",
-      "role": "reproducibility",
-      "contract": "Freeze compact-cut geometry, mandatory direction-balanced gate routing, independent diagnostic endpoints, distance gates and tamper-safe joint feasibility witnesses."
-    },
-    {
-      "path": "tests/evaluation/test_stride_warehouse_compactcut.py",
-      "role": "reproducibility",
-      "contract": "Freeze the exact Q0 registry, map-role separation, eight unique map hashes, 128 reset-only keys, identity audit, terminal failure and same-fingerprint resume contracts."
     },
     {
       "path": "experiments/mixed_full_v2_high_load_multiseed_v1.py",

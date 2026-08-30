@@ -48,5 +48,22 @@ git restore --source 36b1e98 -- path/to/file
 - `docs/STRIDE_SEED25_SAME_SET_PP_GCBS_SCREEN_V1_RESULT.md`
 - `docs/STRIDE_SEED25_SAME_SET_PP_GCBS_MULTISEED_V1_RESULT.md`
 
-Additional older hard-stop chains removed in later pruning stages are appended
-below rather than restoring executable research code.
+## Removed in pruning stage 2
+
+- Cross-map StructShell quick screen, offline profile and profile
+  falsification: the registered cross-map hypothesis was falsified and the
+  branch was stopped before promotion.
+- Warehouse CompactCut task generation and qualification: the registered gate
+  failed and the branch was stopped before controller or TTF evaluation.
+- CycleTransition: the label/readiness gate failed and no model or runtime
+  controller was produced.
+- PlatformEntry Frontier: stopped before training, runtime integration and TTF.
+- Seed25 restored-state replay diagnostic: retained only as mechanism evidence;
+  its follow-up same-set PP/GCBS screen also ended in a hard stop.
+
+Their result/protocol documents and registration configurations remain in the
+repository. Before pruning, eleven canonical local JSON reports were checked
+against the SHA-256 values recorded in those documents and all matched. The
+CompactCut document mentions an external tar archive that was not present in
+this workspace; recovery therefore relies on the Git backup and the retained
+canonical report/configuration evidence, not that missing archive.

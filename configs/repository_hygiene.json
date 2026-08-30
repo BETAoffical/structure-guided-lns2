@@ -20,32 +20,6 @@
     {
       "functions": [
         {
-          "path": "experiments/stride_cycletransition.py",
-          "name": "_mean"
-        },
-        {
-          "path": "experiments/stride_successor_repairability.py",
-          "name": "_mean"
-        }
-      ],
-      "reason": "Preserve the registered source identities of two completed, stopped diagnostic experiments while documenting their identical semantics-free helper."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_cycletransition.py",
-          "name": "_ranks"
-        },
-        {
-          "path": "experiments/stride_successor_repairability.py",
-          "name": "_ranks"
-        }
-      ],
-      "reason": "Preserve the registered source identities of two completed, stopped diagnostic experiments while documenting their identical average-rank helper."
-    },
-    {
-      "functions": [
-        {
           "path": "experiments/stride_successor_repairability.py",
           "name": "_manifest_index_sha256"
         },
