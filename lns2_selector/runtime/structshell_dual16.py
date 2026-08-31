@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import copy
 import json
 import time
 from typing import Any, Iterable
 
+from experiments.neighborhood_candidates import candidate_id
 from experiments.state_analysis import StateAnalysis
 from lns2_selector.runtime.hybridstructpool import (
     HybridStructPoolResult,
-    merge_hybridstructpool_candidates,
 )
 from lns2_selector.runtime.topology_candidates import (
     generate_structpool_candidate_subset,
@@ -15,7 +16,7 @@ from lns2_selector.runtime.topology_candidates import (
 
 
 STRUCTSHELL_DUAL16_POOL_ID = "stride-structshell-dual16-v1"
-STRUCTSHELL_DUAL16_RUNTIME_ID = "stride-structshell-dual16-runtime-v2"
+STRUCTSHELL_DUAL16_RUNTIME_ID = "stride-structshell-dual16-runtime-v3"
 
 _DUAL16_FAMILY_SIZES = {
     "conflict_component": [16],
@@ -134,6 +135,130 @@ def structshell_dual16_ablation_gate(
     }
 
 
+def _normalized_dual16_candidate(
+    row: dict[str, Any],
+) -> tuple[tuple[int, ...], str]:
+    agents = tuple(sorted(set(map(int, row.get("agents") or ()))))
+    if not agents:
+        raise ValueError("HybridStructPool candidates must contain agents")
+    identity = str(row.get("candidate_id") or "")
+    if identity != candidate_id(agents):
+        raise ValueError("HybridStructPool candidate identity does not match agents")
+    return agents, identity
+
+
+def _merge_structshell_dual16_candidates(
+    base_candidates: Iterable[dict[str, Any]],
+    structural_candidates: Iterable[dict[str, Any]],
+) -> HybridStructPoolResult:
+    """Merge the fixed Dual16 union without deep-copying the complete V2 pool.
+
+    Runtime consumers add provenance only at the candidate dictionary's top
+    level.  A shallow copy therefore forms the copy-on-write boundary for V2
+    rows while preserving every frozen nested value.  The at-most-two newly
+    generated structural rows retain the generic merge's full copy isolation.
+
+    Online V2 candidates are already ordered by candidate id, so the common
+    path is a linear merge.  The fallback sort preserves the generic merge
+    semantics for callers that provide an unordered iterable.
+    """
+
+    base = list(base_candidates)
+    structural = list(structural_candidates)
+    provenance: dict[tuple[int, ...], set[str]] = {}
+    candidate_id_by_agents: dict[tuple[int, ...], str] = {}
+    base_entries: list[tuple[str, tuple[int, ...], dict[str, Any]]] = []
+    structural_entries: list[tuple[str, tuple[int, ...], dict[str, Any]]] = []
+
+    seen_base: set[tuple[int, ...]] = set()
+    base_is_sorted = True
+    previous_identity: str | None = None
+    for row in base:
+        agents, identity = _normalized_dual16_candidate(row)
+        if agents in seen_base:
+            raise ValueError(
+                "HybridStructPool source contains duplicate sets: v2_base"
+            )
+        seen_base.add(agents)
+        provenance[agents] = {"v2_base"}
+        candidate_id_by_agents[agents] = identity
+        if previous_identity is not None and previous_identity > identity:
+            base_is_sorted = False
+        previous_identity = identity
+        # Downstream annotation writes only new top-level keys.  Copying the
+        # outer mapping is sufficient to keep the frozen V2 input untouched.
+        base_entries.append((identity, agents, dict(row)))
+
+    seen_structural: set[tuple[int, ...]] = set()
+    duplicate_count = 0
+    for row in structural:
+        agents, identity = _normalized_dual16_candidate(row)
+        if agents in seen_structural:
+            raise ValueError(
+                "HybridStructPool source contains duplicate sets: "
+                "structshell_equal_four_size"
+            )
+        seen_structural.add(agents)
+        provenance.setdefault(agents, set()).add(
+            "structshell_equal_four_size"
+        )
+        if agents in seen_base:
+            duplicate_count += 1
+            continue
+        candidate_id_by_agents[agents] = identity
+        structural_entries.append((identity, agents, copy.deepcopy(row)))
+
+    structural_entries.sort(key=lambda entry: entry[0])
+    if base_is_sorted:
+        merged_entries: list[
+            tuple[str, tuple[int, ...], dict[str, Any]]
+        ] = []
+        base_index = 0
+        structural_index = 0
+        while (
+            base_index < len(base_entries)
+            and structural_index < len(structural_entries)
+        ):
+            base_entry = base_entries[base_index]
+            structural_entry = structural_entries[structural_index]
+            if base_entry[0] <= structural_entry[0]:
+                merged_entries.append(base_entry)
+                base_index += 1
+            else:
+                merged_entries.append(structural_entry)
+                structural_index += 1
+        merged_entries.extend(base_entries[base_index:])
+        merged_entries.extend(structural_entries[structural_index:])
+    else:
+        merged_entries = sorted(
+            [*base_entries, *structural_entries], key=lambda entry: entry[0]
+        )
+
+    ordered = [entry[2] for entry in merged_entries]
+    provenance_by_id = {
+        candidate_id_by_agents[agents]: tuple(sorted(values))
+        for agents, values in sorted(
+            provenance.items(),
+            key=lambda item: candidate_id_by_agents[item[0]],
+        )
+    }
+    challengers = [
+        copy.deepcopy(row)
+        for _identity, agents, row in merged_entries
+        if "v2_base" not in provenance[agents]
+    ]
+    return HybridStructPoolResult(
+        candidates=ordered,
+        challengers=challengers,
+        provenance_by_candidate_id=provenance_by_id,
+        base_candidate_count=len(base),
+        structural_candidate_count=len(structural),
+        causal_candidate_count=0,
+        exact_duplicate_count=duplicate_count,
+        causal_attempts=[],
+    )
+
+
 def generate_structshell_dual16_runtime_candidates(
     state: dict[str, Any],
     analysis: StateAnalysis,
@@ -164,7 +289,7 @@ def generate_structshell_dual16_runtime_candidates(
     maximum_added = int(specification["maximum_added_candidates"])
     if len(structural) > maximum_added:
         raise RuntimeError("Dual16 StructShell generated more than two candidates")
-    result = merge_hybridstructpool_candidates(base, structural, [])
+    result = _merge_structshell_dual16_candidates(base, structural)
     if len(result.challengers) > maximum_added:
         raise RuntimeError("Dual16 StructShell retained more than two challengers")
     result.structural_generation_seconds = structural_seconds

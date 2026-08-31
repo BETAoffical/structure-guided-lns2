@@ -1838,6 +1838,54 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             generate_candidate_pool_attempt(effective_proposal)
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
+                        dual16_pre_realized: dict[str, Any] | None = None
+                        if hybridstructpool_gate_passed and str(
+                            hybridstructpool_runtime.get("pool_id")
+                        ) == STRUCTSHELL_DUAL16_POOL_ID:
+                            if topology_state_analysis is None:
+                                raise ClosedLoopExecutionError(
+                                    "hybridstructpool_analysis_missing",
+                                    "Dual16 gate passed without state analysis",
+                                )
+                            dual16_started = time.perf_counter()
+                            dual16_base_candidates = list(candidates)
+                            dual16_result = (
+                                _generate_fixed_structshell_runtime_candidates(
+                                    state,
+                                    topology_state_analysis,
+                                    v2_candidates=dual16_base_candidates,
+                                    config=hybridstructpool_runtime,
+                                )
+                            )
+                            if dual16_result is None:
+                                raise AssertionError(
+                                    "Dual16 runtime dispatch returned no candidate pool"
+                                )
+                            candidates = list(dual16_result.candidates)
+                            if len(candidates) > int(
+                                hybridstructpool_runtime[
+                                    "maximum_total_candidates"
+                                ]
+                            ):
+                                raise ClosedLoopExecutionError(
+                                    "hybridstructpool_candidate_cap_exceeded",
+                                    "Dual16 runtime exceeded its registered cap",
+                                    details={"candidate_count": len(candidates)},
+                                )
+                            for candidate in candidates:
+                                candidate["hybridstructpool_provenance"] = list(
+                                    dual16_result.provenance_by_candidate_id[
+                                        str(candidate["candidate_id"])
+                                    ]
+                                )
+                            dual16_pre_realized = {
+                                "base_candidates": dual16_base_candidates,
+                                "result": dual16_result,
+                                "started": dual16_started,
+                                "generation_seconds": (
+                                    time.perf_counter() - dual16_started
+                                ),
+                            }
                         if controller_mode == "official_adaptive":
                             feature_started = time.perf_counter()
                             candidate_rows = online_candidate_rows(
@@ -1923,6 +1971,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     )
                                 )
                             )
+                        if dual16_pre_realized is not None:
+                            dual16_pre_realized["seconds"] = (
+                                time.perf_counter()
+                                - float(dual16_pre_realized["started"])
+                            )
                         if hybridstructpool_runtime:
                             proposal_metrics.update(
                                 {
@@ -1983,28 +2036,54 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         "hybridstructpool_feature_engine_missing",
                                         "HybridStructPool requires realized V2 features",
                                     )
-                                hybrid_started = time.perf_counter()
-                                base_candidates = list(candidates)
-                                base_candidate_rows = list(candidate_rows)
                                 hybrid_pool_id = str(
                                     hybridstructpool_runtime.get("pool_id")
                                 )
                                 v2_anchor_index: int | None = None
+                                single_union_feature_batch = (
+                                    hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID
+                                )
                                 if hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
-                                    fixed_structshell_result = (
-                                        _generate_fixed_structshell_runtime_candidates(
-                                            state,
-                                            topology_state_analysis,
-                                            v2_candidates=base_candidates,
-                                            config=hybridstructpool_runtime,
-                                        )
-                                    )
-                                    if fixed_structshell_result is None:
+                                    if dual16_pre_realized is None:
                                         raise AssertionError(
-                                            "Dual16 runtime dispatch returned no candidate pool"
+                                            "Dual16 final union was not prepared before features"
                                         )
-                                    hybrid_result = fixed_structshell_result
+                                    hybrid_result = dual16_pre_realized["result"]
+                                    if not isinstance(
+                                        hybrid_result, HybridStructPoolResult
+                                    ):
+                                        raise AssertionError(
+                                            "Dual16 prepared result has the wrong type"
+                                        )
+                                    base_candidates = list(
+                                        dual16_pre_realized["base_candidates"]
+                                    )
+                                    if [
+                                        str(candidate["candidate_id"])
+                                        for candidate in candidates
+                                    ] != [
+                                        str(candidate["candidate_id"])
+                                        for candidate in hybrid_result.candidates
+                                    ]:
+                                        raise AssertionError(
+                                            "Dual16 candidate union changed during feature fill"
+                                        )
+                                    hybrid_generation_seconds = float(
+                                        dual16_pre_realized["generation_seconds"]
+                                    )
+                                    hybrid_seconds = float(
+                                        dual16_pre_realized["seconds"]
+                                    )
+                                    base_rows_by_id: dict[
+                                        str, dict[str, Any]
+                                    ] = {}
+                                    challenger_candidates = list(
+                                        hybrid_result.challengers
+                                    )
                                 else:
+                                    hybrid_started = time.perf_counter()
+                                    base_candidates = list(candidates)
+                                    base_candidate_rows = list(candidate_rows)
                                     (
                                         v2_anchor_index,
                                         _v2_anchor_scores,
@@ -2058,68 +2137,75 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             ]
                                         ),
                                     )
-                                candidates = list(hybrid_result.candidates)
-                                if len(candidates) > int(
-                                    hybridstructpool_runtime[
-                                        "maximum_total_candidates"
-                                    ]
-                                ):
-                                    raise ClosedLoopExecutionError(
-                                        "hybridstructpool_candidate_cap_exceeded",
-                                        "HybridStructPool runtime exceeded its registered cap",
-                                        details={"candidate_count": len(candidates)},
+                                if not single_union_feature_batch:
+                                    candidates = list(hybrid_result.candidates)
+                                    if len(candidates) > int(
+                                        hybridstructpool_runtime[
+                                            "maximum_total_candidates"
+                                        ]
+                                    ):
+                                        raise ClosedLoopExecutionError(
+                                            "hybridstructpool_candidate_cap_exceeded",
+                                            "HybridStructPool runtime exceeded its registered cap",
+                                            details={"candidate_count": len(candidates)},
+                                        )
+                                    for candidate in candidates:
+                                        candidate[
+                                            "hybridstructpool_provenance"
+                                        ] = list(
+                                            hybrid_result.provenance_by_candidate_id[
+                                                str(candidate["candidate_id"])
+                                            ]
+                                        )
+                                    hybrid_generation_seconds = (
+                                        time.perf_counter() - hybrid_started
                                     )
-                                for candidate in candidates:
-                                    candidate["hybridstructpool_provenance"] = list(
-                                        hybrid_result.provenance_by_candidate_id[
+                                    base_rows_by_id = {
+                                        str(candidate["candidate_id"]): row
+                                        for candidate, row in zip(
+                                            base_candidates, base_candidate_rows
+                                        )
+                                    }
+                                    challenger_candidates = [
+                                        candidate
+                                        for candidate in candidates
+                                        if str(candidate["candidate_id"])
+                                        not in base_rows_by_id
+                                    ]
+                                    if challenger_candidates:
+                                        (
+                                            challenger_rows,
+                                            hybrid_feature_metrics,
+                                        ) = feature_engine.realized_rows(
+                                            challenger_candidates,
+                                            state_hash=before_hash,
+                                        )
+                                    else:
+                                        challenger_rows = []
+                                        hybrid_feature_metrics = {}
+                                    challenger_rows_by_id = {
+                                        str(candidate["candidate_id"]): row
+                                        for candidate, row in zip(
+                                            challenger_candidates, challenger_rows
+                                        )
+                                    }
+                                    candidate_rows = [
+                                        base_rows_by_id.get(
+                                            str(candidate["candidate_id"])
+                                        )
+                                        or challenger_rows_by_id[
                                             str(candidate["candidate_id"])
                                         ]
-                                    )
-                                hybrid_generation_seconds = (
-                                    time.perf_counter() - hybrid_started
-                                )
-                                base_rows_by_id = {
-                                    str(candidate["candidate_id"]): row
-                                    for candidate, row in zip(
-                                        base_candidates, base_candidate_rows
-                                    )
-                                }
-                                challenger_candidates = [
-                                    candidate
-                                    for candidate in candidates
-                                    if str(candidate["candidate_id"])
-                                    not in base_rows_by_id
-                                ]
-                                if challenger_candidates:
-                                    (
-                                        challenger_rows,
-                                        hybrid_feature_metrics,
-                                    ) = feature_engine.realized_rows(
-                                        challenger_candidates,
-                                        state_hash=before_hash,
-                                    )
-                                else:
-                                    challenger_rows = []
-                                    hybrid_feature_metrics = {}
-                                challenger_rows_by_id = {
-                                    str(candidate["candidate_id"]): row
-                                    for candidate, row in zip(
-                                        challenger_candidates, challenger_rows
-                                    )
-                                }
-                                candidate_rows = [
-                                    base_rows_by_id.get(str(candidate["candidate_id"]))
-                                    or challenger_rows_by_id[
-                                        str(candidate["candidate_id"])
+                                        for candidate in candidates
                                     ]
-                                    for candidate in candidates
-                                ]
-                                hybrid_seconds = time.perf_counter() - hybrid_started
-                                feature_seconds += sum(
-                                    float(value)
-                                    for key, value in hybrid_feature_metrics.items()
-                                    if key.endswith("_seconds")
-                                )
+                                    hybrid_seconds = (
+                                        time.perf_counter() - hybrid_started
+                                    )
+                                    feature_seconds += sum(
+                                        float(value)
+                                        for key, value in hybrid_feature_metrics.items()
+                                        if key.endswith("_seconds")
+                                    )
                                 proposal_metrics.update(
                                     {
                                         "hybridstructpool_full_union_required": bool(
@@ -2137,11 +2223,21 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                                 "runtime_filter_id"
                                             ]
                                         ),
-                                        "hybridstructpool_reused_base_feature_count": len(
-                                            base_rows_by_id
+                                        "hybridstructpool_reused_base_feature_count": (
+                                            0
+                                            if single_union_feature_batch
+                                            else len(base_rows_by_id)
                                         ),
                                         "hybridstructpool_computed_challenger_feature_count": len(
                                             challenger_candidates
+                                        ),
+                                        "hybridstructpool_single_union_feature_batch": (
+                                            single_union_feature_batch
+                                        ),
+                                        "hybridstructpool_computed_union_feature_count": (
+                                            len(candidate_rows)
+                                            if single_union_feature_batch
+                                            else 0
                                         ),
                                         "hybridstructpool_v2_anchor_candidate_id": (
                                             str(

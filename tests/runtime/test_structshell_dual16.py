@@ -8,6 +8,9 @@ from experiments.closed_loop_confirmation import (
     _generate_fixed_structshell_runtime_candidates,
 )
 from experiments.neighborhood_candidates import candidate_id
+from lns2_selector.runtime.hybridstructpool import (
+    merge_hybridstructpool_candidates,
+)
 from lns2_selector.runtime.hybridstructpool_routed import (
     validate_any_hybridstructpool_augmentation,
 )
@@ -40,7 +43,7 @@ class StructShellDual16Test(unittest.TestCase):
     def test_exact_registered_contract(self) -> None:
         self.assertEqual(
             STRUCTSHELL_DUAL16_RUNTIME_ID,
-            "stride-structshell-dual16-runtime-v2",
+            "stride-structshell-dual16-runtime-v3",
         )
         expected = {
             "enabled": True,
@@ -118,6 +121,151 @@ class StructShellDual16Test(unittest.TestCase):
         self.assertEqual(result.structural_candidate_count, 2)
         self.assertEqual(result.causal_candidate_count, 0)
         self.assertEqual(result.causal_generation_seconds, 0.0)
+
+    @patch(
+        "lns2_selector.runtime.structshell_dual16."
+        "generate_structpool_candidate_subset"
+    )
+    def test_specialized_merge_matches_generic_contract(self, subset_mock) -> None:
+        # Exercise the unordered fallback, a base-wins exact-set tie, and one
+        # retained challenger in a single equivalence case.
+        base = [
+            _candidate([8, 9], "v2"),
+            _candidate([0, 1], "v2"),
+            _candidate([4, 5], "v2"),
+        ]
+        structural = [
+            _candidate([4, 5], "conflict_component"),
+            _candidate([2, 3], "spatiotemporal_hotspot"),
+        ]
+        frozen_base = copy.deepcopy(base)
+        frozen_structural = copy.deepcopy(structural)
+        subset_mock.return_value = structural
+
+        actual = generate_structshell_dual16_runtime_candidates(
+            {"agents": [{"id": index} for index in range(10)]},
+            object(),  # type: ignore[arg-type]
+            v2_candidates=base,
+            config=structshell_dual16_augmentation(),
+        )
+        expected = merge_hybridstructpool_candidates(base, structural, [])
+
+        self.assertEqual(actual.candidates, expected.candidates)
+        self.assertEqual(actual.challengers, expected.challengers)
+        self.assertEqual(
+            actual.provenance_by_candidate_id,
+            expected.provenance_by_candidate_id,
+        )
+        self.assertEqual(actual.base_candidate_count, expected.base_candidate_count)
+        self.assertEqual(
+            actual.structural_candidate_count,
+            expected.structural_candidate_count,
+        )
+        self.assertEqual(actual.causal_candidate_count, 0)
+        self.assertEqual(actual.exact_duplicate_count, 1)
+        self.assertEqual(
+            [row["candidate_id"] for row in actual.candidates],
+            sorted(row["candidate_id"] for row in actual.candidates),
+        )
+        tied_id = candidate_id([4, 5])
+        tied = next(
+            row for row in actual.candidates if row["candidate_id"] == tied_id
+        )
+        self.assertEqual(tied, frozen_base[2])
+        self.assertEqual(
+            actual.provenance_by_candidate_id[tied_id],
+            ("structshell_equal_four_size", "v2_base"),
+        )
+        self.assertNotIn(
+            tied_id,
+            {row["candidate_id"] for row in actual.challengers},
+        )
+        self.assertEqual(base, frozen_base)
+        self.assertEqual(structural, frozen_structural)
+
+    @patch(
+        "lns2_selector.runtime.structshell_dual16."
+        "generate_structpool_candidate_subset"
+    )
+    def test_sorted_base_linear_merge_matches_generic_contract(
+        self, subset_mock
+    ) -> None:
+        base = sorted(
+            [
+                _candidate([0, 1], "v2"),
+                _candidate([4, 5], "v2"),
+                _candidate([8, 9], "v2"),
+            ],
+            key=lambda row: row["candidate_id"],
+        )
+        structural = [
+            _candidate([4, 5], "conflict_component"),
+            _candidate([2, 3], "spatiotemporal_hotspot"),
+        ]
+        subset_mock.return_value = structural
+
+        actual = generate_structshell_dual16_runtime_candidates(
+            {"agents": [{"id": index} for index in range(10)]},
+            object(),  # type: ignore[arg-type]
+            v2_candidates=base,
+            config=structshell_dual16_augmentation(),
+        )
+        expected = merge_hybridstructpool_candidates(base, structural, [])
+
+        self.assertEqual(actual.candidates, expected.candidates)
+        self.assertEqual(actual.challengers, expected.challengers)
+        self.assertEqual(
+            actual.provenance_by_candidate_id,
+            expected.provenance_by_candidate_id,
+        )
+        self.assertEqual(actual.base_candidate_count, expected.base_candidate_count)
+        self.assertEqual(
+            actual.structural_candidate_count,
+            expected.structural_candidate_count,
+        )
+        self.assertEqual(actual.causal_candidate_count, expected.causal_candidate_count)
+        self.assertEqual(actual.exact_duplicate_count, 1)
+        self.assertEqual(actual.causal_attempts, expected.causal_attempts)
+        self.assertEqual(
+            [row["candidate_id"] for row in actual.candidates],
+            sorted(row["candidate_id"] for row in actual.candidates),
+        )
+        self.assertEqual(
+            [row["candidate_id"] for row in actual.challengers],
+            [candidate_id([2, 3])],
+        )
+
+    @patch(
+        "lns2_selector.runtime.structshell_dual16."
+        "generate_structpool_candidate_subset"
+    )
+    def test_v2_rows_are_not_recursively_copied(self, subset_mock) -> None:
+        base = [_candidate([index, index + 100], "v2") for index in range(32)]
+        structural = [_candidate([200, 201], "conflict_component")]
+        subset_mock.return_value = structural
+
+        with patch(
+            "lns2_selector.runtime.structshell_dual16.copy.deepcopy",
+            wraps=copy.deepcopy,
+        ) as deepcopy_mock:
+            result = generate_structshell_dual16_runtime_candidates(
+                {"agents": [{"id": index} for index in range(202)]},
+                object(),  # type: ignore[arg-type]
+                v2_candidates=base,
+                config=structshell_dual16_augmentation(),
+            )
+
+        self.assertEqual(deepcopy_mock.call_count, 2)
+        self.assertTrue(
+            all(call.args[0] not in base for call in deepcopy_mock.call_args_list)
+        )
+        for candidate in result.candidates:
+            candidate["hybridstructpool_provenance"] = list(
+                result.provenance_by_candidate_id[candidate["candidate_id"]]
+            )
+        self.assertTrue(
+            all("hybridstructpool_provenance" not in row for row in base)
+        )
 
     @patch(
         "lns2_selector.runtime.structshell_dual16."
