@@ -106,13 +106,6 @@ from lns2_selector.evaluation.trace_validation import (
     validate_closed_loop_trace,
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
-from lns2_selector.runtime.bounded_native_retry import (
-    BoundedNativeRetryTracker,
-    merged_retry_metrics,
-)
-from lns2_selector.runtime.failure_informed_rescue import (
-    FailureInformedRescueTracker,
-)
 from lns2_selector.runtime.hybridstructpool import (
     HybridStructPoolResult,
     generate_hybridstructpool_runtime_candidates,
@@ -123,9 +116,6 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     generate_routed_hybridstructpool_runtime_candidates,
     routed_hybridstructpool_high_stress_gate,
     validate_any_hybridstructpool_augmentation,
-)
-from lns2_selector.runtime.signature_scoped_rescue import (
-    SignatureScopedRescueTracker,
 )
 from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
@@ -154,10 +144,6 @@ from lns2_selector.runtime.online_selection import (
     validate_repair_seed_policy,
     validate_structpool_augmentation,
     validate_topology_boundary_augmentation,
-)
-from lns2_selector.runtime.slotpool_selection import (
-    load_slotpool_model,
-    reduce_slotpool_candidates,
 )
 from lns2_selector.solver.native import load_native_module
 from lns2_selector.training.policy_bundle import (
@@ -193,26 +179,34 @@ def _validate_wall_clock_replan_algorithm(
         )
 
 
-def _validate_v3_s3_episode_overrides(
-    controller_mode: str,
-    episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]],
-) -> None:
-    """Keep stateful V3-S3 actions one-select/one-step/one-observe."""
-
-    if controller_mode != "v3-s3":
-        return
-    incompatible = (
-        "forced_first_action",
+_RETIRED_EPISODE_OVERRIDE_KEYS = frozenset(
+    {
         "bounded_native_retry",
         "failure_informed_rescue",
         "signature_scoped_rescue",
-    )
+    }
+)
+
+
+def _validate_episode_overrides(
+    controller_mode: str,
+    episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> None:
+    """Reject retired repair overrides and protect the V3-S3 lifecycle."""
+
     for key, override in episode_overrides.items():
-        enabled = [name for name in incompatible if override.get(name)]
-        if enabled:
+        retired = sorted(
+            name for name in _RETIRED_EPISODE_OVERRIDE_KEYS if name in override
+        )
+        if retired:
+            raise ValueError(
+                "retired closed-loop episode overrides are not executable for "
+                f"{key[0]} seed {key[1]}: {', '.join(retired)}"
+            )
+        if controller_mode == "v3-s3" and override.get("forced_first_action"):
             raise ValueError(
                 "v3-s3 is incompatible with action overrides for "
-                f"{key[0]} seed {key[1]}: {', '.join(enabled)}"
+                f"{key[0]} seed {key[1]}: forced_first_action"
             )
 
 
@@ -997,13 +991,6 @@ def _emit(stream: Any, row: dict[str, Any]) -> float:
     return time.perf_counter() - started
 
 
-def _pool_runtime_modes(value: dict[str, Any] | None) -> tuple[bool, bool]:
-    config = dict(value or {})
-    slotpool = config.get("pool_id") == "stride-slotpool-v1"
-    guardpool = bool(slotpool and config.get("stall_guard"))
-    return slotpool, guardpool
-
-
 def _load_initial_restore_source(
     initial_restore: Mapping[str, Any],
     row: Mapping[str, Any],
@@ -1124,15 +1111,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     episode_override = dict(job.get("episode_override") or {})
     initial_restore = dict(episode_override.get("initial_restore") or {})
     forced_first_action = dict(episode_override.get("forced_first_action") or {})
-    bounded_native_retry = dict(
-        episode_override.get("bounded_native_retry") or {}
-    )
-    failure_informed_rescue = dict(
-        episode_override.get("failure_informed_rescue") or {}
-    )
-    signature_scoped_rescue = dict(
-        episode_override.get("signature_scoped_rescue") or {}
-    )
     pp_replay_seed_salt = episode_override.get("pp_replay_seed_salt")
     if pp_replay_seed_salt is not None and (
         not isinstance(pp_replay_seed_salt, str) or not pp_replay_seed_salt
@@ -1149,29 +1127,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     ) = _load_initial_restore_source(initial_restore, row)
     if forced_first_action and not initial_restore:
         raise ValueError("forced first action requires an initial restored state")
-    if bounded_native_retry and not initial_restore:
-        raise ValueError("bounded native retry requires an initial restored state")
-    if failure_informed_rescue and not initial_restore:
-        raise ValueError(
-            "failure-informed rescue requires an initial restored state"
-        )
-    if signature_scoped_rescue and not initial_restore:
-        raise ValueError(
-            "signature-scoped rescue requires an initial restored state"
-        )
-    enabled_repair_overrides = sum(
-        bool(value)
-        for value in (
-            bounded_native_retry,
-            failure_informed_rescue,
-            signature_scoped_rescue,
-        )
-    )
-    if enabled_repair_overrides > 1:
-        raise ValueError(
-            "bounded retry, failure-informed rescue, and signature-scoped rescue "
-            "are mutually exclusive"
-        )
     if forced_first_action:
         if (
             str(forced_first_action.get("mode")) != "explicit_neighborhood"
@@ -1206,7 +1161,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
         require_pairwise_bundle_identity(
             controller_mode, pairwise_controller_bundle.manifest
         )
-    _validate_v3_s3_episode_overrides(
+    _validate_episode_overrides(
         controller_mode,
         {(str(row["task_id"]), solver_seed): episode_override},
     )
@@ -1245,23 +1200,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError(
             "HybridStructPool requires a realized_dynamic v2-full episode"
-        )
-    slotpool_runtime_enabled, guardpool_runtime_enabled = _pool_runtime_modes(
-        structpool_runtime_config
-    )
-    slotpool_model_payload: dict[str, Any] | None = None
-    if slotpool_runtime_enabled:
-        if policy != "realized_dynamic" or controller_mode != "v2-full":
-            raise ValueError(
-                "SlotPool/GuardPool requires a realized_dynamic v2-full episode"
-            )
-        model_registration = dict(structpool_runtime_config["slotpool_model"])
-        model_path = Path(str(model_registration["path"]))
-        if not model_path.is_absolute():
-            model_path = Path(__file__).resolve().parents[1] / model_path
-        slotpool_model_payload = load_slotpool_model(
-            model_path,
-            expected_sha256=str(model_registration["sha256"]),
         )
     if policy in LEARNED_POLICIES:
         bundle = load_frozen_policy_bundle(job["frozen_models"], job["model_registration"])
@@ -1438,23 +1376,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             budget_final_sum_of_costs = int(state["sum_of_costs"])
             budget_final_low_level = dict(state["low_level"])
             repair_iterations_within_budget = 0
-            native_retry_tracker = (
-                BoundedNativeRetryTracker.from_spec(state, bounded_native_retry)
-                if bounded_native_retry
-                else None
-            )
-            failure_rescue_tracker = (
-                FailureInformedRescueTracker.from_spec(failure_informed_rescue)
-                if failure_informed_rescue
-                else None
-            )
-            signature_rescue_tracker = (
-                SignatureScopedRescueTracker.from_spec(
-                    state, signature_scoped_rescue
-                )
-                if signature_scoped_rescue
-                else None
-            )
             initial_event = {
                 "schema": EPISODE_SCHEMA,
                 "schema_version": SCHEMA_VERSION,
@@ -1510,21 +1431,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             else None
                         ),
                         "forced_first_action": bool(forced_first_action),
-                        "bounded_native_retry": (
-                            native_retry_tracker.summary()
-                            if native_retry_tracker is not None
-                            else None
-                        ),
-                        "failure_informed_rescue": (
-                            failure_rescue_tracker.summary()
-                            if failure_rescue_tracker is not None
-                            else None
-                        ),
-                        "signature_scoped_rescue": (
-                            signature_rescue_tracker.summary()
-                            if signature_rescue_tracker is not None
-                            else None
-                        ),
                     }
                     if episode_override
                     else None
@@ -1578,10 +1484,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     set(v3_s3_bundle.required_feature_names)
                     & set(PROFILE_FEATURE_NAMES["realized_dynamic"])
                 )
-            if slotpool_runtime_enabled:
-                required_model_features.update(
-                    PROFILE_FEATURE_NAMES["realized_dynamic"]
-                )
 
             def make_feature_engine(current_state: dict[str, Any]) -> OnlineFeatureEngine:
                 return OnlineFeatureEngine(
@@ -1604,7 +1506,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             topology_pending_changed_agents: set[int] = set()
             pending_changed_agents: set[int] = set()
             no_progress_streak = 0
-            guard_was_active = False
             previous_route: str | None = None
             v3_s3_selector = (
                 V3S3Selector(v3_s3_bundle)
@@ -1649,136 +1550,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 )
                 decision_index = len(conflicts) - 1
                 controller: dict[str, Any] = {}
-                rescue_override = (
-                    failure_rescue_tracker.action_for_decision(
-                        decision_index, state
-                    )
-                    if failure_rescue_tracker is not None
-                    else None
-                )
-                signature_rescue_override = (
-                    signature_rescue_tracker.action_for_decision(
-                        decision_index, state
-                    )
-                    if signature_rescue_tracker is not None
-                    else None
-                )
-                if rescue_override is not None and signature_rescue_override is not None:
-                    raise ValueError("multiple deferred rescue actions were scheduled")
-                if signature_rescue_override is not None:
-                    rescue_override = signature_rescue_override
-                signature_scoped_action = signature_rescue_override is not None
                 force_this_action = bool(
                     forced_first_action and decision_index == 0
                 )
                 route = "model" if policy in LEARNED_POLICIES else "official_adaptive"
                 route_started = time.perf_counter()
                 pre_step_orchestration_seconds = route_started - iteration_started
-                if rescue_override is not None:
-                    route = "model"
-                    rescue_agents = list(map(int, rescue_override["agents"]))
-                    rescue_seed = int(rescue_override["pp_random_seed"])
-                    action = {
-                        "mode": "explicit_neighborhood",
-                        "agents": rescue_agents,
-                        "random_seed": rescue_seed,
-                        "pp_random_seed": rescue_seed,
-                        "collect_pp_diagnostics": True,
-                    }
-                    controller_seconds_before_repair = (
-                        time.perf_counter() - route_started
-                    )
-                    rescue_mode = str(rescue_override["mode"])
-                    rescue_prefix = (
-                        "signature-scoped-rescue"
-                        if signature_scoped_action
-                        else "failure-informed-rescue"
-                    )
-                    rescue_family = f"{rescue_prefix}:{rescue_mode}"
-                    rescue_candidate_id = _fingerprint(
-                        {
-                            "state": before_hash,
-                            "decision_index": decision_index,
-                            "mode": rescue_mode,
-                            "agents": rescue_agents,
-                        }
-                    )
-                    controller.update(
-                        {
-                            "controller_mode": controller_mode,
-                            "controller_runtime": controller_runtime,
-                            "verification_profile": verification_profile,
-                            "route": route,
-                            "route_conflicts": int(state["num_of_colliding_pairs"]),
-                            "route_conflict_threshold": None,
-                            "forced_first_action": False,
-                            "failure_informed_rescue_action": (
-                                not signature_scoped_action
-                            ),
-                            "signature_scoped_rescue_action": signature_scoped_action,
-                            "forced_candidate_role": rescue_mode,
-                            "selected_candidate_id": rescue_candidate_id,
-                            "candidate_pool": [
-                                {
-                                    "candidate_id": rescue_candidate_id,
-                                    "agents": rescue_agents,
-                                    "actual_size": len(rescue_agents),
-                                    "selection_families": [rescue_family],
-                                    "failure_informed_rescue_action": (
-                                        not signature_scoped_action
-                                    ),
-                                    "signature_scoped_rescue_action": (
-                                        signature_scoped_action
-                                    ),
-                                    "selected_blockers": list(
-                                        map(
-                                            int,
-                                            rescue_override.get(
-                                                "selected_blockers"
-                                            )
-                                            or (),
-                                        )
-                                    ),
-                                    "removed_agents": list(
-                                        map(
-                                            int,
-                                            rescue_override.get("removed_agents")
-                                            or (),
-                                        )
-                                    ),
-                                    "compact_plan": dict(
-                                        rescue_override.get("compact_plan") or {}
-                                    ),
-                                }
-                            ],
-                            "controller_seconds_before_repair": (
-                                controller_seconds_before_repair
-                            ),
-                            "candidate_generation_seconds": 0.0,
-                            "state_check_seconds": 0.0,
-                            "state_check_fingerprint_seconds": 0.0,
-                            "state_analysis_seconds": 0.0,
-                            "proposal_feature_seconds": 0.0,
-                            "realized_feature_seconds": 0.0,
-                            "ranking_inference_seconds": 0.0,
-                            "selection_residual_seconds": (
-                                controller_seconds_before_repair
-                            ),
-                        }
-                    )
-                    selected_sizes[len(rescue_agents)] += 1
-                    selected_families[rescue_family] += 1
-                    controller_totals[
-                        (
-                            "signature_scoped_rescue_action_count"
-                            if signature_scoped_action
-                            else "failure_informed_rescue_action_count"
-                        )
-                    ] += 1
-                    controller_totals["controller_seconds_before_repair"] += (
-                        controller_seconds_before_repair
-                    )
-                elif force_this_action:
+                if force_this_action:
                     route = "model"
                     action = dict(forced_first_action)
                     controller_seconds_before_repair = (
@@ -1897,9 +1675,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     realized_feature_metrics = {"realized_feature_seconds": 0.0}
                     proposal_rows: list[dict[str, Any]] | None = None
                     state_analysis_seconds = 0.0
-                    slotpool_raw_candidates: list[dict[str, Any]] | None = None
-                    slotpool_raw_candidate_rows: list[dict[str, Any]] | None = None
-                    slotpool_retained_raw_indices: list[int] | None = None
                     if cache_hit:
                         assert stateful_cache is not None
                         candidates = stateful_cache["candidates"]
@@ -1950,51 +1725,11 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         hybridstructpool_runtime = dict(
                             effective_proposal.get("hybridstructpool") or {}
                         )
-                        guard_config = dict(
-                            structpool_runtime.get("stall_guard") or {}
-                        )
-                        guard_active_for_decision = bool(
-                            guard_config
-                            and no_progress_streak
-                            >= int(guard_config["no_progress_limit"])
-                        )
-                        guard_triggered_now = bool(
-                            guard_active_for_decision
-                            and not guard_was_active
-                        )
-                        guard_released_now = bool(
-                            guard_was_active and not guard_active_for_decision
-                        )
-                        conflict_signature = (
-                            _fingerprint(
-                                {
-                                    "conflict_pairs": int(
-                                        state["num_of_colliding_pairs"]
-                                    ),
-                                    "conflict_edges": sorted(
-                                        tuple(sorted(map(int, edge)))
-                                        for edge in state.get("conflict_edges", [])
-                                    ),
-                                }
-                            )
-                            if guardpool_runtime_enabled
-                            else None
-                        )
-                        guard_was_active = guard_active_for_decision
                         structpool_gate_result = (
                             structpool_high_stress_gate(state, structpool_runtime)
                             if structpool_runtime
                             else None
                         )
-                        if (
-                            structpool_gate_result is not None
-                            and guard_active_for_decision
-                        ):
-                            structpool_gate_result = {
-                                **structpool_gate_result,
-                                "passed": False,
-                                "reason": "stall_guard_active",
-                            }
                         structpool_gate_passed = bool(
                             structpool_gate_result
                             and structpool_gate_result["passed"]
@@ -2101,16 +1836,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
 
                         candidates, proposal_metrics = (
                             generate_candidate_pool_attempt(effective_proposal)
-                        )
-                        proposal_metrics.update(
-                            {
-                                "guardpool_enabled": guardpool_runtime_enabled,
-                                "guardpool_no_progress_streak": no_progress_streak,
-                                "guardpool_active": guard_active_for_decision,
-                                "guardpool_triggered": guard_triggered_now,
-                                "guardpool_released": guard_released_now,
-                                "guardpool_conflict_signature": conflict_signature,
-                            }
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
                         if controller_mode == "official_adaptive":
@@ -2477,138 +2202,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     "hybridstructpool_gate_seconds": 0.0,
                                 }
                             )
-                        if (
-                            slotpool_model_payload is not None
-                            and bool(
-                                proposal_metrics.get(
-                                    "slotpool_reduction_pending", False
-                                )
-                            )
-                        ):
-                            slotpool_raw_candidates = list(candidates)
-                            slotpool_raw_candidate_rows = list(candidate_rows)
-                            base_raw_indices = [
-                                index
-                                for index, candidate in enumerate(candidates)
-                                if not bool(
-                                    candidate.get("structpool_family_groups")
-                                )
-                            ]
-                            if not base_raw_indices:
-                                raise ClosedLoopExecutionError(
-                                    "slotpool_missing_v2_base_pool",
-                                    "SlotPool runtime produced no V2 base candidates",
-                                )
-                            slotpool_started = time.perf_counter()
-                            (
-                                v2_anchor_base_index,
-                                v2_base_scores,
-                                _,
-                            ) = score_online_candidates(
-                                [candidate_rows[index] for index in base_raw_indices],
-                                runtime_models[policy],
-                            )
-                            v2_anchor_raw_index = base_raw_indices[
-                                v2_anchor_base_index
-                            ]
-                            v2_anchor_seconds = time.perf_counter() - slotpool_started
-                            slotpool_rank_started = time.perf_counter()
-                            slotpool_result = reduce_slotpool_candidates(
-                                candidates=candidates,
-                                candidate_rows=candidate_rows,
-                                model_payload=slotpool_model_payload,
-                                v2_anchor_index=v2_anchor_raw_index,
-                                maximum_challengers=int(
-                                    structpool_runtime_config[
-                                        "maximum_slotpool_candidates"
-                                    ]
-                                ),
-                            )
-                            slotpool_rank_seconds = (
-                                time.perf_counter() - slotpool_rank_started
-                            )
-                            slotpool_retained_raw_indices = list(
-                                map(int, slotpool_result["retained_indices"])
-                            )
-                            retained_raw_set = set(slotpool_retained_raw_indices)
-                            dropped_candidate_ids = [
-                                str(candidate["candidate_id"])
-                                for index, candidate in enumerate(candidates)
-                                if index not in retained_raw_set
-                            ]
-                            candidates = [
-                                candidates[index]
-                                for index in slotpool_retained_raw_indices
-                            ]
-                            candidate_rows = [
-                                candidate_rows[index]
-                                for index in slotpool_retained_raw_indices
-                            ]
-                            slotpool_total_seconds = (
-                                v2_anchor_seconds + slotpool_rank_seconds
-                            )
-                            proposal_metrics.update(
-                                {
-                                    "raw_candidate_count": len(
-                                        slotpool_raw_candidates
-                                    ),
-                                    "candidate_count": len(candidates),
-                                    "slotpool_reduction_applied": True,
-                                    "slotpool_raw_structural_candidate_count": int(
-                                        slotpool_result[
-                                            "raw_structural_candidate_count"
-                                        ]
-                                    ),
-                                    "slotpool_selected_structural_candidate_count": len(
-                                        slotpool_result[
-                                            "selected_structural_indices"
-                                        ]
-                                    ),
-                                    "slotpool_selected_candidate_ids": list(
-                                        slotpool_result["selected_candidate_ids"]
-                                    ),
-                                    "slotpool_selected_scores": list(
-                                        slotpool_result["selected_scores"]
-                                    ),
-                                    "slotpool_dropped_candidate_ids": (
-                                        dropped_candidate_ids
-                                    ),
-                                    "slotpool_v2_anchor_candidate_id": str(
-                                        slotpool_result[
-                                            "v2_anchor_candidate_id"
-                                        ]
-                                    ),
-                                    "slotpool_v2_anchor_score": float(
-                                        v2_base_scores[v2_anchor_base_index]
-                                    ),
-                                    "slotpool_v2_anchor_inference_seconds": (
-                                        v2_anchor_seconds
-                                    ),
-                                    "slotpool_ranking_inference_seconds": (
-                                        slotpool_rank_seconds
-                                    ),
-                                    "slotpool_total_inference_seconds": (
-                                        slotpool_total_seconds
-                                    ),
-                                }
-                            )
-                        else:
-                            proposal_metrics.update(
-                                {
-                                    "raw_candidate_count": len(candidates),
-                                    "slotpool_reduction_applied": False,
-                                    "slotpool_raw_structural_candidate_count": 0,
-                                    "slotpool_selected_structural_candidate_count": 0,
-                                    "slotpool_selected_candidate_ids": [],
-                                    "slotpool_selected_scores": [],
-                                    "slotpool_dropped_candidate_ids": [],
-                                    "slotpool_v2_anchor_candidate_id": None,
-                                    "slotpool_v2_anchor_score": None,
-                                    "slotpool_v2_anchor_inference_seconds": 0.0,
-                                    "slotpool_ranking_inference_seconds": 0.0,
-                                    "slotpool_total_inference_seconds": 0.0,
-                                }
-                            )
                         if v3_s3_state is not None:
                             selected_local_index = 0
                             scores = [0.0] * len(candidate_rows)
@@ -2646,11 +2239,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             inference_seconds = (
                                 time.perf_counter() - inference_started
                             )
-                        inference_seconds += float(
-                            proposal_metrics.get(
-                                "slotpool_total_inference_seconds", 0.0
-                            )
-                        )
                         if stateful_controller is not None:
                             stateful_cache = {
                                 "key": cache_key,
@@ -2667,23 +2255,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     if bool(job.get("feature_shadow_validation", False)):
                         assert feature_engine is not None
                         shadow_rows = feature_engine.last_shadow_rows.get(policy)
-                        if (
-                            shadow_rows is not None
-                            and slotpool_retained_raw_indices is not None
-                        ):
-                            if (
-                                slotpool_raw_candidate_rows is None
-                                or len(shadow_rows)
-                                != len(slotpool_raw_candidate_rows)
-                            ):
-                                raise ClosedLoopExecutionError(
-                                    "slotpool_shadow_mismatch",
-                                    "SlotPool raw candidate shadow rows are incomplete",
-                                )
-                            shadow_rows = [
-                                shadow_rows[index]
-                                for index in slotpool_retained_raw_indices
-                            ]
                         if shadow_rows is None or len(shadow_rows) != len(candidate_rows):
                             raise ClosedLoopExecutionError(
                                 "controller_shadow_mismatch",
@@ -3027,11 +2598,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         diagnostic = feature_range_diagnostic(
                             selected_row, policy, runtime_ranges[policy]
                         )
-                        proposal_metrics["guardpool_selected_structural"] = bool(
-                            guardpool_runtime_enabled
-                            and selected is not None
-                            and selected.get("structpool_family_groups")
-                        )
                         if hybridstructpool_runtime:
                             provenance = list(
                                 selected.get("hybridstructpool_provenance") or ()
@@ -3056,13 +2622,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             "duplicate_candidate_id",
                             "runtime candidate IDs are not unique",
                         )
-                    audit_candidates = (
-                        slotpool_raw_candidates
-                        if slotpool_raw_candidates is not None
-                        else candidates
-                    )
                     candidate_pool = []
-                    for candidate in audit_candidates:
+                    for candidate in candidates:
                         local_index = retained_positions.get(
                             str(candidate["candidate_id"])
                         )
@@ -3345,35 +2906,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         f"structpool_gate_reason={structpool_reason}"
                     ] += 1
-                    controller_totals["slotpool_reduction_applied_count"] += int(
-                        bool(
-                            proposal_metrics.get(
-                                "slotpool_reduction_applied", False
-                            )
-                        )
-                    )
-                    controller_totals[
-                        "slotpool_raw_structural_candidate_count"
-                    ] += int(
-                        proposal_metrics.get(
-                            "slotpool_raw_structural_candidate_count", 0
-                        )
-                    )
-                    controller_totals[
-                        "slotpool_selected_structural_candidate_count"
-                    ] += int(
-                        proposal_metrics.get(
-                            "slotpool_selected_structural_candidate_count", 0
-                        )
-                    )
-                    for slotpool_metric in (
-                        "slotpool_v2_anchor_inference_seconds",
-                        "slotpool_ranking_inference_seconds",
-                        "slotpool_total_inference_seconds",
-                    ):
-                        controller_totals[slotpool_metric] += float(
-                            proposal_metrics.get(slotpool_metric, 0.0)
-                        )
                     for hybrid_metric in (
                         "hybridstructpool_gate_seconds",
                         "hybridstructpool_seconds",
@@ -3435,24 +2967,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[
                         "hybridstructpool_selected_causal_count"
                     ] += int("causalclosure_v2" in selected_provenance)
-                    controller_totals["guardpool_active_decision_count"] += int(
-                        bool(proposal_metrics.get("guardpool_active", False))
-                    )
-                    controller_totals["guardpool_trigger_count"] += int(
-                        bool(proposal_metrics.get("guardpool_triggered", False))
-                    )
-                    controller_totals["guardpool_release_count"] += int(
-                        bool(proposal_metrics.get("guardpool_released", False))
-                    )
-                    controller_totals[
-                        "guardpool_selected_structural_count"
-                    ] += int(
-                        bool(
-                            proposal_metrics.get(
-                                "guardpool_selected_structural", False
-                            )
-                        )
-                    )
                     controller_totals["candidate_count_before_pruning"] += int(
                         pruning_metrics["candidate_count_before"]
                     )
@@ -3522,7 +3036,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 if (
                     bool(job.get("deterministic_pp_replay", False))
                     and not force_this_action
-                    and rescue_override is None
                 ):
                     # Pair the low-level PP stream across controller routes.
                     # Official neighborhood generation still consumes its
@@ -3546,22 +3059,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         route,
                     )
                     controller["pp_replay_seed_salt"] = pp_replay_seed_salt
-                if native_retry_tracker is not None:
-                    # Both arms collect the same native evidence.  Only the
-                    # treatment arm is allowed to execute a second PP call.
-                    action["collect_pp_diagnostics"] = True
-                if (
-                    failure_rescue_tracker is not None
-                    and failure_rescue_tracker.requires_diagnostics(decision_index)
-                ):
-                    # All arms observe the same first native PP call.  A
-                    # treatment, when eligible, is deferred to decision 1.
-                    action["collect_pp_diagnostics"] = True
-                if (
-                    signature_rescue_tracker is not None
-                    and signature_rescue_tracker.requires_diagnostics(decision_index)
-                ):
-                    action["collect_pp_diagnostics"] = True
                 if (
                     wall_budget is not None
                     and time.perf_counter() - ttf_started_wall >= wall_budget
@@ -3590,114 +3087,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         external_timeout = True
                         break
                     raise
-                bounded_retry_record = None
-                if native_retry_tracker is not None:
-                    first_result = result
-                    first_state = dict(first_result["observation"])
-                    first_metrics = dict(first_result["metrics"])
-                    bounded_retry_record = native_retry_tracker.observe_first_attempt(
-                        before=before,
-                        after=first_state,
-                        metrics=first_metrics,
-                        decision_index=decision_index,
-                    )
-                    if bounded_retry_record["triggered"]:
-                        retry_action = {
-                            "mode": "explicit_neighborhood",
-                            "agents": list(map(int, first_metrics["neighborhood"])),
-                            "random_seed": int(bounded_retry_record["retry_seed"]),
-                            "pp_random_seed": int(bounded_retry_record["retry_seed"]),
-                            "collect_pp_diagnostics": True,
-                        }
-                        retry_started = time.perf_counter()
-                        if wall_budget is not None and callable(timed_step):
-                            live_retry_budget = max(
-                                0.0,
-                                wall_budget - (retry_started - ttf_started_wall),
-                            )
-                            if live_retry_budget <= 0.0:
-                                bounded_retry_record = (
-                                    native_retry_tracker.cancel_retry(
-                                        bounded_retry_record,
-                                        reason="episode_wall_budget_exhausted",
-                                    )
-                                )
-                                retry_result = None
-                            else:
-                                retry_result = _plain(
-                                    timed_step(retry_action, live_retry_budget)
-                                )
-                        else:
-                            retry_result = _plain(environment.step(retry_action))
-                        if retry_result is None:
-                            result = {
-                                **first_result,
-                                "metrics": {
-                                    **first_metrics,
-                                    "bounded_native_retry": bounded_retry_record,
-                                },
-                            }
-                        else:
-                            bounded_retry_record = native_retry_tracker.observe_retry(
-                                bounded_retry_record,
-                                before=before,
-                                after=dict(retry_result["observation"]),
-                                metrics=dict(retry_result["metrics"]),
-                            )
-                            result = {
-                                **retry_result,
-                                "metrics": merged_retry_metrics(
-                                    first_metrics,
-                                    dict(retry_result["metrics"]),
-                                    bounded_retry_record,
-                                ),
-                            }
-                    else:
-                        result = {
-                            **first_result,
-                            "metrics": {
-                                **first_metrics,
-                                "bounded_native_retry": bounded_retry_record,
-                            },
-                        }
-                    native_retry_tracker.finalize_decision(bounded_retry_record)
-                failure_rescue_record = None
-                if failure_rescue_tracker is not None:
-                    failure_rescue_record = (
-                        failure_rescue_tracker.observe_decision(
-                            decision_index=decision_index,
-                            before=before,
-                            after=dict(result["observation"]),
-                            metrics=dict(result["metrics"]),
-                        )
-                    )
-                    if failure_rescue_record is not None:
-                        result = {
-                            **result,
-                            "metrics": {
-                                **dict(result["metrics"]),
-                                "failure_informed_rescue": (
-                                    failure_rescue_record
-                                ),
-                            },
-                        }
-                signature_rescue_record = None
-                if signature_rescue_tracker is not None:
-                    signature_rescue_record = (
-                        signature_rescue_tracker.observe_decision(
-                            decision_index=decision_index,
-                            before=before,
-                            after=dict(result["observation"]),
-                            metrics=dict(result["metrics"]),
-                        )
-                    )
-                    result = {
-                        **result,
-                        "metrics": {
-                            **dict(result["metrics"]),
-                            "signature_scoped_rescue": signature_rescue_record,
-                        },
-                    }
                 step_completed_wall = time.perf_counter()
                 repair_wall_seconds = step_completed_wall - repair_started
                 transition_ttf_elapsed_seconds = (
@@ -3733,47 +3122,23 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     previous_route = route
                 if "pp_random_seed" in action:
                     requested_pp_seed = int(action["pp_random_seed"])
-                    retry_record = dict(metrics.get("bounded_native_retry") or {})
-                    observed_first_seed = int(
-                        dict(retry_record.get("first_attempt") or {}).get(
-                            "requested_pp_random_seed",
-                            metrics.get("requested_pp_random_seed", -1),
-                        )
+                    observed_seed = int(
+                        metrics.get("requested_pp_random_seed", -1)
                     )
-                    if observed_first_seed != requested_pp_seed:
+                    if observed_seed != requested_pp_seed:
                         raise ClosedLoopExecutionError(
                             "pp_seed_mismatch",
                             "native transition did not retain the requested PP seed",
                         )
-                    first_attempt = dict(retry_record.get("first_attempt") or {})
-                    first_repair_order = first_attempt.get(
-                        "repair_order", metrics.get("repair_order")
+                    repair_order = metrics.get("repair_order")
+                    applied_seed = int(
+                        metrics.get("applied_pp_random_seed", -1)
                     )
-                    first_applied_seed = int(
-                        first_attempt.get(
-                            "applied_pp_random_seed",
-                            metrics.get("applied_pp_random_seed", -1),
-                        )
-                    )
-                    if first_repair_order and first_applied_seed != requested_pp_seed:
+                    if repair_order and applied_seed != requested_pp_seed:
                         raise ClosedLoopExecutionError(
                             "pp_seed_not_applied",
                             "native PP did not apply the deterministic replay seed",
                         )
-                    if retry_record.get("triggered"):
-                        retry_seed = int(retry_record["retry_seed"])
-                        retry_attempt = dict(retry_record["retry_attempt"])
-                        if (
-                            int(retry_attempt["requested_pp_random_seed"])
-                            != retry_seed
-                            or retry_attempt.get("repair_order")
-                            and int(retry_attempt["applied_pp_random_seed"])
-                            != retry_seed
-                        ):
-                            raise ClosedLoopExecutionError(
-                                "bounded_retry_seed_mismatch",
-                                "native retry did not retain the registered seed",
-                            )
                 try:
                     native_timing_schema = _native_repair_timing_schema(metrics)
                 except (TypeError, ValueError) as error:
@@ -3808,39 +3173,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     controller_totals[f"{route_prefix}_repair_seconds"] += repair_wall_seconds
                     controller_totals[f"{route_prefix}_total_decision_seconds"] += (
                         route_controller_seconds + repair_wall_seconds
-                    )
-                if bounded_retry_record is not None:
-                    controller["bounded_native_retry"] = bounded_retry_record
-                    controller_totals["bounded_retry_trigger_count"] += int(
-                        bool(bounded_retry_record["triggered"])
-                    )
-                    controller_totals["persistent_platform_decision_count"] += int(
-                        bool(bounded_retry_record["persistent_after_transaction"])
-                    )
-                    controller_totals["bounded_retry_resolved_count"] += int(
-                        bool(bounded_retry_record["resolved_by_retry"])
-                    )
-                if failure_rescue_record is not None:
-                    controller["failure_informed_rescue"] = (
-                        failure_rescue_record
-                    )
-                    if decision_index == 0:
-                        controller_totals["failure_rescue_trigger_count"] += int(
-                            bool(failure_rescue_record["triggered"])
-                        )
-                    controller_totals["failure_rescue_resolved_count"] += int(
-                        bool(failure_rescue_record["resolved_by_rescue"])
-                    )
-                if signature_rescue_record is not None:
-                    controller["signature_scoped_rescue"] = signature_rescue_record
-                    controller_totals["signature_rescue_scheduled_count"] += int(
-                        bool(signature_rescue_record["scheduled"])
-                    )
-                    controller_totals["signature_rescue_executed_count"] += int(
-                        bool(signature_rescue_record["intervention_executed"])
-                    )
-                    controller_totals["signature_rescue_resolved_count"] += int(
-                        bool(signature_rescue_record["resolved_by_rescue"])
                     )
                 conflicts.append(int(state["num_of_colliding_pairs"]))
                 if conflicts[-1] < conflicts[-2]:
@@ -4311,21 +3643,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 "selected_family_counts": dict(sorted(selected_families.items())),
                 "invalid_action_count": invalid_actions,
                 "fingerprint_mismatch_count": fingerprint_mismatches,
-                "bounded_native_retry": (
-                    native_retry_tracker.summary()
-                    if native_retry_tracker is not None
-                    else None
-                ),
-                "failure_informed_rescue": (
-                    failure_rescue_tracker.summary()
-                    if failure_rescue_tracker is not None
-                    else None
-                ),
-                "signature_scoped_rescue": (
-                    signature_rescue_tracker.summary()
-                    if signature_rescue_tracker is not None
-                    else None
-                ),
                 "final_sum_of_costs": int(state["sum_of_costs"]),
                 "budget_final_sum_of_costs": budget_final_sum_of_costs,
                 "final_low_level": state["low_level"],
@@ -4703,7 +4020,7 @@ def run_closed_loop_collection(
         (str(task_id), int(solver_seed)): dict(value)
         for (task_id, solver_seed), value in dict(episode_overrides or {}).items()
     }
-    _validate_v3_s3_episode_overrides(
+    _validate_episode_overrides(
         controller_mode, normalized_episode_overrides
     )
     if (

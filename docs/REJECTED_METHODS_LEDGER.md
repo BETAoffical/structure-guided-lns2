@@ -175,3 +175,41 @@ The exact pre-stage-5 source tree is protected remotely at
 ```bash
 git restore --source cccf368 -- path/to/file
 ```
+
+## Removed in pruning stage 6
+
+The final active-tree audit found several branches whose result documents had
+already stopped promotion, but whose experiment runners, command-line entry
+points, runtime overrides, or implementation-detail tests were still present.
+Their executable code was removed rather than repaired:
+
+- ScalePool, SlotPool, GuardPool, and SafeSlot;
+- HistoryRank rule and feature screens;
+- CausalTopoPool and RepairDependencyPool;
+- bounded native retry, failure-informed rescue, compact-blocker rescue,
+  signature-scoped rescue, and their durability/basin diagnostics;
+- ExactState and OnPolicy controller attribution, PlatformEntry order, and the
+  stopped HybridStructPool runtime/source-routing pilots.
+
+The shared closed-loop executor no longer loads these models, deletes
+candidates through SlotPool/GuardPool, changes actions through rescue
+overrides, or performs a second native step inside one controller decision.
+Retired override keys now fail before an episode is created. The four public
+controllers, base HybridStructPool data structures, targeted Dual16 runtime,
+and historical trace validation remain unchanged.
+
+Ninety-six Python implementation, runner, and dedicated test files were
+removed in this stage. Protocols, result reports, registered configurations,
+artifact hashes, and the read-only trace compatibility rules remain as frozen
+scientific evidence. Exact historical SlotPool and GuardPool JSON payloads are
+available only through
+`lns2_selector/compatibility/retired_pool_profiles.py`; the active runtime
+validator rejects both payloads for new execution.
+
+The exact pre-stage-6 source tree is protected remotely at
+`backup/rejected-method-pruning-06-before-final-rejected-pruning`, commit
+`06cc785d95e868a4e7ffedeb521ac0fa6fdf7dae`. Restore an individual file with:
+
+```bash
+git restore --source 06cc785 -- path/to/file
+```

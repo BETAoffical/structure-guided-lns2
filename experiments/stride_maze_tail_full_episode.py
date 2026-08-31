@@ -12,13 +12,14 @@ from experiments._common import (
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
-from experiments.stride_guardpool_maze_regression import _controller_kwargs
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA, _quick_controller_summary
+from lns2_selector.compatibility.retired_pool_profiles import (
+    slotpool_runtime_augmentation,
+)
 from lns2_selector.evaluation.episode_statistics import (
     paired_raw_ttf_comparison as _paired_comparison,
 )
 from lns2_selector.runtime.online_selection import (
-    slotpool_runtime_augmentation,
     validate_structpool_augmentation,
 )
 
@@ -30,6 +31,30 @@ CONTROLLERS = ("v2-full", "v2-plus-structpool", "v2-plus-slotpool")
 CHALLENGERS = CONTROLLERS[1:]
 STATUS_FILENAME = "full_episode_status.json"
 REPORT_FILENAME = "maze_tail_full_episode_report.json"
+
+
+def _controller_kwargs(
+    root: Path, config: dict[str, Any], controller: str
+) -> dict[str, Any]:
+    """Reconstruct historical arguments; active execution rejects retired pools."""
+
+    result: dict[str, Any] = {
+        "controller": "v2-full",
+        "controller_bundle": str((root / str(config["controller_bundle"])).resolve()),
+        "feature_backend": str(config["runtime"]["feature_backend"]),
+        "controller_runtime": str(config["runtime"]["controller_runtime"]),
+        "verification_profile": str(config["runtime"]["verification_profile"]),
+        "stopping_rule": "run-to-completion",
+    }
+    if controller == "v2-plus-structpool":
+        result["structpool_augmentation"] = dict(
+            config["full_structpool_augmentation"]
+        )
+    elif controller == "v2-plus-slotpool":
+        result["structpool_augmentation"] = slotpool_runtime_augmentation()
+    elif controller != "v2-full":
+        raise ValueError(f"unknown Maze tail controller: {controller}")
+    return result
 
 
 def _registered(root: Path, specification: dict[str, Any]) -> Path:
@@ -226,7 +251,7 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
         project_root=root,
         source_files=(
             "experiments/stride_maze_tail_full_episode.py",
-            "experiments/stride_guardpool_maze_regression.py",
+            "lns2_selector/compatibility/retired_pool_profiles.py",
             "lns2_selector/evaluation/episode_statistics.py",
             "experiments/stride_structpool_ttf_quick.py",
         ),

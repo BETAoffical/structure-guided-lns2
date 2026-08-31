@@ -9,13 +9,7 @@
     "lns2_selector",
     "scripts"
   ],
-  "allowed_unused_imports": [
-    {
-      "path": "experiments/stride_tailswitch.py",
-      "name": "_controller_kwargs",
-      "reason": "Preserve the exact source SHA-256 recorded by the completed 264-episode TailSwitch evidence block."
-    }
-  ],
+  "allowed_unused_imports": [],
   "allowed_duplicate_function_groups": [
     {
       "functions": [
@@ -29,83 +23,6 @@
         }
       ],
       "reason": "Preserve completed Successor diagnostic source hashes while documenting the shared manifest-index implementation."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_compact_nativeorder_repair.py",
-          "name": "_failed_job"
-        },
-        {
-          "path": "experiments/stride_nativeorder_transactionalrepair.py",
-          "name": "_failed_job"
-        }
-      ],
-      "reason": "Preserve the registered producer source identity of the completed Compact Native-Order experiment while documenting its intentionally compatible atomic-job failure record."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_failure_informed_rescue_continuation.py",
-          "name": "prepare_cases"
-        },
-        {
-          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
-          "name": "prepare_cases"
-        },
-        {
-          "path": "experiments/stride_exactstate_controller_attribution.py",
-          "name": "prepare_cases"
-        }
-      ],
-      "reason": "Preserve registered producer identities while documenting the compatible frozen-cohort adapters used by the completed signature-scoped screen and exact-state attribution."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_failure_informed_rescue_continuation.py",
-          "name": "continuation_schedule"
-        },
-        {
-          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
-          "name": "continuation_schedule"
-        }
-      ],
-      "reason": "Preserve the registered producer identity of the completed signature-scoped rescue screen while documenting its intentionally compatible paired schedule construction."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_failure_informed_rescue_continuation.py",
-          "name": "_status"
-        },
-        {
-          "path": "experiments/stride_signature_scoped_rescue_continuation.py",
-          "name": "_status"
-        },
-        {
-          "path": "experiments/stride_exactstate_controller_attribution.py",
-          "name": "_status"
-        }
-      ],
-      "reason": "Preserve registered producer identities while documenting the compatible atomic collection status schema shared by the rescue and attribution collectors."
-    },
-    {
-      "functions": [
-        {
-          "path": "scripts/run_stride_failure_informed_rescue_continuation.py",
-          "name": "main"
-        },
-        {
-          "path": "scripts/run_stride_signature_scoped_rescue_continuation.py",
-          "name": "main"
-        },
-        {
-          "path": "scripts/run_stride_exactstate_controller_attribution.py",
-          "name": "main"
-        }
-      ],
-      "reason": "Preserve registered producer identities while documenting the intentionally compatible command interfaces for bounded continuation experiments."
     }
   ],
   "tracked_roles": {

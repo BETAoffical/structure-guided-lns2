@@ -8,9 +8,9 @@ from experiments._common import closed_loop_producer_identity, registered_input,
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
-from experiments.stride_guardpool_maze_regression import _controller_kwargs
 from experiments.stride_maze_tail_full_episode import (
     CONTROLLERS,
+    _controller_kwargs,
     _expected_keys,
     _pool_counts,
     _task_metadata,
@@ -18,9 +18,11 @@ from experiments.stride_maze_tail_full_episode import (
     maze_tail_full_episode_schedule,
 )
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.compatibility.retired_pool_profiles import (
+    slotpool_runtime_augmentation,
+)
 from lns2_selector.evaluation.episode_statistics import mean as _mean
 from lns2_selector.runtime.online_selection import (
-    slotpool_runtime_augmentation,
     validate_structpool_augmentation,
 )
 
@@ -190,7 +192,7 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
         source_files=(
             "experiments/stride_maze_tail_state_collection.py",
             "experiments/stride_maze_tail_full_episode.py",
-            "experiments/stride_guardpool_maze_regression.py",
+            "lns2_selector/compatibility/retired_pool_profiles.py",
             "lns2_selector/evaluation/episode_statistics.py",
         ),
         native_required=native_required,

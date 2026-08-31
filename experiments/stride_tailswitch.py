@@ -11,7 +11,6 @@ from experiments.closed_loop_trace_storage import read_trace_events
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.stride_collection import _paired_action
-from experiments.stride_guardpool_maze_regression import _controller_kwargs
 from experiments.stride_maze_tail_state_collection import (
     _fused_controller_kwargs,
     load_maze_tail_state_collection_config,
