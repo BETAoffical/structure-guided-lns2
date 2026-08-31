@@ -13,9 +13,13 @@ from experiments.run_output_guard import load_completed_report, prepare_resumabl
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.closed_loop_trace_storage import read_trace_events
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
-from experiments.stride_augcontrol_evaluation import _dataset_tasks, _metric
-from experiments.stride_maprank_raw_ttf import _controller_summary, _paired_comparison
-from experiments.stride_robuststep_preflight import _mean
+from lns2_selector.evaluation.episode_statistics import (
+    dataset_tasks as _dataset_tasks,
+    mean as _mean,
+    metric as _metric,
+    paired_raw_ttf_comparison as _paired_comparison,
+    raw_ttf_controller_summary as _controller_summary,
+)
 from lns2_selector.runtime.online_selection import validate_structpool_augmentation
 
 
@@ -194,9 +198,7 @@ def run_structpool_ttf_quick(
             project_root=root,
             source_files=(
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
-                "experiments/stride_robuststep_preflight.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
         ),
         resume=resume,
@@ -356,9 +358,7 @@ def analyze_structpool_ttf_quick(
             project_root=root,
             source_files=(
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
-                "experiments/stride_robuststep_preflight.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
             native_required=False,
         )

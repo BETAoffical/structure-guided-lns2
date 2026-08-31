@@ -18,7 +18,6 @@ from experiments.repair_collection import (
     _write_jsonl,
 )
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_failure_informed_rescue_continuation import _decision_rows
 from experiments.stride_hybridstructpool_routed_confirmation import (
     _bounded_paired_comparison,
@@ -31,6 +30,7 @@ from experiments.stride_structshell_rollback_aware_platform_replay import (
     _exact_repair_platforms,
     _first_exact_repair_platform,
 )
+from lns2_selector.evaluation.episode_statistics import dataset_tasks as _dataset_tasks
 from lns2_selector.runtime.hybridstructpool_routed import (
     rollback_aware_routed_hybridstructpool_augmentation,
     validate_rollback_aware_routed_hybridstructpool_augmentation,
@@ -108,6 +108,7 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
             "experiments/stride_structshell_rollback_aware_ttf.py",
             "scripts/run_stride_structshell_rollback_aware_ttf.py",
             "experiments/closed_loop_confirmation.py",
+            "lns2_selector/evaluation/episode_statistics.py",
             "lns2_selector/runtime/hybridstructpool_routed.py",
             "lns2_selector/runtime/rollback_aware_selection.py",
         ),

@@ -17,8 +17,8 @@ from experiments.stride_maze_tail_full_episode import (
     load_maze_tail_full_episode_config,
     maze_tail_full_episode_schedule,
 )
-from experiments.stride_maprank_raw_ttf import _mean
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.evaluation.episode_statistics import mean as _mean
 from lns2_selector.runtime.online_selection import (
     slotpool_runtime_augmentation,
     validate_structpool_augmentation,
@@ -191,7 +191,7 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
             "experiments/stride_maze_tail_state_collection.py",
             "experiments/stride_maze_tail_full_episode.py",
             "experiments/stride_guardpool_maze_regression.py",
-            "experiments/stride_maprank_raw_ttf.py",
+            "lns2_selector/evaluation/episode_statistics.py",
         ),
         native_required=native_required,
     )

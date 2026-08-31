@@ -43,7 +43,6 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "lns2_selector/compatibility/controller_diagnostics.py",
     "lns2_selector/compatibility/metrics.py",
     "lns2_selector/controllers/__init__.py",
-    "lns2_selector/controllers/guardrank.py",
     "lns2_selector/controllers/official.py",
     "lns2_selector/controllers/v2.py",
     "lns2_selector/controllers/v3_s3.py",

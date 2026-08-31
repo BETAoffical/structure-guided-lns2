@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 from lns2_selector.controllers import (
     CONTROLLER_IDS,
-    DIAGNOSTIC_CONTROLLER_IDS,
     load_selector,
 )
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
@@ -65,17 +64,6 @@ class SelectorContractTests(unittest.TestCase):
                 "v3-s3",
             ),
         )
-        self.assertEqual(
-            DIAGNOSTIC_CONTROLLER_IDS,
-            (
-                "stride-control-v1",
-                "stride-quality-v1",
-                "stride-augcontrol-v1",
-                "stride-guardrank-v1",
-                "stride-maprank-v1",
-            ),
-        )
-
     def test_historical_controller_aliases_are_not_executable(self) -> None:
         for alias in (
             "Adaptive",
@@ -89,6 +77,19 @@ class SelectorContractTests(unittest.TestCase):
                 ValueError, "unsupported controller"
             ):
                 load_selector(alias)
+
+    def test_rejected_diagnostic_controller_ids_are_not_executable(self) -> None:
+        for controller_id in (
+            "stride-control-v1",
+            "stride-quality-v1",
+            "stride-augcontrol-v1",
+            "stride-guardrank-v1",
+            "stride-maprank-v1",
+        ):
+            with self.subTest(controller_id=controller_id), self.assertRaisesRegex(
+                ValueError, "unsupported controller"
+            ):
+                load_selector(controller_id)
 
     def test_cli_lists_only_canonical_controller_ids(self) -> None:
         output = StringIO()
@@ -130,9 +131,6 @@ class SelectorContractTests(unittest.TestCase):
         for controller_id in (
             "v2-full",
             "mixed-full-v2",
-            "stride-control-v1",
-            "stride-quality-v1",
-            "stride-augcontrol-v1",
         ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(
@@ -152,9 +150,6 @@ class SelectorContractTests(unittest.TestCase):
         for controller_id in (
             "v2-full",
             "mixed-full-v2",
-            "stride-control-v1",
-            "stride-quality-v1",
-            "stride-augcontrol-v1",
         ):
             with self.subTest(controller_id=controller_id):
                 bundle = SimpleNamespace(

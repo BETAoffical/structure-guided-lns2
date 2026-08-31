@@ -35,15 +35,6 @@ from experiments.stride_quality_v2 import (  # noqa: E402
     select_stride_quality_v2_confirmation_states,
 )
 from experiments.stride_stage3 import run_stride_stage3_label_audit  # noqa: E402
-from experiments.stride_stage4 import (  # noqa: E402
-    prepare_stride_stage4_protocol,
-    run_stride_stage4_training,
-)
-from experiments.stride_stage4r import (  # noqa: E402
-    run_stride_stage4r_diagnostic,
-    run_stride_stage4r_export,
-    run_stride_stage4r_shadow_audit,
-)
 
 
 def _resolve(value: str) -> Path:
@@ -52,7 +43,9 @@ def _resolve(value: str) -> Path:
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the STRIDE-LNS six-stage pipeline.")
+    parser = argparse.ArgumentParser(
+        description="Run the retained STRIDE-LNS Stage 1-3 data pipeline."
+    )
     subparsers = parser.add_subparsers(dest="stage", required=True)
     audit = subparsers.add_parser(
         "audit", help="Run Stage 1 frozen-baseline and historical-data audit."
@@ -211,61 +204,6 @@ def parse_arguments() -> argparse.Namespace:
     )
     stage3_audit.add_argument(
         "--output", default="build/stride-stage3-label-audit-v1"
-    )
-    stage4_prepare = subparsers.add_parser(
-        "prepare-stage4",
-        help="Freeze the Stage 4 protocol and deterministic map-grouped folds.",
-    )
-    stage4_prepare.add_argument(
-        "--config", default="configs/stride_stage4_training.json"
-    )
-    stage4_prepare.add_argument(
-        "--output", default="build/stride-stage4-protocol-v1"
-    )
-    stage4_train = subparsers.add_parser(
-        "train-stage4",
-        help="Run registered Stage 4 control, quality, and feature-ablation training.",
-    )
-    stage4_train.add_argument(
-        "--config", default="configs/stride_stage4_training.json"
-    )
-    stage4_train.add_argument(
-        "--protocol-report",
-        default="build/stride-stage4-protocol-v1/stage4_protocol_report.json",
-    )
-    stage4_train.add_argument(
-        "--output", default="build/stride-stage4-training-v1"
-    )
-    stage4r_diagnose = subparsers.add_parser(
-        "diagnose-stage4r",
-        help="Diagnose Stage 4 label disagreement, Oracle space, and PP-seed stability.",
-    )
-    stage4r_diagnose.add_argument(
-        "--config", default="configs/stride_stage4r_diagnostic.json"
-    )
-    stage4r_diagnose.add_argument(
-        "--output", default="build/stride-stage4r-diagnostic-v1"
-    )
-    stage4r_export = subparsers.add_parser(
-        "export-stage4r",
-        help="Export diagnostic-only Stage 4R control and quality bundles.",
-    )
-    stage4r_export.add_argument(
-        "--config", default="configs/stride_stage4r_export.json"
-    )
-    stage4r_export.add_argument(
-        "--output", default="build/stride-stage4r-models-v1"
-    )
-    stage4r_shadow_audit = subparsers.add_parser(
-        "audit-shadow-stage4r",
-        help="Audit an action-preserving Stage 4R online shadow collection.",
-    )
-    stage4r_shadow_audit.add_argument(
-        "--config", default="configs/stride_stage4r_shadow.json"
-    )
-    stage4r_shadow_audit.add_argument("--collection", required=True)
-    stage4r_shadow_audit.add_argument(
-        "--output", default="build/stride-stage4r-shadow-audit-v1"
     )
     return parser.parse_args()
 
@@ -448,68 +386,6 @@ def main() -> int:
             "stride_stage3_label_audit_passed"
             if report["passed"]
             else "stride_stage3_label_audit_failed"
-        )
-        return 0 if report["passed"] else 2
-    if arguments.stage == "prepare-stage4":
-        report = prepare_stride_stage4_protocol(
-            config_path=_resolve(arguments.config),
-            output=_resolve(arguments.output),
-            project_root=PROJECT_ROOT,
-        )
-        print(
-            "stride_stage4_protocol_passed"
-            if report["passed"]
-            else "stride_stage4_protocol_failed"
-        )
-        return 0 if report["passed"] else 2
-    if arguments.stage == "train-stage4":
-        report = run_stride_stage4_training(
-            config_path=_resolve(arguments.config),
-            protocol_report_path=_resolve(arguments.protocol_report),
-            output=_resolve(arguments.output),
-            project_root=PROJECT_ROOT,
-        )
-        print(
-            "stride_stage4_training_passed"
-            if report["passed"]
-            else "stride_stage4_training_failed_gates"
-        )
-        return 0 if report["passed"] else 2
-    if arguments.stage == "diagnose-stage4r":
-        report = run_stride_stage4r_diagnostic(
-            config_path=_resolve(arguments.config),
-            output=_resolve(arguments.output),
-            project_root=PROJECT_ROOT,
-        )
-        print(
-            "stride_stage4r_diagnostic_passed"
-            if report["passed"]
-            else "stride_stage4r_diagnostic_failed"
-        )
-        return 0 if report["passed"] else 2
-    if arguments.stage == "export-stage4r":
-        report = run_stride_stage4r_export(
-            config_path=_resolve(arguments.config),
-            output=_resolve(arguments.output),
-            project_root=PROJECT_ROOT,
-        )
-        print(
-            "stride_stage4r_export_passed"
-            if report["passed"]
-            else "stride_stage4r_export_failed"
-        )
-        return 0 if report["passed"] else 2
-    if arguments.stage == "audit-shadow-stage4r":
-        report = run_stride_stage4r_shadow_audit(
-            config_path=_resolve(arguments.config),
-            collection=_resolve(arguments.collection),
-            output=_resolve(arguments.output),
-            project_root=PROJECT_ROOT,
-        )
-        print(
-            "stride_stage4r_shadow_passed"
-            if report["passed"]
-            else "stride_stage4r_shadow_failed"
         )
         return 0 if report["passed"] else 2
     raise AssertionError(f"unhandled stage: {arguments.stage}")

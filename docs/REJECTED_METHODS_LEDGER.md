@@ -67,3 +67,51 @@ against the SHA-256 values recorded in those documents and all matched. The
 CompactCut document mentions an external tar archive that was not present in
 this workspace; recovery therefore relies on the Git backup and the retained
 canonical report/configuration evidence, not that missing archive.
+
+## Removed in pruning stage 3
+
+The following diagnostic controller IDs and their executable training,
+evaluation, CLI and implementation-detail test chains were removed:
+
+- `stride-control-v1` and `stride-quality-v1`: the registered Quick and
+  multi-seed evaluations were slower than frozen `v2-full`, so neither was
+  promoted.
+- `stride-augcontrol-v1`: its held-out offline regret was worse than V2 and it
+  did not qualify for online replacement.
+- `stride-guardrank-v1`: the OOF improvement missed its preregistered gate and
+  the branch stopped before promotion.
+- `stride-maprank-v1`: the complete method improved over the original pool,
+  but its ranker was slower than the V2 ranker on the same augmented pool.
+  Only the rejected ranker/override chain was removed; the independently useful
+  topology and augmented-pool infrastructure remains shared code.
+
+The action-preserving diagnostic-shadow runner was removed with these
+controllers. It never changed the executed action, so removing it does not
+change the behavior of `official_adaptive`, `v2-full`, `mixed-full-v2`, or
+`v3-s3`. Public controller loading now accepts only those four IDs. Historical
+controller diagnostics remain readable through the compatibility layer.
+
+Seven controller-independent dataset/statistics helpers and the historical
+MapBase audit schema were moved into neutral evaluation/compatibility modules
+before their old host files were deleted. This preserves current StructPool,
+HybridStructPool, Boundary and repairability consumers without retaining the
+rejected controller implementations.
+
+The preregistration configurations and the following conclusion documents are
+retained as evidence:
+
+- `docs/STRIDE_STAGE4_PROTOCOL.md`
+- `docs/STRIDE_STAGE4_RESULT.md`
+- `docs/STRIDE_STAGE4R_PROTOCOL.md`
+- `docs/STRIDE_STAGE4R_SEED_DIAGNOSTIC.md`
+- `docs/STRIDE_STAGE4R_PP_REPLAY.md`
+- `docs/STRIDE_STAGE4R_HIGH_LOAD_PROTOCOL.md`
+- `docs/STRIDE_ROBUSTSTEP_PROTOCOL.md`
+
+The exact pre-stage-3 source tree is protected remotely at
+`backup/rejected-method-pruning-02-before-diagnostic-controller-pruning`,
+commit `07f18c0448cc2c13ebf6217e609b936495fd6171`. Restore a removed file with:
+
+```bash
+git restore --source 07f18c0 -- path/to/file
+```

@@ -6,6 +6,14 @@ from lns2_selector.evaluation.trace_validation import (
     ClosedLoopTraceError,
     validate_closed_loop_trace,
 )
+from lns2_selector.evaluation.episode_statistics import (
+    capped_controller_summary,
+    dataset_tasks,
+    mean,
+    metric,
+    paired_raw_ttf_comparison,
+    raw_ttf_controller_summary,
+)
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 
 
@@ -22,6 +30,12 @@ def run_closed_loop_collection(*args: Any, **kwargs: Any) -> Any:
 
 __all__ = [
     "ClosedLoopTraceError",
+    "capped_controller_summary",
+    "dataset_tasks",
+    "mean",
+    "metric",
+    "paired_raw_ttf_comparison",
+    "raw_ttf_controller_summary",
     "run_balanced_wall_clock",
     "run_closed_loop_collection",
     "validate_closed_loop_trace",

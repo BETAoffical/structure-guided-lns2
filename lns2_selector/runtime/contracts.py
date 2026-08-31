@@ -11,14 +11,6 @@ CONTROLLER_IDS = (
     "v3-s3",
 )
 
-DIAGNOSTIC_CONTROLLER_IDS = (
-    "stride-control-v1",
-    "stride-quality-v1",
-    "stride-augcontrol-v1",
-    "stride-guardrank-v1",
-    "stride-maprank-v1",
-)
-
 
 def require_bool(value: Any, *, field: str) -> bool:
     """Return a JSON boolean while rejecting truthy substitutes."""

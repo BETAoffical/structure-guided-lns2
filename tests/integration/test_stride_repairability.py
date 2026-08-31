@@ -12,13 +12,15 @@ from experiments.stride_lns import (
     REQUIRED_POST_STRUCTURE_FIELDS,
     STRIDE_TRIAL_SCHEMA,
 )
-from experiments.stride_mapbase import AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA
 from experiments.stride_repairability import (
     _seed_half_action_stability,
     build_repairability_labels,
     validate_repairability_label_config,
 )
 from experiments.stride_repairability_audit import AUDIT_SCHEMA
+from lns2_selector.compatibility.schemas import (
+    STRIDE_MAPBASE_AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA,
+)
 from experiments.stride_repairability_collection import (
     STATE_SCHEMA,
     _artifact_valid,

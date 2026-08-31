@@ -8,11 +8,11 @@ from experiments.repair_collection import (
     _read_json,
     _read_jsonl,
 )
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_structpool_paired_ttf import (
     analyze_structpool_paired_ttf,
     run_structpool_paired_ttf,
 )
+from lns2_selector.evaluation.episode_statistics import dataset_tasks as _dataset_tasks
 from experiments.stride_structpool_ttf_quick import (
     CONTROLLERS,
     structpool_ttf_schedule,
@@ -179,7 +179,6 @@ def run_structpool_ttf_fresh(
         performance_claim_field="cross_layout_generalization_supported",
         producer_source_files=(
             "experiments/stride_structpool_ttf_fresh.py",
-            "experiments/stride_augcontrol_evaluation.py",
         ),
         resume=resume,
         dry_run=dry_run,
@@ -203,7 +202,6 @@ def analyze_structpool_ttf_fresh(
         performance_claim_field="cross_layout_generalization_supported",
         producer_source_files=(
             "experiments/stride_structpool_ttf_fresh.py",
-            "experiments/stride_augcontrol_evaluation.py",
         ),
     )
 

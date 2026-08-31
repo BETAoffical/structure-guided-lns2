@@ -26,8 +26,8 @@ from experiments.stride_hybridstructpool_routed_confirmation import (
     _bounded_paired_comparison,
     _bounded_summary,
 )
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.evaluation.episode_statistics import dataset_tasks as _dataset_tasks
 from lns2_selector.runtime.hybridstructpool_routed import (
     rollback_aware_routed_hybridstructpool_augmentation,
     routed_hybridstructpool_augmentation,
@@ -336,6 +336,7 @@ def run(
             "experiments/stride_structshell_rollback_aware_platform_replay.py",
             "scripts/run_stride_structshell_rollback_aware_platform_replay.py",
             "experiments/closed_loop_confirmation.py",
+            "lns2_selector/evaluation/episode_statistics.py",
             "lns2_selector/runtime/hybridstructpool_routed.py",
             "lns2_selector/runtime/rollback_aware_selection.py",
         ),
@@ -1083,6 +1084,7 @@ def analyze(
             source_files=(
                 "experiments/stride_structshell_rollback_aware_platform_replay.py",
                 "experiments/closed_loop_confirmation.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 "lns2_selector/runtime/rollback_aware_selection.py",
             ),
             native_required=False,

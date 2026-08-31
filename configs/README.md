@@ -25,8 +25,6 @@ Generated warehouse maps also live under `build/`. The pinned upstream solver
 fixtures under `third_party/mapf_lns2` remain unchanged.
 
 New controller-facing commands accept `official_adaptive`, `v2-full`,
-`mixed-full-v2`, `stride-control-v1`, `stride-quality-v1`, and `v3-s3`.
-The two `stride-*` identifiers require exactly matching diagnostic-only
-bundles and are not deployment defaults. Historical policy labels that still appear in a
+`mixed-full-v2`, and `v3-s3`. Historical policy labels that still appear in a
 registered configuration are inputs to a retained artifact schema; they are
 not additional active controller IDs.

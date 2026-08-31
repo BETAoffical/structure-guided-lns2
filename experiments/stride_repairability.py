@@ -26,12 +26,12 @@ FEATURE_DIMENSION = 124
 
 def _supported_collection_audit_schemas() -> frozenset[str]:
     # Imported lazily to avoid collection -> label-config import cycles.
-    from experiments.stride_mapbase import AUDIT_SCHEMA as MAPBASE_AUDIT_SCHEMA
     from experiments.stride_repairability_audit import (
         AUDIT_SCHEMA as REPAIRABILITY_AUDIT_SCHEMA,
     )
+    from lns2_selector.compatibility.schemas import STRIDE_MAPBASE_AUDIT_SCHEMA
 
-    return frozenset((REPAIRABILITY_AUDIT_SCHEMA, MAPBASE_AUDIT_SCHEMA))
+    return frozenset((REPAIRABILITY_AUDIT_SCHEMA, STRIDE_MAPBASE_AUDIT_SCHEMA))
 
 
 def validate_repairability_label_config(config: dict[str, Any]) -> None:

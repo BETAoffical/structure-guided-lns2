@@ -18,10 +18,12 @@ from experiments.repair_collection import (
     _write_json,
 )
 from experiments.stride_guardpool_maze_regression import _controller_kwargs
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
     TTF_CLOCK_SCHEMA,
     _quick_controller_summary,
+)
+from lns2_selector.evaluation.episode_statistics import (
+    paired_raw_ttf_comparison as _paired_comparison,
 )
 from lns2_selector.runtime.online_selection import (
     slotpool_runtime_augmentation,
@@ -238,7 +240,7 @@ def run_slotpool_structpool_ttf(
             source_files=(
                 "experiments/stride_slotpool_structpool_ttf.py",
                 "experiments/stride_guardpool_maze_regression.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 "experiments/stride_structpool_ttf_quick.py",
             ),
         ),
@@ -384,7 +386,7 @@ def analyze_slotpool_structpool_ttf(
             source_files=(
                 "experiments/stride_slotpool_structpool_ttf.py",
                 "experiments/stride_guardpool_maze_regression.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 "experiments/stride_structpool_ttf_quick.py",
             ),
             native_required=False,

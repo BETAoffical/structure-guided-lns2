@@ -13,7 +13,10 @@ from experiments.repair_collection import (
     _write_json,
     _write_jsonl,
 )
-from experiments.stride_stage4r_quick import _controller_summary, _mean
+from lns2_selector.evaluation.episode_statistics import (
+    capped_controller_summary as _controller_summary,
+    mean as _mean,
+)
 
 
 CONFIG_SCHEMA = "lns2.stride.boundary_ttf_quick_config.v1"

@@ -329,61 +329,6 @@
       "purpose": "Non-promoting run-to-completion paired ablation of map-only and stall-guard topology-boundary activation."
     },
     {
-      "path": "experiments/stride_augcontrol.py",
-      "role": "active",
-      "purpose": "Map-held-out training, ablation, portable export, and repairability-regret evaluation for stride-augcontrol-v1."
-    },
-    {
-      "path": "experiments/stride_augcontrol_evaluation.py",
-      "role": "reproducibility",
-      "purpose": "Staged Shadow, high-load, and formal raw-TTF evaluation with separate candidate-pool and ranker effects."
-    },
-    {
-      "path": "experiments/stride_guardrank.py",
-      "role": "reproducibility",
-      "purpose": "Train-only nested map OOF calibration and diagnostic export for the V2-anchored GuardRank experiment."
-    },
-    {
-      "path": "experiments/stride_guardrank_map_coverage.py",
-      "role": "reproducibility",
-      "purpose": "Fresh-map proposal-only audit for the frozen V2 plus topology-boundary candidate pool."
-    },
-    {
-      "path": "experiments/stride_guardrank_relevance.py",
-      "role": "reproducibility",
-      "purpose": "Input-only all-state topology relevance scan after the fresh-map candidate-coverage failure."
-    },
-    {
-      "path": "experiments/stride_mapbase.py",
-      "role": "reproducibility",
-      "purpose": "Base-only fresh-map multi-PP-seed repair collection and strict post-collection audit for STRIDE-MapBase."
-    },
-    {
-      "path": "experiments/stride_maprank.py",
-      "role": "active",
-      "purpose": "Outcome-blind selection merge and frozen design validation for the separately named STRIDE-MapRank successor."
-    },
-    {
-      "path": "experiments/stride_maprank_evaluation.py",
-      "role": "active",
-      "purpose": "Offline-gated diagnostic Shadow and staged raw-TTF evaluation for STRIDE-MapRank."
-    },
-    {
-      "path": "experiments/stride_maprank_counterfactual.py",
-      "role": "reproducibility",
-      "purpose": "Paired 16-seed current-step counterfactual for the two selected neighborhoods at each MapRank high-load override."
-    },
-    {
-      "path": "experiments/stride_maprank_failure_analysis.py",
-      "role": "reproducibility",
-      "purpose": "Read-only decision-level decomposition of the failed pooled STRIDE-MapRank high-load ranker gate."
-    },
-    {
-      "path": "experiments/stride_maprank_raw_ttf.py",
-      "role": "active",
-      "purpose": "Strictly rotated three-controller high-load and fresh-map run-to-completion raw-TTF evaluation for STRIDE-MapRank."
-    },
-    {
       "path": "experiments/stride_feature_cache_audit.py",
       "role": "active",
       "purpose": "Action-preserving timing and exact-equivalence audit of reference, incremental, and native feature paths."
@@ -534,36 +479,6 @@
       "purpose": "Final integrity, coverage, leakage, weighting, and reproducibility audit for the registered STRIDE Stage 3 label cohort."
     },
     {
-      "path": "experiments/stride_stage4.py",
-      "role": "active",
-      "purpose": "Outcome-blind map-grouped Stage 4 protocol, split registration, controlled retraining, and feature-ablation workflow."
-    },
-    {
-      "path": "experiments/stride_stage4r.py",
-      "role": "active",
-      "purpose": "Post-Stage-4 label-disagreement, Oracle-opportunity, and paired-PP-seed stability diagnosis before TTF-first runtime evaluation."
-    },
-    {
-      "path": "experiments/stride_stage4r_high_load.py",
-      "role": "active",
-      "purpose": "Paired high-load MovingAI diagnostic with rotating controller order, capped TTF, subgroup transfer, and feature-range analysis."
-    },
-    {
-      "path": "experiments/stride_stage4r_quick.py",
-      "role": "active",
-      "purpose": "Registered map-disjoint Stage 4R dataset, strict rotating controller schedule, capped-TTF collection, and paired diagnostic analysis."
-    },
-    {
-      "path": "experiments/stride_stage4r_pp_replay.py",
-      "role": "active",
-      "purpose": "Registered same-state, same-action-set PP-seed replay that separates current-step neighborhood quality from stochastic repair outcomes."
-    },
-    {
-      "path": "experiments/stride_stage4r_seed_diagnostic.py",
-      "role": "active",
-      "purpose": "Outcome-informed multi-seed Stage 4R tail diagnosis that separates persistent controller weakness from solver-seed sensitivity without making a formal speed claim."
-    },
-    {
       "path": "experiments/trace_replay.py",
       "role": "shared",
       "purpose": "Algorithm-neutral runtime utility used by retained workflows: trace replay."
@@ -674,6 +589,11 @@
       "purpose": "Read-only interpretation of registered historical metrics."
     },
     {
+      "path": "lns2_selector/compatibility/schemas.py",
+      "role": "compatibility",
+      "purpose": "Read-only compatibility schemas for retained historical artifacts."
+    },
+    {
       "path": "lns2_selector/compatibility/controller_diagnostics.py",
       "role": "compatibility",
       "purpose": "Read-only validation of retired controller diagnostics without retaining their execution code."
@@ -694,11 +614,6 @@
       "purpose": "Canonical active selector adapter: official."
     },
     {
-      "path": "lns2_selector/controllers/guardrank.py",
-      "role": "active",
-      "purpose": "Diagnostic V2-anchor and challenger override adapter for GuardRank bundles."
-    },
-    {
       "path": "lns2_selector/controllers/v2.py",
       "role": "active",
       "purpose": "Canonical active selector adapter: v2."
@@ -712,6 +627,11 @@
       "path": "lns2_selector/evaluation/__init__.py",
       "role": "shared",
       "purpose": "Shared wall-clock evaluation namespace."
+    },
+    {
+      "path": "lns2_selector/evaluation/episode_statistics.py",
+      "role": "shared",
+      "purpose": "Shared episode aggregation and statistical helpers used by retained evaluations."
     },
     {
       "path": "lns2_selector/evaluation/trace_validation.py",
@@ -1059,91 +979,6 @@
       "purpose": "CLI entry point for the registered paired gated boundary-runtime optimization Quick."
     },
     {
-      "path": "scripts/train_stride_augcontrol.py",
-      "role": "active",
-      "purpose": "CLI entry point for preregistered stride-augcontrol-v1 training and validation."
-    },
-    {
-      "path": "scripts/train_stride_guardrank.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for train-only nested GuardRank training and diagnostic export."
-    },
-    {
-      "path": "scripts/run_stride_guardrank_map_coverage.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for the checksum-pinned GuardRank fresh-map candidate coverage audit."
-    },
-    {
-      "path": "scripts/run_stride_guardrank_relevance.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for the checksum-pinned GuardRank input-only topology relevance scan."
-    },
-    {
-      "path": "scripts/run_stride_mapbase.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for collecting and auditing STRIDE-MapBase fresh-map repair trials."
-    },
-    {
-      "path": "scripts/prepare_stride_maprank.py",
-      "role": "active",
-      "purpose": "CLI entry point for preparing the checksum-pinned STRIDE-MapRank combined selection."
-    },
-    {
-      "path": "scripts/train_stride_maprank.py",
-      "role": "active",
-      "purpose": "CLI entry point for nested train-map-only STRIDE-MapRank training and diagnostic bundle export."
-    },
-    {
-      "path": "scripts/build_stride_maprank_labels.py",
-      "role": "active",
-      "purpose": "CLI entry point for building checksum-audited multi-source STRIDE-MapRank labels."
-    },
-    {
-      "path": "scripts/run_stride_maprank_evaluation.py",
-      "role": "active",
-      "purpose": "CLI entry point for offline-gated STRIDE-MapRank Shadow and staged evaluation."
-    },
-    {
-      "path": "scripts/analyze_stride_maprank_failure.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for the frozen STRIDE-MapRank high-load decision-level failure analysis."
-    },
-    {
-      "path": "scripts/run_stride_maprank_counterfactual.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for paired-seed collection and analysis of MapRank override counterfactuals."
-    },
-    {
-      "path": "scripts/run_stride_maprank_raw_ttf.py",
-      "role": "active",
-      "purpose": "CLI entry point for paired high-load and fresh-map STRIDE-MapRank raw-TTF evaluation."
-    },
-    {
-      "path": "scripts/run_stride_augcontrol_evaluation.py",
-      "role": "reproducibility",
-      "purpose": "CLI entry point for staged stride-augcontrol-v1 Shadow and raw-TTF evaluation."
-    },
-    {
-      "path": "scripts/run_stride_stage4r_high_load.py",
-      "role": "active",
-      "purpose": "CLI entry point for the registered Stage 4R paired high-load MovingAI diagnostic."
-    },
-    {
-      "path": "scripts/run_stride_stage4r_quick.py",
-      "role": "active",
-      "purpose": "CLI entry point for the registered diagnostic-only STRIDE Stage 4R TTF Quick."
-    },
-    {
-      "path": "scripts/run_stride_stage4r_pp_replay.py",
-      "role": "active",
-      "purpose": "CLI entry point for the registered Stage 4R same-state paired PP-seed replay."
-    },
-    {
-      "path": "scripts/run_stride_stage4r_seed_diagnostic.py",
-      "role": "active",
-      "purpose": "CLI entry point for the registered outcome-informed Stage 4R multi-seed TTF diagnostic."
-    },
-    {
       "path": "scripts/run_v3_s3_runtime_comparison.py",
       "role": "active",
       "purpose": "CLI entry point for a current selector workflow: run v3 s3 runtime comparison."
@@ -1197,6 +1032,11 @@
       "path": "tests/evaluation/test_balanced_wall_clock.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained balanced wall clock behavior, artifact integrity, or reproducibility."
+    },
+    {
+      "path": "tests/evaluation/test_episode_statistics.py",
+      "role": "shared",
+      "contract": "Shared episode aggregation and statistical helper behavior."
     },
     {
       "path": "tests/evaluation/test_lns2_bottleneck.py",
@@ -1272,11 +1112,6 @@
       "path": "tests/runtime/test_controller_v2.py",
       "role": "active",
       "contract": "Regression contract for retained controller v2 behavior, artifact integrity, or reproducibility."
-    },
-    {
-      "path": "tests/runtime/test_guardrank_selector.py",
-      "role": "active",
-      "contract": "V2-anchor fallback, candidate-kind threshold, symmetric pair evidence, and non-applied profile behavior."
     },
     {
       "path": "tests/runtime/test_mixed_full_v2.py",
@@ -1494,41 +1329,6 @@
       "contract": "Paired alternating schedule, capped-TTF primary metric, boundary activation accounting, and non-promotion gates."
     },
     {
-      "path": "tests/integration/test_stride_augcontrol.py",
-      "role": "active",
-      "contract": "Independent controller identity, frozen 147-input capacity, runtime exclusion, repairability regret, and augmented-pool opportunity semantics."
-    },
-    {
-      "path": "tests/integration/test_stride_augcontrol_evaluation.py",
-      "role": "reproducibility",
-      "contract": "Uncapped three-controller evaluation, exact candidate-pool decomposition, load registration, and raw-TTF comparison semantics."
-    },
-    {
-      "path": "tests/integration/test_stride_guardrank.py",
-      "role": "reproducibility",
-      "contract": "Train-only nested calibration, exact V2 abstention, map grouping, and fresh-validation evidence boundary."
-    },
-    {
-      "path": "tests/integration/test_stride_guardrank_expansion.py",
-      "role": "reproducibility",
-      "contract": "Fresh DAO map disjointness, checksum pinning, outcome-blind reset-only preflight, and formal-OOD exclusion."
-    },
-    {
-      "path": "tests/integration/test_stride_guardrank_map_coverage.py",
-      "role": "reproducibility",
-      "contract": "Fresh-map candidate coverage identity, outcome blindness, group gates, and registered input checksums."
-    },
-    {
-      "path": "tests/integration/test_stride_guardrank_relevance.py",
-      "role": "reproducibility",
-      "contract": "All-state topology relevance scan identity, input-only boundary, interpretation threshold, and registered checksums."
-    },
-    {
-      "path": "tests/integration/test_stride_mapbase.py",
-      "role": "reproducibility",
-      "contract": "Base-only candidate pool, 16 paired PP seeds, 124-feature schema, fresh-map selection, and registered input checksums."
-    },
-    {
       "path": "tests/integration/test_stride_boundary_gate_ablation.py",
       "role": "active",
       "contract": "Uncapped runtime, complete three-controller pairing, rotating execution order, frozen stall gate, and non-promotion boundaries."
@@ -1559,26 +1359,6 @@
       "contract": "Effective-map split, result-blind source selection, replacement registry, and uncapped source-runtime contracts."
     },
     {
-      "path": "tests/integration/test_stride_stage4r_high_load.py",
-      "role": "active",
-      "contract": "High-load paired schedule, success-constrained capped TTF, map subgroup, feature-range, and fallback analysis contracts."
-    },
-    {
-      "path": "tests/integration/test_stride_stage4r_quick.py",
-      "role": "active",
-      "contract": "Strict rotating Stage 4R schedule, capped-TTF primary metric, success noninferiority, and diagnostic decision contracts."
-    },
-    {
-      "path": "tests/integration/test_stride_stage4r_pp_replay.py",
-      "role": "active",
-      "contract": "Same-state paired PP seed generation, registered replay thresholds, identical-action determinism, and winner-flip diagnosis contracts."
-    },
-    {
-      "path": "tests/integration/test_stride_stage4r_seed_diagnostic.py",
-      "role": "active",
-      "contract": "Multi-seed schedule registration, non-formal evidence boundary, paired runtime integrity, and persistent-tail-versus-seed-sensitive decision contracts."
-    },
-    {
       "path": "tests/runtime/test_v3_s3.py",
       "role": "active",
       "contract": "Regression contract for retained v3 s3 behavior, artifact integrity, or reproducibility."
@@ -1587,16 +1367,6 @@
       "path": "tests/integration/test_warm_start_feasibility.py",
       "role": "reproducibility",
       "contract": "Regression contract for retained warm start feasibility behavior, artifact integrity, or reproducibility."
-    },
-    {
-      "path": "tests/unit/test_stride_maprank_failure_analysis.py",
-      "role": "reproducibility",
-      "contract": "Common-prefix state integrity, first-override candidate alignment, and immediate-effect semantics for MapRank failure diagnosis."
-    },
-    {
-      "path": "tests/unit/test_stride_maprank_counterfactual.py",
-      "role": "reproducibility",
-      "contract": "Exact two-candidate by 16-paired-seed artifact coverage and counterfactual resume identity."
     },
     {
       "path": "experiments/stride_structpool_ttf_quick.py",

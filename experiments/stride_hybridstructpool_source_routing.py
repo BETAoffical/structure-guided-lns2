@@ -15,11 +15,15 @@ from experiments.repair_collection import (
     _write_jsonl,
 )
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
-from experiments.stride_augcontrol_evaluation import _dataset_tasks, _metric
 from experiments.stride_bounded_native_retry_continuation import _failed_job
-from experiments.stride_maprank_raw_ttf import _controller_summary, _paired_comparison
-from experiments.stride_robuststep_preflight import _mean
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.evaluation.episode_statistics import (
+    dataset_tasks as _dataset_tasks,
+    mean as _mean,
+    metric as _metric,
+    paired_raw_ttf_comparison as _paired_comparison,
+    raw_ttf_controller_summary as _controller_summary,
+)
 from lns2_selector.runtime.hybridstructpool import (
     hybridstructpool_runtime_augmentation,
     validate_hybridstructpool_augmentation,
@@ -413,6 +417,7 @@ def run(
                 "experiments/stride_hybridstructpool_source_routing.py",
                 "scripts/run_stride_hybridstructpool_source_routing.py",
                 "experiments/closed_loop_confirmation.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 "lns2_selector/runtime/hybridstructpool.py",
                 "lns2_selector/runtime/hybridstructpool_routed.py",
                 "lns2_selector/runtime/causalclosurepool.py",
@@ -568,6 +573,7 @@ def analyze(
             source_files=(
                 "experiments/stride_hybridstructpool_source_routing.py",
                 "scripts/run_stride_hybridstructpool_source_routing.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
             native_required=False,
         )

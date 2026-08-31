@@ -17,13 +17,15 @@ from experiments.repair_collection import (
     _read_jsonl,
     _write_json,
 )
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
     TTF_CLOCK_SCHEMA,
     _controller_kwargs as _v2_controller_kwargs,
     _quick_controller_summary,
     _structpool_trace_counts,
     load_structpool_ttf_quick_config,
+)
+from lns2_selector.evaluation.episode_statistics import (
+    paired_raw_ttf_comparison as _paired_comparison,
 )
 from lns2_selector.runtime.online_selection import validate_structpool_augmentation
 
@@ -193,8 +195,7 @@ def run_structpool_lns2_quick(
             source_files=(
                 "experiments/stride_structpool_lns2_quick.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
         ),
         resume=resume,
@@ -334,8 +335,7 @@ def analyze_structpool_lns2_quick(
             source_files=(
                 "experiments/stride_structpool_lns2_quick.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
             native_required=False,
         )

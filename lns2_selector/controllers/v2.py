@@ -14,13 +14,7 @@ class PairwiseV2Selector:
     """Adapter shared by pairwise realized-neighborhood ranker bundles."""
 
     def __init__(self, controller_id: str, bundle: Any):
-        if controller_id not in {
-            "v2-full",
-            "mixed-full-v2",
-            "stride-control-v1",
-            "stride-quality-v1",
-            "stride-augcontrol-v1",
-        }:
+        if controller_id not in {"v2-full", "mixed-full-v2"}:
             raise ValueError("unsupported pairwise V2 controller id")
         models = getattr(bundle, "main_models", None)
         if models is None:

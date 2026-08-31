@@ -13,8 +13,10 @@ from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.stride_guardpool_maze_regression import _controller_kwargs
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA, _quick_controller_summary
+from lns2_selector.evaluation.episode_statistics import (
+    paired_raw_ttf_comparison as _paired_comparison,
+)
 from lns2_selector.runtime.online_selection import (
     slotpool_runtime_augmentation,
     validate_structpool_augmentation,
@@ -225,7 +227,7 @@ def _producer(root: Path, *, native_required: bool = True) -> dict[str, Any]:
         source_files=(
             "experiments/stride_maze_tail_full_episode.py",
             "experiments/stride_guardpool_maze_regression.py",
-            "experiments/stride_maprank_raw_ttf.py",
+            "lns2_selector/evaluation/episode_statistics.py",
             "experiments/stride_structpool_ttf_quick.py",
         ),
         native_required=native_required,

@@ -15,7 +15,6 @@ from experiments.repair_collection import (
     _read_jsonl,
     _write_json,
 )
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
     CONTROLLERS,
     TTF_CLOCK_SCHEMA,
@@ -23,6 +22,9 @@ from experiments.stride_structpool_ttf_quick import (
     _quick_controller_summary,
     _structpool_trace_counts,
     structpool_ttf_schedule,
+)
+from lns2_selector.evaluation.episode_statistics import (
+    paired_raw_ttf_comparison as _paired_comparison,
 )
 
 
@@ -65,7 +67,7 @@ def run_structpool_paired_ttf(
             source_files=(
                 "experiments/stride_structpool_paired_ttf.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 *producer_source_files,
             ),
         ),
@@ -218,7 +220,7 @@ def analyze_structpool_paired_ttf(
             source_files=(
                 "experiments/stride_structpool_paired_ttf.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 *producer_source_files,
             ),
             native_required=False,

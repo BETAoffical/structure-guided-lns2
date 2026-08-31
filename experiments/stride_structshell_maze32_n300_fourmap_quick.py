@@ -14,7 +14,7 @@ from experiments._common import (
 )
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.run_output_guard import prepare_resumable_output
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
+from lns2_selector.evaluation.episode_statistics import dataset_tasks as _dataset_tasks
 from lns2_selector.runtime.structshell_dual16 import (
     structshell_dual16_augmentation,
     structshell_dual16_plateau_augmentation,
@@ -767,6 +767,7 @@ def run(
         source_files=(
             "experiments/stride_structshell_maze32_n300_fourmap_quick.py",
             "experiments/closed_loop_confirmation.py",
+            "lns2_selector/evaluation/episode_statistics.py",
             "lns2_selector/runtime/structshell_dual16.py",
             "lns2_selector/runtime/hybridstructpool.py",
             "lns2_selector/runtime/topology_candidates.py",

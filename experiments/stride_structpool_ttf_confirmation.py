@@ -11,8 +11,6 @@ from experiments._common import (
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
 from experiments.closed_loop_confirmation import run_closed_loop_collection
 from experiments.repair_collection import _fingerprint, _read_json, _read_jsonl, _write_json
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import (
     CONTROLLERS,
     TTF_CLOCK_SCHEMA,
@@ -20,6 +18,10 @@ from experiments.stride_structpool_ttf_quick import (
     _quick_controller_summary,
     _structpool_trace_counts,
     load_structpool_ttf_quick_config,
+)
+from lns2_selector.evaluation.episode_statistics import (
+    dataset_tasks as _dataset_tasks,
+    paired_raw_ttf_comparison as _paired_comparison,
 )
 from lns2_selector.runtime.online_selection import validate_structpool_augmentation
 
@@ -187,8 +189,7 @@ def run_structpool_ttf_confirmation(
             source_files=(
                 "experiments/stride_structpool_ttf_confirmation.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
         ),
         resume=resume,
@@ -402,8 +403,7 @@ def analyze_structpool_ttf_confirmation(
             source_files=(
                 "experiments/stride_structpool_ttf_confirmation.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_augcontrol_evaluation.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
             ),
             native_required=False,
         )

@@ -17,9 +17,11 @@ from experiments.repair_collection import (
     _read_jsonl,
     _write_json,
 )
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_lns2_quick import (
     load_structpool_lns2_quick_config,
+)
+from lns2_selector.evaluation.episode_statistics import (
+    paired_raw_ttf_comparison as _paired_comparison,
 )
 from experiments.stride_structpool_ttf_quick import (
     TTF_CLOCK_SCHEMA,
@@ -283,7 +285,7 @@ def run_structpool_lean_multigroup(
                 "experiments/stride_structpool_lean_quick.py",
                 "experiments/stride_structpool_lns2_quick.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 *producer_source_files,
             ),
         ),
@@ -503,7 +505,7 @@ def analyze_structpool_lean_multigroup(
                 "experiments/stride_structpool_lean_quick.py",
                 "experiments/stride_structpool_lns2_quick.py",
                 "experiments/stride_structpool_ttf_quick.py",
-                "experiments/stride_maprank_raw_ttf.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 *producer_source_files,
             ),
             native_required=False,

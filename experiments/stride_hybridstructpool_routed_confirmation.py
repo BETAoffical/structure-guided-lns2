@@ -18,11 +18,13 @@ from experiments.repair_collection import (
     _write_jsonl,
 )
 from experiments.run_output_guard import load_completed_report, prepare_resumable_output
-from experiments.stride_augcontrol_evaluation import _dataset_tasks
 from experiments.stride_bounded_native_retry_continuation import _failed_job
 from experiments.stride_hybridstructpool_source_routing import _summary
-from experiments.stride_maprank_raw_ttf import _paired_comparison
 from experiments.stride_structpool_ttf_quick import TTF_CLOCK_SCHEMA
+from lns2_selector.evaluation.episode_statistics import (
+    dataset_tasks as _dataset_tasks,
+    paired_raw_ttf_comparison as _paired_comparison,
+)
 from lns2_selector.runtime.hybridstructpool_routed import (
     validate_routed_hybridstructpool_augmentation,
 )
@@ -597,6 +599,7 @@ def run(
             source_files=(
                 "experiments/stride_hybridstructpool_routed_confirmation.py",
                 "experiments/closed_loop_confirmation.py",
+                "lns2_selector/evaluation/episode_statistics.py",
                 "lns2_selector/runtime/hybridstructpool.py",
                 "lns2_selector/runtime/hybridstructpool_routed.py",
                 "lns2_selector/runtime/topology_candidates.py",
@@ -1092,7 +1095,10 @@ def analyze(
     if producer is None:
         producer = closed_loop_producer_identity(
             project_root=root,
-            source_files=("experiments/stride_hybridstructpool_routed_confirmation.py",),
+            source_files=(
+                "experiments/stride_hybridstructpool_routed_confirmation.py",
+                "lns2_selector/evaluation/episode_statistics.py",
+            ),
             native_required=False,
         )
     report = {
