@@ -16,9 +16,6 @@ from lns2_selector.runtime.topology_candidates import (
 
 STRUCTSHELL_DUAL16_POOL_ID = "stride-structshell-dual16-v1"
 STRUCTSHELL_DUAL16_RUNTIME_ID = "stride-structshell-dual16-runtime-v1"
-STRUCTSHELL_DUAL16_PLATEAU_RUNTIME_ID = (
-    "stride-structshell-dual16-plateau-guard-runtime-v1"
-)
 
 _DUAL16_FAMILY_SIZES = {
     "conflict_component": [16],
@@ -50,39 +47,13 @@ def structshell_dual16_augmentation() -> dict[str, Any]:
     return json.loads(json.dumps(result))
 
 
-def structshell_dual16_plateau_augmentation() -> dict[str, Any]:
-    """Return Dual16 with a late no-progress fallback to fresh full V2."""
-
-    result = structshell_dual16_augmentation()
-    result.update(
-        {
-            "runtime_id": STRUCTSHELL_DUAL16_PLATEAU_RUNTIME_ID,
-            "runtime_filter_id": "dual_family_fixed16_plateau_guard_v1",
-            "stall_guard": {
-                "guard_id": "stride-dual16-plateau-guard-v1",
-                "no_progress_limit": 8,
-                "counter": "consecutive_non_decreasing_conflict_decisions",
-                "fallback": "fresh_v2_full",
-                "release_condition": "strict_conflict_decrease",
-                "wall_time_condition": None,
-                "maximum_pp_calls_per_decision": 1,
-                "retry_rollback_or_rescue": False,
-            },
-        }
-    )
-    return json.loads(json.dumps(result))
-
-
 def validate_structshell_dual16_augmentation(
     value: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if value is None:
         return None
     result = dict(value)
-    if result not in (
-        structshell_dual16_augmentation(),
-        structshell_dual16_plateau_augmentation(),
-    ):
+    if result != structshell_dual16_augmentation():
         raise ValueError("unsupported Dual16 StructShell runtime augmentation")
     return result
 
@@ -206,12 +177,10 @@ def generate_structshell_dual16_runtime_candidates(
 
 
 __all__ = [
-    "STRUCTSHELL_DUAL16_PLATEAU_RUNTIME_ID",
     "STRUCTSHELL_DUAL16_POOL_ID",
     "STRUCTSHELL_DUAL16_RUNTIME_ID",
     "generate_structshell_dual16_runtime_candidates",
     "structshell_dual16_ablation_gate",
     "structshell_dual16_augmentation",
-    "structshell_dual16_plateau_augmentation",
     "validate_structshell_dual16_augmentation",
 ]

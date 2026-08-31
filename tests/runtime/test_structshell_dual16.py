@@ -12,13 +12,11 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     validate_any_hybridstructpool_augmentation,
 )
 from lns2_selector.runtime.structshell_dual16 import (
-    STRUCTSHELL_DUAL16_PLATEAU_RUNTIME_ID,
     STRUCTSHELL_DUAL16_POOL_ID,
     STRUCTSHELL_DUAL16_RUNTIME_ID,
     generate_structshell_dual16_runtime_candidates,
     structshell_dual16_ablation_gate,
     structshell_dual16_augmentation,
-    structshell_dual16_plateau_augmentation,
     validate_structshell_dual16_augmentation,
 )
 
@@ -64,60 +62,6 @@ class StructShellDual16Test(unittest.TestCase):
         self.assertEqual(validate_any_hybridstructpool_augmentation(config), expected)
         changed = copy.deepcopy(config)
         changed["maximum_added_candidates"] = 1
-        with self.assertRaisesRegex(ValueError, "unsupported Dual16"):
-            validate_structshell_dual16_augmentation(changed)
-
-    def test_plateau_contract_is_separate_and_preserves_original_dual16(
-        self,
-    ) -> None:
-        original = structshell_dual16_augmentation()
-        frozen_original = copy.deepcopy(original)
-
-        plateau = structshell_dual16_plateau_augmentation()
-
-        self.assertEqual(structshell_dual16_augmentation(), frozen_original)
-        self.assertEqual(
-            {
-                key: value
-                for key, value in plateau.items()
-                if key not in {"runtime_id", "runtime_filter_id", "stall_guard"}
-            },
-            {
-                key: value
-                for key, value in original.items()
-                if key not in {"runtime_id", "runtime_filter_id"}
-            },
-        )
-        self.assertEqual(plateau["pool_id"], STRUCTSHELL_DUAL16_POOL_ID)
-        self.assertEqual(
-            plateau["runtime_id"], STRUCTSHELL_DUAL16_PLATEAU_RUNTIME_ID
-        )
-        self.assertEqual(
-            plateau["runtime_filter_id"],
-            "dual_family_fixed16_plateau_guard_v1",
-        )
-        self.assertEqual(
-            plateau["stall_guard"],
-            {
-                "guard_id": "stride-dual16-plateau-guard-v1",
-                "no_progress_limit": 8,
-                "counter": "consecutive_non_decreasing_conflict_decisions",
-                "fallback": "fresh_v2_full",
-                "release_condition": "strict_conflict_decrease",
-                "wall_time_condition": None,
-                "maximum_pp_calls_per_decision": 1,
-                "retry_rollback_or_rescue": False,
-            },
-        )
-        self.assertEqual(
-            validate_structshell_dual16_augmentation(plateau), plateau
-        )
-        self.assertEqual(
-            validate_any_hybridstructpool_augmentation(plateau), plateau
-        )
-
-        changed = copy.deepcopy(plateau)
-        changed["stall_guard"]["no_progress_limit"] = 7
         with self.assertRaisesRegex(ValueError, "unsupported Dual16"):
             validate_structshell_dual16_augmentation(changed)
 

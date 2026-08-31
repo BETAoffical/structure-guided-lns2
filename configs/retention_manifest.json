@@ -2479,21 +2479,6 @@
       "contract": "Freeze the paired Maze cohort, episode-stream PP semantics, baseline artifact identity, complete-union runtime semantics and engineering gates."
     },
     {
-      "path": "experiments/stride_hybridstructpool_raw_ttf.py",
-      "role": "reproducibility",
-      "purpose": "Collect and analyze strictly serial reset-inclusive raw TTF evidence for official Adaptive LNS2, frozen V2 and full HybridStructPool."
-    },
-    {
-      "path": "scripts/run_stride_hybridstructpool_raw_ttf.py",
-      "role": "reproducibility",
-      "purpose": "Run the preregistered HybridStructPool raw TTF quick comparison and integrity analysis."
-    },
-    {
-      "path": "tests/evaluation/test_stride_hybridstructpool_raw_ttf.py",
-      "role": "reproducibility",
-      "contract": "Freeze task identity, rotating serial arm order, official Adaptive comparison, raw timing boundaries and promotion gates."
-    },
-    {
       "path": "lns2_selector/runtime/hybridstructpool_routed.py",
       "role": "reproducibility",
       "purpose": "Expose immutable StructShell-only, Causal-only and strict-gated StructShell runtime routes without changing the frozen full-union contract."
@@ -2512,21 +2497,6 @@
       "path": "tests/evaluation/test_stride_hybridstructpool_source_routing.py",
       "role": "reproducibility",
       "contract": "Freeze source masks, strict gate identity, rotating five-arm schedule and deterministic promotion tie breakers."
-    },
-    {
-      "path": "experiments/stride_hybridstructpool_routed_confirmation.py",
-      "role": "reproducibility",
-      "purpose": "Run and analyze map-disjoint paired raw or right-censored bounded-TTF confirmations of the frozen StructShell-only route, with official Adaptive as an optional comparator."
-    },
-    {
-      "path": "scripts/run_stride_hybridstructpool_routed_confirmation.py",
-      "role": "reproducibility",
-      "purpose": "Run or analyze the preregistered HybridStructPool routed result-blind confirmation."
-    },
-    {
-      "path": "tests/evaluation/test_stride_hybridstructpool_routed_confirmation.py",
-      "role": "reproducibility",
-      "contract": "Freeze map disjointness, 60 paired keys, rotating strict serial execution, fresh solver seeds and raw versus bounded positive-gain bootstrap semantics."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",
@@ -2709,54 +2679,9 @@
       "purpose": "Bound repeated exact native rollback of pure StructShell challengers while preserving one PP call per decision and a V2 fallback."
     },
     {
-      "path": "experiments/stride_structshell_rollback_aware_platform_replay.py",
-      "role": "reproducibility",
-      "purpose": "Replay and audit the exact-rollback StructShell guard on two registered known-platform development cases."
-    },
-    {
-      "path": "scripts/run_stride_structshell_rollback_aware_platform_replay.py",
-      "role": "reproducibility",
-      "purpose": "Run or analyze the registered serial known-platform rollback-aware mechanism replay."
-    },
-    {
       "path": "tests/runtime/test_rollback_aware_selection.py",
       "role": "reproducibility",
       "contract": "Freeze exact-rollback detection, three-failure banning, state reset, bounded StructShell scanning and V2 fallback semantics."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_rollback_aware_platform_replay.py",
-      "role": "reproducibility",
-      "contract": "Freeze the two known-platform keys, strict serial arm rotation, bounded timing identity, repair-fingerprint escape and post-escape platform gates."
-    },
-    {
-      "path": "experiments/stride_structshell_rollback_aware_ttf.py",
-      "role": "reproducibility",
-      "purpose": "Run and analyze the atomic two-stage official, V2 and rollback-aware StructShell bounded TTF comparison."
-    },
-    {
-      "path": "scripts/run_stride_structshell_rollback_aware_ttf.py",
-      "role": "reproducibility",
-      "purpose": "Expose resumable screen, extension and analysis commands for the rollback-aware bounded TTF protocol."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf.py",
-      "role": "reproducibility",
-      "contract": "Freeze the 10+50 key partition, three-arm serial rotation, controller identity, qualification reuse and map-cluster bootstrap."
-    },
-    {
-      "path": "experiments/stride_structshell_rollback_aware_ttf_analysis_recovery.py",
-      "role": "reproducibility",
-      "purpose": "Recover a completed rollback-aware TTF screen with passive observed-delta platform diagnostics and separate collection/analyzer identities."
-    },
-    {
-      "path": "scripts/recover_stride_structshell_rollback_aware_ttf_analysis.py",
-      "role": "reproducibility",
-      "purpose": "Generate the hash-bound analysis-only recovery report without reexecuting solver episodes."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_rollback_aware_ttf_analysis_recovery.py",
-      "role": "reproducibility",
-      "contract": "Verify unseeded official PP transitions can be passively audited while tampered observed fingerprints are rejected."
     },
     {
       "path": "lns2_selector/runtime/overall_rollback_selection.py",
@@ -2769,51 +2694,6 @@
       "contract": "Freeze the three-rollback state budget, persistent StructShell suppression and fresh V2 fallback semantics."
     },
     {
-      "path": "experiments/stride_structshell_overall_rollback_screen.py",
-      "role": "reproducibility",
-      "purpose": "Run the same-key four-arm bounded TTF screen for the state-bounded StructShell rollback policy."
-    },
-    {
-      "path": "scripts/run_stride_structshell_overall_rollback_screen.py",
-      "role": "reproducibility",
-      "purpose": "Expose dry-run, collection and analysis commands for the registered state-bounded rollback screen."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_overall_rollback_screen.py",
-      "role": "reproducibility",
-      "contract": "Freeze the ten paired keys, four-arm serial rotation, state-guard trace audit and no-promotion screen gates."
-    },
-    {
-      "path": "experiments/stride_structshell_fourmap_fivearm_quick.py",
-      "role": "reproducibility",
-      "purpose": "Run the seed23 four-map five-arm reset-inclusive StructShell runtime triage with strict serial rotation and no promotion gate."
-    },
-    {
-      "path": "scripts/run_stride_structshell_fourmap_fivearm_quick.py",
-      "role": "reproducibility",
-      "purpose": "Expose plan, dry-run, bounded execution and compact analysis for the four-map five-arm quick triage."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_fourmap_fivearm_quick.py",
-      "role": "reproducibility",
-      "contract": "Freeze the exact four tasks, seed23 identity, twenty-entry serial schedule, Official phase and single-family versus Dual16 runtime contracts."
-    },
-    {
-      "path": "experiments/stride_structshell_maze32_n300_fourmap_quick.py",
-      "role": "reproducibility",
-      "purpose": "Run the seed25 four-map plateau-guard triage with the independently materialized Maze32 N300 task, versioned 90/200-second timing identities and strict four-arm rotation."
-    },
-    {
-      "path": "scripts/run_stride_structshell_maze32_n300_fourmap_quick.py",
-      "role": "reproducibility",
-      "purpose": "Expose plan, dry-run, bounded execution and compact analysis for the Maze32 N300 Dual16 plateau-guard comparison."
-    },
-    {
-      "path": "tests/evaluation/test_stride_structshell_maze32_n300_fourmap_quick.py",
-      "role": "reproducibility",
-      "contract": "Freeze the exact four tasks, seed25 identity, sixteen-entry serial schedule, Official phase, Dual16 plateau fallback and versioned 90/200-second runtime contracts."
-    },
-    {
       "path": "lns2_selector/runtime/structshell_single_family.py",
       "role": "reproducibility",
       "purpose": "Expose exactly one registered StructShell family and one fixed size while preserving the complete frozen V2 candidate pool and Copeland selector."
@@ -2824,16 +2704,6 @@
       "purpose": "Expose the independently identified Component16 plus Hotspot16 runtime and its versioned eight-step plateau fallback while preserving the complete frozen V2 candidate pool and Copeland selector."
     },
     {
-      "path": "experiments/stride_warehouse_fixed16_development.py",
-      "role": "reproducibility",
-      "purpose": "Run the preregistered Warehouse fixed16 six-arm development screen with reset-only load qualification and strict serial timing."
-    },
-    {
-      "path": "scripts/run_stride_warehouse_fixed16_development.py",
-      "role": "reproducibility",
-      "purpose": "Expose read-only planning, qualification, collection, analysis and resumable execution for the Warehouse fixed16 development screen."
-    },
-    {
       "path": "tests/runtime/test_structshell_single_family.py",
       "role": "reproducibility",
       "contract": "Freeze the single-family single-size configuration, all-state ablation gate, one-candidate cap and V2-authoritative merge semantics."
@@ -2842,26 +2712,6 @@
       "path": "tests/runtime/test_structshell_dual16.py",
       "role": "reproducibility",
       "contract": "Freeze the exact Dual16 and plateau-guard configurations, two fixed family-size cells, two-challenger cap, V2-authoritative merge and closed-loop dispatch."
-    },
-    {
-      "path": "tests/evaluation/test_stride_warehouse_fixed16_development.py",
-      "role": "reproducibility",
-      "contract": "Freeze the 256-reset qualification, 32-key six-arm serial schedule, identity audits, TTF-only gates and reserved final namespace."
-    },
-    {
-      "path": "experiments/stride_warehouse_fixed16_development_v2.py",
-      "role": "reproducibility",
-      "purpose": "Run the independently identified four-task Warehouse qualification and eight-key six-arm fixed16 development screen without importing failed r2 artifacts."
-    },
-    {
-      "path": "scripts/run_stride_warehouse_fixed16_development_v2.py",
-      "role": "reproducibility",
-      "purpose": "Expose planning, qualification, strict serial collection and analysis for the Warehouse fixed16 v2 development identity."
-    },
-    {
-      "path": "tests/evaluation/test_stride_warehouse_fixed16_development_v2.py",
-      "role": "reproducibility",
-      "contract": "Freeze four registered task hashes, fresh sixteen-reset qualification, eight paired keys, six-arm rotation, trace identity and conditional next-step semantics."
     },
     {
       "path": "experiments/warehouse_crossaisle_tasks.py",

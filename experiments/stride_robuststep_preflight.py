@@ -21,6 +21,7 @@ from experiments.balanced_wall_clock import (
     _write_jsonl_atomic,
 )
 from experiments.repair_collection import _read_json, _read_jsonl, _write_json
+from lns2_selector.evaluation.episode_statistics import mean as _mean
 
 
 REPORT_SCHEMA = "lns2.stride.robuststep_map_preflight_report.v1"
@@ -37,10 +38,6 @@ PREFLIGHT_ROLES = {
     "stride_robuststep_outcome_blind_congestion_preflight",
     "stride_robuststep_topology_balanced_preflight",
 }
-
-
-def _mean(values: list[float]) -> float:
-    return statistics.fmean(values) if values else 0.0
 
 
 def _scenario_rank(row: dict[str, Any]) -> int:

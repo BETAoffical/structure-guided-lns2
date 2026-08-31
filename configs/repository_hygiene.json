@@ -106,45 +106,6 @@
         }
       ],
       "reason": "Preserve registered producer identities while documenting the intentionally compatible command interfaces for bounded continuation experiments."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_warehouse_fixed16_development.py",
-          "name": "qualification_schedule"
-        },
-        {
-          "path": "experiments/stride_warehouse_fixed16_development_v2.py",
-          "name": "qualification_schedule"
-        }
-      ],
-      "reason": "Preserve the completed Warehouse v2 collection producer identity while documenting the deliberately version-compatible reset-only qualification schedule."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_warehouse_fixed16_development.py",
-          "name": "_key"
-        },
-        {
-          "path": "experiments/stride_warehouse_fixed16_development_v2.py",
-          "name": "_key"
-        }
-      ],
-      "reason": "Preserve the completed Warehouse v2 collection producer identity while documenting the deliberately version-compatible local manifest-key helper."
-    },
-    {
-      "functions": [
-        {
-          "path": "experiments/stride_warehouse_fixed16_development.py",
-          "name": "run"
-        },
-        {
-          "path": "experiments/stride_warehouse_fixed16_development_v2.py",
-          "name": "run"
-        }
-      ],
-      "reason": "Preserve the completed Warehouse v2 collection producer identity while documenting the deliberately version-compatible top-level orchestration flow."
     }
   ],
   "tracked_roles": {

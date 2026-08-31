@@ -115,3 +115,38 @@ commit `07f18c0448cc2c13ebf6217e609b936495fd6171`. Restore a removed file with:
 ```bash
 git restore --source 07f18c0 -- path/to/file
 ```
+
+## Removed in pruning stage 4
+
+The executable experiment, CLI and implementation-detail test chains for the
+following stopped branches were removed while their protocols, result reports
+and registered configurations were retained:
+
+- StructShell four-map/five-arm Quick: the apparent seed-23 advantage did not
+  reproduce and Dual16 was the worst arm; no controller was promoted.
+- StructShell Maze32/N300 plateau Quick: the structural variants were unstable,
+  did not improve the plateau overall and were explicitly barred from
+  replacing V2 or Official.
+- HybridStructPool raw-TTF Quick: all three promotion gates versus V2 failed.
+- Routed StructShell/Hybrid confirmation: four of six performance gates failed
+  and the registered branch stopped.
+- Overall/candidate-guard/rollback-aware StructShell screens: rollback did not
+  recover the TTF loss, exposed repeated candidate cycling, and failed the
+  registered mechanism and promotion gates.
+- Warehouse Fixed16 development V1/V2: no challenger passed, `winner=null`, and
+  the branch stopped by its preregistered rule.
+
+This removal does not delete the base `structshell_dual16_augmentation()` used
+by targeted warehouse `high_only` recovery, nor the shared topology and
+HybridStructPool candidate data structures. Only the rejected plateau variant
+and its dedicated tests are removed. The common warehouse runtime configuration
+`configs/stride_warehouse_fixed16_development_runtime_v2.json` is retained
+because current recovery experiments reuse it as an input template.
+
+The exact pre-stage-4 source tree is protected remotely at
+`backup/rejected-method-pruning-03-before-structshell-hybrid-pruning`, commit
+`02cdccd4b4e8c79f3b7616ede953c1d5d65fcadc`. Restore a removed file with:
+
+```bash
+git restore --source 02cdccd -- path/to/file
+```
