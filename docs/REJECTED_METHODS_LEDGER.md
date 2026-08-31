@@ -137,7 +137,7 @@ and registered configurations were retained:
   the branch stopped by its preregistered rule.
 
 This removal does not delete the base `structshell_dual16_augmentation()` used
-by targeted warehouse `high_only` recovery, nor the shared topology and
+by targeted warehouse recovery evaluation, nor the shared topology and
 HybridStructPool candidate data structures. Only the rejected plateau variant
 and its dedicated tests are removed. The common warehouse runtime configuration
 `configs/stride_warehouse_fixed16_development_runtime_v2.json` is retained
@@ -149,4 +149,29 @@ The exact pre-stage-4 source tree is protected remotely at
 
 ```bash
 git restore --source 02cdccd -- path/to/file
+```
+
+## Removed in pruning stage 5
+
+After stage 4 removed the final callers, the following execution-only runtime
+implementations became unreachable and were deleted with their dedicated
+tests:
+
+- StructShell single-family runtime selection;
+- candidate-scoped exact-rollback selection;
+- state-scoped overall-rollback selection.
+
+Their constructors, validators, routing branches, repair-state cache,
+selection/observation telemetry and the now-unreachable Hybrid stall-guard
+plumbing were also removed from the shared closed-loop runner. Routed-v1,
+base HybridStructPool, base Dual16, V3-S3 stateful caching and current warehouse
+recovery remain intact. Historical configuration files are retained as frozen
+evidence but are no longer accepted as executable active runtime contracts.
+
+The exact pre-stage-5 source tree is protected remotely at
+`backup/rejected-method-pruning-04-before-runtime-dead-code`, commit
+`cccf368af785f1f360f71a62bb326b22a70ae88f`. Restore a removed file with:
+
+```bash
+git restore --source cccf368 -- path/to/file
 ```

@@ -19,13 +19,9 @@ from lns2_selector.runtime.hybridstructpool import (
 )
 from lns2_selector.runtime.hybridstructpool_routed import (
     generate_routed_hybridstructpool_runtime_candidates,
-    overall_rollback_routed_hybridstructpool_augmentation,
-    rollback_aware_routed_hybridstructpool_augmentation,
     routed_hybridstructpool_augmentation,
     routed_hybridstructpool_high_stress_gate,
     validate_any_hybridstructpool_augmentation,
-    validate_overall_rollback_routed_hybridstructpool_augmentation,
-    validate_rollback_aware_routed_hybridstructpool_augmentation,
     validate_routed_hybridstructpool_augmentation,
 )
 
@@ -94,45 +90,6 @@ class HybridStructPoolTest(unittest.TestCase):
         self.assertEqual(
             hybridstructpool_runtime_augmentation(), legacy
         )
-
-    def test_rollback_aware_contract_is_separately_versioned_and_frozen(self) -> None:
-        config = rollback_aware_routed_hybridstructpool_augmentation()
-        self.assertEqual(config["pool_id"], "stride-hybridstructpool-routed-v2")
-        self.assertEqual(config["source_mode"], "structshell_only")
-        self.assertEqual(config["exact_rollback_guard"]["exact_rollback_limit"], 3)
-        self.assertEqual(
-            validate_rollback_aware_routed_hybridstructpool_augmentation(config),
-            config,
-        )
-        self.assertEqual(validate_any_hybridstructpool_augmentation(config), config)
-        config["exact_rollback_guard"]["exact_rollback_limit"] = 2
-        with self.assertRaisesRegex(ValueError, "rollback-aware"):
-            validate_any_hybridstructpool_augmentation(config)
-
-    def test_state_bounded_contract_is_separately_versioned_and_strict(self) -> None:
-        legacy = rollback_aware_routed_hybridstructpool_augmentation()
-        config = overall_rollback_routed_hybridstructpool_augmentation()
-        self.assertEqual(config["pool_id"], "stride-hybridstructpool-routed-v3")
-        self.assertEqual(config["source_mode"], "routed_structshell")
-        self.assertEqual(
-            config["activation_gate"]["gate_id"],
-            "stride-highstress-conflict-structure-v1",
-        )
-        guard = config["exact_rollback_guard"]
-        self.assertEqual(guard["exact_rollback_limit"], 3)
-        self.assertEqual(guard["fallback"], "fresh_v2_only")
-        self.assertEqual(guard["repair_state_cache"], "pre_budget_only")
-        self.assertEqual(
-            validate_overall_rollback_routed_hybridstructpool_augmentation(config),
-            config,
-        )
-        self.assertEqual(validate_any_hybridstructpool_augmentation(config), config)
-        self.assertEqual(
-            rollback_aware_routed_hybridstructpool_augmentation(), legacy
-        )
-        config["exact_rollback_guard"]["exact_rollback_limit"] = 2
-        with self.assertRaisesRegex(ValueError, "state-bounded rollback"):
-            validate_any_hybridstructpool_augmentation(config)
 
     def test_routed_gate_removes_total_agent_shortcut(self) -> None:
         sparse_edges = [

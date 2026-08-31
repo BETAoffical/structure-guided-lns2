@@ -16,10 +16,6 @@ from lns2_selector.runtime.hybridstructpool import (
 from lns2_selector.runtime.topology_candidates import (
     generate_structpool_candidate_subset,
 )
-from lns2_selector.runtime.structshell_single_family import (
-    STRUCTSHELL_SINGLE_FAMILY_POOL_ID,
-    validate_structshell_single_family_augmentation,
-)
 from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
     validate_structshell_dual16_augmentation,
@@ -27,8 +23,6 @@ from lns2_selector.runtime.structshell_dual16 import (
 
 
 ROUTED_HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-routed-v1"
-ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-routed-v2"
-OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID = "stride-hybridstructpool-routed-v3"
 ROUTED_SOURCE_MODES = (
     "structshell_only",
     "causal_only",
@@ -86,66 +80,6 @@ def routed_hybridstructpool_augmentation(source_mode: str) -> dict[str, Any]:
     return json.loads(json.dumps(result))
 
 
-def rollback_aware_routed_hybridstructpool_augmentation(
-    source_mode: str = "structshell_only",
-) -> dict[str, Any]:
-    """Return the separately versioned no-extra-PP escape runtime contract."""
-
-    if str(source_mode) != "structshell_only":
-        raise ValueError("rollback-aware routing is registered for StructShell only")
-    result = routed_hybridstructpool_augmentation(source_mode)
-    result.update(
-        {
-            "pool_id": ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID,
-            "runtime_id": "stride-hybridstructpool-routed-runtime-v2",
-            "runtime_filter_id": "source_route_exact_rollback_guard_v1",
-            "exact_rollback_guard": {
-                "guard_id": "stride-exact-rollback-candidate-guard-v1",
-                "exact_rollback_limit": 3,
-                "candidate_scope": "hybrid_challenger_only",
-                "fallback": "v2_anchor",
-                "repair_state_cache": True,
-                "maximum_pp_calls_per_decision": 1,
-            },
-        }
-    )
-    return json.loads(json.dumps(result))
-
-
-def overall_rollback_routed_hybridstructpool_augmentation(
-    source_mode: str = "routed_structshell",
-) -> dict[str, Any]:
-    """Return the state-bounded StructShell rollback runtime contract.
-
-    This is intentionally separate from routed-v1 and candidate-guard-v2.  It
-    uses the registered strict conflict-structure gate, then bounds all pure
-    StructShell exact rollbacks at one repair fingerprint as a single budget.
-    """
-
-    if str(source_mode) != "routed_structshell":
-        raise ValueError(
-            "state-bounded rollback routing is registered for routed StructShell only"
-        )
-    result = routed_hybridstructpool_augmentation(source_mode)
-    result.update(
-        {
-            "pool_id": OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID,
-            "runtime_id": "stride-hybridstructpool-routed-runtime-v3",
-            "runtime_filter_id": "source_route_state_rollback_guard_v1",
-            "exact_rollback_guard": {
-                "guard_id": "stride-exact-rollback-state-guard-v1",
-                "exact_rollback_limit": 3,
-                "candidate_scope": "all_pure_structshell_per_repair_fingerprint",
-                "fallback": "fresh_v2_only",
-                "repair_state_cache": "pre_budget_only",
-                "state_history": "persistent_per_repair_fingerprint",
-                "maximum_pp_calls_per_decision": 1,
-            },
-        }
-    )
-    return json.loads(json.dumps(result))
-
-
 def validate_routed_hybridstructpool_augmentation(
     value: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
@@ -155,28 +89,6 @@ def validate_routed_hybridstructpool_augmentation(
     mode = str(result.get("source_mode") or "")
     if mode not in ROUTED_SOURCE_MODES or result != routed_hybridstructpool_augmentation(mode):
         raise ValueError("unsupported routed HybridStructPool runtime augmentation")
-    return result
-
-
-def validate_rollback_aware_routed_hybridstructpool_augmentation(
-    value: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if value is None:
-        return None
-    result = dict(value)
-    if result != rollback_aware_routed_hybridstructpool_augmentation():
-        raise ValueError("unsupported rollback-aware HybridStructPool augmentation")
-    return result
-
-
-def validate_overall_rollback_routed_hybridstructpool_augmentation(
-    value: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if value is None:
-        return None
-    result = dict(value)
-    if result != overall_rollback_routed_hybridstructpool_augmentation():
-        raise ValueError("unsupported state-bounded rollback HybridStructPool augmentation")
     return result
 
 
@@ -190,12 +102,6 @@ def validate_any_hybridstructpool_augmentation(
         return validate_hybridstructpool_augmentation(value)
     if pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
         return validate_routed_hybridstructpool_augmentation(value)
-    if pool_id == ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        return validate_rollback_aware_routed_hybridstructpool_augmentation(value)
-    if pool_id == OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        return validate_overall_rollback_routed_hybridstructpool_augmentation(value)
-    if pool_id == STRUCTSHELL_SINGLE_FAMILY_POOL_ID:
-        return validate_structshell_single_family_augmentation(value)
     if pool_id == STRUCTSHELL_DUAL16_POOL_ID:
         return validate_structshell_dual16_augmentation(value)
     raise ValueError("unsupported HybridStructPool runtime augmentation")
@@ -204,13 +110,7 @@ def validate_any_hybridstructpool_augmentation(
 def routed_hybridstructpool_high_stress_gate(
     state: dict[str, Any], value: dict[str, Any]
 ) -> dict[str, Any]:
-    pool_id = str(value.get("pool_id") or "")
-    if pool_id == ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        config = validate_rollback_aware_routed_hybridstructpool_augmentation(value)
-    elif pool_id == OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        config = validate_overall_rollback_routed_hybridstructpool_augmentation(value)
-    else:
-        config = validate_routed_hybridstructpool_augmentation(value)
+    config = validate_routed_hybridstructpool_augmentation(value)
     assert config is not None
     started = time.perf_counter()
     agent_ids = {int(agent["id"]) for agent in state.get("agents", [])}
@@ -286,17 +186,7 @@ def generate_routed_hybridstructpool_runtime_candidates(
     v2_anchors: Iterable[dict[str, Any]],
     config: dict[str, Any],
 ) -> HybridStructPoolResult:
-    pool_id = str(config.get("pool_id") or "")
-    if pool_id == ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        specification = validate_rollback_aware_routed_hybridstructpool_augmentation(
-            config
-        )
-    elif pool_id == OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID:
-        specification = validate_overall_rollback_routed_hybridstructpool_augmentation(
-            config
-        )
-    else:
-        specification = validate_routed_hybridstructpool_augmentation(config)
+    specification = validate_routed_hybridstructpool_augmentation(config)
     assert specification is not None
     mode = str(specification["source_mode"])
     base = list(v2_candidates)
@@ -343,17 +233,11 @@ def generate_routed_hybridstructpool_runtime_candidates(
 
 
 __all__ = [
-    "OVERALL_ROLLBACK_ROUTED_HYBRIDSTRUCTPOOL_ID",
-    "ROLLBACK_AWARE_ROUTED_HYBRIDSTRUCTPOOL_ID",
     "ROUTED_HYBRIDSTRUCTPOOL_ID",
     "ROUTED_SOURCE_MODES",
     "generate_routed_hybridstructpool_runtime_candidates",
-    "rollback_aware_routed_hybridstructpool_augmentation",
-    "overall_rollback_routed_hybridstructpool_augmentation",
     "routed_hybridstructpool_augmentation",
     "routed_hybridstructpool_high_stress_gate",
     "validate_any_hybridstructpool_augmentation",
-    "validate_rollback_aware_routed_hybridstructpool_augmentation",
-    "validate_overall_rollback_routed_hybridstructpool_augmentation",
     "validate_routed_hybridstructpool_augmentation",
 ]

@@ -27,8 +27,6 @@ class ProducerIdentityResumeTest(unittest.TestCase):
             "lns2_selector/runtime/causalclosurepool.py",
             "lns2_selector/runtime/hybridstructpool.py",
             "lns2_selector/runtime/hybridstructpool_routed.py",
-            "lns2_selector/runtime/overall_rollback_selection.py",
-            "lns2_selector/runtime/rollback_aware_selection.py",
             "third_party/mapf_lns2/inc/SIPP.h",
             "third_party/mapf_lns2/inc/SingleAgentSolver.h",
             "third_party/mapf_lns2/inc/SpaceTimeAStar.h",
