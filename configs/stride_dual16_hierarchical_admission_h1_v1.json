@@ -1,0 +1,131 @@
+{
+  "schema": "lns2.stride.dual16_hierarchical_admission_h1_config.v1",
+  "experiment_id": "stride-dual16-hierarchical-admission-h1-v1",
+  "data_line_id": "stride-dual16-hierarchical-admission-h1-data-v1",
+  "planned_model_id": "stride-dual16-hierarchical-admission-v1",
+  "scientific_status": "preregistered_sequential_development_current_step_label_support_only",
+  "pre_registration_parent_commit": "e0912b3bf76be1ae3d45bfc248c3b67ec72874ac",
+  "inputs": {
+    "load_extension_config": {
+      "path": "configs/stride_warehouse_disruption_recovery_load_extension_v1.json",
+      "sha256": "6af88121e232fdd925d5e640a65a174d45fc1a82f837a414c4ea4068f6e44e26"
+    },
+    "checkpoint_manifest": {
+      "path": "build/stride-warehouse-disruption-recovery-load-extension-v1/checkpoints/load_extension_checkpoint_manifest.jsonl",
+      "sha256": "a9acfae87a43ed1a703495f085d7215274beb166e9771a4c5f75c3331b7a113e"
+    },
+    "checkpoint_report": {
+      "path": "build/stride-warehouse-disruption-recovery-load-extension-v1/checkpoints/load_extension_checkpoint_report.json",
+      "sha256": "5e100bd4340b307ef6aa5785b78c43017626c816dd2bca35b7809f93509a13a9"
+    },
+    "checkpoint_worker_results": {
+      "path": "build/stride-warehouse-disruption-recovery-load-extension-v1/checkpoints/load_extension_worker_results.json",
+      "sha256": "f4ea48e8519e104a05bc24d781925e7b8c08dd4fb646228c355a3119fa864209"
+    },
+    "runtime_template": {
+      "path": "configs/stride_warehouse_fixed16_development_runtime_v2.json",
+      "sha256": "4a7376f428338abedf8a7defb645588b59fdda081f575918ea2a7abb278f673a"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "source_cohort": {
+    "cohort_id": "stride-warehouse-disruption-recovery-load-extension-v1",
+    "role": "sequential_development_only",
+    "expected_checkpoint_count": 36,
+    "expected_map_count": 6,
+    "expected_load_band_counts": {
+      "medium_high": 12,
+      "high": 12,
+      "very_high": 12
+    },
+    "controller_outcome_filtering": false,
+    "reserve_or_replacement_backfill": false,
+    "future_map_disjoint_confirmation_required": true
+  },
+  "controller_contract": {
+    "controller_id": "v2-full",
+    "bundle_path": "artifacts/initlns-closed-loop-controller-v2",
+    "feature_schema": "lns2.realized_features.v2",
+    "feature_profile": "realized_dynamic",
+    "feature_dimension": 124,
+    "proposal_backend": "optimized",
+    "anchor_ranking": "base_v2_pool_only_before_structural_generation"
+  },
+  "dual16_contract": {
+    "pool_id": "stride-structshell-dual16-v1",
+    "runtime_id": "stride-structshell-dual16-runtime-v3",
+    "nominal_size": 16,
+    "structural_families": {
+      "component": "conflict_component",
+      "hotspot": "spatiotemporal_hotspot"
+    },
+    "maximum_structural_actions": 2,
+    "exact_agent_tuple_deduplication": true,
+    "frozen_v2_anchor_may_not_change_after_structural_generation": true
+  },
+  "paired_repair_contract": {
+    "trial_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "first_fixed_half": [0, 1, 2, 3, 4, 5, 6, 7],
+    "second_fixed_half": [8, 9, 10, 11, 12, 13, 14, 15],
+    "trials_per_unique_action": 16,
+    "seed_namespace": "stride-dual16-hierarchical-admission-h1-paired-pp-v1",
+    "same_state_trial_seed_across_all_unique_actions": true,
+    "fresh_restore_per_action_trial": true,
+    "execute_each_unique_set_once": true,
+    "failure_backfill_allowed": false,
+    "replan_algorithm": "PP",
+    "per_action_time_limit_seconds": 5.0,
+    "runtime_fields_stored": false,
+    "future_fields_stored": false
+  },
+  "label_contract": {
+    "per_seed_target": "normalized_current_step_conflict_reduction",
+    "formula": "(conflicts_before-conflicts_after)/max(1,conflicts_before)",
+    "minimum_mean_advantage": 0.02,
+    "minimum_paired_win_fraction": 0.75,
+    "require_positive_first_fixed_half": true,
+    "require_positive_second_fixed_half": true,
+    "require_rollback_rate_noninferiority": true,
+    "require_no_progress_rate_noninferiority": true,
+    "stage1": "admit_structural_only_when_component_and_hotspot_each_stably_support_structural_over_frozen_v2",
+    "stage2": "component_vs_hotspot_only_when_exact_agent_sets_differ",
+    "all_shared": "audit_only",
+    "posthoc_best_structural_used": false,
+    "single_seed_winner_used": false,
+    "repair_runtime_used": false,
+    "future_repair_rounds_used": false,
+    "cost_to_go_used": false,
+    "receding_q_used": false,
+    "ttf_used": false
+  },
+  "pilot_support_gates": {
+    "minimum_stage1_structural_labels": 4,
+    "minimum_stage1_v2_labels": 4,
+    "minimum_maps_with_stage1_structural_label": 2,
+    "minimum_maps_with_stage1_v2_label": 2,
+    "minimum_stage2_component_labels": 2,
+    "minimum_stage2_hotspot_labels": 2,
+    "minimum_stage2_eligible_states": 8,
+    "gate_authorizes": "expanded_fresh_label_collection_only"
+  },
+  "execution": {
+    "recommended_workers": 16,
+    "maximum_workers": 20,
+    "per_state_process_fuse_seconds": 420.0,
+    "resume_required_for_existing_output": true,
+    "preserve_complete_failed_product": true
+  },
+  "claim_boundary": {
+    "sequential_development_only": true,
+    "training_authorized": false,
+    "runtime_integration_authorized": false,
+    "default_replacement_authorized": false,
+    "ttf_or_speed_claim_authorized": false,
+    "map_disjoint_confirmation_required": true
+  },
+  "next_decision_on_support_pass": "register_expanded_fresh_map_grouped_h1_collection_before_training",
+  "next_decision_on_support_failure": "stop_before_training_and_report_no_go_label_support"
+}
