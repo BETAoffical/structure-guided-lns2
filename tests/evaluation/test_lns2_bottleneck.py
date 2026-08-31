@@ -1339,7 +1339,7 @@ class Lns2BottleneckTests(unittest.TestCase):
         current = types.ModuleType("lns2_env")
         current.repair_timing_schema = "lns2.repair_timing.v2"
         current.native_semantics_schema = (
-            "lns2.native_semantics.official_step_timed_extension.v2"
+            "lns2.native_semantics.official_step_timed_extension.v3"
         )
         current.__file__ = "/tmp/lns2_env.so"
 

@@ -23,7 +23,7 @@ from typing import Any, Iterable
 
 
 PRODUCER_IDENTITY_SCHEMA = "lns2.producer_identity.v2"
-NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.official_step_timed_extension.v2"
+NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.official_step_timed_extension.v3"
 CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "CMakeLists.txt",
     "experiments/_common.py",

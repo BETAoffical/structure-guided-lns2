@@ -38,6 +38,10 @@ def _candidate(agents: list[int], family: str) -> dict:
 
 class StructShellDual16Test(unittest.TestCase):
     def test_exact_registered_contract(self) -> None:
+        self.assertEqual(
+            STRUCTSHELL_DUAL16_RUNTIME_ID,
+            "stride-structshell-dual16-runtime-v2",
+        )
         expected = {
             "enabled": True,
             "pool_id": STRUCTSHELL_DUAL16_POOL_ID,
@@ -95,7 +99,6 @@ class StructShellDual16Test(unittest.TestCase):
             {"agents": [{"id": index} for index in range(8)]},
             object(),  # type: ignore[arg-type]
             v2_candidates=base,
-            v2_anchors=[base[0]],
             config=structshell_dual16_augmentation(),
         )
 
@@ -132,7 +135,6 @@ class StructShellDual16Test(unittest.TestCase):
                 {"agents": [{"id": index} for index in range(8)]},
                 object(),  # type: ignore[arg-type]
                 v2_candidates=base,
-                v2_anchors=base,
                 config=structshell_dual16_augmentation(),
             )
 
@@ -152,7 +154,6 @@ class StructShellDual16Test(unittest.TestCase):
             state,
             analysis,
             v2_candidates=base,
-            v2_anchors=[base[0]],
             config=config,
         )
 
@@ -161,9 +162,17 @@ class StructShellDual16Test(unittest.TestCase):
             state,
             analysis,
             v2_candidates=base,
-            v2_anchors=[base[0]],
             config=config,
         )
+
+    def test_generator_requires_only_the_full_v2_pool(self) -> None:
+        with self.assertRaisesRegex(ValueError, "full V2 pool"):
+            generate_structshell_dual16_runtime_candidates(
+                {"agents": [{"id": 0}]},
+                object(),  # type: ignore[arg-type]
+                v2_candidates=[],
+                config=structshell_dual16_augmentation(),
+            )
 
 
 if __name__ == "__main__":

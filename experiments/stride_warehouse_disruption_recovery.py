@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+from functools import partial
 import math
 from pathlib import Path
 from typing import Any, Mapping
@@ -27,6 +28,10 @@ from experiments.warehouse_disruption_checkpoints import (
     warehouse_checkpoint_gate,
     warehouse_hotspot_definition,
 )
+from experiments.warehouse_checkpoint_resume import (
+    checkpoint_failure_record,
+    reusable_checkpoint_report,
+)
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
@@ -38,6 +43,7 @@ CHECKPOINT_NATIVE_SCHEMA = "lns2.warehouse_disruption_checkpoint.native.v1"
 MANIFEST_FILENAME = "checkpoint_manifest.jsonl"
 REPORT_FILENAME = "checkpoint_qualification_report.json"
 PLAN_FILENAME = "checkpoint_plan.json"
+WORKER_RESULTS_FILENAME = "worker_results.json"
 INCUMBENT_SUPPLY_ERROR = (
     "RuntimeError: Official incumbent did not produce a feasible path set"
 )
@@ -402,38 +408,21 @@ def _checkpoint_worker(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _checkpoint_failure(job: dict[str, Any], status: str, error: str) -> dict[str, Any]:
-    item = dict(job["item"])
-    normalized_status = (
-        "state_supply_unavailable"
-        if status == "error" and error == INCUMBENT_SUPPLY_ERROR
-        else status
-    )
-    return {
-        "status": normalized_status,
-        "error": error,
-        "state_count": 0,
-        "outcome_count": 0,
-        "key_index": int(item["key_index"]),
-        "key_id": str(item["key_id"]),
-        "map_id": str(item["map_id"]),
-        "task_id": str(item["task_id"]),
-    }
+_checkpoint_failure = partial(
+    checkpoint_failure_record,
+    incumbent_supply_error=INCUMBENT_SUPPLY_ERROR,
+)
 
 
-def analyze_checkpoints(
-    config_path: str | Path, output: str | Path
+def _checkpoint_report(
+    path: Path,
+    config: Mapping[str, Any],
+    rows: list[dict[str, Any]],
+    raw_failures: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    path, _root, config = load_config(config_path)
-    output_path = Path(output).resolve()
-    manifest_path = output_path / "checkpoints" / MANIFEST_FILENAME
-    rows = _read_jsonl(manifest_path) if manifest_path.is_file() else []
     generation = dict(config["checkpoint_generation"])
     qualified = [row for row in rows if dict(row.get("qualification") or {}).get("passed")]
     maps = {str(row["map_id"]) for row in qualified}
-    raw_failures = _read_json(output_path / "checkpoints" / "worker_results.json").get(
-        "failures", []
-    ) if (output_path / "checkpoints" / "worker_results.json").is_file() else []
     supply_unavailable = [
         dict(row)
         for row in raw_failures
@@ -453,7 +442,7 @@ def analyze_checkpoints(
         and len(maps) >= int(generation["minimum_qualified_map_count"])
         and not execution_failures
     )
-    report = {
+    return {
         "schema": REPORT_SCHEMA,
         "experiment_id": EXPERIMENT_ID,
         "config_sha256": sha256_file(path),
@@ -493,7 +482,24 @@ def analyze_checkpoints(
             for row in rows
         ],
     }
-    _write_json(output_path / "checkpoints" / REPORT_FILENAME, report)
+
+
+def analyze_checkpoints(
+    config_path: str | Path, output: str | Path
+) -> dict[str, Any]:
+    path, _root, config = load_config(config_path)
+    output_path = Path(output).resolve()
+    checkpoint_root = output_path / "checkpoints"
+    manifest_path = checkpoint_root / MANIFEST_FILENAME
+    rows = _read_jsonl(manifest_path) if manifest_path.is_file() else []
+    worker_path = checkpoint_root / WORKER_RESULTS_FILENAME
+    raw_failures = (
+        list(_read_json(worker_path).get("failures", []))
+        if worker_path.is_file()
+        else []
+    )
+    report = _checkpoint_report(path, config, rows, raw_failures)
+    _write_json(checkpoint_root / REPORT_FILENAME, report)
     return report
 
 
@@ -509,14 +515,25 @@ def prepare_checkpoints(
     output_path = Path(output).resolve()
     checkpoint_root = output_path / "checkpoints"
     report_path = checkpoint_root / REPORT_FILENAME
-    if resume and report_path.is_file():
-        report = _read_json(report_path)
-        if report.get("config_sha256") != sha256_file(path):
-            raise ValueError("existing checkpoint report belongs to another config")
-        return report
-
     schedule = _screen_schedule(config, dataset_root)
     plan_payload = plan(path)
+    if resume:
+        report = reusable_checkpoint_report(
+            report_path=report_path,
+            plan_path=output_path / PLAN_FILENAME,
+            manifest_path=checkpoint_root / MANIFEST_FILENAME,
+            worker_path=checkpoint_root / WORKER_RESULTS_FILENAME,
+            expected_schema=REPORT_SCHEMA,
+            experiment_id=EXPERIMENT_ID,
+            config_sha256=sha256_file(path),
+            expected_plan=plan_payload,
+            schedule=plan_payload["schedule"],
+            build_report=lambda rows, failures: _checkpoint_report(
+                path, config, rows, failures
+            ),
+        )
+        if report is not None:
+            return report
     checkpoint_root.mkdir(parents=True, exist_ok=True)
     _write_json(output_path / PLAN_FILENAME, plan_payload)
     generation = dict(config["checkpoint_generation"])
@@ -554,7 +571,7 @@ def prepare_checkpoints(
     failures = [dict(row) for row in results if row.get("status") != "ok"]
     _write_jsonl(checkpoint_root / MANIFEST_FILENAME, completed)
     _write_json(
-        checkpoint_root / "worker_results.json",
+        checkpoint_root / WORKER_RESULTS_FILENAME,
         {"completed_count": len(completed), "failures": failures},
     )
     return analyze_checkpoints(path, output_path)

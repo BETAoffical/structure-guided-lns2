@@ -32,7 +32,7 @@ class EnvironmentCheckTests(unittest.TestCase):
         module = types.SimpleNamespace(
             repair_timing_schema="lns2.repair_timing.v2",
             native_semantics_schema=(
-                "lns2.native_semantics.official_step_timed_extension.v2"
+                "lns2.native_semantics.official_step_timed_extension.v3"
             ),
             __file__="/tmp/lns2_env.so",
             LNS2RepairEnv=type(

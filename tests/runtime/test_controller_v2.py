@@ -578,6 +578,80 @@ class ControllerV2Tests(unittest.TestCase):
                 "artifacts/initlns-mixed-full-controller-v2",
             )
 
+    def test_pairwise_controller_mode_rejects_a_missing_bundle_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            for controller_id in ("v2-full", "mixed-full-v2"):
+                with self.subTest(controller_id=controller_id), self.assertRaisesRegex(
+                    ValueError, "requires controller_manifest.json"
+                ):
+                    resolve_controller_mode(
+                        PROJECT_ROOT,
+                        controller_id,
+                        Path(directory) / controller_id,
+                    )
+
+    def test_pairwise_worker_rejects_missing_or_mislabeled_bundle_before_environment(
+        self,
+    ) -> None:
+        config = json.loads(
+            (PROJECT_ROOT / "configs" / "movingai_ood_collection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            base_job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 1,
+                "output_root": directory,
+                "run_fingerprint": "identity-check",
+                "resume": False,
+                "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                "model_registration": config["model_registration"],
+                "feature_backend": "python",
+                "proposal": {},
+            }
+            cases = (
+                (
+                    "mixed-full-v2",
+                    Path(directory) / "missing-mixed",
+                    "requires controller_manifest.json",
+                ),
+                (
+                    "mixed-full-v2",
+                    PROJECT_ROOT / "artifacts" / "initlns-closed-loop-controller-v2",
+                    "matching controller bundle",
+                ),
+                (
+                    "v2-full",
+                    PROJECT_ROOT / "artifacts" / "initlns-mixed-full-controller-v2",
+                    "matching controller bundle",
+                ),
+            )
+            for controller_id, bundle, message in cases:
+                with (
+                    self.subTest(controller_id=controller_id, bundle=bundle),
+                    patch(
+                        "experiments.closed_loop_confirmation._make_environment"
+                    ) as make_environment,
+                    self.assertRaisesRegex(ValueError, message),
+                ):
+                    _closed_loop_episode_worker(
+                        {
+                            **base_job,
+                            "controller": controller_id,
+                            "controller_bundle": str(bundle),
+                        }
+                    )
+                make_environment.assert_not_called()
+
     def test_revision_only_proposal_check_avoids_full_state_copy(self) -> None:
         state = make_state()
 

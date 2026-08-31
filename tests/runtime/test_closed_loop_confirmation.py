@@ -20,6 +20,9 @@ from experiments.closed_loop_confirmation import (
     _qualification_reuse_fingerprint,
     _selector_required_model_features,
     _valid_episode_trace,
+    _validate_v3_s3_episode_overrides,
+    _validate_v3_s3_proposal,
+    _validate_wall_clock_replan_algorithm,
     _with_stopping_rule,
     _with_time_budget_overrides,
     ClosedLoopExecutionError,
@@ -55,6 +58,7 @@ from experiments.closed_loop_trace_storage import TRACE_FORMAT_FULL_V1
 from experiments.neighborhood_features import _feature_profiles
 from experiments.state_analysis import analyze_state, analyze_static_grid
 from experiments.repair_collection import state_fingerprint
+from experiments.v3_s3 import S3_ACTION_TEMPLATES, V3_S3_BUNDLE_SCHEMA
 from lns2_selector.runtime.online_selection import (
     EpisodeRepairSeedStream,
     filter_structpool_lean_candidates,
@@ -330,6 +334,339 @@ class DirectCandidateModel:
 
 
 class ClosedLoopConfirmationTests(unittest.TestCase):
+    def test_wall_clock_budget_rejects_non_pp_before_environment_creation(self) -> None:
+        for algorithm in ("GCBS", "PBS"):
+            with self.subTest(algorithm=algorithm), patch(
+                "experiments.closed_loop_confirmation._make_environment"
+            ) as make_environment, self.assertRaisesRegex(
+                ValueError, "replan_algorithm=PP"
+            ):
+                _closed_loop_episode_worker(
+                    {
+                        "row": {"task_id": "task-a"},
+                        "policy": "official_adaptive",
+                        "solver_seed": 0,
+                        "wall_time_budget_seconds": 1.0,
+                        "environment": {"replan_algorithm": algorithm},
+                    }
+                )
+            make_environment.assert_not_called()
+        _validate_wall_clock_replan_algorithm(
+            None, {"replan_algorithm": "GCBS"}
+        )
+
+    def test_v3_s3_rejects_action_replacement_and_retry_overrides(self) -> None:
+        for name in (
+            "forced_first_action",
+            "bounded_native_retry",
+            "failure_informed_rescue",
+            "signature_scoped_rescue",
+        ):
+            with self.subTest(name=name), self.assertRaisesRegex(
+                ValueError, name
+            ):
+                _validate_v3_s3_episode_overrides(
+                    "v3-s3", {("task-a", 0): {name: {"enabled": True}}}
+                )
+        _validate_v3_s3_episode_overrides(
+            "v3-s3", {("task-a", 0): {"initial_restore": {"state": "x"}}}
+        )
+
+    def test_v3_s3_rejects_nonfrozen_candidate_space(self) -> None:
+        frozen = {
+            "max_seed_agents": 4,
+            "heuristics": ["target", "collision", "random"],
+            "neighborhood_sizes": [4, 8, 16],
+            "trials": 8,
+            "candidates_per_family": 2,
+        }
+        _validate_v3_s3_proposal(frozen)
+        invalid = (
+            {"topology_boundary": {"enabled": True}},
+            {"structpool": {"enabled": True}},
+            {"hybridstructpool": {"enabled": True}},
+            {"heuristics": ["collision", "target", "random"]},
+            {"neighborhood_sizes": [4, 8]},
+            {"max_seed_agents": 5},
+            {"trials": 7},
+            {"candidates_per_family": 1},
+        )
+        for change in invalid:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                _validate_v3_s3_proposal({**frozen, **change})
+
+    def test_v3_s3_restricted_miss_replans_full_pool_before_one_native_step(self) -> None:
+        class Bundle:
+            manifest = {"schema": V3_S3_BUNDLE_SCHEMA}
+            feature_names = ("state.agent_count",)
+            required_feature_names = feature_names
+            inference_backends = ("test",)
+            wall_time_history_required = False
+            thresholds = {
+                "minimum_template_valid_probability": 0.0,
+                "maximum_no_progress_probability": 1.0,
+                "maximum_sequence_no_progress_probability": 1.0,
+            }
+            continuation_calibration = {
+                "schema": "lns2.v3_s3_continuation.v2",
+                "cells": {},
+                "fallback": {
+                    f"step{step}": {
+                        "no_progress_threshold": 0.5,
+                        "reduction_relative_error": 0.1,
+                    }
+                    for step in range(1, 4)
+                },
+            }
+
+            def __init__(self):
+                self.calls = 0
+
+            def predict(self, rows):
+                self.calls += 1
+                count = len(rows)
+                predictions = {
+                    "sequence_net_conflict_reduction": [3.0] * count,
+                    "sequence_total_seconds": [3.0] * count,
+                    "sequence_no_progress_probability": [0.0] * count,
+                }
+                for step in range(1, 4):
+                    predictions[f"step{step}_conflict_reduction"] = [1.0] * count
+                    predictions[f"step{step}_total_seconds"] = [1.0] * count
+                    predictions[f"step{step}_log_total_seconds"] = [0.0] * count
+                    predictions[f"step{step}_no_progress_probability"] = [0.0] * count
+                    predictions[f"step{step}_template_valid_probability"] = [1.0] * count
+                return predictions
+
+        class FeatureEngine:
+            backend = "test"
+            static_grid = None
+            last_shadow_rows = {}
+            last_prepare_metrics = {"state_analysis_seconds": 0.0}
+
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def prepare(self, *_args, **_kwargs):
+                return {"state_analysis_seconds": 0.0}
+
+            def realized_rows(self, candidates, *, state_hash):
+                return [
+                    {
+                        "state_id": state_hash,
+                        "candidate_id": candidate["candidate_id"],
+                        "candidate_key": candidate["candidate_id"],
+                        "features": {
+                            "realized_dynamic": {"state.agent_count": 4.0}
+                        },
+                    }
+                    for candidate in candidates
+                ], {
+                    "realized_feature_seconds": 0.2,
+                    "state_analysis_seconds": 0.1,
+                    # These are diagnostic subdivisions of the totals above,
+                    # not additional elapsed stages.
+                    "feature_fill_seconds": 50.0,
+                    "feature_python_seconds": 40.0,
+                }
+
+        class Environment:
+            def __init__(self):
+                self.state = make_state(2)
+                self.step_calls = 0
+
+            def reset(self, seed):
+                return self.state
+
+            def step(self, action):
+                self.step_calls += 1
+                solved = self.step_calls == 2
+                previous_conflicts = int(self.state["num_of_colliding_pairs"])
+                state = json.loads(json.dumps(self.state))
+                state.update(
+                    {
+                        "iteration": self.step_calls,
+                        "runtime": 0.01 + self.step_calls * 0.001,
+                        "feasible": solved,
+                        "done": solved,
+                        "num_of_colliding_pairs": 0 if solved else 1,
+                        "conflict_edges": [] if solved else [[0, 1]],
+                    }
+                )
+                state["agents"][0]["path"] = (
+                    [0, 2, 2] if self.step_calls == 1 else [0, 3, 2]
+                )
+                state["low_level"] = {
+                    **state["low_level"],
+                    "expanded": int(state["low_level"]["expanded"]) + 1,
+                    "generated": int(state["low_level"]["generated"]) + 2,
+                    "runs": int(state["low_level"]["runs"]) + 1,
+                }
+                self.state = state
+                return {
+                    "observation": state,
+                    "terminated": solved,
+                    "truncated": False,
+                    "metrics": {
+                        "iteration": self.step_calls,
+                        "action_valid": True,
+                        "generated": True,
+                        "replan_success": True,
+                        "neighborhood": list(action["agents"]),
+                        "conflicts_before": previous_conflicts,
+                        "conflicts_after": 0 if solved else 1,
+                        "requested_random_seed": int(action["random_seed"]),
+                        "native_step_seconds": 0.0,
+                        "native_neighborhood_generation_seconds": 0.0,
+                        "native_replan_seconds": 0.0,
+                        "pp_replan_seconds": 0.0,
+                        "native_repair_bookkeeping_seconds": 0.0,
+                        "native_state_snapshot_seconds": 0.0,
+                        "native_residual_seconds": 0.0,
+                        "binding_solver_call_seconds": 0.0,
+                        "binding_state_snapshot_seconds": 0.0,
+                        "state_to_python_seconds": 0.0,
+                        "metrics_to_python_seconds": 0.0,
+                        "binding_total_seconds": 0.0,
+                        "binding_residual_seconds": 0.0,
+                        "step_runtime": 0.0,
+                    },
+                }
+
+        generation_modes = []
+        generation_configs = []
+
+        def generated_pool(*_args, proposal_config, **_kwargs):
+            mode = "restricted" if len(proposal_config["heuristics"]) == 1 else "full"
+            generation_modes.append(mode)
+            generation_configs.append(json.loads(json.dumps(proposal_config)))
+            template = S3_ACTION_TEMPLATES[0]
+            candidate_id = f"{mode}-{len(generation_modes)}"
+            candidate = {
+                **make_candidate(candidate_id, [0, 1, 2, 3], template.family_key),
+                "selection_rank_by_family": {template.family_key: template.representative},
+            }
+            return [candidate], {
+                "proposal_seconds": 0.0,
+                "proposal_count": 1,
+                "candidate_count": 1,
+                "candidate_generation_seconds": 0.0,
+                "state_check_seconds": 0.0,
+                "state_check_fingerprint_seconds": 0.0,
+                "backend": "test",
+                "state_check_backend": "test",
+                "full_state_verified": True,
+            }
+
+        bundle = Bundle()
+        environment = Environment()
+        frozen = SimpleNamespace(
+            models={"realized_dynamic": DirectCandidateModel()},
+            ranges={"realized_dynamic": {}},
+            manifest={},
+        )
+        compact = SimpleNamespace(
+            main_models={"realized_dynamic": DirectCandidateModel()},
+            main_ranges={"realized_dynamic": {}},
+            manifest={},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            controller_root = Path(directory) / "controller"
+            controller_root.mkdir()
+            (controller_root / "controller_manifest.json").write_text(
+                "{}", encoding="utf-8"
+            )
+            job = {
+                "row": {
+                    "split": "closed_loop",
+                    "map_id": "map-a",
+                    "task_id": "task-a",
+                    "layout_mode": "regular_beltway",
+                    "task_variant": "balanced_80",
+                    "agent_count": 4,
+                },
+                "policy": "realized_dynamic",
+                "solver_seed": 0,
+                "output_root": directory,
+                "run_fingerprint": "v3-lifecycle",
+                "resume": False,
+                "dataset_root": directory,
+                "environment": {"replan_algorithm": "PP"},
+                "max_decisions": 2,
+                "metric_iteration_budget": 2,
+                "wall_time_budget_seconds": None,
+                "proposal": {
+                    "max_seed_agents": 4,
+                    "heuristics": ["target", "collision", "random"],
+                    "neighborhood_sizes": [4, 8, 16],
+                    "trials": 8,
+                    "candidates_per_family": 2,
+                },
+                "frozen_models": directory,
+                "model_registration": {},
+                "controller": "v3-s3",
+                "controller_bundle": str(controller_root),
+                "v3_s3_bundle": directory,
+                "feature_backend": "reference",
+                "verification_profile": "deployment",
+                "trace_format": TRACE_FORMAT_FULL_V1,
+            }
+            with (
+                patch(
+                    "experiments.closed_loop_confirmation._make_environment",
+                    return_value=environment,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_v3_s3_bundle",
+                    return_value=bundle,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
+                    return_value=frozen,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.load_controller_bundle",
+                    return_value=compact,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
+                    FeatureEngine,
+                ),
+                patch(
+                    "experiments.closed_loop_confirmation.generate_online_candidates",
+                    side_effect=generated_pool,
+                ),
+            ):
+                result = _closed_loop_episode_worker(job)
+            self.assertEqual(result["status"], "ok", result.get("error"))
+            events = [
+                json.loads(line)
+                for line in (Path(directory) / result["trace_file"])
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(generation_modes, ["full", "restricted", "full"])
+        self.assertEqual(generation_configs[0], generation_configs[2])
+        self.assertNotEqual(generation_configs[0], generation_configs[1])
+        self.assertEqual(bundle.calls, 2)
+        self.assertEqual(environment.step_calls, 2)
+        transition_events = [
+            event for event in events if event.get("event") == "transition"
+        ]
+        self.assertEqual(len(transition_events), 2)
+        self.assertEqual(
+            transition_events[1]["controller"]["selected_candidate_id"],
+            "full-3",
+        )
+        self.assertAlmostEqual(
+            transition_events[1]["controller"]["feature_seconds"], 0.6
+        )
+        replan = events[2]["controller"]["v3_s3"]["full_pool_replan"]
+        self.assertEqual(replan["retry_count"], 1)
+        self.assertEqual(replan["restricted_candidate_count"], 1)
+        self.assertEqual(replan["full_candidate_count"], 1)
+
     def test_static_grid_cache_is_enabled_for_structpool_or_boundary(self) -> None:
         self.assertTrue(
             _proposal_uses_static_grid_cache({"structpool": STRUCTPOOL_RUNTIME})
@@ -2067,6 +2404,74 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
         self.assertGreater(scores[0], scores[1])
         self.assertEqual(selected, 1)
         self.assertEqual(margin, 0.0)
+
+    def test_online_scoring_rejects_non_finite_direct_scores(self) -> None:
+        rows = [{"candidate_key": "a"}]
+        for value in (float("nan"), float("inf"), -float("inf")):
+            model = SimpleNamespace(score_candidates=lambda _rows, value=value: [value])
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "non-finite score"
+            ):
+                score_online_candidates(rows, model)
+
+    def test_online_scoring_rejects_misaligned_pairwise_batches(self) -> None:
+        rows = [{"candidate_key": "a"}, {"candidate_key": "b"}]
+
+        class Model:
+            def score_candidates(self, _rows):
+                return None
+
+            def pair_vectors(self, _rows):
+                return [[1.0]], [], [(0, 1)]
+
+        with self.assertRaisesRegex(ValueError, "differ in length"):
+            score_online_candidates(rows, Model())
+
+    def test_online_scoring_rejects_non_finite_vectors_and_probabilities(self) -> None:
+        rows = [{"candidate_key": "a"}, {"candidate_key": "b"}]
+
+        class Model:
+            def __init__(self, vector, probability):
+                self.vector = vector
+                self.probability = probability
+
+            def score_candidates(self, _rows):
+                return None
+
+            def pair_vectors(self, _rows):
+                return [self.vector], [[0.0]], [(0, 1)]
+
+            def predict_positive(self, vectors):
+                return [self.probability for _ in vectors]
+
+        with self.assertRaisesRegex(ValueError, "vectors contain a non-finite"):
+            score_online_candidates(rows, Model([float("nan")], 0.5))
+        with self.assertRaisesRegex(ValueError, "probability outside"):
+            score_online_candidates(rows, Model([0.0], float("inf")))
+        for probability in (-0.01, 1.01):
+            with self.subTest(probability=probability), self.assertRaisesRegex(
+                ValueError, "probability outside"
+            ):
+                score_online_candidates(rows, Model([0.0], probability))
+
+    def test_online_scoring_rejects_misaligned_probability_batches(self) -> None:
+        rows = [{"candidate_key": "a"}, {"candidate_key": "b"}]
+
+        class Model:
+            calls = 0
+
+            def score_candidates(self, _rows):
+                return None
+
+            def pair_vectors(self, _rows):
+                return [[1.0]], [[-1.0]], [(0, 1)]
+
+            def predict_positive(self, _vectors):
+                self.calls += 1
+                return [] if self.calls == 1 else [0.5]
+
+        with self.assertRaisesRegex(ValueError, "differ in length"):
+            score_online_candidates(rows, Model())
 
     def test_portable_tree_inference_matches_a_binary_split(self) -> None:
         model = PortablePairwiseModel(

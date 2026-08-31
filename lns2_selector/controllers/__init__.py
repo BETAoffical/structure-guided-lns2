@@ -5,7 +5,11 @@ from pathlib import Path
 from experiments.compact_controller_model import load_controller_bundle
 from experiments.v3_s3 import load_v3_s3_bundle
 from lns2_selector.controllers.official import OfficialAdaptiveSelector
-from lns2_selector.controllers.v2 import PairwiseV2Selector
+from lns2_selector.controllers.v2 import (
+    PAIRWISE_CONTROLLER_IDS,
+    PairwiseV2Selector,
+    require_pairwise_bundle_identity,
+)
 from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.runtime.contracts import CONTROLLER_IDS, Selector
 
@@ -25,14 +29,9 @@ def load_selector(
         return OfficialAdaptiveSelector()
     if bundle is None:
         raise ValueError(f"{resolved} requires a controller bundle")
-    pairwise_ids = {"v2-full", "mixed-full-v2"}
-    if resolved in pairwise_ids:
+    if resolved in PAIRWISE_CONTROLLER_IDS:
         loaded = load_controller_bundle(bundle)
-        manifest_id = str(loaded.manifest.get("controller_id", "v2-full"))
-        if resolved == "mixed-full-v2" and manifest_id != resolved:
-            raise ValueError("mixed-full-v2 requires a mixed controller bundle")
-        if resolved == "v2-full" and manifest_id not in {"", "v2-full"}:
-            raise ValueError("v2-full requires the canonical v2 bundle")
+        require_pairwise_bundle_identity(resolved, loaded.manifest)
         return PairwiseV2Selector(resolved, loaded)
     if resolved == "v3-s3":
         return V3S3Selector(load_v3_s3_bundle(bundle))

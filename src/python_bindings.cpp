@@ -605,6 +605,9 @@ public:
     py::dict stepWithTimeLimit(const py::dict& action_value,
                                double pp_time_limit_seconds)
     {
+        if (replan_algorithm != "PP")
+            throw py::value_error(
+                "step_with_time_limit is supported only when replan_algorithm is PP");
         if (!std::isfinite(pp_time_limit_seconds) ||
             pp_time_limit_seconds < 0.0)
             throw py::value_error(
@@ -1055,7 +1058,7 @@ PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     module.attr("native_semantics_schema") =
-        "lns2.native_semantics.official_step_timed_extension.v2";
+        "lns2.native_semantics.official_step_timed_extension.v3";
     module.attr("repair_timing_schema") = "lns2.repair_timing.v2";
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))

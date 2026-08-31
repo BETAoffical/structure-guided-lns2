@@ -2,8 +2,10 @@
 
 from lns2_selector.runtime.contracts import (
     SelectionDecision,
+    SelectionObservation,
     SelectionRequest,
     Selector,
+    StatefulSelector,
 )
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.online_selection import (
@@ -19,8 +21,10 @@ from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 
 __all__ = [
     "SelectionDecision",
+    "SelectionObservation",
     "SelectionRequest",
     "Selector",
+    "StatefulSelector",
     "ClosedLoopExecutionError",
     "generate_online_candidates",
     "score_online_candidates",

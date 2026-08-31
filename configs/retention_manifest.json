@@ -2729,6 +2729,11 @@
       "purpose": "Provide hash-bound warehouse disruption checkpoint creation, validation and restoration shared by retained recovery evaluations."
     },
     {
+      "path": "experiments/warehouse_checkpoint_resume.py",
+      "role": "shared",
+      "purpose": "Authenticate successful warehouse checkpoint reports against their plans, manifests, worker partitions and state blobs before resume reuse."
+    },
+    {
       "path": "experiments/stride_warehouse_disruption_recovery.py",
       "role": "reproducibility",
       "purpose": "Reproduce the retained paired warehouse disruption recovery evaluation for Official and targeted Dual16 routing."
@@ -2792,6 +2797,11 @@
       "path": "tests/evaluation/test_warehouse_disruption_checkpoints.py",
       "role": "reproducibility",
       "contract": "Protect warehouse disruption checkpoint identity, serialization and restoration contracts."
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_checkpoint_resume.py",
+      "role": "reproducibility",
+      "contract": "Protect strict warehouse checkpoint resume reuse, failure preservation and schedule coverage validation."
     },
     {
       "path": "tests/integration/test_warehouse_disruption_dataset.py",

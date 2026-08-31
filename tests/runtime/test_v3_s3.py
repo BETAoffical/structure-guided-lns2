@@ -315,6 +315,8 @@ class S3SelectionTests(unittest.TestCase):
         self.assertEqual(diagnostic["selection_kind"], "new-plan")
         self.assertEqual(bundle.calls, 1)
         expected = state.observe(
+            candidate_id="candidate",
+            actual_agents=(1, 2, 3, 4),
             before_fingerprint="before",
             after_fingerprint="after",
             repair_outcome="conflict_reduced",
@@ -323,6 +325,7 @@ class S3SelectionTests(unittest.TestCase):
             # continuation decision.
             total_seconds=1_000_000.0,
             feasible=False,
+            terminal=False,
         )
         self.assertTrue(expected)
         continuation = state.continuation_template
@@ -337,6 +340,32 @@ class S3SelectionTests(unittest.TestCase):
         self.assertEqual(diagnostic["selection_kind"], "direct-continuation")
         self.assertFalse(diagnostic["full_pool_scored"])
         self.assertEqual(bundle.calls, 1)
+
+    def test_terminal_observation_never_preserves_a_continuation(self) -> None:
+        state = V3S3ControllerState(_Bundle())
+        template = S3_ACTION_TEMPLATES[0]
+        state.select(
+            [_candidate(template)],
+            [_row()],
+            temporal_context={},
+            before_fingerprint="before",
+        )
+
+        expected = state.observe(
+            candidate_id="candidate",
+            actual_agents=(1, 2, 3, 4),
+            before_fingerprint="before",
+            after_fingerprint="after",
+            repair_outcome="conflict_reduced",
+            conflict_reduction=1.0,
+            total_seconds=1.0,
+            feasible=False,
+            terminal=True,
+        )
+
+        self.assertFalse(expected)
+        self.assertIsNone(state.active_plan)
+        self.assertIsNone(state.continuation_template)
 
     def test_no_candidate_stalls_without_external_fallback(self) -> None:
         state = V3S3ControllerState(_Bundle())
@@ -364,12 +393,15 @@ class S3SelectionTests(unittest.TestCase):
             before_fingerprint="before",
         )
         expected = state.observe(
+            candidate_id="candidate",
+            actual_agents=(1, 2, 3, 4),
             before_fingerprint="before",
             after_fingerprint="after",
             repair_outcome="conflict_reduced",
             conflict_reduction=9.0,
             total_seconds=1.0,
             feasible=False,
+            terminal=False,
         )
         self.assertFalse(expected)
         self.assertIsNone(state.continuation_template)
@@ -391,12 +423,15 @@ class S3SelectionTests(unittest.TestCase):
             before_fingerprint="same",
         )
         state.observe(
+            candidate_id="candidate",
+            actual_agents=(1, 2, 3, 4),
             before_fingerprint="same",
             after_fingerprint="same",
             repair_outcome="accepted_noop",
             conflict_reduction=0.0,
             total_seconds=1.0,
             feasible=False,
+            terminal=False,
         )
         selected, diagnostic = state.select(
             [_candidate(template)],
@@ -407,6 +442,102 @@ class S3SelectionTests(unittest.TestCase):
         self.assertIsNone(selected)
         self.assertEqual(diagnostic["selection_kind"], "v3_stalled_no_candidate")
         self.assertEqual(state.summary()["adaptive_call_count"], 0)
+
+    def test_restricted_template_miss_requests_full_pool_without_prediction(self) -> None:
+        bundle = _Bundle()
+        state = V3S3ControllerState(bundle)
+        first_template = S3_ACTION_TEMPLATES[0]
+        state.select(
+            [_candidate(first_template)],
+            [_row()],
+            temporal_context={},
+            before_fingerprint="before",
+        )
+        state.observe(
+            candidate_id="candidate",
+            actual_agents=(1, 2, 3, 4),
+            before_fingerprint="before",
+            after_fingerprint="after",
+            repair_outcome="conflict_reduced",
+            conflict_reduction=1.0,
+            total_seconds=1.0,
+            feasible=False,
+            terminal=False,
+        )
+        continuation = state.continuation_template
+        self.assertIsNotNone(continuation)
+        missing = next(
+            template
+            for template in S3_ACTION_TEMPLATES
+            if template.key != continuation.key
+        )
+
+        selected, diagnostic = state.select(
+            [_candidate(missing)],
+            [_row()],
+            temporal_context={},
+            before_fingerprint="after",
+            candidate_pool_mode="restricted",
+            generation_context={
+                "mode": "restricted",
+                "template": continuation.payload(),
+            },
+        )
+
+        self.assertIsNone(selected)
+        self.assertEqual(
+            diagnostic["selection_kind"], "requires_full_pool_replan"
+        )
+        self.assertTrue(diagnostic["requires_full_pool_replan"])
+        self.assertFalse(diagnostic["full_pool_scored"])
+        self.assertEqual(bundle.calls, 1)
+        self.assertIsNone(state.pending_agents)
+
+        selected, diagnostic = state.select(
+            [_candidate(first_template, candidate_id="full")],
+            [_row()],
+            temporal_context={},
+            before_fingerprint="after",
+            candidate_pool_mode="full",
+            generation_context={"mode": "full"},
+        )
+        self.assertEqual(selected, 0)
+        self.assertEqual(diagnostic["selection_kind"], "new-plan")
+        self.assertTrue(diagnostic["full_pool_scored"])
+        self.assertEqual(bundle.calls, 2)
+
+    def test_restricted_pool_requires_an_active_continuation(self) -> None:
+        state = V3S3ControllerState(_Bundle())
+        template = S3_ACTION_TEMPLATES[0]
+        with self.assertRaisesRegex(ValueError, "active continuation"):
+            state.select(
+                [_candidate(template)],
+                [_row()],
+                temporal_context={},
+                before_fingerprint="before",
+                candidate_pool_mode="restricted",
+                generation_context={
+                    "mode": "restricted",
+                    "template": template.payload(),
+                },
+            )
+
+    def test_select_requires_observing_the_pending_action(self) -> None:
+        state = V3S3ControllerState(_Bundle())
+        template = S3_ACTION_TEMPLATES[0]
+        state.select(
+            [_candidate(template)],
+            [_row()],
+            temporal_context={},
+            before_fingerprint="before",
+        )
+        with self.assertRaisesRegex(RuntimeError, "before observing"):
+            state.select(
+                [_candidate(template)],
+                [_row()],
+                temporal_context={},
+                before_fingerprint="before",
+            )
 
 
 if __name__ == "__main__":

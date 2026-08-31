@@ -752,6 +752,7 @@ class V3S3ControllerState:
         self.bundle = bundle
         self.active_plan: S3ActivePlan | None = None
         self.blacklisted_neighborhoods: set[tuple[int, ...]] = set()
+        self.pending_candidate_id: str | None = None
         self.pending_agents: tuple[int, ...] | None = None
         self.pending_prediction: dict[str, float] | None = None
         self.pending_before_fingerprint: str | None = None
@@ -820,9 +821,32 @@ class V3S3ControllerState:
         temporal_context: dict[str, Any],
         before_fingerprint: str,
         agent_count: int | None = None,
+        candidate_pool_mode: str = "full",
+        generation_context: dict[str, Any] | None = None,
     ) -> tuple[int | None, dict[str, Any]]:
+        if any(
+            value is not None
+            for value in (
+                self.pending_candidate_id,
+                self.pending_agents,
+                self.pending_prediction,
+                self.pending_before_fingerprint,
+                self.pending_agent_count,
+                self.pending_step,
+            )
+        ):
+            raise RuntimeError(
+                "v3-S3 select called before observing the pending action"
+            )
         if len(candidates) != len(candidate_rows):
             raise ValueError("v3-S3 candidates and features differ in length")
+        if candidate_pool_mode not in {"full", "restricted"}:
+            raise ValueError("v3-S3 candidate pool mode must be full or restricted")
+        if candidate_pool_mode == "restricted" and self.continuation_template is None:
+            raise ValueError(
+                "v3-S3 restricted candidate pools require an active continuation"
+            )
+        generation_context = dict(generation_context or {})
         resolved_agent_count = int(agent_count) if agent_count is not None else None
         observed_agent_counts = set()
         for row in candidate_rows:
@@ -849,6 +873,16 @@ class V3S3ControllerState:
             raise ValueError("v3-S3 selection requires a positive agent_count")
         if self.active_plan is not None and self.active_plan.step_index > 0:
             template = self.active_plan.templates[self.active_plan.step_index]
+            if candidate_pool_mode == "restricted":
+                requested_template = generation_context.get("template")
+                if not isinstance(requested_template, dict):
+                    raise ValueError(
+                        "v3-S3 restricted pool is missing its generation template"
+                    )
+                if S3ActionTemplate.from_payload(requested_template).key != template.key:
+                    raise ValueError(
+                        "v3-S3 restricted pool template differs from active plan"
+                    )
             selected = self._candidate_for_template(candidates, template)
             if selected is not None:
                 step = self.active_plan.step_index + 1
@@ -857,6 +891,11 @@ class V3S3ControllerState:
                     name: float(values[self.active_plan.step_index])
                     for name, values in self.active_plan.predictions.items()
                 }
+                self.pending_candidate_id = str(
+                    candidates[selected].get(
+                        "candidate_id", candidates[selected].get("candidate_key")
+                    )
+                )
                 self.pending_agents = tuple(sorted(map(int, candidates[selected]["agents"])))
                 self.pending_prediction = prediction
                 self.pending_before_fingerprint = str(before_fingerprint)
@@ -866,8 +905,23 @@ class V3S3ControllerState:
                     "schema": V3_S3_BUNDLE_SCHEMA,
                     "route": "v3-s3",
                     "selection_kind": "direct-continuation",
+                    "candidate_pool_mode": candidate_pool_mode,
                     "sequence_id": self.active_plan.sequence_id,
                     "sequence_step": step,
+                    "template": template.payload(),
+                    "full_pool_scored": False,
+                    "v2_call_count": 0,
+                    "adaptive_call_count": 0,
+                }
+            if candidate_pool_mode == "restricted":
+                self.active_plan = None
+                self.deviation_replan_count += 1
+                return None, {
+                    "schema": V3_S3_BUNDLE_SCHEMA,
+                    "route": "v3-s3",
+                    "selection_kind": "requires_full_pool_replan",
+                    "candidate_pool_mode": candidate_pool_mode,
+                    "requires_full_pool_replan": True,
                     "template": template.payload(),
                     "full_pool_scored": False,
                     "v2_call_count": 0,
@@ -909,6 +963,7 @@ class V3S3ControllerState:
                 "schema": V3_S3_BUNDLE_SCHEMA,
                 "route": "v3-s3",
                 "selection_kind": "v3_stalled_no_candidate",
+                "candidate_pool_mode": candidate_pool_mode,
                 "full_pool_scored": True,
                 "v2_call_count": 0,
                 "adaptive_call_count": 0,
@@ -935,6 +990,7 @@ class V3S3ControllerState:
                 "schema": V3_S3_BUNDLE_SCHEMA,
                 "route": "v3-s3",
                 "selection_kind": "v3_exhausted",
+                "candidate_pool_mode": candidate_pool_mode,
                 "full_pool_scored": True,
                 "v2_call_count": 0,
                 "adaptive_call_count": 0,
@@ -962,6 +1018,11 @@ class V3S3ControllerState:
             sequence_id=sequence_id(templates),
         )
         selected = template_indices[templates[0].key]
+        self.pending_candidate_id = str(
+            candidates[selected].get(
+                "candidate_id", candidates[selected].get("candidate_key")
+            )
+        )
         self.pending_agents = tuple(sorted(map(int, candidates[selected]["agents"])))
         self.pending_prediction = {
             name: float(values[0]) for name, values in plan_predictions.items()
@@ -973,6 +1034,7 @@ class V3S3ControllerState:
             "schema": V3_S3_BUNDLE_SCHEMA,
             "route": "v3-s3",
             "selection_kind": "new-plan",
+            "candidate_pool_mode": candidate_pool_mode,
             "sequence_id": self.active_plan.sequence_id,
             "sequence_step": 1,
             "templates": [template.payload() for template in templates],
@@ -986,15 +1048,26 @@ class V3S3ControllerState:
     def observe(
         self,
         *,
+        candidate_id: str,
+        actual_agents: tuple[int, ...],
         before_fingerprint: str,
         after_fingerprint: str,
         repair_outcome: str,
         conflict_reduction: float,
         total_seconds: float,
         feasible: bool,
+        terminal: bool,
     ) -> bool:
-        if self.pending_agents is None or self.pending_prediction is None:
+        if (
+            self.pending_candidate_id is None
+            or self.pending_agents is None
+            or self.pending_prediction is None
+        ):
             raise RuntimeError("v3-S3 observe called without a pending action")
+        if str(candidate_id) != self.pending_candidate_id:
+            raise ValueError("v3-S3 pending candidate ID mismatch")
+        if tuple(sorted(map(int, actual_agents))) != self.pending_agents:
+            raise ValueError("v3-S3 pending candidate agents mismatch")
         if str(before_fingerprint) != str(self.pending_before_fingerprint):
             raise ValueError("v3-S3 pending state fingerprint mismatch")
         no_progress = str(repair_outcome) in {"hard_failure", "accepted_noop"}
@@ -1016,7 +1089,8 @@ class V3S3ControllerState:
             calibration["reduction_relative_error"]
         ) * reduction_scale
         expected = (
-            not hard_stop
+            not terminal
+            and not hard_stop
             and predicted_no_progress == no_progress
             and reduction_error
             <= float(calibration["reduction_relative_error"]) + 1e-12
@@ -1046,7 +1120,7 @@ class V3S3ControllerState:
             self.blacklisted_neighborhoods.clear()
         elif hard_stop:
             self.blacklisted_neighborhoods.add(self.pending_agents)
-        if feasible:
+        if terminal:
             self.active_plan = None
             self.blacklisted_neighborhoods.clear()
         elif expected and self.active_plan is not None:
@@ -1057,6 +1131,7 @@ class V3S3ControllerState:
             if self.active_plan is not None:
                 self.deviation_replan_count += 1
             self.active_plan = None
+        self.pending_candidate_id = None
         self.pending_agents = None
         self.pending_prediction = None
         self.pending_before_fingerprint = None

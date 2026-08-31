@@ -83,6 +83,20 @@ class BalancedWallClockTests(unittest.TestCase):
                     call.kwargs["stopping_rule"],
                     "wall-clock-fixed-metric",
                 )
+            self.assertEqual(
+                [call.kwargs["controller"] for call in run.call_args_list],
+                controller_order * 6,
+            )
+            expected_bundles = {
+                "official_adaptive": root / "v2",
+                "v2-full": root / "v2",
+                "mixed-full-v2": root / "mixed",
+            }
+            for call in run.call_args_list:
+                self.assertEqual(
+                    call.kwargs["controller_bundle"],
+                    expected_bundles[call.kwargs["controller"]],
+                )
 
     def test_success_only_ttf_excludes_failures_from_pairs(self) -> None:
         def successful(value: float) -> dict[str, object]:

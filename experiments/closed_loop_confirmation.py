@@ -89,7 +89,11 @@ from experiments.v3_s3 import (
     s3_temporal_context,
 )
 from lns2_selector.compatibility.metrics import fixed_budget_conflict_auc
-from lns2_selector.controllers.v2 import PairwiseV2Selector
+from lns2_selector.controllers.v2 import (
+    PAIRWISE_CONTROLLER_IDS,
+    PairwiseV2Selector,
+    require_pairwise_bundle_identity,
+)
 from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.evaluation.trace_validation import (
     ClosedLoopTraceError,
@@ -131,6 +135,7 @@ from lns2_selector.runtime.structshell_dual16 import (
 from lns2_selector.runtime.metrics import wall_clock_conflict_auc
 from lns2_selector.runtime.contracts import (
     CONTROLLER_IDS,
+    SelectionObservation,
     SelectionRequest,
     Selector,
 )
@@ -150,7 +155,6 @@ from lns2_selector.runtime.online_selection import (
     validate_structpool_augmentation,
     validate_topology_boundary_augmentation,
 )
-from lns2_selector.runtime.repair_outcomes import classify_repair_outcome
 from lns2_selector.runtime.slotpool_selection import (
     load_slotpool_model,
     reduce_slotpool_candidates,
@@ -174,12 +178,85 @@ def _proposal_uses_static_grid_cache(proposal_config: Mapping[str, Any]) -> bool
     )
 
 
+def _validate_wall_clock_replan_algorithm(
+    wall_time_budget_seconds: Any,
+    environment_config: Mapping[str, Any],
+) -> None:
+    """Reject a wall-clock contract that the native low-level solver cannot honor."""
+
+    if (
+        wall_time_budget_seconds is not None
+        and str(environment_config.get("replan_algorithm", "PP")) != "PP"
+    ):
+        raise ValueError(
+            "wall_time_budget_seconds requires environment.replan_algorithm=PP"
+        )
+
+
+def _validate_v3_s3_episode_overrides(
+    controller_mode: str,
+    episode_overrides: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> None:
+    """Keep stateful V3-S3 actions one-select/one-step/one-observe."""
+
+    if controller_mode != "v3-s3":
+        return
+    incompatible = (
+        "forced_first_action",
+        "bounded_native_retry",
+        "failure_informed_rescue",
+        "signature_scoped_rescue",
+    )
+    for key, override in episode_overrides.items():
+        enabled = [name for name in incompatible if override.get(name)]
+        if enabled:
+            raise ValueError(
+                "v3-s3 is incompatible with action overrides for "
+                f"{key[0]} seed {key[1]}: {', '.join(enabled)}"
+            )
+
+
+_V3_S3_FROZEN_PROPOSAL = {
+    "max_seed_agents": 4,
+    "heuristics": ("target", "collision", "random"),
+    "neighborhood_sizes": (4, 8, 16),
+    "trials": 8,
+    "candidates_per_family": 2,
+}
+
+
+def _validate_v3_s3_proposal(proposal: Mapping[str, Any]) -> None:
+    """Enforce the exact candidate space used by the frozen V3-S3 bundle."""
+
+    for name in ("topology_boundary", "structpool", "hybridstructpool"):
+        if proposal.get(name):
+            raise ValueError(
+                f"v3-s3 does not allow {name} candidate augmentation"
+            )
+    heuristics = proposal.get("heuristics")
+    if not isinstance(heuristics, list) or tuple(heuristics) != (
+        _V3_S3_FROZEN_PROPOSAL["heuristics"]
+    ):
+        raise ValueError("v3-s3 requires the frozen target/collision/random order")
+    sizes = proposal.get("neighborhood_sizes")
+    if (
+        not isinstance(sizes, list)
+        or any(type(value) is not int for value in sizes)
+        or tuple(sizes) != _V3_S3_FROZEN_PROPOSAL["neighborhood_sizes"]
+    ):
+        raise ValueError("v3-s3 requires the frozen 4/8/16 candidate space")
+    for name in ("max_seed_agents", "trials", "candidates_per_family"):
+        value = proposal.get(name)
+        expected = _V3_S3_FROZEN_PROPOSAL[name]
+        if type(value) is not int or value != expected:
+            raise ValueError(f"v3-s3 requires frozen proposal {name}={expected}")
+
+
 def _generate_fixed_structshell_runtime_candidates(
     state: dict[str, Any],
     analysis: StateAnalysis,
     *,
     v2_candidates: Iterable[dict[str, Any]],
-    v2_anchors: Iterable[dict[str, Any]],
     config: dict[str, Any],
 ) -> HybridStructPoolResult | None:
     """Dispatch separately registered fixed StructShell runtime contracts."""
@@ -190,7 +267,6 @@ def _generate_fixed_structshell_runtime_candidates(
             state,
             analysis,
             v2_candidates=v2_candidates,
-            v2_anchors=v2_anchors,
             config=config,
         )
     return None
@@ -203,10 +279,6 @@ POLICIES = ("official_adaptive", "proposal_dynamic", "realized_dynamic")
 SUPPORTED_POLICIES = ("official_adaptive", *FIXED_POLICIES, "proposal_dynamic", "realized_dynamic")
 LEARNED_POLICIES = ("proposal_dynamic", "realized_dynamic")
 CONTROLLER_MODES = CONTROLLER_IDS
-PAIRWISE_CONTROLLER_MODES = {
-    "v2-full",
-    "mixed-full-v2",
-}
 CONTROLLER_RUNTIMES = ("reference", "optimized", "auto")
 VERIFICATION_PROFILES = ("audit", "deployment")
 STOPPING_RULES = (
@@ -413,16 +485,12 @@ def resolve_controller_mode(
         mode = str(controller)
     if mode not in CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {mode}")
-    if loaded is not None and mode in {"v2-full", "mixed-full-v2"}:
-        bundle_controller = str(loaded.manifest.get("controller_id") or "")
-        allowed_bundle_controllers = (
-            {"", "v2-full"} if mode == "v2-full" else {"mixed-full-v2"}
-        )
-        if bundle_controller not in allowed_bundle_controllers:
+    if mode in PAIRWISE_CONTROLLER_IDS:
+        if loaded is None:
             raise ValueError(
-                f"{mode} requires a matching controller bundle; "
-                f"manifest controller_id is {bundle_controller or 'legacy-v2-full'}"
+                f"{mode} requires controller_manifest.json in {bundle_path}"
             )
+        require_pairwise_bundle_identity(mode, loaded.manifest)
     return mode, bundle_path, loaded.manifest if loaded is not None else None
 
 
@@ -982,6 +1050,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     row = job["row"]
     policy = str(job["policy"])
     solver_seed = int(job["solver_seed"])
+    _validate_wall_clock_replan_algorithm(
+        job.get("wall_time_budget_seconds"),
+        dict(job.get("environment") or {}),
+    )
     episode_id = _episode_id(row, solver_seed, policy)
     output_root = Path(job["output_root"])
     trace_format = str(job.get("trace_format", TRACE_FORMAT_DELTA_GZIP_V2))
@@ -1112,6 +1184,32 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     controller_mode = str(job.get("controller", "official_adaptive"))
     if controller_mode not in CONTROLLER_MODES:
         raise ValueError(f"unsupported controller mode: {controller_mode}")
+    if controller_mode == "v3-s3":
+        _validate_v3_s3_proposal(dict(job.get("proposal") or {}))
+    pairwise_controller_path: Path | None = None
+    pairwise_controller_bundle = None
+    if controller_mode in PAIRWISE_CONTROLLER_IDS:
+        raw_controller_path = job.get("controller_bundle")
+        if raw_controller_path is None:
+            raise ValueError(f"{controller_mode} requires a controller bundle")
+        pairwise_controller_path = Path(str(raw_controller_path))
+        if not (
+            pairwise_controller_path / "controller_manifest.json"
+        ).is_file():
+            raise ValueError(
+                f"{controller_mode} requires controller_manifest.json in "
+                f"{pairwise_controller_path}"
+            )
+        pairwise_controller_bundle = load_controller_bundle(
+            pairwise_controller_path
+        )
+        require_pairwise_bundle_identity(
+            controller_mode, pairwise_controller_bundle.manifest
+        )
+    _validate_v3_s3_episode_overrides(
+        controller_mode,
+        {(str(row["task_id"]), solver_seed): episode_override},
+    )
     feature_backend = str(job.get("feature_backend", "auto"))
     requested_controller_runtime = str(job.get("controller_runtime", "reference"))
     if requested_controller_runtime not in CONTROLLER_RUNTIMES:
@@ -1171,9 +1269,20 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             runtime_models = bundle.models
             runtime_ranges = bundle.ranges
         else:
-            controller_path = Path(str(job["controller_bundle"]))
-            if (controller_path / "controller_manifest.json").is_file():
-                compact_bundle = load_controller_bundle(controller_path)
+            raw_controller_path = job.get("controller_bundle")
+            controller_path = (
+                pairwise_controller_path
+                if pairwise_controller_path is not None
+                else Path(str(raw_controller_path))
+            )
+            if pairwise_controller_bundle is not None or (
+                controller_path / "controller_manifest.json"
+            ).is_file():
+                compact_bundle = (
+                    pairwise_controller_bundle
+                    if pairwise_controller_bundle is not None
+                    else load_controller_bundle(controller_path)
+                )
                 runtime_models = compact_bundle.main_models
                 runtime_ranges = compact_bundle.main_ranges
                 if bool(job.get("feature_shadow_validation", False)):
@@ -1207,7 +1316,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             dict(job["model_registration"]["model_sha256"])[policy]
                         ).lower(),
                     }
-        if controller_mode in PAIRWISE_CONTROLLER_MODES:
+        if controller_mode in PAIRWISE_CONTROLLER_IDS:
             learned_selector = PairwiseV2Selector(controller_mode, runtime_models)
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path.unlink(missing_ok=True)
@@ -1751,6 +1860,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else:
                     proposal_started = time.perf_counter()
                     effective_proposal = dict(job["proposal"])
+                    generation_request: dict[str, Any] = {"mode": "full"}
                     if v3_s3_state is not None:
                         generation_request = (
                             v3_s3_state.candidate_generation_request()
@@ -1945,43 +2055,52 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             topology_state_analysis_seconds = (
                                 topology_analysis_cache.last_prepare_seconds
                             )
-                        candidates, proposal_metrics = generate_online_candidates(
-                            environment,
-                            state,
-                            task_id=str(row["task_id"]),
-                            solver_seed=solver_seed,
-                            decision_index=decision_index,
-                            proposal_config=effective_proposal,
-                            state_hash=before_hash,
-                            verify_full_state=verify_full_state,
-                            proposal_backend=controller_runtime,
-                            shadow_validation=bool(
-                                job.get("proposal_shadow_validation", False)
-                                and optimized_runtime_available
-                            ),
-                            topology_static_grid=(
-                                feature_engine.static_grid
-                                if feature_engine is not None
-                                and _proposal_uses_static_grid_cache(
-                                    effective_proposal
-                                )
-                                else None
-                            ),
-                            topology_state_analysis=topology_state_analysis,
-                            topology_state_analysis_seconds=(
-                                topology_state_analysis_seconds
-                            ),
-                            topology_no_progress_streak=no_progress_streak,
-                            topology_remaining_wall_seconds=(
-                                max(
-                                    0.0,
-                                    wall_budget
-                                    - (time.perf_counter() - ttf_started_wall),
-                                )
-                                if wall_budget is not None
-                                else None
-                            ),
-                            structpool_gate_result=structpool_gate_result,
+                        def generate_candidate_pool_attempt(
+                            proposal_config: dict[str, Any],
+                        ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                            """Generate either V3 pool with one shared runtime path."""
+
+                            return generate_online_candidates(
+                                environment,
+                                state,
+                                task_id=str(row["task_id"]),
+                                solver_seed=solver_seed,
+                                decision_index=decision_index,
+                                proposal_config=proposal_config,
+                                state_hash=before_hash,
+                                verify_full_state=verify_full_state,
+                                proposal_backend=controller_runtime,
+                                shadow_validation=bool(
+                                    job.get("proposal_shadow_validation", False)
+                                    and optimized_runtime_available
+                                ),
+                                topology_static_grid=(
+                                    feature_engine.static_grid
+                                    if feature_engine is not None
+                                    and _proposal_uses_static_grid_cache(
+                                        proposal_config
+                                    )
+                                    else None
+                                ),
+                                topology_state_analysis=topology_state_analysis,
+                                topology_state_analysis_seconds=(
+                                    topology_state_analysis_seconds
+                                ),
+                                topology_no_progress_streak=no_progress_streak,
+                                topology_remaining_wall_seconds=(
+                                    max(
+                                        0.0,
+                                        wall_budget
+                                        - (time.perf_counter() - ttf_started_wall),
+                                    )
+                                    if wall_budget is not None
+                                    else None
+                                ),
+                                structpool_gate_result=structpool_gate_result,
+                            )
+
+                        candidates, proposal_metrics = (
+                            generate_candidate_pool_attempt(effective_proposal)
                         )
                         proposal_metrics.update(
                             {
@@ -2005,6 +2124,17 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             if feature_engine is None:
                                 feature_engine = make_feature_engine(state)
                                 feature_engine_created = True
+
+                            def realized_candidate_rows_attempt(
+                                current_candidates: list[dict[str, Any]],
+                            ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                                """Build realized rows identically for initial and retry pools."""
+
+                                assert feature_engine is not None
+                                return feature_engine.realized_rows(
+                                    current_candidates, state_hash=before_hash
+                                )
+
                             if topology_prepared_native_analysis is not None:
                                 state_feature_metrics = feature_engine.prepare(
                                     state,
@@ -2033,9 +2163,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 )
                             if policy == "realized_dynamic":
                                 candidate_rows, realized_feature_metrics = (
-                                    feature_engine.realized_rows(
-                                        candidates, state_hash=before_hash
-                                    )
+                                    realized_candidate_rows_attempt(candidates)
                                 )
                             else:
                                 assert proposal_rows is not None
@@ -2133,30 +2261,34 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 hybrid_started = time.perf_counter()
                                 base_candidates = list(candidates)
                                 base_candidate_rows = list(candidate_rows)
-                                (
-                                    v2_anchor_index,
-                                    _v2_anchor_scores,
-                                    _v2_anchor_margin,
-                                ) = score_online_candidates(
-                                    base_candidate_rows, runtime_models[policy]
-                                )
                                 hybrid_pool_id = str(
                                     hybridstructpool_runtime.get("pool_id")
                                 )
-                                fixed_structshell_result = (
-                                    _generate_fixed_structshell_runtime_candidates(
-                                        state,
-                                        topology_state_analysis,
-                                        v2_candidates=base_candidates,
-                                        v2_anchors=[
-                                            base_candidates[v2_anchor_index]
-                                        ],
-                                        config=hybridstructpool_runtime,
+                                v2_anchor_index: int | None = None
+                                if hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
+                                    fixed_structshell_result = (
+                                        _generate_fixed_structshell_runtime_candidates(
+                                            state,
+                                            topology_state_analysis,
+                                            v2_candidates=base_candidates,
+                                            config=hybridstructpool_runtime,
+                                        )
                                     )
-                                )
-                                if fixed_structshell_result is not None:
+                                    if fixed_structshell_result is None:
+                                        raise AssertionError(
+                                            "Dual16 runtime dispatch returned no candidate pool"
+                                        )
                                     hybrid_result = fixed_structshell_result
-                                elif hybrid_pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
+                                else:
+                                    (
+                                        v2_anchor_index,
+                                        _v2_anchor_scores,
+                                        _v2_anchor_margin,
+                                    ) = score_online_candidates(
+                                        base_candidate_rows, runtime_models[policy]
+                                    )
+                                if hybrid_pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
+                                    assert v2_anchor_index is not None
                                     hybrid_result = (
                                         generate_routed_hybridstructpool_runtime_candidates(
                                             state,
@@ -2168,12 +2300,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             config=hybridstructpool_runtime,
                                         )
                                     )
-                                else:
+                                elif hybrid_pool_id != STRUCTSHELL_DUAL16_POOL_ID:
+                                    assert v2_anchor_index is not None
                                     hybrid_result = generate_hybridstructpool_runtime_candidates(
                                         state,
                                         topology_state_analysis,
                                         v2_candidates=base_candidates,
-                                        v2_anchors=[base_candidates[v2_anchor_index]],
+                                        v2_anchors=[
+                                            base_candidates[v2_anchor_index]
+                                        ],
                                         structural_family_sizes=hybridstructpool_runtime[
                                             "runtime_structural_family_sizes"
                                         ],
@@ -2283,10 +2418,14 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         "hybridstructpool_computed_challenger_feature_count": len(
                                             challenger_candidates
                                         ),
-                                        "hybridstructpool_v2_anchor_candidate_id": str(
-                                            base_candidates[v2_anchor_index][
-                                                "candidate_id"
-                                            ]
+                                        "hybridstructpool_v2_anchor_candidate_id": (
+                                            str(
+                                                base_candidates[v2_anchor_index][
+                                                    "candidate_id"
+                                                ]
+                                            )
+                                            if v2_anchor_index is not None
+                                            else None
                                         ),
                                         "hybridstructpool_base_candidate_count": (
                                             hybrid_result.base_candidate_count
@@ -2645,22 +2784,38 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                     v3_s3_seconds = 0.0
                     if v3_s3_state is not None:
                         assert v3_s3_selector is not None
-                        v3_s3_select_started = time.perf_counter()
-                        v3_s3_selection = v3_s3_selector.select(
-                            SelectionRequest(
-                                candidates=candidates,
-                                candidate_rows=candidate_rows,
-                                profile=policy,
-                                before_fingerprint=before_repair_hash,
-                                temporal_context=s3_temporal_context(
-                                    v3_s3_history,
-                                    int(row["agent_count"]),
-                                    include_wall_time=bool(
-                                        v3_s3_bundle.wall_time_history_required
+
+                        def select_v3_s3_pool_attempt(
+                            current_candidates: list[dict[str, Any]],
+                            current_rows: list[dict[str, Any]],
+                            current_generation: dict[str, Any],
+                        ):
+                            """Select either V3 pool through the same public contract."""
+
+                            return v3_s3_selector.select(
+                                SelectionRequest(
+                                    candidates=current_candidates,
+                                    candidate_rows=current_rows,
+                                    profile=policy,
+                                    before_fingerprint=before_repair_hash,
+                                    temporal_context=s3_temporal_context(
+                                        v3_s3_history,
+                                        int(row["agent_count"]),
+                                        include_wall_time=bool(
+                                            v3_s3_bundle.wall_time_history_required
+                                        ),
                                     ),
-                                ),
-                                agent_count=int(row["agent_count"]),
+                                    agent_count=int(row["agent_count"]),
+                                    candidate_pool_mode=str(
+                                        current_generation["mode"]
+                                    ),
+                                    generation_context=current_generation,
+                                )
                             )
+
+                        v3_s3_select_started = time.perf_counter()
+                        v3_s3_selection = select_v3_s3_pool_attempt(
+                            candidates, candidate_rows, generation_request
                         )
                         v3_s3_selected_index = v3_s3_selection.candidate_index
                         v3_s3_diagnostic = dict(v3_s3_selection.diagnostics)
@@ -2670,6 +2825,163 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         selected_local_index = v3_s3_selected_index
                         controller["v3_s3"] = v3_s3_diagnostic
                         controller_totals["v3_s3_seconds"] += v3_s3_seconds
+                        if bool(
+                            v3_s3_diagnostic.get(
+                                "requires_full_pool_replan", False
+                            )
+                        ):
+                            if generation_request["mode"] != "restricted":
+                                raise ClosedLoopExecutionError(
+                                    "invalid_v3_s3_replan_request",
+                                    "v3-s3 requested a full-pool replan from a full pool",
+                                )
+                            if cache_hit:
+                                raise ClosedLoopExecutionError(
+                                    "invalid_v3_s3_replan_cache",
+                                    "a restricted V3-S3 miss unexpectedly came from cache",
+                                )
+                            restricted_candidate_count = len(candidates)
+                            restricted_proposal_metrics = dict(proposal_metrics)
+                            restricted_feature_seconds = float(feature_seconds)
+                            restricted_realized_metrics = dict(
+                                realized_feature_metrics
+                            )
+                            full_proposal = dict(job["proposal"])
+                            full_candidates, full_proposal_metrics = (
+                                generate_candidate_pool_attempt(full_proposal)
+                            )
+                            if feature_engine is None:
+                                raise ClosedLoopExecutionError(
+                                    "v3_s3_feature_engine_missing",
+                                    "V3-S3 full-pool replan requires realized features",
+                                )
+                            (
+                                full_candidate_rows,
+                                full_realized_metrics,
+                            ) = realized_candidate_rows_attempt(
+                                full_candidates
+                            )
+                            # Match the initial realized-feature timing contract.
+                            # The native metrics also expose diagnostic subparts
+                            # (for example feature_fill_seconds), so summing every
+                            # ``*_seconds`` field would count the same work twice.
+                            full_feature_seconds = float(
+                                full_realized_metrics.get(
+                                    "state_analysis_seconds", 0.0
+                                )
+                            ) + float(
+                                full_realized_metrics.get(
+                                    "realized_feature_seconds", 0.0
+                                )
+                            )
+                            candidates = full_candidates
+                            candidate_rows = full_candidate_rows
+                            proposal_metrics = full_proposal_metrics
+                            for metric_name in (
+                                "proposal_seconds",
+                                "proposal_count",
+                                "candidate_generation_seconds",
+                                "state_check_seconds",
+                                "state_check_fingerprint_seconds",
+                            ):
+                                proposal_metrics[metric_name] = float(
+                                    full_proposal_metrics.get(metric_name, 0.0)
+                                ) + float(
+                                    restricted_proposal_metrics.get(
+                                        metric_name, 0.0
+                                    )
+                                )
+                            realized_feature_metrics = {
+                                **full_realized_metrics,
+                                **{
+                                    key: float(full_realized_metrics.get(key, 0.0))
+                                    + float(restricted_realized_metrics.get(key, 0.0))
+                                    for key in set(full_realized_metrics)
+                                    | set(restricted_realized_metrics)
+                                    if key.endswith("_seconds")
+                                },
+                            }
+                            feature_seconds = (
+                                restricted_feature_seconds
+                                + full_feature_seconds
+                            )
+                            state_analysis_seconds = sum(
+                                float(value)
+                                for metrics_group in (
+                                    state_feature_metrics,
+                                    proposal_feature_metrics,
+                                    realized_feature_metrics,
+                                )
+                                for key, value in metrics_group.items()
+                                if key == "state_analysis_seconds"
+                            )
+                            scores = [0.0] * len(candidate_rows)
+                            margin = 0.0
+                            base_selected_local_index = 0
+                            full_select_started = time.perf_counter()
+                            v3_s3_selection = select_v3_s3_pool_attempt(
+                                candidates,
+                                candidate_rows,
+                                {
+                                    "mode": "full",
+                                    "retry_reason": "restricted_template_missing",
+                                },
+                            )
+                            full_select_seconds = (
+                                time.perf_counter() - full_select_started
+                            )
+                            v3_s3_seconds += full_select_seconds
+                            controller_totals["v3_s3_seconds"] += (
+                                full_select_seconds
+                            )
+                            selected_local_index = (
+                                v3_s3_selection.candidate_index
+                            )
+                            retry_diagnostic = dict(
+                                v3_s3_selection.diagnostics
+                            )
+                            retry_record = {
+                                "required": True,
+                                "retry_count": 1,
+                                "reason": "restricted_template_missing",
+                                "restricted_candidate_count": (
+                                    restricted_candidate_count
+                                ),
+                                "full_candidate_count": len(candidates),
+                                "restricted_select_seconds": float(
+                                    v3_s3_seconds - full_select_seconds
+                                ),
+                                "full_select_seconds": full_select_seconds,
+                                "restricted_feature_seconds": (
+                                    restricted_feature_seconds
+                                ),
+                                "full_feature_seconds": full_feature_seconds,
+                            }
+                            retry_diagnostic["full_pool_replan"] = retry_record
+                            controller["v3_s3"] = retry_diagnostic
+                            proposal_metrics["v3_s3_full_pool_replan"] = (
+                                retry_record
+                            )
+                            controller["proposal"] = proposal_metrics
+                            controller_totals[
+                                "v3_s3_full_pool_replan_count"
+                            ] += 1
+                            full_cache_key = (
+                                before_repair_hash,
+                                _fingerprint(full_proposal),
+                                int(solver_seed),
+                            )
+                            stateful_cache = {
+                                "key": full_cache_key,
+                                "candidates": candidates,
+                                "candidate_rows": candidate_rows,
+                                "scores": scores,
+                                "margin": margin,
+                                "base_selected_local_index": (
+                                    base_selected_local_index
+                                ),
+                                "proposal_metrics": dict(proposal_metrics),
+                            }
                     base_diagnostic = (
                         None
                         if v3_s3_bundle is not None
@@ -3627,29 +3939,46 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 ) + float(controller.get("state_check_fingerprint_seconds", 0.0))
                 if v3_s3_state is not None:
                     v3_s3_observe_started = time.perf_counter()
-                    repair_outcome = classify_repair_outcome(
-                        before_fingerprint=before_repair_hash,
-                        after_fingerprint=after_repair_hash,
-                        replan_success=bool(metrics.get("replan_success")),
-                        conflicts_before=int(before["num_of_colliding_pairs"]),
-                        conflicts_after=int(state["num_of_colliding_pairs"]),
-                        feasible=bool(state.get("feasible")),
-                    )
+                    assert v3_s3_selector is not None
                     conflict_reduction = max(
                         0,
                         int(before["num_of_colliding_pairs"])
                         - int(state["num_of_colliding_pairs"]),
                     )
-                    continuation_expected = v3_s3_state.observe(
-                        before_fingerprint=before_repair_hash,
-                        after_fingerprint=after_repair_hash,
-                        repair_outcome=repair_outcome,
-                        conflict_reduction=float(conflict_reduction),
-                        total_seconds=float(
-                            controller_before_repair_seconds
-                            + repair_wall_seconds
-                        ),
-                        feasible=bool(state.get("feasible")),
+                    observation_diagnostic = v3_s3_selector.observe(
+                        SelectionObservation(
+                            candidate_id=str(
+                                controller["selected_candidate_id"]
+                            ),
+                            actual_agents=actual,
+                            before_fingerprint=before_repair_hash,
+                            after_fingerprint=after_repair_hash,
+                            replan_success=bool(
+                                metrics.get("replan_success")
+                            ),
+                            conflicts_before=int(
+                                before["num_of_colliding_pairs"]
+                            ),
+                            conflicts_after=int(
+                                state["num_of_colliding_pairs"]
+                            ),
+                            feasible=bool(state.get("feasible")),
+                            terminal=bool(
+                                state.get("done")
+                                or result.get("terminated")
+                                or result.get("truncated")
+                            ),
+                            total_seconds=float(
+                                controller_before_repair_seconds
+                                + repair_wall_seconds
+                            ),
+                        )
+                    )
+                    repair_outcome = str(
+                        observation_diagnostic["repair_outcome"]
+                    )
+                    continuation_expected = bool(
+                        observation_diagnostic["continuation_expected"]
                     )
                     v3_s3_history.append(
                         {
@@ -3672,8 +4001,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                         "continuation_expected": bool(
                             continuation_expected
                         ),
-                        "state_unchanged": (
-                            before_repair_hash == after_repair_hash
+                        "state_unchanged": bool(
+                            observation_diagnostic["state_unchanged"]
                         ),
                     }
                     controller["v3_s3_seconds"] = float(
@@ -4303,6 +4632,10 @@ def run_closed_loop_collection(
         episode_process_timeout_seconds,
         environment_time_limit_seconds,
     )
+    _validate_wall_clock_replan_algorithm(
+        config.get("wall_time_budget_seconds"),
+        dict(config.get("environment") or {}),
+    )
     config = _with_stopping_rule(config, stopping_rule)
     if qualification_process_timeout_seconds is not None and (
         not math.isfinite(float(qualification_process_timeout_seconds))
@@ -4329,6 +4662,7 @@ def run_closed_loop_collection(
     v3_s3_root: Path | None = None
     v3_s3_manifest: dict[str, Any] | None = None
     if controller_mode == "v3-s3":
+        _validate_v3_s3_proposal(dict(config.get("proposal") or {}))
         v3_s3_root = Path(
             str(v3_s3_bundle or DEFAULT_V3_S3_BUNDLE)
         )
@@ -4339,11 +4673,6 @@ def run_closed_loop_collection(
         v3_s3_manifest = loaded_v3_s3.manifest
         if not bool(v3_s3_manifest.get("native_audit_completed")):
             raise ValueError("v3-s3 requires a completed native audit")
-        proposal_sizes = set(map(int, config["proposal"]["neighborhood_sizes"]))
-        if proposal_sizes != {4, 8, 16}:
-            raise ValueError(
-                "v3-s3 requires the frozen 4/8/16 candidate space"
-            )
     elif v3_s3_bundle is not None:
         raise ValueError("v3_s3_bundle is only valid with v3-s3")
     storage_fp = storage_fingerprint(trace_format)
@@ -4374,6 +4703,9 @@ def run_closed_loop_collection(
         (str(task_id), int(solver_seed)): dict(value)
         for (task_id, solver_seed), value in dict(episode_overrides or {}).items()
     }
+    _validate_v3_s3_episode_overrides(
+        controller_mode, normalized_episode_overrides
+    )
     if (
         normalized_cohort_job_keys is not None
         and not normalized_cohort_job_keys <= available_job_keys

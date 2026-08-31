@@ -10,11 +10,35 @@ from lns2_selector.runtime.contracts import (
 from lns2_selector.runtime.online_selection import score_online_candidates
 
 
+PAIRWISE_CONTROLLER_IDS = frozenset({"v2-full", "mixed-full-v2"})
+
+
+def require_pairwise_bundle_identity(
+    controller_id: str, manifest: Mapping[str, Any]
+) -> str:
+    """Return the canonical bundle identity or reject a mislabeled ranker."""
+
+    if controller_id not in PAIRWISE_CONTROLLER_IDS:
+        raise ValueError("unsupported pairwise V2 controller id")
+    manifest_id = manifest.get("controller_id")
+    if manifest_id is None:
+        # The frozen v2-full artifact predates the explicit controller_id field;
+        # its promoted default is its canonical identity, not a wildcard.
+        manifest_id = manifest.get("default_controller")
+    resolved = str(manifest_id or "")
+    if resolved != controller_id:
+        raise ValueError(
+            f"{controller_id} requires a matching controller bundle; "
+            f"manifest identity is {resolved or 'missing'}"
+        )
+    return resolved
+
+
 class PairwiseV2Selector:
     """Adapter shared by pairwise realized-neighborhood ranker bundles."""
 
     def __init__(self, controller_id: str, bundle: Any):
-        if controller_id not in {"v2-full", "mixed-full-v2"}:
+        if controller_id not in PAIRWISE_CONTROLLER_IDS:
             raise ValueError("unsupported pairwise V2 controller id")
         models = getattr(bundle, "main_models", None)
         if models is None:

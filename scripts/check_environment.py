@@ -20,7 +20,7 @@ TRAINING_VERSIONS = {
     "threadpoolctl": "3.5.0",
     "pytest": "6.2.5",
 }
-NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.official_step_timed_extension.v2"
+NATIVE_SEMANTICS_SCHEMA = "lns2.native_semantics.official_step_timed_extension.v3"
 
 
 def _check(

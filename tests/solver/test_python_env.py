@@ -83,7 +83,7 @@ class RepairEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(
             lns2_env.native_semantics_schema,
-            "lns2.native_semantics.official_step_timed_extension.v2",
+            "lns2.native_semantics.official_step_timed_extension.v3",
         )
 
     def test_portable_tree_supports_raw_and_sigmoid_outputs(self) -> None:
@@ -164,6 +164,97 @@ class RepairEnvironmentTests(unittest.TestCase):
             neighborhood_size=8,
             max_repair_iterations=3,
             context={"layout_mode": "random", "task_flow": "benchmark"},
+        )
+
+    def test_timed_step_rejects_non_pp_before_mutating_state(self) -> None:
+        for replan_algorithm in ("GCBS", "PBS"):
+            with self.subTest(replan_algorithm=replan_algorithm):
+                env = lns2_env.LNS2RepairEnv(
+                    os.environ["LNS2_TEST_MAP"],
+                    os.environ["LNS2_TEST_SCEN"],
+                    agent_count=80,
+                    time_limit=30.0,
+                    neighborhood_size=8,
+                    replan_algorithm=replan_algorithm,
+                    max_repair_iterations=3,
+                    context={"layout_mode": "random", "task_flow": "benchmark"},
+                )
+                before = env.reset(seed=17)
+                with self.assertRaisesRegex(
+                    ValueError, "supported only.*replan_algorithm.*PP"
+                ):
+                    env.step_with_time_limit({"mode": "official"}, 1.0)
+                after = env.get_state()
+                self.assertEqual(after["iteration"], before["iteration"])
+                self.assertEqual(
+                    after["num_of_colliding_pairs"],
+                    before["num_of_colliding_pairs"],
+                )
+                self.assertEqual(after["sum_of_costs"], before["sum_of_costs"])
+                self.assertEqual(
+                    [agent["path"] for agent in after["agents"]],
+                    [agent["path"] for agent in before["agents"]],
+                )
+
+    def test_pp_timed_step_with_large_budget_matches_ordinary_step(self) -> None:
+        ordinary = self.make_env()
+        timed = self.make_env()
+        ordinary_state = ordinary.reset(seed=29)
+        timed_state = timed.reset(seed=29)
+        self.assertEqual(
+            [agent["path"] for agent in ordinary_state["agents"]],
+            [agent["path"] for agent in timed_state["agents"]],
+        )
+        if ordinary_state["done"] or not ordinary_state["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        agents = list(ordinary_state["conflict_edges"][0])
+        action = {
+            "mode": "explicit_neighborhood",
+            "agents": agents,
+            "repair_order": agents,
+            "random_seed": 34001,
+        }
+        ordinary_result = ordinary.step(action)
+        timed_result = timed.step_with_time_limit(action, 30.0)
+        for name in ("neighborhood", "repair_order", "conflicts_after"):
+            self.assertEqual(
+                timed_result["metrics"][name], ordinary_result["metrics"][name]
+            )
+        self.assertEqual(
+            timed_result["observation"]["sum_of_costs"],
+            ordinary_result["observation"]["sum_of_costs"],
+        )
+        self.assertEqual(
+            [agent["path"] for agent in timed_result["observation"]["agents"]],
+            [agent["path"] for agent in ordinary_result["observation"]["agents"]],
+        )
+
+    def test_zero_pp_deadline_rolls_back_atomically(self) -> None:
+        env = self.make_env()
+        before = env.reset(seed=29)
+        if before["done"] or not before["conflict_edges"]:
+            self.skipTest("initial soft PP was already feasible")
+        agents = list(before["conflict_edges"][0])
+        result = env.step_with_time_limit(
+            {
+                "mode": "explicit_neighborhood",
+                "agents": agents,
+                "repair_order": agents,
+                "random_seed": 34002,
+            },
+            0.0,
+        )
+        self.assertEqual(result["metrics"]["pp_failure_reason"], "time_limit")
+        self.assertTrue(result["metrics"]["pp_rolled_back"])
+        after = result["observation"]
+        self.assertEqual(after["iteration"], before["iteration"] + 1)
+        self.assertEqual(
+            after["num_of_colliding_pairs"], before["num_of_colliding_pairs"]
+        )
+        self.assertEqual(after["sum_of_costs"], before["sum_of_costs"])
+        self.assertEqual(
+            [agent["path"] for agent in after["agents"]],
+            [agent["path"] for agent in before["agents"]],
         )
 
     def test_reset_is_deterministic_and_exposes_context(self) -> None:

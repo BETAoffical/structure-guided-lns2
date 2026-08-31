@@ -530,6 +530,8 @@ def score_online_candidates(
     )
     if len(scores) != len(rows):
         raise ValueError("direct candidate scorer returned the wrong number of scores")
+    if any(not math.isfinite(score) for score in scores):
+        raise ValueError("direct candidate scorer returned a non-finite score")
     vectors = []
     reverse_vectors = []
     pairs = []
@@ -537,6 +539,10 @@ def score_online_candidates(
         pair_vectors = getattr(model, "pair_vectors", None)
         if callable(pair_vectors):
             vectors, reverse_vectors, pairs = pair_vectors(rows)
+            if len(vectors) != len(reverse_vectors) or len(vectors) != len(pairs):
+                raise ValueError(
+                    "pairwise vector batches and pair identities differ in length"
+                )
         else:
             pair_vector = getattr(model, "pair_vector", None)
             for left in range(len(rows)):
@@ -557,6 +563,16 @@ def score_online_candidates(
                         )
                     pairs.append((left, right))
     if vectors:
+        for label, batch in (
+            ("forward", vectors),
+            ("reverse", reverse_vectors),
+        ):
+            if any(
+                not math.isfinite(float(value))
+                for vector in batch
+                for value in vector
+            ):
+                raise ValueError(f"{label} pairwise vectors contain a non-finite value")
         predict_positive = getattr(model, "predict_positive", None)
         if callable(predict_positive):
             forward = predict_positive(vectors)
@@ -568,10 +584,33 @@ def score_online_candidates(
             reverse = model.estimator.predict_proba(
                 np.asarray(reverse_vectors, dtype=float)
             )[:, 1]
+        if len(forward) != len(pairs) or len(reverse) != len(pairs):
+            raise ValueError(
+                "pairwise probability batches and pair identities differ in length"
+            )
+        for batch in (forward, reverse):
+            if any(
+                not math.isfinite(float(value))
+                or float(value) < 0.0
+                or float(value) > 1.0
+                for value in batch
+            ):
+                raise ValueError(
+                    "pairwise predictor returned a probability outside [0, 1]"
+                )
         probabilities = [
             (float(first) + (1.0 - float(second))) / 2.0
             for first, second in zip(forward, reverse)
         ]
+        if any(
+            not math.isfinite(probability)
+            or probability < 0.0
+            or probability > 1.0
+            for probability in probabilities
+        ):
+            raise ValueError(
+                "pairwise predictor returned a probability outside [0, 1]"
+            )
         for probability, (left, right) in zip(probabilities, pairs):
             scores[left] += float(probability)
             scores[right] += 1.0 - float(probability)

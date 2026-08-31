@@ -7,6 +7,7 @@ and strictly serial.
 from __future__ import annotations
 
 import collections
+from functools import partial
 import random
 from pathlib import Path
 from typing import Any, Mapping
@@ -19,6 +20,10 @@ from experiments.stride_warehouse_disruption_recovery_heldout_ttf import (
     TTF_OVERRIDE_SCHEMA, _common_kwargs, _controller_kwargs, _controller_summary, _mean,
 )
 from experiments.warehouse_disruption_checkpoints import compute_checkpoint_identity_sha256
+from experiments.warehouse_checkpoint_resume import (
+    checkpoint_failure_record,
+    reusable_checkpoint_report,
+)
 from generators.dataset import generate_dataset
 
 SCHEMA = "lns2.stride.warehouse_disruption_recovery_load_extension_config.v1"
@@ -33,6 +38,7 @@ CONTROLLERS = ("official_adaptive", "dual16")
 MANIFEST_FILENAME = "load_extension_checkpoint_manifest.jsonl"
 REPORT_FILENAME = "load_extension_checkpoint_report.json"
 WORKER_FILENAME = "load_extension_worker_results.json"
+PLAN_FILENAME = "load_extension_plan.json"
 TIMED_MANIFESTS = {"official_adaptive": "official_adaptive_manifest.jsonl", "dual16": "realized_dynamic_manifest.jsonl"}
 
 
@@ -142,10 +148,11 @@ def plan(config_path: str | Path) -> dict[str, Any]:
             "schedule": [{k: v for k, v in r.items() if k != "row"} for r in schedule]}
 
 
-def _failure(job: dict[str, Any], status: str, error: str) -> dict[str, Any]:
-    item = job["item"]
-    normalized = "state_supply_unavailable" if status == "error" and error == INCUMBENT_SUPPLY_ERROR else status
-    return {"status": normalized, "error": error, **{k: item[k] for k in ("key_index", "key_id", "map_id", "task_id", "task_variant", "load_band")}}
+_failure = partial(
+    checkpoint_failure_record,
+    incumbent_supply_error=INCUMBENT_SUPPLY_ERROR,
+    include_count_fields=False,
+)
 
 
 def _worker(job: dict[str, Any]) -> dict[str, Any]:
@@ -158,27 +165,52 @@ def _worker(job: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def analyze_checkpoints(config_path: str | Path, output: str | Path) -> dict[str, Any]:
-    path, _root_path, config = load_config(config_path); root = Path(output).resolve() / "checkpoints"
-    rows = [dict(r) for r in read_jsonl(root / MANIFEST_FILENAME)] if (root / MANIFEST_FILENAME).is_file() else []
-    worker = read_json(root / WORKER_FILENAME) if (root / WORKER_FILENAME).is_file() else {"failures": []}
+def _checkpoint_report(
+    path: Path,
+    config: Mapping[str, Any],
+    rows: list[dict[str, Any]],
+    failures: list[dict[str, Any]],
+) -> dict[str, Any]:
     qualified = [r for r in rows if dict(r.get("qualification") or {}).get("passed")]
     bands = collections.Counter(str(r.get("load_band")) for r in qualified)
     maps = {str(r.get("map_id")) for r in qualified}; cells = collections.Counter((str(r.get("map_id")), str(r.get("load_band"))) for r in qualified)
-    failures = list(worker.get("failures") or ()); execution = [r for r in failures if r.get("status") != "state_supply_unavailable"]
+    execution = [r for r in failures if r.get("status") != "state_supply_unavailable"]
     passed = len(rows) + len(failures) == 36 and 30 <= len(qualified) <= 36 and len(maps) == 6 and all(bands[b] >= 10 for b in BANDS) and len(cells) == 18 and all(v >= 1 for v in cells.values()) and not execution
-    report = {"schema": CHECKPOINT_REPORT_SCHEMA, "experiment_id": EXPERIMENT_ID, "config_sha256": sha256_file(path),
+    return {"schema": CHECKPOINT_REPORT_SCHEMA, "experiment_id": EXPERIMENT_ID, "config_sha256": sha256_file(path),
         "attempted_candidate_count": len(rows) + len(failures), "completed_checkpoint_count": len(rows), "qualified_checkpoint_count": len(qualified),
         "qualified_map_count": len(maps), "qualified_per_load_band": dict(bands), "qualified_map_band_cell_count": len(cells),
         "qualified_checkpoint_ids": [r["checkpoint_id"] for r in qualified], "failures": failures, "execution_failure_count": len(execution),
         "checkpoint_selection_controller_outcomes_consulted": False, "failed_candidate_replacement": False, "passed": passed}
+
+
+def analyze_checkpoints(config_path: str | Path, output: str | Path) -> dict[str, Any]:
+    path, _root_path, config = load_config(config_path); root = Path(output).resolve() / "checkpoints"
+    rows = [dict(r) for r in read_jsonl(root / MANIFEST_FILENAME)] if (root / MANIFEST_FILENAME).is_file() else []
+    worker = read_json(root / WORKER_FILENAME) if (root / WORKER_FILENAME).is_file() else {"failures": []}
+    failures = [dict(row) for row in worker.get("failures") or ()]
+    report = _checkpoint_report(path, config, rows, failures)
     write_json(root / REPORT_FILENAME, report); return report
 
 
 def prepare_checkpoints(config_path: str | Path, output: str | Path, *, workers: int | None = None, resume: bool = False) -> dict[str, Any]:
     path, _root_path, config = load_config(config_path); dataset_root = _ensure_dataset(config); out = Path(output).resolve(); cp = out / "checkpoints"
-    if resume and (cp / REPORT_FILENAME).is_file(): return analyze_checkpoints(path, out)
-    payload = plan(path); cp.mkdir(parents=True, exist_ok=True); write_json(out / "load_extension_plan.json", payload)
+    payload = plan(path)
+    if resume:
+        report = reusable_checkpoint_report(
+            report_path=cp / REPORT_FILENAME,
+            plan_path=out / PLAN_FILENAME,
+            manifest_path=cp / MANIFEST_FILENAME,
+            worker_path=cp / WORKER_FILENAME,
+            expected_schema=CHECKPOINT_REPORT_SCHEMA,
+            experiment_id=EXPERIMENT_ID,
+            config_sha256=sha256_file(path),
+            expected_plan=payload,
+            schedule=payload["schedule"],
+            build_report=lambda rows, failures: _checkpoint_report(path, config, rows, failures),
+        )
+        if report is not None:
+            return report
+    cp.mkdir(parents=True, exist_ok=True); write_json(out / PLAN_FILENAME, payload)
     jobs = [{"job_id": r["key_id"], "item": r, "dataset_root": str(dataset_root), "checkpoint_root": str(cp), "generation": config["checkpoint_generation"]} for r in _checkpoint_schedule(config, dataset_root)]
     results = _run_jobs(_worker, jobs, int(workers or config["checkpoint_generation"]["workers"]), phase="warehouse-load-extension-checkpoints", output_root=cp,
         run_fingerprint=_fingerprint({"config_sha256": sha256_file(path), "schedule": payload["schedule"]}), timeout_seconds=float(config["checkpoint_generation"]["process_timeout_seconds"]), failure_result=_failure, stop_on_failure=False)

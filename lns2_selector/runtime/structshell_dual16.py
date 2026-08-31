@@ -15,7 +15,7 @@ from lns2_selector.runtime.topology_candidates import (
 
 
 STRUCTSHELL_DUAL16_POOL_ID = "stride-structshell-dual16-v1"
-STRUCTSHELL_DUAL16_RUNTIME_ID = "stride-structshell-dual16-runtime-v1"
+STRUCTSHELL_DUAL16_RUNTIME_ID = "stride-structshell-dual16-runtime-v2"
 
 _DUAL16_FAMILY_SIZES = {
     "conflict_component": [16],
@@ -139,7 +139,6 @@ def generate_structshell_dual16_runtime_candidates(
     analysis: StateAnalysis,
     *,
     v2_candidates: Iterable[dict[str, Any]],
-    v2_anchors: Iterable[dict[str, Any]],
     config: dict[str, Any],
 ) -> HybridStructPoolResult:
     """Merge the complete V2 pool with at most two fixed-size challengers."""
@@ -147,11 +146,8 @@ def generate_structshell_dual16_runtime_candidates(
     specification = validate_structshell_dual16_augmentation(config)
     assert specification is not None
     base = list(v2_candidates)
-    anchors = list(v2_anchors)
-    if not base or not anchors:
-        raise ValueError(
-            "Dual16 StructShell requires the full V2 pool and a V2 anchor"
-        )
+    if not base:
+        raise ValueError("Dual16 StructShell requires the full V2 pool")
     family_sizes = {
         str(family): tuple(map(int, sizes))
         for family, sizes in dict(

@@ -1849,7 +1849,7 @@ def collect_scheduled(
                 output=lane,
                 workers=1,
                 task_ids=task_ids,
-                controller="v2-full",
+                controller=controller_id,
                 feature_backend="auto",
                 controller_bundle=bundles[controller_id],
                 controller_runtime="optimized",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+from functools import partial
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -19,6 +20,10 @@ from experiments.stride_warehouse_disruption_recovery import (
     _project_path,
     _registered_file,
 )
+from experiments.warehouse_checkpoint_resume import (
+    checkpoint_failure_record,
+    reusable_checkpoint_report,
+)
 
 
 CONFIG_SCHEMA = "lns2.stride.warehouse_disruption_recovery_heldout_config.v1"
@@ -28,6 +33,7 @@ REPORT_SCHEMA = "lns2.stride.warehouse_disruption_recovery_heldout_checkpoint_re
 PLAN_FILENAME = "heldout_checkpoint_plan.json"
 MANIFEST_FILENAME = "heldout_checkpoint_manifest.jsonl"
 REPORT_FILENAME = "heldout_checkpoint_qualification_report.json"
+WORKER_RESULTS_FILENAME = "heldout_worker_results.json"
 
 
 def load_config(config_path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
@@ -206,36 +212,25 @@ def plan(config_path: str | Path) -> dict[str, Any]:
     }
 
 
-def _failure(job: dict[str, Any], status: str, error: str) -> dict[str, Any]:
-    item = dict(job["item"])
-    normalized = "state_supply_unavailable" if status == "error" and error == INCUMBENT_SUPPLY_ERROR else status
-    return {
-        "status": normalized,
-        "error": error,
-        "state_count": 0,
-        "outcome_count": 0,
-        "key_index": int(item["key_index"]),
-        "key_id": str(item["key_id"]),
-        "map_id": str(item["map_id"]),
-        "task_id": str(item["task_id"]),
-    }
+_failure = partial(
+    checkpoint_failure_record,
+    incumbent_supply_error=INCUMBENT_SUPPLY_ERROR,
+)
 
 
-def analyze_checkpoints(config_path: str | Path, output: str | Path) -> dict[str, Any]:
-    from experiments.repair_collection import _read_jsonl
-
-    path, _root, config = load_config(config_path)
-    checkpoint_root = Path(output).resolve() / "checkpoints"
-    rows = _read_jsonl(checkpoint_root / MANIFEST_FILENAME) if (checkpoint_root / MANIFEST_FILENAME).is_file() else []
-    worker_path = checkpoint_root / "heldout_worker_results.json"
-    failures = list(_read_json(worker_path).get("failures", [])) if worker_path.is_file() else []
+def _checkpoint_report(
+    path: Path,
+    config: Mapping[str, Any],
+    rows: list[dict[str, Any]],
+    failures: list[dict[str, Any]],
+) -> dict[str, Any]:
     qualified = [row for row in rows if dict(row.get("qualification") or {}).get("passed")]
     supply = [row for row in failures if row.get("status") == "state_supply_unavailable" or (row.get("status") == "error" and row.get("error") == INCUMBENT_SUPPLY_ERROR)]
     execution = [row for row in failures if row not in supply]
     generation = dict(config["checkpoint_generation"])
     maps = {str(row["map_id"]) for row in qualified}
     attempted = len(rows) + len(failures)
-    report = {
+    return {
         "schema": REPORT_SCHEMA,
         "experiment_id": EXPERIMENT_ID,
         "config_sha256": sha256_file(path),
@@ -260,6 +255,17 @@ def analyze_checkpoints(config_path: str | Path, output: str | Path) -> dict[str
         "global_or_default_promotion_allowed": False,
         "claim_boundary": str(config["claim_boundary"]),
     }
+
+
+def analyze_checkpoints(config_path: str | Path, output: str | Path) -> dict[str, Any]:
+    from experiments.repair_collection import _read_jsonl
+
+    path, _root, config = load_config(config_path)
+    checkpoint_root = Path(output).resolve() / "checkpoints"
+    rows = _read_jsonl(checkpoint_root / MANIFEST_FILENAME) if (checkpoint_root / MANIFEST_FILENAME).is_file() else []
+    worker_path = checkpoint_root / WORKER_RESULTS_FILENAME
+    failures = list(_read_json(worker_path).get("failures", [])) if worker_path.is_file() else []
+    report = _checkpoint_report(path, config, rows, failures)
     _write_json(checkpoint_root / REPORT_FILENAME, report)
     return report
 
@@ -276,13 +282,25 @@ def prepare_checkpoints(
     output_path = Path(output).resolve()
     checkpoint_root = output_path / "checkpoints"
     report_path = checkpoint_root / REPORT_FILENAME
-    if resume and report_path.is_file():
-        report = _read_json(report_path)
-        if report.get("config_sha256") != sha256_file(path):
-            raise ValueError("existing held-out checkpoint report belongs to another config")
-        return report
     schedule = _heldout_schedule(config, dataset_root)
     payload = plan(path)
+    if resume:
+        report = reusable_checkpoint_report(
+            report_path=report_path,
+            plan_path=output_path / PLAN_FILENAME,
+            manifest_path=checkpoint_root / MANIFEST_FILENAME,
+            worker_path=checkpoint_root / WORKER_RESULTS_FILENAME,
+            expected_schema=REPORT_SCHEMA,
+            experiment_id=EXPERIMENT_ID,
+            config_sha256=sha256_file(path),
+            expected_plan=payload,
+            schedule=payload["schedule"],
+            build_report=lambda rows, failures: _checkpoint_report(
+                path, config, rows, failures
+            ),
+        )
+        if report is not None:
+            return report
     checkpoint_root.mkdir(parents=True, exist_ok=True)
     _write_json(output_path / PLAN_FILENAME, payload)
     generation = dict(config["checkpoint_generation"])
@@ -310,7 +328,7 @@ def prepare_checkpoints(
     completed = sorted((dict(row["checkpoint"]) for row in results if row.get("status") == "ok"), key=lambda row: int(row["key_index"]))
     failures = [dict(row) for row in results if row.get("status") != "ok"]
     _write_jsonl(checkpoint_root / MANIFEST_FILENAME, completed)
-    _write_json(checkpoint_root / "heldout_worker_results.json", {"completed_count": len(completed), "failures": failures})
+    _write_json(checkpoint_root / WORKER_RESULTS_FILENAME, {"completed_count": len(completed), "failures": failures})
     return analyze_checkpoints(path, output_path)
 
 

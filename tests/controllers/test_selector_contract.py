@@ -4,6 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from lns2_selector.controllers import (
     CONTROLLER_IDS,
@@ -13,7 +14,12 @@ from lns2_selector.controllers.official import OfficialAdaptiveSelector
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.controllers.v3_s3 import V3S3Selector
 from lns2_selector.cli import main as selector_cli
-from lns2_selector.runtime.contracts import SelectionRequest, Selector
+from lns2_selector.runtime.contracts import (
+    SelectionObservation,
+    SelectionRequest,
+    Selector,
+    StatefulSelector,
+)
 
 
 class DirectModel:
@@ -31,6 +37,16 @@ class DirectV3State:
             "v3_sequence" if self.index is not None else "v3_stalled_no_candidate"
         )
         return self.index, {"selection_kind": selection_kind}
+
+
+class ObservableV3State:
+    pending_candidate_id = "candidate-1"
+    pending_agents = (1,)
+    pending_before_fingerprint = "before"
+
+    def observe(self, **values):
+        self.values = values
+        return True
 
 
 def request(
@@ -91,6 +107,17 @@ class SelectorContractTests(unittest.TestCase):
             ):
                 load_selector(controller_id)
 
+    def test_pairwise_loader_rejects_a_noncanonical_bundle_identity(self) -> None:
+        loaded = SimpleNamespace(
+            manifest={"controller_id": "mixed-full-v2"},
+            main_models={"realized_dynamic": DirectModel()},
+        )
+        with patch(
+            "lns2_selector.controllers.load_controller_bundle",
+            return_value=loaded,
+        ), self.assertRaisesRegex(ValueError, "matching controller bundle"):
+            load_selector("v2-full", "bundle")
+
     def test_cli_lists_only_canonical_controller_ids(self) -> None:
         output = StringIO()
         with redirect_stdout(output):
@@ -119,6 +146,88 @@ class SelectorContractTests(unittest.TestCase):
                 ),
                 before_fingerprint="state",
             )
+
+    def test_restricted_request_requires_matching_generation_context(self) -> None:
+        with self.assertRaisesRegex(ValueError, "generation template"):
+            SelectionRequest(
+                candidates=(),
+                candidate_rows=(),
+                before_fingerprint="state",
+                candidate_pool_mode="restricted",
+            )
+        with self.assertRaisesRegex(ValueError, "differs"):
+            SelectionRequest(
+                candidates=(),
+                candidate_rows=(),
+                before_fingerprint="state",
+                candidate_pool_mode="full",
+                generation_context={"mode": "restricted"},
+            )
+
+    def test_request_rejects_a_missing_identity_on_either_side(self) -> None:
+        cases = (
+            (({"agents": [0]},), ({"candidate_id": "candidate-a"},), "candidate"),
+            (({"candidate_id": "candidate-a"},), ({"score": 1.0},), "feature row"),
+        )
+        for candidates, rows, kind in cases:
+            with self.subTest(kind=kind), self.assertRaisesRegex(
+                ValueError, rf"{kind} identity is missing at index 0"
+            ):
+                SelectionRequest(
+                    candidates=candidates,
+                    candidate_rows=rows,
+                    before_fingerprint="state",
+                )
+
+    def test_request_rejects_conflicting_identity_aliases(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "feature row identity fields differ at index 0"
+        ):
+            SelectionRequest(
+                candidates=({"candidate_id": "candidate-a"},),
+                candidate_rows=(
+                    {
+                        "candidate_id": "candidate-a",
+                        "candidate_key": "candidate-b",
+                    },
+                ),
+                before_fingerprint="state",
+            )
+
+    def test_request_and_observation_reject_nonstring_identities(self) -> None:
+        for identity in (None, 7):
+            with self.subTest(identity=identity), self.assertRaisesRegex(
+                ValueError, "identity is missing"
+            ):
+                SelectionRequest(
+                    candidates=({"candidate_id": identity},),
+                    candidate_rows=({"candidate_id": identity},),
+                    before_fingerprint="state",
+                )
+        with self.assertRaisesRegex(ValueError, "before_fingerprint"):
+            SelectionRequest(
+                candidates=(),
+                candidate_rows=(),
+                before_fingerprint=None,  # type: ignore[arg-type]
+            )
+        for field in ("candidate_id", "before_fingerprint", "after_fingerprint"):
+            values = {
+                "candidate_id": "candidate-1",
+                "actual_agents": (1,),
+                "before_fingerprint": "before",
+                "after_fingerprint": "after",
+                "replan_success": True,
+                "conflicts_before": 2,
+                "conflicts_after": 1,
+                "feasible": False,
+                "terminal": False,
+                "total_seconds": 0.5,
+            }
+            values[field] = None
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, field
+            ):
+                SelectionObservation(**values)  # type: ignore[arg-type]
 
     def test_official_selector_routes_to_native_policy(self) -> None:
         selector = OfficialAdaptiveSelector()
@@ -195,3 +304,53 @@ class SelectorContractTests(unittest.TestCase):
         self.assertIsNone(decision.candidate)
         self.assertEqual(decision.fallback_reason, "v3_stalled_no_candidate")
         self.assertFalse(decision.uses_native_adaptive)
+
+    def test_v3_s3_observation_is_bound_to_selected_identity(self) -> None:
+        selector = V3S3Selector.__new__(V3S3Selector)
+        selector.state = ObservableV3State()
+        self.assertIsInstance(selector, StatefulSelector)
+        observation = SelectionObservation(
+            candidate_id="candidate-1",
+            actual_agents=(1,),
+            before_fingerprint="before",
+            after_fingerprint="after",
+            replan_success=True,
+            conflicts_before=2,
+            conflicts_after=1,
+            feasible=False,
+            terminal=False,
+            total_seconds=0.5,
+        )
+
+        diagnostic = selector.observe(observation)
+
+        self.assertEqual(diagnostic["repair_outcome"], "conflict_reduced")
+        self.assertTrue(diagnostic["continuation_expected"])
+        self.assertEqual(selector.state.values["candidate_id"], "candidate-1")
+        self.assertEqual(selector.state.values["actual_agents"], (1,))
+        self.assertFalse(selector.state.values["terminal"])
+
+    def test_v3_s3_observation_rejects_candidate_agent_and_state_mismatch(self) -> None:
+        selector = V3S3Selector.__new__(V3S3Selector)
+        selector.state = ObservableV3State()
+        base = {
+            "candidate_id": "candidate-1",
+            "actual_agents": (1,),
+            "before_fingerprint": "before",
+            "after_fingerprint": "after",
+            "replan_success": True,
+            "conflicts_before": 2,
+            "conflicts_after": 1,
+            "feasible": False,
+            "terminal": False,
+            "total_seconds": 0.5,
+        }
+        for replacement, message in (
+            ({"candidate_id": "other"}, "candidate ID"),
+            ({"actual_agents": (2,)}, "agents"),
+            ({"before_fingerprint": "other"}, "fingerprint"),
+        ):
+            with self.subTest(replacement=replacement), self.assertRaisesRegex(
+                ValueError, message
+            ):
+                selector.observe(SelectionObservation(**{**base, **replacement}))
