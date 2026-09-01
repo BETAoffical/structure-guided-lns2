@@ -1,0 +1,94 @@
+{
+  "schema": "lns2.stride.warehouse_component16_dual16_independent_ttf_config.v1",
+  "experiment_id": "stride-warehouse-component16-dual16-independent-ttf-v1",
+  "scientific_status": "development_independent_map_disjoint_ttf_test_not_default_promotion",
+  "inputs": {
+    "source_experiment_config": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/experiment_config.json",
+      "sha256": "aa356a43d3aa7cae9882b0652c8be8574143859ee9e2bcb7b85310937d315a0d"
+    },
+    "source_dataset_manifest": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/dataset/confirmation/manifest.jsonl",
+      "sha256": "67928fa402493de91cde034d6817c2d73a7d1bb9d9d36e4cf278c6e20f53508d"
+    },
+    "source_checkpoint_manifest": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/checkpoints/checkpoint_manifest.jsonl",
+      "sha256": "6c152e44269520b6c7bae96d8b430eca61c556b866c68c90138d11860af6bd84"
+    },
+    "source_checkpoint_report": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/checkpoints/checkpoint_report.json",
+      "sha256": "5faceeaa16a80ad5320ec07ecfeb90aef33d98f2c5f6a52f717bc35beb999a62"
+    },
+    "source_runtime_config": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/ttf/runtime_config.json",
+      "sha256": "121d7334ccf6363a12d95dafd112f02436edb02d0ff3e9982a0b41759e464112"
+    },
+    "source_qualification_manifest": {
+      "path": "build/stride-warehouse-dual16-very-high-confirmation-v2/ttf/qualification_anchor/qualification_manifest.jsonl",
+      "sha256": "9871e985064055d2d9cd688261df35ccd5ddc41cf48aa7377e54909b4c7430af"
+    },
+    "h1_source_manifest": {
+      "path": "build/stride-warehouse-disruption-recovery-load-extension-v1/checkpoints/load_extension_checkpoint_manifest.jsonl",
+      "sha256": "a9acfae87a43ed1a703495f085d7215274beb166e9771a4c5f75c3331b7a113e"
+    },
+    "frozen_v2_manifest": {
+      "path": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+      "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+    }
+  },
+  "cohort": {
+    "split": "confirmation",
+    "load_band": "very_high",
+    "task_variant": "balanced_od_d15",
+    "expected_map_count": 8,
+    "expected_task_count": 8,
+    "expected_checkpoint_count": 16,
+    "checkpoints_per_map": 2,
+    "h1_expected_map_count": 6,
+    "h1_expected_checkpoint_count": 36,
+    "require_map_sha_disjoint_from_h1": true
+  },
+  "controllers": [
+    "official_adaptive",
+    "component16",
+    "dual16"
+  ],
+  "controller_contract": {
+    "v2_bundle": "artifacts/initlns-closed-loop-controller-v2",
+    "component16": "stride-structshell-component16-v1",
+    "dual16": "stride-structshell-dual16-v1",
+    "frozen_v2": true,
+    "no_retraining": true,
+    "no_default_change": true
+  },
+  "runtime": {
+    "wall_time_budget_seconds": 60.0,
+    "environment_time_limit_seconds": 60.0,
+    "episode_process_timeout_seconds": 90.0,
+    "qualification_process_timeout_seconds": 90.0,
+    "qualification_workers": 8,
+    "timed_workers": 1,
+    "execution_order": "key_mod_3_rotating_strict_three_controller_serial",
+    "timing_boundary": "checkpoint_restore_inclusive_ttf",
+    "repair_seed_policy": "episode_stream",
+    "rebuild_local_qualification_anchor_with_current_native": true,
+    "rebind_authenticated_checkpoint_rows_from_source": true
+  },
+  "reporting": {
+    "primary_baseline": "official_adaptive",
+    "pairwise_targets": [
+      "component16",
+      "dual16"
+    ],
+    "include_component16_vs_dual16": true,
+    "minimum_paired_win_rate": 0.7,
+    "minimum_mean_capped_ttf_improvement": 0.15,
+    "minimum_successes_per_hour_improvement": 0.2,
+    "maximum_success_rate_loss": 0.0,
+    "no_additional_timeout_or_censor": true,
+    "gate_is_diagnostic_only": true,
+    "formal_promotion_allowed": false,
+    "global_claim_allowed": false,
+    "default_replacement_allowed": false
+  }
+}

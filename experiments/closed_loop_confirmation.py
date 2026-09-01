@@ -117,6 +117,11 @@ from lns2_selector.runtime.hybridstructpool_routed import (
     routed_hybridstructpool_high_stress_gate,
     validate_any_hybridstructpool_augmentation,
 )
+from lns2_selector.runtime.structshell_component16 import (
+    STRUCTSHELL_COMPONENT16_POOL_ID,
+    generate_structshell_component16_runtime_candidates,
+    structshell_component16_ablation_gate,
+)
 from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
     generate_structshell_dual16_runtime_candidates,
@@ -256,6 +261,13 @@ def _generate_fixed_structshell_runtime_candidates(
     """Dispatch separately registered fixed StructShell runtime contracts."""
 
     pool_id = str(config.get("pool_id") or "")
+    if pool_id == STRUCTSHELL_COMPONENT16_POOL_ID:
+        return generate_structshell_component16_runtime_candidates(
+            state,
+            analysis,
+            v2_candidates=v2_candidates,
+            config=config,
+        )
     if pool_id == STRUCTSHELL_DUAL16_POOL_ID:
         return generate_structshell_dual16_runtime_candidates(
             state,
@@ -264,6 +276,14 @@ def _generate_fixed_structshell_runtime_candidates(
             config=config,
         )
     return None
+
+
+_FIXED_STRUCTSHELL_POOL_IDS = frozenset(
+    {
+        STRUCTSHELL_COMPONENT16_POOL_ID,
+        STRUCTSHELL_DUAL16_POOL_ID,
+    }
+)
 
 
 CLOSED_LOOP_SCHEMA = "lns2.closed_loop_confirmation.v1"
@@ -1739,7 +1759,13 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             hybrid_pool_id = str(
                                 hybridstructpool_runtime.get("pool_id")
                             )
-                            if hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
+                            if hybrid_pool_id == STRUCTSHELL_COMPONENT16_POOL_ID:
+                                hybridstructpool_gate_result = (
+                                    structshell_component16_ablation_gate(
+                                        state, hybridstructpool_runtime
+                                    )
+                                )
+                            elif hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
                                 hybridstructpool_gate_result = (
                                     structshell_dual16_ablation_gate(
                                         state, hybridstructpool_runtime
@@ -1838,30 +1864,41 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             generate_candidate_pool_attempt(effective_proposal)
                         )
                         proposal_metrics["v3_s3_cache_hit"] = False
-                        dual16_pre_realized: dict[str, Any] | None = None
-                        if hybridstructpool_gate_passed and str(
+                        fixed_structshell_pre_realized: dict[str, Any] | None = None
+                        fixed_structshell_pool_id = str(
                             hybridstructpool_runtime.get("pool_id")
-                        ) == STRUCTSHELL_DUAL16_POOL_ID:
+                        )
+                        if (
+                            hybridstructpool_gate_passed
+                            and fixed_structshell_pool_id
+                            in _FIXED_STRUCTSHELL_POOL_IDS
+                        ):
+                            fixed_structshell_name = (
+                                "Dual16"
+                                if fixed_structshell_pool_id
+                                == STRUCTSHELL_DUAL16_POOL_ID
+                                else "Component16"
+                            )
                             if topology_state_analysis is None:
                                 raise ClosedLoopExecutionError(
                                     "hybridstructpool_analysis_missing",
-                                    "Dual16 gate passed without state analysis",
+                                    f"{fixed_structshell_name} gate passed without state analysis",
                                 )
-                            dual16_started = time.perf_counter()
-                            dual16_base_candidates = list(candidates)
-                            dual16_result = (
+                            fixed_structshell_started = time.perf_counter()
+                            fixed_structshell_base_candidates = list(candidates)
+                            fixed_structshell_result = (
                                 _generate_fixed_structshell_runtime_candidates(
                                     state,
                                     topology_state_analysis,
-                                    v2_candidates=dual16_base_candidates,
+                                    v2_candidates=fixed_structshell_base_candidates,
                                     config=hybridstructpool_runtime,
                                 )
                             )
-                            if dual16_result is None:
+                            if fixed_structshell_result is None:
                                 raise AssertionError(
-                                    "Dual16 runtime dispatch returned no candidate pool"
+                                    f"{fixed_structshell_name} runtime dispatch returned no candidate pool"
                                 )
-                            candidates = list(dual16_result.candidates)
+                            candidates = list(fixed_structshell_result.candidates)
                             if len(candidates) > int(
                                 hybridstructpool_runtime[
                                     "maximum_total_candidates"
@@ -1869,21 +1906,22 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                             ):
                                 raise ClosedLoopExecutionError(
                                     "hybridstructpool_candidate_cap_exceeded",
-                                    "Dual16 runtime exceeded its registered cap",
+                                    f"{fixed_structshell_name} runtime exceeded its registered cap",
                                     details={"candidate_count": len(candidates)},
                                 )
                             for candidate in candidates:
                                 candidate["hybridstructpool_provenance"] = list(
-                                    dual16_result.provenance_by_candidate_id[
+                                    fixed_structshell_result.provenance_by_candidate_id[
                                         str(candidate["candidate_id"])
                                     ]
                                 )
-                            dual16_pre_realized = {
-                                "base_candidates": dual16_base_candidates,
-                                "result": dual16_result,
-                                "started": dual16_started,
+                            fixed_structshell_pre_realized = {
+                                "base_candidates": fixed_structshell_base_candidates,
+                                "result": fixed_structshell_result,
+                                "started": fixed_structshell_started,
+                                "name": fixed_structshell_name,
                                 "generation_seconds": (
-                                    time.perf_counter() - dual16_started
+                                    time.perf_counter() - fixed_structshell_started
                                 ),
                             }
                         if controller_mode == "official_adaptive":
@@ -1971,10 +2009,10 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     )
                                 )
                             )
-                        if dual16_pre_realized is not None:
-                            dual16_pre_realized["seconds"] = (
+                        if fixed_structshell_pre_realized is not None:
+                            fixed_structshell_pre_realized["seconds"] = (
                                 time.perf_counter()
-                                - float(dual16_pre_realized["started"])
+                                - float(fixed_structshell_pre_realized["started"])
                             )
                         if hybridstructpool_runtime:
                             proposal_metrics.update(
@@ -2041,22 +2079,38 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 )
                                 v2_anchor_index: int | None = None
                                 single_union_feature_batch = (
-                                    hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID
+                                    hybrid_pool_id in _FIXED_STRUCTSHELL_POOL_IDS
                                 )
-                                if hybrid_pool_id == STRUCTSHELL_DUAL16_POOL_ID:
-                                    if dual16_pre_realized is None:
+                                if hybrid_pool_id in _FIXED_STRUCTSHELL_POOL_IDS:
+                                    fixed_structshell_name = (
+                                        "Dual16"
+                                        if hybrid_pool_id
+                                        == STRUCTSHELL_DUAL16_POOL_ID
+                                        else "Component16"
+                                    )
+                                    if fixed_structshell_pre_realized is None:
                                         raise AssertionError(
-                                            "Dual16 final union was not prepared before features"
+                                            f"{fixed_structshell_name} final union was not prepared before features"
                                         )
-                                    hybrid_result = dual16_pre_realized["result"]
+                                    if str(
+                                        fixed_structshell_pre_realized["name"]
+                                    ) != fixed_structshell_name:
+                                        raise AssertionError(
+                                            "fixed StructShell prepared identity changed"
+                                        )
+                                    hybrid_result = fixed_structshell_pre_realized[
+                                        "result"
+                                    ]
                                     if not isinstance(
                                         hybrid_result, HybridStructPoolResult
                                     ):
                                         raise AssertionError(
-                                            "Dual16 prepared result has the wrong type"
+                                            f"{fixed_structshell_name} prepared result has the wrong type"
                                         )
                                     base_candidates = list(
-                                        dual16_pre_realized["base_candidates"]
+                                        fixed_structshell_pre_realized[
+                                            "base_candidates"
+                                        ]
                                     )
                                     if [
                                         str(candidate["candidate_id"])
@@ -2066,13 +2120,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         for candidate in hybrid_result.candidates
                                     ]:
                                         raise AssertionError(
-                                            "Dual16 candidate union changed during feature fill"
+                                            f"{fixed_structshell_name} candidate union changed during feature fill"
                                         )
                                     hybrid_generation_seconds = float(
-                                        dual16_pre_realized["generation_seconds"]
+                                        fixed_structshell_pre_realized[
+                                            "generation_seconds"
+                                        ]
                                     )
                                     hybrid_seconds = float(
-                                        dual16_pre_realized["seconds"]
+                                        fixed_structshell_pre_realized["seconds"]
                                     )
                                     base_rows_by_id: dict[
                                         str, dict[str, Any]
@@ -2104,7 +2160,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                             config=hybridstructpool_runtime,
                                         )
                                     )
-                                elif hybrid_pool_id != STRUCTSHELL_DUAL16_POOL_ID:
+                                elif hybrid_pool_id not in _FIXED_STRUCTSHELL_POOL_IDS:
                                     assert v2_anchor_index is not None
                                     hybrid_result = generate_hybridstructpool_runtime_candidates(
                                         state,

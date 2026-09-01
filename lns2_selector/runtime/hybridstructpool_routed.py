@@ -16,6 +16,10 @@ from lns2_selector.runtime.hybridstructpool import (
 from lns2_selector.runtime.topology_candidates import (
     generate_structpool_candidate_subset,
 )
+from lns2_selector.runtime.structshell_component16 import (
+    STRUCTSHELL_COMPONENT16_POOL_ID,
+    validate_structshell_component16_augmentation,
+)
 from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
     validate_structshell_dual16_augmentation,
@@ -102,6 +106,8 @@ def validate_any_hybridstructpool_augmentation(
         return validate_hybridstructpool_augmentation(value)
     if pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
         return validate_routed_hybridstructpool_augmentation(value)
+    if pool_id == STRUCTSHELL_COMPONENT16_POOL_ID:
+        return validate_structshell_component16_augmentation(value)
     if pool_id == STRUCTSHELL_DUAL16_POOL_ID:
         return validate_structshell_dual16_augmentation(value)
     raise ValueError("unsupported HybridStructPool runtime augmentation")
