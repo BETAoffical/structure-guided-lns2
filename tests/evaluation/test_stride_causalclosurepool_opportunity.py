@@ -9,11 +9,38 @@ from experiments.stride_causalclosurepool_opportunity import (
     EXECUTION_SCHEMA,
     EXPERIMENT_ID,
     TRIAL_SCHEMA,
+    _opportunity_summary,
     _valid_trial,
 )
 
 
 class CausalClosurePoolOpportunityTest(unittest.TestCase):
+    def test_summary_reports_pool_opportunity_without_selector_metrics(self) -> None:
+        rows = [
+            {
+                "new_stably_dominates_base_best": True,
+                "stable_frontier_addition_count": 1,
+                "new_best_seed_mean_advantage": 0.1,
+                "new_candidate_count": 3,
+                "mean_new_candidate_size": 9.0,
+            },
+            {
+                "new_stably_dominates_base_best": False,
+                "stable_frontier_addition_count": 0,
+                "new_best_seed_mean_advantage": -0.02,
+                "new_candidate_count": 2,
+                "mean_new_candidate_size": 6.0,
+            },
+        ]
+        summary = _opportunity_summary(rows)
+        self.assertEqual(summary["robust_best_base_opportunity_fraction"], 0.5)
+        self.assertEqual(summary["stable_frontier_addition_fraction"], 0.5)
+        self.assertEqual(summary["mean_new_candidate_count"], 2.5)
+        self.assertEqual(summary["mean_new_candidate_size"], 7.5)
+        self.assertNotIn("ttf", summary)
+        self.assertNotIn("ranker", summary)
+        self.assertEqual(set(_opportunity_summary([]).values()), {0})
+
     def test_execution_freezes_ranker_free_bounded_native_audit(self) -> None:
         root = Path(__file__).resolve().parents[2]
         config = json.loads(

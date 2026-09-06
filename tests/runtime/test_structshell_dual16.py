@@ -11,8 +11,8 @@ from experiments.neighborhood_candidates import candidate_id
 from lns2_selector.runtime.hybridstructpool import (
     merge_hybridstructpool_candidates,
 )
-from lns2_selector.runtime.hybridstructpool_routed import (
-    validate_any_hybridstructpool_augmentation,
+from lns2_selector.runtime.fixed_structshell import (
+    validate_fixed_structshell_augmentation,
 )
 from lns2_selector.runtime.structshell_dual16 import (
     STRUCTSHELL_DUAL16_POOL_ID,
@@ -66,7 +66,7 @@ class StructShellDual16Test(unittest.TestCase):
         config = structshell_dual16_augmentation()
         self.assertEqual(config, expected)
         self.assertEqual(validate_structshell_dual16_augmentation(config), expected)
-        self.assertEqual(validate_any_hybridstructpool_augmentation(config), expected)
+        self.assertEqual(validate_fixed_structshell_augmentation(config), expected)
         changed = copy.deepcopy(config)
         changed["maximum_added_candidates"] = 1
         with self.assertRaisesRegex(ValueError, "unsupported Dual16"):

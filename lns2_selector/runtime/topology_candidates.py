@@ -603,16 +603,6 @@ _STRUCTPOOL_DRAFT_VARIANT_ORDER = (
     "topology_boundary_low_degree",
 )
 
-_SCALEPOOL_VARIANT_ORDER = (
-    "bottleneck_crossing",
-    "conflict_component",
-    "topology_boundary_articulation",
-    "topology_boundary_low_degree",
-    "spatiotemporal_hotspot",
-    "path_overlap",
-)
-
-
 def _jaccard(left: Iterable[int], right: Iterable[int]) -> float:
     left_set = set(map(int, left))
     right_set = set(map(int, right))
@@ -1328,20 +1318,6 @@ def generate_structpool_candidate_subset(
         row["structpool_grid_duplicate_provenance_count"] = len(families)
         row["structpool_runtime_subset"] = True
     return rows
-
-
-def _structpool_family_name(variant: str, size: int) -> str:
-    names = {
-        "bottleneck_crossing": "structpool-bottleneck-crossing",
-        "conflict_component": "structpool-conflict-component",
-        "topology_boundary_articulation": "structpool-boundary-articulation",
-        "topology_boundary_low_degree": "structpool-boundary-low_degree",
-        "spatiotemporal_hotspot": "structpool-spatiotemporal-hotspot",
-        "path_overlap": "structpool-path-overlap",
-    }
-    if variant not in names:
-        raise ValueError(f"unsupported StructPool family variant: {variant}")
-    return f"{names[variant]}:{int(size)}"
 
 
 

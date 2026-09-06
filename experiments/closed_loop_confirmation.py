@@ -106,16 +106,9 @@ from lns2_selector.evaluation.trace_validation import (
     validate_closed_loop_trace,
 )
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
-from lns2_selector.runtime.hybridstructpool import (
-    HybridStructPoolResult,
-    generate_hybridstructpool_runtime_candidates,
-    hybridstructpool_high_stress_gate,
-)
-from lns2_selector.runtime.hybridstructpool_routed import (
-    ROUTED_HYBRIDSTRUCTPOOL_ID,
-    generate_routed_hybridstructpool_runtime_candidates,
-    routed_hybridstructpool_high_stress_gate,
-    validate_any_hybridstructpool_augmentation,
+from lns2_selector.runtime.hybridstructpool import HybridStructPoolResult
+from lns2_selector.runtime.fixed_structshell import (
+    validate_fixed_structshell_augmentation,
 )
 from lns2_selector.runtime.structshell_component16 import (
     STRUCTSHELL_COMPONENT16_POOL_ID,
@@ -1212,7 +1205,7 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
     hybridstructpool_runtime_config = dict(
         dict(job.get("proposal") or {}).get("hybridstructpool") or {}
     )
-    validate_any_hybridstructpool_augmentation(
+    validate_fixed_structshell_augmentation(
         hybridstructpool_runtime_config or None
     )
     if hybridstructpool_runtime_config and (
@@ -1771,18 +1764,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                         state, hybridstructpool_runtime
                                     )
                                 )
-                            elif hybrid_pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
-                                hybridstructpool_gate_result = (
-                                    routed_hybridstructpool_high_stress_gate(
-                                        state, hybridstructpool_runtime
-                                    )
-                                )
                             else:
-                                hybridstructpool_gate_result = (
-                                    hybridstructpool_high_stress_gate(
-                                        state, hybridstructpool_runtime
-                                    )
-                                )
+                                raise AssertionError("validated fixed pool identity changed")
                         hybridstructpool_gate_passed = bool(
                             hybridstructpool_gate_result
                             and hybridstructpool_gate_result["passed"]
@@ -1916,7 +1899,6 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                     ]
                                 )
                             fixed_structshell_pre_realized = {
-                                "base_candidates": fixed_structshell_base_candidates,
                                 "result": fixed_structshell_result,
                                 "started": fixed_structshell_started,
                                 "name": fixed_structshell_name,
@@ -2077,191 +2059,52 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                 hybrid_pool_id = str(
                                     hybridstructpool_runtime.get("pool_id")
                                 )
-                                v2_anchor_index: int | None = None
-                                single_union_feature_batch = (
-                                    hybrid_pool_id in _FIXED_STRUCTSHELL_POOL_IDS
+                                fixed_structshell_name = (
+                                    "Dual16"
+                                    if hybrid_pool_id
+                                    == STRUCTSHELL_DUAL16_POOL_ID
+                                    else "Component16"
                                 )
-                                if hybrid_pool_id in _FIXED_STRUCTSHELL_POOL_IDS:
-                                    fixed_structshell_name = (
-                                        "Dual16"
-                                        if hybrid_pool_id
-                                        == STRUCTSHELL_DUAL16_POOL_ID
-                                        else "Component16"
+                                if fixed_structshell_pre_realized is None:
+                                    raise AssertionError(
+                                        f"{fixed_structshell_name} final union was not prepared before features"
                                     )
-                                    if fixed_structshell_pre_realized is None:
-                                        raise AssertionError(
-                                            f"{fixed_structshell_name} final union was not prepared before features"
-                                        )
-                                    if str(
-                                        fixed_structshell_pre_realized["name"]
-                                    ) != fixed_structshell_name:
-                                        raise AssertionError(
-                                            "fixed StructShell prepared identity changed"
-                                        )
-                                    hybrid_result = fixed_structshell_pre_realized[
-                                        "result"
+                                if str(
+                                    fixed_structshell_pre_realized["name"]
+                                ) != fixed_structshell_name:
+                                    raise AssertionError(
+                                        "fixed StructShell prepared identity changed"
+                                    )
+                                hybrid_result = fixed_structshell_pre_realized[
+                                    "result"
+                                ]
+                                if not isinstance(
+                                    hybrid_result, HybridStructPoolResult
+                                ):
+                                    raise AssertionError(
+                                        f"{fixed_structshell_name} prepared result has the wrong type"
+                                    )
+                                if [
+                                    str(candidate["candidate_id"])
+                                    for candidate in candidates
+                                ] != [
+                                    str(candidate["candidate_id"])
+                                    for candidate in hybrid_result.candidates
+                                ]:
+                                    raise AssertionError(
+                                        f"{fixed_structshell_name} candidate union changed during feature fill"
+                                    )
+                                hybrid_generation_seconds = float(
+                                    fixed_structshell_pre_realized[
+                                        "generation_seconds"
                                     ]
-                                    if not isinstance(
-                                        hybrid_result, HybridStructPoolResult
-                                    ):
-                                        raise AssertionError(
-                                            f"{fixed_structshell_name} prepared result has the wrong type"
-                                        )
-                                    base_candidates = list(
-                                        fixed_structshell_pre_realized[
-                                            "base_candidates"
-                                        ]
-                                    )
-                                    if [
-                                        str(candidate["candidate_id"])
-                                        for candidate in candidates
-                                    ] != [
-                                        str(candidate["candidate_id"])
-                                        for candidate in hybrid_result.candidates
-                                    ]:
-                                        raise AssertionError(
-                                            f"{fixed_structshell_name} candidate union changed during feature fill"
-                                        )
-                                    hybrid_generation_seconds = float(
-                                        fixed_structshell_pre_realized[
-                                            "generation_seconds"
-                                        ]
-                                    )
-                                    hybrid_seconds = float(
-                                        fixed_structshell_pre_realized["seconds"]
-                                    )
-                                    base_rows_by_id: dict[
-                                        str, dict[str, Any]
-                                    ] = {}
-                                    challenger_candidates = list(
-                                        hybrid_result.challengers
-                                    )
-                                else:
-                                    hybrid_started = time.perf_counter()
-                                    base_candidates = list(candidates)
-                                    base_candidate_rows = list(candidate_rows)
-                                    (
-                                        v2_anchor_index,
-                                        _v2_anchor_scores,
-                                        _v2_anchor_margin,
-                                    ) = score_online_candidates(
-                                        base_candidate_rows, runtime_models[policy]
-                                    )
-                                if hybrid_pool_id == ROUTED_HYBRIDSTRUCTPOOL_ID:
-                                    assert v2_anchor_index is not None
-                                    hybrid_result = (
-                                        generate_routed_hybridstructpool_runtime_candidates(
-                                            state,
-                                            topology_state_analysis,
-                                            v2_candidates=base_candidates,
-                                            v2_anchors=[
-                                                base_candidates[v2_anchor_index]
-                                            ],
-                                            config=hybridstructpool_runtime,
-                                        )
-                                    )
-                                elif hybrid_pool_id not in _FIXED_STRUCTSHELL_POOL_IDS:
-                                    assert v2_anchor_index is not None
-                                    hybrid_result = generate_hybridstructpool_runtime_candidates(
-                                        state,
-                                        topology_state_analysis,
-                                        v2_candidates=base_candidates,
-                                        v2_anchors=[
-                                            base_candidates[v2_anchor_index]
-                                        ],
-                                        structural_family_sizes=hybridstructpool_runtime[
-                                            "runtime_structural_family_sizes"
-                                        ],
-                                        maximum_causal_candidates=int(
-                                            hybridstructpool_runtime[
-                                                "maximum_causal_candidates"
-                                            ]
-                                        ),
-                                        maximum_causal_neighborhood_size=int(
-                                            hybridstructpool_runtime[
-                                                "maximum_causal_neighborhood_size"
-                                            ]
-                                        ),
-                                        causal_temporal_window=int(
-                                            hybridstructpool_runtime[
-                                                "causal_temporal_window"
-                                            ]
-                                        ),
-                                        maximum_causal_jaccard=float(
-                                            hybridstructpool_runtime[
-                                                "maximum_causal_jaccard_similarity"
-                                            ]
-                                        ),
-                                    )
-                                if not single_union_feature_batch:
-                                    candidates = list(hybrid_result.candidates)
-                                    if len(candidates) > int(
-                                        hybridstructpool_runtime[
-                                            "maximum_total_candidates"
-                                        ]
-                                    ):
-                                        raise ClosedLoopExecutionError(
-                                            "hybridstructpool_candidate_cap_exceeded",
-                                            "HybridStructPool runtime exceeded its registered cap",
-                                            details={"candidate_count": len(candidates)},
-                                        )
-                                    for candidate in candidates:
-                                        candidate[
-                                            "hybridstructpool_provenance"
-                                        ] = list(
-                                            hybrid_result.provenance_by_candidate_id[
-                                                str(candidate["candidate_id"])
-                                            ]
-                                        )
-                                    hybrid_generation_seconds = (
-                                        time.perf_counter() - hybrid_started
-                                    )
-                                    base_rows_by_id = {
-                                        str(candidate["candidate_id"]): row
-                                        for candidate, row in zip(
-                                            base_candidates, base_candidate_rows
-                                        )
-                                    }
-                                    challenger_candidates = [
-                                        candidate
-                                        for candidate in candidates
-                                        if str(candidate["candidate_id"])
-                                        not in base_rows_by_id
-                                    ]
-                                    if challenger_candidates:
-                                        (
-                                            challenger_rows,
-                                            hybrid_feature_metrics,
-                                        ) = feature_engine.realized_rows(
-                                            challenger_candidates,
-                                            state_hash=before_hash,
-                                        )
-                                    else:
-                                        challenger_rows = []
-                                        hybrid_feature_metrics = {}
-                                    challenger_rows_by_id = {
-                                        str(candidate["candidate_id"]): row
-                                        for candidate, row in zip(
-                                            challenger_candidates, challenger_rows
-                                        )
-                                    }
-                                    candidate_rows = [
-                                        base_rows_by_id.get(
-                                            str(candidate["candidate_id"])
-                                        )
-                                        or challenger_rows_by_id[
-                                            str(candidate["candidate_id"])
-                                        ]
-                                        for candidate in candidates
-                                    ]
-                                    hybrid_seconds = (
-                                        time.perf_counter() - hybrid_started
-                                    )
-                                    feature_seconds += sum(
-                                        float(value)
-                                        for key, value in hybrid_feature_metrics.items()
-                                        if key.endswith("_seconds")
-                                    )
+                                )
+                                hybrid_seconds = float(
+                                    fixed_structshell_pre_realized["seconds"]
+                                )
+                                challenger_candidates = list(
+                                    hybrid_result.challengers
+                                )
                                 proposal_metrics.update(
                                     {
                                         "hybridstructpool_full_union_required": bool(
@@ -2279,31 +2122,15 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                                                 "runtime_filter_id"
                                             ]
                                         ),
-                                        "hybridstructpool_reused_base_feature_count": (
-                                            0
-                                            if single_union_feature_batch
-                                            else len(base_rows_by_id)
-                                        ),
+                                        "hybridstructpool_reused_base_feature_count": 0,
                                         "hybridstructpool_computed_challenger_feature_count": len(
                                             challenger_candidates
                                         ),
-                                        "hybridstructpool_single_union_feature_batch": (
-                                            single_union_feature_batch
+                                        "hybridstructpool_single_union_feature_batch": True,
+                                        "hybridstructpool_computed_union_feature_count": len(
+                                            candidate_rows
                                         ),
-                                        "hybridstructpool_computed_union_feature_count": (
-                                            len(candidate_rows)
-                                            if single_union_feature_batch
-                                            else 0
-                                        ),
-                                        "hybridstructpool_v2_anchor_candidate_id": (
-                                            str(
-                                                base_candidates[v2_anchor_index][
-                                                    "candidate_id"
-                                                ]
-                                            )
-                                            if v2_anchor_index is not None
-                                            else None
-                                        ),
+                                        "hybridstructpool_v2_anchor_candidate_id": None,
                                         "hybridstructpool_base_candidate_count": (
                                             hybrid_result.base_candidate_count
                                         ),
@@ -4054,7 +3881,7 @@ def run_closed_loop_collection(
     structpool_augmentation = validate_structpool_augmentation(
         structpool_augmentation
     )
-    hybridstructpool_augmentation = validate_any_hybridstructpool_augmentation(
+    hybridstructpool_augmentation = validate_fixed_structshell_augmentation(
         hybridstructpool_augmentation
     )
     repair_seed_policy = validate_repair_seed_policy(

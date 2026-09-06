@@ -27,7 +27,6 @@ from experiments.stride_repairability_collection import (
     repairability_pp_seed,
     repairability_restore_seed,
 )
-from experiments.stride_repairclosurepool import _summary as _opportunity_summary
 from experiments.stride_robustaction_label_collection import _forbidden_hits
 from experiments.trace_replay import TARGET_STATE_RESTORE_CONTRACT, restore_repair_state
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
@@ -54,6 +53,27 @@ PRODUCER_FILES = (
     "third_party/mapf_lns2/inc/RepairPolicy.h",
     "third_party/mapf_lns2/src/InitLNS.cpp",
 )
+
+
+def _opportunity_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "state_count": len(rows),
+        "robust_best_base_opportunity_fraction": statistics.fmean(
+            float(row["new_stably_dominates_base_best"]) for row in rows
+        ) if rows else 0.0,
+        "stable_frontier_addition_fraction": statistics.fmean(
+            float(row["stable_frontier_addition_count"] > 0) for row in rows
+        ) if rows else 0.0,
+        "mean_new_best_seed_mean_advantage": statistics.fmean(
+            float(row["new_best_seed_mean_advantage"]) for row in rows
+        ) if rows else 0.0,
+        "mean_new_candidate_count": statistics.fmean(
+            int(row["new_candidate_count"]) for row in rows
+        ) if rows else 0.0,
+        "mean_new_candidate_size": statistics.fmean(
+            float(row["mean_new_candidate_size"]) for row in rows
+        ) if rows else 0.0,
+    }
 
 
 def _load_execution(

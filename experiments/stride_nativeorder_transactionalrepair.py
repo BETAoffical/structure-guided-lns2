@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from experiments._common import mean, producer_identity, registered_input, sha256_file
+from experiments._common import mean, producer_identity, registered_input, resolve_within, sha256_file
 from experiments.repair_collection import (
     _fingerprint,
     _plain,
@@ -24,9 +24,6 @@ from experiments.stride_repairability_causal_audit import (
     external_blocker_order,
 )
 from experiments.stride_repairability_collection import repairability_pp_seed
-from experiments.stride_repairdependency_predictability import (
-    _contained as _registered_collection_path,
-)
 from experiments.stride_transactionalrepair import (
     _attempt_signature,
     _load_restored_source,
@@ -63,6 +60,7 @@ DEPLOYABLE_POLICIES = (SAME_SET_POLICY, AUGMENTED_POLICY)
 PHASES = ("qualification", "initial", "extension")
 
 PRODUCER_FILES = (
+    "experiments/_common.py",
     "experiments/stride_nativeorder_transactionalrepair.py",
     "scripts/run_stride_nativeorder_transactionalrepair.py",
     "experiments/stride_transactionalrepair.py",
@@ -106,10 +104,9 @@ def load_registration(
         )
         for name, row in dict(config["inputs"]).items()
     }
-    collection = _registered_collection_path(
+    collection = resolve_within(
         root,
         str(config["causal_collection"]["path"]),
-        label="native-order transactional repair causal collection",
     )
     policy = dict(config["policies"])
     if tuple(policy["ids"]) != POLICIES:

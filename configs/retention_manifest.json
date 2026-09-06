@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/retired-experiments-cleanup-00-original-20260906",
+  "checkpoint": "backup/retired-experiments-cleanup-01-before-shared-pruning-20260906",
   "allowed_executable_roles": [
     "active",
     "shared",
@@ -18,6 +18,11 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {
+      "path": "lns2_selector/runtime/fixed_structshell.py",
+      "role": "shared",
+      "purpose": "Validate only retained Dual16 and Component16 runtime payloads and reject retired Hybrid and SourceRoute execution contracts."
+    },
     {
       "path": "experiments/stride_warehouse_component16_dual16_independent_ttf_v1.py",
       "role": "reproducibility",
@@ -1830,58 +1835,13 @@
     },
     {
       "path": "lns2_selector/runtime/temporal_state.py",
-      "role": "active",
-      "purpose": "Represent occurrence-aware STRIDE temporal history without collapsing repeated state fingerprints."
-    },
-    {
-      "path": "lns2_selector/runtime/paretopool.py",
-      "role": "active",
-      "purpose": "Generate natural-support ParetoPool structural and history-conditioned neighborhood challengers."
-    },
-    {
-      "path": "experiments/stride_paretopool_audit.py",
-      "role": "reproducibility",
-      "purpose": "Audit natural ParetoPool candidate gaps and budgets without making runtime or TTF claims."
-    },
-    {
-      "path": "scripts/run_stride_paretopool_audit.py",
-      "role": "reproducibility",
-      "purpose": "Run the preregistered ParetoPool candidate-gap audit."
-    },
-    {
-      "path": "experiments/stride_multivalue.py",
-      "role": "active",
-      "purpose": "Define censored multi-horizon targets, anchor deltas and dynamic worker selection for STRIDE MultiValue."
-    },
-    {
-      "path": "experiments/stride_multivalue_collection.py",
-      "role": "active",
-      "purpose": "Prepare, collect, recover and analyze dual-teacher MultiValue rollouts with occurrence-aware history."
-    },
-    {
-      "path": "scripts/run_stride_multivalue.py",
-      "role": "active",
-      "purpose": "Run preregistered STRIDE MultiValue preparation, worker preflight, collection and stability analysis stages."
+      "role": "shared",
+      "purpose": "Represent occurrence-aware temporal history and reconstruct strict-prefix trace history without collapsing repeated state fingerprints or consulting future outcomes."
     },
     {
       "path": "tests/runtime/test_temporal_state.py",
-      "role": "active",
-      "contract": "Verify temporal state identities preserve decision occurrence and history repetition."
-    },
-    {
-      "path": "tests/runtime/test_paretopool.py",
-      "role": "active",
-      "contract": "Verify natural ParetoPool breakpoints, history candidates, diversity and deterministic budgets."
-    },
-    {
-      "path": "tests/evaluation/test_stride_multivalue.py",
-      "role": "active",
-      "contract": "Verify multi-horizon censoring, structural future metrics, anchor deltas and worker selection."
-    },
-    {
-      "path": "tests/evaluation/test_stride_multivalue_collection.py",
-      "role": "active",
-      "contract": "Verify strict-prefix temporal history, pilot selection and MultiValue label stability gates."
+      "role": "shared",
+      "contract": "Verify occurrence identity, history repetition and strict-prefix trace reconstruction with no future-outcome leakage."
     },
     {
       "path": "experiments/stride_repairability_causal_audit.py",
@@ -1899,21 +1859,6 @@
       "contract": "Freeze the 45-state, five-arm, sixteen-seed causal intervention design, stable-effect rules and diagnostic-only claim boundary."
     },
     {
-      "path": "experiments/stride_repairdependency_predictability.py",
-      "role": "reproducibility",
-      "purpose": "Measure whether frozen PP external blockers are predictable from action-preceding conflict, corridor and path structure without fitting a model."
-    },
-    {
-      "path": "scripts/run_stride_repairdependency_predictability.py",
-      "role": "reproducibility",
-      "purpose": "Freeze RepairDependency inputs and run the preregistered sixteen-worker predictability audit."
-    },
-    {
-      "path": "tests/evaluation/test_stride_repairdependency_predictability.py",
-      "role": "reproducibility",
-      "contract": "Freeze unweighted Pareto-frontier definitions, primary predictor identity and scientific-row exclusion of execution fields."
-    },
-    {
       "path": "experiments/stride_transactionalrepair.py",
       "role": "active",
       "purpose": "Evaluate bounded pre-commit PP retries that use native rollback diagnostics to revise a selected neighborhood before any solver-state transition is committed."
@@ -1927,31 +1872,6 @@
       "path": "tests/evaluation/test_stride_transactionalrepair.py",
       "role": "active",
       "contract": "Freeze transactional retry caps, blocker-tail placement, conflict-priority fallback and non-TTF claim boundaries."
-    },
-    {
-      "path": "lns2_selector/runtime/repairclosurepool.py",
-      "role": "active",
-      "purpose": "Generate outcome-blind repair dependency closures at natural Pareto evidence-front boundaries without fixed preferred sizes or repair-order control."
-    },
-    {
-      "path": "experiments/stride_repairclosurepool.py",
-      "role": "active",
-      "purpose": "Materialize and exhaustively replay RepairClosurePool challengers against the complete frozen V2 base pool without using the current ranker."
-    },
-    {
-      "path": "scripts/run_stride_repairclosurepool.py",
-      "role": "active",
-      "purpose": "Run sixteen-worker RepairClosurePool materialization, bounded native PP preflight, collection and pool-opportunity analysis."
-    },
-    {
-      "path": "tests/runtime/test_repairclosurepool.py",
-      "role": "active",
-      "contract": "Verify deterministic natural dependency-front candidates, conflict contact, diversity and absence of fixed size grids."
-    },
-    {
-      "path": "tests/evaluation/test_stride_repairclosurepool.py",
-      "role": "active",
-      "contract": "Freeze no-ranker, uncontrolled-order, bounded native replay and pool-opportunity report semantics."
     },
     {
       "path": "lns2_selector/runtime/causalclosurepool.py",
@@ -2150,8 +2070,8 @@
     },
     {
       "path": "lns2_selector/runtime/hybridstructpool.py",
-      "role": "reproducibility",
-      "purpose": "Preserve the complete audited HybridStructPool union and expose a full-membership engineered runtime with complete V2, structural and CausalClosure sources."
+      "role": "shared",
+      "purpose": "Provide shared candidate-result types, V2-authoritative exact-set union and the retained offline budget reducer; no legacy Hybrid online execution."
     },
     {
       "path": "experiments/stride_hybridstructpool_audit.py",
@@ -2187,11 +2107,6 @@
       "path": "tests/evaluation/test_stride_hybridstructpool_budget.py",
       "role": "reproducibility",
       "contract": "Freeze V2-outside-budget semantics, challenger caps, membership accounting and no-outcome reducer boundaries."
-    },
-    {
-      "path": "lns2_selector/runtime/hybridstructpool_routed.py",
-      "role": "reproducibility",
-      "purpose": "Expose immutable StructShell-only, Causal-only and strict-gated StructShell runtime routes without changing the frozen full-union contract."
     },
     {
       "path": "experiments/stride_nativeorder_transactionalrepair.py",

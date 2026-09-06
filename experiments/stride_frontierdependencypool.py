@@ -17,12 +17,13 @@ from experiments.repair_collection import (
     state_fingerprint,
 )
 from experiments.state_analysis import analyze_state, analyze_static_grid
-from experiments.stride_multivalue_collection import _source_trace, history_before_decision
+from experiments.stride_closurepool_longtail import reconstruct_trace
 from lns2_selector.runtime.frontierdependencypool import (
     FRONTIERDEPENDENCYPOOL_ID,
     generate_frontierdependency_candidates,
     select_frontierdependency_candidate,
 )
+from lns2_selector.runtime.temporal_state import history_before_decision
 
 
 CONFIG_SCHEMA = "lns2.stride.frontierdependencypool_registration.v1"
@@ -33,7 +34,8 @@ EXPERIMENT_ID = "stride-frontierdependencypool-v1"
 PRE_REGISTRATION_COMMIT = "1c80b144a0290f778e37e2d2fa78ec1bddbe07bb"
 PRODUCER_FILES = (
     "experiments/stride_frontierdependencypool.py",
-    "experiments/stride_multivalue_collection.py",
+    "experiments/stride_closurepool_longtail.py",
+    "lns2_selector/runtime/fingerprints.py",
     "lns2_selector/runtime/frontierdependencypool.py",
     "lns2_selector/runtime/temporal_state.py",
     "lns2_selector/runtime/topology_candidates.py",
@@ -90,6 +92,25 @@ def load_registration(
     }:
         raise ValueError("FrontierDependencyPool execution contract changed")
     return path, root, config, inputs
+
+
+def _source_trace(
+    root: Path, checkpoint: Mapping[str, Any]
+) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    source = (
+        root
+        / "build"
+        / "stride-tailswitch-v1"
+        / "states"
+        / _fingerprint({"state_id": str(checkpoint["state_id"])})[:20]
+        / str(checkpoint["treatment_policy"])
+    )
+    manifests = _read_jsonl(source / "realized_dynamic_manifest.jsonl")
+    if len(manifests) != 1 or manifests[0].get("status") != "ok":
+        raise ValueError("FrontierDependencyPool source trace manifest is invalid")
+    manifest = dict(manifests[0])
+    trace = reconstruct_trace(source, manifest)
+    return source, manifest, trace
 
 
 def _selected_candidate(checkpoint: Mapping[str, Any]) -> dict[str, Any]:

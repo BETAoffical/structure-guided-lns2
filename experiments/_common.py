@@ -52,7 +52,7 @@ CLOSED_LOOP_IMPLEMENTATION_FILES = (
     "lns2_selector/runtime/contracts.py",
     "lns2_selector/runtime/fingerprints.py",
     "lns2_selector/runtime/hybridstructpool.py",
-    "lns2_selector/runtime/hybridstructpool_routed.py",
+    "lns2_selector/runtime/fixed_structshell.py",
     "lns2_selector/runtime/metrics.py",
     "lns2_selector/runtime/online_selection.py",
     "lns2_selector/runtime/portable_scalar.py",

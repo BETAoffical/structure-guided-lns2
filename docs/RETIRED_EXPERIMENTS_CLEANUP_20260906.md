@@ -56,3 +56,85 @@ tests also passed (`38 passed`). The source diff contains no changes under
 
 The next phase starts only after this stage is committed, pushed and protected
 by `backup/retired-experiments-cleanup-01-before-shared-pruning-20260906`.
+
+## Stage 2: remove historical hosts after preserving their live dependencies
+
+The phase-1 recovery tag and remote cleanup branch were both verified at
+`0de922ee7157a011eb9cba8241997243c63753b5` before this phase began.
+
+- Remove MultiValue collection/labels and their dedicated CLI/tests after the
+  [label stability stop](STRIDE_MULTIVALUE_PILOT_V1_REPORT.md). Keep strict-prefix
+  history reconstruction in `runtime/temporal_state.py`; keep source-trace
+  lookup in its remaining FrontierDependency consumer.
+- Remove ParetoPool and its gap-audit execution chain after its last retained
+  production consumer (MultiValue) is removed. This also removes the test-class
+  import that caused topology tests to be collected twice, and the now-unused
+  ScalePool family-name/order helpers.
+- Remove RepairClosurePool execution and dedicated tests after its
+  [stop decision](STRIDE_REPAIRCLOSUREPOOL_V1_RESULT.md). Preserve the small
+  opportunity-summary function and its behavior test in the CausalClosure
+  opportunity consumer.
+- Remove RepairDependency predictability execution after its
+  [hard stop](STRIDE_REPAIRDEPENDENCY_PREDICTABILITY_V1_REPORT.md). The retained
+  TransactionalRepair and NativeOrder consumers use the existing common
+  contained-path resolver instead of importing that historical experiment.
+- Remove the stopped base Hybrid/SourceRoute online execution branches and
+  their private branch tests. A small `runtime/fixed_structshell.py` registry
+  accepts only retained Dual16/Component16 payloads. Keep the candidate-result
+  type, exact-set merge and offline budget reducer used by retained callers.
+
+Required history/summary regression tests move with the preserved logic, rather
+than disappearing with the historical test files. Producer dependency lists
+and the retention manifest are updated for the new ownership. Existing
+Hybrid membership/budget evidence tools remain; they do not restore the
+deleted online execution routes or authorize a compressed/runtime replacement.
+
+## Evidence and non-goals
+
+All registered configurations, result reports, model bundles, maps and raw
+experiment data remain in place. The saved H1, MultiValue and other negative
+conclusions are not reinterpreted. No report metrics are recalculated or
+overwritten by this cleanup. The two report-input validation weaknesses found
+in the preceding audit are a separate retained-path repair task, not silently
+claimed as fixed by deleting unrelated experiments.
+
+## Size comparison
+
+Counts use the original Git tree `6e2f605` and the final cleanup tree; Python
+physical lines include comments and blank lines. Test modules are files named
+`test_*.py` under `tests/`, not collected test cases. No hard reduction target
+was used.
+
+| Measure | Original | Cleaned |
+| --- | ---: | ---: |
+| Tracked files | 1,295 | 1,271 |
+| Python files | 490 | 465 |
+| Python physical lines | 171,103 | 159,877 |
+| Test modules | 141 | 132 |
+| Python scripts | 142 | 136 |
+| Registered configuration files | 337 | 337 |
+| `closed_loop_confirmation.py` physical lines | 4,704 | 4,531 |
+
+Twenty-six old Python files are removed and one fixed-pool registry is added.
+Net Python reduction is 11,226 lines. This is source cleanup, not evidence that
+the current solver is faster; no new performance claim is made.
+
+## Final verification
+
+- Full WSL Python suite: `925 passed, 37 skipped` (235.13 seconds).
+- Native build and CTest: `13/13`, including official parity hash tests.
+- Repository hygiene: zero errors; all 24 registered evidence hashes verified.
+- Retention manifest: 454 entries, no duplicate paths or missing files.
+- No retained Python imports or producer file lists reference removed modules.
+- Necessary migrated helpers match the pre-stage-2 implementation: 1,000
+  synthetic trace cases, 33 opportunity summaries and seven path-containment
+  cases; independent review additionally checked 1,857 prefix/window cases,
+  including the resulting history hashes.
+- The complete diff from `6e2f605` leaves native source, headers, third-party
+  source, CMake, model artifacts and registered experiment configurations
+  unchanged (only the retention manifest is updated under `configs/`).
+
+The final cleanup is protected by
+`backup/retired-experiments-cleanup-02-final-20260906` on the remote, alongside
+the original and pre-shared-pruning recovery tags. The cleanup branch is
+`codex/retired-experiments-cleanup`.

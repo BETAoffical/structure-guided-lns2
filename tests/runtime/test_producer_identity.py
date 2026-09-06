@@ -26,7 +26,7 @@ class ProducerIdentityResumeTest(unittest.TestCase):
         required = {
             "lns2_selector/runtime/causalclosurepool.py",
             "lns2_selector/runtime/hybridstructpool.py",
-            "lns2_selector/runtime/hybridstructpool_routed.py",
+            "lns2_selector/runtime/fixed_structshell.py",
             "lns2_selector/runtime/structshell_component16.py",
             "lns2_selector/runtime/structshell_dual16.py",
             "third_party/mapf_lns2/inc/SIPP.h",

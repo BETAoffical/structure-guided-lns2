@@ -44,6 +44,8 @@ from experiments.closed_loop_confirmation import (
     PortablePairwiseModel,
     REPAIR_TIMING_SCHEMA_V1,
     REPAIR_TIMING_SCHEMA_V2,
+    SCHEMA_VERSION,
+    run_closed_loop_collection,
     score_online_candidates,
     validate_closed_loop_trace,
     wall_clock_conflict_auc,
@@ -66,10 +68,7 @@ from lns2_selector.runtime.online_selection import (
     validate_structpool_augmentation,
     validate_repair_seed_policy,
 )
-from lns2_selector.runtime.hybridstructpool import (
-    HybridStructPoolResult,
-    hybridstructpool_runtime_augmentation,
-)
+from lns2_selector.runtime.hybridstructpool import HybridStructPoolResult
 from lns2_selector.runtime.structshell_dual16 import (
     structshell_dual16_augmentation,
 )
@@ -926,233 +925,33 @@ class ClosedLoopConfirmationTests(unittest.TestCase):
             proposal["hybridstructpool_computed_challenger_feature_count"], 1
         )
 
-    def test_generic_hybrid_pool_keeps_split_base_and_challenger_features(self) -> None:
-        realized_calls: list[list[str]] = []
-
-        class FeatureEngine:
-            backend = "test"
-            static_grid = None
-            last_shadow_rows: dict[str, list[dict]] = {}
-            last_prepare_metrics = {"state_analysis_seconds": 0.0}
-
-            def __init__(self, *_args, **_kwargs):
-                pass
-
-            def prepare(self, *_args, **_kwargs):
-                return {"state_analysis_seconds": 0.0}
-
-            def realized_rows(self, candidates, *, state_hash):
-                candidate_ids = [str(candidate["candidate_id"]) for candidate in candidates]
-                realized_calls.append(candidate_ids)
-                return [
-                    {
-                        "state_id": state_hash,
-                        "candidate_id": candidate_id,
-                        "candidate_key": candidate_id,
-                        "features": {
-                            "realized_dynamic": {"state.agent_count": 4.0}
-                        },
-                    }
-                    for candidate_id in candidate_ids
-                ], {
-                    "realized_feature_seconds": 0.0,
-                    "state_analysis_seconds": 0.0,
+    def test_retired_hybrid_payloads_are_rejected_before_creating_output(self) -> None:
+        payloads = [
+            {"pool_id": "stride-hybridstructpool-v1"},
+            *(
+                {
+                    "pool_id": "stride-hybridstructpool-routed-v1",
+                    "source_mode": mode,
                 }
-
-        class FeatureScoreModel:
-            profile = "realized_dynamic"
-            feature_names = ("state.agent_count",)
-            base_feature_names = feature_names
-
-            def score_candidates(self, rows):
-                return [float(index) for index, _row in enumerate(rows)]
-
-        class TopologyCache:
-            def __init__(self, *_args, **_kwargs):
-                self.analysis = object()
-                self.last_native_prepared = None
-                self.last_prepare_seconds = 0.0
-
-            def prepare(self, *_args, **_kwargs):
-                return None
-
-        class ExactRepairEnvironment(LearnedRepairEnvironment):
-            def propose(self, action: dict) -> dict:
-                return {
-                    "action_valid": True,
-                    "generated": True,
-                    "neighborhood": list(action["agents"]),
-                }
-
-            def step(self, action: dict) -> dict:
-                result = super().step(action)
-                result["metrics"]["neighborhood"] = list(action["agents"])
-                return result
-
-        base = [
-            make_candidate("candidate-a", [0, 1], "collision:2"),
-            make_candidate("candidate-z", [2, 3], "target:2"),
+                for mode in ("structshell_only", "causal_only", "routed_structshell")
+            ),
         ]
-        challenger = make_candidate(
-            "candidate-m", [0, 2], "structpool:conflict_component:16"
-        )
-
-        def generated_pool(*_args, **_kwargs):
-            return [dict(candidate) for candidate in base], {
-                "proposal_seconds": 0.0,
-                "proposal_count": 2,
-                "candidate_count": 2,
-                "candidate_generation_seconds": 0.0,
-                "state_check_seconds": 0.0,
-                "state_check_fingerprint_seconds": 0.0,
-                "backend": "test",
-                "state_check_backend": "test",
-                "full_state_verified": True,
-            }
-
-        def generated_hybrid(*_args, **_kwargs) -> HybridStructPoolResult:
-            union = [dict(base[0]), dict(challenger), dict(base[1])]
-            return HybridStructPoolResult(
-                candidates=union,
-                challengers=[dict(challenger)],
-                provenance_by_candidate_id={
-                    "candidate-a": ("v2_base",),
-                    "candidate-m": ("structshell_equal_four_size",),
-                    "candidate-z": ("v2_base",),
-                },
-                base_candidate_count=2,
-                structural_candidate_count=1,
-                causal_candidate_count=0,
-                exact_duplicate_count=0,
-                causal_attempts=[],
-            )
-
-        model = FeatureScoreModel()
-        bundle = SimpleNamespace(
-            models={"realized_dynamic": model},
-            ranges={"realized_dynamic": {"state.agent_count": (0.0, 10.0)}},
-            manifest={},
-        )
-        compact = SimpleNamespace(
-            main_models={"realized_dynamic": model},
-            main_ranges={"realized_dynamic": {"state.agent_count": (0.0, 10.0)}},
-            manifest={},
-        )
-        runtime = hybridstructpool_runtime_augmentation()
-        gate = {
-            "passed": True,
-            "evaluated": True,
-            "reason": "high_stress_state",
-            "seconds": 0.0,
-            "gate_id": runtime["activation_gate"]["gate_id"],
-            "conflict_pair_count": 1,
-            "active_conflict_agent_count": 2,
-            "largest_conflict_component_size": 2,
-        }
         with tempfile.TemporaryDirectory() as directory:
-            controller_root = Path(directory) / "controller"
-            controller_root.mkdir()
-            (controller_root / "controller_manifest.json").write_text(
-                "{}", encoding="utf-8"
-            )
-            job = {
-                "row": {
-                    "split": "closed_loop",
-                    "map_id": "map-a",
-                    "task_id": "task-a",
-                    "layout_mode": "regular_beltway",
-                    "task_variant": "balanced_80",
-                    "agent_count": 4,
-                },
-                "policy": "realized_dynamic",
-                "solver_seed": 0,
-                "output_root": directory,
-                "run_fingerprint": "generic-hybrid-split-feature-batch",
-                "resume": False,
-                "dataset_root": directory,
-                "environment": {"replan_algorithm": "PP"},
-                "max_decisions": 1,
-                "metric_iteration_budget": 1,
-                "wall_time_budget_seconds": None,
-                "proposal": {
-                    "max_seed_agents": 4,
-                    "heuristics": ["target", "collision", "random"],
-                    "neighborhood_sizes": [4, 8, 16],
-                    "trials": 8,
-                    "candidates_per_family": 2,
-                    "hybridstructpool": runtime,
-                },
-                "frozen_models": directory,
-                "model_registration": {},
-                "controller": "v2-full",
-                "controller_bundle": str(controller_root),
-                "feature_backend": "reference",
-                "verification_profile": "deployment",
-                "trace_format": TRACE_FORMAT_FULL_V1,
-            }
-            with (
-                patch(
-                    "experiments.closed_loop_confirmation._make_environment",
-                    return_value=ExactRepairEnvironment(solve_after=1),
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.load_frozen_policy_bundle",
-                    return_value=bundle,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.load_controller_bundle",
-                    return_value=compact,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.require_pairwise_bundle_identity"
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.OnlineFeatureEngine",
-                    FeatureEngine,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.TopologyAnalysisCache",
-                    TopologyCache,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.generate_online_candidates",
-                    side_effect=generated_pool,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.hybridstructpool_high_stress_gate",
-                    return_value=gate,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation.generate_hybridstructpool_runtime_candidates",
-                    side_effect=generated_hybrid,
-                ),
-                patch(
-                    "experiments.closed_loop_confirmation._generate_fixed_structshell_runtime_candidates"
-                ) as fixed_dual16,
-            ):
-                result = _closed_loop_episode_worker(job)
-
-            self.assertEqual(result["status"], "ok", result.get("error"))
-            events = [
-                json.loads(line)
-                for line in (Path(directory) / result["trace_file"])
-                .read_text(encoding="utf-8")
-                .splitlines()
-            ]
-
-        fixed_dual16.assert_not_called()
-        self.assertEqual(
-            realized_calls,
-            [["candidate-a", "candidate-z"], ["candidate-m"]],
-        )
-        transition = next(event for event in events if event.get("event") == "transition")
-        proposal = transition["controller"]["proposal"]
-        self.assertFalse(proposal["hybridstructpool_single_union_feature_batch"])
-        self.assertEqual(proposal["hybridstructpool_computed_union_feature_count"], 0)
-        self.assertEqual(proposal["hybridstructpool_reused_base_feature_count"], 2)
-        self.assertEqual(
-            proposal["hybridstructpool_computed_challenger_feature_count"], 1
-        )
+            output = Path(directory) / "new-output"
+            for payload in payloads:
+                with self.subTest(payload=payload), patch(
+                    "experiments.closed_loop_confirmation._read_json",
+                    return_value={"schema_version": SCHEMA_VERSION},
+                ):
+                    with self.assertRaisesRegex(ValueError, "retired structural"):
+                        run_closed_loop_collection(
+                            directory,
+                            Path(directory) / "config.json",
+                            output,
+                            controller="v2-full",
+                            hybridstructpool_augmentation=payload,
+                        )
+                self.assertFalse(output.exists())
 
     def test_static_grid_cache_is_enabled_for_structpool_or_boundary(self) -> None:
         self.assertTrue(

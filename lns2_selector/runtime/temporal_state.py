@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
 import string
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
+
+from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
 
 
 TEMPORAL_STATE_SCHEMA = "lns2.stride.temporal_state_identity.v1"
@@ -150,6 +153,93 @@ def temporal_history_context(
     )
 
 
+def _transition_neighborhood(transition: Mapping[str, Any]) -> tuple[int, ...]:
+    metrics = transition.get("metrics")
+    raw = metrics.get("neighborhood") if isinstance(metrics, Mapping) else None
+    if not isinstance(raw, list) or not raw:
+        action = transition.get("action")
+        raw = action.get("agents") if isinstance(action, Mapping) else None
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("temporal history transition has no neighborhood")
+    result = tuple(sorted(set(map(int, raw))))
+    if len(result) != len(raw):
+        raise ValueError("temporal history neighborhood contains duplicates")
+    return result
+
+
+def _edge_set(state: Mapping[str, Any]) -> set[tuple[int, int]]:
+    return {tuple(sorted(map(int, edge))) for edge in state["conflict_edges"]}
+
+
+def history_before_decision(
+    states: Sequence[dict[str, Any]],
+    transitions: Sequence[dict[str, Any]],
+    *,
+    decision_index: int,
+    history_limit: int = 8,
+) -> TemporalHistoryContext:
+    """Build a decision's history from its strict trace prefix only."""
+
+    target = int(decision_index)
+    if target < 0 or target >= len(states) or target > len(transitions):
+        raise ValueError("temporal target decision is outside its source trace")
+    prefix_transitions = list(transitions[:target])
+    prefix_states = list(states[: target + 1])
+    neighborhoods = [_transition_neighborhood(row) for row in prefix_transitions]
+    exact_repeat = []
+    max_jaccard = []
+    for index, neighborhood in enumerate(neighborhoods):
+        prior = neighborhoods[:index]
+        exact_repeat.append(neighborhood in prior)
+        members = set(neighborhood)
+        max_jaccard.append(
+            max(
+                (len(members & set(row)) / len(members | set(row)) for row in prior),
+                default=0.0,
+            )
+        )
+    current_edges = _edge_set(prefix_states[-1])
+    previous_edges = _edge_set(prefix_states[-2]) if len(prefix_states) > 1 else set()
+    older_edges = set().union(*map(_edge_set, prefix_states[:-1]))
+    streak = 1
+    for state in reversed(prefix_states[:-1]):
+        if _edge_set(state) != current_edges:
+            break
+        streak += 1
+    repair_counts: collections.Counter[int] = collections.Counter(
+        agent for neighborhood in neighborhoods for agent in neighborhood
+    )
+    candidate_ids = []
+    pp_history = []
+    for index, transition in enumerate(prefix_transitions):
+        controller = transition.get("controller")
+        candidate_ids.append(
+            str(controller.get("selected_candidate_id", ""))
+            if isinstance(controller, Mapping)
+            else ""
+        )
+        metrics = dict(transition.get("metrics") or {})
+        changed = repair_structure_fingerprint(prefix_states[index]) != (
+            repair_structure_fingerprint(prefix_states[index + 1])
+        )
+        pp_history.append(
+            (bool(metrics.get("replan_success")), not changed, changed)
+        )
+    return temporal_history_context(
+        recent_neighborhoods=neighborhoods[-history_limit:],
+        recent_neighborhood_exact_repeat=exact_repeat[-history_limit:],
+        recent_neighborhood_max_jaccard=max_jaccard[-history_limit:],
+        persistent_conflict_edges=current_edges & previous_edges,
+        new_conflict_edges=current_edges - previous_edges,
+        disappeared_conflict_edges=previous_edges - current_edges,
+        reappeared_conflict_edges=current_edges & (older_edges - previous_edges),
+        conflict_signature_streak=streak,
+        agent_repair_counts=repair_counts,
+        recent_candidate_ids=candidate_ids[-history_limit:],
+        recent_pp_history=pp_history[-history_limit:],
+    )
+
+
 def temporal_state_identity(
     *,
     episode_id: str,
@@ -186,6 +276,7 @@ def temporal_state_identity(
 __all__ = [
     "TEMPORAL_STATE_SCHEMA",
     "TemporalHistoryContext",
+    "history_before_decision",
     "temporal_history_context",
     "temporal_state_identity",
 ]

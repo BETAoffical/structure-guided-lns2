@@ -8,8 +8,8 @@ from experiments.closed_loop_confirmation import (
     _generate_fixed_structshell_runtime_candidates,
 )
 from experiments.neighborhood_candidates import candidate_id
-from lns2_selector.runtime.hybridstructpool_routed import (
-    validate_any_hybridstructpool_augmentation,
+from lns2_selector.runtime.fixed_structshell import (
+    validate_fixed_structshell_augmentation,
 )
 from lns2_selector.runtime.structshell_component16 import (
     STRUCTSHELL_COMPONENT16_POOL_ID,
@@ -71,7 +71,7 @@ class StructShellComponent16Test(unittest.TestCase):
         config = structshell_component16_augmentation()
         self.assertEqual(config, expected)
         self.assertEqual(validate_structshell_component16_augmentation(config), expected)
-        self.assertEqual(validate_any_hybridstructpool_augmentation(config), expected)
+        self.assertEqual(validate_fixed_structshell_augmentation(config), expected)
 
         state = {
             "agents": [{"id": 0}, {"id": 1}],
