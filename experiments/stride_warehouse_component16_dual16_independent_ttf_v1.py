@@ -108,8 +108,7 @@ EXPECTED_REPORTING = {
 }
 
 
-def _root() -> Path:
-    return Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def validate_config(config: Mapping[str, Any]) -> None:
@@ -151,7 +150,7 @@ def validate_config(config: Mapping[str, Any]) -> None:
 
 def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
     config_path = Path(path).resolve()
-    root = _root()
+    root = PROJECT_ROOT
     config = read_json(config_path)
     validate_config(config)
     registered = {

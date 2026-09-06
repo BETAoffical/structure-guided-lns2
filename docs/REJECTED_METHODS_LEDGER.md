@@ -1,5 +1,8 @@
 # Rejected-method evidence ledger
 
+The follow-up cleanup and verified recovery tags are recorded in
+[Retired experiment cleanup (2026-09-06)](RETIRED_EXPERIMENTS_CLEANUP_20260906.md).
+
 This ledger preserves the scientific status of research branches removed from
 the active source tree. The complete pre-pruning workspace is recoverable from
 `backup/rejected-method-pruning-00-original` at commit

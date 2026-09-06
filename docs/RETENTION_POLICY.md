@@ -27,3 +27,10 @@ The generated manifest must contain no unclassified production module or test.
 Failed or diagnostic-only research chains are never labeled `active`. They may
 remain executable as `reproducibility` only when a retained report identifies
 the exact negative result and the code is not imported by an active controller.
+
+An explicit decision not to rerun a stopped experiment locally supersedes that
+optional execution retention: archive its code and dedicated tests under a
+verified remote recovery tag, and keep only the evidence and read-only inputs
+still required by retained work. Extract live shared helpers before deleting
+their historical host module. A challenger awaiting fresh confirmation is not
+automatically obsolete merely because it has not been promoted.

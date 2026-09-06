@@ -11,7 +11,6 @@ from lns2_selector.runtime.topology_candidates import (
     _anchor_neighborhood,
     _boundary_neighborhood,
     _fill_neighborhood,
-    generate_scalepool_candidates,
     generate_structpool_candidates,
     generate_structpool_candidate_grid,
     generate_structpool_candidate_subset,
@@ -19,7 +18,6 @@ from lns2_selector.runtime.topology_candidates import (
     generate_topology_boundary_candidates,
     merge_structpool_candidates,
     merge_topology_anchor_candidates,
-    scalepool_size_attempt_order,
 )
 
 
@@ -825,47 +823,6 @@ class TopologyCandidatesTest(unittest.TestCase):
             [row["agents"] for row in full],
         )
 
-    def test_scalepool_orders_sizes_by_support_with_smaller_tie_break(self) -> None:
-        self.assertEqual(scalepool_size_attempt_order(2), (8, 16, 24, 32))
-        self.assertEqual(scalepool_size_attempt_order(12), (8, 16, 24, 32))
-        self.assertEqual(scalepool_size_attempt_order(20), (16, 24, 8, 32))
-        self.assertEqual(scalepool_size_attempt_order(29), (32, 24, 16, 8))
-
-    def test_scalepool_is_lazy_deterministic_and_anchor_relative(self) -> None:
-        state, analysis = self._structpool_state()
-        anchor = [34, 35, 36, 37, 38, 39]
-        first = generate_scalepool_candidates(
-            state, analysis, v2_anchor_agents=anchor
-        )
-        second = generate_scalepool_candidates(
-            state, analysis, v2_anchor_agents=anchor
-        )
-        self.assertEqual(first, second)
-        self.assertLessEqual(len(first.candidates), 6)
-        self.assertLess(first.raw_candidate_count, 24)
-        self.assertTrue(first.attempts)
-        selected_or_merged = [
-            row for row in first.attempts
-            if row["decision"] in {"selected", "merged"}
-        ]
-        self.assertEqual(
-            len({row["family_variant"] for row in selected_or_merged}),
-            len(selected_or_merged),
-        )
-        for row in first.candidates:
-            self.assertLessEqual(row["v2_anchor_jaccard"], 0.9)
-            families = set(row["selection_families"])
-            self.assertEqual(
-                set(row["structpool_support_count_by_family"]), families
-            )
-            self.assertEqual(
-                set(row["scalepool_size_attempt_order_by_family"]), families
-            )
-        for index, left in enumerate(first.candidates):
-            for right in first.candidates[index + 1 :]:
-                intersection = set(left["agents"]) & set(right["agents"])
-                union = set(left["agents"]) | set(right["agents"])
-                self.assertLessEqual(len(intersection) / len(union), 0.8)
 
     def test_structpool_novel_additions_obey_jaccard_filter(self) -> None:
         state, analysis = self._structpool_state()

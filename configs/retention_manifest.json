@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/rejected-method-pruning-06-before-final-rejected-pruning",
+  "checkpoint": "backup/retired-experiments-cleanup-00-original-20260906",
   "allowed_executable_roles": [
     "active",
     "shared",
@@ -18,6 +18,31 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {
+      "path": "experiments/stride_warehouse_component16_dual16_independent_ttf_v1.py",
+      "role": "reproducibility",
+      "purpose": "Reproduce the development-only Component16, Dual16 and Official independent TTF comparison; no default promotion."
+    },
+    {
+      "path": "lns2_selector/runtime/structshell_component16.py",
+      "role": "reproducibility",
+      "purpose": "Prepare Component16-only structural additions while preserving frozen V2 candidates and scorer semantics."
+    },
+    {
+      "path": "scripts/run_stride_warehouse_component16_dual16_independent_ttf_v1.py",
+      "role": "reproducibility",
+      "purpose": "Run and inspect the registered Component16 independent TTF comparison."
+    },
+    {
+      "path": "tests/evaluation/test_stride_warehouse_component16_dual16_independent_ttf_v1.py",
+      "role": "reproducibility",
+      "contract": "Protect cohort identity, map disjointness, fixed controller configuration and development-only reporting boundaries."
+    },
+    {
+      "path": "tests/runtime/test_structshell_component16.py",
+      "role": "reproducibility",
+      "contract": "Protect Component16 candidate membership, provenance, frozen V2 authority and fixed-pool dispatch."
+    },
     {
       "path": "experiments/__init__.py",
       "role": "shared",
@@ -1904,21 +1929,6 @@
       "contract": "Freeze transactional retry caps, blocker-tail placement, conflict-priority fallback and non-TTF claim boundaries."
     },
     {
-      "path": "experiments/stride_transactionalrepair_confirmation.py",
-      "role": "active",
-      "purpose": "Confirm the frozen TransactionalRepair mechanism on all 240 map-disjoint result-blind repairability states without consulting source repair outcomes."
-    },
-    {
-      "path": "scripts/run_stride_transactionalrepair_confirmation.py",
-      "role": "active",
-      "purpose": "Prepare, collect and analyze the preregistered 16-worker TransactionalRepair result-blind confirmation."
-    },
-    {
-      "path": "tests/evaluation/test_stride_transactionalrepair_confirmation.py",
-      "role": "active",
-      "contract": "Freeze the 240-state cohort, discovery-policy parity, result-blind selected-neighborhood extraction, stop-on-failure execution and non-TTF claim boundary."
-    },
-    {
       "path": "lns2_selector/runtime/repairclosurepool.py",
       "role": "active",
       "purpose": "Generate outcome-blind repair dependency closures at natural Pareto evidence-front boundaries without fixed preferred sizes or repair-order control."
@@ -2201,12 +2211,12 @@
     {
       "path": "lns2_selector/runtime/structshell_dual16.py",
       "role": "reproducibility",
-      "purpose": "Expose the independently identified Component16 plus Hotspot16 runtime and its versioned eight-step plateau fallback while preserving the complete frozen V2 candidate pool and Copeland selector."
+      "purpose": "Expose Component16 plus Hotspot16 runtime additions while preserving the complete frozen V2 candidate pool and Copeland selector; no plateau override."
     },
     {
       "path": "tests/runtime/test_structshell_dual16.py",
       "role": "reproducibility",
-      "contract": "Freeze the exact Dual16 and plateau-guard configurations, two fixed family-size cells, two-challenger cap, V2-authoritative merge and closed-loop dispatch."
+      "contract": "Protect fixed family-size cells, the two-challenger cap, V2-authoritative merge, single-batch feature equivalence and closed-loop dispatch."
     },
     {
       "path": "experiments/warehouse_crossaisle_tasks.py",

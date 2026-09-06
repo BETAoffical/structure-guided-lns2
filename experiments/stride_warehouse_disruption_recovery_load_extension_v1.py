@@ -42,12 +42,11 @@ PLAN_FILENAME = "load_extension_plan.json"
 TIMED_MANIFESTS = {"official_adaptive": "official_adaptive_manifest.jsonl", "dual16": "realized_dynamic_manifest.jsonl"}
 
 
-def _root() -> Path:
-    return Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_config(path: str | Path) -> tuple[Path, Path, dict[str, Any]]:
-    path, root = Path(path).resolve(), _root()
+    path, root = Path(path).resolve(), PROJECT_ROOT
     config = read_json(path)
     if config.get("schema") != SCHEMA or config.get("experiment_id") != EXPERIMENT_ID:
         raise ValueError("load-extension config identity changed")
