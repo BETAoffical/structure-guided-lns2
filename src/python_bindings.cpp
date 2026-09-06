@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "InitLNS.h"
+#include "LNS.h"
 #include "online_features.h"
 #include "structure_guided/instance_validation.hpp"
 
@@ -13,6 +14,7 @@
 #include <map>
 #include <mutex>
 #include <stdexcept>
+#include <limits>
 
 namespace py = pybind11;
 
@@ -1054,12 +1056,73 @@ private:
     py::dict last_reset_timings;
 };
 
+namespace
+{
+py::dict optimizeFeasiblePaths(const std::string& map_path, const std::string& scenario_path,
+                              int agent_count, const vector<vector<int>>& paths, int seed,
+                              double time_limit, int max_iterations,
+                              const std::string& strategy, int neighborhood_size)
+{
+    const auto started = DiagnosticClock::now();
+    if (!std::isfinite(time_limit) || time_limit < 0 || seed < 0 || max_iterations < 0 || neighborhood_size < 1)
+        throw py::value_error("invalid anytime budget, seed, iteration limit or neighborhood size");
+    if (strategy != "Adaptive" && strategy != "RandomWalk" && strategy != "Intersection" && strategy != "Random")
+        throw py::value_error("invalid official anytime strategy");
+    auto instance = makeValidatedInstance(map_path, scenario_path, agent_count);
+    LNS::validateFeasiblePaths(*instance, paths);
+    PIBTPPS_option options;
+    LNS optimizer(*instance, time_limit, "PP", "PP", strategy, neighborhood_size,
+                  max_iterations == 0 ? std::numeric_limits<int>::max() : max_iterations,
+                  false, "Adaptive", true, 0, options);
+    const double setup_seconds = diagnosticSeconds(started);
+    const double remaining = std::max(0.0, time_limit - setup_seconds);
+    auto& rng = processGlobalRngState();
+    std::unique_lock<std::mutex> lock(rng.mutex);
+    // This is a new independent stage stream. Existing live repair environments
+    // must not unknowingly continue after this function has changed rand().
+    rng.epoch++;
+    if (rng.epoch == 0)
+        rng.epoch++;
+    rng.owner_environment_id = 0;
+    srand(seed);
+    optimizer.runFromFeasiblePaths(paths, std::max(0.0, time_limit - diagnosticSeconds(started)));
+    lock.unlock();
+    const auto& result_paths = optimizer.getDeadlinePaths();
+    LNS::validateFeasiblePaths(*instance, result_paths);
+    py::dict result;
+    result["schema"] = "lns2.anytime_handoff.v1";
+    result["initial_paths"] = paths;
+    result["paths"] = result_paths;
+    result["initial_soc"] = optimizer.initial_sum_of_costs;
+    result["soc"] = optimizer.getHandoffCostHistory().back();
+    result["cost_history"] = optimizer.getHandoffCostHistory();
+    result["native_last_soc"] = optimizer.sum_of_costs;
+    result["iterations"] = optimizer.iteration_stats.size() - 1;
+    result["initial_planner_called"] = false;
+    result["feasible"] = true;
+    result["stage2_seed"] = seed;
+    result["setup_seconds"] = setup_seconds;
+    result["budget_after_setup_seconds"] = remaining;
+    result["wall_seconds"] = diagnosticSeconds(started);
+    result["budget_seconds"] = time_limit;
+    result["budget_exceeded"] = diagnosticSeconds(started) > time_limit;
+    result["deadline_semantics"] = "last_feasible_snapshot_within_soft_budget; export_and_overshoot_charged";
+    return result;
+}
+}
+
 PYBIND11_MODULE(lns2_env, module)
 {
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     module.attr("native_semantics_schema") =
         "lns2.native_semantics.official_step_timed_extension.v3";
     module.attr("repair_timing_schema") = "lns2.repair_timing.v2";
+    module.attr("anytime_handoff_schema") = "lns2.anytime_handoff.v1";
+    module.def("optimize_feasible_paths", &optimizeFeasiblePaths,
+               py::arg("map_path"), py::arg("scenario_path"), py::arg("agent_count"),
+               py::arg("paths"), py::arg("seed"), py::arg("time_limit"),
+               py::arg("max_iterations") = 0, py::arg("strategy") = "Adaptive",
+               py::arg("neighborhood_size") = 8);
     py::class_<PortableTreeEnsemble>(module, "PortableTreeEnsemble")
         .def(py::init<double, const py::list&>(), py::arg("baseline"), py::arg("trees"))
         .def("predict_raw", &PortableTreeEnsemble::predictRaw, py::arg("vectors"))

@@ -1,0 +1,60 @@
+{
+  "schema": "lns2.path_quality_preflight.v1",
+  "scientific_status": "reused_cases_development_only_not_independent_confirmation",
+  "allow_solver_execution": false,
+  "preparation_revision": 4,
+  "output": "build/path-quality-preflight-v4",
+  "controllers": ["official_adaptive", "v2-full", "dual16"],
+  "solver_seeds": [51, 52],
+  "runtime_template": {
+    "manifest": "configs/stride_warehouse_fixed16_development_runtime_v2.json",
+    "sha256": "4a7376f428338abedf8a7defb645588b59fdda081f575918ea2a7abb278f673a"
+  },
+  "sources": [
+    {
+      "name": "warehouse",
+      "manifest": "build/stride-warehouse-dual16-very-high-confirmation-v2/dataset/confirmation/manifest.jsonl",
+      "sha256": "67928fa402493de91cde034d6817c2d73a7d1bb9d9d36e4cf278c6e20f53508d",
+      "all_tasks": true,
+      "expected_tasks": 8
+    },
+    {
+      "name": "movingai_room_maze",
+      "manifest": "build/initlns-movingai-ood-dataset-v1/movingai_ood/manifest.jsonl",
+      "sha256": "cab89325c4ca62c7eefd7a0c5de38e1a700bf8384b618c399eafab876dd05742",
+      "map_agent_counts": {"room-64-64-8": 600, "room-64-64-16": 600, "maze-32-32-4": 200, "maze-128-128-1": 400},
+      "scenario_indices": [4, 5],
+      "expected_tasks": 8
+    }
+  ],
+  "quarantined_maps": {
+    "maze-128-128-1": "Historical empty initial path under native reset; retain inputs but require separate reset-integrity clearance before timed admission."
+  },
+  "supplementary_checkpoints": {
+    "manifest": "build/stride-warehouse-dual16-very-high-confirmation-v2/checkpoints/checkpoint_manifest.jsonl",
+    "sha256": "6c152e44269520b6c7bae96d8b430eca61c556b866c68c90138d11860af6bd84",
+    "expected_count": 16,
+    "role": "offline_full_path_repair_only_not_executed_suffix_recovery"
+  },
+  "frozen_bundle": {
+    "manifest": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+    "sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "protocol": {
+    "phases": ["first_feasible_quality", "shared_official_anytime_stage"],
+    "first_feasible_budget_seconds": 120,
+    "total_planning_budgets_seconds": [60, 120],
+    "repair_iteration_cap": null,
+    "timed_workers": 1,
+    "execution_model": "plan_then_synchronous_four_neighbor_move_or_wait_stay_at_goal",
+    "step_seconds_sensitivity": [0.5, 1.0, 2.0],
+    "physical_step_duration_calibrated": false,
+    "metrics": ["planning_wall_seconds", "soc_steps", "makespan_steps", "wait_steps", "sum_shortest_distances", "modeled_batch_completion_seconds"],
+    "failures": "retain_all_cases_report_success_first_no_execution_time_for_infeasible_paths",
+    "comparison": "same_tasks_seeds_native_and_total_planning_budget; common-success_quality_and_all-case_failure_counts",
+    "stage2": "same_official_Adaptive_PP_SIPPS_neighbor8; preserve_feasibility; optimize_SOC_report_makespan_separately",
+    "stage2_rng": "explicit_common_stage2_seed_independent_of_stage1_draw_count",
+    "dispatch": "first_feasible_immediately_or_fixed_total_budget_separate_protocols_no_posthoc_best_dispatch",
+    "promotion_allowed": false
+  }
+}

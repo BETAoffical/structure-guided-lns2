@@ -1046,7 +1046,7 @@ def _load_initial_restore_source(
     return source_state, source_trace_path, source_checkpoint_path, source_kind
 
 
-def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
+def _closed_loop_episode_worker(job: dict[str, Any], *, path_observer: Any = None) -> dict[str, Any]:
     row = job["row"]
     policy = str(job["policy"])
     solver_seed = int(job["solver_seed"])
@@ -1370,6 +1370,8 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
             # agent path at the top of the next loop.  This changes neither the
             # fingerprint definition nor any controller/random-seed semantics.
             current_state_fingerprint = initial_fingerprint
+            if path_observer is not None:
+                path_observer("initial", state, ttf_started_wall, reset_completed_wall, initial_fingerprint)
             episode_repair_seed_stream = (
                 EpisodeRepairSeedStream.from_episode(
                     task_id=str(row["task_id"]),
@@ -3427,6 +3429,9 @@ def _closed_loop_episode_worker(job: dict[str, Any]) -> dict[str, Any]:
                 else initial_state_elapsed_seconds
             )
             feasible_elapsed = algorithm_elapsed if bool(state["feasible"]) else None
+            if path_observer is not None:
+                path_observer("terminal", state, ttf_started_wall,
+                              ttf_started_wall + algorithm_elapsed, current_state_fingerprint)
             success = feasible_elapsed is not None and (
                 wall_budget is None or feasible_elapsed <= wall_budget
             )

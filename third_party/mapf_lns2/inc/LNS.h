@@ -40,6 +40,11 @@ public:
     }
     bool getInitialSolution();
     bool run();
+    // Opt-in handoff; the ordinary run() initialization and RNG remain unchanged.
+    bool runFromFeasiblePaths(const vector<vector<int>>& paths, double remaining_seconds);
+    const vector<vector<int>>& getDeadlinePaths() const { return deadline_paths; }
+    const vector<int>& getHandoffCostHistory() const { return handoff_cost_history; }
+    static void validateFeasiblePaths(const Instance& instance, const vector<vector<int>>& paths);
     void validateSolution() const;
     void writeIterStatsToFile(const string & file_name) const;
     void writeResultToFile(const string & file_name) const;
@@ -47,6 +52,10 @@ public:
     string getSolverName() const override { return "LNS(" + init_algo_name + ";" + replan_algo_name + ")"; }
     const InitLNS* getInitLNS() const { return init_lns; }
 private:
+    bool supplied_initial_paths = false;
+    vector<vector<int>> deadline_paths;
+    vector<int> handoff_cost_history;
+    void checkpointWithinDeadline();
     InitLNS* init_lns = nullptr;
     string init_algo_name;
     string replan_algo_name;

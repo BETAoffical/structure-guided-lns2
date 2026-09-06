@@ -1,6 +1,8 @@
 #include "LNS.h"
 #include "ECBS.h"
 #include <queue>
+#include <cmath>
+#include <stdexcept>
 
 LNS::LNS(const Instance& instance, double time_limit, const string & init_algo_name, const string & replan_algo_name,
          const string & destory_name, int neighbor_size, int num_of_iterations, bool use_init_lns,
@@ -44,6 +46,99 @@ LNS::LNS(const Instance& instance, double time_limit, const string & init_algo_n
         cout << "Pre-processing time = " << preprocessing_time << " seconds." << endl;
 }
 
+void LNS::validateFeasiblePaths(const Instance& instance, const vector<vector<int>>& paths)
+{
+    InitLNS::validateRestoredPaths(instance, paths);
+    size_t horizon = 0;
+    for (const auto& path : paths)
+    {
+        if (path.size() > 1 && path[path.size() - 2] == path.back())
+            throw std::invalid_argument("anytime handoff requires paths without terminal padding");
+        horizon = std::max(horizon, path.size());
+    }
+    for (size_t t = 0; t < horizon; t++)
+    {
+        unordered_set<int> occupied;
+        set<pair<int, int>> moves;
+        for (const auto& path : paths)
+        {
+            int current = path[std::min(t, path.size() - 1)];
+            if (!occupied.insert(current).second)
+                throw std::invalid_argument("anytime handoff has a vertex or terminal conflict");
+            if (t > 0)
+            {
+                int previous = path[std::min(t - 1, path.size() - 1)];
+                if (previous != current)
+                {
+                    if (moves.count({current, previous}))
+                        throw std::invalid_argument("anytime handoff has an edge conflict");
+                    moves.insert({previous, current});
+                }
+            }
+        }
+    }
+}
+
+bool LNS::runFromFeasiblePaths(const vector<vector<int>>& paths, double remaining_seconds)
+{
+    if (!std::isfinite(remaining_seconds) || remaining_seconds < 0)
+        throw std::invalid_argument("remaining budget must be finite and nonnegative");
+    if (supplied_initial_paths || !iteration_stats.empty() || init_lns != nullptr)
+        throw std::invalid_argument("anytime handoff requires a fresh LNS instance");
+    if (replan_algo_name != "PP")
+        throw std::invalid_argument("anytime handoff currently supports official PP only");
+    start_time = Time::now();
+    validateFeasiblePaths(instance, paths);
+    // Intersection assumes a map contains a branching cell. Reject unsupported
+    // handoff inputs instead of silently changing the official heuristic.
+    if (remaining_seconds > 0 && (ALNS || destroy_strategy == INTERSECTION))
+    {
+        bool has_intersection = false;
+        for (int loc = 0; loc < instance.map_size; loc++)
+            if (!instance.isObstacle(loc) && instance.getDegree(loc) > 2)
+                has_intersection = true;
+        if (!has_intersection)
+            throw std::invalid_argument("official Intersection requires a branching map");
+    }
+    time_limit = remaining_seconds;
+    replan_time_limit = time_limit / 100;
+    path_table.reset();
+    initial_sum_of_costs = 0;
+    neighbor.agents.clear();
+    for (size_t id = 0; id < paths.size(); id++)
+    {
+        auto& path = agents[id].path;
+        path.clear();
+        for (int location : paths[id])
+            path.emplace_back(location);
+        path_table.insertPath(static_cast<int>(id), path);
+        initial_sum_of_costs += static_cast<int>(path.size()) - 1;
+        neighbor.agents.push_back(static_cast<int>(id));
+    }
+    sum_of_costs = initial_sum_of_costs;
+    deadline_paths = paths;
+    handoff_cost_history = {initial_sum_of_costs};
+    supplied_initial_paths = true;
+    return run();
+}
+
+void LNS::checkpointWithinDeadline()
+{
+    if (!supplied_initial_paths || handoff_cost_history.back() <= sum_of_costs ||
+        ((fsec)(Time::now() - start_time)).count() > time_limit)
+        return;
+    vector<vector<int>> snapshot(agents.size());
+    for (size_t i = 0; i < agents.size(); i++)
+        for (const auto& entry : agents[i].path)
+            snapshot[i].push_back(entry.location);
+    // Charge the snapshot itself, and never present a late result as on time.
+    if (((fsec)(Time::now() - start_time)).count() <= time_limit)
+    {
+        deadline_paths.swap(snapshot);
+        handoff_cost_history.push_back(sum_of_costs);
+    }
+}
+
 bool LNS::run()
 {
     // only for statistic analysis, and thus is not included in runtime
@@ -54,8 +149,9 @@ bool LNS::run()
     }
 
     initial_solution_runtime = 0;
-    start_time = Time::now();
-    bool succ = getInitialSolution();
+    if (!supplied_initial_paths)
+        start_time = Time::now();
+    bool succ = supplied_initial_paths || getInitialSolution();
     initial_solution_runtime = ((fsec)(Time::now() - start_time)).count();
     if (!succ && initial_solution_runtime < time_limit)
     {
@@ -180,6 +276,8 @@ bool LNS::run()
                  << "solution cost = " << sum_of_costs << ", "
                  << "remaining time = " << time_limit - runtime << endl;
         iteration_stats.emplace_back(neighbor.agents.size(), sum_of_costs, runtime, replan_algo_name);
+        if (supplied_initial_paths)
+            checkpointWithinDeadline();
     }
 
 
@@ -189,7 +287,8 @@ bool LNS::run()
     if (average_group_size > 0)
         average_group_size /= (double)(iteration_stats.size() - 1);
 
-    cout << getSolverName() << ": "
+    if (!supplied_initial_paths || screen >= 1)
+      cout << getSolverName() << ": "
          << "runtime = " << runtime << ", "
          << "iterations = " << iteration_stats.size() << ", "
          << "solution cost = " << sum_of_costs << ", "

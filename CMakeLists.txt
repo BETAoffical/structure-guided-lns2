@@ -209,6 +209,12 @@ add_test(NAME lns2_official_parity_hash COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_path_hash.py"
     "${PARITY_PATH}" "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf"
 )
+add_test(NAME lns2_anytime_handoff COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/solver/test_anytime_native.py"
+)
+set_tests_properties(lns2_anytime_handoff PROPERTIES ENVIRONMENT
+    "PYTHONPATH=$<TARGET_FILE_DIR:lns2_env>${LNS2_TEST_PYTHONPATH_SEPARATOR}${CMAKE_CURRENT_SOURCE_DIR}"
+)
 set_tests_properties(lns2_official_parity_hash PROPERTIES FIXTURES_REQUIRED official_paths)
 
 # Exercise the official entry point beyond initial path generation.  This hash

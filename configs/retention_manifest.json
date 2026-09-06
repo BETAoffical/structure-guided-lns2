@@ -19,6 +19,46 @@
   },
   "entries": [
     {
+      "path": "lns2_selector/evaluation/path_quality_execution.py",
+      "role": "active",
+      "purpose": "Prepare paired schedules and opt-in isolated episodes with durable path journals; no authorized cohort timing entry."
+    },
+    {
+      "path": "tests/evaluation/test_path_quality_execution.py",
+      "role": "active",
+      "contract": "Protect three-controller mapping, paired seeds, artifact integrity, execution gate, timeout and resume without benchmark execution."
+    },
+    {
+      "path": "lns2_selector/evaluation/anytime_handoff.py",
+      "role": "active",
+      "purpose": "Opt-in exact feasible-path handoff to official anytime LNS with shared-budget accounting; not a collector."
+    },
+    {
+      "path": "tests/evaluation/test_anytime_handoff.py",
+      "role": "active",
+      "contract": "Protect exact path import, task binding, shared deadline, native identity and modeled execution units."
+    },
+    {
+      "path": "tests/solver/test_anytime_native.py",
+      "role": "active",
+      "contract": "Validate native handoff, official SOC improvement and RNG isolation on tiny synthetic fixtures only."
+    },
+    {
+      "path": "lns2_selector/evaluation/path_quality_preflight.py",
+      "role": "active",
+      "purpose": "Prepare static path-quality cases and audit discrete paths without executing any solver or timed experiment."
+    },
+    {
+      "path": "scripts/prepare_path_quality_cases.py",
+      "role": "active",
+      "purpose": "Prepare or verify the frozen case roster; no collect or timing entry point."
+    },
+    {
+      "path": "tests/evaluation/test_path_quality_preflight.py",
+      "role": "active",
+      "contract": "Validate static scenario bindings, path-quality metrics, collision rules, no-execution gate and immutable preflight output."
+    },
+    {
       "path": "lns2_selector/evaluation/ttf_artifacts.py",
       "role": "shared",
       "purpose": "Validate completed TTF lane source/native/model/runtime/checkpoint/trace bindings without requiring historical source hashes to equal current code."
