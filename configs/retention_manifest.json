@@ -1,7 +1,7 @@
 {
   "schema": "lns2.retention_manifest.v1",
   "schema_version": 1,
-  "checkpoint": "backup/retired-experiments-cleanup-01-before-shared-pruning-20260906",
+  "checkpoint": "backup/ttf-artifact-validation-00-original-20260906",
   "allowed_executable_roles": [
     "active",
     "shared",
@@ -18,6 +18,26 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {
+      "path": "lns2_selector/evaluation/ttf_artifacts.py",
+      "role": "shared",
+      "purpose": "Validate completed TTF lane source/native/model/runtime/checkpoint/trace bindings without requiring historical source hashes to equal current code."
+    },
+    {
+      "path": "lns2_selector/evaluation/ttf_metrics.py",
+      "role": "shared",
+      "purpose": "Validate strict reset-inclusive TTF summary types, deadline semantics and trace-clock relationships before shared warehouse aggregation."
+    },
+    {
+      "path": "tests/evaluation/test_ttf_artifacts.py",
+      "role": "shared",
+      "contract": "Reject malformed or mismatched completed lane artifacts, including fully rehashed changes to registered models, runtime and successful TTF."
+    },
+    {
+      "path": "tests/evaluation/test_ttf_metrics.py",
+      "role": "shared",
+      "contract": "Protect finite numeric types, exact TTF clock binding, capped failure times and feasible-after-deadline semantics."
+    },
     {
       "path": "lns2_selector/runtime/fixed_structshell.py",
       "role": "shared",

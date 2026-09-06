@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import experiments.stride_warehouse_component16_dual16_independent_ttf_v1 as subject
+from tests.evaluation.ttf_fixtures import mocked_validated_lane, synthetic_summary
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +17,11 @@ CONFIG = (
     / "configs"
     / "stride_warehouse_component16_dual16_independent_ttf_v1.json"
 )
+
+
+@pytest.fixture(autouse=True)
+def authenticated_report_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subject, "load_ttf_lane", mocked_validated_lane)
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -69,23 +75,23 @@ def _write_new_lane_manifests(
                     "task_id": item["task_id"],
                     "solver_seed": item["solver_seed"],
                     "status": "ok",
-                    "summary": {
-                        "initial_fingerprint": checkpoint["expected_fingerprint"],
-                        "initial_conflicts": checkpoint["expected_conflicts"],
-                        "success": True,
-                        "capped_wall_time_to_feasible": capped,
-                        "wall_time_to_feasible": capped,
-                        "episode_observed_wall_seconds": observed,
-                        "external_timeout": False,
-                        "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
-                        "wall_time_budget_seconds": 60.0,
-                        "invalid_action_count": 0,
-                        "fingerprint_mismatch_count": 0,
-                        "stop_reason": "success",
-                    },
+                    "summary": synthetic_summary(
+                        checkpoint, capped=capped, observed=observed, budget=60.0,
+                    ),
                 }
             ],
         )
+
+
+def test_invalid_schedule_does_not_overwrite_existing_report(tmp_path: Path) -> None:
+    report_path = tmp_path / "ttf" / subject.REPORT_FILENAME
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text('{"existing": true}', encoding="utf-8")
+    before = report_path.read_bytes()
+    _write_schedule(tmp_path, [{"wrong": True}])
+    with pytest.raises(ValueError, match="schedule mismatch"):
+        subject.analyze_collection(CONFIG, tmp_path)
+    assert report_path.read_bytes() == before
 
 
 def test_preflight_has_16_by_3_key_mod_rotating_strict_schedule() -> None:
@@ -204,6 +210,19 @@ def test_old_confirmation_ttf_outputs_are_not_counted_as_new_results(
     assert report["promotion_decision"] == (
         "development_evidence_only_no_default_change"
     )
+
+
+def test_analysis_propagates_completed_lane_authentication_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_schedule(tmp_path, list(_preflight()["schedule"]))
+
+    def reject_lane(*_args: Any, **_kwargs: Any) -> None:
+        raise ValueError("completed TTF lane controller mismatch")
+
+    monkeypatch.setattr(subject, "load_ttf_lane", reject_lane)
+    with pytest.raises(ValueError, match="controller mismatch"):
+        subject.analyze_collection(CONFIG, tmp_path)
 
 
 def test_local_qualification_anchor_uses_current_native_then_rebinds_source(

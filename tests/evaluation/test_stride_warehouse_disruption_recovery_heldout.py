@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.evaluation.ttf_fixtures import synthetic_summary
 
 import experiments.repair_collection as repair_collection
 import experiments.stride_warehouse_disruption_recovery_heldout as heldout
@@ -429,20 +430,10 @@ def _write_ttf_rows(
                     "task_id": item["task_id"],
                     "solver_seed": item["solver_seed"],
                     "status": "ok",
-                    "summary": {
-                        "initial_fingerprint": checkpoint["expected_fingerprint"],
-                        "initial_conflicts": checkpoint["expected_conflicts"],
-                        "success": success,
-                        "capped_wall_time_to_feasible": capped,
-                        "wall_time_to_feasible": capped if success else None,
-                        "episode_observed_wall_seconds": observed,
-                        "external_timeout": False,
-                        "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
-                        "wall_time_budget_seconds": 120.0,
-                        "invalid_action_count": 0,
-                        "fingerprint_mismatch_count": 0,
-                        "stop_reason": "success" if success else "controller_stalled",
-                    },
+                    "summary": synthetic_summary(
+                        checkpoint, success=success, capped=capped,
+                        observed=observed, budget=120.0,
+                    ),
                 }
             ],
         )

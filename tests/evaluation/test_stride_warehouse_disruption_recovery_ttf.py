@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import experiments.stride_warehouse_disruption_recovery_ttf as subject
+from tests.evaluation.ttf_fixtures import mocked_validated_lane, synthetic_summary
 from experiments.warehouse_disruption_checkpoints import (
     compute_checkpoint_identity_sha256,
 )
@@ -19,6 +20,11 @@ CONFIG = (
     / "configs"
     / "stride_warehouse_disruption_recovery_screen_v1.json"
 )
+
+
+@pytest.fixture(autouse=True)
+def authenticated_report_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subject, "load_ttf_lane", mocked_validated_lane)
 
 
 def _sha256(path: Path) -> str:
@@ -90,6 +96,17 @@ def _checkpoint_fixture(output: Path) -> list[dict[str, Any]]:
         },
     )
     return rows
+
+
+def test_invalid_schedule_does_not_overwrite_existing_report(tmp_path: Path) -> None:
+    _checkpoint_fixture(tmp_path)
+    report_path = tmp_path / "ttf" / "ttf_report.json"
+    _write_json(report_path, {"existing": True})
+    before = report_path.read_bytes()
+    _write_jsonl(tmp_path / "ttf" / "execution_schedule.jsonl", [{"wrong": True}])
+    with pytest.raises(ValueError, match="schedule mismatch"):
+        subject.analyze_ttf(CONFIG, tmp_path)
+    assert report_path.read_bytes() == before
 
 
 def test_plan_has_seven_by_four_rotating_serial_schedule(tmp_path: Path) -> None:
@@ -178,6 +195,7 @@ def _write_ttf_manifests(
     case: str,
 ) -> None:
     ttf_root = output / "ttf"
+    _write_jsonl(ttf_root / "execution_schedule.jsonl", subject._schedule(checkpoints))
     for item in subject._schedule(checkpoints):
         checkpoint = checkpoints[int(item["key_index"])]
         capped, observed, success, timeout = _profile(
@@ -194,28 +212,10 @@ def _write_ttf_manifests(
                     "task_id": item["task_id"],
                     "solver_seed": item["solver_seed"],
                     "status": "ok",
-                    "summary": {
-                        "initial_fingerprint": checkpoint[
-                            "expected_fingerprint"
-                        ],
-                        "initial_conflicts": checkpoint["expected_conflicts"],
-                        "success": success,
-                        "capped_wall_time_to_feasible": capped,
-                        "wall_time_to_feasible": capped if success else None,
-                        "episode_observed_wall_seconds": observed,
-                        "external_timeout": timeout,
-                        "ttf_clock_schema": "lns2.ttf.reset_inclusive_wall.v1",
-                        "wall_time_budget_seconds": 120.0,
-                        "invalid_action_count": 0,
-                        "fingerprint_mismatch_count": 0,
-                        "stop_reason": (
-                            "success"
-                            if success
-                            else "wall_timeout"
-                            if timeout
-                            else "controller_stalled"
-                        ),
-                    },
+                    "summary": synthetic_summary(
+                        checkpoint, success=success, capped=capped,
+                        observed=observed, budget=120.0, timeout=timeout,
+                    ),
                 }
             ],
         )
@@ -239,6 +239,19 @@ def test_screen_gate_accepts_exact_registered_boundaries(tmp_path: Path) -> None
     assert comparison["additional_censor_count"] == 0
     assert comparison["screen_gate_passed"] is True
     assert report["screen_gate_passed_controllers"] == ["v2_only"]
+
+
+def test_analysis_propagates_completed_lane_authentication_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _checkpoint_fixture(tmp_path)
+
+    def reject_lane(*_args: Any, **_kwargs: Any) -> None:
+        raise ValueError("completed TTF lane trace hash mismatch")
+
+    monkeypatch.setattr(subject, "load_ttf_lane", reject_lane)
+    with pytest.raises(ValueError, match="trace hash mismatch"):
+        subject.analyze_ttf(CONFIG, tmp_path)
 
 
 @pytest.mark.parametrize(

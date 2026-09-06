@@ -21,6 +21,12 @@ from experiments._common import (
     write_jsonl,
 )
 from experiments.closed_loop_confirmation import run_closed_loop_collection
+from lns2_selector.evaluation.ttf_artifacts import (
+    TTF_ARTIFACT_VALIDATION_SCHEMA,
+    load_ttf_lane,
+    registered_ttf_model_manifest,
+    validate_ttf_lane_cohort,
+)
 from experiments.stride_warehouse_disruption_recovery_ttf import (
     TTF_OVERRIDE_SCHEMA,
     _common_kwargs,
@@ -839,54 +845,61 @@ def _pairwise_comparison(
 def analyze_collection(config_path: str | Path, output: str | Path) -> dict[str, Any]:
     evidence = _evidence(config_path)
     config = evidence["config"]
+    expected_configuration = read_json(evidence["runtime_config"])
+    expected_frozen_models = registered_ttf_model_manifest(evidence["root"], expected_configuration)
+    expected_controller_bundle = read_json(Path(config["_v2_bundle"]) / "controller_manifest.json")
     ttf_root = Path(output).resolve() / "ttf"
     schedule = _schedule(evidence["checkpoints"])
     schedule_path = ttf_root / "execution_schedule.jsonl"
     schedule_integrity = bool(
         schedule_path.is_file() and read_jsonl(schedule_path) == schedule
     )
+    if schedule_path.is_file() and not schedule_integrity:
+        raise ValueError("TTF execution schedule mismatch")
     checkpoint_by_id = {
         str(row["checkpoint_id"]): row for row in evidence["checkpoints"]
     }
     collected: list[dict[str, Any]] = []
     missing: list[dict[str, Any]] = []
     for item in schedule:
-        manifest_path = _lane_root(ttf_root, item) / TIMED_MANIFESTS[str(item["controller"])]
-        matches = [
-            dict(row)
-            for row in (read_jsonl(manifest_path) if manifest_path.is_file() else [])
-            if str(row.get("task_id")) == str(item["task_id"])
-            and int(row.get("solver_seed", -1)) == int(item["solver_seed"])
-        ]
-        if len(matches) != 1 or matches[0].get("status") not in {"ok", "resumed"}:
+        checkpoint = checkpoint_by_id[str(item["checkpoint_id"])]
+        phase, runtime_kwargs = _controller_kwargs(
+            evidence["root"], config, str(item["controller"])
+        )
+        lane_result = load_ttf_lane(
+            _lane_root(ttf_root, item),
+            TIMED_MANIFESTS[str(item["controller"])],
+            item=item,
+            checkpoint=checkpoint,
+            expected_policy=phase,
+            expected_controller=runtime_kwargs["controller"],
+            expected_augmentation=runtime_kwargs.get("hybridstructpool_augmentation"),
+            wall_time_budget_seconds=float(config["runtime"]["wall_time_budget_seconds"]),
+            expected_override={
+                "schema": TTF_OVERRIDE_SCHEMA,
+                "state_id": str(checkpoint["checkpoint_id"]),
+                "initial_restore": {
+                    **checkpoint,
+                    "collection_root": str(evidence["checkpoint_root"].resolve()),
+                },
+            },
+            expected_runtime=runtime_kwargs,
+            expected_configuration=expected_configuration,
+            expected_frozen_models=expected_frozen_models,
+            expected_controller_bundle=expected_controller_bundle,
+        )
+        if lane_result is None:
             missing.append(dict(item))
             continue
-        checkpoint = checkpoint_by_id[str(item["checkpoint_id"])]
-        summary = dict(matches[0].get("summary") or {})
-        collected.append(
-            {
-                **item,
-                "summary": summary,
-                "initial_fingerprint_matches": str(summary.get("initial_fingerprint"))
-                == str(checkpoint["expected_fingerprint"]),
-                "initial_conflicts_match": int(summary.get("initial_conflicts", -1))
-                == int(checkpoint["expected_conflicts"]),
-                "bounded_summary_valid": bool(
-                    summary.get("ttf_clock_schema") == "lns2.ttf.reset_inclusive_wall.v1"
-                    and summary.get("capped_wall_time_to_feasible") is not None
-                    and float(summary.get("wall_time_budget_seconds", -1)) == 60.0
-                    and int(summary.get("invalid_action_count", -1)) == 0
-                    and int(summary.get("fingerprint_mismatch_count", -1)) == 0
-                    and str(summary.get("stop_reason"))
-                    in {
-                        "success",
-                        "wall_timeout",
-                        "controller_stalled",
-                        "native_terminal",
-                    }
-                ),
-            }
-        )
+        collected.append({
+            **item, **lane_result,
+            "initial_fingerprint_matches": True,
+            "initial_conflicts_match": True,
+            "bounded_summary_valid": True,
+        })
+    validate_ttf_lane_cohort(collected)
+    if collected and not schedule_integrity:
+        raise ValueError("completed TTF lanes require the execution schedule")
     by_controller = {
         controller: [row for row in collected if row["controller"] == controller]
         for controller in CONTROLLERS
@@ -938,6 +951,11 @@ def analyze_collection(config_path: str | Path, output: str | Path) -> dict[str,
     complete = bool(integrity and all(integrity.values()))
     report = {
         "schema": REPORT_SCHEMA,
+        "artifact_validation_schema": TTF_ARTIFACT_VALIDATION_SCHEMA,
+        "input_artifacts": [
+            {"checkpoint_id": row["checkpoint_id"], "controller": row["controller"], **row["evidence"]}
+            for row in collected
+        ],
         "experiment_id": EXPERIMENT_ID,
         "scientific_status": SCIENTIFIC_STATUS,
         "config_sha256": sha256_file(evidence["config_path"]),
