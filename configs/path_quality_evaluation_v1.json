@@ -1,0 +1,17 @@
+{
+  "schema": "lns2.path_quality_evaluation.v1",
+  "preflight_config": "configs/path_quality_preflight_v1.json",
+  "output": "build/path-quality-evaluation-v1",
+  "native_file": "build/linux/anytime-handoff-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+  "native_sha256": "1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa",
+  "process_fuse_extra_seconds": 120,
+  "bootstrap_samples": 5000,
+  "bootstrap_seed": 20260907,
+  "primary_step_seconds": 1.0,
+  "step_seconds_sensitivity": [0.5, 1.0, 2.0],
+  "primary_clock": "reset_to_saved_path_delivery",
+  "workers": 1,
+  "timing_requires_separate_authorization": true,
+  "branch": "codex/path-quality-timed-evaluation",
+  "remote": "origin"
+}

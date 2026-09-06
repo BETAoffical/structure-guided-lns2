@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "lns2_selector/evaluation/path_quality_cohort.py", "role": "active", "purpose": "Frozen reset admission and explicitly authorized serial path-quality cohort."},
+    {"path": "lns2_selector/evaluation/path_quality_analysis.py", "role": "active", "purpose": "Recompute path quality and paired completion metrics from authenticated episode artifacts."},
+    {"path": "scripts/run_path_quality_evaluation.py", "role": "active", "purpose": "Separate prepare, reset validation, authorized collection and analysis entry points."},
+    {"path": "tests/evaluation/test_path_quality_cohort.py", "role": "active", "contract": "Protect cohort admission, report integrity, deadline accounting, zero baselines and authorization gates."},
     {
       "path": "lns2_selector/evaluation/path_quality_execution.py",
       "role": "active",

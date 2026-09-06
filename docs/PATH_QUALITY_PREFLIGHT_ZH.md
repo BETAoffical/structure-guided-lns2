@@ -3,8 +3,8 @@
 ## 当前边界
 
 本轮准备案例、冻结输入、定义指标，并补齐第一阶段到第二阶段的直接路径交接。
-只允许微型人工地图的功能测试和已有官方 parity 回归测试，不运行候选案例的 reset、
-控制器或计时实验，不训练、不重新抽取任务，不修改冻结模型或默认控制器。
+当前允许功能回归和候选案例的 reset 正确性准入，不比较其运行速度；正式控制器计时
+仍需单独授权。不训练、不重新抽取任务，不修改冻结模型或默认控制器。
 新增的 C++ 接口是显式调用的扩展，原有 InitLNS 和 LNS 入口仍保留。
 `scripts/prepare_path_quality_cases.py` 只有准备和只读验证功能，没有 collect/run 参数。
 
@@ -53,7 +53,7 @@ makespan 选择任务，不排除共同失败或某个控制器较差的任务�
 定义采用上下左右移动或等待、同步离散时间、到达终点后永久占据终点。指标检查器
 会排除纯粹用于数组对齐的末端重复终点，但保留中途等待；agent 提前经过终点后又
 离开，不算提前完成。验证顶点冲突、对向边交换冲突和到达后的终点占用冲突。
-当前只用小型人工数据测试这些函数，没有对候选案例或历史解质量作新评估。
+这些指标函数由人工数据与微型 native 测试验证；reset 准入不是正式解质量比较。
 
 1. **首次可行即出发**：规划最多 120 秒，无 100 次修复限制；得到首个有效解就交付。
 2. **固定总预算后出发**：分别预设 60、120 秒的总计算预算；首次可行后接同一个官方
@@ -108,7 +108,8 @@ Intersection，不擅自替换官方启发式。当前案例是否可被整体�
 ## 调度、路径保存与中断处理
 
 `lns2_selector/evaluation/path_quality_execution.py` 已提供静态排程、worker 输入适配、
-路径 journal 和单 episode 进程监管。没有新增可以启动地图队列的 CLI。
+路径 journal 和单 episode 进程监管。新增整组入口
+`scripts/run_path_quality_evaluation.py`，严格分开 prepare、validate、collect 和 analyze。
 
 - 三种方法复用 `_closed_loop_episode_worker`：Official 保留官方分支；V2 保留原排序器；
   Dual16 只加入已存在的 Component16 + Hotspot16 增强配置，不重写候选或排序逻辑。
@@ -126,18 +127,24 @@ Intersection，不擅自替换官方启发式。当前案例是否可被整体�
   `first_feasible_within_budget`，但 `success_by_deadline=false`，单独标记中断，不能冒充正常完成。
 - 没有可行解、worker 异常、外部超时和完整成功分别记录。已有完整结果可校验后复用；
   缺少完整监管结果的中断目录要求人工检查，不从 episode 中间继续或静默自动重跑。
-- 进程启动 API 默认拒绝执行。准备表的 `execution_authorized` 全部为 false；本轮只有
-  测试代码显式运行模拟进程和两-agent 人工地图，不对候选案例开放执行。
+- 进程启动 API 默认拒绝执行。准备表的 `execution_authorized` 全部为 false；collect
+  必须另有明确授权，同时确认接电与无重负载干扰，验证干净分支和远端提交后才能运行。
+- validate 只按14任务、2个solver seed、2种预算做56次 reset。120秒协议复用同一 reset
+  准入锚点，但正式 episode 不复用求解轨迹。任一错误立即停止准入，不按冲突大小删除案例。
+- 每个正式 episode 启动后先比较实际初始 fingerprint 与准入锚点，不一致即停止，不继续修复。
+- 每个规划预算对应的进程 fuse 为预算加120秒；支持 `pause.request` 在下一 episode 前暂停。
+  WSL 高负载和其他使用共同运行锁的 collector 会阻止继续；Windows 的游戏、GPU负载和供电
+  状态不能由 WSL 负载完整判断，需要操作者确认并在发现干扰时暂停，不能选择性重跑较差结果。
 
 ## 计时前剩余事项
 
-1. 对真正使用的构建登记 native SHA、模型及代码清单；准备阶段未把验证构建自动晋级。
-2. 完成整组结果的配对完整性检查与汇总接线；微型样例一致不代替真实案例的初始状态核验。
-3. 正式确定每个预算对应的外部 fuse，并登记异常、保存成功和正常成功的分开统计规则。
+1. 已完成整组 reset 准入与全量回归；启动前仍须复核登记的 native、模型和代码 SHA。
+2. 提交推送计时前代码与协议，验证远端提交与本地一致。
+3. 获得计时授权并确认接电、固定电源模式、无其他求解或游戏负载。
 4. Maze128 两项仍隔离；不因小地图交接通过而自动解除隔离。
 5. 获得用户单独的计时授权后，才开放串行地图队列。
 
-当前是“静态准备与交接功能已补齐，整组执行与计时门禁仍关闭”。
+具体准入状态以整组输出的 `admission.json` 为准；不存在该文件或 passed=false 时不能 collect。
 功能测试通过不表示两阶段性能更好，更不表示实际机器人执行已得到验证。
 
 ## 使用方式
@@ -152,9 +159,9 @@ python -m unittest tests.evaluation.test_anytime_handoff -v
 python -m unittest tests.evaluation.test_path_quality_execution -v
 ```
 
-当前 revision 4 输出保存在 `build/path-quality-preflight-v4/`：`cases.jsonl`、
+当前 revision 5 输出保存在 `build/path-quality-preflight-v5/`：`cases.jsonl`、
 `execution_schedule.jsonl`、`preflight_report.json` 和 `preflight_report.md`。配置仍为
-`configs/path_quality_preflight_v1.json`（协议 schema 不变，准备修订号为 4）。
+`configs/path_quality_preflight_v1.json`（协议 schema 不变，准备修订号为 5）。
 前面的准备修订输出原样保留；新代码不允许覆盖旧指纹结果。v4 补齐了 V2 部署模式
 原有的抽样状态校验参数，避免适配层默认退回每轮完整校验而增加开销。
 Windows 功能测试使用标准库 unittest，WSL 使用现有环境，不安装依赖。
@@ -165,7 +172,7 @@ Windows 功能测试使用标准库 unittest，WSL 使用现有环境，不安�
 PYTHONPATH=build/linux/anytime-handoff-validation:. /usr/bin/python3 -m unittest tests.solver.test_anytime_native -v
 ```
 
-## 本轮验证记录
+## 上一里程碑验证记录
 
 - 新增及相关 Python 功能测试：49 项通过，没有运行全仓库测试。
 - 独立构建中 LNS2 CTest：12/12 通过；未运行无关的 GPBS 测试。
@@ -177,3 +184,57 @@ PYTHONPATH=build/linux/anytime-handoff-validation:. /usr/bin/python3 -m unittest
   `build/linux/anytime-handoff-validation/path-execution-tests.xml`；
   CTest 日志：`build/linux/anytime-handoff-validation/Testing/Temporary/LastTest.log`。
 - 上述是回归与接口验证，不是地图队列的性能实验，也不证明模型改善了 SOC/makespan。
+
+## 整组入口
+
+在 WSL 中使用 `/usr/bin/python3`，并将 `build/linux/anytime-handoff-validation` 与仓库根目录
+加入 `PYTHONPATH`；构建名称只是位置，实际 native SHA 必须匹配 `configs/path_quality_evaluation_v1.json`。
+
+```bash
+python3 scripts/run_path_quality_evaluation.py prepare
+python3 scripts/run_path_quality_evaluation.py validate --resume
+python3 scripts/run_path_quality_evaluation.py analyze --partial
+```
+
+仅在用户单独授权计时且实际满足运行条件后，才使用以下命令：
+
+```bash
+python3 scripts/run_path_quality_evaluation.py collect --authorize-timing --quiet-machine --on-ac --resume
+python3 scripts/run_path_quality_evaluation.py analyze
+```
+
+整组输出在 `build/path-quality-evaluation-v1`。registration、admission、episode 文件和
+collection manifest 分开保存；完整报告为 `analysis/report_zh.md`、`episodes.csv`、
+`report.json`、`completion.svg`。未完成时只能显式生成 partial_report，不能冒充完整结果。
+按全组分母报告成功数，按共同成功任务报告原始时间和路径质量；超时与缺失时间不填零。
+若基线等待数为零，比例改善/比例 bootstrap 不定义，使用地图级配对绝对差区间。
+主图以1秒一步的建模完成时间为例，0.5与2秒敏感性结果同时保留；不使用任意5%晋级门槛。
+
+## 本轮全量验证（2026-09-07）
+
+- Windows 定向 unittest：51 项通过。
+- WSL 全量 pytest：1252 项通过、37 项跳过，0 失败。JUnit 保存在
+  `build/linux/anytime-handoff-validation/full-path-quality-tests.xml`。
+- 跳过原因：1 项 Windows 专用长路径测试，4 项 Windows sklearn 训练环境测试，
+  31 项由 Linux CTest 入口执行的 native 测试，1 项由 CTest 执行的 native collector 测试。
+  本轮没有安装或升级依赖。
+- LNS2 CTest：12/12 通过，包含微型三控制器两阶段流程、原始路径和修复路径 parity。
+  上述两组官方路径 SHA 均未改变；无关的 GPBS CTest 未运行。
+- 仓库只读卫生审计：0 错误，24/24 正式证据验证成功。
+- reset 准入：56/56 通过、0 错误，覆盖14任务、seed 51/52、60/120秒两种配置，
+  未执行任何案例修复。两项 Maze128 保持隔离，未替换或重新抽取案例。
+  记录位于 `build/path-quality-evaluation-v1/admission.json`；准入 manifest SHA256 为
+  `8c442e29ef31c1c43b0c252720270b68030e92c70b243c66058b0969280c2ae4`。
+- 当前 native 文件为 `build/linux/anytime-handoff-validation/lns2_env.cpython-310-x86_64-linux-gnu.so`，
+  SHA256 为 `1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa`。
+- 输入登记 fingerprint 为
+  `577eb90d12cb2db13dc99059953085178cea82a6db045ceaf0dc8f36a429d63a`。
+  配置、模型、native 或登记源码改变时必须新建运行版本，不能混用已有记录。
+
+正式待授权排程仍为：首次可行120秒84项、两阶段60秒84项、两阶段120秒84项。
+每组使用相同14任务、seed 51/52和三种控制器，单 worker；本轮尚未启动正式计时。
+串行计时预算估计4.5至8小时，按 fuse 累计的极端上限15.4小时，另加调度与分析；
+这不是求解性能预测。接电、固定电源模式、无其他重负载以及单独计时授权仍是启动前提。
+本地分支为 `codex/path-quality-timed-evaluation`。本轮推送曾被权限审查拦截，
+须获得向 `BETAoffical/structure-guided-lns2` 推送源码的确认后再执行并验证远端 SHA；
+在此之前不得声称预注册已发布，也不得启动 collect。

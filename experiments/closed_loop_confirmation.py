@@ -1047,6 +1047,7 @@ def _load_initial_restore_source(
 
 
 def _closed_loop_episode_worker(job: dict[str, Any], *, path_observer: Any = None) -> dict[str, Any]:
+    setup_started_wall = time.perf_counter() if path_observer is not None else None
     row = job["row"]
     policy = str(job["policy"])
     solver_seed = int(job["solver_seed"])
@@ -3633,6 +3634,8 @@ def _closed_loop_episode_worker(job: dict[str, Any], *, path_observer: Any = Non
                 "budget_final_low_level": budget_final_low_level,
             }
             final_fingerprint_started = time.perf_counter()
+            if setup_started_wall is not None:
+                summary["setup_before_environment_seconds"] = environment_started - setup_started_wall
             final_fingerprint = current_state_fingerprint
             final_fingerprint_seconds = time.perf_counter() - final_fingerprint_started
             summary["final_fingerprint_seconds"] = final_fingerprint_seconds

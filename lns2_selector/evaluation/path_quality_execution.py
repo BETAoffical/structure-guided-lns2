@@ -88,12 +88,13 @@ def controller_job(root: Path, case: dict, item: dict, template: dict, output: P
 
 class PathJournal:
     """Atomically preserve independent path checkpoints before stage two."""
-    def __init__(self, output: Path, binding: str, map_path: Path, scenario: Path):
+    def __init__(self, output: Path, binding: str, map_path: Path, scenario: Path, expected_initial_fingerprint: str | None = None):
         self.output, self.binding = output, binding
         self.grid = read_grid(map_path)
         self.map_path, self.scenario = map_path, scenario
         self.first: dict | None = None
         self.started: float | None = None
+        self.expected_initial_fingerprint = expected_initial_fingerprint
 
     def save(self, name: str, payload: dict) -> dict:
         envelope = {"schema": "lns2.path_quality_artifact.v1", "binding": self.binding, "payload": payload}
@@ -120,6 +121,8 @@ class PathJournal:
         return quality
 
     def __call__(self, event: str, state: dict, started: float, completed: float, fingerprint: str) -> None:
+        if event == "initial" and self.expected_initial_fingerprint is not None and fingerprint != self.expected_initial_fingerprint:
+            raise ValueError("initial fingerprint differs from reset admission")
         if event not in {"initial", "terminal"} or not math.isfinite(completed - started) or completed < started:
             raise ValueError("invalid path checkpoint event")
         if self.started is not None and self.started != started:
@@ -142,7 +145,7 @@ def read_artifact(path: Path, binding: str) -> dict:
 
 
 def spec_fingerprint(spec: dict) -> str:
-    return json_fingerprint({k: v for k, v in spec.items() if k != "binding"})
+    return json_fingerprint({k: v for k, v in spec.items() if k not in {"binding", "_process_started_wall"}})
 
 
 def prepare_episode_spec(root: Path, report: dict, item: dict, output: Path,
@@ -166,11 +169,12 @@ def prepare_episode_spec(root: Path, report: dict, item: dict, output: Path,
 
 
 def _episode_child(spec: dict) -> None:
+    child_entered = time.perf_counter()
     from experiments.closed_loop_confirmation import _closed_loop_episode_worker
     from lns2_selector.solver.native import load_native_module, native_identity
     output, root = Path(spec["output"]), Path(spec["root"])
     journal = PathJournal(output, spec["binding"], contained(root, spec["case"]["files"]["map_file"]),
-                          contained(root, spec["case"]["files"]["scenario_file"]))
+                          contained(root, spec["case"]["files"]["scenario_file"]), spec.get("expected_initial_fingerprint"))
     try:
         for relative, expected in spec["input_sha256"].items():
             if sha256_file(contained(root, relative)) != expected:
@@ -201,8 +205,15 @@ def _episode_child(spec: dict) -> None:
                 "first_feasible_elapsed_seconds": first["available_elapsed_seconds"], "success_by_deadline": success})
         ready = time.perf_counter() - journal.started
         dispatch = max(spec["item"]["budget_seconds"], ready) if spec["item"]["protocol"] == "fixed_budget" else ready
+        process_start = spec.get("_process_started_wall", child_entered)
         journal.save("result", {"status": "completed", "success_by_deadline": success,
                                 "paths_saved_elapsed_seconds": ready, "dispatch_wall_seconds": dispatch,
+                                "flow_completed": True, "delivered_within_budget": ready <= spec["item"]["budget_seconds"],
+                                "cold_start_to_paths_seconds": journal.started + ready - process_start,
+                                "startup_before_reset_seconds": journal.started - process_start,
+                                "environment_construct_seconds": result["summary"]["environment_construct_seconds"],
+                                "setup_before_environment_seconds": result["summary"].get("setup_before_environment_seconds"),
+                                "budget_overshoot_seconds": max(0.0, ready - spec["item"]["budget_seconds"]),
                                 "first_feasible_elapsed_seconds": first["available_elapsed_seconds"]})
     except Exception as error:
         journal.save("result", {"status": "error", "error_type": type(error).__name__, "error": str(error),
@@ -243,7 +254,8 @@ def supervise_episode(spec: dict, *, authorized: bool = False, resume: bool = Fa
                 return read_artifact(output / "supervisor.json", spec["binding"])
             raise ValueError("interrupted episode requires inspection; no silent mid-episode resume")
         write_json(binding_file, identity)
-        process = multiprocessing.get_context("spawn").Process(target=child_entry, args=(spec,))
+        process_started = time.perf_counter()
+        process = multiprocessing.get_context("spawn").Process(target=child_entry, args=({**spec, "_process_started_wall": process_started},))
         process.start()
         process.join(timeout)
         expired = process.is_alive()
@@ -261,12 +273,14 @@ def supervise_episode(spec: dict, *, authorized: bool = False, resume: bool = Fa
                 status = result["status"]
         first = read_artifact(output / "first_feasible.json", spec["binding"]) if (output / "first_feasible.json").exists() else None
         summary = {"status": status, "process_exitcode": process.exitcode,
+                   "process_observed_wall_seconds": time.perf_counter() - process_started,
                    "first_feasible_preserved": first is not None,
                    "first_feasible_within_budget": first is not None and first["available_elapsed_seconds"] <= budget,
                    "success_by_deadline": bool(result and status == "completed" and result["success_by_deadline"]),
                    "error": status not in {"completed", "no_feasible_solution", "external_timeout"}}
         if result is not None and status == "completed":
             summary["dispatch_wall_seconds"] = result.get("dispatch_wall_seconds")
+            summary["delivered_within_budget"] = result.get("delivered_within_budget", False)
         # A preserved solution is not silently credited as an uninterrupted run.
         envelope = {"schema": "lns2.path_quality_artifact.v1", "binding": spec["binding"], "payload": summary}
         envelope["sha256"] = json_fingerprint(envelope)

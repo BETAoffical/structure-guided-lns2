@@ -116,6 +116,35 @@ class AnytimeNativeTests(unittest.TestCase):
                 initial_hashes.append(initial["state_fingerprint"])
         self.assertEqual(len(set(initial_hashes)), 1)
 
+    def test_whole_tiny_episode_pipeline_for_all_three_controllers(self):
+        from experiments._common import read_json
+        from lns2_selector.evaluation.path_quality_execution import _episode_child, controller_job, read_artifact
+        root = Path(__file__).resolve().parents[2]
+        template = read_json(root / "configs/stride_warehouse_fixed16_development_runtime_v2.json")
+        with tempfile.TemporaryDirectory(dir=root / "build", prefix="path-quality-unit-") as directory:
+            folder = Path(directory)
+            map_path, scenario = folder / "tiny.map", folder / "tiny.scen"
+            map_path.write_text(self.map.read_text(), encoding="utf-8")
+            scenario.write_text(self.scen.read_text(), encoding="utf-8")
+            case = {"status": "static_ready_runtime_unverified", "task_id": "tiny", "map_id": "tiny", "family": "warehouse",
+                "static_audit": {"agent_count": 2}, "files": {"map_file": map_path.relative_to(root).as_posix(), "scenario_file": scenario.relative_to(root).as_posix()}}
+            for controller in ("official_adaptive", "v2-full", "dual16"):
+                for protocol in ("first_feasible", "fixed_budget"):
+                    with self.subTest(controller=controller, protocol=protocol):
+                        output = folder / f"{controller}-{protocol}"
+                        item = {"task_id": "tiny", "controller": controller, "protocol": protocol,
+                                "budget_seconds": 2.0, "solver_seed": 7, "stage2_seed": 11}
+                        job = controller_job(root, case, item, template, output, "tiny-functional")
+                        _episode_child({"root": str(root), "output": str(output), "case": case, "item": item,
+                            "worker_job": job, "binding": "tiny-functional", "native_sha256": native_identity(lns2_env)["sha256"], "input_sha256": {}})
+                        result = read_artifact(output / "result.json", "tiny-functional")
+                        self.assertEqual(result["status"], "completed", result)
+                        self.assertTrue(result["flow_completed"])
+                        if protocol == "fixed_budget":
+                            final = read_artifact(output / "final_paths.json", "tiny-functional")
+                            self.assertTrue(final["stage2_called"])
+                            self.assertFalse(final["native_result"]["initial_planner_called"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,8 +2,8 @@
   "schema": "lns2.path_quality_preflight.v1",
   "scientific_status": "reused_cases_development_only_not_independent_confirmation",
   "allow_solver_execution": false,
-  "preparation_revision": 4,
-  "output": "build/path-quality-preflight-v4",
+  "preparation_revision": 5,
+  "output": "build/path-quality-preflight-v5",
   "controllers": ["official_adaptive", "v2-full", "dual16"],
   "solver_seeds": [51, 52],
   "runtime_template": {
