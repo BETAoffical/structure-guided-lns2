@@ -9,7 +9,18 @@
     "lns2_selector",
     "scripts"
   ],
-  "allowed_unused_imports": [],
+  "allowed_unused_imports": [
+    {
+      "path": "lns2_selector/evaluation/path_quality_cohort.py",
+      "name": "time",
+      "reason": "Known pre-existing unused import in the frozen path-quality episode engine. Defer cleanup to a separately registered source revision; preserve both pressure cohorts' execution source SHA."
+    },
+    {
+      "path": "lns2_selector/evaluation/path_quality_cohort.py",
+      "name": "read_artifact",
+      "reason": "Known pre-existing imported alias in the frozen path-quality episode engine. Preserve the registered module bytes and exported name during pressure timing preparation; no blanket unused-import exemption."
+    }
+  ],
   "allowed_duplicate_function_groups": [
     {
       "functions": [
