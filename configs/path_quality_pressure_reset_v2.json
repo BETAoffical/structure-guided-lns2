@@ -1,0 +1,12 @@
+{
+  "schema": "lns2.pressure_reset_only.v1",
+  "preparation_config": "configs/path_quality_pressure_pilot_v2.json",
+  "output": "build/path-quality-pressure-reset-v2",
+  "native_file": "build/linux/anytime-handoff-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+  "native_sha256": "1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa",
+  "initial_planning_budget_seconds": 120,
+  "reset_process_timeout_seconds": 150,
+  "workers": 1,
+  "repairs_allowed": false,
+  "formal_timing_allowed": false
+}
