@@ -1,0 +1,24 @@
+{
+  "schema": "lns2.path_quality_result_evidence.v1",
+  "source_commit": "bbf66a39d2815f3b5239a8090b199fcfda67eb16",
+  "source_branch": "codex/path-quality-timed-evaluation",
+  "registration_fingerprint": "577eb90d12cb2db13dc99059953085178cea82a6db045ceaf0dc8f36a429d63a",
+  "native_sha256": "1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa",
+  "scheduled": 252,
+  "completed_with_feasible_paths": 247,
+  "no_feasible_solution": 5,
+  "unexplained_errors": 0,
+  "scientific_status": "reused-case development diagnostic; not independent generalization or physical execution",
+  "files": {
+    "build/path-quality-evaluation-v1/registration.json": "f795d1c72ed341705892ac000526ccfc7c3f003a01c8b3ce71d23b311c1e0f86",
+    "build/path-quality-evaluation-v1/admission.json": "c8f2efe06050dbcbbc622a60622c1ae881830da1054f84f48218433bf087c7f8",
+    "build/path-quality-evaluation-v1/admission_manifest.jsonl": "8c442e29ef31c1c43b0c252720270b68030e92c70b243c66058b0969280c2ae4",
+    "build/path-quality-evaluation-v1/execution_schedule.jsonl": "fc91b6af62c235a75f25f2779696e00d23057b3a704eb57a9be1df8a88e26bf4",
+    "build/path-quality-evaluation-v1/timing_authorization.json": "574d037713b5a314c18c56d28c18d5b0b9d7eb44751eda2b15a7db4a772b59b5",
+    "build/path-quality-evaluation-v1/collection_manifest.jsonl": "f851bb4d47736fe033a1224b6f300ed2382280c5160e2dc9a30e60245307ae05",
+    "build/path-quality-evaluation-v1/analysis/report.json": "67134c59382d953bb9ed9c94d1a85d4b070f2e83b6acf713c0b12834a1e90538",
+    "docs/path_quality_results_v1/episodes.csv": "6cf758941ef86088180ddc5eaf2e9dae823bd7a681f8f2d715bce2b825ddb409",
+    "docs/path_quality_results_v1/report_zh.md": "4878150dd163620ee22138ed799feb799076fb5132ac3bc7734ab8242729a49e",
+    "docs/path_quality_results_v1/completion.svg": "685fd4b892a5bf96650e6a780dec8df705649959ad5a00addcca047429e33690"
+  }
+}

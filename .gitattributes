@@ -1,1 +1,3 @@
 third_party/gpbs/** whitespace=-blank-at-eof,-space-before-tab,-trailing-space
+docs/path_quality_results_v1/** -text
+docs/path_quality_results_v1/*.csv whitespace=cr-at-eol

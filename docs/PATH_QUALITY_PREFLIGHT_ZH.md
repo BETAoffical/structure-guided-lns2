@@ -238,3 +238,9 @@ collection manifest 分开保存；完整报告为 `analysis/report_zh.md`、`ep
 本地分支为 `codex/path-quality-timed-evaluation`。本轮推送曾被权限审查拦截，
 须获得向 `BETAoffical/structure-guided-lns2` 推送源码的确认后再执行并验证远端 SHA；
 在此之前不得声称预注册已发布，也不得启动 collect。
+
+## 后续执行状态
+
+用户随后明确授权推送，运行源提交 `bbf66a39d2815f3b5239a8090b199fcfda67eb16` 已与远端SHA核对一致。
+获得单独计时授权后，252项已于2026-09-07完成，247项正常完成、5项无解超时、0项未解释运行错误。
+完整结果及边界见 [计时结果说明](PATH_QUALITY_TIMED_RESULTS_ZH.md)，不以本页准备阶段状态代替最终结果。
