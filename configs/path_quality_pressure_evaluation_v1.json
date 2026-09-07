@@ -1,0 +1,28 @@
+{
+  "schema": "lns2.pressure_evaluation_design.v1",
+  "scientific_status": "reused_pressure_pilot_development_comparison_not_independent_confirmation",
+  "preparation_config": "configs/path_quality_pressure_pilot_v2.json",
+  "preparation_report": {
+    "manifest": "build/path-quality-pressure-pilot-v2/preparation_report.json",
+    "sha256": "d08e92476e3117ba75dc3881df4cbf2e5ef84c2c4199a0c43d9cccf53500aa9a"
+  },
+  "reset_report": {
+    "manifest": "build/path-quality-pressure-reset-v2/report.json",
+    "sha256": "db4cd87349f6343995992616c23c98c14969bd00e814361b6920fff6df5e26b0"
+  },
+  "protocol_template": {
+    "manifest": "configs/path_quality_preflight_v1.json",
+    "sha256": "441e8f73a64046899dac7bc5cc1d88972e65244ccfeb05a9e4e8af1d5b985c1d"
+  },
+  "output": "build/path-quality-pressure-evaluation-v1",
+  "native_file": "build/linux/anytime-handoff-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+  "native_sha256": "1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa",
+  "expected_tasks": 48,
+  "expected_maps": 8,
+  "expected_episodes": 864,
+  "solver_seeds": [61, 62],
+  "controllers": ["official_adaptive", "v2-full", "dual16"],
+  "branch": "codex/path-quality-pressure-evaluation",
+  "remote": "origin",
+  "timing_requires_separate_authorization": true
+}
