@@ -1,0 +1,31 @@
+{
+  "schema": "lns2.path_quality_pressure_pilot.v1",
+  "role": "reused_map_design_pilot_not_confirmation",
+  "allow_solver_execution": false,
+  "master_seed": 2026090801,
+  "output": "build/path-quality-pressure-pilot-v1",
+  "source_manifest": {
+    "manifest": "build/stride-warehouse-dual16-very-high-confirmation-v2/dataset/confirmation/manifest.jsonl",
+    "sha256": "67928fa402493de91cde034d6817c2d73a7d1bb9d9d36e4cf278c6e20f53508d"
+  },
+  "expected_maps": 8,
+  "densities": [0.15, 0.20, 0.25],
+  "solver_seeds_for_later_reset": [61, 62],
+  "task": {
+    "density_reference": "free_cells",
+    "minimum_shortest_distance": 8,
+    "maximum_shortest_distance": 100,
+    "max_sampling_attempts": 2000,
+    "hotspot_skew": 0.0,
+    "od_matrix": {
+      "storage->station": 0.35,
+      "station->storage": 0.35,
+      "left->right": 0.15,
+      "right->left": 0.15
+    }
+  },
+  "modes": [
+    {"name": "balanced", "required_bottleneck_crossing_ratio": 0.0},
+    {"name": "bottleneck_eligible", "required_bottleneck_crossing_ratio": 0.6}
+  ]
+}
