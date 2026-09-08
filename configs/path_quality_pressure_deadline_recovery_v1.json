@@ -1,0 +1,44 @@
+{
+  "schema": "lns2.pressure_evaluation_design.v1",
+  "scientific_status": "reused_pressure_pilot_development_comparison_not_independent_confirmation",
+  "preparation_config": "configs/path_quality_pressure_pilot_v2.json",
+  "preparation_report": {
+    "manifest": "build/path-quality-pressure-pilot-v2/preparation_report.json",
+    "sha256": "d08e92476e3117ba75dc3881df4cbf2e5ef84c2c4199a0c43d9cccf53500aa9a"
+  },
+  "reset_report": {
+    "manifest": "build/path-quality-pressure-reset-v2/report.json",
+    "sha256": "db4cd87349f6343995992616c23c98c14969bd00e814361b6920fff6df5e26b0"
+  },
+  "protocol_template": {
+    "manifest": "configs/path_quality_preflight_v1.json",
+    "sha256": "441e8f73a64046899dac7bc5cc1d88972e65244ccfeb05a9e4e8af1d5b985c1d"
+  },
+  "output": "build/path-quality-pressure-deadline-recovery-v1",
+  "native_file": "build/linux/proposal-deadline-fix-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+  "native_sha256": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+  "protocol_scope": "fixed_budget_only",
+  "expected_tasks": 48,
+  "expected_maps": 8,
+  "expected_episodes": 576,
+  "solver_seeds": [61, 62],
+  "controllers": ["official_adaptive", "v2-full", "dual16"],
+  "branch": "codex/path-quality-pressure-deadline-recovery",
+  "remote": "origin",
+  "timing_requires_separate_authorization": true,
+  "recovery": {
+    "source_output": "build/path-quality-pressure-evaluation-v1",
+    "registration": {
+      "manifest": "build/path-quality-pressure-evaluation-v1/registration.json",
+      "sha256": "b227ef3f93b4f23ac79974c9fe2fd8c64ae9dde2c9373b3aab35419f3510c685"
+    },
+    "audit": {
+      "manifest": "build/path-quality-pressure-batches-v1/retained-audit-20260908/audit.json",
+      "sha256": "15404542cf58bf6eae5f131b9fb0d60550e8d877690f9ce73913efa88b006bd3"
+    },
+    "recommended_scope": {
+      "manifest": "build/path-quality-pressure-batches-v1/retained-audit-20260908/recommended_scope.jsonl",
+      "sha256": "3310bf6f4ab313444b2680de072f4f84ee8c5c0a689abe17d4cefe7c544dfba0"
+    }
+  }
+}

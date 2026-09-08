@@ -33,16 +33,64 @@ def copy_once(source, destination):
 
 def load_design(root, design_path):
     design = read_json(design_path)
+    scope = design.get("protocol_scope", "all")
+    expected = 576 if scope == "fixed_budget_only" else 864
     if (design["schema"] != "lns2.pressure_evaluation_design.v1"
+            or scope not in {"all", "fixed_budget_only"}
             or design["timing_requires_separate_authorization"] is not True
             or design["controllers"] != ["official_adaptive", "v2-full", "dual16"]
             or design["solver_seeds"] != [61, 62]
-            or (design["expected_maps"], design["expected_tasks"], design["expected_episodes"]) != (8, 48, 864)):
+            or (design["expected_maps"], design["expected_tasks"], design["expected_episodes"]) != (8, 48, expected)):
         raise ValueError("frozen pressure design changed")
     output = contained(root, design["output"])
     if not output.is_relative_to((root / "build").resolve()):
         raise ValueError("output must be inside build")
     return design, output
+
+
+def scoped_schedule(design, schedule):
+    scope = design.get("protocol_scope", "all")
+    if scope not in {"all", "fixed_budget_only"}:
+        raise ValueError("unknown pressure protocol scope")
+    # Preserve original job IDs, schedule indices, and balanced controller order.
+    selected = [r for r in schedule if scope == "all" or r["protocol"] == "fixed_budget"]
+    if len(selected) != design["expected_episodes"]:
+        raise ValueError("scoped pressure schedule count differs")
+    return selected
+
+
+def verify_recovery_scope(root, design, schedule):
+    recovery = design.get("recovery")
+    if recovery is None:
+        if design.get("protocol_scope", "all") != "all":
+            raise ValueError("reduced protocol scope requires frozen recovery evidence")
+        return {}
+    source = contained(root, recovery["source_output"])
+    output = contained(root, design["output"])
+    if (source == output or source in output.parents or output in source.parents):
+        raise ValueError("recovery output must not overlap historical output")
+    paths = {key: checked_input(root, recovery[key]) for key in ("registration", "audit", "recommended_scope")}
+    if paths["registration"] != source / "registration.json":
+        raise ValueError("recovery registration does not belong to source output")
+    registration, audit = read_json(paths["registration"]), read_json(paths["audit"])
+    if json_fingerprint({k:v for k,v in registration.items() if k != "fingerprint"}) != registration["fingerprint"]:
+        raise ValueError("historical registration fingerprint mismatch")
+    if (audit.get("status") != "completed" or audit.get("solver_calls") != 0
+            or audit.get("formal_timing_resumed") is not False):
+        raise ValueError("completed read-only recovery audit required")
+    batches = [b for b in audit["batches"] if b["batch"] == source.name]
+    if len(batches) != 1 or batches[0]["registration"] != registration["fingerprint"]:
+        raise ValueError("recovery audit registration mismatch")
+    rows = [r for r in read_jsonl(paths["recommended_scope"]) if r["batch"] == source.name]
+    if len(rows) != 864 or len({r["item"]["job_id"] for r in rows}) != 864:
+        raise ValueError("recovery source schedule incomplete")
+    allowed = {"retain_complete_old_protocol", "rerun_under_new_protocol_version", "pending_new_version"}
+    if any(r["action"] not in allowed or r.get("timing_authorized") is not False for r in rows):
+        raise ValueError("invalid recovery action or implicit timing authorization")
+    expected = [r["item"] for r in rows if r["action"] != "retain_complete_old_protocol"]
+    if schedule != expected:
+        raise ValueError("schedule differs from audited recovery scope")
+    return {p.relative_to(root).as_posix(): sha256_file(p) for p in paths.values()}
 
 
 def prepare_evaluation(root, design_path):
@@ -105,6 +153,11 @@ def prepare_evaluation(root, design_path):
     report = prepare(root, preflight_path)
     if (report["map_count"], report["eligible_tasks"], report["quarantined_tasks"], report["proposed_total_episode_count"]) != (8, 48, 0, 864):
         raise ValueError("pressure cohort dimensions changed")
+    report["execution_schedule"] = scoped_schedule(design, report["execution_schedule"])
+    inputs.update(verify_recovery_scope(root, design, report["execution_schedule"]))
+    if design.get("protocol_scope", "all") != "all":
+        report["protocol_scope"] = design["protocol_scope"]
+        report["proposed_total_episode_count"] = len(report["execution_schedule"])
     for case in report["cases"]:
         case["pressure_design"] = by_task[case["task_id"]]
     report["blocking_items"] = ["Separate explicit timing authorization and quiet-machine/AC attestation required.",
@@ -141,7 +194,7 @@ def prepare_evaluation(root, design_path):
     if schedule_path.exists() and read_jsonl(schedule_path) != report["execution_schedule"]:
         raise ValueError("frozen pressure schedule changed")
     write_jsonl(schedule_path, report["execution_schedule"])
-    return {"status": "prepared_timing_blocked", "scheduled": 864, "reset_admissions_required": 192,
+    return {"status": "prepared_timing_blocked", "scheduled": len(report["execution_schedule"]), "reset_admissions_required": 192,
             "registration": registration["fingerprint"], "evaluation_config": evaluation_path.relative_to(root).as_posix()}
 
 
@@ -189,7 +242,25 @@ def collect_pressure(root, design_path, *, authorize=False, quiet_machine=False,
     cases = {c["task_id"]: c for c in report["cases"]}
     results, total = [], len(report["execution_schedule"])
     with _CollectionRunLock(output, registration["fingerprint"], "pressure-path-quality-timing"):
-        for item in report["execution_schedule"]:
+        manifest_path = output / "collection_manifest.jsonl"
+        if manifest_path.exists():
+            if not resume:
+                raise ValueError("collection manifest exists; request resume")
+            results = read_jsonl(manifest_path)
+            if ([r["job_id"] for r in results] != [i["job_id"] for i in report["execution_schedule"][:len(results)]]
+                    or len(results) > total):
+                raise ValueError("retained collection is not a schedule prefix")
+            for saved, item in zip(results, report["execution_schedule"]):
+                spec = cohort.bound_spec(root, config, output, registration, report, item, anchors)
+                inspected = cohort.inspect_episode(root, cases[item["task_id"]], item, Path(spec["output"]),
+                                                   spec["binding"], anchors[cohort.admission_key(item)])
+                supervisor = cohort.read_artifact(Path(spec["output"]) / "supervisor.json", spec["binding"])
+                if inspected["status"] != saved["status"] or supervisor != saved["summary"]:
+                    raise ValueError("retained collection result differs from saved artifacts")
+                if supervisor["error"]:
+                    write_json(output / "run_status.json", {"status": "blocked_on_error", "completed": len(results), "total": total})
+                    return {"status": "blocked_on_error", "completed": len(results), "total": total}
+        for item in report["execution_schedule"][len(results):]:
             host = cohort.runtime_environment()
             busy = host["load_average"] is not None and host["load_average"][0] > max(2, (host["logical_cpus"] or 1) / 2)
             if (output / "pause.request").exists() or busy:
@@ -197,6 +268,8 @@ def collect_pressure(root, design_path, *, authorize=False, quiet_machine=False,
                 return {"status": "paused", "completed": len(results), "total": total}
             cohort.verified_registration(root, config_path, require_native=True)
             spec = cohort.bound_spec(root, config, output, registration, report, item, anchors)
+            if (Path(spec["output"]) / "binding.json").exists():
+                raise ValueError("unmanifested episode requires interruption audit before resuming")
             summary = cohort.supervise_episode(spec, authorized=True, resume=resume)
             inspected = cohort.inspect_episode(root, cases[item["task_id"]], item, Path(spec["output"]), spec["binding"], anchors[cohort.admission_key(item)])
             results.append({"job_id": item["job_id"], "summary": summary, "status": inspected["status"], "environment": host})
