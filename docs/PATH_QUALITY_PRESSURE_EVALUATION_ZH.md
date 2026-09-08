@@ -92,3 +92,43 @@ PYTHONPATH=build/linux/anytime-handoff-validation /usr/bin/python3 scripts/run_p
 准入报告SHA256：`6168029633589522008a88c4ea4a7111eb520b2ec07cf7e1da31b969e1a0bdd2`。
 
 本轮没有新的速度、成功率或路径质量比较结论；只表明数据及运行入口已通过计时前准入。
+
+## 2026-09-08 截止时间边界修复
+
+上文是原准备版本的历史记录。获得授权后，第一批计时运行到第345条发生错误：
+Dual16、457 agents、seed 61、60秒总预算。已记录284条正常完成、60条预算内无解和1条错误；原数据全部保留。
+
+独立诊断重建440次transition并逐项校验fingerprint。最后一次修复墙钟为59.993611秒，仍有2对冲突。
+相同路径和冲突图下，288个请求在预算充足时全部有效；批量调用跨过截止时间时，后续请求被native拒绝，
+原接口却统一记为invalid，导致上层抛出`valid online proposal was rejected`并停止整组。
+这是共用proposal接口的终止分类缺陷，不是模型训练或第二阶段优化错误。
+
+修复分支：`codex/path-quality-proposal-deadline-fix`。原冻结提交仍为`6b20d653504128206b551f097e27bf01ecb4e190`。
+
+- Native仅给合法且因时间耗尽停止的请求标记`deadline_exhausted`。非法seed、未初始化、已可行和修复轮数截止不得冒充时间耗尽。
+- 正常proposal输出不变；只有到期返回才增加标记。Grouped输出增加`deadline_indices`；dict输出增加`deadline_exhausted=true`；compact到期行增加第四项`true`，正常行仍为三项。
+- Python在明确标记、终止状态及路径/冲突图/计数未变的条件下，抛出专门的`ProposalDeadlineExceeded`。真正非法请求或状态变化仍是硬错误。
+- Worker丢弃不完整候选池，不排序、不消耗下一次repair动作、不执行额外修复，按`wall_timeout`正常收尾。若始终未可行，外层结果为`no_feasible_solution`。
+- 混合了非法请求的批次不得被转为超时；参考、compact、grouped和shadow路径均有边界测试。
+- 没有改变模型、PP+SIPPS、邻域规则、预算或失败惩罚，没有直接修改原错误记录。
+
+新native只编译到`build/linux/proposal-deadline-fix-validation/`，不覆盖旧构建：
+
+| 身份 | SHA256 |
+|---|---|
+| 旧正式native | `1f3e41f9853a88acc640d666429508567f469fd3d722c48727eff24923c154aa` |
+| 修复版native | `7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08` |
+
+未到期等价验证使用同一任务、三个控制器、seeds 61/62、每条5次修复，共30次transition、380个候选与特征向量。
+比较的是旧Git源码+旧native和修复源码+新native，而不是仅替换Python后比较两个二进制。
+候选、特征、分数、显式动作、repair order、前后状态fingerprint及低层节点计数逐项一致；科学字段签名SHA均为
+`56f40ed64ab83c0138fc810af147d450072bde905fd073cec7636ae479d18875`。
+这属于有限样本的功能等价证据，不是全部实例或墙钟性能不变的证明。
+
+最终验收：Python `1278 passed, 47 skipped`；LNS2 CTest `12/12`通过（不包含未构建且不参与本次比较的两项GPBS测试）。
+Python中的原生环境测试由CTest单独设置环境后执行，已包含真实native到期联通测试。
+两组官方路径SHA保持`915ee104...13ecf`与`031d1bf8...aa83a`。旧native及事故四份结果文件SHA保持不变。
+
+验证文件在`build/path-quality-pressure-batches-v1/`下：原事故诊断、deadline复现和`equivalence-reference/fixed`短轨迹。
+这次修复验证不授权恢复原目录的计时，不修改旧registration，不将新旧结果静默混算。
+正式恢复前还需登记新源码/native，决定旧结果复用与必要的配对补测协议。

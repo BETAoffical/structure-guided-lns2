@@ -452,6 +452,8 @@ py::dict proposalToPython(const RepairProposal& proposal)
     result["action_valid"] = proposal.action_valid;
     result["generated"] = proposal.generated;
     result["neighborhood"] = proposal.neighborhood;
+    if (proposal.deadline_exhausted)
+        result["deadline_exhausted"] = true;
     return result;
 }
 }
@@ -844,10 +846,12 @@ public:
         py::list results;
         for (const RepairProposal& proposal : proposals)
         {
-            py::tuple compact(3);
+            py::tuple compact(proposal.deadline_exhausted ? 4 : 3);
             compact[0] = py::bool_(proposal.action_valid);
             compact[1] = py::bool_(proposal.generated);
             compact[2] = py::cast(proposal.neighborhood);
+            if (proposal.deadline_exhausted)
+                compact[3] = py::bool_(true);
             results.append(std::move(compact));
         }
         return results;
@@ -871,10 +875,12 @@ public:
         py::list results;
         for (const RepairProposal& proposal : proposals)
         {
-            py::tuple compact(3);
+            py::tuple compact(proposal.deadline_exhausted ? 4 : 3);
             compact[0] = py::bool_(proposal.action_valid);
             compact[1] = py::bool_(proposal.generated);
             compact[2] = py::cast(proposal.neighborhood);
+            if (proposal.deadline_exhausted)
+                compact[3] = py::bool_(true);
             results.append(std::move(compact));
         }
         return results;
@@ -896,6 +902,7 @@ public:
         const vector<RepairProposal> proposals = proposeActionsLocked(actions);
         std::map<vector<int>, vector<int>> grouped;
         vector<int> invalid_indices;
+        vector<int> deadline_indices;
         for (size_t index = 0; index < proposals.size(); index++)
         {
             const RepairProposal& proposal = proposals[index];
@@ -903,6 +910,8 @@ public:
                 proposal.neighborhood.empty())
             {
                 invalid_indices.push_back((int)index);
+                if (proposal.deadline_exhausted)
+                    deadline_indices.push_back((int)index);
                 continue;
             }
             grouped[proposal.neighborhood].push_back((int)index);
@@ -914,6 +923,8 @@ public:
         result["proposal_count"] = proposals.size();
         result["unique_neighborhood_count"] = grouped.size();
         result["invalid_indices"] = invalid_indices;
+        if (!deadline_indices.empty())
+            result["deadline_indices"] = deadline_indices;
         result["rows"] = rows;
         return result;
     }

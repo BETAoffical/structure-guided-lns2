@@ -129,6 +129,7 @@ from lns2_selector.runtime.contracts import (
 )
 from lns2_selector.runtime.online_selection import (
     ClosedLoopExecutionError,
+    ProposalDeadlineExceeded,
     EpisodeRepairSeedStream,
     feature_range_diagnostic,
     generate_online_candidates,
@@ -1846,9 +1847,13 @@ def _closed_loop_episode_worker(job: dict[str, Any], *, path_observer: Any = Non
                                 structpool_gate_result=structpool_gate_result,
                             )
 
-                        candidates, proposal_metrics = (
-                            generate_candidate_pool_attempt(effective_proposal)
-                        )
+                        try:
+                            candidates, proposal_metrics = generate_candidate_pool_attempt(effective_proposal)
+                        except ProposalDeadlineExceeded as error:
+                            controller_totals["proposal_deadline_count"] += 1
+                            controller_totals["proposal_deadline_rejected_requests"] += error.rejected_count
+                            external_timeout = True
+                            break
                         proposal_metrics["v3_s3_cache_hit"] = False
                         fixed_structshell_pre_realized: dict[str, Any] | None = None
                         fixed_structshell_pool_id = str(
@@ -2400,9 +2405,13 @@ def _closed_loop_episode_worker(job: dict[str, Any], *, path_observer: Any = Non
                                 realized_feature_metrics
                             )
                             full_proposal = dict(job["proposal"])
-                            full_candidates, full_proposal_metrics = (
-                                generate_candidate_pool_attempt(full_proposal)
-                            )
+                            try:
+                                full_candidates, full_proposal_metrics = generate_candidate_pool_attempt(full_proposal)
+                            except ProposalDeadlineExceeded as error:
+                                controller_totals["proposal_deadline_count"] += 1
+                                controller_totals["proposal_deadline_rejected_requests"] += error.rejected_count
+                                external_timeout = True
+                                break
                             if feature_engine is None:
                                 raise ClosedLoopExecutionError(
                                     "v3_s3_feature_engine_missing",

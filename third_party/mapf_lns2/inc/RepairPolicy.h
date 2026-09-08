@@ -56,6 +56,7 @@ struct RepairProposal
     vector<int> neighborhood;
     bool action_valid = false;
     bool generated = false;
+    bool deadline_exhausted = false;
 };
 
 struct RepairAgentState

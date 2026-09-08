@@ -46,6 +46,7 @@ from experiments.online_feature_engine import (
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.controllers.v2 import PairwiseV2Selector
 from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+from lns2_selector.runtime.online_selection import ProposalDeadlineExceeded, ClosedLoopExecutionError
 from tests.runtime.test_closed_loop_confirmation import make_candidate, make_state
 
 
@@ -88,6 +89,122 @@ def _refresh_conflicts(state: dict) -> None:
 
 
 class ControllerV2Tests(unittest.TestCase):
+    def test_proposal_deadline_is_distinct_from_invalid_or_changed_state(self) -> None:
+        state = make_state()
+        config = {"max_seed_agents": 1, "heuristics": ["collision"],
+                  "neighborhood_sizes": [4], "trials": 2, "candidates_per_family": 1}
+
+        class Environment:
+            def __init__(self, invalid=(1,), deadlines=(1,), changed=False, done=True):
+                self.invalid, self.deadlines = list(invalid), list(deadlines)
+                self.changed, self.done = changed, done
+            def get_state_revision(self):
+                return 0
+            def get_state(self):
+                after = copy.deepcopy(state)
+                after["done"] = self.done
+                after["runtime"] = 10.0
+                if self.changed:
+                    after["sum_of_costs"] += 1
+                return after
+            def propose_seed_grid_grouped(self, *args):
+                return {"proposal_count": 2, "unique_neighborhood_count": 1,
+                        "invalid_indices": self.invalid, "deadline_indices": self.deadlines,
+                        "rows": [([0, 1], [0])]}
+
+        def generate(env):
+            return generate_online_candidates(env, state, task_id="task", solver_seed=1,
+                decision_index=0, proposal_config=config, proposal_backend="optimized",
+                verify_full_state=False)
+
+        with self.assertRaises(ProposalDeadlineExceeded) as caught:
+            generate(Environment())
+        self.assertEqual(caught.exception.rejected_count, 1)
+        with self.assertRaises(ProposalDeadlineExceeded):
+            generate(Environment(invalid=(0, 1), deadlines=(0, 1)))
+        for deadlines in ((), (1,)):
+            with self.subTest(deadlines=deadlines), self.assertRaisesRegex(RuntimeError, "valid online proposal"):
+                generate(Environment(invalid=(0, 1), deadlines=deadlines))
+        with self.assertRaises(ClosedLoopExecutionError):
+            generate(Environment(changed=True))
+        with self.assertRaises(ClosedLoopExecutionError):
+            generate(Environment(done=False))
+
+    def test_deadline_is_handled_in_compact_batch_and_single_backends(self) -> None:
+        state = make_state()
+        config = {"max_seed_agents": 1, "heuristics": ["collision"],
+                  "neighborhood_sizes": [4], "trials": 1, "candidates_per_family": 1}
+        expired = {"action_valid": False, "generated": False, "neighborhood": [], "deadline_exhausted": True}
+        for backend in ("propose_batch_compact", "propose_seed_grid_compact", "propose_batch", "propose"):
+            env = types.SimpleNamespace(get_state=lambda: {**state, "done": True}, get_state_revision=lambda: 0)
+            if backend == "propose":
+                function = lambda *args: expired
+            elif "compact" in backend:
+                function = lambda *args: [(False, False, [], True)]
+            else:
+                function = lambda *args: [expired]
+            setattr(env, backend, function)
+            with self.subTest(backend=backend), self.assertRaises(ProposalDeadlineExceeded):
+                generate_online_candidates(env, state, task_id="task", solver_seed=1,
+                    decision_index=0, proposal_config=config, proposal_backend="auto")
+
+    def test_complete_proposal_then_deadline_is_not_a_fingerprint_error(self) -> None:
+        state = make_state()
+        env = types.SimpleNamespace(
+            get_state=lambda: {**state, "done": True}, get_state_revision=lambda: 0,
+            propose_batch=lambda actions: [{"action_valid": True, "generated": True, "neighborhood": [0, 1]} for _ in actions])
+        with self.assertRaises(ProposalDeadlineExceeded) as caught:
+            generate_online_candidates(env, state, task_id="task", solver_seed=1,
+                decision_index=0, proposal_config={"max_seed_agents": 1,
+                    "heuristics": ["collision"], "neighborhood_sizes": [4], "trials": 1,
+                    "candidates_per_family": 1}, verify_full_state=True)
+        self.assertEqual(caught.exception.rejected_count, 0)
+
+    def test_shadow_deadline_discards_primary_pool(self) -> None:
+        state = make_state()
+        env = types.SimpleNamespace(
+            get_state=lambda: {**state, "done": True}, get_state_revision=lambda: 0,
+            propose_batch=lambda actions: [{"action_valid": True, "generated": True, "neighborhood": [0, 1]} for _ in actions],
+            propose_batch_compact=lambda actions: [(False, False, [], True) for _ in actions])
+        with self.assertRaises(ProposalDeadlineExceeded):
+            generate_online_candidates(env, state, task_id="task", solver_seed=1,
+                decision_index=0, proposal_config={"max_seed_agents": 1,
+                    "heuristics": ["collision"], "neighborhood_sizes": [4], "trials": 1,
+                    "candidates_per_family": 1}, proposal_backend="reference", shadow_validation=True)
+
+
+    def test_learned_proposal_deadline_finalizes_without_repair_or_ranking(self) -> None:
+        state = make_state()
+        _refresh_conflicts(state)
+        env = types.SimpleNamespace(reset=lambda seed: state,
+                                    step=lambda action: self.fail("repair after expired proposal"))
+        config = json.loads((PROJECT_ROOT / "configs/movingai_ood_collection.json").read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            job = {"row": {"split": "closed_loop", "map_id": "map-a", "task_id": "task-a",
+                           "layout_mode": "regular_beltway", "agent_count": 4},
+                   "policy": "realized_dynamic", "solver_seed": 1, "output_root": directory,
+                   "run_fingerprint": "deadline-run", "resume": False, "dataset_root": directory,
+                   "environment": {}, "max_decisions": 0, "wall_time_budget_seconds": 300.0,
+                   "proposal": {"max_seed_agents": 1, "heuristics": ["target"], "neighborhood_sizes": [4],
+                                "trials": 1, "candidates_per_family": 1},
+                   "frozen_models": str(PROJECT_ROOT / config["frozen_models"]),
+                   "model_registration": config["model_registration"], "controller": "v2-full",
+                   "feature_backend": "python", "controller_bundle": str(PROJECT_ROOT / "artifacts/initlns-closed-loop-controller-v2")}
+            observed = []
+            with (patch("experiments.closed_loop_confirmation._make_environment", return_value=env),
+                  patch("experiments.closed_loop_confirmation.generate_online_candidates",
+                        side_effect=ProposalDeadlineExceeded(request_count=1, rejected_count=1)),
+                  patch.object(PairwiseV2Selector, "select", side_effect=AssertionError("ranking expired pool"))):
+                result = _closed_loop_episode_worker(job, path_observer=lambda *args: observed.append(args))
+            self.assertEqual(result["status"], "ok", result.get("error"))
+            events = read_trace_events(Path(directory) / result["trace_file"])
+        self.assertEqual(result["status"], "ok", result.get("error"))
+        self.assertEqual(result["summary"]["stop_reason"], "wall_timeout")
+        self.assertEqual(result["summary"]["repair_iterations"], 0)
+        self.assertEqual(result["summary"]["controller_totals"]["proposal_deadline_count"], 1)
+        self.assertEqual([row[0] for row in observed], ["initial", "terminal"])
+        self.assertFalse(any(event["event"] == "transition" for event in events))
+
     def test_active_controller_modes_are_minimal(self) -> None:
         self.assertEqual(
             CONTROLLER_MODES,

@@ -76,6 +76,29 @@ class NativeModuleDiscoveryTests(unittest.TestCase):
     "the native LNS2 module is tested by Linux CTest",
 )
 class RepairEnvironmentTests(unittest.TestCase):
+    def test_native_deadline_flows_through_online_candidate_interface(self) -> None:
+        from lns2_selector.runtime.online_selection import generate_online_candidates, ProposalDeadlineExceeded
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            map_path, scen = root / "tiny.map", root / "tiny.scen"
+            map_path.write_text("type octile\nheight 2\nwidth 3\nmap\n...\n...\n")
+            scen.write_text("version 1\n0\ttiny.map\t3\t2\t0\t0\t2\t0\t2\n0\ttiny.map\t3\t2\t2\t0\t0\t0\t2\n")
+            env = lns2_env.LNS2RepairEnv(str(map_path), str(scen), 2, time_limit=1.0)
+            state = env.reset_paths([[0, 1, 2], [2, 1, 0]], seed=61)
+            self.assertFalse(state["done"])
+            def delayed_proposals(*args):
+                time.sleep(1.05)
+                return env.propose_seed_grid_grouped(*args)
+            proxy = SimpleNamespace(get_state=env.get_state, get_state_revision=env.get_state_revision,
+                                    propose_seed_grid_grouped=delayed_proposals)
+            with self.assertRaises(ProposalDeadlineExceeded) as caught:
+                generate_online_candidates(proxy, state, task_id="tiny", solver_seed=61,
+                    decision_index=0, proposal_backend="optimized", verify_full_state=False,
+                    proposal_config={"max_seed_agents": 1, "heuristics": ["target", "collision", "random"],
+                                     "neighborhood_sizes": [4, 8, 16], "trials": 8, "candidates_per_family": 2})
+            self.assertEqual(caught.exception.rejected_count, 72)
+            self.assertEqual(env.get_state()["iteration"], 0)
+
     def test_native_timing_schema_is_current(self) -> None:
         self.assertEqual(
             lns2_env.repair_timing_schema,
@@ -602,6 +625,13 @@ class RepairEnvironmentTests(unittest.TestCase):
         )
         self.assertFalse(proposal["action_valid"])
         self.assertFalse(proposal["generated"])
+        self.assertTrue(proposal["deadline_exhausted"])
+        invalid = dict(mode="seed", heuristic="collision", seed_agent=-1,
+                       neighborhood_size=8, random_seed=555)
+        self.assertFalse(env.propose(invalid).get("deadline_exhausted", False))
+        grouped = env.propose_seed_grid_grouped([edge[0], -1], ["collision"], [8], [555, 556], 1)
+        self.assertEqual(grouped["invalid_indices"], [0, 1])
+        self.assertEqual(grouped["deadline_indices"], [0])
         terminal = env.step({"mode": "official", "random_seed": 556})
         self.assertFalse(terminal["metrics"]["step_applied"])
         self.assertFalse(terminal["terminated"])

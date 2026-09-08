@@ -223,11 +223,20 @@ RepairProposal InitLNS::proposeNeighborhood(const RepairAction& action)
     RepairProposal proposal;
     proposal.requested_action = action;
     proposal.applied_heuristic = action.heuristic;
-    if (!initialized || isDone() || action.mode != RepairActionMode::SEED ||
+    if (!initialized || action.mode != RepairActionMode::SEED ||
         action.heuristic == RepairHeuristic::ADAPTIVE || action.random_seed < 0 ||
         action.neighborhood_size <= 0 || action.seed_agent < 0 ||
         action.seed_agent >= (int)agents.size() || collision_graph[action.seed_agent].empty())
         return proposal;
+    if (isDone())
+    {
+        // Only valid requests stopped by the clock carry this marker.
+        proposal.deadline_exhausted = initial_solution_complete &&
+            num_of_colliding_pairs > 0 &&
+            !(max_repair_iterations > 0 && repair_iteration >= max_repair_iterations) &&
+            currentRuntime() >= time_limit;
+        return proposal;
+    }
 
     // Proposal generation only writes neighbor.agents. Swap in an empty
     // scratch Neighbor so hundreds of diagnostic proposals do not deep-copy

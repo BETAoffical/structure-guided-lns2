@@ -310,6 +310,41 @@ class ClosedLoopExecutionError(RuntimeError):
         self.details = dict(details or {})
 
 
+class ProposalDeadlineExceeded(RuntimeError):
+    """A read-only candidate batch expired; no partial pool may be used."""
+
+    def __init__(self, *, request_count: int, rejected_count: int) -> None:
+        super().__init__("proposal generation reached the native deadline")
+        self.request_count = request_count
+        self.rejected_count = rejected_count
+
+
+def _raise_proposal_deadline(environment: Any, state: dict[str, Any],
+                             state_hash: str, revision: int | None,
+                             request_count: int, rejected_count: int) -> None:
+    get_revision = getattr(environment, "get_state_revision", None)
+    if revision is not None and int(get_revision()) != revision:
+        raise ClosedLoopExecutionError("revision_mismatch", "expired proposal changed the revision")
+    after = _plain(environment.get_state())
+    if not after.get("done") or after.get("feasible") or not after.get("initial_solution_complete"):
+        raise ClosedLoopExecutionError("invalid_proposal_deadline", "proposal deadline has no terminal state")
+    # A live deadline may change done/runtime, never paths, edges or counters.
+    after["done"] = state["done"]
+    if state_fingerprint(after) != state_hash:
+        raise ClosedLoopExecutionError("fingerprint_mismatch", "expired proposal changed the repair state")
+    raise ProposalDeadlineExceeded(request_count=request_count, rejected_count=rejected_count)
+
+
+def _compact_proposal(value: Any) -> dict[str, Any]:
+    if not isinstance(value, (list, tuple)) or len(value) not in (3, 4):
+        raise RuntimeError("compact proposal returned an invalid row")
+    if len(value) == 4 and (value[3] is not True or value[0] or value[1] or value[2]):
+        raise RuntimeError("compact proposal returned an invalid deadline marker")
+    return {"action_valid": bool(value[0]), "generated": bool(value[1]),
+            "neighborhood": list(map(int, value[2])),
+            "deadline_exhausted": len(value) == 4}
+
+
 def proposal_random_seed(
     task_id: str,
     solver_seed: int,
@@ -790,6 +825,15 @@ def generate_online_candidates(
             raise RuntimeError("grouped proposal grid returned the wrong request count")
         invalid_indices = list(map(int, grouped_payload.get("invalid_indices", [])))
         if invalid_indices:
+            deadline_indices = grouped_payload.get("deadline_indices", [])
+            if (len(invalid_indices) != len(set(invalid_indices)) or
+                    any(index < 0 or index >= len(requests) for index in invalid_indices)):
+                raise RuntimeError("grouped proposal grid returned invalid rejection indices")
+            if (len(deadline_indices) == len(invalid_indices) and
+                    all(type(index) is int for index in deadline_indices) and
+                    set(deadline_indices) == set(invalid_indices)):
+                _raise_proposal_deadline(environment, state, state_hash, revision_before,
+                                         len(requests), len(invalid_indices))
             raise RuntimeError("valid online proposal was rejected")
         proposal_groups = []
         for value in list(grouped_payload.get("rows", [])):
@@ -826,29 +870,13 @@ def generate_online_candidates(
         ]
         results = []
         for value in compact_results:
-            if not isinstance(value, (list, tuple)) or len(value) != 3:
-                raise RuntimeError("compact proposal grid returned an invalid row")
-            results.append(
-                {
-                    "action_valid": bool(value[0]),
-                    "generated": bool(value[1]),
-                    "neighborhood": list(map(int, value[2])),
-                }
-            )
+            results.append(_compact_proposal(value))
         backend = "compact_seed_grid"
     elif use_compact:
         compact_results = [_plain(value) for value in propose_compact(actions)]
         results = []
         for value in compact_results:
-            if not isinstance(value, (list, tuple)) or len(value) != 3:
-                raise RuntimeError("compact proposal batch returned an invalid row")
-            results.append(
-                {
-                    "action_valid": bool(value[0]),
-                    "generated": bool(value[1]),
-                    "neighborhood": list(map(int, value[2])),
-                }
-            )
+            results.append(_compact_proposal(value))
         backend = "compact"
     elif callable(propose_batch):
         results = [_plain(value) for value in propose_batch(actions)]
@@ -856,6 +884,18 @@ def generate_online_candidates(
     else:
         results = [_plain(environment.propose(action)) for action in actions]
         backend = "single_fallback"
+    if results is not None:
+        if len(results) != len(requests):
+            raise RuntimeError("online proposal batch returned an unexpected result count")
+        rejected = [value for value in results
+                    if not value.get("action_valid") or not value.get("generated")]
+        if rejected:
+            if all(value.get("deadline_exhausted") is True and
+                   not value.get("action_valid") and not value.get("generated") and
+                   not value.get("neighborhood") for value in rejected):
+                _raise_proposal_deadline(environment, state, state_hash, revision_before,
+                                         len(requests), len(rejected))
+            raise RuntimeError("valid online proposal was rejected")
     proposal_seconds = time.perf_counter() - started
     proposal_shadow_seconds = 0.0
     if shadow_validation:
@@ -871,16 +911,17 @@ def generate_online_candidates(
                 )
             shadow_results = []
             for value in [_plain(item) for item in propose_compact(actions)]:
-                if not isinstance(value, (list, tuple)) or len(value) != 3:
-                    raise RuntimeError("compact proposal shadow returned an invalid row")
-                shadow_results.append(
-                    {
-                        "action_valid": bool(value[0]),
-                        "generated": bool(value[1]),
-                        "neighborhood": list(map(int, value[2])),
-                    }
-                )
+                shadow_results.append(_compact_proposal(value))
         proposal_shadow_seconds = time.perf_counter() - shadow_started
+        if len(shadow_results) != len(requests):
+            raise RuntimeError("proposal shadow returned the wrong request count")
+        rejected_shadow = [value for value in shadow_results
+                           if not value.get("action_valid") or not value.get("generated")]
+        if rejected_shadow and all(value.get("deadline_exhausted") is True and
+                                   not value.get("action_valid") and not value.get("generated") and
+                                   not value.get("neighborhood") for value in rejected_shadow):
+            _raise_proposal_deadline(environment, state, state_hash, revision_before,
+                                     len(requests), len(rejected_shadow))
         if proposal_groups is not None:
             primary_signature: list[tuple[bool, bool, tuple[int, ...]] | None] = [
                 None
@@ -926,6 +967,9 @@ def generate_online_candidates(
     state_check_fingerprint_seconds = 0.0
     if full_state_verified:
         after = _plain(environment.get_state())
+        if not state["done"] and after.get("done") and not after.get("feasible"):
+            _raise_proposal_deadline(environment, state, state_hash, revision_before,
+                                     len(requests), 0)
         state_check_fingerprint_started = time.perf_counter()
         after_fingerprint = state_fingerprint(after)
         state_check_fingerprint_seconds = (
@@ -1315,6 +1359,7 @@ def generate_online_candidates(
 
 __all__ = [
     "ClosedLoopExecutionError",
+    "ProposalDeadlineExceeded",
     "EpisodeRepairSeedStream",
     "REPAIR_SEED_POLICIES",
     "feature_range_diagnostic",
