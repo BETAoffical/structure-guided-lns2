@@ -67,3 +67,25 @@ Windows与WSL共享文件时，若WSL Git仅因CRLF显示工作区脏，可在�
 
 正式运行仍使用单worker，无修复次数上限，原规划预算及预算加120秒的进程保护上限不变。
 本轮不训练模型、不修改候选生成/排序/PP+SIPPS、不自动恢复半小时巡检，不执行正式计时。
+
+## 2026-09-08 准入完成
+
+实现提交：`16fd6529163b8952a5ec56dae94ea6fc8b07aabb`，分支`codex/path-quality-pressure-deadline-recovery`。
+
+- 两批各192次reset，总计384/384通过，0错误。
+- 384项新旧state fingerprint、完整路径和初始质量指标逐项相等。
+- 旧3,327个episode文件SHA全部保持不变；旧错误仍保留为错误。
+- Python最终完整测试：`1288 passed, 47 skipped`；LNS2 CTest：`12/12`通过。
+- 两项GPBS测试不在本次比较范围，未执行。原生Python接口测试由CTest专用环境执行。
+- 官方路径SHA保持`915ee104...13ecf`和`031d1bf8...aa83a`。
+- Windows全局Python缺少pytest，使用WSL现有pytest验证，没有安装新依赖。
+- 两个新输出目录均保留`pause.request`，无计时授权文件、无正式episode。半小时巡检未恢复。
+
+| 身份 | 第一批 | 第二批 |
+|---|---|---|
+| 排程条数 | 576 | 864 |
+| Registration fingerprint | `a098e5ef1b9f92f1d00b8a6afabe516250b0361325c2478d6b2d2d37114b682a` | `50a78b94c8dab66ab4f7861907401d5c4b10897d6b4afa4ad204b23ba8bd0f97` |
+| Admission SHA256 | `1646fbeaa0111aabf55e34a8b035a81ed2ba0b8e4250c1b479790978510cb2c9` | `075175132e5f6cec1e455005db85c38238cf623c0a5b1ce3aa40d015bc1a25dd` |
+
+详细准入报告和测试日志保存在`build/path-quality-deadline-recovery-preparation-v1/`，
+入口报告为`readiness.json`。当前结论仅为“计时前准备与初始化一致性通过”，不是新的性能结论。

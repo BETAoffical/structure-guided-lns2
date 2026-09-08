@@ -132,3 +132,6 @@ Python中的原生环境测试由CTest单独设置环境后执行，已包含真
 验证文件在`build/path-quality-pressure-batches-v1/`下：原事故诊断、deadline复现和`equivalence-reference/fixed`短轨迹。
 这次修复验证不授权恢复原目录的计时，不修改旧registration，不将新旧结果静默混算。
 正式恢复前还需登记新源码/native，决定旧结果复用与必要的配对补测协议。
+
+后续已按协议边界完成修复版登记及384次初始化核验，见
+[截止边界修复版恢复协议](PATH_QUALITY_DEADLINE_RECOVERY_ZH.md)。上文旧登记与结果继续保留，不用于直接续跑修复版。
