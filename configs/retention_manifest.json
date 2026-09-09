@@ -18,6 +18,13 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/native_path_compatibility.py", "role": "reproducibility", "purpose": "Isolated frozen-core PP parity and hard-pair path reselection diagnostics; no production controller."},
+    {"path": "scripts/diagnose_native_path_compatibility.py", "role": "reproducibility", "purpose": "Explicit preparation, parity gate and bounded native mechanism diagnostics."},
+    {"path": "tests/evaluation/test_native_path_compatibility.py", "role": "reproducibility", "contract": "Protect native hard constraints, soft PP rollback, identity and parity admission."},
+    {"path": "experiments/local_path_search.py", "role": "reproducibility", "purpose": "Retain bounded hard-path reference search and two-agent CBS mechanism evidence."},
+    {"path": "experiments/local_path_compatibility.py", "role": "reproducibility", "purpose": "Retain registered reference mechanism collection and independent witness validation."},
+    {"path": "scripts/diagnose_local_path_compatibility.py", "role": "reproducibility", "purpose": "Reproduce retained local path compatibility reference diagnostics."},
+    {"path": "tests/evaluation/test_local_path_compatibility.py", "role": "reproducibility", "contract": "Protect hard reference searches, replay evidence, witnesses and resumable diagnostics."},
     {"path": "lns2_selector/evaluation/path_quality_pressure.py", "role": "active", "purpose": "Generate and statically validate frozen pressure tasks without native solver execution."},
     {"path": "lns2_selector/evaluation/pressure_capacity.py", "role": "reproducibility", "purpose": "Explain retained Pilot v1 endpoint-capacity failures without task resampling or changes to generator RNG."},
     {"path": "lns2_selector/evaluation/pressure_reset.py", "role": "active", "purpose": "Run isolated initial PP checks and reconstruct conflict pressure without repair or timed comparison."},

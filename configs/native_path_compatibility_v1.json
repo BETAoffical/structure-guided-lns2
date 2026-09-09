@@ -1,0 +1,16 @@
+{
+  "schema": "lns2.native_path_compatibility.v1",
+  "reference_output": "build/initlns-local-path-compatibility-v1-final",
+  "output": "build/initlns-native-path-compatibility-v1",
+  "native_file": "build/linux/proposal-deadline-fix-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+  "native_sha256": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+  "probe_file": "build/linux/native-path-probe-v1/lns2_path_probe_native.cpython-310-x86_64-linux-gnu.so",
+  "core_file": "build/linux/proposal-deadline-fix-validation/libmapf_lns2_core.a",
+  "parity_seeds": [20260910, 20260911],
+  "path_seed": 20260910,
+  "reselections": 4,
+  "call_seconds": 5,
+  "job_seconds": 30,
+  "fuse_buffer_seconds": 30,
+  "scope": "native_equivalence_then_hard_pair_mechanism_no_full_neighborhood_reselection_no_controller_change_no_ttf"
+}
