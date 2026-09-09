@@ -1,0 +1,173 @@
+{
+  "schema": "lns2.prefix_feedback_evidence.v1",
+  "preregistered_commit": "0ef7dcbced6871df495f72f373d090e734ae5797",
+  "backup_tag": "pre-prefix-feedback-20260910",
+  "source_evidence": "artifacts/initlns-full-neighborhood-recovery-v1/evidence.json",
+  "output": "build/initlns-prefix-budget-feedback-v1",
+  "fingerprint": "f315f6d417d94047b7b3dc18769a1145c62b0d4d3e968f2b906ed700abe3f68e",
+  "files": {
+    "manifest.json": "b50550df6600f721d5b684d91349218747a55b5c2b7cb0f7b03f20933637641c",
+    "report.json": "d56a30a52950676bae29afef7b5656b62f1b412e1f439f072d287335cc0a4aba",
+    "verification.json": "e41d66db0800f5bca4803d28109f2bdc07726bcb32fc482365f4880d9c3ac93f",
+    "collection_manifest.jsonl": "3c32de7c3af078b77408d2d623d9b4b79c236d71d9871a0757c1984b18bacd5d",
+    "target_pair_diagnostics.jsonl": "907143bec6af259b5121f5ba334e3a7694cfcdb1e0e6f08768376a6ae4a07c76",
+    "python-parallel.xml": "eedf242c770d68fc4e9acd90d838a2989f32cc68e3ca67243ff20c0e8eab9176",
+    "python-serial-verification.xml": "807063a1750252c4485b58a1d52e8bf641eeadc1de5851097fd468a284953030"
+  },
+  "decision": "mechanism_no_go",
+  "methods": {
+    "directed_resources": {
+      "added_recovery": 1,
+      "attempts": {
+        "accepted": 3,
+        "not_found": 10,
+        "rolled_back": 24
+      },
+      "conditions": 48,
+      "expanded": 2879898,
+      "failed_tail_recovery": 0,
+      "generated": 3676944,
+      "no_feedback": 13,
+      "no_harm_to_ordinary": true,
+      "strict_decrease": 16,
+      "triggered": 29
+    },
+    "ordinary": {
+      "added_recovery": 0,
+      "attempts": {},
+      "conditions": 48,
+      "expanded": 1812427,
+      "failed_tail_recovery": 0,
+      "generated": 2359891,
+      "no_feedback": 0,
+      "no_harm_to_ordinary": true,
+      "strict_decrease": 15,
+      "triggered": 29
+    },
+    "prefix_resources": {
+      "added_recovery": 1,
+      "attempts": {
+        "accepted": 4,
+        "not_found": 10,
+        "rolled_back": 44
+      },
+      "conditions": 48,
+      "expanded": 4162329,
+      "failed_tail_recovery": 0,
+      "generated": 4988801,
+      "no_feedback": 8,
+      "no_harm_to_ordinary": true,
+      "strict_decrease": 16,
+      "triggered": 29
+    },
+    "random_retry": {
+      "added_recovery": 2,
+      "attempts": {
+        "accepted": 4,
+        "rolled_back": 106
+      },
+      "conditions": 48,
+      "expanded": 7039307,
+      "failed_tail_recovery": 0,
+      "generated": 8611834,
+      "no_feedback": 0,
+      "no_harm_to_ordinary": true,
+      "strict_decrease": 17,
+      "triggered": 29
+    }
+  },
+  "gate": {
+    "checks": {
+      "at_least_three_double_trigger_states": false,
+      "at_least_two_maps": false,
+      "failed_tail_recovered": false,
+      "no_harm_to_ordinary": true,
+      "not_fewer_than_either_control": true,
+      "two_states_exclusive_to_prefix": false
+    },
+    "interpretation": "development_mechanism_only_requires_future_independent_validation",
+    "passed": false,
+    "stable_recovered_states": {
+      "directed_resources": [],
+      "ordinary": [],
+      "prefix_resources": [],
+      "random_retry": []
+    },
+    "trigger_strata": {
+      "0": 8,
+      "1": 3,
+      "2": 13
+    }
+  },
+  "prefix_comparisons": {
+    "directed_resources": {
+      "better": 0,
+      "conditions": 48,
+      "equal": 47,
+      "worse": 1
+    },
+    "random_retry": {
+      "better": 0,
+      "conditions": 48,
+      "equal": 47,
+      "worse": 1
+    }
+  },
+  "verification_counts": {
+    "attempts": 205,
+    "baseline_equivalent": 192,
+    "constrained_paths": 75,
+    "final_paths": 192,
+    "frozen_control_equivalent": 144
+  },
+  "target_pair_summary": {
+    "directed_resources": {
+      "blocker_path_unavailable": 10,
+      "pair_persists": 8,
+      "pair_removed": 5,
+      "victim_path_unavailable": 14
+    },
+    "prefix_resources": {
+      "blocker_path_unavailable": 10,
+      "pair_persists": 26,
+      "pair_removed": 18,
+      "victim_path_unavailable": 4
+    }
+  },
+  "failure_summary": {
+    "directed_resources": {
+      "internal_removed_external_added": 5,
+      "interpretation": "common-prefix changes are not full-outcome or external-agent necessity proofs",
+      "pair_and_branch_status": {
+        "blocker_path_unavailable/not_found": 10,
+        "pair_persists/rolled_back": 8,
+        "pair_removed/accepted": 3,
+        "pair_removed/rolled_back": 2,
+        "victim_path_unavailable/rolled_back": 14
+      }
+    },
+    "prefix_resources": {
+      "internal_removed_external_added": 18,
+      "interpretation": "common-prefix changes are not full-outcome or external-agent necessity proofs",
+      "pair_and_branch_status": {
+        "blocker_path_unavailable/not_found": 10,
+        "pair_persists/accepted": 1,
+        "pair_persists/rolled_back": 25,
+        "pair_removed/accepted": 3,
+        "pair_removed/rolled_back": 15,
+        "victim_path_unavailable/rolled_back": 4
+      }
+    }
+  },
+  "validation": {
+    "python_passed": 1375,
+    "python_skipped": 47,
+    "lns2_ctest_passed": 12,
+    "lns2_ctest_total": 12,
+    "gpbs": "excluded_unbuilt",
+    "historical_formal_evidence_verified": 24
+  },
+  "timing_allowed": false,
+  "production_controller_modified": false,
+  "interpretation": "Same-budget development mechanism comparison only; no long-tail recovery or end-to-end promotion."
+}

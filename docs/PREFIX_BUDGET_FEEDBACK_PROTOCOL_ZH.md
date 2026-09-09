@@ -63,3 +63,5 @@ python scripts/diagnose_prefix_budget_feedback.py analyze
 ```
 
 结果写入 `build/initlns-prefix-budget-feedback-v1`，不覆盖前两轮结果。
+
+运行完成后的独立结果见 [同预算机制对照报告](PREFIX_BUDGET_FEEDBACK_RESULT_ZH.md)。原注册门槛保持不变。

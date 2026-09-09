@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "tests/evaluation/test_prefix_feedback_verification.py", "role": "reproducibility", "contract": "Distinguish attempted paths, restored rollback paths and unobserved target pairs in saved-output attribution."},
+    {"path": "scripts/verify_prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Independently verify frozen controls, selected prefix relations, hard feedback constraints, costs and rollback."},
     {"path": "experiments/prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Frozen same-budget cumulative-prefix feedback comparison without changing runtime controllers."},
     {"path": "experiments/prefix_feedback_collection.py", "role": "reproducibility", "purpose": "Run isolated registered prefix recovery jobs with frozen control equivalence, pause and resume."},
     {"path": "scripts/diagnose_prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Expose explicit preparation, bounded collection and non-promoting mechanism analysis."},
