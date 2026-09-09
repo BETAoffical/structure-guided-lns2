@@ -12,8 +12,8 @@ from experiments.whole_pair_collection import prepare, load, worker, collect, an
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('phase',choices=('prepare','dry-run','collect','verify','analyze','_job'))
-    parser.add_argument('--config',default='configs/whole_pair_feedback_v1.json')
-    parser.add_argument('--output',default='build/initlns-whole-pair-feedback-v1')
+    parser.add_argument('--config',default='configs/whole_pair_feedback_v1b.json')
+    parser.add_argument('--output',default='build/initlns-whole-pair-feedback-v1b')
     parser.add_argument('--workers',type=int,default=20)
     parser.add_argument('--resume',action='store_true')
     parser.add_argument('--max-jobs',type=int)

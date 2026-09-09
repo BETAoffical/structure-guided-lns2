@@ -155,6 +155,11 @@ def worker(output,job_id):
     write_json(output_file(output,job),seal(result))
 
 
+def worker_command(output,job):
+    return [sys.executable,str(ROOT/'scripts/diagnose_whole_pair_feedback.py'),
+            '_job','--output',output.resolve().relative_to(ROOT).as_posix(),'--job-id',job['job_id']]
+
+
 def collect(output,workers=20,resume=False,max_jobs=None):
     m=load(output)
     if not 1<=workers<=20 or (max_jobs is not None and max_jobs<1):
@@ -191,8 +196,7 @@ def collect(output,workers=20,resume=False,max_jobs=None):
                     job=pending.pop(0)
                     log=output/'logs'/(job['job_id']+'.log'); log.parent.mkdir(parents=True,exist_ok=True)
                     with log.open('wb') as stream:
-                        child=subprocess.Popen([sys.executable,str(ROOT/'scripts/diagnose_whole_pair_feedback.py'),
-                            '_job','--output',str(output),'--job-id',job['job_id']],cwd=ROOT,
+                        child=subprocess.Popen(worker_command(output,job),cwd=ROOT,
                             stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
                     active[job['job_id']]=(child,time.monotonic(),job)
                     launched+=1

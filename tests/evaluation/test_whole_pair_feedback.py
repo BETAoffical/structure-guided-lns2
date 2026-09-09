@@ -92,6 +92,20 @@ class WholePairTests(unittest.TestCase):
 
 
 class CollectorTests(unittest.TestCase):
+    def test_child_output_matches_relative_cli_contract(self):
+        output=collection.ROOT/'build'/'whole pair test'
+        command=collection.worker_command(output,dict(job_id='example'))
+        relative=command[command.index('--output')+1]
+        self.assertEqual(relative,'build/whole pair test')
+        self.assertEqual(collection.contained(relative),output.resolve())
+        self.assertEqual(command[-1],'example')
+
+    def test_launcher_repair_does_not_change_experiment_design(self):
+        old=read_json(collection.ROOT/'configs/whole_pair_feedback_v1.json')
+        new=read_json(collection.ROOT/'configs/whole_pair_feedback_v1b.json')
+        self.assertNotEqual(old.pop('output'),new.pop('output'))
+        self.assertEqual(old,new)
+
     def test_stop_does_not_dispatch(self):
         m=dict(content_sha256='f',jobs=[dict(job_id='j')],config=dict(collection_session_hours=2))
         with tempfile.TemporaryDirectory() as tmp:
