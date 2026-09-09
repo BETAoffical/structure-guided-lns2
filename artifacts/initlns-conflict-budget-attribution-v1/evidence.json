@@ -1,0 +1,42 @@
+{
+  "schema": "lns2.conflict_budget_attribution_evidence.v1",
+  "implementation_commit": "c0c017afdb97cf7bf04f3780c0c4acbbacbe83e5",
+  "backup_tag": "pre-budget-attribution-20260910",
+  "output": "build/initlns-conflict-budget-attribution-v1",
+  "report": "docs/CONFLICT_BUDGET_ATTRIBUTION_ZH.md",
+  "source_report_sha256": "36db8f4debfb16b42174d9958ec268292d39f2c0d0f4c92d46581c1caf9b450b",
+  "files": {
+    "manifest.json": "2ca4a3989478dd002463d12c4e1058dcbbfd8ad06687678c69e35f1006ebd9de",
+    "report.json": "ca200a5268529e1772ca76b8b249bb3ded9f99879efee2c18872bec50e4acc3a",
+    "conditions.jsonl": "59a98c4a4816bb7c64c9ea8b77655a0fae1c6bef4097d94a3f60e6cf7a442ec6",
+    "python-parallel.xml": "15b60d6bf2a7687e5a63afd0d47827f669a47d217b4373bd465e0482515f420f",
+    "python-timing-sensitive.xml": "f00fc179a58b67d0fb91bdb908699b114b32e0e1fa3f63feb389e2fba984856e"
+  },
+  "conditions": 48,
+  "states": 24,
+  "maps": 4,
+  "ordinary_rollback_conditions": 29,
+  "saved_alternative_branches": 37,
+  "missing_earlier_internal_feedback": 5,
+  "missed_conditions_with_sufficient_optimistic_internal_bound": 3,
+  "earlier_internal_bound_covers_excess": 11,
+  "any_internal_bound_covers_excess": 18,
+  "no_recorded_internal_pairs": 7,
+  "internal_pairs_present_but_bound_insufficient": 4,
+  "attempts_remove_internal_but_add_external": 5,
+  "attempts_reach_different_prefix_length": 25,
+  "solver_calls": 0,
+  "source_no_go_unchanged": true,
+  "timing_allowed": false,
+  "controller_modified": false,
+  "validation": {
+    "windows_new_tests_passed": 8,
+    "python_parallel_passed": 1349,
+    "python_isolated_passed": 10,
+    "python_skipped": 47,
+    "lns2_ctest_passed": 12,
+    "official_path_sha256": "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf",
+    "official_repair_path_sha256": "031d1bf843ada89f03be6880809bcf7632fdaeba509fd035a15657fcc93aa83a"
+  },
+  "interpretation": "Post-hoc saved-prefix attribution; optimistic edge deletion is not a path feasibility or repair-success claim."
+}
