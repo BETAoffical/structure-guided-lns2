@@ -82,3 +82,5 @@ python scripts/diagnose_whole_pair_feedback.py verify
 最初注册提交 `6ffa240f0e7b05a684a13bb7883834ac32a685db` 的首 20 项均在 CLI 解析输出路径时退出：父进程传入绝对路径，而子入口要求仓库相对 POSIX 路径。20 项均未进入 worker 或原生求解，不是算法失败或超时。
 
 修复仅使父进程传入仓库相对输出路径，增加路径含空格的参数契约测试。所有科学配置、方法、预算和门槛不变。原 v1 配置、错误结果与日志保留；默认配置改用 `whole_pair_feedback_v1b.json`，新输出 `build/initlns-whole-pair-feedback-v1b`，从头执行全部 96 项，不与 v1 错误记录混合。代码修复须在重新执行前推送。
+
+全部完成后的结果见 [整对路径协调机制报告](WHOLE_PAIR_FEEDBACK_RESULT_ZH.md)，不改写本协议的原门槛。

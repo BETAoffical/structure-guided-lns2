@@ -1,0 +1,299 @@
+{
+  "schema": "lns2.whole_pair_feedback_evidence.v1",
+  "preregistered_commit": "6ffa240f0e7b05a684a13bb7883834ac32a685db",
+  "launcher_fix_commit": "8f28c4298ea4c16431c27e0e1f44a0f25e86872f",
+  "output": "build/initlns-whole-pair-feedback-v1b",
+  "fingerprint": "e5da97b81d22f20d99fd741dc5d6592c5ebae7e2c15216e97c84750ef5b7ed08",
+  "files": {
+    "manifest.json": "73ac9212e109513982a018339225afd032da79de361b492045034cb938c213c7",
+    "report.json": "96abcfa38ca88a06bff7c372dd88a2f654a2a5380b47550d456e375189ef9424",
+    "collection_manifest.jsonl": "d81faa0ecfa76b32dab6e6236bc2870842ab7bb6850e29e841f347421716e996",
+    "partial_report.json": "e181c71e6055b9c90a01e373f797e45744ddfe6cc35b5d5f9c3d98682f2948c5",
+    "run_status.json": "55799bc7ce3df61ac478403a1b9f6256081d59d28eb0f912538a2789f41e418f",
+    "launcher-tests.xml": "9a65089524ce1d30209139c0c587a44123d1268a57013bd2a8ed96e709f6aa93",
+    "python-parallel.xml": "05d91578de2a747af04785fec06dea80ba2bf921fb598224126ea16c81f0e82d",
+    "python-serial.xml": "488685c362b0c0f9b1471ecb99801b6d216efa3f43127038523337b4122ba9cf"
+  },
+  "frozen_binaries": {
+    "build/linux/proposal-deadline-fix-validation/lns2_env.cpython-310-x86_64-linux-gnu.so": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+    "build/linux/native-path-probe-v1/lns2_path_probe_native.cpython-310-x86_64-linux-gnu.so": "8992aed87e895f915ce2e9e38ebd959be5e0cb1e142f144ce62bfd7ee3607336",
+    "build/linux/proposal-deadline-fix-validation/libmapf_lns2_core.a": "2285d3576e845c7af0a50b096e87fc515fd804b1a3c34c771d82ff736a3f2efe"
+  },
+  "source_evidence": "artifacts/initlns-prefix-budget-feedback-v1/evidence.json",
+  "new_conditions": 96,
+  "frozen_controls_reused": 192,
+  "methods": {
+    "directed_resources": {
+      "added_recovery": 1,
+      "attempts": {
+        "accepted": 3,
+        "not_found": 10,
+        "rolled_back": 24
+      },
+      "conditions": 48,
+      "expanded": 2879898,
+      "failed_tail_recovery": 0,
+      "generated": 3676944,
+      "pair_checks": {},
+      "strict_decrease": 16,
+      "triggered": 29
+    },
+    "ordinary": {
+      "added_recovery": 0,
+      "attempts": {},
+      "conditions": 48,
+      "expanded": 1812427,
+      "failed_tail_recovery": 0,
+      "generated": 2359891,
+      "pair_checks": {},
+      "strict_decrease": 15,
+      "triggered": 29
+    },
+    "prefix_resources": {
+      "added_recovery": 1,
+      "attempts": {
+        "accepted": 4,
+        "not_found": 10,
+        "rolled_back": 44
+      },
+      "conditions": 48,
+      "expanded": 4162329,
+      "failed_tail_recovery": 0,
+      "generated": 4988801,
+      "pair_checks": {},
+      "strict_decrease": 16,
+      "triggered": 29
+    },
+    "random_retry": {
+      "added_recovery": 2,
+      "attempts": {
+        "accepted": 4,
+        "rolled_back": 106
+      },
+      "conditions": 48,
+      "expanded": 7039307,
+      "failed_tail_recovery": 0,
+      "generated": 8611834,
+      "pair_checks": {},
+      "strict_decrease": 17,
+      "triggered": 29
+    },
+    "whole_pair": {
+      "added_recovery": 2,
+      "attempts": {
+        "accepted": 6,
+        "not_found": 32,
+        "rolled_back": 36
+      },
+      "conditions": 48,
+      "expanded": 3477343,
+      "failed_tail_recovery": 0,
+      "generated": 4084694,
+      "pair_checks": {
+        "blocker_path_unavailable": 32,
+        "pair_removed": 36,
+        "victim_not_inserted": 6
+      },
+      "strict_decrease": 17,
+      "triggered": 29
+    },
+    "whole_pair_guarded": {
+      "added_recovery": 2,
+      "attempts": {
+        "accepted": 5,
+        "not_found": 46,
+        "reference_adds_external_pair": 4,
+        "rolled_back": 19
+      },
+      "conditions": 48,
+      "expanded": 2737032,
+      "failed_tail_recovery": 0,
+      "generated": 3386807,
+      "pair_checks": {
+        "blocker_path_unavailable": 46,
+        "pair_removed": 24,
+        "reference_guard_rejected": 4
+      },
+      "strict_decrease": 17,
+      "triggered": 29
+    }
+  },
+  "gate": {
+    "checks": {
+      "complete_valid_uncensored": true,
+      "failed_tail": false,
+      "no_conflict_harm": true,
+      "not_fewer_than_controls": true,
+      "three_stable_states": false,
+      "two_exclusive_states": false,
+      "two_maps": false
+    },
+    "passed": false
+  },
+  "decision": "mechanism_no_go",
+  "comparisons": {
+    "whole_pair": {
+      "ordinary": {
+        "better": 2,
+        "equal": 46,
+        "worse": 0
+      },
+      "random_retry": {
+        "better": 1,
+        "equal": 45,
+        "worse": 2
+      },
+      "directed_resources": {
+        "better": 1,
+        "equal": 46,
+        "worse": 1
+      },
+      "prefix_resources": {
+        "better": 1,
+        "equal": 46,
+        "worse": 1
+      }
+    },
+    "whole_pair_guarded": {
+      "ordinary": {
+        "better": 2,
+        "equal": 46,
+        "worse": 0
+      },
+      "random_retry": {
+        "better": 1,
+        "equal": 45,
+        "worse": 2
+      },
+      "directed_resources": {
+        "better": 1,
+        "equal": 46,
+        "worse": 1
+      },
+      "prefix_resources": {
+        "better": 1,
+        "equal": 46,
+        "worse": 1
+      },
+      "whole_pair": {
+        "better": 0,
+        "equal": 47,
+        "worse": 1
+      }
+    }
+  },
+  "validation": {
+    "python_passed": 1390,
+    "python_skipped": 47,
+    "lns2_ctest_passed": 12,
+    "lns2_ctest_total": 12,
+    "gpbs": "excluded_unbuilt",
+    "historical_formal_evidence_verified": 24
+  },
+  "initial_launch_failure": {
+    "output": "build/initlns-whole-pair-feedback-v1",
+    "startup_rejections": 20,
+    "solver_calls": 0,
+    "scope": "CLI output path rejected before worker invocation; original logs retained"
+  },
+  "timing_allowed": false,
+  "production_controller_modified": false,
+  "saved_path_diagnostics": {
+    "whole_pair": {
+      "counts": {
+        "pair:pair_removed": 36,
+        "status:rolled_back": 36,
+        "pair_removed_then_rollback_at_other_agent": 24,
+        "internal_removed_external_added": 27,
+        "pair:victim_not_inserted": 6,
+        "pair:blocker_path_unavailable": 32,
+        "status:not_found": 32,
+        "status:accepted": 6,
+        "pair_removed_then_rollback_at_victim": 6
+      },
+      "recoveries": [
+        {
+          "job": {
+            "case_id": "full-81ad5a58949637ce",
+            "job_id": "783f2e11317d9f7f2c3e",
+            "method": "whole_pair",
+            "seed": 20260913
+          },
+          "role": "fast_control",
+          "map_id": "very_high_confirm_v2_station_centric_0006",
+          "before": 37,
+          "after": 31,
+          "initial_soc": 20501,
+          "final_soc": 20496,
+          "initial_makespan": 109,
+          "final_makespan": 109
+        },
+        {
+          "job": {
+            "case_id": "full-19a42c3de71bfc69",
+            "job_id": "e259d9c54e307f1b97c6",
+            "method": "whole_pair",
+            "seed": 20260912
+          },
+          "role": "fast_control",
+          "map_id": "very_high_confirm_v2_station_centric_0000",
+          "before": 25,
+          "after": 23,
+          "initial_soc": 18252,
+          "final_soc": 18298,
+          "initial_makespan": 106,
+          "final_makespan": 108
+        }
+      ],
+      "max_constraints": 256
+    },
+    "whole_pair_guarded": {
+      "counts": {
+        "pair:pair_removed": 24,
+        "status:accepted": 5,
+        "internal_removed_external_added": 1,
+        "pair:blocker_path_unavailable": 46,
+        "status:not_found": 46,
+        "status:rolled_back": 19,
+        "pair_removed_then_rollback_at_other_agent": 17,
+        "pair_removed_then_rollback_at_victim": 2,
+        "pair:reference_guard_rejected": 4
+      },
+      "recoveries": [
+        {
+          "job": {
+            "case_id": "full-19a42c3de71bfc69",
+            "job_id": "01598384ab948df9a187",
+            "method": "whole_pair_guarded",
+            "seed": 20260912
+          },
+          "role": "fast_control",
+          "map_id": "very_high_confirm_v2_station_centric_0000",
+          "before": 25,
+          "after": 24,
+          "initial_soc": 18252,
+          "final_soc": 18298,
+          "initial_makespan": 106,
+          "final_makespan": 108
+        },
+        {
+          "job": {
+            "case_id": "full-81ad5a58949637ce",
+            "job_id": "a9911ad7599de3e718af",
+            "method": "whole_pair_guarded",
+            "seed": 20260913
+          },
+          "role": "fast_control",
+          "map_id": "very_high_confirm_v2_station_centric_0006",
+          "before": 37,
+          "after": 31,
+          "initial_soc": 20501,
+          "final_soc": 20496,
+          "initial_makespan": 109,
+          "final_makespan": 109
+        }
+      ],
+      "max_constraints": 81956
+    }
+  }
+}
