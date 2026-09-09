@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Bounded original-neighborhood soft-PP recovery diagnostics with immutable external paths."},
+    {"path": "experiments/full_recovery_collection.py", "role": "reproducibility", "purpose": "Registered 20-process mechanism collection, failure analysis and fail-closed timing admission."},
+    {"path": "scripts/diagnose_full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Explicit full-neighborhood preparation, parity, diagnosis and timing-readiness stages."},
+    {"path": "tests/evaluation/test_full_neighborhood_recovery.py", "role": "reproducibility", "contract": "Protect same-neighborhood recovery, feedback sampling, rollback, budgets and stage gates."},
     {"path": "scripts/verify_native_path_compatibility.py", "role": "reproducibility", "purpose": "Independently recheck native pair witnesses, matched baselines and historical-neighborhood applicability."},
     {"path": "experiments/native_path_compatibility.py", "role": "reproducibility", "purpose": "Isolated frozen-core PP parity and hard-pair path reselection diagnostics; no production controller."},
     {"path": "scripts/diagnose_native_path_compatibility.py", "role": "reproducibility", "purpose": "Explicit preparation, parity gate and bounded native mechanism diagnostics."},
