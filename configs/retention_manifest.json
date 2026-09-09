@@ -18,6 +18,7 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/verify_native_path_compatibility.py", "role": "reproducibility", "purpose": "Independently recheck native pair witnesses, matched baselines and historical-neighborhood applicability."},
     {"path": "experiments/native_path_compatibility.py", "role": "reproducibility", "purpose": "Isolated frozen-core PP parity and hard-pair path reselection diagnostics; no production controller."},
     {"path": "scripts/diagnose_native_path_compatibility.py", "role": "reproducibility", "purpose": "Explicit preparation, parity gate and bounded native mechanism diagnostics."},
     {"path": "tests/evaluation/test_native_path_compatibility.py", "role": "reproducibility", "contract": "Protect native hard constraints, soft PP rollback, identity and parity admission."},

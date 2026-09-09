@@ -11,6 +11,16 @@
   ],
   "allowed_unused_imports": [
     {
+      "path": "experiments/local_path_compatibility.py",
+      "name": "graph_of",
+      "reason": "Preserve the completed local-path reference diagnostic implementation SHA. This known unused import is not used by the native diagnostic; remove only in a separately registered reference revision."
+    },
+    {
+      "path": "experiments/local_path_compatibility.py",
+      "name": "reconstruct_conflicts",
+      "reason": "Preserve the completed local-path reference diagnostic implementation SHA and its public imported alias. Explicit frozen-file exception only; no exemption for new diagnostic code."
+    },
+    {
       "path": "lns2_selector/evaluation/path_quality_cohort.py",
       "name": "time",
       "reason": "Known pre-existing unused import in the frozen path-quality episode engine. Defer cleanup to a separately registered source revision; preserve both pressure cohorts' execution source SHA."

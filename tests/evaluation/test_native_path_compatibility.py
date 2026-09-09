@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from experiments import native_path_compatibility as audit
+from scripts import verify_native_path_compatibility as verifier
 
 try:
     extension = importlib.import_module('lns2_path_probe_native')
@@ -16,6 +17,14 @@ except ImportError:
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_verifier_refuses_incomplete_or_failed_report(self):
+        for changes in ({'complete': False}, {'parity_pass': False}, {'decision': 'native_parity_gate_failed'}):
+            report = audit.seal(dict(dict(complete=True, parity_pass=True,
+                decision='hard_pair_mechanism_only'), **changes))
+            with patch.object(verifier, 'load', return_value={}), patch.object(verifier, 'read_json', return_value=report):
+                with self.assertRaisesRegex(ValueError, 'completed, error-free'):
+                    verifier.verify(Path('unused'))
+
     def test_seal_detects_tampering(self):
         value = audit.seal(dict(status='pass', paths=[[0, 1]]))
         audit.check_seal(value)

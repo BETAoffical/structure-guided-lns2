@@ -44,6 +44,7 @@ python3 scripts/diagnose_native_path_compatibility.py dry-run
 python3 scripts/diagnose_native_path_compatibility.py parity --workers 4
 python3 scripts/diagnose_native_path_compatibility.py diagnose --workers 4
 python3 scripts/diagnose_native_path_compatibility.py report
+python3 scripts/verify_native_path_compatibility.py
 ```
 
 恢复时使用对应命令的 `--resume`。`--max-jobs` 用于小规模流程检查。
