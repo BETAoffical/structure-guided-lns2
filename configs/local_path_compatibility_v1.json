@@ -1,0 +1,19 @@
+{
+  "schema": "lns2.local_path_compatibility.v1",
+  "source_directory": "build/path-quality-pressure-deadline-recovery-v1/review-20260909",
+  "output": "build/initlns-local-path-compatibility-v1-final",
+  "pressure_config": "configs/path_quality_pressure_deadline_recovery_v1.json",
+  "formal_report": "build/path-quality-pressure-deadline-recovery-v1/pressure_analysis/report.json",
+  "formal_report_sha256": "a0a5608e9790b80ee0f82ffb172ab9f1d77f6b9832b2aa18c3aca1a19fa54aa7",
+  "prior_analysis_sha256": "76a98cac1683737c3a6d1444b70515fa0d029ddf9facb7f9b187a5f808b5f862",
+  "prior_native_validation_sha256": "59862774d2d35acf06849e61f5113b1e71265336bfb83e238fa325a72d0647ef",
+  "workers": 4,
+  "seconds_per_pair_method": 180,
+  "expanded_per_pair_method": 1000000,
+  "external_fuse_buffer_seconds": 15,
+  "random_seed": 20260909,
+  "pairs_per_state": 2,
+  "max_reselections": 4,
+  "methods": ["ordinary", "random_paths", "directed_paths", "cbs_pair"],
+  "scope": "six_posthoc_development_states_reference_hard_constraints_no_controller_changes_no_ttf"
+}
