@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Frozen same-budget cumulative-prefix feedback comparison without changing runtime controllers."},
+    {"path": "experiments/prefix_feedback_collection.py", "role": "reproducibility", "purpose": "Run isolated registered prefix recovery jobs with frozen control equivalence, pause and resume."},
+    {"path": "scripts/diagnose_prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Expose explicit preparation, bounded collection and non-promoting mechanism analysis."},
+    {"path": "tests/evaluation/test_prefix_budget_feedback.py", "role": "reproducibility", "contract": "Protect prefix contribution accounting, fixed cost and order, exact rollback, trigger strata and comparison gates."},
     {"path": "experiments/conflict_budget_attribution.py", "role": "reproducibility", "purpose": "Reconstruct cumulative unique collision-pair budgets from saved PP attempts without new searches or runtime changes."},
     {"path": "scripts/audit_conflict_budget_attribution.py", "role": "reproducibility", "purpose": "Expose authenticated 20-process saved-path budget attribution and deterministic resume."},
     {"path": "tests/evaluation/test_conflict_budget_attribution.py", "role": "reproducibility", "contract": "Protect unique-pair accounting, external boundaries, saved-path validation and non-promoting optimistic bounds."},
