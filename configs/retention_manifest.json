@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/whole_pair_feedback.py", "role": "reproducibility", "purpose": "Isolated bounded whole-path pair commitment and external conflict-set protection; never a default controller."},
+    {"path": "experiments/whole_pair_collection.py", "role": "reproducibility", "purpose": "Registered whole-pair comparison against frozen controls with atomic subprocess output and strict saved-path verification."},
+    {"path": "scripts/diagnose_whole_pair_feedback.py", "role": "reproducibility", "purpose": "Explicit preparation, bounded parallel diagnosis and non-promoting whole-pair report."},
+    {"path": "tests/evaluation/test_whole_pair_feedback.py", "role": "reproducibility", "contract": "Protect finite-cap hard occupancy, cached-reference accounting, exact rollback, native semantics, pause and result identity."},
     {"path": "tests/evaluation/test_prefix_feedback_verification.py", "role": "reproducibility", "contract": "Distinguish attempted paths, restored rollback paths and unobserved target pairs in saved-output attribution."},
     {"path": "scripts/verify_prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Independently verify frozen controls, selected prefix relations, hard feedback constraints, costs and rollback."},
     {"path": "experiments/prefix_budget_feedback.py", "role": "reproducibility", "purpose": "Frozen same-budget cumulative-prefix feedback comparison without changing runtime controllers."},

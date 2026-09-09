@@ -1,0 +1,15 @@
+{
+  "schema": "lns2.whole_pair_feedback.v1",
+  "source_collection": "build/initlns-prefix-budget-feedback-v1",
+  "source_evidence": "artifacts/initlns-prefix-budget-feedback-v1/evidence.json",
+  "output": "build/initlns-whole-pair-feedback-v1",
+  "workers": 20,
+  "pp_seeds": [20260912, 20260913],
+  "job_seconds": 30,
+  "call_seconds": 5,
+  "process_fuse_seconds": 60,
+  "max_feedback_blockers": 2,
+  "max_attempts": 4,
+  "minimum_available_memory_gib": 3,
+  "collection_session_hours": 2
+}
