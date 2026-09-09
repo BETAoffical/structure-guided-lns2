@@ -90,3 +90,9 @@ python3 scripts/diagnose_full_neighborhood_recovery.py timing-readiness
 正式输出在 `build/initlns-full-neighborhood-recovery-v1-final`；`v1` 目录仅保留静态准备检查点，没有修复结果。
 每个阶段使用 `--resume` 验证后续跑，
 可用 `--max-jobs` 做有限流程检查。代码、配置或输入变化时必须登记新目录并保留旧失败记录。
+
+## 结果入口
+
+预登记采集已完成；原预算、方法和门槛没有修改。
+参见 [中文结果与失败分析](FULL_NEIGHBORHOOD_RECOVERY_RESULTS_ZH.md)。
+保存结果的独立校验入口为 `python scripts/verify_full_neighborhood_recovery.py`，只读输入，不执行搜索。

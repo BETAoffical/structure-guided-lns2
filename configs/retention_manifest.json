@@ -18,6 +18,7 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/verify_full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Independently validate full-neighborhood recovery outputs, paired baselines, rollback, cost caps and timing prohibition."},
     {"path": "experiments/full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Bounded original-neighborhood soft-PP recovery diagnostics with immutable external paths."},
     {"path": "experiments/full_recovery_collection.py", "role": "reproducibility", "purpose": "Registered 20-process mechanism collection, failure analysis and fail-closed timing admission."},
     {"path": "scripts/diagnose_full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Explicit full-neighborhood preparation, parity, diagnosis and timing-readiness stages."},

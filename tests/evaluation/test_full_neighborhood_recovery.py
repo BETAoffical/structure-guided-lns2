@@ -119,6 +119,30 @@ class RecoveryTests(unittest.TestCase):
                  feedback=None,attempts=[dict(result={'status':'not_found'})])
         self.assertEqual(collection.failure_label(row),'cost_bounded_path_search_failed')
 
+    def test_one_seed_recoveries_and_budget_censoring_cannot_pass(self):
+        cases=[dict(case_id=str(i),map_id=str(i%2),role='failed_long') for i in range(3)]
+        rows=[dict(status='ok',recovered=method=='directed_resources' and seed==1,
+                   job=dict(case_id=c['case_id'],seed=seed,method=method))
+              for c in cases for seed in (1,2) for method in recovery.METHODS]
+        gate=recovery.mechanism_gate(rows,cases,len(rows))
+        self.assertFalse(gate['passed'])
+        self.assertEqual(gate['stable_recoveries']['directed_resources'],[])
+        rows[0]['budget_exhausted']=True
+        self.assertEqual(recovery.mechanism_gate(rows,cases,len(rows))['reason'],
+                         'incomplete_error_or_censored_evidence')
+
+    def test_retry_not_found_is_not_source_infeasibility(self):
+        class NoAlternative(FakeProbe):
+            def plan(self,aid,fixed,overrides,hard,constraints,cap,seconds):
+                if constraints:
+                    return dict(status='empty',path=[],cost=-1,expanded=2,generated=3,low_level_collisions=-1)
+                return super().plan(aid,fixed,overrides,hard,constraints,cap,seconds)
+        result=recovery.recover(NoAlternative(),tiny_state(),[0,1],11,'directed_resources',CONFIG)
+        self.assertFalse(result['recovered'])
+        self.assertEqual(result['status'],'ok')
+        self.assertEqual(result['final'],result['base'])
+        self.assertTrue(all(a['result']['status']=='not_found' for a in result['attempts']))
+
 
 class CollectionTests(unittest.TestCase):
     def test_source_sampling_excludes_holdout_maps_and_duplicate_tasks(self):
