@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/conflict_budget_attribution.py", "role": "reproducibility", "purpose": "Reconstruct cumulative unique collision-pair budgets from saved PP attempts without new searches or runtime changes."},
+    {"path": "scripts/audit_conflict_budget_attribution.py", "role": "reproducibility", "purpose": "Expose authenticated 20-process saved-path budget attribution and deterministic resume."},
+    {"path": "tests/evaluation/test_conflict_budget_attribution.py", "role": "reproducibility", "contract": "Protect unique-pair accounting, external boundaries, saved-path validation and non-promoting optimistic bounds."},
     {"path": "scripts/verify_full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Independently validate full-neighborhood recovery outputs, paired baselines, rollback, cost caps and timing prohibition."},
     {"path": "experiments/full_neighborhood_recovery.py", "role": "reproducibility", "purpose": "Bounded original-neighborhood soft-PP recovery diagnostics with immutable external paths."},
     {"path": "experiments/full_recovery_collection.py", "role": "reproducibility", "purpose": "Registered 20-process mechanism collection, failure analysis and fail-closed timing admission."},
