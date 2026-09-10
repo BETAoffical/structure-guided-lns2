@@ -66,7 +66,19 @@
 python scripts/prepare_warehouse_repair_confirmation.py --output build/warehouse-repair-confirmation-preparation-copy
 ```
 
-下一步先完成历史种子和地图清单，再生成8图16任务，验证几何、OD及身份；之后才构造32个检查点。构造和非计时校验最多20个进程，准备求解成本与正式TTF分开。旧三档负载执行器写死6图/18任务及两种控制器，不能通过改常量覆盖历史协议；新三方法执行入口尚未完成。
+数据准备入口只提供以下三个阶段，没有solver或计时入口：
+
+```powershell
+python scripts/generate_warehouse_repair_confirmation.py inventory
+python scripts/generate_warehouse_repair_confirmation.py generate
+python scripts/generate_warehouse_repair_confirmation.py verify
+```
+
+`inventory`在生成前登记当前可访问的历史输入文件、种子与地图几何哈希；排除新确认目录、构建环境及依赖环境，不读取episode轨迹或outcome标签。此盘点不等价于检查已删除文件或全部Git历史，也不能证明新地图在统计意义上与历史布局独立。重复种子或相同地图内容会阻止继续，不自动换seed。
+
+`generate`复用原生成器，拒绝覆盖已有数据；几何合法性重试沿用原协议，任务失败不重抽seed。`verify`重新读取地图、任务sidecar及MovingAI场景，检查唯一起终点、可通行性、最短距离、密度、身份和实际种子顺序。最多20个独立进程做任务校验；8图生成沿用原串行入口，避免为小批输入另改生成器。生成失败或中断的目录保留，必须审查原因，不能自动重跑。
+
+完成8图16任务验证后，才构造32个检查点。构造和非计时校验最多20个进程，准备求解成本与正式TTF分开。旧三档负载执行器写死6图/18任务及两种控制器，不能通过改常量覆盖历史协议；新三方法执行入口尚未完成。
 
 计时前还必须完成：三方法恢复/配对/时间边界微型测试、暂停/续跑和失败统计测试、冻结有效checkpoint清单及最终排程、登记新增执行器身份、提交推送并取得单独计时授权。此时方法与数据参数保持不变；新增适配器身份不能混入已完成历史运行。
 

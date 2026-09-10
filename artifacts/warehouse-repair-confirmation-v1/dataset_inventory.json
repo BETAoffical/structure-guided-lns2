@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.confirmation_dataset_inventory_registration.v1",
+  "status": "inventory_frozen_before_dataset_generation",
+  "inventory_path": "build/warehouse-repair-confirmation-v1/dataset-audit/historical_inputs.jsonl",
+  "inventory_sha256": "5cd08a338e24278c2befcc7e86800d78e9681e7296122fe76731358383a46dec",
+  "configuration_sha256": "4299a045a12f1cacf3c7362764c06a08026b1bedf9a6de8b8db93b07badc08bd",
+  "retained_input_files": 8091,
+  "movingai_map_files": 1462,
+  "new_map_seeds": [567535149, 2098403859, 210747068, 150975963, 1676438254, 1024981055, 405876468, 1123891063],
+  "historical_seed_overlap": 0,
+  "scope": "accessible retained inputs; excludes deleted files and archived Git history",
+  "solver_calls": 0,
+  "timed_execution_authorized": false
+}
