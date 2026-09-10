@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.recovery_provenance_evidence.v1",
+  "report_file": "build/initlns-recovery-provenance-audit-v1/report.json",
+  "report_sha256": "95f1047d003f8d1c00e3fdadf966ad4aa0dca70cd9cf22af6fdd23b8a725f5ae",
+  "cases": 3,
+  "prefix_repair_replays": 472,
+  "proposal_grids": 1603,
+  "proposal_requests": 258624,
+  "new_candidate_repairs": 0,
+  "previous_raw_hits": 0,
+  "previous_pruned_hits": 0,
+  "errors": 0,
+  "training": false,
+  "production_changes": false,
+  "timing_experiment": false,
+  "decision": "mechanism_localization_only",
+  "boundary": "Exact historical witness subsets only. Does not show absence of other useful proposals or prove that more sampling improves TTF."
+}
