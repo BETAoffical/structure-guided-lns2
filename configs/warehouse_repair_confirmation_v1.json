@@ -1,0 +1,72 @@
+{
+  "schema": "lns2.warehouse_repair_confirmation_preparation.v1",
+  "experiment_id": "warehouse-repair-confirmation-v1",
+  "scope": "full_path_set_repair_after_synthetic_hotspot_delay",
+  "timed_execution_authorized": false,
+  "base_dataset_config": "configs/stride_warehouse_disruption_recovery_load_extension_dataset_v1.json",
+  "base_dataset_sha256": "acd253f1ee38903f4700b8c61fac610d5e343b4804bec27a8e268b3c82b37739",
+  "dataset": {
+    "master_seed": 2026102101,
+    "map_count": 8,
+    "tasks_per_map": 2,
+    "agent_density": 0.15,
+    "split": "confirmation",
+    "output": "build/warehouse-repair-confirmation-v1/dataset"
+  },
+  "checkpoint": {
+    "replicas_per_task": 2,
+    "incumbent_solver_seed_base": 2026102200,
+    "selection_seed_base": 2026102300,
+    "screen_solver_seed_base": 2026102400,
+    "incumbent_time_limit_seconds": 120,
+    "incumbent_max_repair_iterations": 0,
+    "share_frozen_incumbent_across_replicas": true,
+    "delay_ticks": 4,
+    "delayed_agent_fraction": 0.15,
+    "hotspot_neighborhood_radius": 1,
+    "global_time_rule": "earliest_maximum_hotspot_occupancy_after_t0",
+    "minimum_conflict_pair_count": 16,
+    "minimum_active_conflict_agent_count": 32,
+    "minimum_largest_conflict_component_size": 16,
+    "minimum_qualified_checkpoints": 24,
+    "minimum_qualified_maps": 8,
+    "replace_failed_candidates": false,
+    "retain_all_construction_outcomes": true,
+    "native_integrity_errors_allowed": 0
+  },
+  "controllers": ["official_adaptive", "v2-full", "dual16"],
+  "frozen": {
+    "runtime_commit": "5c31ba91345e32c055110b2b17eb9c3242390f01",
+    "native_path": "build/linux/proposal-deadline-fix-validation/lns2_env.cpython-310-x86_64-linux-gnu.so",
+    "native_sha256": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+    "model_manifest": "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json",
+    "model_manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "runtime": {
+    "preparation_workers": 20,
+    "timed_workers": 1,
+    "wall_budget_seconds": 60,
+    "solver_budget_seconds": 60,
+    "external_fuse_seconds": 90,
+    "max_repair_iterations": 0,
+    "controller_order": "six_permutations_rotating",
+    "repair_seed_policy": "episode_stream",
+    "timing_boundary": "checkpoint_restore_inclusive_ttf",
+    "safe_stop": "after_current_episode"
+  },
+  "primary_comparison": "dual16_vs_official_adaptive",
+  "gate": {
+    "minimum_paired_win_rate": 0.70,
+    "minimum_mean_capped_ttf_improvement": 0.15,
+    "minimum_successes_per_hour_improvement": 0.20,
+    "maximum_success_count_loss": 0,
+    "no_additional_timeout_or_censor": true,
+    "minimum_nonworse_maps": 6,
+    "bootstrap_replicates": 5000,
+    "bootstrap_unit": "map_id",
+    "minimum_improvement_ci_lower_bound": 0
+  },
+  "secondary_comparisons": ["v2-full_vs_official_adaptive", "dual16_vs_v2-full"],
+  "no_model_selection_from_confirmation": true,
+  "claim_exclusions": ["online_execution_recovery", "executed_prefix_preservation", "lifelong_mapf", "natural_from_scratch_planning", "global_lns2_replacement", "static_context_transfer"]
+}

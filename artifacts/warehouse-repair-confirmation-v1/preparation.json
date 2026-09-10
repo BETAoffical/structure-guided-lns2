@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.warehouse_repair_confirmation_preparation_evidence.v1",
+  "status": "protocol_frozen_not_ready_for_timing",
+  "runtime_commit": "5c31ba91345e32c055110b2b17eb9c3242390f01",
+  "config": "configs/warehouse_repair_confirmation_v1.json",
+  "report_plan": "docs/WAREHOUSE_REPAIR_REPORT_PLAN_ZH.md",
+  "preflight": {
+    "path": "build/warehouse-repair-confirmation-v1/preparation/preflight.json",
+    "sha256": "c7858503f042ccd1f3bccf2ce7345a8b5096a9d29b155b8d2ff02c43ac20dfe3"
+  },
+  "prior_evidence": [
+    {
+      "path": "build/stride-warehouse-disruption-recovery-load-extension-v1/ttf/load_extension_ttf_report.json",
+      "sha256": "4735c946800a0e0cdb603b6daef31de4a16013e9a1af7da923b0508b1fd3bd43",
+      "role": "development_boundary_selection_not_new_confirmation"
+    },
+    {
+      "path": "build/stride-warehouse-component16-dual16-independent-ttf-v1/ttf/independent_ttf_report.json",
+      "sha256": "9b44687bda49eed49ab7b994652bb706657f25f68c0d665484d3a2d49057f9d5",
+      "role": "post_hoc_development_not_new_confirmation"
+    }
+  ],
+  "planned_maps": 8,
+  "planned_tasks": 16,
+  "planned_checkpoint_candidates": 32,
+  "maximum_timed_episodes": 96,
+  "maps_generated": 0,
+  "solver_calls": 0,
+  "timed_execution_authorized": false,
+  "preparation_tests_passed": 7,
+  "execution_prefix_frozen": false,
+  "claim": "synthetic_delay_full_path_set_repair_only"
+}
