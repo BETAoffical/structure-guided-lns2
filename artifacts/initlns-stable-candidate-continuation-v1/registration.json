@@ -1,0 +1,19 @@
+{
+  "schema": "lns2.stable_candidate_continuation.v1",
+  "plan_file": "build/initlns-stable-candidate-continuation-v1/plan.json",
+  "plan_sha256": "e19ee055075ebf7b2c489a379ca262a89558a07c60845f4bda6345d1eab8d12b",
+  "fingerprint": "0905052b3e05ad0f3f3bebd3721c9f7f6441666487b063a095445cb292585688",
+  "case_id": "case-3723c8bd272e",
+  "candidate_id": "neighborhood-0d3103de10e25097",
+  "agents": [54, 222, 245, 287],
+  "arms": ["frozen", "alternative_first"],
+  "seed_roots": [1617968853, 497039566, 974972275, 246394296, 305219720, 1407601345, 370198061, 860308551],
+  "jobs": 16,
+  "decision_budget": 64,
+  "continuation_wall_seconds": 60,
+  "workers": 16,
+  "inference": "One post-hoc state. No independent confirmation, serial TTF claim, or automatic controller promotion.",
+  "native_sha256": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+  "legacy_child_sha256": "e3eb814ecda70571836c2ed5c19d4d5e8de486d7084769ed0701f2b9d52610f1",
+  "entry_sha256": "5dbc0bc17860e79a83d351bae15ec1ee9715409da325059cc69533df7c688349"
+}
