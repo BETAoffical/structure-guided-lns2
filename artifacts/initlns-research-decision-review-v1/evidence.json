@@ -1,0 +1,41 @@
+{
+  "schema": "lns2.research_decision_review.v1",
+  "status": "posthoc_descriptive",
+  "decision": "pause_new_mechanism_collection",
+  "new_solver_calls": 0,
+  "training_runs": 0,
+  "timing_experiments": 0,
+  "scope": "Existing 120-second first-phase traces: 8 maps, 48 tasks, 2 seeds, 3 methods.",
+  "validation": {
+    "source_trace_hashes": 288,
+    "first_phase_payload_hashes": 288,
+    "episode_records": 288,
+    "previously_classified_transitions": 109900,
+    "readonly_workers": 20,
+    "new_transition_decoding": false
+  },
+  "files": {
+    "build/path-quality-pressure-deadline-recovery-v1/pressure_analysis/report.json": "a0a5608e9790b80ee0f82ffb172ab9f1d77f6b9832b2aa18c3aca1a19fa54aa7",
+    "build/path-quality-pressure-deadline-recovery-v1/pressure_analysis/episodes.csv": "5d263f6293e9de37d55f0a3387e30356caf7f201ceec3827b1b3ff28a2d8a0ee",
+    "build/path-quality-pressure-deadline-recovery-v1/review-20260909/review_metrics.json": "2d5a0afbb76b511e33cfed40fb701a1ab5bed3bb50a09fea320782c81d3fc7e2",
+    "build/path-quality-pressure-deadline-recovery-v1/review-20260909/transition-audit/report.json": "f9d16a0fc47d2d487c48e49acc653daf72082f0c436d50a04d83fe7888cae864"
+  },
+  "success_per_96": {"official_adaptive": 89, "v2-full": 79, "dual16": 65},
+  "paired_common_success": {
+    "v2-full": {"n": 78, "faster": 29, "slower": 49, "ttf_difference_sum_seconds": 168.8037778709977},
+    "dual16": {"n": 65, "faster": 38, "slower": 27, "ttf_difference_sum_seconds": 364.82575777398415}
+  },
+  "inference_fraction_of_recorded_iteration_percent": {"v2-full": 1.4215713239435148, "dual16": 1.096433425672069},
+  "recorded_iteration_difference_seconds": {
+    "v2-full": {"rollback_pp": 668.439262143, "other_pp": -66.17487727699972, "controller": 470.1254167446523, "other": -122.5365940082313, "total": 949.8532076024212},
+    "dual16": {"rollback_pp": 1474.7123234330002, "other_pp": 208.87254364900014, "controller": 881.4519667260565, "other": -93.18943821316748, "total": 2471.8473955948893}
+  },
+  "accounting": {
+    "other_iteration_seconds": "iteration_wall_seconds - pp_replan_seconds - controller_before_repair_seconds",
+    "inference": "Nested in controller time; never added again.",
+    "difference": "Method aggregate minus Official aggregate on all 96 scheduled tasks; includes unsolved episodes.",
+    "causal_attribution": false,
+    "full_ttf_decomposition": false,
+    "failure_ttf_imputation": false
+  }
+}
