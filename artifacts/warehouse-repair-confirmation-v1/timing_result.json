@@ -1,0 +1,31 @@
+{
+  "schema": "lns2.warehouse_confirmation_result_evidence.v1",
+  "producer_commit": "77d5693110d717af8a371cb0b87e3f51de14fcf2",
+  "report": "build/warehouse-repair-confirmation-v1/timed/confirmation_report.json",
+  "report_sha256": "c5fc7e0a14d579e7d411bb613e1cef3b13704ce0b21e038015f195df26b81c8c",
+  "completed_schedule_positions": 96,
+  "successful_episodes": 95,
+  "normal_solver_timeouts": 1,
+  "unexplained_errors": 0,
+  "invalid_actions": 0,
+  "fingerprint_mismatches": 0,
+  "process_wall_seconds_sum": 1171.842884140999,
+  "primary_time": "reset_to_validated_paths_delivery",
+  "failure_cap_seconds": 60,
+  "success_counts": {"official_adaptive": 32, "v2-full": 32, "dual16": 31},
+  "mean_capped_delivery_seconds": {
+    "official_adaptive": 1.2304055792812496,
+    "v2-full": 1.0872731260624997,
+    "dual16": 2.8660637026874998
+  },
+  "primary_comparison": "dual16_vs_official_adaptive",
+  "primary_decision": "fail",
+  "promoted": false,
+  "scope": "Full incumbent path sets with synthetic waits on eight fresh warehouse maps; not physical online execution recovery.",
+  "failed_checkpoint": "repair-confirm-13",
+  "failed_controller": "dual16",
+  "failed_stop_reason": "wall_timeout",
+  "failed_final_conflicts": 3,
+  "failed_repair_iterations": 734,
+  "rerun_or_exclusion_performed": false
+}
