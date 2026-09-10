@@ -1,0 +1,15 @@
+{
+  "schema": "lns2.preentry_trace_evidence.v1",
+  "report_file": "build/initlns-preentry-trace-audit-v1/report.json",
+  "report_sha256": "6b5cc94a7bf677808a70640e31393116f3e851b2fe3ec1062043310e96394648",
+  "source_cases": 6,
+  "transitions": 3776,
+  "errors": 0,
+  "solver_runs": 0,
+  "training": false,
+  "production_changes": false,
+  "case_ids": ["case-b4c844537f19", "case-7ee343a50388", "case-7972d3318d2d", "case-6542dfb0660a", "case-3723c8bd272e", "case-505cbcf446fa"],
+  "longest_unchanged_runs": [806, 602, 1, 192, 1008, 0],
+  "decision": "diagnostic_only_no_controller_promotion",
+  "limitation": "Post-hoc retained traces; absent counterfactuals cannot establish that rejecting an entry action or expanding a candidate pool helps."
+}
