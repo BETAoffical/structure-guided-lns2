@@ -1,0 +1,30 @@
+{
+  "schema": "lns2.runtime_component_attribution_evidence.v1",
+  "decision": "admit_static_payload_reuse_prototype_only",
+  "report": {
+    "path": "build/runtime-component-attribution-20260910-final/report.json",
+    "sha256": "5e6d6d5068aa40bb6e39cea17c7135712b76c3cbd88267d3c7bd603c812e941f"
+  },
+  "protocol": {
+    "path": "build/runtime-component-attribution-20260910-final/protocol.json",
+    "sha256": "35014b4141e50abcde8a8f28345dca0056fec921dd2c1eda8482366f15f0ef29"
+  },
+  "script": {
+    "path": "scripts/profile_retained_controller_components.py",
+    "sha256": "3ea55f0bd4d93d94c6da3987700f2c5cca97e6d5ef269d986b01ed90ce0547b1"
+  },
+  "states": 6,
+  "fast_controls": 2,
+  "workers": 6,
+  "repeats_per_stage": 3,
+  "exact_historical_selected_candidates": 6,
+  "maximum_historical_score_delta": 0.0,
+  "same_input_features_repeat_exactly": true,
+  "input_mutations": 0,
+  "solver_calls": 0,
+  "runtime_modified": false,
+  "formal_ttf_runs": 0,
+  "new_unit_tests_passed": 4,
+  "existing_frozen_native_tests_passed": 2,
+  "boundary": "Six post-hoc development states and parallel instrumented components, not representative end-to-end timing. V2 topology preparation is a diagnostic control, not its online cost. No whole-residual attribution or reliability gain is established."
+}
