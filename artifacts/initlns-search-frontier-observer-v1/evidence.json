@@ -1,0 +1,24 @@
+{
+  "schema": "lns2.search_frontier_evidence.v1",
+  "preregistered_commit": "4f6a47c89e0f16120aa1215f9ca6bc15b4d0fea2",
+  "files": {
+    "build/initlns-search-frontier-observer-v1/plan.json": "5a401d5b138c01b574b8857fba632e84082253af0481df630856292e4ad232e1",
+    "build/initlns-search-frontier-observer-v1/witness-report.json": "941826a06cfc440e5a82145eb131bd989b634c6ff372e562603c7299bf9deaed",
+    "build/initlns-search-frontier-observer-v1/independent-audit.json": "7ebd4f745e87124a11bbccf91d24106df5a6909750b4765902cd714c13559132"
+  },
+  "audit_implementation_sha256": "ec4edf933716aa1fa14f296d91ff699bfda320c034863c7d07f0dfcc13483c77",
+  "witness_conditions": 8,
+  "distinct_witness_states": 1,
+  "parity_conditions": 8,
+  "truncated_searches": 0,
+  "unmapped_flags": 0,
+  "searches_observed": 88,
+  "records": 301754,
+  "main_owner_fraction": 0.9931710213776722,
+  "main_witness_top4": 0,
+  "main_witness_ranks": [279, 318, 294, 269, 318, 245, 313, 313],
+  "development_conditions_run": 0,
+  "decision": "NO_GO",
+  "scope": "Observation only; no intervention, training, TTF, or runtime promotion.",
+  "tests": {"targeted_python_passed": 38, "lns2_ctest_passed": 12, "formal_evidence_verified": 24}
+}
