@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.compressed_neighborhood_registration.v1",
+  "plan_file": "build/initlns-compressed-neighborhood-native-v1/plan.json",
+  "plan_sha256": "0b3e457e5c92638cf965a28d47ce669c42c13b3933c16cf7f8948ab742f8a349",
+  "case_id": "case-6542dfb0660a",
+  "source_step": 254,
+  "prefix_steps": 253,
+  "arms": ["original16", "compressed12", "compressed11"],
+  "trials": 8,
+  "jobs": 24,
+  "workers": 20,
+  "pp_seconds": 10,
+  "process_fuse_seconds": 300,
+  "common_relative_order": true,
+  "witness_paths_as_input": false,
+  "timing_experiment": false,
+  "no_automatic_next_stage": true
+}
