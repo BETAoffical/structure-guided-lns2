@@ -1,5 +1,27 @@
 import pytest
-from scripts.audit_reservation_outcomes import verify_branch
+from scripts.audit_reservation_outcomes import verify_branch, canonical_role, corrected_gate
+
+
+@pytest.mark.parametrize('name',['failed_long','failed_long_unchanged'])
+def test_failure_role_aliases(name):
+    assert canonical_role(name)=='failed_tail'
+
+
+def test_unknown_role_is_rejected_not_silently_excluded():
+    with pytest.raises(ValueError,match='unknown case role'):
+        canonical_role('failure_new_unknown')
+
+
+def test_short_failure_alias_can_satisfy_failure_source_gate():
+    rows=[]
+    for i in range(3):
+        for _ in range(2):
+            rows.append(dict(job=dict(case=dict(case_id=str(i),map_id=str(i),role='failed_long')),
+                triggered=True,branches=dict(
+                    directed_release=dict(applicable=True,recovered=True,final_conflicts=0),
+                    random_release=dict(applicable=True,recovered=False,final_conflicts=1),
+                    fresh_retry=dict(applicable=True,recovered=False,final_conflicts=1))))
+    assert corrected_gate(rows)['passed']
 
 
 def test_final_external_occupancy_cannot_be_omitted_from_acceptance():

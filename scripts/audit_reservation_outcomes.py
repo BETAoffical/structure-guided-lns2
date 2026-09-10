@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 import sys
 
@@ -12,8 +13,24 @@ from experiments._common import read_json, write_json
 from experiments.state_analysis import reconstruct_conflicts
 from experiments.native_path_compatibility import edge_set, paths_of, modules
 from experiments.full_neighborhood_recovery import check_paths
-from scripts.diagnose_reservation_feedback import OUT, METHODS, load, read_result, feedback_ranking
+from scripts.diagnose_reservation_feedback import OUT, METHODS, load, read_result, feedback_ranking, gate
 from scripts.diagnose_reservation_mediation import require, sha256_file
+
+
+def canonical_role(role):
+    roles={'failed_long':'failed_tail','failed_long_unchanged':'failed_tail',
+           'successful_stall':'successful_tail','successful_long_unchanged':'successful_tail',
+           'fast_control':'fast_control'}
+    require(role in roles,'unknown case role: '+role)
+    return roles[role]
+
+
+def corrected_gate(rows):
+    normalized=deepcopy(rows)
+    for row in normalized:
+        case=row['job']['case']
+        if canonical_role(case['role'])=='failed_tail': case['role']='failed_long_unchanged'
+    return gate(normalized)
 
 
 def ledger(state,order,diagnostics):
@@ -127,6 +144,20 @@ def main():
     m=load(); report=read_json(OUT/'report.json')
     for j in m['jobs']:
         require(sha256_file(OUT/'results'/f"{j['id']}.json")==report['result_sha256'][j['id']],'report row SHA')
+    saved=[read_result(j) for j in m['jobs']]
+    corrected=deepcopy(report)
+    corrected.update(schema='lns2.reservation_feedback_report.v1.1',
+        gate=corrected_gate(saved),
+        supersedes_report_sha256=sha256_file(OUT/'report.json'),
+        correction='Reporting role aliases failed_long and failed_long_unchanged; no solver or selection changes.',
+        analysis_issue_count=1,solver_errors=0,
+        role_counts=dict(Counter(canonical_role(j['case']['role']) for j in m['jobs'])))
+    for method in METHODS:
+        corrected['summaries'][method]['failed_tail_recovered']=sum(
+            r['branches'][method]['recovered'] for r in saved
+            if canonical_role(r['job']['case']['role'])=='failed_tail')
+    corrected['decision']='bounded_development_signal_only' if corrected['gate']['passed'] else 'no_go'
+    require(not corrected['gate']['passed'],'stop review requires a failed mechanism gate')
     with ProcessPoolExecutor(max_workers=20) as pool: data=list(pool.map(audit_job,m['jobs']))
     rows=[r for d in data for r in d['rows']]; methods={}
     for method in METHODS:
@@ -140,16 +171,19 @@ def main():
             total_expanded_including_baseline=sum(d['base_expanded'] for d in data)+sum(r['expanded'] for r in rs))
     coverage=witness_feedback_coverage()
     native_checks=verify_mediation_native()
-    summary=dict(schema='lns2.reservation_failure_review.v1',conditions=48,
+    summary=dict(schema='lns2.reservation_failure_review.v2',conditions=48,
         verified_new_branches=sum(r['applicable'] for r in rows),native_mediation_paths_verified=native_checks,
         methods=methods,witness_feedback_coverage=coverage,
         witness_present_count=sum(r['present'] for r in coverage),
         recovered_rows=[r for r in rows if r['recovered']],
         base_expanded=sum(d['base_expanded'] for d in data),
-        result_report_sha256=sha256_file(OUT/'report.json'),
+        original_result_report_sha256=sha256_file(OUT/'report.json'),
+        analysis_issue_count=1,role_counts=corrected['role_counts'],
         decision='stop_automatic_feedback_branch_no_ttf_no_training',
         boundary='Viewed development cases; omission-sensitive avoiders need not be observed collision partners.')
-    write_json(OUT/'round4-rows.json',rows); write_json(OUT/'round4-review.json',summary)
+    write_json(OUT/'report-corrected.json',corrected)
+    summary['corrected_report_sha256']=sha256_file(OUT/'report-corrected.json')
+    write_json(OUT/'round4-rows-v2.json',rows); write_json(OUT/'round4-review-v2.json',summary)
     print(__import__('json').dumps(summary,ensure_ascii=False))
 
 

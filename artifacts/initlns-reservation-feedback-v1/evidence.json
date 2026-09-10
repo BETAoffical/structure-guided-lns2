@@ -1,0 +1,36 @@
+{
+  "schema": "lns2.reservation_feedback_evidence.v1.1",
+  "preregister_commit": "99233892def513cbb940a401fadb8f0e5dc2ddad",
+  "output": "build/initlns-reservation-feedback-v1",
+  "files": {
+    "report.json": "5a6de5b2ece924dfd68bf355b825570820dd9554af5b22e0957b08e69460be67",
+    "report-corrected.json": "053589e9b0218ac4c887e42b85241f5ef1c2fd7dd739843b7be4fe73576cef58",
+    "round4-review-v2.json": "384074c3bba20c25d50065ffc3a77fe651a3a0b8a224af5f1344092a3de8e902",
+    "round4-rows-v2.json": "58b69909b0fbb9932bbc588c11e5e8b61e90e7fd94edc143820aae44d1e73bc9"
+  },
+  "canonical_report": "report-corrected.json",
+  "states": 24,
+  "conditions": 48,
+  "baseline_verified": 48,
+  "new_branches": 87,
+  "fresh_retry_improvements": 1,
+  "directed_release_improvements": 1,
+  "random_release_improvements": 3,
+  "random_release_failed_tail_single_seed_improvements": 1,
+  "stable_improved_states": 0,
+  "witness_present_in_feedback": 0,
+  "witness_trials": 8,
+  "solver_errors": 0,
+  "censored_jobs": 0,
+  "analysis_issue_count": 1,
+  "decision": "no_go",
+  "production_changes": false,
+  "timing_experiment": false,
+  "training": false,
+  "validation": {
+    "targeted_python_passed": 21,
+    "lns2_ctest_passed": 12,
+    "formal_evidence_hashes_verified": 24,
+    "full_python_suite_rerun": false
+  }
+}
