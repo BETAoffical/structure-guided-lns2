@@ -107,6 +107,45 @@ python scripts/generate_warehouse_repair_confirmation.py verify
 
 确认通过则保留为有条件的扰动路径集修复方法；未通过则保留开发证据并停止该确认路线，不扩图、增扰动、挑更有利的案例直到通过。本轮不会训练、改初始化器、在线路由、PP顺序或救援机制。
 
+### 检查点与执行适配
+
+检查点准备代码先以`f84981c`提交并推送，再执行原生准备。16个任务均由Official在120秒预算内得到一份参考路径，每份路径由两个扰动副本共享；共32个检查点全部满足16/32/16门槛，8张地图均有供应。唯一冲突agent对范围222至371，活动冲突agent范围162至230，最大冲突分量范围157至228。没有换图、换seed、删除非理想结果，也没有在这些检查点上执行控制器速度比较。
+
+准备采用最多20个独立进程，每任务外部保护300秒；该保护不是额外求解预算。`checkpoints/result-XX.json`逐任务原子保存，保存的同任务incumbent只规划一次。缺少最终结果的中断任务不能自动重跑；旧准备脚本身份保存在`preparation_identity.json`。原模型、候选生成、PP+SIPPS、native及随机流逻辑不变。
+
+执行复用`path_quality_execution`的三方法映射、路径日志和单进程监督器，通过`initial_restore`直接接收认证的完整路径检查点，不从零重算PP。正式预算为60秒，外部进程保护90秒，取消修复轮数上限；每个episode包括独立启动、加载与完整校验记录。
+
+**计时实现澄清，必须在正式结果产生前冻结：**旧报告的算法TTF截至native最后一步返回，最终路径校验、写出和收尾不包含在该字段中。本轮同时保存两种时间，不改写历史报告：
+
+- `algorithm_ttf_seconds`：从`reset_paths()`前到native首次返回可行路径，包含过程中已经发生的候选生成、特征、排序、PP及日志开销。
+- `validated_delivery_seconds`：从同一起点到可行路径校验、保存及算法收尾完成，复用路径执行器的`dispatch_wall_seconds`。按本轮“交付前校验不能扣除”的协议，该字段的60秒capped版本用于主门槛。它不能直接当作旧纯算法TTF来计算工程加速比。
+- 正常结束且预算内找到可行解记为求解成功；超过预算才交付另外记录，不能隐去。没有成功或进程被杀死时主时间按60秒记，不把未交付的临时可行路径当正常完成。
+- `process_wall_seconds`：包含冷启动、模型/输入加载及子进程收尾，用于实际计算占用下的成功任务/小时；冷启动和交付时间仍分开列出。它不是实体仓库吞吐。
+
+固定5000次地图级bootstrap，随机种子`2026102500`。主比较是Dual16对Official；另外两项只解释结果，不选择替代模型。零分母和未完成配对不能判通过。源码及输入SHA绑定每个episode，缺失或改变的文件、路径或trace必须拒绝续跑。
+
+准备与执行入口相互分离：
+
+```text
+python scripts/run_warehouse_repair_confirmation.py prepare
+python scripts/warehouse_repair_confirmation_runtime.py validate
+python scripts/warehouse_repair_confirmation_runtime.py verify
+```
+
+只有最终readiness登记、完整验证和单独授权后才能使用：
+
+```text
+python scripts/warehouse_repair_confirmation_runtime.py collect --authorize-timing
+python scripts/warehouse_repair_confirmation_runtime.py stop
+python scripts/warehouse_repair_confirmation_runtime.py clear-stop
+python scripts/warehouse_repair_confirmation_runtime.py collect --authorize-timing --resume
+python scripts/warehouse_repair_confirmation_runtime.py analyze
+```
+
+上述Python命令应在指定`Ubuntu-22.04`的项目目录中用`/usr/bin/python3`执行；脚本严格加载登记的native。`collect`没有授权参数时必须在启动前失败。`stop`只写安全停止请求，当前episode完成并校验、原子落盘后不再启动下一个；可在另一个终端执行。不要用关闭终端或强制结束WSL代替安全停止。正常超时有明确记录且不自动重试；未解释错误立即停止整组，保留现场。
+
+最多96个串行episode，规划预算累计上限96分钟；按90秒进程保护计算最多144分钟，另加调度和外层校验。通常耗时目前未知，不将旧样本的秒级TTF当作新案例的完成保证。本次仅完成准备与功能测试，不运行这96个计时位置。
+
 ## 6. 报告先写哪些内容
 
 建议正文先按8至10页组织，篇幅可按实际报告模板调整：

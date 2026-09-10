@@ -39,9 +39,10 @@ def test_native_error_never_becomes_supply_failure():
     assert len(run.checkpoint_report([result])["errors"]) == 2
 
 
-def test_new_protocol_does_not_reintroduce_iteration_limit():
+def test_new_protocol_does_not_reintroduce_iteration_limit(monkeypatch):
     config = run.read_json(run.ROOT / run.CONFIG)
     assert run.environment_config(config)["max_repair_iterations"] == 0
+    monkeypatch.setattr(run, "_load_dataset_rows", lambda *a: [{"task_id": f"task-{i:02d}"} for i in range(16)])
     plan = run.task_plan(config)
     assert len(plan) == 16
     for item in plan:

@@ -11,6 +11,21 @@
   ],
   "allowed_unused_imports": [
     {
+      "path": "scripts/audit_recovery_provenance.py",
+      "name": "os",
+      "reason": "Pre-existing unused import in the frozen recovery provenance audit. Preserve its registered evidence SHA during warehouse confirmation preparation; not an exemption for new runtime code."
+    },
+    {
+      "path": "scripts/diagnose_search_occupancy.py",
+      "name": "hashlib",
+      "reason": "Pre-existing unused import in the frozen occupancy diagnostic. Its bytes are bound by the existing warehouse preflight; defer cleanup to a separate historical audit revision."
+    },
+    {
+      "path": "scripts/diagnose_single_release_opportunity.py",
+      "name": "Counter",
+      "reason": "Pre-existing unused import in the frozen single-release opportunity census. Preserve historical source identity; not a general unused-import allowance."
+    },
+    {
       "path": "experiments/local_path_compatibility.py",
       "name": "graph_of",
       "reason": "Preserve the completed local-path reference diagnostic implementation SHA. This known unused import is not used by the native diagnostic; remove only in a separately registered reference revision."
@@ -32,6 +47,20 @@
     }
   ],
   "allowed_duplicate_function_groups": [
+    {
+      "functions": [
+        {"path": "experiments/local_path_search.py", "name": "at"},
+        {"path": "experiments/search_occupancy_observation.py", "name": "at"}
+      ],
+      "reason": "Two-line goal-wait lookup retained in frozen reference-search and occupancy diagnostic sources. Historical evidence and current preflight bind both source hashes."
+    },
+    {
+      "functions": [
+        {"path": "scripts/audit_retained_path_witness.py", "name": "require"},
+        {"path": "scripts/diagnose_reservation_mediation.py", "name": "require"}
+      ],
+      "reason": "Small fail-closed assertion helpers in two frozen negative-result diagnostics. Documented duplication avoids rewriting their registered source identities."
+    },
     {
       "functions": [
         {

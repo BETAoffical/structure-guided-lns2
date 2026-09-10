@@ -18,6 +18,236 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {
+      "path": "experiments/search_frontier_observation.py",
+      "role": "reproducibility",
+      "purpose": "Positive queued transitions and a fixed post-search competitiveness envelope."
+    },
+    {
+      "path": "experiments/search_occupancy_observation.py",
+      "role": "reproducibility",
+      "purpose": "Map offered soft intervals to actual occupants outside native search."
+    },
+    {
+      "path": "experiments/search_occupancy_snapshot.py",
+      "role": "reproducibility",
+      "purpose": "Snapshot-only correction for the frozen v1 diagnostic recorder."
+    },
+    {
+      "path": "scripts/audit_preentry_trace.py",
+      "role": "reproducibility",
+      "purpose": "Read retained traces only; no solver, learned predictions or new outcomes."
+    },
+    {
+      "path": "scripts/audit_recovery_provenance.py",
+      "role": "reproducibility",
+      "purpose": "Reconstruct retained proposal grids; never repair a new candidate."
+    },
+    {
+      "path": "scripts/audit_reservation_outcomes.py",
+      "role": "reproducibility",
+      "purpose": "Independent real-path ledgers and the scheduled two-round failure review."
+    },
+    {
+      "path": "scripts/audit_retained_path_witness.py",
+      "role": "reproducibility",
+      "purpose": "Check stored path witnesses and binary old/reference path splices; no search."
+    },
+    {
+      "path": "scripts/audit_search_frontier.py",
+      "role": "reproducibility",
+      "purpose": "Read-only independent reconstruction and failure analysis of frontier records."
+    },
+    {
+      "path": "scripts/audit_search_occupancy.py",
+      "role": "reproducibility",
+      "purpose": "Independently audit saved observer evidence; never run a solver."
+    },
+    {
+      "path": "scripts/audit_single_release_outcomes.py",
+      "role": "reproducibility",
+      "purpose": "Post-hoc failure descriptions; cannot change the preregistered opportunity gate."
+    },
+    {
+      "path": "scripts/audit_witness_path_ablation.py",
+      "role": "reproducibility",
+      "purpose": "Finite old/new path recombination, not PP or online policy evaluation."
+    },
+    {
+      "path": "scripts/diagnose_reservation_feedback.py",
+      "role": "reproducibility",
+      "purpose": "Outcome-blind feedback selection with true-occupancy acceptance guards."
+    },
+    {
+      "path": "scripts/diagnose_reservation_mediation.py",
+      "role": "reproducibility",
+      "purpose": "Bounded retrospective CAT interventions, isolated from production controllers."
+    },
+    {
+      "path": "scripts/diagnose_search_frontier.py",
+      "role": "reproducibility",
+      "purpose": "Frozen, bounded queued-node observation; no repair intervention."
+    },
+    {
+      "path": "scripts/diagnose_search_occupancy.py",
+      "role": "reproducibility",
+      "purpose": "Bounded search-observation readiness, never a candidate intervention."
+    },
+    {
+      "path": "scripts/diagnose_search_occupancy_snapshot.py",
+      "role": "reproducibility",
+      "purpose": "Run the v1 observation protocol with independent per-search list snapshots."
+    },
+    {
+      "path": "scripts/diagnose_single_release_opportunity.py",
+      "role": "reproducibility",
+      "purpose": "Finite single-external soft-CAT opportunity census; never an online policy."
+    },
+    {
+      "path": "scripts/diagnose_stable_candidate_continuation.py",
+      "role": "reproducibility",
+      "purpose": "One registered candidate, two paired arms; no controller or model changes."
+    },
+    {
+      "path": "scripts/generate_warehouse_repair_confirmation.py",
+      "role": "active",
+      "purpose": "Inventory retained inputs and generate the frozen cohort without a solver."
+    },
+    {
+      "path": "scripts/prepare_warehouse_repair_confirmation.py",
+      "role": "active",
+      "purpose": "Freeze a report-oriented confirmation plan; never generate or solve tasks."
+    },
+    {
+      "path": "scripts/probe_compressed_neighborhood.py",
+      "role": "reproducibility",
+      "purpose": "Frozen same-state PP subset diagnostic; no saved witness paths as actions."
+    },
+    {
+      "path": "scripts/profile_retained_controller_components.py",
+      "role": "reproducibility",
+      "purpose": "Bounded, solver-free attribution on the six retained development states."
+    },
+    {
+      "path": "scripts/run_warehouse_repair_confirmation.py",
+      "role": "active",
+      "purpose": "Prepare the frozen warehouse confirmation; timed collection is opt-in."
+    },
+    {
+      "path": "scripts/verify_topology_static_payload.py",
+      "role": "reproducibility",
+      "purpose": "Compare only static-payload reuse against the frozen pre-edit implementation."
+    },
+    {
+      "path": "scripts/warehouse_repair_confirmation_runtime.py",
+      "role": "active",
+      "purpose": "Checkpoint validation and opt-in serial execution for the frozen cohort."
+    },
+    {
+      "path": "tests/evaluation/test_retained_component_profile.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for retained component profile"
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_repair_confirmation_dataset.py",
+      "role": "active",
+      "contract": "Regression coverage for warehouse repair confirmation dataset"
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_repair_confirmation_execution.py",
+      "role": "active",
+      "contract": "Regression coverage for warehouse repair confirmation execution"
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_repair_confirmation_preparation.py",
+      "role": "active",
+      "contract": "Regression coverage for warehouse repair confirmation preparation"
+    },
+    {
+      "path": "tests/evaluation/test_warehouse_repair_confirmation_runtime.py",
+      "role": "active",
+      "contract": "Regression coverage for warehouse repair confirmation runtime"
+    },
+    {
+      "path": "tests/test_compressed_neighborhood_probe.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for compressed neighborhood probe"
+    },
+    {
+      "path": "tests/test_preentry_trace_audit.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for preentry trace audit"
+    },
+    {
+      "path": "tests/test_recovery_provenance.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for recovery provenance"
+    },
+    {
+      "path": "tests/test_reservation_feedback.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for reservation feedback"
+    },
+    {
+      "path": "tests/test_reservation_mediation.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for reservation mediation"
+    },
+    {
+      "path": "tests/test_reservation_outcome_audit.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for reservation outcome audit"
+    },
+    {
+      "path": "tests/test_retained_path_witness.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for retained path witness"
+    },
+    {
+      "path": "tests/test_search_frontier.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for search frontier"
+    },
+    {
+      "path": "tests/test_search_frontier_audit.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for search frontier audit"
+    },
+    {
+      "path": "tests/test_search_occupancy_audit.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for search occupancy audit"
+    },
+    {
+      "path": "tests/test_search_occupancy_observation.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for search occupancy observation"
+    },
+    {
+      "path": "tests/test_search_occupancy_snapshot.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for search occupancy snapshot"
+    },
+    {
+      "path": "tests/test_single_release_failure.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for single release failure"
+    },
+    {
+      "path": "tests/test_single_release_opportunity.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for single release opportunity"
+    },
+    {
+      "path": "tests/test_stable_candidate_continuation.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for stable candidate continuation"
+    },
+    {
+      "path": "tests/test_witness_path_ablation.py",
+      "role": "reproducibility",
+      "contract": "Regression coverage for witness path ablation"
+    },
     {"path": "experiments/whole_pair_feedback.py", "role": "reproducibility", "purpose": "Isolated bounded whole-path pair commitment and external conflict-set protection; never a default controller."},
     {"path": "experiments/whole_pair_collection.py", "role": "reproducibility", "purpose": "Registered whole-pair comparison against frozen controls with atomic subprocess output and strict saved-path verification."},
     {"path": "scripts/diagnose_whole_pair_feedback.py", "role": "reproducibility", "purpose": "Explicit preparation, bounded parallel diagnosis and non-promoting whole-pair report."},
