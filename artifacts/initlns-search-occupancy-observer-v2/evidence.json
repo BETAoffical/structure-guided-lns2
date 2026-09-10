@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.search_occupancy_evidence.v2",
+  "preregistered_commit": "08ed0fd7c074278c04e4205a5f4891d1ccf22383",
+  "files": {
+    "build/initlns-search-occupancy-observer-v2/plan.json": "b108e553f6f23dfa076291be18341c2caaece2dee60490cb6cd2d9054c757efd",
+    "build/initlns-search-occupancy-observer-v2/witness-report.json": "20f4fb0445381294c7fd6aa96affc60e03dfdf7286797b379b65ad34ba855eec",
+    "build/initlns-search-occupancy-observer-v2/development-report.json": "f4db2264d9cc4d5cdd8e61816e03f275bec32e12a39d3b091d9cbd9e7005df69",
+    "build/initlns-search-occupancy-observer-v2/independent-audit.json": "2252ad44b5d2d4d62002b0e4369ee10202dfc36de66e28261ecc648f0ccd67e4"
+  },
+  "independent_audit_implementation_sha256": "aa369cc75d4d961e1ab819a693553ad5167f208450b50a8bb8524f8e32d1ccbb",
+  "frozen_module_sha256": "e7f8c220f17531a35759b70d05868e04631ea144285f50136f93da7f965cb1c9",
+  "verified_jobs": 56,
+  "frozen_off_on_parity_jobs": 56,
+  "predecessor_observation_equal_jobs": 56,
+  "witness_captured": 8,
+  "witness_top8": 0,
+  "witness_rank_range": [230, 311],
+  "development_jobs": 48,
+  "development_states": 24,
+  "development_maps": 4,
+  "development_complete_jobs": 38,
+  "truncated_searches": 14,
+  "truncated_jobs": 10,
+  "truncated_states": 5,
+  "unrecorded_events": 230118,
+  "unmapped_retained_flags": 0,
+  "complete_development_mean_owner_fraction": 0.9727214802122168,
+  "exploratory_within_arrival_mean_owner_fraction": 0.9693834298803947,
+  "decision": "NO_GO: bounded observation completeness; selective intervention remains unproved",
+  "runtime_promotion_allowed": false,
+  "formal_timing_performed": false,
+  "tests": {"targeted_python_passed": 32, "lns2_ctest_passed": 12, "historical_evidence_verified": 24}
+}

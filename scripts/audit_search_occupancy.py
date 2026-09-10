@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from experiments._common import read_json, write_json
 from experiments.local_path_compatibility import sha256_file
+from experiments.native_path_compatibility import check_seal
 from scripts.diagnose_search_occupancy import OUT, load, read_result, signature
 from scripts.diagnose_reservation_mediation import require
 from scripts.audit_reservation_outcomes import canonical_role
@@ -76,6 +77,22 @@ def audit_job(job):
     with gzip.open(ROOT / result['raw_file'], 'rt') as stream:
         raw = json.load(stream)
     require(raw['job'] == job, 'raw job changed')
+    predecessor = ROOT / 'build/initlns-search-occupancy-observer-v1'
+    prior_report = read_json(predecessor / (job['phase'] + '-report.json'))
+    prior_path = predecessor / job['phase'] / (job['id'] + '.json')
+    require(sha256_file(prior_path) == prior_report['result_sha256'][job['id']], 'predecessor binding')
+    prior_result = read_json(prior_path)
+    check_seal(prior_result)
+    require(sha256_file(ROOT / prior_result['raw_file']) == prior_result['raw_sha256'], 'predecessor raw SHA')
+    with gzip.open(ROOT / prior_result['raw_file'], 'rt') as stream:
+        prior = json.load(stream)
+    require(prior['job'] == job and prior['summaries'] == raw['summaries'], 'snapshot changed contacts')
+    require(len(prior['captures']) == len(raw['captures']), 'snapshot changed call count')
+    for previous, current in zip(prior['captures'], raw['captures']):
+        require(previous['capture'] == current['capture'] and previous['agent'] == current['agent'],
+                'snapshot changed native observations')
+    for mode in ('on', 'off'):
+        require(signature(prior[mode]) == signature(raw[mode]), 'snapshot changed scientific result')
     state = read_json(ROOT / job['state_file'])
     original = {a['id']: a['path'] for a in state['agents']}
     expected_source = read_json(ROOT / job['expected_file'])
@@ -89,6 +106,10 @@ def audit_job(job):
     require(len(raw['captures']) == len(records) == len(raw['summaries']), 'search count')
     summaries = []
     clipped = []
+    within_arrival = set()
+    late_records = 0
+    terminal_contacts = 0
+    contact_total = 0
     for index, (record, capture, saved) in enumerate(zip(records, raw['captures'], raw['summaries'])):
         aid = record['agent']
         require(aid == order[index] == capture['agent'], 'planner order')
@@ -101,6 +122,13 @@ def audit_job(job):
             clipped.append(dict(agent=aid, offered=data['offered'], retained=len(data['events'])))
         summary = reconstruct_contacts(aid, fixed, record['search']['path'], data['events'], external)
         require(summary == saved, 'owner/contact reconstruction differs')
+        arrival = len(record['search']['path']) - 1
+        late_records += sum(event[5] > arrival for event in data['events'])
+        for owner, contacts in summary['contacts'].items():
+            if any(contact[-1] <= arrival for contact in contacts):
+                within_arrival.add(int(owner))
+            terminal_contacts += sum(contact[-1] >= len(fixed[int(owner)]) - 1 for contact in contacts)
+            contact_total += len(contacts)
         summaries.append(summary)
         fixed[aid] = record['search']['path']
     ranking = independent_ranking(summaries)
@@ -118,6 +146,14 @@ def audit_job(job):
                 owner_fraction=len(observed) / len(external) if external else 0.,
                 returned_external_owners=len(incident), observed_not_in_returned=len(observed - incident),
                 truncated_searches=clipped, complete_capture=not clipped,
+                predecessor_observation_equal=True,
+                fixed_snapshots_corrected=sum(a['fixed'] != b['fixed'] for a, b in zip(prior['captures'], raw['captures'])),
+                exploratory=dict(late_records=late_records,
+                                 late_record_fraction=late_records / result['records'] if result['records'] else 0.,
+                                 within_returned_arrival_owners=len(within_arrival),
+                                 within_returned_arrival_fraction=len(within_arrival) / len(external) if external else 0.,
+                                 terminal_contacts=terminal_contacts, external_contacts=contact_total,
+                                 terminal_contact_fraction=terminal_contacts / contact_total if contact_total else 0.),
                 records=result['records'], queries=result['queries'], searches=result['searches'],
                 witness_rank=result['witness_rank'], raw_sha256=result['raw_sha256'],
                 result_sha256=sha256_file(OUT / job['phase'] / (job['id'] + '.json')))
@@ -135,6 +171,9 @@ def summarize(rows):
                 observed_owners=distribution([r['observed_owners'] for r in rows]),
                 returned_external_owners=distribution([r['returned_external_owners'] for r in rows]),
                 observed_not_in_returned=distribution([r['observed_not_in_returned'] for r in rows]),
+                exploratory_late_fraction=distribution([r['exploratory']['late_record_fraction'] for r in rows]),
+                exploratory_within_arrival_fraction=distribution([r['exploratory']['within_returned_arrival_fraction'] for r in rows]),
+                exploratory_terminal_contact_fraction=distribution([r['exploratory']['terminal_contact_fraction'] for r in rows]),
                 total_searches=sum(r['searches'] for r in rows),
                 total_records=sum(r['records'] for r in rows))
 
@@ -160,11 +199,14 @@ def main():
         rows = list(pool.map(audit_job, plan['jobs']))
     development = [r for r in rows if r['phase'] == 'development']
     report = dict(schema='lns2.search_occupancy_independent_audit.v1',
+                  implementation_sha256=sha256_file(Path(__file__)),
                   plan_sha256=sha256_file(OUT / 'plan.json'), verified_jobs=len(rows),
                   raw_reconstruction_errors=0, solver_runs=0,
                   complete_capture_jobs=sum(r['complete_capture'] for r in rows),
                   truncated_searches=sum(len(r['truncated_searches']) for r in rows),
                   completeness_gate_passed=all(r['complete_capture'] for r in rows),
+                  predecessor_observation_equal_jobs=sum(r['predecessor_observation_equal'] for r in rows),
+                  fixed_snapshots_corrected=sum(r['fixed_snapshots_corrected'] for r in rows),
                   partial_capture_note='Owner counts are lower bounds where capture is truncated; never impute missing events.',
                   phases={p: summarize([r for r in rows if r['phase'] == p]) for p in ('witness', 'development')},
                   roles={role: summarize([r for r in development if r['role'] == role])
