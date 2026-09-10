@@ -397,6 +397,7 @@ class TopologyAnalysisCache:
             else None
         )
         self.backend = "native" if native_function is not None else "python"
+        self.native_static: dict[str, Any] | None = None
         self.index: TemporalConflictIndex | None = None
         self.paths: dict[int, list[int]] | None = None
         self.analysis: StateAnalysis | None = None
@@ -477,9 +478,8 @@ class TopologyAnalysisCache:
                 raise ValueError("prepared native analysis belongs to another state")
             payload = self.native_prepared_topology_function(prepared.capsule)
         else:
-            payload = self.native_function(
-                state, _native_static_payload(self.static_grid)
-            )
+            assert self.native_static is not None
+            payload = self.native_function(state, self.native_static)
         events = [
             ConflictEvent(
                 int(row[0]),
@@ -559,6 +559,9 @@ class TopologyAnalysisCache:
         self._validate_grid(state)
         paths = self._paths(state)
         if self.native_function is not None:
+            # The grid is fixed for this cache; native calls only read its arrays.
+            if self.native_static is None:
+                self.native_static = _native_static_payload(self.static_grid)
             native_prepared = None
             if (
                 self.native_prepare_function is not None
@@ -566,7 +569,7 @@ class TopologyAnalysisCache:
             ):
                 native_prepared = NativePreparedAnalysis(
                     self.native_prepare_function(
-                        state, _native_static_payload(self.static_grid)
+                        state, self.native_static
                     ),
                     id(state),
                 )

@@ -1,0 +1,27 @@
+{
+  "schema": "lns2.static_payload_reuse_evidence.v1",
+  "decision": "retain_narrow_engineering_change_without_ttf_or_reliability_claim",
+  "baseline_commit": "e633e9b02fc68279c8f5230aef559c76e2cfb9ab",
+  "baseline_source_sha256": "f95340b1f44326e0bd0956a46eba5d03305d66ee4154a4baba441cb994cf3ef9",
+  "updated_source_sha256": "17ea9d5630bbb34a0af22383de35b60d57930cc693e0c90f509872af1a082764",
+  "report": {
+    "path": "build/topology-static-payload-reuse-20260910-v1/report.json",
+    "sha256": "34eebb21442ccf52948feffa4a50f2955fe2ccce7f532bfe004718c80cb65529"
+  },
+  "protocol": {
+    "path": "build/topology-static-payload-reuse-20260910-v1/protocol.json",
+    "sha256": "20256413d106bf0bddc13404be9db64cd31bd0861eae3c8b10cd6003bd7aafe3"
+  },
+  "workers": 1,
+  "states": 6,
+  "exact_feature_and_selection_pairs": 6,
+  "maximum_historical_candidate_score_delta": 0.0,
+  "remaining_static_payload_rebuilds_in_repeated_prepare": 0,
+  "new_runtime_tests": 3,
+  "targeted_regression_tests_passed": 121,
+  "dual16_topology_improvement_percent": [9.653720424357859, 8.433625527144994, 22.71510366249029],
+  "v2_diagnostic_topology_improvement_percent": [24.772748672170298, -0.4312190643937841, 19.52444549229351],
+  "new_solver_episodes": 0,
+  "formal_ttf_runs": 0,
+  "boundary": "Only the topology cache's static native payload is reused. Dynamic paths, analysis, checks and shadow recomputation remain. V2 topology measurements are controls, not its online speedup. No full candidate-generation/RNG replay or end-to-end success/TTF improvement is established."
+}

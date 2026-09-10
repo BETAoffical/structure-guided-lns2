@@ -42,6 +42,7 @@ from experiments.online_feature_engine import (
     TopologyAnalysisCache,
     _native_batch_function,
     _native_topology_event_function,
+    _native_static_payload,
 )
 from experiments.repair_collection import state_fingerprint
 from lns2_selector.controllers.v2 import PairwiseV2Selector
@@ -467,6 +468,66 @@ class ControllerV2Tests(unittest.TestCase):
         self.assertEqual(cache.analysis.pair_set, expected.pair_set)
         self.assertEqual(cache.analysis.component_id, expected.component_id)
         self.assertEqual(cache.analysis.component_members, expected.component_members)
+
+    def test_topology_static_payload_reused_and_not_mutated(self) -> None:
+        if _native_topology_event_function() is None:
+            self.skipTest("native topology extraction is unavailable")
+        state = make_state()
+        _refresh_conflicts(state)
+        with patch("experiments.online_feature_engine._native_static_payload",
+                   wraps=_native_static_payload) as conversion:
+            cache = TopologyAnalysisCache(state, backend="native", shadow_interval=1)
+            payload = cache.native_static
+            snapshot = copy.deepcopy(payload)
+            for step in range(3):
+                changed = copy.deepcopy(state)
+                changed["iteration"] = step + 1
+                changed["agents"][0]["path"].insert(0, changed["agents"][0]["path"][0])
+                _refresh_conflicts(changed)
+                cache.prepare(changed, changed_agents=[changed["agents"][0]["id"]])
+                self.assertEqual(cache.analysis, analyze_state(changed, static_grid=cache.static_grid))
+                self.assertIs(cache.native_static, payload)
+                self.assertEqual(cache.native_static, snapshot)
+                self.assertTrue(cache.last_shadow_validation)
+                state = changed
+            # Also cover the older native API without prepared analysis.
+            cache.native_prepare_function = None
+            cache.prepare(state, changed_agents=[])
+            self.assertEqual(cache.native_static, snapshot)
+            self.assertEqual(conversion.call_count, 1)
+        other = TopologyAnalysisCache(state, backend="native")
+        self.assertEqual(other.native_static, snapshot)
+        self.assertIsNot(other.native_static, payload)
+
+    def test_topology_static_payload_rejects_changed_map_before_native(self) -> None:
+        if _native_topology_event_function() is None:
+            self.skipTest("native topology extraction is unavailable")
+        state = make_state()
+        _refresh_conflicts(state)
+        cache = TopologyAnalysisCache(state, backend="native")
+        paths = copy.deepcopy(cache.paths)
+        payload = copy.deepcopy(cache.native_static)
+        for field in ("rows", "cols", "obstacles"):
+            changed = copy.deepcopy(state)
+            if field == "obstacles":
+                changed[field][0] = 1 - changed[field][0]
+            else:
+                changed[field] += 1
+            with self.subTest(field=field), patch.object(cache, "native_prepare_function") as native:
+                with self.assertRaisesRegex(ValueError, "grid changed"):
+                    cache.prepare(changed, changed_agents=[])
+                native.assert_not_called()
+            self.assertEqual(cache.paths, paths)
+            self.assertEqual(cache.native_static, payload)
+
+    def test_python_topology_does_not_build_native_static_payload(self) -> None:
+        state = make_state()
+        _refresh_conflicts(state)
+        with patch("experiments.online_feature_engine._native_static_payload") as conversion:
+            cache = TopologyAnalysisCache(state, backend="python")
+            cache.prepare(state, changed_agents=[])
+            conversion.assert_not_called()
+            self.assertIsNone(cache.native_static)
 
     def test_native_batch_engine_matches_reference_when_available(self) -> None:
         if _native_batch_function() is None:

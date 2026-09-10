@@ -205,3 +205,42 @@ timeout --signal=TERM --kill-after=5s 240s /usr/bin/python3 -B scripts/profile_r
 输出目录必须是不存在的build子目录，不覆盖已有结果。输入检查/记录使用项目已有公共I/O函数，状态和逐案例结果原子写入；进程被外部强制终止时可能保留running记录，必须结合进程状态判断，不按completed读取。
 
 验证：4项新工具测试通过；冻结native下2项既有拓扑/共享特征测试通过。没有修改求解器或运行时，因此未重跑全套Python、CTest或正式parity。恢复标签 `pre-component-profile-20260910` 指向 `5929dd2867ca0d2c41cf684ca2290b7fd5715294`，编辑前已推送核验。
+
+## 10. 静态payload复用原型：保留小改动，不宣称解决长尾
+
+本次只修改 `TopologyAnalysisCache`：首次通过地图和路径检查后生成静态native数组，后续同一缓存对象复用这份表示。prepared native接口及旧式拓扑接口均使用它。每次仍验证rows/cols/obstacles，重新提取路径和冲突，更新动态特征，照常执行周期性完整shadow校验。Python后端不生成这份数组；缓存是实例局部的，不按访问状态无限增长，占用O(栅格单元数)持久内存。
+
+没有改变候选构造、模型、排序、PP、RNG、native二进制或任何正式结果。不是跨decision复用动态分析，更不是复用最终动作。
+
+### 同输入配对检查
+
+从恢复提交 `e633e9b` 读取原始特征模块并校验其SHA，与当前原型在同一个进程内比较；共六个原状态，不替换。串行运行，旧/新顺序逐案例交替，每段三次普通调用取中位数。没有拿上轮六进程的绝对时间当作旧基线，没有追加样本或重复运行来改善结果。
+
+| 案例 | 旧拓扑prepare，ms | 新拓扑prepare，ms | 该组件改善 |
+|---|---:|---:|---:|
+| V2成功停滞，b4c844 | 6.617 | 4.977 | 24.77% |
+| V2失败停滞，7ee343 | 7.024 | 7.055 | -0.43% |
+| V2快速对照，7972d3 | 4.288 | 3.451 | 19.52% |
+| Dual16成功停滞，6542df | 6.583 | 5.948 | 9.65% |
+| Dual16失败停滞，3723c8 | 7.884 | 7.219 | 8.43% |
+| Dual16快速对照，505cbc | 3.569 | 2.758 | 22.72% |
+
+V2前三行仍然只是拓扑函数诊断对照，不是V2新增或减少的在线成本。一次小幅负差如实保留，不能据此保证所有状态必然加速。三例Dual16表现支持保留这个低风险工程修改，但不是总体TTF估计，也不提供成功率恢复证据。
+
+6/6新旧特征digest和选中候选一致，全部历史候选分数差为0，输入未变；函数剖析确认重复prepare不再调用静态payload构造函数。候选直接来自旧trace，未重新执行proposal和完整随机流，不能把这项检查写成全流程动作等价实验。
+
+### 验证与后续边界
+
+- 新增3项运行时测试：路径与iteration变化后正确更新及shadow一致；native不修改payload、旧接口复用和不同实例隔离；换图在native调用前拒绝；Python后端不分配native数组。
+- V2、闭环入口、组件工具定向回归共121项通过，使用原冻结native。不是全套Python或新CTest结果；C++与二进制未变，没有重编译或重跑正式路径实验。
+- 比较入口：[静态payload验证](../scripts/verify_topology_static_payload.py)。原生、模型、输入、旧源码和新源码分别登记；[紧凑证据](../artifacts/initlns-runtime-component-attribution-v1/static_payload_reuse.json)。
+- 运行时源码身份已经改变，历史registration不应被改写或放宽校验。未来实验必须登记新身份并使用新输出目录，不能续跑旧正式计时来混合两个版本。
+- 保留这项小改动，停止本轮组件扩展。暂不增加动态路径缓存、不移除诊断、不重训或跑全量TTF。它不能替代对11/24例Official独有成功的解释；不得宣布成功率或算法长尾已修复。
+
+复现组件对比命令，使用未存在的build输出目录：
+
+```bash
+timeout --signal=TERM --kill-after=5s 240s /usr/bin/python3 -B scripts/verify_topology_static_payload.py --output build/topology-static-payload-reuse-review-copy
+```
+
+恢复标签 `pre-topology-static-payload-20260910` 指向 `e633e9b02fc68279c8f5230aef559c76e2cfb9ab`，修改前已推送并核验。
