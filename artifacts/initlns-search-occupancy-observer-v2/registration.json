@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.search_occupancy_registration.v2",
+  "plan_file": "build/initlns-search-occupancy-observer-v2/plan.json",
+  "plan_sha256": "b108e553f6f23dfa076291be18341c2caaece2dee60490cb6cd2d9054c757efd",
+  "module_sha256": "e7f8c220f17531a35759b70d05868e04631ea144285f50136f93da7f965cb1c9",
+  "change": "Per-call list snapshot only; identical observation protocol and gates.",
+  "witness_jobs": 8,
+  "development_jobs": 48,
+  "workers": 20,
+  "event_cap_per_search": 65536,
+  "witness_capture_minimum": 6,
+  "scope": "Non-timed observation diagnostics only. No controller changes."
+}

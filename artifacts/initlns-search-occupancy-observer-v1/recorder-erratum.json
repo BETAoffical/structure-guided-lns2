@@ -1,0 +1,10 @@
+{
+  "schema": "lns2.search_occupancy_erratum.v1",
+  "affected_field": "raw.captures[*].fixed",
+  "cause": "Shared mutable list was saved without a per-call copy.",
+  "frozen_path_node_and_pp_parity_affected": false,
+  "capture_prefix_metadata_verified": false,
+  "development_gate": "NO_GO: 14 truncated searches; unchanged",
+  "replacement_directory": "build/initlns-search-occupancy-observer-v2",
+  "scope": "Repeat identical non-timed observation conditions after snapshot fix; retain all v1 evidence."
+}
