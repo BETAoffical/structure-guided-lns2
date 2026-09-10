@@ -1,0 +1,8 @@
+{
+  "jobs": 2708,
+  "plan_file": "build/initlns-single-release-opportunity-v1/plan.json",
+  "plan_sha256": "589dc51a8e0132646bdf664b58f18b51c8b8d0c631244e85b7c28a12fca6d77c",
+  "schema": "lns2.single_release_opportunity.v1",
+  "scope": "three_previously_viewed_failed_tail_states_not_ttf_or_new_confirmation",
+  "states": 3
+}

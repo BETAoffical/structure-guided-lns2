@@ -1,0 +1,17 @@
+{
+  "schema": "lns2.single_release_opportunity.v1",
+  "output": "build/initlns-single-release-opportunity-v1",
+  "selection_salt": "single-release-opportunity-v1/",
+  "seeds": [20260912, 20260913],
+  "expected_cases": ["case-3723c8bd272e", "full-f062ea7307d7d84b", "case-7ee343a50388"],
+  "expected_jobs": 2708,
+  "workers": 20,
+  "search_seconds": 30,
+  "call_seconds": 5,
+  "job_fuse_seconds": 90,
+  "session_seconds": 3600,
+  "minimum_available_memory_gib": 3,
+  "minimum_stable_states": 2,
+  "minimum_mean_relative_reduction": 0.05,
+  "scope": "three_previously_viewed_failed_tail_states_not_ttf_or_new_confirmation"
+}
