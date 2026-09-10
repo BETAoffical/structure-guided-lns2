@@ -146,6 +146,19 @@ python scripts/warehouse_repair_confirmation_runtime.py analyze
 
 最多96个串行episode，规划预算累计上限96分钟；按90秒进程保护计算最多144分钟，另加调度和外层校验。通常耗时目前未知，不将旧样本的秒级TTF当作新案例的完成保证。本次仅完成准备与功能测试，不运行这96个计时位置。
 
+### 最终准入状态（2026-09-10）
+
+当前已完成准备，状态为`ready_awaiting_timing_authorization`；以上“检查点尚未构造”等描述仅记录较早阶段。正式计时目录尚未创建，正式episode为0。最终[准入登记](../artifacts/warehouse-repair-confirmation-v1/readiness.json)绑定准备报告、测试证据和冻结身份；准备实现提交为`7e8c3d6`。
+
+- 8张地图、16个任务、32个检查点全部合格；三方法共96次恢复验证通过，初始fingerprint一致，未执行正式控制器步骤。
+- 全量Python测试分两组完成：20 workers组1497通过、55跳过；隔离组17通过。合计1514通过、55跳过，未弱化断言或时限。首次全并行运行发现短进程保护受启动竞争影响、原生模块导入状态污染及仓库登记遗漏；前两类采用隔离验证，登记遗漏已补齐，原失败日志保留。
+- 55项跳过分别为：33项转由Linux CTest覆盖的原生测试、9项要求其他handoff扩展、8项要求隔离probe扩展、4项Windows sklearn训练环境测试、1项Windows专属长路径测试。它们不记作通过；当前控制器另有冻结native微型端到端功能验证，不为补历史扩展而更换正式二进制。
+- 冻结LNS2构建12项通过；该构建缺少GPBS可执行文件的两项在已有GPBS构建中补验，2/2通过。没有替换冻结native或修改官方求解逻辑。
+- 两组官方路径SHA分别保持`915ee104...13ecf`和`031d1bf8...aa83a`，native SHA保持`7e84f535...90e08`。仓库卫生审计通过，24项正式证据全部验证。
+- 已验证逐episode安全停止、续跑、错误暂停、超时记录和三控制器微型路径交付。正式运行只能由单独授权后的`collect --authorize-timing`启动；本次到此停止。
+
+`readiness/preparation_validation.json`、配对恢复记录和排程保存在忽略的`build/warehouse-repair-confirmation-v1/readiness/`。新确认不预设正面结果；32个扰动检查点不是32张独立地图，统计仍以8张地图为bootstrap单位。
+
 ## 6. 报告先写哪些内容
 
 建议正文先按8至10页组织，篇幅可按实际报告模板调整：

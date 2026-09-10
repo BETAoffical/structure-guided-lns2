@@ -1,0 +1,44 @@
+{
+  "schema": "lns2.warehouse_confirmation_readiness.v1",
+  "status": "ready_awaiting_timing_authorization",
+  "timed_execution_authorized": false,
+  "preparation_commit": "7e8c3d62cd9107a4e630c756333765e60c19c629",
+  "preparation_sha256": "ac6103596716c1cd60eb8c7894c914d2ca77652ccdbfe2abadfb72c2371a5e08",
+  "validation_evidence": {
+    "build/warehouse-repair-confirmation-v1/verification/python-parallel.xml": "71c245bb42fb6fa88f4009789dd7ec28c0c507094ea292424650768f00fdde1f",
+    "build/warehouse-repair-confirmation-v1/verification/python-isolated.xml": "33f3569318baf02ae729befcafb67777200cf3a4d9818e9ba32c5ce08a90cdc4",
+    "build/warehouse-repair-confirmation-v1/verification/ctest.xml": "c0bd682ff5a716a9c987e55e6803b023b36b57c7c38ac2efd7cdf9f7c76b1384",
+    "build/warehouse-repair-confirmation-v1/verification/gpbs-ctest.xml": "746147291d6829f67735bac8b42d4ef3b04f61461dfb7ed288aea0bc65fe58e0"
+  },
+  "native_sha256": "7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08",
+  "official_path_sha256": "915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf",
+  "official_repair_path_sha256": "031d1bf843ada89f03be6880809bcf7632fdaeba509fd035a15657fcc93aa83a",
+  "map_count": 8,
+  "task_count": 16,
+  "qualified_checkpoints": 32,
+  "paired_restores_validated": 96,
+  "scheduled_episodes": 96,
+  "formal_timed_episodes_executed": 0,
+  "python_tests": {
+    "passed": 1514,
+    "skipped": 55,
+    "partition": "1497 passed and 55 skipped with 20 workers; 17 passed in isolation",
+    "reason": "Preserve process-fuse deadlines and isolate native module import state; no assertions weakened."
+  },
+  "native_tests": {
+    "frozen_lns2_passed": 12,
+    "existing_gpbs_build_passed": 2,
+    "note": "Frozen LNS2 build lacks the GPBS executable. Its two unrun entries were covered in the existing project build, without replacing the frozen native module."
+  },
+  "hygiene": {"passed": true, "formal_evidence_verified": 24},
+  "timing_protocol": {
+    "workers": 1,
+    "budget_seconds": 60,
+    "process_fuse_seconds": 90,
+    "repair_iteration_limit": null,
+    "primary_time": "reset_to_validated_paths_delivery",
+    "algorithm_ttf_reported_separately": true,
+    "stop_boundary": "after_current_episode"
+  },
+  "remaining_gate": "Separate user authorization before collect --authorize-timing."
+}
