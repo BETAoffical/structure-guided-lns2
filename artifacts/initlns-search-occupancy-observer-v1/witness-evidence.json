@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.search_occupancy_witness_evidence.v1",
+  "preregistered_commit": "ffde28dfbc3466b5a9f16af230e0fdb62d234838",
+  "report_file": "build/initlns-search-occupancy-observer-v1/witness-report.json",
+  "report_sha256": "9456ceaca29047406c9cf20e17e77201dc93ed44fef4dd0cd72691b5bdd71af3",
+  "parity_jobs": 8,
+  "captured_jobs": 8,
+  "unmapped_flags": 0,
+  "truncated_queries": 0,
+  "witness_rank_range": [230, 311],
+  "candidate_owner_range": [420, 421],
+  "interpretation": "Observation readiness passed. Selective online influence prediction has not been established."
+}
