@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.witness_path_ablation_evidence.v1",
+  "report_file": "build/initlns-witness-path-ablation-v1/report.json",
+  "report_sha256": "bf33bf3a94cc37e76b38d1c482d268f589927ffa218ae3b6a4d64bbcb35e332f",
+  "cases": 3,
+  "old_new_path_combinations": 33032,
+  "solver_runs": 0,
+  "new_repairs": 0,
+  "native_validation": false,
+  "errors": 0,
+  "training": false,
+  "production_changes": false,
+  "timing_experiment": false,
+  "decision": "fixed_path_compatibility_only",
+  "dual16_minimum_paths_for_34_conflicts": [18,55,100,149,152,273,280,300,335,388,418],
+  "dual16_minimum_paths_for_exact_post_edges": [18,55,100,149,152,235,273,280,300,335,388,418],
+  "boundary": "Minimum changed paths in a fixed binary witness space, not a minimum PP neighborhood or an online deployable action."
+}
