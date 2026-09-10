@@ -1,0 +1,15 @@
+{
+  "schema": "lns2.search_frontier_registration.v1",
+  "plan_file": "build/initlns-search-frontier-observer-v1/plan.json",
+  "plan_sha256": "5a401d5b138c01b574b8857fba632e84082253af0481df630856292e4ad232e1",
+  "module_sha256": "848c7b343674e2cfe5ad03c9d2fbb8ccf50c283c8129ebc2faf4994588efc577",
+  "recovery_tag": "pre-search-frontier-observer-20260910",
+  "primary_profile": "queued_envelope",
+  "maximum_mean_owner_fraction": 0.25,
+  "witness_top4_minimum": 6,
+  "event_cap": 32768,
+  "workers": 20,
+  "witness_jobs": 8,
+  "conditional_development_jobs": 48,
+  "scope": "Observation only; no interventions, training, or TTF."
+}
