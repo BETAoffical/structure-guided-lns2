@@ -1,0 +1,17 @@
+{
+  "schema": "lns2.reservation_mediation_evidence.v1",
+  "preregister_commit": "fa60f6f593ef29328132243739a7cee64c85e9f2",
+  "round1_report": "build/initlns-reservation-mediation-v1/round1-report.json",
+  "round1_sha256": "503069bc8b0a725d749dd0286a7262779e8c78aec656b4b3a2a2f8e768f799cd",
+  "round2_report": "build/initlns-reservation-mediation-v1/round2-report.json",
+  "round2_sha256": "e31c5cc3e6fbfcdfd5aab2b3b9c30e38050537b773b4c6a18ed8c41cbd6be466",
+  "parity_conditions": 24,
+  "controlled_query_pairs": 24,
+  "query_path_changes": 14,
+  "release_better_than_11": 8,
+  "release_mean_conflicts": 35.0,
+  "original11_mean_conflicts": 37.75,
+  "decision": "posthoc_opportunity_only",
+  "production_changes": false,
+  "timing_experiment": false
+}
