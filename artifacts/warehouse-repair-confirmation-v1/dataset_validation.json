@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.confirmation_dataset_evidence.v1",
+  "status": "dataset_validated_not_ready_for_timing",
+  "preregistration_commit": "0222db00504b253ff57b668e4f3f4e4e821edc66",
+  "report_path": "build/warehouse-repair-confirmation-v1/dataset-audit/dataset_validation.json",
+  "report_sha256": "8eb7bcc7e152d51d6a5886d106960e1eb28a1960219038c7b813a1da4b2f1cb6",
+  "dataset_path": "build/warehouse-repair-confirmation-v1/dataset",
+  "map_count": 8,
+  "task_count": 16,
+  "map_dimensions": [48, 72],
+  "agents_per_map_task": [299, 239, 252, 298, 282, 280, 252, 269],
+  "tasks_per_map": 2,
+  "historical_seed_overlap": 0,
+  "historical_or_internal_geometry_overlap": 0,
+  "solver_calls": 0,
+  "timed_episodes": 0,
+  "targeted_test_result": "28 passed",
+  "validation_repeated_without_report_changes": true,
+  "claim": "Input validity and nonduplication within the retained inventory, not solver performance or statistical independence.",
+  "remaining": ["construct_and_validate_checkpoints", "three_controller_runner_and_clock_tests", "register_checkpoint_bound_schedule", "separate_timing_authorization"]
+}
