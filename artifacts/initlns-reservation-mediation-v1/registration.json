@@ -1,0 +1,12 @@
+{
+  "schema": "lns2.reservation_mediation_registration.v1",
+  "plan_file": "build/initlns-reservation-mediation-v1/plan.json",
+  "plan_sha256": "7d630be25f645fc46a871f8a79f0f18b5ffbae651e87672f9c37ee0b303ba15a",
+  "source_commit": "3ac967c658405681007f42a136b748f44edfd572",
+  "round1_jobs": 8,
+  "round2_jobs": 8,
+  "workers_limit": 20,
+  "timing_experiment": false,
+  "production_changes": false,
+  "scope": "Post-hoc reservation mediation; parity before intervention; controlled query RNG is not a historical RNG snapshot."
+}
