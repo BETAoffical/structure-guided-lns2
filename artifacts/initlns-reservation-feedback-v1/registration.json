@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.reservation_feedback_registration.v1",
+  "plan_file": "build/initlns-reservation-feedback-v1/plan.json",
+  "plan_sha256": "e013ece7568677fa6ab53e35ccd5d885fb2d74b5f73384756bf2291c74922e52",
+  "source_commit": "f0640687cb655a56e068817ca9ab30714fe8105c",
+  "states": 24,
+  "conditions": 48,
+  "triggered": 29,
+  "maximum_new_branches": 87,
+  "workers": 20,
+  "timing_experiment": false,
+  "production_changes": false,
+  "scope": "Viewed development states; same selected agents and order; temporary CAT guidance removal with full real-path acceptance."
+}
