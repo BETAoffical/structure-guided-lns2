@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.search_occupancy_registration.v1",
+  "plan_file": "build/initlns-search-occupancy-observer-v1/plan.json",
+  "plan_sha256": "a2dc2d96b11cfad91b210cba24c1310c07a5302970a6fc63a2f417c669513720",
+  "module_sha256": "e7f8c220f17531a35759b70d05868e04631ea144285f50136f93da7f965cb1c9",
+  "recovery_tag": "pre-search-occupancy-observer-20260910",
+  "scope": "Observation only. No controller intervention, training, or formal timing.",
+  "witness_jobs": 8,
+  "development_jobs": 48,
+  "workers": 20,
+  "witness_capture_minimum": 6,
+  "event_cap_per_search": 65536,
+  "required_integrity": "Exact frozen/off/on scientific signatures; no unmapped positive flags or truncation."
+}
