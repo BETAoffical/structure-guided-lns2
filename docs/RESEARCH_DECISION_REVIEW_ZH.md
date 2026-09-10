@@ -112,3 +112,47 @@ V2净少成功10例，Dual16净少24例。Dual16在共同成功交集中胜例�
 - 初次校验把汇总额外添加的 `comparison_group` 当作逐episode原字段，导致断言失败；随后按生产汇总语义单独重算该分组，全部一致。此为新校验假设修正，原实验与结果未修改。
 - 24项正式证据与本轮来源SHA另行严格验证；没有重跑Python/CTest或solver，因为本轮只增加文档和紧凑证据。
 - 恢复标签 `pre-research-decision-review-20260910` 指向 `abcbe4d6d760e70d5ded3328119dde10729f0ea2`，创建文档前已推送并核验。
+
+## 8. 运行时准入补充：尚不实施缓存
+
+本次继续只检查工程机会，不重开算法机制实验。20个只读进程从192条V2/Dual16原trace读取68,562个transition的已有计时，验证trace SHA、fingerprint链、分类步数及原循环时间合计。没有调用native搜索、训练或进行新的组件/TTF计时。
+
+### 已有优化不能重新算作新方法
+
+当前代码已有 grouped seed-grid proposal、原生特征、稠密特征输出、静态地图缓存、路径热度增量更新、同一步内共享prepared analysis、fingerprint复用及Dual16候选合并优化。历史[StructPool Lazy](STRIDE_STRUCTPOOL_LAZY_V1_REPORT.md)明确记录了同一步分析共享，不能再次用同一理由启动一轮“全新缓存实验”。
+
+核对 `experiments/closed_loop_confirmation.py`、`experiments/online_feature_engine.py`、`src/online_features.cpp`、`lns2_selector/runtime/structshell_dual16.py` 四份当前源码SHA，均与本批正式registration登记一致；不是拿另一版本的源码解释这批计时。
+
+### 一个不同但有限的机会
+
+原生 `TopologyAnalysisCache.prepare()` 每次仍构造新的prepared analysis；V2的native feature分支未提供prepared capsule时也重新分析。现有共享主要发生在同一个decision内部，而不是在回滚后的相邻decision之间。
+
+`Analysis`包含全体路径、冲突事件、热度、agent conflict_degree/delay/path_cost/shortest_path_cost及栅格派生数据。回滚后这些数据可能不变，但iteration、低层搜索计数和proposal来源继续变化。即使未来缓存这个分析对象，动态特征、候选与排名仍必须按当前输入重算，不能复用上一步的最终动作或跳过RNG。
+
+| 原trace计时，秒 | V2 | Dual16 |
+|---|---:|---:|
+| 候选生成 | 193.362 | 268.904 |
+| 原生分析四项合计，全部decision | 125.394 | 134.885 |
+| 其中紧接前一步回滚的decision | 92.054 | 98.851 |
+| 上述回滚后四项 / 修复循环时间 | 3.292% | 2.289% |
+| 控制器selection residual | 16.977 | 438.922 |
+
+四项是 `feature_timings` 中的state_input、state_conflict_scan、state_graph、state_path_aggregate时间。本表不将它们与包含这些工作的候选、分析或控制器总时间重复相加。V2/Dual16分别有23,916/25,578个decision紧接前一步回滚；比回滚总数少是因为终止前最后一个回滚可能没有下一decision。
+
+49,539个回滚transition的agent patches均为空，冲突边无增删。这支持检查复用机会，但不等于新的通用缓存guard已经实现和验证。不得只检查冲突数或只信changed_agents列表；未来须覆盖全部analysis依赖，并以当前状态重算动态字段。
+
+3.292%/2.289%是已记录四项计算在特定步骤上的占比，不是承诺的TTF加速率，更不是整个缓存方案的收益上限。实际缓存还有键校验、生命周期和内存成本，也可能涉及另行计时的Python转换。不能把全部439秒残差自动归给它。
+
+Dual16 residual占其控制器处理约49.8%。源码显示该区间还容纳控制器框架、拓扑prepare、候选合并/注释、特征范围诊断等未被主阶段单独覆盖的工作；已有计时不能精确分摊。它不是已证实的无用代码或已证实的可消除成本。
+
+### 本次决定
+
+- 不立即实施跨decision缓存；不删除状态校验、日志、候选或结构分支，不改变控制器。
+- 不重复批量proposal、同一步prepared分析共享、静态地图缓存等已有优化。
+- 工程路线唯一优先的下一项是一个有界、仅调用纯控制器/特征函数的开销定位：复用已有六个诊断状态，包含快速对照，不调用PP、不重放求解prefix、不训练、不跑完整episode。必须先确认native和源码身份，再区分拓扑准备、Python转换和候选注释的成本。
+- 该定位属于带测量开销的组件诊断，不是串行TTF证据；只有找到占比明确、可移除且不改变候选/特征/分数/随机流的工作，才允许独立原型与一致性测试。若没有，就停止这个工程分支，不继续扩大profile范围。
+- 本轮未执行上述组件定位。算法可靠性路线仍暂停，工程节省不能被当作11/24个Official独有成功已被恢复。
+
+原episode summary还可能记录了预算边界上未进入transition的最后一次选择；本次只汇总实际transition，避免将470.245/881.686秒summary处理时间与470.163/881.490秒transition处理时间混用。该小差额不改变此前判断，也不单凭差额宣布计时bug。
+
+本次只新增报告与紧凑计时证据。恢复标签 `pre-runtime-admission-review-20260910` 指向 `891ac4f7e4f538671b816bd57d826fb7a9d0b6f6`，更新前已推送核验。

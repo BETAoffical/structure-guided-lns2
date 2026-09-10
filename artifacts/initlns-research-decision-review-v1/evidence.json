@@ -30,6 +30,44 @@
     "v2-full": {"rollback_pp": 668.439262143, "other_pp": -66.17487727699972, "controller": 470.1254167446523, "other": -122.5365940082313, "total": 949.8532076024212},
     "dual16": {"rollback_pp": 1474.7123234330002, "other_pp": 208.87254364900014, "controller": 881.4519667260565, "other": -93.18943821316748, "total": 2471.8473955948893}
   },
+  "runtime_admission": {
+    "decision": "defer_cache_implementation_until_bounded_component_attribution",
+    "source_episodes": 192,
+    "source_transitions": 68562,
+    "verified_empty_rollback_agent_and_edge_deltas": 49539,
+    "readonly_workers": 20,
+    "new_component_measurements": 0,
+    "core_fields": ["state_input_seconds", "state_conflict_scan_seconds", "state_graph_seconds", "state_path_aggregate_seconds"],
+    "v2-full": {
+      "steps": 32822,
+      "after_rollback_steps": 23916,
+      "native_core_seconds": 125.39449605099999,
+      "after_rollback_native_core_seconds": 92.053927404,
+      "after_rollback_core_iteration_percent": 3.292333650722788,
+      "candidate_generation_seconds": 193.36186942083987,
+      "selection_residual_seconds": 16.97736279817491
+    },
+    "dual16": {
+      "steps": 35740,
+      "after_rollback_steps": 25578,
+      "native_core_seconds": 134.8850487719999,
+      "after_rollback_native_core_seconds": 98.85109943300003,
+      "after_rollback_core_iteration_percent": 2.289278342154227,
+      "candidate_generation_seconds": 268.9036949279325,
+      "selection_residual_seconds": 438.9217380767441
+    },
+    "source_registration": {
+      "path": "build/path-quality-pressure-deadline-recovery-v1/registration.json",
+      "sha256": "39f4a836748e7120378112284440c9503437fa1f5e3a605cd8432520f172b3f5",
+      "matched_source_files": {
+        "experiments/closed_loop_confirmation.py": "f659319b961896053c847896a89a2602d9cac3eb90bece5106388ce079fdad03",
+        "experiments/online_feature_engine.py": "f95340b1f44326e0bd0956a46eba5d03305d66ee4154a4baba441cb994cf3ef9",
+        "src/online_features.cpp": "7e2dcb168b67f9dcdf1ad659b8f00459112ee80f1e56090828fc05a435ba8136",
+        "lns2_selector/runtime/structshell_dual16.py": "057be721e975eb34da5923b43c269ac4965b44fd5ff2b5c6f7abe901d68094ca"
+      }
+    },
+    "boundary": "Recorded component fractions are not measured cache savings or TTF gains. The residual has no exact function attribution yet."
+  },
   "accounting": {
     "other_iteration_seconds": "iteration_wall_seconds - pp_replan_seconds - controller_before_repair_seconds",
     "inference": "Nested in controller time; never added again.",
