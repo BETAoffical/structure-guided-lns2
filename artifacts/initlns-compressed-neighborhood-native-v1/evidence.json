@@ -1,0 +1,20 @@
+{
+  "schema": "lns2.compressed_neighborhood_native_evidence.v1",
+  "preregister_commit": "0317fe04a1da710118378e79446a04bcc645823e",
+  "report_file": "build/initlns-compressed-neighborhood-native-v1/report.json",
+  "report_sha256": "431d1f74ba60301ea9ee17ddc1499d49f1f7453d45f1e8142c2f1c655b55a635",
+  "historical_qualification": true,
+  "new_repairs": 24,
+  "historical_prefix_steps": 6325,
+  "errors": 0,
+  "censored": false,
+  "decision": "no_go",
+  "original16": [35,35,36,36,35,34,35,35],
+  "compressed12": [35,35,36,35,35,34,35,35],
+  "compressed11": [38,38,37,38,38,37,38,38],
+  "posthoc_restore235_only_on_native12": [35,35,37,36,35,35,35,35],
+  "production_changes": false,
+  "training": false,
+  "timing_experiment": false,
+  "boundary": "Controlled relative-order single-state PP probe. Subset12 preserves local mean performance, but the preregistered witness-strength gate failed. No default-controller promotion."
+}
