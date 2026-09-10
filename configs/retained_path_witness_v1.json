@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.retained_path_witness.v1",
+  "output": "build/initlns-retained-path-witness-v1",
+  "workers": 20,
+  "reference_controller": "official_adaptive",
+  "reference_protocol": "fixed_budget",
+  "reference_budget_seconds": 120,
+  "path_capture": "first_feasible.json",
+  "maximum_small_changed_agents": 16,
+  "timing_experiment": false,
+  "solver_search_allowed": false,
+  "scope": "posthoc_same_task_saved_path_existence_only"
+}

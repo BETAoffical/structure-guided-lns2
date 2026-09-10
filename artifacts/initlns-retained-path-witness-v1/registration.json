@@ -1,0 +1,5 @@
+{
+  "plan_file": "build/initlns-retained-path-witness-v1/plan.json",
+  "plan_sha256": "2d6251d3b988616c42f5788ade27b214400f0931719eae9512c539de2a28a9f1",
+  "schema": "lns2.retained_path_witness.v1"
+}
