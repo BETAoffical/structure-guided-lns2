@@ -1,0 +1,48 @@
+{
+  "schema": "lns2.retained_path_witness.evidence.v1",
+  "preregistered_commit": "531fc90a0085e97125582639a3d6f772c9bb7344",
+  "backup_tag": "pre-retained-path-witness-20260910",
+  "decision": "existence_diagnostic_only_no_controller_promotion",
+  "solver_search_calls": 0,
+  "workers": 20,
+  "dependency_rows": 1401,
+  "root_closures": 77,
+  "native_path_validations": 3,
+  "historical_jobs": 12,
+  "historical_feasible_witnesses": 2,
+  "historical_witnesses_with_external_changes": 0,
+  "small_reference_splice_states": 0,
+  "maximum_small_changed_agents": 16,
+  "cases": [
+    {"case_id": "case-3723c8bd272e", "agents": 432, "before": 40, "after": 0, "changed": 413, "external_changed": 397, "roots": 73},
+    {"case_id": "full-f062ea7307d7d84b", "agents": 483, "before": 1, "after": 0, "changed": 471, "external_changed": 455, "roots": 2},
+    {"case_id": "case-7ee343a50388", "agents": 486, "before": 1, "after": 0, "changed": 472, "external_changed": 457, "roots": 2}
+  ],
+  "validation": {
+    "related_python_passed": 81,
+    "ctest_passed": 12,
+    "gpbs_excluded": true,
+    "formal_evidence_verified": 24,
+    "independent_dependency_rows_matched": 1401,
+    "root_closures_matched": 77
+  },
+  "files": {
+    "build/initlns-retained-path-witness-v1/plan.json": "2d6251d3b988616c42f5788ade27b214400f0931719eae9512c539de2a28a9f1",
+    "build/initlns-retained-path-witness-v1/report.json": "8e67efaecaa9353a0c491af7e5c6ae57a43696ddd6b53b7719160e2fec669e58",
+    "build/initlns-retained-path-witness-v1/dependencies.json": "b42de093ebc3326a6009cc0d668795601a454a245bf1897b5cb0e32f06ce1b06",
+    "build/initlns-retained-path-witness-v1/run_status.json": "8918e2e9a992f22b81bd630d1e40d0d4a15b64492285eafcbfcbd6cd4735753f",
+    "build/initlns-retained-path-witness-v1/witnesses/case-3723c8bd272e.json": "0ff4d190c0bff7a2bd9aa69a04398239b9f2f549c6c756bd8af56355a5b7508d",
+    "build/initlns-retained-path-witness-v1/witnesses/case-7ee343a50388.json": "959f29c673c8e8be58c17231029ac32560fd453683aeabeeae10698ec1e5a37a",
+    "build/initlns-retained-path-witness-v1/witnesses/full-f062ea7307d7d84b.json": "72254bd5386b34491c269f2086bbc5409f420525c58542615fcb03e45f9e6bc4",
+    "build/initlns-preentry-trace-audit-v1/report.json": "6b5cc94a7bf677808a70640e31393116f3e851b2fe3ec1062043310e96394648",
+    "build/initlns-stable-candidate-continuation-v1/report.json": "e35a116a0551b2d873e2bcd867a9117d6782825856ffded4c9f68881a1f25d11",
+    "docs/NATIVE_PATH_COMPATIBILITY_V1_RESULT.md": "5fb2302bec2c2c29fa693d4266c1301783d64ffcf377052bf0850617986140bb",
+    "docs/STABLE_CANDIDATE_CONTINUATION_RESULT_ZH.md": "5811ef10f9df6256131340020ebd430d9f07fc81466e3873c5de349f7d1400f2"
+  },
+  "boundaries": [
+    "One fixed paired Official first-feasible reference per task; not a minimum over all possible paths.",
+    "A globally feasible saved reference is not a new controller recovery or TTF result.",
+    "Historical two-agent witnesses are internal to the old neighborhood and remove one of forty pairs only.",
+    "No automatic expansion, retraining, RL, native modification or formal timing."
+  ]
+}
