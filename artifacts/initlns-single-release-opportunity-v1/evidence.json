@@ -1,0 +1,31 @@
+{
+  "schema": "lns2.single_release_opportunity_evidence.v1",
+  "preregister_commit": "8189cedecf5c60abd36456e9f85d624502be971f",
+  "output": "build/initlns-single-release-opportunity-v1",
+  "files": {
+    "plan.json": "589dc51a8e0132646bdf664b58f18b51c8b8d0c631244e85b7c28a12fca6d77c",
+    "preflight.json": "b766566a40a673a2d9e51a2f084e539fbd4f2f1df785c5163f3ac6a32176f230",
+    "report.json": "3545282f110ecb30e0add076e979cde838d00479d8cb4384dbd1e907674af721",
+    "failure-analysis.json": "cddf508b3f9a5d9788114b8dd329ba4bb116a40f51bda54324635a8e5cb48f79"
+  },
+  "states": 3,
+  "maps": 3,
+  "layout_families": 1,
+  "pp_seeds": [20260912, 20260913],
+  "baseline_parity": 6,
+  "known_witness_parity": 2,
+  "fresh_context_replays": 6,
+  "branches": 2708,
+  "independently_verified": 2708,
+  "improvements": 0,
+  "rollbacks": 2708,
+  "unknown_or_not_found": 0,
+  "different_attempted_paths_or_stop": 2589,
+  "same_attempted_paths_and_stop": 119,
+  "rollback_with_new_pair_touching_released_agent": 1052,
+  "stable_states_at_five_percent": 0,
+  "decision": "no_go_insufficient_stable_single_release_opportunity",
+  "production_changes": false,
+  "timing_experiment": false,
+  "scope": "finite_action_census_on_three_previously_viewed_failed_tail_states"
+}
