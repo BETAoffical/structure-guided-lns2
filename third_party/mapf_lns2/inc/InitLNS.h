@@ -81,6 +81,7 @@ private:
                RepairTransition& transition, int pp_random_seed = -1);
     bool runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
                                  RepairTransition& transition);
+    bool acceptCompletedPP(RepairTransition& transition) const;
     bool runGCBS();
     bool runPBS();
 

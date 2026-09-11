@@ -297,6 +297,18 @@ vector<RepairProposal> InitLNS::proposeNeighborhoodBatch(
 
 bool InitLNS::step(const RepairAction& action)
 {
+    if (action.experimental_acceptance != ExperimentalPPAcceptance::DISABLED)
+    {
+        if (!initialized || replan_algo_name != "PP" ||
+            action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD ||
+            !validateExplicitNeighborhood(action.agents) ||
+            (!action.repair_order.empty() && !validateRepairOrder(action.repair_order, action.agents)) ||
+            !std::isfinite(action.pp_time_limit_seconds) || action.pp_time_limit_seconds < 0 ||
+            !std::isfinite(action.acceptance_temperature) || action.acceptance_temperature < 0 ||
+            !std::isfinite(action.acceptance_uniform) || action.acceptance_uniform < 0 ||
+            action.acceptance_uniform >= 1)
+            throw std::invalid_argument("invalid experimental PP action");
+    }
     const auto native_step_started = RepairTimingClock::now();
     if (!initialized)
         initialize();
@@ -738,7 +750,8 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
                  ", remaining time = " << time_limit - runtime << " seconds. " << endl;
         }
         transition.pp_attempted_agent_count++;
-        if (neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
+        if (transition.requested_action.experimental_acceptance == ExperimentalPPAcceptance::DISABLED &&
+            neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
         {
             transition.pp_failure_reason = PPFailureReason::CONFLICT_BOUND_EXCEEDED;
             transition.pp_failed_agent = id;
@@ -754,7 +767,7 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
     }
     transition.pp_attempt_conflict_pair_count =
         (int)neighbor.colliding_pairs.size();
-    if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size()) // accept new paths
+    if (p == shuffled_agents.end() && acceptCompletedPP(transition)) // accept new paths
     {
         return true;
     }
@@ -791,6 +804,23 @@ bool InitLNS::runPP(const vector<int>& requested_order, vector<int>& applied_ord
         }
         return false;
     }
+}
+
+bool InitLNS::acceptCompletedPP(RepairTransition& transition) const
+{
+    const auto& action = transition.requested_action;
+    const int delta = (int)neighbor.colliding_pairs.size() - (int)neighbor.old_colliding_pairs.size();
+    if (action.experimental_acceptance == ExperimentalPPAcceptance::DISABLED)
+        return delta <= 0;
+    transition.acceptance_evaluated = true;
+    transition.acceptance_probability = delta <= 0 ? 1.0 : 0.0;
+    if (delta > 0 && action.experimental_acceptance == ExperimentalPPAcceptance::ANNEALED &&
+        action.acceptance_temperature > 0)
+        transition.acceptance_probability = std::exp(-delta / action.acceptance_temperature);
+    if (delta <= 0 || action.acceptance_uniform < transition.acceptance_probability)
+        return true;
+    transition.pp_failure_reason = PPFailureReason::ACCEPTANCE_REJECTED;
+    return false;
 }
 
 bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
@@ -852,7 +882,8 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
                  ", LL nodes = " << agents[id].path_planner->getNumExpanded() <<
                  ", remaining time = " << time_limit - runtime << " seconds. " << endl;
         }
-        if (neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
+        if (transition.requested_action.experimental_acceptance == ExperimentalPPAcceptance::DISABLED &&
+            neighbor.colliding_pairs.size() > neighbor.old_colliding_pairs.size())
         {
             transition.pp_failure_reason = PPFailureReason::CONFLICT_BOUND_EXCEEDED;
             transition.pp_failed_agent = id;
@@ -864,7 +895,7 @@ bool InitLNS::runPPWithoutDiagnostics(const vector<int>& shuffled_agents,
         ++p;
     }
     transition.pp_attempt_conflict_pair_count = (int)neighbor.colliding_pairs.size();
-    if (p == shuffled_agents.end() && neighbor.colliding_pairs.size() <= neighbor.old_colliding_pairs.size())
+    if (p == shuffled_agents.end() && acceptCompletedPP(transition))
         return true;
 
     transition.pp_rolled_back = true;

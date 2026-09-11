@@ -23,6 +23,8 @@ enum class RepairHeuristic
     RANDOM
 };
 
+enum class ExperimentalPPAcceptance { DISABLED, COMPLETE_GREEDY, ANNEALED };
+
 struct RepairAction
 {
     RepairActionMode mode = RepairActionMode::OFFICIAL;
@@ -45,6 +47,11 @@ struct RepairAction
     // Opt-in causal instrumentation. Disabled by default so normal solver
     // timing and PP acceptance semantics do not pay diagnostic-loop overhead.
     bool collect_pp_diagnostics = false;
+    // Only the separate experimental Python API sets these fields. Acceptance
+    // uses an externally supplied uniform draw, never the PP/global RNG.
+    ExperimentalPPAcceptance experimental_acceptance = ExperimentalPPAcceptance::DISABLED;
+    double acceptance_temperature = 0.0;
+    double acceptance_uniform = 0.0;
     vector<int> agents;
     vector<int> repair_order;
 };
@@ -97,7 +104,8 @@ enum class PPFailureReason
     NOT_RUN,
     NONE,
     CONFLICT_BOUND_EXCEEDED,
-    TIME_LIMIT
+    TIME_LIMIT,
+    ACCEPTANCE_REJECTED
 };
 
 struct PPAgentDiagnostic
@@ -132,6 +140,8 @@ struct RepairTransition
     int pp_old_conflict_pair_count = 0;
     int pp_attempt_conflict_pair_count = 0;
     bool pp_rolled_back = false;
+    bool acceptance_evaluated = false;
+    double acceptance_probability = 0.0;
     vector<PPAgentDiagnostic> pp_agent_diagnostics;
     int applied_pp_random_seed = -1;
     int iteration = 0;
@@ -200,6 +210,7 @@ inline const char* ppFailureReasonName(PPFailureReason reason)
         case PPFailureReason::NONE: return "none";
         case PPFailureReason::CONFLICT_BOUND_EXCEEDED: return "conflict_bound_exceeded";
         case PPFailureReason::TIME_LIMIT: return "time_limit";
+        case PPFailureReason::ACCEPTANCE_REJECTED: return "acceptance_rejected";
     }
     return "unknown";
 }

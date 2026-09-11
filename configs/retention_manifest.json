@@ -18,6 +18,17 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    { "path": "experiments/nonmonotonic_repair.py", "role": "reproducibility", "purpose": "Experimental complete-PP acceptance validation and diagnostic gates." },
+    { "path": "scripts/diagnose_nonmonotonic_repair.py", "role": "reproducibility", "purpose": "Bounded three-arm nonmonotonic acceptance pilot." },
+    { "path": "scripts/run_feedback_exploration_diagnostics.py", "role": "reproducibility", "purpose": "Frozen feedback exploration diagnostic reproduction." },
+    { "path": "scripts/audit_feedback_memory.py", "role": "reproducibility", "purpose": "Historical feedback evidence and source registration audit." },
+    { "path": "scripts/analyze_feedback_exploration.py", "role": "reproducibility", "purpose": "Analysis of retained feedback exploration outcomes." },
+    { "path": "experiments/feedback_exploration_diagnostic.py", "role": "reproducibility", "purpose": "Feedback diagnostic metrics and paired comparisons." },
+    { "path": "scripts/diagnose_feedback_equivalence.py", "role": "reproducibility", "purpose": "Native feedback and default-path equivalence verification." },
+    { "path": "tests/evaluation/test_feedback_native_equivalence.py", "role": "reproducibility", "contract": "Frozen native feedback equivalence." },
+    { "path": "tests/evaluation/test_feedback_memory_audit.py", "role": "reproducibility", "contract": "Historical feedback source integrity." },
+    { "path": "tests/evaluation/test_nonmonotonic_repair.py", "role": "reproducibility", "contract": "Acceptance RNG isolation, transactional integrity and pilot gates." },
+    { "path": "tests/evaluation/test_feedback_exploration.py", "role": "reproducibility", "contract": "Feedback exploration diagnostic contracts." },
     {
       "path": "experiments/search_frontier_observation.py",
       "role": "reproducibility",

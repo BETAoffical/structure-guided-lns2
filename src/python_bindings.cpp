@@ -397,6 +397,17 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["pp_old_conflict_pair_count"] = transition.pp_old_conflict_pair_count;
     result["pp_attempt_conflict_pair_count"] = transition.pp_attempt_conflict_pair_count;
     result["pp_rolled_back"] = transition.pp_rolled_back;
+    if (transition.requested_action.experimental_acceptance != ExperimentalPPAcceptance::DISABLED)
+    {
+        result["experimental_acceptance_schema"] = "lns2.experimental_pp_acceptance.v1";
+        result["experimental_acceptance"] =
+            transition.requested_action.experimental_acceptance == ExperimentalPPAcceptance::ANNEALED
+                ? "annealed" : "complete_greedy";
+        result["acceptance_temperature"] = transition.requested_action.acceptance_temperature;
+        result["acceptance_uniform"] = transition.requested_action.acceptance_uniform;
+        result["acceptance_evaluated"] = transition.acceptance_evaluated;
+        result["acceptance_probability"] = transition.acceptance_probability;
+    }
     py::list pp_agent_diagnostics;
     for (const auto& diagnostic : transition.pp_agent_diagnostics)
     {
@@ -619,14 +630,33 @@ public:
         return stepImpl(action_value, pp_time_limit_seconds);
     }
 
+    py::dict stepExperimentalPP(const py::dict& value, double seconds,
+                                const std::string& acceptance, double temperature, double uniform)
+    {
+        if (replan_algorithm != "PP" || !std::isfinite(seconds) || seconds < 0 ||
+            !std::isfinite(temperature) || temperature < 0 ||
+            !std::isfinite(uniform) || uniform < 0 || uniform >= 1)
+            throw py::value_error("invalid experimental PP parameters");
+        ExperimentalPPAcceptance mode;
+        if (acceptance == "complete_greedy") mode = ExperimentalPPAcceptance::COMPLETE_GREEDY;
+        else if (acceptance == "annealed") mode = ExperimentalPPAcceptance::ANNEALED;
+        else throw py::value_error("unknown experimental PP acceptance");
+        return stepImpl(value, seconds, mode, temperature, uniform);
+    }
+
     py::dict stepImpl(const py::dict& action_value,
-                      double pp_time_limit_seconds)
+                      double pp_time_limit_seconds,
+                      ExperimentalPPAcceptance acceptance = ExperimentalPPAcceptance::DISABLED,
+                      double temperature = 0.0, double uniform = 0.0)
     {
         const auto binding_started = DiagnosticClock::now();
         if (!solver)
             throw std::runtime_error("reset() must be called before step()");
         RepairAction action = parseAction(action_value);
         action.pp_time_limit_seconds = pp_time_limit_seconds;
+        action.experimental_acceptance = acceptance;
+        action.acceptance_temperature = temperature;
+        action.acceptance_uniform = uniform;
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
         const bool already_done = solver->isDone();
@@ -1168,6 +1198,9 @@ PYBIND11_MODULE(lns2_env, module)
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
         .def("step_with_time_limit", &LNS2RepairEnv::stepWithTimeLimit,
              py::arg("action"), py::arg("pp_time_limit_seconds"))
+        .def("step_experimental_pp", &LNS2RepairEnv::stepExperimentalPP,
+             py::arg("action"), py::arg("pp_time_limit_seconds"),
+             py::arg("acceptance"), py::arg("temperature"), py::arg("uniform"))
         .def("get_state", &LNS2RepairEnv::getState)
         .def("get_state_revision", &LNS2RepairEnv::getStateRevision)
         .def("get_last_reset_timings", &LNS2RepairEnv::getLastResetTimings);
