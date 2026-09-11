@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    { "path": "scripts/verify_cplns_reference.py", "role": "reproducibility", "purpose": "Unmodified pinned CPLNS CLI identity, option and bounded smoke verification." },
+    { "path": "tests/evaluation/test_cplns_reference.py", "role": "reproducibility", "contract": "Reference profile isolation, archive identity, output validation and no TTF claims." },
     { "path": "experiments/nonmonotonic_repair.py", "role": "reproducibility", "purpose": "Experimental complete-PP acceptance validation and diagnostic gates." },
     { "path": "scripts/diagnose_nonmonotonic_repair.py", "role": "reproducibility", "purpose": "Bounded three-arm nonmonotonic acceptance pilot." },
     { "path": "scripts/run_feedback_exploration_diagnostics.py", "role": "reproducibility", "purpose": "Frozen feedback exploration diagnostic reproduction." },

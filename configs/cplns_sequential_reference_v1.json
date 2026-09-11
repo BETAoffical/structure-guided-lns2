@@ -1,0 +1,31 @@
+{
+  "schema": "lns2.cplns_reference.v1",
+  "commit": "e3fbcc82bf6a1f2cbab0ceb166d547865ca8210a",
+  "archive_url": "https://codeload.github.com/KaenChan/cplns/zip/e3fbcc82bf6a1f2cbab0ceb166d547865ca8210a",
+  "archive_sha256": "caf1dd5f088e7af0109c8ddf6a85d8aae3c7252add66af0f88691cffd66d3897",
+  "output": "build/cplns-sequential-reference-v1",
+  "source": "build/cplns-sequential-reference-v1/cplns-e3fbcc82bf6a1f2cbab0ceb166d547865ca8210a",
+  "binary": "build/cplns-sequential-reference-v1/build/plns",
+  "workers": 20,
+  "seeds": [0, 1],
+  "solver_seconds": 2,
+  "external_seconds": 20,
+  "common_options": {
+    "solver": "LNS", "sipp": "1", "initLNS": "true",
+    "initAlgo": "PP", "initReplanAlgo": "PP", "replanAlgo": "PP",
+    "initDestoryStrategy": "Adaptive", "destoryStrategy": "Adaptive",
+    "neighborSize": "8", "maxIterations": "0", "astar_wh": "1",
+    "numSolver": "1", "numSolverInit": "1", "numSolverPP": "1", "numGroupPP": "1",
+    "doSharePhase1": "true", "doSharePhase2": "true", "syncMode": "false",
+    "sa_T": "1000", "sa_iteration_coolfactor": "0.99", "sa_restart_coolfactor": "1",
+    "sa_restart_resume": "false", "sa_phase2": "false", "screen": "2"
+  },
+  "profiles": {
+    "author_no_sa_no_restart": {"sa": "false", "sa_max_con_fail": "2"},
+    "author_sa_no_restart": {"sa": "true", "sa_max_con_fail": "2"},
+    "author_no_sa_restart": {"sa": "false", "sa_max_con_fail": "0.4"},
+    "author_sa_restart": {"sa": "true", "sa_max_con_fail": "0.4"}
+  },
+  "fixtures": ["open", "order_reversal_corridor"],
+  "no_ttf_or_promotion": true
+}
