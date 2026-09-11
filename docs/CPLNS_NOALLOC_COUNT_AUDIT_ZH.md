@@ -55,3 +55,29 @@ python3 scripts/verify_cplns_noalloc.py counter-run
 ```
 
 每项输出独立保存在忽略目录；不覆盖历史原始数据或正式结论。
+
+## A/B 结果与原生计数验证登记
+
+实现提交 `b891487`。C++ 分配陷阱 harness 通过：258 个事件，包括超出单个缓冲区的长路径；
+开启/关闭成功，重复文件和无效路径按预期拒绝。
+
+A 的 96/96 作业完整；96/96 组观测对照通过，72 组非 PP-direct 初始化路径逐项相同。
+但两条双门 seed 2 的 SA 轨迹仍发生计数漏报，decision 保持 `blocked_before_real_cases`。
+两者均在内部 iteration 12，实际 62 对、记录 59 对，agent 22 只有位置 55 的单位置路径。
+这轮解决了观测扰动问题，未解决作者计数问题，也不构成 TTF 证据。
+
+B 的 56/56 函数案例在 guard 修正后全部匹配独立 pair 集。原函数有三项不匹配：
+两个手工单位置案例，以及保存状态中的 agent 22；后者精确补回 `(20,22)`、`(22,37)`、`(22,45)`。
+
+现在单独登记原生回归，不改 A/B 或作者原版：
+
+- 独立 `build/cplns-stationary-count-native-v1`，名称为 `author_stationary_count_corrected_not_official`。
+- 在无分配观测副本上只改该一处 guard，不改调用入口、Target、PP 顺序、SIPPS、SA 或重启。
+- 原 32 个 observer-on task/profile/seed 全部保留、相同参数、每作业 3 秒、20 worker。
+- 原开放、单通道和密集开放 24 条中性对照保持科学前缀一致。
+- 双门 8 条检查初始化相同、修复后路径/冲突/回滚正确；修正计数后的后续接受和路径可以改变，不伪称动作等价。
+- 必须 32 条完整、0 路径/计数不一致，中性对照通过；否则停止，不继续扩大 patch 范围。
+- 通过也仅为原生计数回归，不宣称成功率/速度提升，不接入本项目正式控制器。
+
+原生回归入口：`scripts/verify_cplns_stationary_count.py prepare|register|collect|report`。
+prepare 后在输出目录的 `source` 与 `build` 上使用相同 CMake Release 命令构建，再 register 和 collect。

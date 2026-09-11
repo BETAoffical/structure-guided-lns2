@@ -23,6 +23,7 @@
     { "path": "scripts/diagnose_cplns_observation_divergence.py", "role": "reproducibility", "purpose": "Bounded unchanged-binary repetition and fixed-rule localization after Target-first observation mismatches." },
     { "path": "scripts/audit_cplns_observation_outputs.py", "role": "reproducibility", "purpose": "Read-only failure attribution preserving the rejected CPLNS bridge gate and original raw jobs." },
     { "path": "scripts/verify_cplns_noalloc.py", "role": "reproducibility", "purpose": "Separate allocation-free observer and extracted stationary-path counter regression without production changes." },
+    { "path": "scripts/verify_cplns_stationary_count.py", "role": "reproducibility", "purpose": "Bounded separately named author counter-corrected native reference; no official/model/runtime promotion." },
     { "path": "tests/evaluation/test_cplns_noalloc.py", "role": "reproducibility", "contract": "Noalloc schedule, path-output coverage, minimal count patch and independent conflict expectations." },
     { "path": "tests/evaluation/test_cplns_observation.py", "role": "reproducibility", "contract": "Observation patch boundaries, paths, conflict semantics, fixtures, transition integrity and frozen inputs." },
     { "path": "tests/evaluation/test_cplns_reference.py", "role": "reproducibility", "contract": "Reference profile isolation, archive identity, output validation and no TTF claims." },

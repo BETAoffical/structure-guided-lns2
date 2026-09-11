@@ -4,6 +4,7 @@ import pytest
 
 from scripts import verify_cplns_noalloc as audit
 from scripts import verify_cplns_reference as reference
+from scripts import verify_cplns_stationary_count as native_counter
 
 
 def test_schedule_has_distinct_seeds_and_full_init_log_level():
@@ -66,3 +67,18 @@ def test_noalloc_header_has_only_pod_thread_storage():
     assert "char data[8192]" in text and "O_EXCL" in text
     assert "CLOCK_MONOTONIC" in text and "errno == EINTR" in text
     assert "rand(" not in text
+
+
+def test_native_counter_only_changes_one_guard_and_reuses_registered_tasks():
+    source = "abc if (path.size() < 2) return succ; xyz"
+    assert native_counter.corrected_source(source) == "abc if (path.empty()) return succ; xyz"
+    with pytest.raises(ValueError):
+        native_counter.corrected_source(source + source)
+    config = json.loads(audit.CONFIG.read_text())
+    ref = json.loads(reference.CONFIG.read_text())
+    originals = {j["job_id"]: j for j in audit.schedule(config, ref)}
+    jobs = native_counter.jobs(config, ref)
+    assert len(jobs) == 32
+    for job in jobs:
+        assert job["argv"][1:] == originals[job["source_job_id"]]["argv"][1:]
+        assert job["argv"][0] != originals[job["source_job_id"]]["argv"][0]
