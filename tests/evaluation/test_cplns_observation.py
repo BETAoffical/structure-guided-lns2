@@ -5,6 +5,7 @@ import pytest
 
 from scripts import verify_cplns_observation as bridge
 from scripts import diagnose_cplns_observation_divergence as divergence
+from scripts import audit_cplns_observation_outputs as failure_audit
 
 
 def test_patch_refuses_missing_and_ambiguous_anchors():
@@ -129,3 +130,13 @@ def test_divergence_jobs_only_change_rule_and_keep_original_binary_repeat():
             assert job["argv"] == original["argv"]
     assert not divergence.first_difference([], ["a"])["equal_prefix"]
     assert divergence.first_difference(["a", "b"], ["a", "c"])["first_difference"] == 1
+
+
+def test_stationary_goal_conflicts_are_not_ignored_by_independent_audit():
+    grid = "type octile\nheight 1\nwidth 4\nmap\n....\n"
+    scen = "version 1\n0 a.map 4 1 1 0 1 0 0\n0 a.map 4 1 0 0 3 0 3\n"
+    event = {"event": "step", "restart": 0, "iteration": 2, "conflicts": 0, "cost": 3,
+             "selected": [0], "agents": [agent(0, [1]), agent(1, [0, 1, 2, 3])]}
+    witness = failure_audit.first_bad_state([event], grid, scen)
+    assert witness["actual_conflicts"] == 1 and witness["reported_conflicts"] == 0
+    assert witness["one_vertex_paths"] == [{"id": 0, "location": 1}]
