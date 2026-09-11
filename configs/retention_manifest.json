@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    { "path": "scripts/diagnose_dual16_sa_transfer.py", "role": "reproducibility", "purpose": "Frozen Dual16 SA transfer from exact author initial paths with import and legacy parity gates, not repeated late-stall trials." },
+    { "path": "tests/evaluation/test_dual16_sa_transfer.py", "role": "reproducibility", "contract": "Protect exact initial path imports, bounded schedules, legacy smoke gates and success-versus-effort interpretation." },
     { "path": "scripts/diagnose_cplns_complete_greedy.py", "role": "reproducibility", "purpose": "One additional complete-PP greedy arm, reusing fixed author-reference SA and early-stop records without TTF claims." },
     { "path": "tests/evaluation/test_cplns_complete_greedy.py", "role": "reproducibility", "contract": "Protect the one-block PP patch, paired identities, full call counts and greedy no-worsening semantics." },
     { "path": "scripts/diagnose_cplns_real_tasks.py", "role": "reproducibility", "purpose": "Gated same-OD author-reference SA/restart diagnostics, explicitly excluding saved-path replay and TTF claims." },
