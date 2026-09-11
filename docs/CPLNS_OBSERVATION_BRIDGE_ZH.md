@@ -55,3 +55,21 @@ python3 scripts/verify_cplns_observation.py report
 
 `collect` 重入只复用 SHA 和身份完全一致的已完成作业。任何异常保留原结果并停止准入。
 原始 CLI 的非 SA 配置并不等于本项目官方 LNS2，不能改名为 Official baseline。
+
+## 首轮观测与后续定位登记
+
+首轮实现提交 `923dc24`：96 个作业完整，3128 个完整状态/结束快照、3072 次修复检查通过，
+观测到 480 次正 delta 接受。但 64 组原版对桥接比较仅 32 组一致，复杂两图的全部 32 组首次分歧
+都在 `Generate 8 neighbors by target`。保留失败结论 `investigate_before_real_cases`。
+
+作者 `SingleAgentSolver.cpp` 的 Target 辅助搜索使用 `pairing_heap<Node*> open_list`，没有将所声明的
+节点比较器传入堆。相同 seed 不能控制分配器给出的指针顺序；观测本身可能改变分配历史。
+此外目标计数表达式缺少括号的问题也仍在作者固定代码中，本轮不修改。
+项目历史提交 `ab833fd` 曾检查/修改过同类目标搜索的比较器和计数语义；本轮不能再把修正后的版本
+冒充未经修改的作者算法，也不重训模型来补偿复现差异。
+
+下一项严格限于原因定位：沿用两个复杂 fixture、seed 0、SA 开启且重启关闭，分别固定
+Adaptive、Target、Collision、Random。每组运行原版两次、桥接关闭和桥接开启，共 32 个 3 秒作业。
+比较前 128 个原始科学记录。入口为 `scripts/diagnose_cplns_observation_divergence.py prepare|collect|report`，
+独立输出 `build/cplns-observer-divergence-v1`，计划及输入 SHA 在运行前冻结。
+该对照只判断差异是否集中于 Target，不覆盖或放宽首轮门槛，也不评价速度或求解成功率。

@@ -20,6 +20,7 @@
   "entries": [
     { "path": "scripts/verify_cplns_reference.py", "role": "reproducibility", "purpose": "Unmodified pinned CPLNS CLI identity, option and bounded smoke verification." },
     { "path": "scripts/verify_cplns_observation.py", "role": "reproducibility", "purpose": "Isolated output-only upstream bridge, bounded semantic parity and independent path validation." },
+    { "path": "scripts/diagnose_cplns_observation_divergence.py", "role": "reproducibility", "purpose": "Bounded unchanged-binary repetition and fixed-rule localization after Target-first observation mismatches." },
     { "path": "tests/evaluation/test_cplns_observation.py", "role": "reproducibility", "contract": "Observation patch boundaries, paths, conflict semantics, fixtures, transition integrity and frozen inputs." },
     { "path": "tests/evaluation/test_cplns_reference.py", "role": "reproducibility", "contract": "Reference profile isolation, archive identity, output validation and no TTF claims." },
     { "path": "experiments/nonmonotonic_repair.py", "role": "reproducibility", "purpose": "Experimental complete-PP acceptance validation and diagnostic gates." },

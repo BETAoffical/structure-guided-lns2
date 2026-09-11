@@ -4,6 +4,7 @@ import json
 import pytest
 
 from scripts import verify_cplns_observation as bridge
+from scripts import diagnose_cplns_observation_divergence as divergence
 
 
 def test_patch_refuses_missing_and_ambiguous_anchors():
@@ -115,3 +116,16 @@ def test_result_file_tamper_rejected(tmp_path, monkeypatch):
     log.write_text("changed")
     with pytest.raises(ValueError):
         bridge.verify_job(row, job)
+
+
+def test_divergence_jobs_only_change_rule_and_keep_original_binary_repeat():
+    config = json.loads(bridge.CONFIG.read_text())
+    ref = json.loads((bridge.ROOT / config["reference_config"]).read_text())
+    jobs = divergence.jobs(config, ref)
+    assert len(jobs) == len({job["job_id"] for job in jobs}) == 32
+    for job in jobs:
+        if job["lane"] == "upstream_repeat":
+            original = next(j for j in jobs if j["lane"] == "upstream" and j["rule"] == job["rule"] and j["fixture"] == job["fixture"])
+            assert job["argv"] == original["argv"]
+    assert not divergence.first_difference([], ["a"])["equal_prefix"]
+    assert divergence.first_difference(["a", "b"], ["a", "c"])["first_difference"] == 1
