@@ -13,6 +13,16 @@ four controller identities:
 LNS2 is the solver. V2 and V3-S3 are selector policies inside that solver, so
 they are organized under one layered package instead of parallel version trees.
 
+## Current research status
+
+The latest warehouse confirmation did not pass the Dual16 promotion gate.
+Retained positive results are conditional on their registered inputs and timing
+boundaries, not evidence of a universal LNS2 replacement. Repeated post-stall
+rescue diagnostics are paused; runnable historical tools are not pending tasks.
+See the [Chinese report outline and claim boundaries](docs/WAREHOUSE_REPAIR_REPORT_PLAN_ZH.md)
+and the [research decision review](docs/RESEARCH_DECISION_REVIEW_ZH.md) for the
+current conclusions and requirements before any new experiment.
+
 ## Layout
 
 ```text
