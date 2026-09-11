@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    { "path": "scripts/diagnose_cplns_real_tasks.py", "role": "reproducibility", "purpose": "Gated same-OD author-reference SA/restart diagnostics, explicitly excluding saved-path replay and TTF claims." },
+    { "path": "tests/evaluation/test_cplns_real_tasks.py", "role": "reproducibility", "purpose": "Protect real-task conversion, resource schedule, pairing, qualification and truncated-observation attribution." },
     { "path": "scripts/verify_cplns_reference.py", "role": "reproducibility", "purpose": "Unmodified pinned CPLNS CLI identity, option and bounded smoke verification." },
     { "path": "scripts/verify_cplns_observation.py", "role": "reproducibility", "purpose": "Isolated output-only upstream bridge, bounded semantic parity and independent path validation." },
     { "path": "scripts/diagnose_cplns_observation_divergence.py", "role": "reproducibility", "purpose": "Bounded unchanged-binary repetition and fixed-rule localization after Target-first observation mismatches." },

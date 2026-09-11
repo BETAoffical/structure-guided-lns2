@@ -1,0 +1,16 @@
+{
+  "schema": "lns2.cplns_real_task_mechanism.v1",
+  "output": "build/cplns-real-task-mechanism-v1",
+  "source": "build/feedback-exploration-diagnostics-v1/plan.json",
+  "source_sha256": "83af0fd6d70a24517a4f41e2cfdec13c433a841fd118188ddba4111e825dd2a6",
+  "reference_report_sha256": "488d1b9eddc751de207dbd30597075385172990528d9493302f6e5b8f55912c2",
+  "cases": ["repair-confirm-02", "repair-confirm-04", "repair-confirm-09", "repair-confirm-13", "repair-confirm-22"],
+  "seeds": [0, 2, 3, 5],
+  "workers": 20,
+  "solver_seconds": 30,
+  "external_seconds": 60,
+  "minimum_repair_episodes": 10,
+  "minimum_repair_maps": 3,
+  "no_ttf_or_promotion": true,
+  "scope": "same_map_and_OD_new_author_initialization_not_saved_path_replay"
+}
