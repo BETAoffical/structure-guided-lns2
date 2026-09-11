@@ -85,3 +85,18 @@ def test_audit_acceptance_and_action_integrity():
 def test_smoke_missing_rows_rejected():
     with pytest.raises(ValueError):
         rounds.smoke_gate([])
+
+
+def test_promotion_gate_counts_tasks_not_initialization_seeds():
+    from copy import deepcopy
+    from scripts.analyze_sa_selector_rounds import gates
+    a = rounds.summarize(records())
+    b = deepcopy(a)
+    for r, seed in ((a, 7), (b, 13)):
+        for arm in rounds.ARMS[1:]:
+            r["comparisons"][arm + "_vs_standard"]["gains"] = [f"case-native-{seed}"]
+    assert not gates([a, b])["rank_sa"]["passed"]
+    b["comparisons"]["rank_sa_vs_standard"]["gains"] = ["other-native-13"]
+    assert gates([a, b])["rank_sa"]["passed"]
+    b["comparisons"]["rank_sa_vs_standard"]["losses"] = ["lost-native-13"]
+    assert not gates([a, b])["rank_sa"]["passed"]

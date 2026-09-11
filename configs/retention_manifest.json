@@ -19,6 +19,11 @@
   },
   "entries": [
     {
+      "path": "scripts/analyze_sa_selector_rounds.py",
+      "role": "reproducibility",
+      "purpose": "Recompute frozen factorial metrics, preregistered task-level gates and backup integrity"
+    },
+    {
       "path": "scripts/diagnose_sa_selector_rounds.py",
       "role": "reproducibility",
       "purpose": "Frozen non-timing acceptance and selector factorial rounds with result backups"
