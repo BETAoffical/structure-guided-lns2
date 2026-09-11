@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/diagnose_sa_independent_lanes.py",
+      "role": "reproducibility",
+      "purpose": "Fixed-budget independent rank-SA and uniform-greedy lane diagnostics without default or TTF changes"
+    },
+    {
+      "path": "tests/evaluation/test_sa_independent_lanes.py",
+      "role": "reproducibility",
+      "contract": "Shared repair budget, isolated native lanes, prefix equivalence and bounded process cleanup"
+    },
+    {
       "path": "scripts/analyze_sa_selector_rounds.py",
       "role": "reproducibility",
       "purpose": "Recompute frozen factorial metrics, preregistered task-level gates and backup integrity"
