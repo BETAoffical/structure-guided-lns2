@@ -81,3 +81,52 @@ B 的 56/56 函数案例在 guard 修正后全部匹配独立 pair 集。原函�
 
 原生回归入口：`scripts/verify_cplns_stationary_count.py prepare|register|collect|report`。
 prepare 后在输出目录的 `source` 与 `build` 上使用相同 CMake Release 命令构建，再 register 和 collect。
+
+## C：独立原生计数回归结果
+
+预注册提交 `81bc2aa`；32/32 作业完整且全部通过，decision 为 `bounded_native_counter_pass`。
+24 条中性对照保持科学前缀一致。双门 8 条初始化路径相同，其中原来漏计的两条 SA seed 2
+轨迹在修正后的科学前缀发生变化，其余六条前缀一致。这种变化是计数修正的预期影响，不是动作等价证据。
+
+共检查 3,128 个导出状态/结束记录、3,072 次有完整前后路径的修复，以及 448 次接受更差候选的事件。
+所有导出完整状态均通过路径合法性、终点持续占用、唯一冲突对数和 SOC 重建检查；
+观测到的修复通过外部路径不变、接受增量和拒绝回滚检查。
+每条轨迹只导出前 128 次决策及最终状态，因此不声称检查了截断后全部中间修复。
+
+这里的“路径合法”指栅格移动、起终点及记录一致，不代表所有诊断任务都找到了无冲突解。
+作者代码的 Target 指针排序、其他未涉及的实现和编译警告仍保留。修正版是独立参考，
+不能再称为未经修改的作者代码，也不替换本项目的官方 LNS2、V2 或 Dual16。
+
+### 固定证据
+
+| 文件 | SHA256 |
+|---|---|
+| `build/cplns-noalloc-audit-v1/report.json` | `3e65ab812c0cc188bd3df64a497ba5a5f433b0167ac80a40f429d1fc6a4dd2eb` |
+| `build/cplns-count-function-audit-v1/report.json` | `14db21d044b9af36ca6c4c12af7005959a7683afd3407b70ec93b3c98869910b` |
+| `build/cplns-stationary-count-native-v1/report.json` | `488d1b9eddc751de207dbd30597075385172990528d9493302f6e5b8f55912c2` |
+| `build/cplns-stationary-count-native-v1/build/plns` | `1aa54faf31eda5c6c17258bc623eb7af43a5b54f4ec500e0ffc66249798377ef` |
+
+### 对后续路线的影响
+
+1. 可以使用这个明确标记的参考版本开展下一轮有预算的真实困难案例机制验证。
+2. 比较无退火、仅退火、仅重启、退火加重启，保持参考求解器、初始化和其他参数一致；
+   单独登记案例、停止条件与观测范围，不将原版与修正版混合统计。
+3. 重点判断接受更差解后能否持续突破停滞、是否只靠重启获益，以及搜索开销是否可控。
+   仅接受了更差解或某条轨迹恢复，均不等于总体成功率和 TTF 改善。
+4. 本轮到正确性验收为止，不自动启动新的真实案例或正式串行 TTF，不重训任何模型。
+
+## 项目回归与保留边界
+
+- Python 主回归：`1584 passed, 68 skipped`，20 worker，104.67 秒。
+- 单独使用冻结正式 native 的进程/路径交付测试：`9 passed`，串行，14.56 秒。
+- 跳过项为 Windows 专用 1 项、其他隔离原生扩展 30 项、Windows sklearn 训练环境 4 项、
+  由 Linux CTest 覆盖的原生模块/采集器 33 项；不把跳过写成通过。
+- LNS2 CTest：`12/12`，15.73 秒；本轮未运行无关 GPBS 测试。
+- 两组官方路径 parity 继续为
+  `915ee104f0168c463f05925541fef1c22ec1eb37e9bf8df7ab09807753013ecf` 和
+  `031d1bf843ada89f03be6880809bcf7632fdaeba509fd035a15657fcc93aa83a`。
+- 冻结正式 native SHA 仍为 `7e84f535cc992d7424959cbafe63fce122a5b97c952b92c68d8978093f190e08`；
+  作者未改动 binary SHA 仍为 `c57de074f49065a39f1f1ad6e87b698964df3b9ea3b7ba5cb51746fc1e867445`。
+- 结束时只读进程检查无残留 CPLNS 求解器或本轮 collector；没有安装依赖、删除旧结果或改动正式模型。
+- 分支与恢复标签保存在本地。此前远端推送权限未覆盖待推送历史中的 evidence artifacts，
+  本轮不绕过该限制，不将本地提交描述为已上传 GitHub。
