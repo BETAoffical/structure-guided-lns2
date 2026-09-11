@@ -1,0 +1,76 @@
+#include <algorithm>
+#include <iostream>
+#include <limits>
+#include <set>
+#include <utility>
+#include <vector>
+using namespace std;
+struct Entry { int location; };
+using Path = vector<Entry>;
+struct Agent { Path path; };
+struct Table {
+    vector<vector<vector<int>>> table;
+    vector<int> goals;
+};
+
+// Minimal fixture for the exact extracted function, NOT a replacement PP solver.
+struct CounterFixture {
+    vector<Agent> agents;
+    Table path_table;
+    bool original(set<pair<int, int>>&, int, const Path&) const;
+    bool corrected(set<pair<int, int>>&, int, const Path&) const;
+};
+
+/* EXTRACTED_FUNCTIONS */
+
+void print_pairs(const set<pair<int, int>>& pairs) {
+    cout << '[';
+    bool comma = false;
+    for (auto p : pairs) {
+        if (comma) cout << ',';
+        cout << '[' << p.first << ',' << p.second << ']';
+        comma = true;
+    }
+    cout << ']';
+}
+
+int main() {
+    int cases;
+    if (!(cin >> cases)) return 2;
+    for (int case_id = 0; case_id < cases; ++case_id) {
+        int cells, count, target;
+        if (!(cin >> cells >> count >> target)) return 2;
+        CounterFixture fixture;
+        fixture.path_table.table.resize(cells);
+        fixture.path_table.goals.assign(cells, numeric_limits<int>::max());
+        for (int i = 0; i < count; ++i) {
+            int id, length;
+            if (!(cin >> id >> length) || id < 0 || length < 0) return 2;
+            if (id >= fixture.agents.size()) fixture.agents.resize(id + 1);
+            for (int t = 0; t < length; ++t) {
+                int cell;
+                if (!(cin >> cell) || cell < 0 || cell >= cells) return 2;
+                fixture.agents[id].path.push_back({cell});
+                if (id != target) {
+                    auto& visits = fixture.path_table.table[cell];
+                    if (visits.size() <= t) visits.resize(t + 1);
+                    visits[t].push_back(id);
+                }
+            }
+            if (length && id != target) {
+                int goal = fixture.agents[id].path.back().location;
+                fixture.path_table.goals[goal] = min(fixture.path_table.goals[goal], length - 1);
+            }
+        }
+        if (target < 0 || target >= fixture.agents.size()) return 2;
+        set<pair<int, int>> original, corrected;
+        fixture.original(original, target, fixture.agents[target].path);
+        fixture.corrected(corrected, target, fixture.agents[target].path);
+        cout << "{\"case\":" << case_id << ",\"original\":";
+        print_pairs(original);
+        cout << ",\"corrected\":";
+        print_pairs(corrected);
+        cout << "}\n";
+    }
+    return 0;
+}

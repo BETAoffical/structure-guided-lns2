@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.cplns_noalloc_audit.v1",
+  "output": "build/cplns-noalloc-audit-v1",
+  "seeds": [0, 2],
+  "fixtures": ["open", "order_reversal_corridor", "dense_open", "two_door"],
+  "fixture_seed": 917,
+  "solver_seconds": 3,
+  "external_seconds": 25,
+  "workers": 20,
+  "screen": 4,
+  "prefix_records": 512,
+  "no_ttf_or_promotion": true
+}
