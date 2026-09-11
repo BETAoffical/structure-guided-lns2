@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import signal
 import sys
 import time
 from unittest.mock import patch
@@ -74,6 +75,57 @@ def test_parent_guard_rejects_wrong_parent():
         probe.parent_death_guard(-1)
     # Restore the test worker's previous default rather than leave its signal changed.
     probe.ctypes.CDLL(None).prctl(1, 0, 0, 0, 0)
+
+
+def guarded_wait(connection, parent_pid):
+    probe.parent_death_guard(parent_pid)
+    connection.send(os.getpid())
+    time.sleep(30)
+
+
+def nested_parent(connection):
+    child = multiprocessing.get_context("spawn").Process(target=guarded_wait, args=(connection, os.getpid()))
+    child.start()
+    child.join()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux native subprocess contract")
+def test_outer_worker_kill_does_not_leave_running_lane():
+    context = multiprocessing.get_context("spawn")
+    reader, writer = context.Pipe(duplex=False)
+    parent = context.Process(target=nested_parent, args=(writer,))
+    parent.start()
+    writer.close()
+    child_pid = None
+    try:
+        # Nested spawn may queue behind 20 test workers; cleanup still has its own 5s bound.
+        assert reader.poll(60)
+        child_pid = reader.recv()
+        parent.terminate()
+        parent.join(5)
+        for _ in range(100):
+            status = probe.Path(f"/proc/{child_pid}/status")
+            if not status.exists():
+                break
+            try:
+                text = status.read_text()
+            except FileNotFoundError:
+                break
+            if "State:\tZ" in text:
+                break
+            time.sleep(.05)
+        else:
+            pytest.fail("running native lane survived parent termination")
+    finally:
+        if parent.is_alive():
+            parent.kill()
+            parent.join(5)
+        reader.close()
+        if child_pid is not None:
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
 
 
 def test_digest_tamper_rejected(tmp_path):
