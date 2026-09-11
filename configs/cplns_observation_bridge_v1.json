@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.cplns_observation_bridge.v1",
+  "output": "build/cplns-observation-bridge-v1",
+  "reference_config": "configs/cplns_sequential_reference_v1.json",
+  "workers": 20,
+  "solver_seconds": 3,
+  "external_seconds": 25,
+  "seeds": [0, 1],
+  "fixtures": ["open", "order_reversal_corridor", "dense_open", "two_door"],
+  "fixture_seed": 917,
+  "max_observed_decisions": 128,
+  "no_ttf_or_promotion": true
+}
