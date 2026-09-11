@@ -15,7 +15,7 @@ from experiments.nonmonotonic_repair import ARMS, acceptance_draw, temperature, 
 from experiments.repair_collection import _CollectionRunLock, _plain, _run_jobs, state_fingerprint
 from scripts.audit_feedback_memory import checked, digest
 from scripts.run_feedback_exploration_diagnostics import (
-    FrozenPool, check_source_pool, paths, padded_auc, restore, validate_final,
+    FrozenPool, check_source_pool, padded_auc, restore, validate_final,
 )
 
 OUT = ROOT / "build/nonmonotonic-repair-pilot-v1"
