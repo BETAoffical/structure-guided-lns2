@@ -49,6 +49,22 @@ def test_strict_recovery_not_equal_and_no_off_by_one():
     assert inc[0]["windows"]["4"]=="below_pre_increase"
 
 
+def test_no_pp_is_not_a_failed_rollback():
+    r=fixture()
+    r["events"]=r["events"][:1]
+    m=r["events"][0]["metrics"]
+    m.update(replan_success=False,pp_failure_reason="not_run",conflicts_after=2,
+        pp_attempted_agent_count=0,pp_inserted_agent_count=0,repair_order=[],native_replan_seconds=0.)
+    m.pop("acceptance_evaluated")
+    r.update(final_state=dict(num_of_colliding_pairs=2,feasible=False),ttf_seconds=None,
+             success_within_budget=False,pp_seconds=0.)
+    s,inc,attempts=audit.episode(seal(r))
+    assert s["categories"]==dict(pp_not_run=1) and not inc and not attempts
+    m["pp_attempted_agent_count"]=1
+    with pytest.raises(ValueError,match="not-run"):
+        audit.episode(seal(r))
+
+
 @pytest.mark.parametrize("change",["hash","probability","continuity","timer","ttf","accepted_delta"])
 def test_bad_inputs_fail_closed(change):
     r=deepcopy(fixture())

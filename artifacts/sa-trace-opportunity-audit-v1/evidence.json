@@ -1,0 +1,26 @@
+{
+  "schema": "lns2.sa_trace_opportunity_evidence.v1",
+  "source_manifest": "build/sa-independent-confirmation-supervisor-v2/timed_report.json",
+  "source_manifest_sha256": "926a72001abead832c225f8e80c766298a61bd8a864da5791cec627138ff0fd5",
+  "report": "build/sa-trace-opportunity-audit-v1/report.json",
+  "report_sha256": "faae54d725157af9d72eab2fca054ecd10983067e216cfa9517a1b685998336e",
+  "test_report": "build/sa-trace-opportunity-audit-v1/final_pytest.xml",
+  "test_report_sha256": "3ce164765dfb41b6794051cd39a2aeab10a4204a3620997dba9e7bdb39caefc1",
+  "pytest_passed": 15,
+  "source_episodes": 128,
+  "new_solver_runs": 0,
+  "new_model_fits": 0,
+  "posthoc_descriptive": true,
+  "default_changed": false,
+  "dual16_sa": {
+    "worse_attempts": 719,
+    "accepted_increases": 710,
+    "rejected_increases": 9,
+    "episodes_with_rejected_increases": 5,
+    "mean_attempt_acceptance_probability": 0.9916432422950017,
+    "below_pre_increase_within_4": 440,
+    "below_pre_increase_within_16": 566,
+    "below_pre_increase_within_64": 643
+  },
+  "decision": "retain_current_runtime_no_new_acceptance_rule; bounded_rejection_branch_audit_proposed_not_executed"
+}

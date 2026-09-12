@@ -66,10 +66,14 @@ def episode(row):
                 raise ValueError("accepted delta mismatch")
             categories["increase" if delta > 0 else "decrease" if delta < 0 else "equal"] += 1
         else:
-            if after != before or not m["pp_rolled_back"]:
+            not_run = m["pp_failure_reason"] == "not_run"
+            if not_run and (m["pp_attempted_agent_count"] or m["pp_inserted_agent_count"]
+                            or m["repair_order"] or m["native_replan_seconds"]):
+                raise ValueError("not-run record contains PP work")
+            if after != before or (not not_run and not m["pp_rolled_back"]):
                 raise ValueError("rejected attempt did not roll back conflicts")
-            categories["rejected_or_incomplete"] += 1
-        if row["arm"].endswith("_sa") and m["acceptance_evaluated"]:
+            categories["pp_not_run" if not_run else "rejected_or_incomplete"] += 1
+        if row["arm"].endswith("_sa") and m.get("acceptance_evaluated",False):
             t, u = m["acceptance_temperature"], m["acceptance_uniform"]
             p = 1. if delta <= 0 else math.exp(-delta/t) if t > 0 else 0.
             if not math.isclose(p, m["acceptance_probability"], rel_tol=1e-12, abs_tol=1e-14):
