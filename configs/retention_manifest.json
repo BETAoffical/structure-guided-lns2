@@ -2813,6 +2813,11 @@
       "path": "tests/evaluation/test_sa_incremental_heat.py",
       "role": "reproducibility",
       "contract": "Protect exact cache-relative path differences, rollback, identity checks and corrupt-heat detection."
+    },
+    {
+      "path": "tests/evaluation/test_sa_shadow_callgraph.py",
+      "role": "reproducibility",
+      "contract": "Record that native shadow builds an unused Python index while Python fallback requires it."
     }
   ]
 }

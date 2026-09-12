@@ -1,0 +1,27 @@
+{
+  "schema": "lns2.sa_incremental_heat_evidence.v1",
+  "registration_commit": "06f5a9b",
+  "no_ttf_experiment": true,
+  "default_changed": false,
+  "cases": 8,
+  "paired_selection_calls": 792,
+  "replay_steps_equal": 792,
+  "shadow_calls": 35,
+  "reference_selection_seconds": 26.163285007000177,
+  "incremental_selection_seconds": 29.181021285999982,
+  "reduction_percent": -11.534240743058024,
+  "faster_calls": 632,
+  "faster_cases": 3,
+  "ordinary_update_reduction_percent": 9.058892921083965,
+  "targeted_tests_passed": 57,
+  "decision": "do_not_promote_incremental_heat",
+  "posthoc_next_hypothesis": "remove unused Python index construction in native shadow while preserving full validation",
+  "files": {
+    "build/sa-incremental-heat-audit-v1/report.json": "4a15dd2ae00a160a0f0122906819df039d3109137308ca8c0a61052ca24c5054",
+    "build/sa-incremental-heat-audit-v1/plan.json": "2aaf946ce4777c7eff56e3dc6aa8420ebf914b537d8353918c54f203d7629f95",
+    "build/sa-incremental-heat-audit-v1/pytest-final.xml": "fb58a102edd004000aa8c7e18b3f51a8f5be2920094ab4aaebfc44ea4218ccac",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "report": "docs/SA_INCREMENTAL_HEAT_RESULTS_ZH.md"
+}
