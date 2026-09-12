@@ -2733,6 +2733,21 @@
       "path": "tests/evaluation/test_stride_dual16_room_maze_highload_extension_v1.py",
       "role": "reproducibility",
       "contract": "Protect the targeted Dual16 room and maze high-load boundary protocol."
+    },
+    {
+      "path": "experiments/sa_single_check_runtime.py",
+      "role": "reproducibility",
+      "purpose": "Isolate redundant snapshot removal while preserving the frozen SA worker and default controller."
+    },
+    {
+      "path": "scripts/confirm_sa_single_check_runtime.py",
+      "role": "reproducibility",
+      "purpose": "Verify full-prefix equivalence and serial paired runtime timing with separately supervised audits."
+    },
+    {
+      "path": "tests/evaluation/test_sa_single_check_runtime.py",
+      "role": "reproducibility",
+      "contract": "Protect selector equivalence, state guards, private bindings, paired scheduling and safe stopping."
     }
   ]
 }
