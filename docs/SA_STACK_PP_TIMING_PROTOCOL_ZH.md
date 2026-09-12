@@ -27,4 +27,6 @@
 
 `scripts/time_sa_stack_pp.py register|verify|collect|resume|stop|analyze`。
 
+2026-09-13：v1 因启动时外部负载隔离，拒绝续跑或分析。复测使用 `--output build/sa-stack-pp-timing-v2`，同样的32作业、样本、门槛及两种native，不读取v1耗时做筛选；不覆盖旧注册及结果。
+
 先本地 Git 标签及 ZIP 备份，提交代码与本协议，再登记输入 SHA 并运行测试。所有原始计时、注册和 manifest 保存于忽略目录 `build/sa-stack-pp-timing-v1`。本轮不推送。

@@ -127,3 +127,11 @@ def test_resume_rejects_modified_output_before_loading(tmp_path, monkeypatch):
     timing.write_json(tmp_path / "jobs" / "job.json", {})
     with pytest.raises(ValueError, match="saved job changed"):
         timing.collect(True)
+
+
+def test_quarantined_batch_fails_before_any_work(tmp_path, monkeypatch):
+    monkeypatch.setattr(timing, "OUT", tmp_path)
+    timing.write_json(tmp_path / "QUARANTINED.json", {})
+    for operation in (timing.register, timing.verify, timing.analyze):
+        with pytest.raises(ValueError, match="quarantined"):
+            operation()

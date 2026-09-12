@@ -55,6 +55,8 @@ def prerequisite():
 
 
 def register():
+    if (OUT / "QUARANTINED.json").exists():
+        raise ValueError("quarantined batch; use a newly registered output directory")
     if (OUT / "registration.json").exists():
         raise ValueError("registration exists")
     p, b = prerequisite()
@@ -79,6 +81,8 @@ def register():
 
 
 def verify():
+    if (OUT / "QUARANTINED.json").exists():
+        raise ValueError("quarantined batch cannot be resumed or analyzed")
     p, b = prerequisite()
     r = read_json(OUT / "registration.json")
     for name, h in r["input_sha256"].items():
@@ -329,7 +333,13 @@ def analyze():
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("phase", choices=("register", "verify", "collect", "resume", "stop", "analyze"))
-    phase = p.parse_args().phase
+    p.add_argument("--output", default=OUT.relative_to(ROOT).as_posix())
+    args = p.parse_args()
+    requested = (ROOT / args.output).resolve()
+    if requested.parent != (ROOT / "build").resolve() or not requested.name.startswith("sa-stack-pp-timing-"):
+        p.error("output must be a sa-stack-pp-timing-* directory directly under build")
+    OUT = requested
+    phase = args.phase
     if phase == "stop":
         write_json(OUT / "STOP_AFTER_JOB.json", dict(requested=True))
         result = dict(stop_after_job=True)
