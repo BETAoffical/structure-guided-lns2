@@ -1,0 +1,46 @@
+{
+  "schema": "lns2.sa_independent_compact_results.v1",
+  "source_commit": "a3bd1d4",
+  "source_plan_sha256": "2efbfa268fb62b2de7ccfcee7f41a2982ca86bafae31046f81a9ca053e443de7",
+  "supervision_registration_sha256": "cf5ab086a9a45820a73d077ea05baf0a560e2b51fff1542b549d8491850b8d6b",
+  "files": {
+    "build/sa-independent-confirmation-supervisor-v2/timed_report.json": "926a72001abead832c225f8e80c766298a61bd8a864da5791cec627138ff0fd5",
+    "build/sa-independent-confirmation-supervisor-v2/analysis.json": "73cc588f481357428cef3975acf61a807c5a8189cc11ba3e70172ca3f4d31fe2",
+    "build/sa-independent-confirmation-supervisor-v2/supplementary_analysis.json": "ddd589d4c75b4b5b4cd5a7114093078fd7aaff7eeba9d3adb730c659ab46681d",
+    "build/sa-independent-confirmation-supervisor-v2/path_quality_descriptive.json": "b94ba29b40cff3adff8f1bc628dcd509d37a624d2651e12dc0f728ac5a2d182b",
+    "artifacts/sa-independent-confirmation-v1/ttf_details.csv": "01d5ad237af164827d89ed22aa3187099e88d3d87e58367c1b0f606eb5c321de"
+  },
+  "maps": 8,
+  "task_seed_cases": 32,
+  "episodes": 128,
+  "retained_original_episodes": 27,
+  "new_fully_audited_episodes": 101,
+  "planning_budget_seconds": 60,
+  "official": {"successes": 29, "mean_capped_ttf": 17.951618274656205},
+  "official_sa": {"successes": 30, "mean_capped_ttf": 20.930879558937505},
+  "dual16": {"successes": 21, "mean_capped_ttf": 26.035284831437504},
+  "dual16_sa": {"successes": 31, "mean_capped_ttf": 17.165158143343767},
+  "primary_dual16_sa_vs_dual16": {
+    "confirmation_mean_ttf_passed": true,
+    "improvement_percent": 34.069635671444985,
+    "paired_seconds_ci95": [-13.95222492537496, -4.279239163250017],
+    "new_successes": 10,
+    "lost_successes": 0,
+    "improved_map_means": 7,
+    "common_success_cases": 21,
+    "common_success_mean_ttf": [8.244243552666674, 9.152309973000026]
+  },
+  "dual16_sa_vs_official": {
+    "improvement_percent": 4.380998522137413,
+    "paired_seconds_ci95": [-4.881970946249808, 3.3356041867187503],
+    "statistically_confirmed_mean_speedup": false
+  },
+  "claim_scope": "Current complete-PP plus annealed-acceptance combination reduces Dual16 high-load timeouts on unseen station-centric generator maps at a 60-second budget.",
+  "not_pure_acceptance_ablation": true,
+  "no_cross_family_claim": true,
+  "no_static_context_claim": true,
+  "no_real_robot_execution_claim": true,
+  "no_default_promotion": true,
+  "original_interruption_preserved": true,
+  "diagnostic_substitution": false
+}
