@@ -2788,6 +2788,16 @@
       "path": "tests/evaluation/test_sa_runtime_costs.py",
       "role": "reproducibility",
       "contract": "Reject malformed timers and prevent nested-cost double counting or speedup claims from idealized bounds."
+    },
+    {
+      "path": "scripts/profile_sa_selector_components.py",
+      "role": "reproducibility",
+      "purpose": "Profile frozen selector components on 24 registered states with complete prefix equivalence."
+    },
+    {
+      "path": "tests/evaluation/test_sa_selector_components.py",
+      "role": "reproducibility",
+      "contract": "Protect fixed state sampling, private bytecode binding, proxy semantics and nested timer accounting."
     }
   ]
 }
