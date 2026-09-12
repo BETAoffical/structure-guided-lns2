@@ -2748,6 +2748,16 @@
       "path": "tests/evaluation/test_sa_single_check_runtime.py",
       "role": "reproducibility",
       "contract": "Protect selector equivalence, state guards, private bindings, paired scheduling and safe stopping."
+    },
+    {
+      "path": "scripts/audit_sa_trace_opportunities.py",
+      "role": "reproducibility",
+      "purpose": "Read frozen SA traces to describe acceptance excursions and existing runtime costs without solver runs."
+    },
+    {
+      "path": "tests/evaluation/test_sa_trace_opportunities.py",
+      "role": "reproducibility",
+      "contract": "Protect strict recovery, right censoring, timing boundaries and frozen trace consistency."
     }
   ]
 }
