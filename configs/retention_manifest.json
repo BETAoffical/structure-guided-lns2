@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/diagnose_sa_confirmation_interruption.py",
+      "role": "reproducibility",
+      "purpose": "One isolated reproduction distinguishing solver time from post-solver audit fuse failures."
+    },
+    {
+      "path": "tests/evaluation/test_sa_confirmation_interruption.py",
+      "role": "reproducibility",
+      "contract": "Preserve diagnostic worker error payload without assuming a generic dataset job schema."
+    },
+    {
       "path": "scripts/run_sa_independent_confirmation.py",
       "role": "reproducibility",
       "purpose": "Frozen SA new-map confirmation adapter, paired density generation and isolated evidence."
