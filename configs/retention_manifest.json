@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/diagnose_uniform_runtime.py",
+      "role": "reproducibility",
+      "purpose": "Model-free uniform candidate equivalence and bounded paired Official PP diagnostics"
+    },
+    {
+      "path": "tests/evaluation/test_uniform_runtime.py",
+      "role": "reproducibility",
+      "contract": "Official RNG preservation, unscored selection, paired accounting and explicit no-promotion gates"
+    },
+    {
       "path": "scripts/diagnose_sa_independent_lanes.py",
       "role": "reproducibility",
       "purpose": "Fixed-budget independent rank-SA and uniform-greedy lane diagnostics without default or TTF changes"
