@@ -2853,6 +2853,16 @@
       "path": "tests/evaluation/test_sa_pp_workload.py",
       "role": "reproducibility",
       "contract": "Keep reset work separate and reject incomplete traces, malformed counters and inconsistent PP attempts."
+    },
+    {
+      "path": "scripts/probe_sa_stack_neighbors.py",
+      "role": "reproducibility",
+      "purpose": "Isolated order-preserving SIPPS neighbor microbenchmark and frozen-prefix native equivalence."
+    },
+    {
+      "path": "tests/evaluation/test_sa_stack_neighbors.py",
+      "role": "reproducibility",
+      "contract": "Restrict generated native changes to one loop and preserve boundary, obstacle and duplicate-neighbor semantics."
     }
   ]
 }
