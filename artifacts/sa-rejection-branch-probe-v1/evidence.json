@@ -1,0 +1,27 @@
+{
+  "schema": "lns2.sa_rejection_branch_evidence.v1",
+  "registration_commit": "80b60a5",
+  "development_only": true,
+  "timing_experiment": false,
+  "default_changed": false,
+  "decision": "retain_frozen_sa_rejection_no_acceptance_rule_promotion",
+  "files": {
+    "build/sa-rejection-branch-probe-v1/plan.json": "aab6f52e78b5a3b03457d59716e8a9eb86fe4fd376d2ca3d5b37dc3a382f744a",
+    "build/sa-rejection-branch-probe-v1/smoke_report.json": "c30ba0b140fa12b4827021212fc7b778d1d674b6cbbfac68068d5233d51122d9",
+    "build/sa-rejection-branch-probe-v1/branches_report.json": "f7c81abf85d897ca7fe8ab673fb4f4fe6468c1597e93d8addac0eab0140793a7",
+    "build/sa-rejection-branch-probe-v1/analysis.json": "a1473385035f679eeae2ac8f90c51579985ff5de7eb3a196888823ffd4380401",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "targets": 9,
+  "source_trajectories": 5,
+  "source_maps": 4,
+  "branches": 18,
+  "successes_within_bound": {"keep_rejection": 4, "accept_once": 2},
+  "stops": {"feasible": 6, "node_budget": 9, "horizon": 3},
+  "posthoc_first_step_full_reconvergence_pairs": 3,
+  "followup_steps": 781,
+  "followup_generated_nodes": 67215806,
+  "targeted_tests_passed": 39,
+  "report": "docs/SA_REJECTION_BRANCH_RESULTS_ZH.md"
+}

@@ -2768,6 +2768,16 @@
       "path": "tests/evaluation/test_sa_rejection_branches.py",
       "role": "reproducibility",
       "contract": "Protect fixed rejection events, one-time intervention, PP identity and safe resume boundaries."
+    },
+    {
+      "path": "scripts/analyze_sa_rejection_branches.py",
+      "role": "reproducibility",
+      "purpose": "Verify frozen paired SA branch results and full-state reconvergence without solver execution."
+    },
+    {
+      "path": "tests/evaluation/test_sa_rejection_branch_analysis.py",
+      "role": "reproducibility",
+      "contract": "Distinguish resource-unknown outcomes from finite-horizon outcomes and require full-state convergence."
     }
   ]
 }
