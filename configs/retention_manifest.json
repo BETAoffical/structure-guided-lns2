@@ -2758,6 +2758,16 @@
       "path": "tests/evaluation/test_sa_trace_opportunities.py",
       "role": "reproducibility",
       "contract": "Protect strict recovery, right censoring, timing boundaries and frozen trace consistency."
+    },
+    {
+      "path": "scripts/probe_sa_rejection_branches.py",
+      "role": "reproducibility",
+      "purpose": "Isolate one accepted versus rejected SA decision with frozen-prefix bounded continuations."
+    },
+    {
+      "path": "tests/evaluation/test_sa_rejection_branches.py",
+      "role": "reproducibility",
+      "contract": "Protect fixed rejection events, one-time intervention, PP identity and safe resume boundaries."
     }
   ]
 }
