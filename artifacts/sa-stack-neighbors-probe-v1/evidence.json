@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.sa_stack_neighbors_evidence.v1",
+  "registration_commit": "6761ef8",
+  "default_changed": false,
+  "frozen_native_changed": false,
+  "diagnostic_native_created": true,
+  "no_ttf": true,
+  "no_pp_timing": true,
+  "micro_maps": 4,
+  "micro_rounds_per_map": 4,
+  "micro_queries_per_round_per_variant": 200000,
+  "micro_reference_seconds": 0.2515926,
+  "micro_stack_seconds": 0.07417032,
+  "micro_reduction_percent": 70.51967347211324,
+  "replay_cases": 8,
+  "replay_steps": 792,
+  "full_prefix_equal": true,
+  "prebuild_tests_passed": 17,
+  "native_and_related_tests_passed": 43,
+  "test_batches_overlap": true,
+  "decision": "eligible_for_bounded_pp_timing",
+  "files": {
+    "build/sa-stack-neighbors-probe-v1/plan.json": "9c34267427ca5efb03cc98b42ae44d236c4629a1a1d610be73df497523224260",
+    "build/sa-stack-neighbors-probe-v1/report.json": "1bd8c0109f8dac067900a76834393700656766b925513b7ebf6e0832ea7f6275",
+    "build/sa-stack-neighbors-probe-v1/micro.json": "7c6a7b7335939fce653012f5eec8cfb6f595cd716afe7c77beac6c73d493d055",
+    "build/sa-stack-neighbors-probe-v1/build.json": "1724b35b56ae57094950620aa5e2a0954e727a36f7c85d443357b1d621a31d52",
+    "build/sa-stack-neighbors-probe-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "f214c49b5bab0a59ae110f4b27d248972eba9e0406a1a0118a3abe911c04e3fd",
+    "build/sa-stack-neighbors-probe-v1/pytest.xml": "aef6ee8376e20ad2b04c183a3c5f796fbc3222645d2a962b9ee8ab2486a76340",
+    "build/sa-stack-neighbors-probe-v1/pytest-native.xml": "2629387151b5378d8feeff8c282b3641fcceefe9a05dd5a535184ec8cbe8820d",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d"
+  },
+  "report": "docs/SA_STACK_NEIGHBORS_RESULTS_ZH.md"
+}
