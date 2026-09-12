@@ -2818,6 +2818,21 @@
       "path": "tests/evaluation/test_sa_shadow_callgraph.py",
       "role": "reproducibility",
       "contract": "Record that native shadow builds an unused Python index while Python fallback requires it."
+    },
+    {
+      "path": "experiments/sa_native_shadow_heat_runtime.py",
+      "role": "reproducibility",
+      "purpose": "Isolated native shadow with identical full validation but no unused Python index construction."
+    },
+    {
+      "path": "scripts/audit_sa_native_shadow_heat.py",
+      "role": "reproducibility",
+      "purpose": "Reuse frozen paired component protocol for native-shadow heat validation without baseline mutation."
+    },
+    {
+      "path": "tests/evaluation/test_sa_native_shadow_heat.py",
+      "role": "reproducibility",
+      "contract": "Check unchanged shadow outputs, corruption detection, Python fallback and private runtime bindings."
     }
   ]
 }
