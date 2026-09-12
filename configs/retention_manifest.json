@@ -2798,6 +2798,21 @@
       "path": "tests/evaluation/test_sa_selector_components.py",
       "role": "reproducibility",
       "contract": "Protect fixed state sampling, private bytecode binding, proxy semantics and nested timer accounting."
+    },
+    {
+      "path": "experiments/sa_incremental_heat_runtime.py",
+      "role": "reproducibility",
+      "purpose": "Isolated exact changed-path heat maintenance with full periodic shadow validation."
+    },
+    {
+      "path": "scripts/audit_sa_incremental_heat.py",
+      "role": "reproducibility",
+      "purpose": "Compare frozen and incremental-heat selection on identical replay states including shadow costs."
+    },
+    {
+      "path": "tests/evaluation/test_sa_incremental_heat.py",
+      "role": "reproducibility",
+      "contract": "Protect exact cache-relative path differences, rollback, identity checks and corrupt-heat detection."
     }
   ]
 }
