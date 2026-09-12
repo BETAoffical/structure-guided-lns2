@@ -2778,6 +2778,16 @@
       "path": "tests/evaluation/test_sa_rejection_branch_analysis.py",
       "role": "reproducibility",
       "contract": "Distinguish resource-unknown outcomes from finite-horizon outcomes and require full-state convergence."
+    },
+    {
+      "path": "scripts/audit_sa_runtime_costs.py",
+      "role": "reproducibility",
+      "purpose": "Account disjoint TTF costs from hash-bound serial SA runtime traces without additional solver runs."
+    },
+    {
+      "path": "tests/evaluation/test_sa_runtime_costs.py",
+      "role": "reproducibility",
+      "contract": "Reject malformed timers and prevent nested-cost double counting or speedup claims from idealized bounds."
     }
   ]
 }

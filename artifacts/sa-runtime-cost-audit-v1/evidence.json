@@ -1,0 +1,26 @@
+{
+  "schema": "lns2.sa_runtime_cost_evidence.v1",
+  "posthoc_readonly": true,
+  "new_solver_runs": 0,
+  "no_speedup_claim": true,
+  "default_changed": false,
+  "episodes": 32,
+  "optimized_episodes": 16,
+  "independent_maps": 4,
+  "paired_cases": 8,
+  "targeted_tests_passed": 32,
+  "optimized_total_ttf_seconds": 250.88469857899986,
+  "optimized_pp_percent": 66.63049001107655,
+  "optimized_selection_percent": 19.937389094794913,
+  "optimized_low_conflict_interval_percent": 40.09941820239051,
+  "decision": "profile_selection_and_pp_subcosts_before_runtime_changes",
+  "files": {
+    "build/sa-single-check-runtime-v1/timed_report.json": "154ca77c8ccd5702afc73f406528ddad5399dce09ee8a067a03ef6caa3d60902",
+    "build/sa-single-check-runtime-v1/registration.json": "2c2f8d9fa945d55a15cc4cfb193c91c37cee28a49323af569e699951edeacb0c",
+    "build/sa-runtime-cost-audit-v1/report.json": "713b17ecb4fab79f6664af4df2dbe2d43b201a5e7a97af022971e9dbe901d2d8",
+    "build/sa-runtime-cost-audit-v1/pytest.xml": "4da4b24e190c6de360a067e59ca5fb07f0290f2431cbe9af86dbd863fbb0965b",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "report": "docs/SA_RUNTIME_COST_AUDIT_ZH.md"
+}
