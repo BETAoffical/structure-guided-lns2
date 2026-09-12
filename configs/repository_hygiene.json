@@ -49,6 +49,13 @@
   "allowed_duplicate_function_groups": [
     {
       "functions": [
+        {"path": "scripts/diagnose_sa_independent_lanes.py", "name": "backup"},
+        {"path": "scripts/diagnose_uniform_runtime.py", "name": "backup"}
+      ],
+      "reason": "Identical phase ZIP verification retained in two completed, preregistered diagnostics. Their implementation hashes bind the 64 lane outcomes and 48 uniform/Official outcomes; preserve those exact bytes. This exception covers only these two backup functions, not solver or policy logic and not future collectors."
+    },
+    {
+      "functions": [
         {"path": "experiments/local_path_search.py", "name": "at"},
         {"path": "experiments/search_occupancy_observation.py", "name": "at"}
       ],
