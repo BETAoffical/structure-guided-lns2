@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/run_sa_independent_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "Frozen SA new-map confirmation adapter, paired density generation and isolated evidence."
+    },
+    {
+      "path": "tests/evaluation/test_sa_independent_confirmation.py",
+      "role": "reproducibility",
+      "contract": "Protect old output isolation, frozen sampling, native reuse and map/seed separation."
+    },
+    {
       "path": "scripts/run_sa_wall_clock.py",
       "role": "reproducibility",
       "purpose": "Registered serial four-arm SA development timing, atomic resume and safe episode-boundary stopping."
