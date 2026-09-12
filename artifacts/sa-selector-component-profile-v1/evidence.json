@@ -1,0 +1,27 @@
+{
+  "schema": "lns2.sa_selector_component_profile_evidence.v1",
+  "registration_commit": "f4c9b22",
+  "no_ttf_experiment": true,
+  "no_default_change": true,
+  "no_new_speedup_claim": true,
+  "cases": 8,
+  "states": 24,
+  "measurements": 72,
+  "prefix_repairs_equal": 792,
+  "targeted_tests_passed": 20,
+  "noninitial_first_visit_percentages": {
+    "topology_prepare": 30.08433686398618,
+    "proposal": 25.52432264435275,
+    "fingerprints": 19.37889885299726,
+    "scoring": 5.591162052991414
+  },
+  "decision": "test_existing_incremental_heat_interface_in_isolation",
+  "files": {
+    "build/sa-selector-component-profile-v1/plan.json": "d2e774856b1f39dab32d435bef233ca7812c222a78075e693f1aae4fc0ecae09",
+    "build/sa-selector-component-profile-v1/report.json": "09901deeff7e50f073d63f41c76c7631d12b250a9035cc69dd7240a32f46a4b6",
+    "build/sa-selector-component-profile-v1/pytest.xml": "cd65d567dcfbdbc851f09466dc47bac0e819e66e923ebe4b4c9a3199916701ab",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "report": "docs/SA_SELECTOR_COMPONENT_PROFILE_RESULTS_ZH.md"
+}
