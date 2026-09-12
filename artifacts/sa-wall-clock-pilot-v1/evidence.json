@@ -1,0 +1,39 @@
+{
+  "schema": "lns2.sa_wall_clock_compact_evidence.v1",
+  "preregistered_commit": "7f4419e99d16ab77c64d505cc175c303dd793e08",
+  "development_only": true,
+  "default_promoted": false,
+  "scope": "16 previously examined task-seeds on 8 station_centric maps; raw PP reset; serial warm-planner first-feasible TTF",
+  "source_directory": "build/sa-wall-clock-pilot-v1",
+  "hashes": {
+    "analysis.json": "02f4ab6821cc37d6a8f3dc15af6d0846fa19fe023d820017d044f6ec1966260d",
+    "timed_report.json": "71a9ac1ae29ff24997be2d164d3ace40e3431ab13a43b3521c0c99010b5af07c",
+    "plan.json": "d8b4b92105186b0be1d6e482cdc8aa1f8c52fdcaf3afc4fbb3ee452b65e494c0",
+    "parity_report.json": "f8c9d2675e113ae7cf5270da078b5ad523b3ce08cfc1c939ae5e1f042e218d3a",
+    "admission_report.json": "499c2f03428aa5df2675e045c95e17d98a31976133286a7f015f1ec96918ee48",
+    "smoke_report.json": "32cd69733027d7df9eb77d079f0e651dc35e29dfc8ee4e862d9a2727afd2a18e"
+  },
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "model_manifest_sha256": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8",
+  "completed_episodes": 64,
+  "unexplained_errors": 0,
+  "main_comparison": {
+    "base": "dual16",
+    "challenger": "dual16_sa",
+    "successes": [16, 16],
+    "mean_ttf_seconds": [1.9759784454999796, 1.2042756916874993],
+    "improvement_percent": 39.05420909676053,
+    "paired_seconds_ci95": [-1.687745844062487, -0.049964782999971646],
+    "case_wins": 9,
+    "case_losses": 7,
+    "map_wins": 6,
+    "map_losses": 2,
+    "decision": "development_timing_signal"
+  },
+  "official_mean_ttf_seconds": 0.9428426308124997,
+  "dual16_sa_slower_than_official_percent": 27.728175660630466,
+  "success_rate_improvement_established": false,
+  "independent_generalization_established": false,
+  "sa_effect_includes_complete_pp": true,
+  "full_cplns_reproduction": false
+}
