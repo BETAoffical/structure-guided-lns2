@@ -1,0 +1,22 @@
+{
+  "schema": "lns2.sa_pp_workload_evidence.v1",
+  "no_solver_run": true,
+  "no_new_timing": true,
+  "native_changed": false,
+  "maps": 4,
+  "paired_episodes": 16,
+  "repair_steps_per_variant": 1584,
+  "searches_per_variant": 23392,
+  "expanded_per_variant": 77806100,
+  "generated_per_variant": 111282934,
+  "sit_slot_initializations_from_source": 80842752,
+  "tests_passed": 15,
+  "decision": "profile_order_preserving_neighbor_enumeration_before_native_change",
+  "files": {
+    "build/sa-pp-workload-audit-v1/report.json": "e3c8b9746e5eb44522211e77ac0938f659b970def2d9a1e7e92cf301d080a3e6",
+    "build/sa-pp-workload-audit-v1/pytest.xml": "d458f5801d8cfa789bccd609ddfda420ed0a528feedd709b2022eb28f8fd4536",
+    "build/sa-native-shadow-ttf-v1/timed_report.json": "bb3261ee52c3575ae0b847bded4a1a4264efec2cdea2f19acf00941c30ab7fdb",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d"
+  },
+  "report": "docs/SA_PP_WORKLOAD_AUDIT_ZH.md"
+}

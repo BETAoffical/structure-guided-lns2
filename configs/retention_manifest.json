@@ -2843,6 +2843,16 @@
       "path": "tests/evaluation/test_sa_native_shadow_ttf.py",
       "role": "reproducibility",
       "contract": "Protect selector isolation, paired schedule, native trajectory equivalence, safe stop and TTF decision boundaries."
+    },
+    {
+      "path": "scripts/audit_sa_pp_workload.py",
+      "role": "reproducibility",
+      "purpose": "Read hash-bound paired results to quantify PP search work without new timing or native changes."
+    },
+    {
+      "path": "tests/evaluation/test_sa_pp_workload.py",
+      "role": "reproducibility",
+      "contract": "Keep reset work separate and reject incomplete traces, malformed counters and inconsistent PP attempts."
     }
   ]
 }
