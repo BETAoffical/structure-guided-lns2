@@ -1,0 +1,35 @@
+{
+  "schema": "lns2.sa_native_shadow_heat_evidence.v2",
+  "registration_commit": "6a187b6",
+  "no_ttf_experiment": true,
+  "default_changed": false,
+  "reference_runtime": "SingleFullCheckPool",
+  "candidate_runtime": "NativeShadowHeatPool",
+  "cases": 8,
+  "maps": 4,
+  "paired_selection_calls": 792,
+  "replay_steps_equal": 792,
+  "shadow_calls": 35,
+  "reference_selection_seconds": 27.857911556000232,
+  "incremental_selection_seconds": 26.167155252999937,
+  "reduction_percent": 6.069214124689576,
+  "faster_calls": 652,
+  "faster_cases": 8,
+  "ordinary_update_reduction_percent": 7.392698009638375,
+  "targeted_tests_passed": 62,
+  "decision": "retain_for_independent_ttf_confirmation",
+  "gate": {
+    "minimum_selection_reduction_percent": 5.0,
+    "minimum_faster_cases": 6
+  },
+  "files": {
+    "build/sa-native-shadow-heat-audit-v2/report.json": "2b20f8ef8f529a4fbf5e35b08e601918e816f6eaf65881e81e49ab6b19a95958",
+    "build/sa-native-shadow-heat-audit-v2/plan.json": "14cda50bc426044138de1c1c3c6e8a539cc7f980e5b04a5dd8c9ef41070629d1",
+    "build/sa-native-shadow-heat-audit-v2/pytest.xml": "bde1671f2a1f276ae543b3bdcbec312c51c9cff195c8ecbd48c0b111d5824a32",
+    "build/sa-incremental-heat-audit-v1/report.json": "4a15dd2ae00a160a0f0122906819df039d3109137308ca8c0a61052ca24c5054",
+    "build/sa-incremental-heat-audit-v1/plan.json": "2aaf946ce4777c7eff56e3dc6aa8420ebf914b537d8353918c54f203d7629f95",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "artifacts/initlns-closed-loop-controller-v2/controller_manifest.json": "1b699182f9890148d0030e691b457c82ac7054760534665ad65484afb0ac82a8"
+  },
+  "report": "docs/SA_NATIVE_SHADOW_HEAT_RESULTS_ZH.md"
+}
