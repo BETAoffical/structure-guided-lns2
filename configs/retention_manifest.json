@@ -2873,6 +2873,16 @@
       "path": "tests/evaluation/test_sa_stack_pp_timing.py",
       "role": "reproducibility",
       "contract": "Protect paired schedule, immutable native identities, component timing, coverage and preregistered gates."
+    },
+    {
+      "path": "scripts/run_sa_path_quality.py",
+      "role": "reproducibility",
+      "purpose": "Frozen shared-native Official, Dual16 and annealed Dual16 paired path-quality timing."
+    },
+    {
+      "path": "tests/evaluation/test_sa_path_quality.py",
+      "role": "reproducibility",
+      "contract": "Protect paired 252-job schedule, shared PP identity, first-feasible journals and official stage-two handoff."
     }
   ]
 }

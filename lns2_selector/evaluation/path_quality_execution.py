@@ -168,7 +168,7 @@ def prepare_episode_spec(root: Path, report: dict, item: dict, output: Path,
     return spec
 
 
-def _episode_child(spec: dict) -> None:
+def _episode_child(spec: dict, *, first_phase_worker: Any = None) -> None:
     child_entered = time.perf_counter()
     from experiments.closed_loop_confirmation import _closed_loop_episode_worker
     from lns2_selector.solver.native import load_native_module, native_identity
@@ -182,7 +182,7 @@ def _episode_child(spec: dict) -> None:
         module = load_native_module()
         if native_identity(module)["sha256"] != spec["native_sha256"]:
             raise ValueError("loaded native binary SHA mismatch")
-        result = _closed_loop_episode_worker(spec["worker_job"], path_observer=journal)
+        result = (first_phase_worker or _closed_loop_episode_worker)(spec["worker_job"], path_observer=journal)
         journal.save("first_phase_result", result)
         if result.get("status") != "ok":
             raise ValueError("first-phase worker failed; saved paths are diagnostic only")

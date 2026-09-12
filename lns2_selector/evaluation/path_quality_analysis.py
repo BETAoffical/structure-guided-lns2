@@ -127,7 +127,8 @@ def inspect_episode(root: Path, case: dict, item: dict, folder: Path, expected_b
     return row
 
 
-def summarize(rows: list[dict], *, samples=5000) -> dict:
+def summarize(rows: list[dict], *, samples=5000, controllers=("official_adaptive", "v2-full", "dual16"),
+              comparisons=COMPARISONS) -> dict:
     result = {"by_protocol": {}, "comparisons": []}
     for protocol in sorted({(r["protocol"], r["budget_seconds"]) for r in rows}):
         selected = [r for r in rows if (r["protocol"], r["budget_seconds"]) == protocol]
@@ -138,7 +139,7 @@ def summarize(rows: list[dict], *, samples=5000) -> dict:
         for stratum, subset in strata.items():
             key = f"{label}/{stratum}"
             stats = {}
-            for controller in ("official_adaptive", "v2-full", "dual16"):
+            for controller in controllers:
                 group = [r for r in subset if r["controller"] == controller]
                 good = [r for r in group if r["success"]]
                 stats[controller] = {"scheduled": len(group), "successes": len(good),
@@ -148,7 +149,7 @@ def summarize(rows: list[dict], *, samples=5000) -> dict:
                     "metrics_on_own_successes": {m: {"mean": statistics.fmean(r[m] for r in good),
                         "median": statistics.median(r[m] for r in good)} if good else None for m in METRICS}}
             result["by_protocol"][key] = stats
-            for baseline, challenger in COMPARISONS:
+            for baseline, challenger in comparisons:
                 left = {(r["task_id"], r["solver_seed"]): r for r in subset if r["controller"] == baseline}
                 right = {(r["task_id"], r["solver_seed"]): r for r in subset if r["controller"] == challenger}
                 if left.keys() != right.keys():
