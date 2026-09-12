@@ -2863,6 +2863,16 @@
       "path": "tests/evaluation/test_sa_stack_neighbors.py",
       "role": "reproducibility",
       "contract": "Restrict generated native changes to one loop and preserve boundary, obstacle and duplicate-neighbor semantics."
+    },
+    {
+      "path": "scripts/time_sa_stack_pp.py",
+      "role": "reproducibility",
+      "purpose": "Serial paired frozen-prefix PP timing for the order-preserving stack-neighbor native variant."
+    },
+    {
+      "path": "tests/evaluation/test_sa_stack_pp_timing.py",
+      "role": "reproducibility",
+      "contract": "Protect paired schedule, immutable native identities, component timing, coverage and preregistered gates."
     }
   ]
 }
