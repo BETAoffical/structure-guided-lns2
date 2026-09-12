@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/run_sa_supervised_confirmation.py",
+      "role": "active",
+      "purpose": "Versioned SA confirmation supervision with durable pre-audit capture and independent audit fuse."
+    },
+    {
+      "path": "tests/evaluation/test_sa_supervised_confirmation.py",
+      "role": "active",
+      "contract": "Frozen action equivalence, capture, audit binding, retained records, errors, stop and resume."
+    },
+    {
       "path": "scripts/diagnose_sa_confirmation_interruption.py",
       "role": "reproducibility",
       "purpose": "One isolated reproduction distinguishing solver time from post-solver audit fuse failures."

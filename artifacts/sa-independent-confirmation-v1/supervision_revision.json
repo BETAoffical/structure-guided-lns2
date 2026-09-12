@@ -1,0 +1,37 @@
+{
+  "schema": "lns2.sa_supervision_revision_evidence.v2",
+  "registration_path": "build/sa-independent-confirmation-supervisor-v2/registration.json",
+  "registration_sha256": "cf5ab086a9a45820a73d077ea05baf0a560e2b51fff1542b549d8491850b8d6b",
+  "source_plan_sha256": "2efbfa268fb62b2de7ccfcee7f41a2982ca86bafae31046f81a9ca053e443de7",
+  "retained_formal_episodes": 27,
+  "remaining_scheduled_episodes": 101,
+  "planning_budget_seconds": 60,
+  "solver_fuse_seconds": 180,
+  "independent_full_audit_fuse_seconds": 1800,
+  "no_audit_overlapping_timing": true,
+  "native_model_actions_unchanged": true,
+  "four_arm_native_action_equivalence_passed": true,
+  "ctest": {"passed": 12, "failed": 0, "official_parity_unchanged": true},
+  "focused_final_tests": {
+    "passed": 41,
+    "path": "build/sa-supervisor-checks-v2/pytest-final.xml",
+    "sha256": "8579d40debc6b7a58afca21e2cc17aed1a8850b487842c0d0d43d575295c17da"
+  },
+  "full_parallel_tests": {
+    "passed": 1669, "skipped": 78, "failed": 2,
+    "path": "build/sa-supervisor-checks-v2/pytest-full.xml",
+    "sha256": "43e3ffc19f942709d2cb10cd661f3c97743fb6c599bf6de055062b7d912da706",
+    "failures_resolved": [
+      "Missing retention entries added and rechecked.",
+      "Ten-second test child startup fuse under 20-worker load; unchanged error test passes in isolation."
+    ]
+  },
+  "isolated_tests": {
+    "passed": 18,
+    "path": "build/sa-supervisor-checks-v2/pytest-isolated.xml",
+    "sha256": "c3622de667d9dcc1e776dbfb48157366c8ea5b7eed8f67ad8dc1de31198bf816"
+  },
+  "backup_tag": "pre-sa-supervisor-v2-20260912",
+  "diagnostic_result_imported": false,
+  "no_default_promotion": true
+}
