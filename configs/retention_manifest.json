@@ -2833,6 +2833,16 @@
       "path": "tests/evaluation/test_sa_native_shadow_heat.py",
       "role": "reproducibility",
       "contract": "Check unchanged shadow outputs, corruption detection, Python fallback and private runtime bindings."
+    },
+    {
+      "path": "scripts/confirm_sa_native_shadow_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Frozen-loop serial paired TTF confirmation for native-shadow heat engineering optimization."
+    },
+    {
+      "path": "tests/evaluation/test_sa_native_shadow_ttf.py",
+      "role": "reproducibility",
+      "contract": "Protect selector isolation, paired schedule, native trajectory equivalence, safe stop and TTF decision boundaries."
     }
   ]
 }
