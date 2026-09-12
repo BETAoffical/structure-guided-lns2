@@ -300,8 +300,13 @@ bool InitLNS::step(const RepairAction& action)
     if (action.experimental_acceptance != ExperimentalPPAcceptance::DISABLED)
     {
         if (!initialized || replan_algo_name != "PP" ||
-            action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD ||
-            !validateExplicitNeighborhood(action.agents) ||
+            (action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD &&
+             action.mode != RepairActionMode::OFFICIAL) ||
+            (action.mode == RepairActionMode::EXPLICIT_NEIGHBORHOOD &&
+             !validateExplicitNeighborhood(action.agents)) ||
+            (action.mode == RepairActionMode::OFFICIAL &&
+             (!action.agents.empty() || !action.repair_order.empty() ||
+              action.random_seed >= 0 || action.pp_random_seed >= 0)) ||
             (!action.repair_order.empty() && !validateRepairOrder(action.repair_order, action.agents)) ||
             !std::isfinite(action.pp_time_limit_seconds) || action.pp_time_limit_seconds < 0 ||
             !std::isfinite(action.acceptance_temperature) || action.acceptance_temperature < 0 ||

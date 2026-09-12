@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/run_sa_wall_clock.py",
+      "role": "reproducibility",
+      "purpose": "Registered serial four-arm SA development timing, atomic resume and safe episode-boundary stopping."
+    },
+    {
+      "path": "tests/evaluation/test_sa_wall_clock.py",
+      "role": "reproducibility",
+      "contract": "Protect isolated official-SA acceptance, timing boundaries, paired RNG, scheduling and safe resume."
+    },
+    {
       "path": "scripts/diagnose_uniform_runtime.py",
       "role": "reproducibility",
       "purpose": "Model-free uniform candidate equivalence and bounded paired Official PP diagnostics"
