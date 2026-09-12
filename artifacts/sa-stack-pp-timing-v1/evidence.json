@@ -1,0 +1,40 @@
+{
+  "schema": "lns2.sa_stack_pp_timing_interruption.v1",
+  "decision": "quarantined_external_load_no_speed_conclusion",
+  "registration_commit": "8895563",
+  "planned_jobs": 32,
+  "completed_jobs": 2,
+  "completed_replay_steps_per_variant": 48,
+  "completed_paired_steps": 48,
+  "full_prefix_equal": true,
+  "new_ttf_experiment": false,
+  "default_native_changed": false,
+  "automatic_resume_allowed": false,
+  "next_run_requires_new_output_directory": true,
+  "environment_observation": {
+    "windows_process_name": "deadlock",
+    "windows_process_id": 36408,
+    "percent_processor_time": 371,
+    "interpretation": "About 3.71 logical CPUs at a single preflight observation; competing load creates timing confounding, not proof of a particular slowdown.",
+    "battery_status": 2,
+    "battery_charge_percent": 100,
+    "cause": "The read-only load check and collector launch were dispatched sequentially within one orchestration call, before the assistant inspected the load-check result.",
+    "action": "Stop marker written after discovering competing load; current job finished safely. External process was not modified."
+  },
+  "tests": {
+    "passed": 65,
+    "scope": "New timing protocol, stack-neighbor transform, retention manifest and native Python environment tests",
+    "full_python_suite_run": false,
+    "ctest_run_this_phase": false,
+    "official_cli_parity_run_this_phase": false
+  },
+  "inputs": {
+    "build/sa-stack-pp-timing-v1/registration.json": "37739eb9e1cf9d536e2b52d194eccb1732b327203442d86bc3eb1dbb982c5a50",
+    "build/sa-stack-pp-timing-v1/manifest.json": "7e4c0230afb9c908e00a3e8649930995251e79076aab76b5bb6f06f08da12712",
+    "build/sa-stack-pp-timing-v1/pytest-preflight.xml": "39564c46b28de98e9fbcb942834409628aaabff8d1d814e1de11138a90a82efb",
+    "build/sa-stack-pp-timing-v1/jobs/r0-sa_independent_v1_m01_station_centric_0000__task_0000-seed103-reference.json": "3ce35da90b745046b9093ad9e59bb7f65ca58c54763955286f5d03761b69ccc0",
+    "build/sa-stack-pp-timing-v1/jobs/r0-sa_independent_v1_m01_station_centric_0000__task_0000-seed103-stack_neighbors.json": "18a38cc33cb8c7aea6cff80c906104e5ca8498f8a69e28b25242f249137c6970",
+    "build/linux/sa-wall-clock-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+    "build/sa-stack-neighbors-probe-v1/lns2_env.cpython-310-x86_64-linux-gnu.so": "f214c49b5bab0a59ae110f4b27d248972eba9e0406a1a0118a3abe911c04e3fd"
+  }
+}
