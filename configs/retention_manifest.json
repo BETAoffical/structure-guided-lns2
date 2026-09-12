@@ -19,6 +19,16 @@
   },
   "entries": [
     {
+      "path": "scripts/audit_sa_engineering_speed.py",
+      "role": "reproducibility",
+      "purpose": "Bounded selector profiling and action-equivalent duplicate-check microbenchmark, not a formal controller."
+    },
+    {
+      "path": "tests/evaluation/test_sa_engineering_speed.py",
+      "role": "reproducibility",
+      "contract": "Diagnostic flag isolation, restoration on failure and observational fault-injection proxy."
+    },
+    {
       "path": "scripts/run_sa_supervised_confirmation.py",
       "role": "active",
       "purpose": "Versioned SA confirmation supervision with durable pre-audit capture and independent audit fuse."
