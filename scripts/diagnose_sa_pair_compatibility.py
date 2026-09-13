@@ -38,11 +38,12 @@ def prepare():
              "build/pbs-repair-mechanism-v1/summary.json", "build/pbs-repair-mechanism-v1/tail/registration.json",
              "build/pbs-repair-mechanism-v1/tail/report.json", io.NATIVE]
     for old_case in reg["cases"]:
-        job_file = prior.OUT / "tail/jobs" / (old_case["id"] + "-PP-0.json")
+        # PP may accept equal-conflict paths; the failed PBS branch is fully rolled back.
+        job_file = prior.OUT / "tail/jobs" / (old_case["id"] + "-PBS-0.json")
         row = io.read(job_file)
         state = row["final_state"]
         reconstructed = next(c for c in source_cases if c["id"] == old_case["id"])
-        io.require(state["conflict_edges"] and row["summary"]["before_structure"] == row["summary"]["after_structure"], "source changed during PP")
+        io.require(state["conflict_edges"] and row["summary"]["before_structure"] == row["summary"]["after_structure"], "source is not the restored root")
         io.require(io.repair_structure_fingerprint(state) == reconstructed["expected_structure"], "source replay mismatch")
         cases.append(dict(id=old_case["id"], state=state, selected=old_case["agents"], files=old_case["files"]))
         names.append(job_file.relative_to(ROOT).as_posix())
