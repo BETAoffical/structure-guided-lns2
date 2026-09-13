@@ -33,4 +33,7 @@
 
 `python scripts/audit_sa_cooling_traces.py prepare`登记后，使用`run`分析；已有输出须显式`--resume`，错误不自动重试。
 只读作业使用最多20进程，逐episode原子保存、运行锁、进度与300秒作业安全上限；不加载或调用native求解器。
-输出到忽略目录`build/sa-cooling-trace-audit-v1`，旧正式数据保持不变。
+输出到忽略目录`build/sa-cooling-trace-audit-v2`，旧正式数据保持不变。
+prepare必须在原WSL路径执行，并在提交作业之前验证每个计算出的binding与原初态一致。
+v1清单曾在Windows准备，路径相关binding与原WSL身份不同，首个作业因身份检查正确拒绝；没有科学统计结果。
+v1目录和错误保留。v2只修正审计预检及错误汇总，不修改原实验身份规则，不重跑任何求解。

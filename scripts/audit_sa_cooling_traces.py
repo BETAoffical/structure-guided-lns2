@@ -16,7 +16,7 @@ from scripts.audit_sa_trace_opportunities import recovery_window
 from experiments.nonmonotonic_repair import probability
 
 p, q = extended.p, extended.q
-OUT = ROOT / "build/sa-cooling-trace-audit-v1"
+OUT = ROOT / "build/sa-cooling-trace-audit-v2"
 REPORTS = {
     "full_120": (p.OUT, extended.SOURCE_SHA, 96),
     "failure_union_300": (extended.OUT, "b5d18477c724fc7b867fa45995cd691e2f9c5f24dfff53388bd041e6eb492945", 11),
@@ -31,6 +31,11 @@ def iteration_bin(decision):
 def conflict_bin(count):
     if count <= 0: raise ValueError("terminal state has no decision")
     return "1-5" if count <= 5 else "6-20" if count <= 20 else "21+"
+
+
+def require_source_binding(expected, saved):
+    if expected != saved:
+        raise ValueError("source binding differs: prepare in the original WSL checkout path; do not weaken identity checks")
 
 
 class PhysicalIdentity:
@@ -94,6 +99,9 @@ def prepare():
         for i in items:
             row=next(x for x in report["episodes"] if x["job_id"]==i["job_id"])
             spec=module.spec_for(r,i,anchors)
+            initial=folder/"episodes"/i["job_id"]/"initial.json"
+            require_source_binding(spec["binding"],q.read_json(initial)["binding"])
+            q.execution.read_artifact(initial,spec["binding"])
             jobs.append(dict(job_id=cohort+"-"+i["job_id"],cohort=cohort,source_job_id=i["job_id"],
                 task_id=i["task_id"],solver_seed=i["solver_seed"],success=row["success"],
                 folder=(folder/"episodes"/i["job_id"]).relative_to(ROOT).as_posix(),
@@ -218,14 +226,20 @@ def run(resume=False):
         def save(row):
             q.write_json(OUT/"episodes"/(row["job_id"]+".json"),row)
             print(row["job_id"],row["status"],flush=True)
-        q._run_jobs(episode,pending,workers=20,phase="read-only-cooling",output_root=OUT/"progress",
+        completed=q._run_jobs(episode,pending,workers=20,phase="read-only-cooling",output_root=OUT/"progress",
             run_fingerprint=plan["fingerprint"],timeout_seconds=300,failure_result=failed,on_result=save,stop_on_failure=True)
+        missing=[j["job_id"] for j in plan["jobs"] if not (OUT/"episodes"/(j["job_id"]+".json")).exists()]
+        errors=[r for r in completed if r["status"]!="ok"]
+        if missing or errors:
+            q.write_json(OUT/"status.json",dict(status="incomplete_or_failed",missing=missing,errors=errors))
+            raise ValueError("read-only audit stopped; inspect saved error; no automatic retry")
         rows=[q.read_json(OUT/"episodes"/(j["job_id"]+".json")) for j in plan["jobs"]]
         if any(r["status"]!="ok" for r in rows): raise ValueError("audit error; no conclusions")
         result=dict(schema="lns2.sa_cooling_report.v1",complete=True,binding=plan["fingerprint"],
             cohorts=aggregate(rows),episodes=rows,no_solver=True,no_causal_claim=True,
             files={"episodes/"+j["job_id"]+".json":q.sha256_file(OUT/"episodes"/(j["job_id"]+".json")) for j in plan["jobs"]})
         q.write_json(OUT/"report.json",result)
+        q.write_json(OUT/"status.json",dict(status="complete",episodes=len(rows)))
         return dict(complete=True,episodes=len(rows),no_solver=True)
 
 

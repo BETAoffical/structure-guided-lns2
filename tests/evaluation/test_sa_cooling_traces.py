@@ -3,6 +3,12 @@ import pytest
 from scripts import audit_sa_cooling_traces as audit
 
 
+def test_cross_platform_binding_fails_during_preparation():
+    audit.require_source_binding("same","same")
+    with pytest.raises(ValueError,match="original WSL"):
+        audit.require_source_binding("windows-derived","original-linux")
+
+
 @pytest.mark.parametrize("decision,expected",[(0,"0-99"),(99,"0-99"),(100,"100-499"),(499,"100-499"),(500,"500-999"),(999,"500-999"),(1000,"1000+")])
 def test_iteration_boundaries(decision,expected):
     assert audit.iteration_bin(decision)==expected
