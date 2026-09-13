@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/pair_compatibility.py", "role": "reproducibility", "purpose": "Bounded necessary pair relaxation and isolated shortest-path reference backend."},
+    {"path": "scripts/diagnose_sa_pair_compatibility.py", "role": "reproducibility", "purpose": "Frozen SA tail pair compatibility rounds with input bindings and explicit resume."},
+    {"path": "tests/evaluation/test_sa_pair_compatibility.py", "role": "reproducibility", "contract": "Reference A*/BFS equivalence, relaxation semantics, witnesses, budgets and result integrity."},
     {"path": "scripts/audit_sa_node_allocation.py", "role": "reproducibility", "purpose": "Frozen SA search-node allocation diagnosis."},
     {"path": "scripts/probe_sa_bounded_reheat.py", "role": "reproducibility", "purpose": "Bounded reheating mechanism probe, not a default controller."},
     {"path": "scripts/probe_pbs_cat_underflow.py", "role": "reproducibility", "purpose": "Minimal PBS collision-table underflow reproduction."},
