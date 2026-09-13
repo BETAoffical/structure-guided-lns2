@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/probe_sa_certificate_continuation.py", "role": "reproducibility", "purpose": "One proof-derived membership intervention with exact-prefix frozen policy continuation."},
+    {"path": "tests/evaluation/test_sa_certificate_continuation.py", "role": "reproducibility", "contract": "First-only membership intervention, conflict endpoint preservation and paired random streams."},
     {"path": "scripts/diagnose_sa_external_obstruction.py", "role": "reproducibility", "purpose": "Independent exact prefix certificate for necessary external coordination."},
     {"path": "scripts/probe_sa_certificate_augmentation.py", "role": "reproducibility", "purpose": "Certificate-derived membership interventions and matched controls using frozen PP/SA."},
     {"path": "tests/evaluation/test_sa_external_obstruction.py", "role": "reproducibility", "contract": "Prefix conflict owners, terminal waiting and deterministic matched candidate controls."},
