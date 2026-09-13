@@ -2893,6 +2893,16 @@
       "path": "tests/evaluation/test_sa_pressure_first_feasible.py",
       "role": "reproducibility",
       "contract": "Protect full pressure cohort, serial paired schedule, output isolation and safe stop."
+    },
+    {
+      "path": "scripts/diagnose_sa_pressure_300s.py",
+      "role": "reproducibility",
+      "purpose": "Frozen 300-second paired failure-union diagnostic without changing solver policy."
+    },
+    {
+      "path": "tests/evaluation/test_sa_pressure_300s.py",
+      "role": "reproducibility",
+      "contract": "Protect symmetric failure selection, fixed budget and timing-independent trajectory comparisons."
     }
   ]
 }
