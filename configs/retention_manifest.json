@@ -2883,6 +2883,16 @@
       "path": "tests/evaluation/test_sa_path_quality.py",
       "role": "reproducibility",
       "contract": "Protect paired 252-job schedule, shared PP identity, first-feasible journals and official stage-two handoff."
+    },
+    {
+      "path": "scripts/run_sa_pressure_first_feasible.py",
+      "role": "reproducibility",
+      "purpose": "Reuse frozen shared-native controller for complete high-pressure first-feasible paired timing."
+    },
+    {
+      "path": "tests/evaluation/test_sa_pressure_first_feasible.py",
+      "role": "reproducibility",
+      "contract": "Protect full pressure cohort, serial paired schedule, output isolation and safe stop."
     }
   ]
 }
