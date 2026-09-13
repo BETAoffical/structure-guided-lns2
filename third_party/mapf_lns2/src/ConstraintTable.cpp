@@ -20,7 +20,12 @@ int ConstraintTable::getLastCollisionTimestep(int location) const
         rst = path_table_for_CAT->getLastCollisionTimestep(location);
     if (!cat.empty())
     {
+#ifdef LNS2_PBS_DIAGNOSTIC
+        // Keep the empty-row sentinel signed; size_t underflow can index past CAT.
+        for (int t = static_cast<int>(cat[location].size()) - 1; t > rst; --t)
+#else
         for (auto t = cat[location].size() - 1; t > rst; t--)
+#endif
         {
             if (cat[location][t])
                 return t;

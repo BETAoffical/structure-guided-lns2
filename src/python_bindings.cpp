@@ -1154,6 +1154,9 @@ py::dict optimizeFeasiblePaths(const std::string& map_path, const std::string& s
 
 PYBIND11_MODULE(lns2_env, module)
 {
+#ifdef LNS2_PBS_DIAGNOSTIC
+    module.attr("pbs_diagnostic_schema") = "lns2.pbs_diagnostic.cat_fix.v1";
+#endif
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     module.attr("native_semantics_schema") =
         "lns2.native_semantics.official_step_timed_extension.v3";

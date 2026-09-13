@@ -43,6 +43,8 @@ endif()
 find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
+option(LNS2_PBS_DIAGNOSTIC "Build isolated PBS correctness and mechanism diagnostics" OFF)
+
 set(MAPF_LNS2_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/mapf_lns2")
 file(GLOB MAPF_LNS2_SOURCES CONFIGURE_DEPENDS
     "${MAPF_LNS2_ROOT}/src/*.cpp"
@@ -52,6 +54,9 @@ file(GLOB MAPF_LNS2_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM MAPF_LNS2_SOURCES "${MAPF_LNS2_ROOT}/src/driver.cpp")
 
 add_library(mapf_lns2_core ${MAPF_LNS2_SOURCES})
+if(LNS2_PBS_DIAGNOSTIC)
+    target_compile_definitions(mapf_lns2_core PUBLIC LNS2_PBS_DIAGNOSTIC=1)
+endif()
 set_target_properties(mapf_lns2_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(mapf_lns2_core PUBLIC
     "${MAPF_LNS2_ROOT}/inc"
@@ -112,6 +117,13 @@ target_link_libraries(
 )
 
 enable_testing()
+if(LNS2_PBS_DIAGNOSTIC)
+    add_executable(pbs_cat_underflow_probe tests/diagnostics/pbs_cat_underflow_probe.cpp)
+    target_link_libraries(pbs_cat_underflow_probe PRIVATE mapf_lns2_core)
+    foreach(case empty_local_external_hit local_only mixed_populated no_hit external_table_only)
+        add_test(NAME pbs_cat_${case} COMMAND pbs_cat_underflow_probe ${case})
+    endforeach()
+endif()
 set(LNS2_TEST_PYTHONPATH_SEPARATOR ":")
 if(WIN32)
     # ENVIRONMENT is itself a CMake list, so keep the Windows path-list
