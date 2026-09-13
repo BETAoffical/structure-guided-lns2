@@ -56,6 +56,7 @@ list(REMOVE_ITEM MAPF_LNS2_SOURCES "${MAPF_LNS2_ROOT}/src/driver.cpp")
 add_library(mapf_lns2_core ${MAPF_LNS2_SOURCES})
 if(LNS2_PBS_DIAGNOSTIC)
     target_compile_definitions(mapf_lns2_core PUBLIC LNS2_PBS_DIAGNOSTIC=1)
+    target_sources(mapf_lns2_core PRIVATE src/pbs_diagnostic.cpp)
 endif()
 set_target_properties(mapf_lns2_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(mapf_lns2_core PUBLIC

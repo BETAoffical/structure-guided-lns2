@@ -54,6 +54,11 @@ struct RepairAction
     double acceptance_uniform = 0.0;
     vector<int> agents;
     vector<int> repair_order;
+#ifdef LNS2_PBS_DIAGNOSTIC
+    double pbs_seconds = -1.0;
+    int pbs_node_limit = 16;
+    bool pbs_warm_root = false;
+#endif
 };
 
 struct RepairProposal
@@ -125,6 +130,12 @@ struct PPAgentDiagnostic
 
 struct RepairTransition
 {
+#ifdef LNS2_PBS_DIAGNOSTIC
+    string pbs_stop_reason;
+    uint64_t pbs_expanded = 0, pbs_generated = 0, pbs_low_level_calls = 0;
+    int pbs_root_conflicts = -1, pbs_best_conflicts = -1;
+    double pbs_root_seconds = 0.0;
+#endif
     RepairAction requested_action;
     RepairHeuristic applied_heuristic = RepairHeuristic::COLLISION;
     vector<int> neighborhood;

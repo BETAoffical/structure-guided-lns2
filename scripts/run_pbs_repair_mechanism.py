@@ -53,7 +53,8 @@ def worker(folder, job_id):
     old.require(Path(lns2_env.__file__).resolve() == binary.resolve(), "wrong native loaded")
     old.require(hasattr(lns2_env,"pbs_diagnostic_schema"), "not a diagnostic binary")
     env = lns2_env.LNS2RepairEnv(str(ROOT/case["files"]["map_file"]), str(ROOT/case["files"]["scenario_file"]),
-        len(case["paths"]), time_limit=60, replan_algorithm=job["algorithm"], use_sipp=True)
+        len(case["paths"]), time_limit=5 if registration["stage"]=="admission" else 60,
+        replan_algorithm=job["algorithm"], use_sipp=True)
     before = env.reset_paths(case["paths"], seed=job["seed"])
     if "expected_structure" in case:
         old.require(old.repair_structure_fingerprint(before)==case["expected_structure"],"restored mismatch")
@@ -75,6 +76,10 @@ def run(stage):
     folder=OUT/stage
     old.require(not (folder/"registration.json").exists(),"stage exists; preserve prior evidence")
     selected=cases()
+    prerequisite = None
+    if stage != "admission":
+        prerequisite = OUT/"admission/report.json"
+        old.require(old.read(prerequisite)["errors"] == 0, "PBS correctness admission failed")
     binary,=(ROOT/BUILDS[stage]).glob("lns2_env*.so")
     jobs=[]
     for case in selected:
@@ -86,6 +91,7 @@ def run(stage):
     registration=dict(schema="lns2.pbs_mechanism_round.v1",stage=stage,cases=selected,jobs=jobs,
         native=binary.relative_to(ROOT).as_posix(),native_sha256=old.sha256_file(binary),
         source_plan_sha256=old.sha256_file(old.OUT/"plan.json"),runner_sha256=old.sha256_file(Path(__file__)),
+        prerequisite_sha256=None if prerequisite is None else old.sha256_file(prerequisite),
         source_commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
         workers=min(20,len(jobs)),process_fuse_seconds=60 if stage=="admission" else 30,no_ttf=True)
     registration["binding"]=old.semantic_fingerprint(registration)

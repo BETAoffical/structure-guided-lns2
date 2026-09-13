@@ -7,6 +7,9 @@ bool PBS::solve(double _time_limit, int _node_limit, int _collsion_threshold)
     this->time_limit = _time_limit;
     this->node_limit = _node_limit;
     this->collsion_threshold = _collsion_threshold;
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (diagnostic) diagnostic_start = Time::now();
+#endif
 
     if (screen > 0) // 1 or 2
     {
@@ -18,7 +21,23 @@ bool PBS::solve(double _time_limit, int _node_limit, int _collsion_threshold)
     }
 
     if(!generateRoot())
+    {
+#ifdef LNS2_PBS_DIAGNOSTIC
+        if (diagnostic)
+        {
+            diagnostic_root_seconds = std::chrono::duration<double>(Time::now() - diagnostic_start).count();
+            diagnostic_stop_reason = diagnostic_timed_out ? "time_limit" : "root_no_path";
+        }
+#endif
         return false;
+    }
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (diagnostic)
+    {
+        diagnostic_root_conflicts = root_node->getCollidingPairs();
+        diagnostic_root_seconds = std::chrono::duration<double>(Time::now() - diagnostic_start).count();
+    }
+#endif
 
     while (!terminate())
     {
@@ -209,6 +228,13 @@ bool PBS::generateChild(PBSNode& parent, bool left_child)
 
 bool PBS::planPath(int agent, PBSNode& node, const set<int> & higher_agents, const set<int> & lower_agents)
 {
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (diagnostic && diagnosticRemaining() <= 0.0)
+    {
+        diagnostic_timed_out = true;
+        return false;
+    }
+#endif
     if (screen > 1)
         cout << "\t\tReplan path for agent " << agent << " by avoiding collisions with agents ";
     // build constraint table
@@ -254,7 +280,31 @@ bool PBS::planPath(int agent, PBSNode& node, const set<int> & higher_agents, con
 
     // find a path
     t = clock();
-    Path new_path = search_engines[agent]->findPath(constraint_table);
+    Path new_path;
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (diagnostic)
+    {
+        try
+        {
+            const double remaining = diagnosticRemaining();
+            if (remaining <= 0.0)
+                diagnostic_timed_out = true;
+            else
+            {
+                ++diagnostic_low_level_calls;
+                new_path = search_engines[agent]->findPath(constraint_table, remaining);
+                diagnostic_timed_out |= search_engines[agent]->last_find_path_timed_out;
+            }
+        }
+        catch (...)
+        {
+            for (auto a : lower_agents) if (a < 0) path_table.insertPath(-a-1);
+            throw;
+        }
+    }
+    else
+#endif
+        new_path = search_engines[agent]->findPath(constraint_table);
     for (auto a : lower_agents)
     {
         if (a < 0)
@@ -481,6 +531,17 @@ void PBS::update(PBSNode& node)
 
 inline bool PBS::terminate()
 {
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (diagnostic)
+    {
+        if (diagnostic_timed_out || diagnosticRemaining() <= 0.0) diagnostic_stop_reason = "time_limit";
+        else if (open_list.empty()) diagnostic_stop_reason = "search_exhausted";
+        else if (num_HL_expanded > node_limit) diagnostic_stop_reason = "node_limit";
+        else if (open_list.top()->getCollidingPairs() < collsion_threshold) diagnostic_stop_reason = "strict_improvement";
+        else return false;
+        return true;
+    }
+#endif
     runtime = (double)(clock() - start) / CLOCKS_PER_SEC;
     return open_list.empty() or runtime > time_limit or num_HL_expanded > node_limit or
             open_list.top()->getCollidingPairs() < collsion_threshold;

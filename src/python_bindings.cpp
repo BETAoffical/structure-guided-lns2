@@ -397,6 +397,19 @@ py::dict transitionToPython(const RepairTransition& transition)
     result["pp_old_conflict_pair_count"] = transition.pp_old_conflict_pair_count;
     result["pp_attempt_conflict_pair_count"] = transition.pp_attempt_conflict_pair_count;
     result["pp_rolled_back"] = transition.pp_rolled_back;
+#ifdef LNS2_PBS_DIAGNOSTIC
+    if (transition.requested_action.pbs_seconds >= 0.0)
+    {
+        result["pbs_stop_reason"] = transition.pbs_stop_reason;
+        result["pbs_hl_expanded"] = transition.pbs_expanded;
+        result["pbs_hl_generated"] = transition.pbs_generated;
+        result["pbs_low_level_calls"] = transition.pbs_low_level_calls;
+        result["pbs_root_conflicts"] = transition.pbs_root_conflicts;
+        result["pbs_best_conflicts"] = transition.pbs_best_conflicts;
+        result["pbs_root_seconds"] = transition.pbs_root_seconds;
+        result["pbs_warm_root"] = transition.requested_action.pbs_warm_root;
+    }
+#endif
     if (transition.requested_action.experimental_acceptance != ExperimentalPPAcceptance::DISABLED)
     {
         result["experimental_acceptance_schema"] = "lns2.experimental_pp_acceptance.v1";
@@ -644,10 +657,30 @@ public:
         return stepImpl(value, seconds, mode, temperature, uniform);
     }
 
+#ifdef LNS2_PBS_DIAGNOSTIC
+    py::dict stepDiagnosticPBS(const py::dict& value, double seconds, int node_limit, bool warm_root)
+    {
+        if (replan_algorithm != "PBS" || !std::isfinite(seconds) || seconds < 0.0 || node_limit < 0)
+            throw py::value_error("invalid diagnostic PBS parameters");
+        const auto action = parseAction(value);
+        if (action.mode != RepairActionMode::EXPLICIT_NEIGHBORHOOD || action.agents.size() < 2 ||
+            set<int>(action.agents.begin(), action.agents.end()).size() != action.agents.size())
+            throw py::value_error("diagnostic PBS requires an explicit set of at least two unique agents");
+        for (int id : action.agents)
+            if (id < 0 || id >= instance->getDefaultNumberOfAgents())
+                throw py::value_error("unknown diagnostic PBS agent");
+        return stepImpl(value, -1.0, ExperimentalPPAcceptance::DISABLED, 0.0, 0.0, seconds, node_limit, warm_root);
+    }
+#endif
+
     py::dict stepImpl(const py::dict& action_value,
                       double pp_time_limit_seconds,
                       ExperimentalPPAcceptance acceptance = ExperimentalPPAcceptance::DISABLED,
-                      double temperature = 0.0, double uniform = 0.0)
+                      double temperature = 0.0, double uniform = 0.0
+#ifdef LNS2_PBS_DIAGNOSTIC
+                      , double pbs_seconds = -1.0, int pbs_node_limit = 16, bool pbs_warm_root = false
+#endif
+                      )
     {
         const auto binding_started = DiagnosticClock::now();
         if (!solver)
@@ -657,6 +690,11 @@ public:
         action.experimental_acceptance = acceptance;
         action.acceptance_temperature = temperature;
         action.acceptance_uniform = uniform;
+#ifdef LNS2_PBS_DIAGNOSTIC
+        action.pbs_seconds = pbs_seconds;
+        action.pbs_node_limit = pbs_node_limit;
+        action.pbs_warm_root = pbs_warm_root;
+#endif
         ProcessGlobalRngState& rng_state = processGlobalRngState();
         std::unique_lock<std::mutex> rng_lock(rng_state.mutex);
         const bool already_done = solver->isDone();
@@ -1155,7 +1193,7 @@ py::dict optimizeFeasiblePaths(const std::string& map_path, const std::string& s
 PYBIND11_MODULE(lns2_env, module)
 {
 #ifdef LNS2_PBS_DIAGNOSTIC
-    module.attr("pbs_diagnostic_schema") = "lns2.pbs_diagnostic.cat_fix.v1";
+    module.attr("pbs_diagnostic_schema") = "lns2.pbs_diagnostic.bounded.v1";
 #endif
     module.doc() = "Step-wise MAPF-LNS2 collision-repair environment";
     module.attr("native_semantics_schema") =
@@ -1199,6 +1237,10 @@ PYBIND11_MODULE(lns2_env, module)
              py::arg("neighborhood_sizes"), py::arg("random_seeds"),
              py::arg("trials"))
         .def("step", &LNS2RepairEnv::step, py::arg("action"))
+#ifdef LNS2_PBS_DIAGNOSTIC
+        .def("step_diagnostic_pbs", &LNS2RepairEnv::stepDiagnosticPBS,
+             py::arg("action"), py::arg("seconds"), py::arg("node_limit"), py::arg("warm_root") = false)
+#endif
         .def("step_with_time_limit", &LNS2RepairEnv::stepWithTimeLimit,
              py::arg("action"), py::arg("pp_time_limit_seconds"))
         .def("step_experimental_pp", &LNS2RepairEnv::stepExperimentalPP,

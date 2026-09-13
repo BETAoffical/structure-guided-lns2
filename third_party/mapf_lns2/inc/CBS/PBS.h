@@ -57,6 +57,17 @@ public:
     uint64_t num_HL_generated = 0;
     vector<Path*> paths;
     PBSNode* best_node = nullptr;
+#ifdef LNS2_PBS_DIAGNOSTIC
+    bool diagnostic = false;
+    bool diagnostic_timed_out = false;
+    string diagnostic_stop_reason;
+    uint64_t diagnostic_low_level_calls = 0;
+    int diagnostic_root_conflicts = -1;
+    double diagnostic_root_seconds = 0.0;
+    Time::time_point diagnostic_start;
+    double diagnosticRemaining() const
+    { return max(0.0, time_limit - std::chrono::duration<double>(Time::now() - diagnostic_start).count()); }
+#endif
 
     explicit PBS(vector<SingleAgentSolver*>& search_engines,
                  PathTableWC & path_table, int screen);

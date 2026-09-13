@@ -84,6 +84,9 @@ private:
     bool acceptCompletedPP(RepairTransition& transition) const;
     bool runGCBS();
     bool runPBS();
+#ifdef LNS2_PBS_DIAGNOSTIC
+    bool runPBSDiagnostic(RepairTransition& transition);
+#endif
 
     bool updateCollidingPairs(set<pair<int, int>>& colliding_pairs, int agent_id, const Path& path) const;
 

@@ -452,7 +452,11 @@ bool InitLNS::step(const RepairAction& action)
     else if (replan_algo_name == "GCBS")
         succ = runGCBS();
     else if (replan_algo_name == "PBS")
+#ifdef LNS2_PBS_DIAGNOSTIC
+        succ = action.pbs_seconds >= 0.0 ? runPBSDiagnostic(transition) : runPBS();
+#else
         succ = runPBS();
+#endif
     else
     {
         cerr << "Wrong replanning strategy" << endl;
