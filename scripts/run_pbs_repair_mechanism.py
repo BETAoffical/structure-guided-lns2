@@ -13,6 +13,63 @@ from scripts import diagnose_pbs_repair as old
 
 OUT = ROOT / "build/pbs-repair-mechanism-v1"
 BUILDS = {"admission": "build/linux/pbs-fixed-asan-v1", "mechanism": "build/linux/pbs-mechanism-v1"}
+BUILDS.update(extended=BUILDS["mechanism"], tail=BUILDS["mechanism"])
+
+
+def stage_report(stage):
+    folder=OUT/stage
+    report=old.read(folder/"report.json")
+    old.require(report["errors"]==0,"previous stage has errors")
+    for name,sha in report["files"].items():
+        old.require(old.sha256_file(folder/name)==sha,"previous result changed")
+    return report
+
+
+def extended_cases(selected):
+    report=stage_report("mechanism")
+    names=[]
+    for case in selected:
+        rows=[r for r in report["rows"] if r["job"]["case_id"]==case["id"] and r["job"]["algorithm"]=="PBS"]
+        metrics=[old.read(OUT/"mechanism/jobs"/(r["job"]["id"]+".json"))["metrics"] for r in rows]
+        if rows and all(not r["summary"]["strict_drop"] for r in rows) and any(m["pbs_stop_reason"]=="node_limit" for m in metrics):
+            names.append(case["id"])
+    old.require(bool(names),"no node-limit iteration admitted")
+    return [c for c in selected if c["id"] in names]
+
+
+def tail_cases():
+    from experiments._common import read_jsonl
+    from experiments.closed_loop_trace_storage import apply_state_delta
+    from experiments.repair_collection import state_fingerprint
+    plan_path=ROOT/"build/sa-plateau-candidate-audit-v1/plan.json"
+    plan=old.read(plan_path)
+    old.require(plan["fingerprint"]==old.semantic_fingerprint({k:v for k,v in plan.items() if k!="fingerprint"}),"tail plan changed")
+    source=ROOT/"build/sa-pressure-300s-diagnostic-v1"
+    for name,key in (("registration.json","source_registration_sha256"),("manifest.json","source_manifest_sha256"),("analysis/report.json","source_report_sha256")):
+        old.require(old.sha256_file(source/name)==plan[key],"tail source changed")
+    registration=old.read(source/"registration.json")
+    manifest=old.read(source/"manifest.json")
+    result=[]
+    for target in plan["targets"]:
+        folder=source/"episodes"/target["job_id"]
+        source_files=manifest["jobs"][target["job_id"]]["files"]
+        for name,sha in source_files.items():
+            old.require(old.sha256_file(folder/name)==sha,"tail episode changed")
+        initial=old.read(folder/"initial.json")
+        state=initial["observation"] if "observation" in initial else initial["payload"]["observation"]
+        events=list(read_jsonl(folder/"first_phase/trace.jsonl"))
+        for event in events[:target["decision"]]: state=apply_state_delta(state,event["delta"])
+        old.require(state_fingerprint(state)==target["state_fingerprint"],"tail reconstruction mismatch")
+        case=next(c for c in registration["cases"] if c["task_id"]==target["item"]["task_id"])
+        files={k:case["files"][k] for k in ("map_file","scenario_file")}
+        for name in files.values():
+            old.require(old.sha256_file(ROOT/name)==registration["inputs"][name],"tail task changed")
+        candidate=target["pool"][target["selected_index"]]
+        result.append(dict(id=target["job_id"],files=files,paths=[a["path"] for a in sorted(state["agents"],key=lambda a:a["id"])],
+            agents=candidate["agents"],seed=17,expected_structure=old.repair_structure_fingerprint(state),
+            state_fingerprint=target["state_fingerprint"],selected_candidate_id=candidate["candidate_id"],
+            source_plan_sha256=old.sha256_file(plan_path)))
+    return result
 
 
 def cases():
@@ -80,14 +137,20 @@ def run(stage):
     if stage != "admission":
         prerequisite = OUT/"admission/report.json"
         old.require(old.read(prerequisite)["errors"] == 0, "PBS correctness admission failed")
+    if stage=="extended": selected=extended_cases(selected)
+    if stage=="tail":
+        previous=stage_report("mechanism")
+        old.require(any(r["summary"]["strict_drop"] for r in previous["rows"]
+                        if r["job"]["algorithm"]=="PBS" and r["job"]["case_id"] not in ("open","corridor")),"no real-state PBS opportunity")
+        selected=tail_cases()
     binary,=(ROOT/BUILDS[stage]).glob("lns2_env*.so")
     jobs=[]
     for case in selected:
-        for algorithm in ("PP","PBS"):
+        for algorithm in (("PBS",) if stage=="extended" else ("PP","PBS")):
             for trial in range(2 if stage=="admission" else 4):
                 seed=case["seed"] if stage=="admission" else int(old.semantic_fingerprint([case["id"],20260914,trial])[:7],16)
                 jobs.append(dict(id=f"{case['id']}-{algorithm}-{trial}",case_id=case["id"],algorithm=algorithm,
-                    trial=trial,seed=seed,seconds=5.,node_limit=len(case["agents"]),warm_root=False))
+                    trial=trial,seed=seed,seconds=5.,node_limit=len(case["agents"])*(4 if stage=="extended" else 1),warm_root=False))
     registration=dict(schema="lns2.pbs_mechanism_round.v1",stage=stage,cases=selected,jobs=jobs,
         native=binary.relative_to(ROOT).as_posix(),native_sha256=old.sha256_file(binary),
         source_plan_sha256=old.sha256_file(old.OUT/"plan.json"),runner_sha256=old.sha256_file(Path(__file__)),
