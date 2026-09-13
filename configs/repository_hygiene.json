@@ -11,6 +11,21 @@
   ],
   "allowed_unused_imports": [
     {
+      "path": "scripts/audit_sa_native_shadow_heat.py",
+      "name": "read_json",
+      "reason": "Preserve the registered source SHA of the completed native shadow heat diagnostic; not an allowance for new runtime code."
+    },
+    {
+      "path": "scripts/audit_sa_plateau_candidates.py",
+      "name": "deepcopy",
+      "reason": "Preserve the frozen plateau candidate audit source identity used by the PBS tail reconstruction."
+    },
+    {
+      "path": "scripts/audit_sa_plateau_candidates.py",
+      "name": "os",
+      "reason": "Preserve the frozen plateau candidate audit source identity used by the PBS tail reconstruction."
+    },
+    {
       "path": "scripts/audit_recovery_provenance.py",
       "name": "os",
       "reason": "Pre-existing unused import in the frozen recovery provenance audit. Preserve its registered evidence SHA during warehouse confirmation preparation; not an exemption for new runtime code."
@@ -47,6 +62,27 @@
     }
   ],
   "allowed_duplicate_function_groups": [
+    {
+      "functions": [
+        {"path": "scripts/audit_feedback_memory.py", "name": "checked"},
+        {"path": "scripts/audit_sa_node_allocation.py", "name": "checked"}
+      ],
+      "reason": "Identical validation helper retained in completed diagnostics with registered source hashes; do not rewrite historical evidence."
+    },
+    {
+      "functions": [
+        {"path": "scripts/audit_sa_incremental_heat.py", "name": "main"},
+        {"path": "scripts/audit_sa_native_shadow_heat.py", "name": "main"}
+      ],
+      "reason": "Identical CLI dispatch retained in two frozen engineering diagnostics. This exemption does not cover new experiment logic."
+    },
+    {
+      "functions": [
+        {"path": "scripts/diagnose_sa_pressure_300s.py", "name": "inspect"},
+        {"path": "scripts/run_sa_pressure_first_feasible.py", "name": "inspect"}
+      ],
+      "reason": "Frozen pressure evidence readers share this validation implementation; their registered bytes must remain reproducible."
+    },
     {
       "functions": [
         {"path": "scripts/diagnose_sa_independent_lanes.py", "name": "backup"},

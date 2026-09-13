@@ -18,6 +18,22 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/audit_sa_node_allocation.py", "role": "reproducibility", "purpose": "Frozen SA search-node allocation diagnosis."},
+    {"path": "scripts/probe_sa_bounded_reheat.py", "role": "reproducibility", "purpose": "Bounded reheating mechanism probe, not a default controller."},
+    {"path": "scripts/probe_pbs_cat_underflow.py", "role": "reproducibility", "purpose": "Minimal PBS collision-table underflow reproduction."},
+    {"path": "scripts/run_pbs_repair_mechanism.py", "role": "reproducibility", "purpose": "Isolated PBS admission, same-set comparison and gated node-budget diagnosis."},
+    {"path": "scripts/audit_sa_training_readiness.py", "role": "reproducibility", "purpose": "Frozen readiness evidence before considering retraining."},
+    {"path": "scripts/audit_sa_plateau_candidates.py", "role": "reproducibility", "purpose": "Frozen SA plateau candidate inventory and input provenance."},
+    {"path": "scripts/debug_pbs_admission.py", "role": "reproducibility", "purpose": "PBS crash localization and sanitizer admission evidence."},
+    {"path": "scripts/diagnose_pbs_repair.py", "role": "reproducibility", "purpose": "Original PP/PBS diagnostic admission and source identity checks."},
+    {"path": "scripts/audit_sa_cooling_traces.py", "role": "reproducibility", "purpose": "Frozen cooling trajectory diagnosis."},
+    {"path": "tests/evaluation/test_sa_node_allocation.py", "role": "reproducibility", "contract": "Node allocation and counter interpretation."},
+    {"path": "tests/solver/test_pbs_diagnostic.py", "role": "reproducibility", "contract": "Isolated PBS action validation, budgets, rollback and follow-up equivalence."},
+    {"path": "tests/evaluation/test_pbs_repair_diagnostic.py", "role": "reproducibility", "contract": "PBS admission input binding and diagnostic boundaries."},
+    {"path": "tests/evaluation/test_sa_training_readiness.py", "role": "reproducibility", "contract": "Training readiness without implicit model promotion."},
+    {"path": "tests/evaluation/test_sa_plateau_candidates.py", "role": "reproducibility", "contract": "Plateau state and candidate evidence consistency."},
+    {"path": "tests/evaluation/test_sa_bounded_reheat.py", "role": "reproducibility", "contract": "Bounded reheat isolation and deterministic probe behavior."},
+    {"path": "tests/evaluation/test_sa_cooling_traces.py", "role": "reproducibility", "contract": "Cooling trace metrics and retained outcome semantics."},
     {
       "path": "scripts/audit_sa_engineering_speed.py",
       "role": "reproducibility",

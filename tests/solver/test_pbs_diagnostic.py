@@ -71,3 +71,25 @@ def test_warm_root_preserves_contract():
     assert result["observation"]["feasible"]
     assert result["metrics"]["pbs_warm_root"]
     assert result["observation"]["agents"][2]["path"]==before["agents"][2]["path"]
+
+
+def test_mid_search_timeout_restores_real_external_paths():
+    import json
+    from lns2_selector.runtime.fingerprints import repair_structure_fingerprint
+    plan=ROOT/"build/pbs-repair-admission-v1/plan.json"
+    if not plan.is_file(): pytest.skip("registered historical diagnostic input unavailable")
+    case=next(c for c in json.loads(plan.read_text())["cases"] if c["id"]=="room-64-64-16")
+    def restore():
+        env=native.LNS2RepairEnv(str(ROOT/case["files"]["map_file"]),str(ROOT/case["files"]["scenario_file"]),
+            len(case["paths"]),time_limit=60,replan_algorithm="PBS")
+        return env,env.reset_paths(case["paths"],seed=case["seed"])
+    env,before=restore()
+    act=dict(mode="explicit_neighborhood",agents=case["agents"],random_seed=case["seed"])
+    result=env.step_diagnostic_pbs(act,.005,16,False)
+    assert result["metrics"]["pbs_stop_reason"]=="time_limit"
+    assert result["metrics"]["pbs_low_level_calls"]>0
+    assert repair_structure_fingerprint(result["observation"])==repair_structure_fingerprint(before)
+    next_result=env.step_diagnostic_pbs(act,5.,16,False)
+    fresh,_=restore()
+    fresh_result=fresh.step_diagnostic_pbs(act,5.,16,False)
+    assert repair_structure_fingerprint(next_result["observation"])==repair_structure_fingerprint(fresh_result["observation"])

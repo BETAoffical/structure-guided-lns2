@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -73,10 +76,21 @@ def test_paired_gate_and_map_bootstrap():
 
 @pytest.mark.parametrize("collision", [False, True])
 def test_native_micro_three_methods_paths_and_resume(collision):
-    pytest.importorskip("lns2_env")
+    native = pytest.importorskip("lns2_env")
     config = rt.read_json(rt.ROOT / rt.CONFIG)
-    if not (rt.ROOT / config["frozen"]["native_path"]).exists():
+    registered = rt.ROOT / config["frozen"]["native_path"]
+    if not registered.exists():
         pytest.skip("registered native binary is unavailable")
+    if Path(native.__file__).resolve() != registered.resolve():
+        # A loaded extension cannot be replaced safely in the pytest process.
+        assert not os.environ.get("LNS2_REGISTERED_NATIVE_TEST_CHILD"), "child loaded wrong native"
+        child_env = {**os.environ, "PYTHONPATH": os.pathsep.join((str(registered.parent), str(rt.ROOT))),
+                     "LNS2_REGISTERED_NATIVE_TEST_CHILD": "1"}
+        node = f"{Path(__file__).resolve()}::test_native_micro_three_methods_paths_and_resume[{collision}]"
+        result = subprocess.run([sys.executable, "-B", "-m", "pytest", "-q", node],
+                                cwd=rt.ROOT, env=child_env, capture_output=True, text=True, timeout=90)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
     rt.install_native(config)
     with tempfile.TemporaryDirectory(prefix="warehouse-readiness-micro-", dir=rt.ROOT / "build") as temporary:
         root = Path(temporary)

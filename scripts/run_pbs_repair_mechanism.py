@@ -1,11 +1,13 @@
 """Fixed, isolated PBS correctness and same-neighborhood mechanism rounds."""
 import argparse
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+from statistics import mean
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -13,7 +15,7 @@ from scripts import diagnose_pbs_repair as old
 
 OUT = ROOT / "build/pbs-repair-mechanism-v1"
 BUILDS = {"admission": "build/linux/pbs-fixed-asan-v1", "mechanism": "build/linux/pbs-mechanism-v1"}
-BUILDS.update(extended=BUILDS["mechanism"], tail=BUILDS["mechanism"])
+BUILDS.update(extended=BUILDS["mechanism"], tail=BUILDS["mechanism"], tail_extended=BUILDS["mechanism"])
 
 
 def stage_report(stage):
@@ -25,12 +27,12 @@ def stage_report(stage):
     return report
 
 
-def extended_cases(selected):
-    report=stage_report("mechanism")
+def extended_cases(selected, source="mechanism"):
+    report=stage_report(source)
     names=[]
     for case in selected:
         rows=[r for r in report["rows"] if r["job"]["case_id"]==case["id"] and r["job"]["algorithm"]=="PBS"]
-        metrics=[old.read(OUT/"mechanism/jobs"/(r["job"]["id"]+".json"))["metrics"] for r in rows]
+        metrics=[old.read(OUT/source/"jobs"/(r["job"]["id"]+".json"))["metrics"] for r in rows]
         if rows and all(not r["summary"]["strict_drop"] for r in rows) and any(m["pbs_stop_reason"]=="node_limit" for m in metrics):
             names.append(case["id"])
     old.require(bool(names),"no node-limit iteration admitted")
@@ -138,6 +140,8 @@ def run(stage):
         prerequisite = OUT/"admission/report.json"
         old.require(old.read(prerequisite)["errors"] == 0, "PBS correctness admission failed")
     if stage=="extended": selected=extended_cases(selected)
+    if stage=="tail_extended":
+        selected=extended_cases(old.read(OUT/"tail/registration.json")["cases"],"tail")
     if stage=="tail":
         previous=stage_report("mechanism")
         old.require(any(r["summary"]["strict_drop"] for r in previous["rows"]
@@ -146,11 +150,11 @@ def run(stage):
     binary,=(ROOT/BUILDS[stage]).glob("lns2_env*.so")
     jobs=[]
     for case in selected:
-        for algorithm in (("PBS",) if stage=="extended" else ("PP","PBS")):
+        for algorithm in (("PBS",) if stage.endswith("extended") else ("PP","PBS")):
             for trial in range(2 if stage=="admission" else 4):
                 seed=case["seed"] if stage=="admission" else int(old.semantic_fingerprint([case["id"],20260914,trial])[:7],16)
                 jobs.append(dict(id=f"{case['id']}-{algorithm}-{trial}",case_id=case["id"],algorithm=algorithm,
-                    trial=trial,seed=seed,seconds=5.,node_limit=len(case["agents"])*(4 if stage=="extended" else 1),warm_root=False))
+                    trial=trial,seed=seed,seconds=5.,node_limit=len(case["agents"])*(4 if stage.endswith("extended") else 1),warm_root=False))
     registration=dict(schema="lns2.pbs_mechanism_round.v1",stage=stage,cases=selected,jobs=jobs,
         native=binary.relative_to(ROOT).as_posix(),native_sha256=old.sha256_file(binary),
         source_plan_sha256=old.sha256_file(old.OUT/"plan.json"),runner_sha256=old.sha256_file(Path(__file__)),
@@ -193,9 +197,50 @@ def run(stage):
     print(dict(stage=stage,jobs=len(rows),errors=report["errors"]))
 
 
+def analyze():
+    reports={}
+    inputs={}
+    for stage in BUILDS:
+        folder=OUT/stage
+        reg=old.read(folder/"registration.json")
+        old.require(reg["binding"]==old.semantic_fingerprint({k:v for k,v in reg.items() if k!="binding"}),"registration changed")
+        old.require(old.sha256_file(ROOT/reg["native"])==reg["native_sha256"],"registered binary changed")
+        report=stage_report(stage)
+        old.require(report["binding"]==reg["binding"],"report binding mismatch")
+        groups=defaultdict(list)
+        for job in reg["jobs"]:
+            row=old.read(folder/"jobs"/(job["id"]+".json"))
+            old.require(row["binding"]==reg["binding"] and row["job"]==job,"job identity mismatch")
+            groups[(job["case_id"],job["algorithm"])].append(row)
+        stats=[]
+        for (case,algorithm),rows in groups.items():
+            stats.append(dict(case=case,algorithm=algorithm,trials=len(rows),
+                strict_drops=sum(r["summary"]["strict_drop"] for r in rows),feasible=sum(r["summary"]["feasible"] for r in rows),
+                before=rows[0]["summary"]["before"],external=rows[0]["summary"]["external_pairs"],
+                remaining=[r["summary"]["after"] for r in rows],
+                mean_drop=mean(r["summary"]["before"]-r["summary"]["after"] for r in rows),
+                mean_generated=mean(r["summary"]["nodes"]["generated"] for r in rows),
+                root_improvements=sum(r["metrics"].get("pbs_hl_expanded",-1)==0 and r["summary"]["strict_drop"] for r in rows),
+                stop_reasons=dict(Counter(r["metrics"].get("pbs_stop_reason",r["metrics"]["pp_failure_reason"]) for r in rows))))
+        reports[stage]=dict(jobs=len(reg["jobs"]),errors=report["errors"],groups=stats)
+        inputs[stage]=dict(registration=old.sha256_file(folder/"registration.json"),report=old.sha256_file(folder/"report.json"))
+    tail_groups=[g for stage in ("tail","tail_extended") for g in reports[stage]["groups"] if g["algorithm"]=="PBS"]
+    decision=("SA_tail_local_opportunity_requires_independent_validation" if any(g["strict_drops"] for g in tail_groups)
+              else "local_opportunity_but_no_SA_tail_recovery_within_registered_budget")
+    result=dict(schema="lns2.pbs_mechanism_summary.v1",stages=reports,inputs=inputs,
+        decision=decision,no_ttf=True,
+        iteration="single_node_limit_multiplier_4",formal_controller_changed=False,
+        caveats=["historical posthoc states", "parallel wall budgets not solver speed evidence",
+                 "time_limit does not prove infeasibility", "PP nonincrease versus PBS strict decrease acceptance"])
+    old.write(OUT/"summary.json",result)
+    print(result)
+
+
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage",choices=tuple(BUILDS))
+    parser.add_argument("stage",choices=(*BUILDS,"analyze"))
     parser.add_argument("--worker")
     args=parser.parse_args()
-    worker(OUT/args.stage,args.worker) if args.worker else run(args.stage)
+    if args.worker: worker(OUT/args.stage,args.worker)
+    elif args.stage=="analyze": analyze()
+    else: run(args.stage)
