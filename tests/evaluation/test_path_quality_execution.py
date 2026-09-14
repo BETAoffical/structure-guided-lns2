@@ -88,8 +88,10 @@ class JournalAndProcessTests(unittest.TestCase):
                       "num_of_colliding_pairs": 0, "sum_of_costs": 1}
 
     def spec(self, **changes):
+        # Spawn imports on a WSL-mounted checkout can exceed two seconds.
+        # These fixtures test journaling and supervision, not startup latency.
         spec = {"output": str(self.root), "native_sha256": "test-only",
-                "item": {"budget_seconds": 0.1}, "process_timeout_seconds": 2.0, **changes}
+                "item": {"budget_seconds": 0.1}, "process_timeout_seconds": 10.0, **changes}
         spec["binding"] = spec_fingerprint(spec)
         return spec
 

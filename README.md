@@ -26,6 +26,9 @@ current conclusions and requirements before any new experiment.
 The latest bounded SA diagnostic found certified multi-agent capacity shortages
 under fixed outsider paths, but no promoted controller or new TTF result. See
 the [capacity follow-up and paired intervention report](docs/SA_CAPACITY_FOLLOWUP_RESULTS_ZH.md).
+The [bounded outsider-release follow-up](docs/SA_CAPACITY_RELEASE_RESULTS_ZH.md)
+finds input-derived candidates that remove some capacity contradictions; it
+does not establish native repair success or authorize an online controller.
 
 ## Layout
 

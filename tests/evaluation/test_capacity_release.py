@@ -1,5 +1,5 @@
 from copy import deepcopy
-from experiments.capacity_release import propose, domain_at_tick
+from experiments.capacity_release import propose, domain_at_tick, evaluate
 from experiments.joint_slot_capacity import hall_witness
 import pytest
 
@@ -37,3 +37,29 @@ def test_input_only_proposals_are_deterministic_and_never_select_internal_agents
     assert a == propose(deepcopy(s), [2], [2], 1, "test", limit=1)
     assert len(a["candidates"]) == 3
     assert all(2 not in c["members"] for c in a["candidates"])
+    s["agents"].reverse()
+    assert a == propose(s, [2], [2], 1, "test", limit=1)
+
+
+def test_released_agent_is_reintroduced_with_its_goal(monkeypatch):
+    called = []
+    def scan(s, selected):
+        called.append(selected)
+        return dict(status="proved")
+    monkeypatch.setattr("experiments.capacity_release.scan_capacity", scan)
+    result = evaluate(dict(state=state(), selected=[2]), dict(time=1,witness=dict(agents=[2])),
+                      dict(id="release",members=[8]))
+    assert result["original_certificate_cleared"]
+    assert called == [[2,8]]
+    assert result["augmented"]["status"] == "proved"
+    assert result["no_feasibility_claim"]
+
+
+def test_no_second_stage_if_original_capacity_deficit_remains(monkeypatch):
+    def forbidden(*args):
+        raise AssertionError("unnecessary enlarged-set scan")
+    monkeypatch.setattr("experiments.capacity_release.scan_capacity", forbidden)
+    result = evaluate(dict(state=state(), selected=[2]), dict(time=1,witness=dict(agents=[2])),
+                      dict(id="baseline",members=[]))
+    assert not result["original_certificate_cleared"]
+    assert result["augmented"]["status"] == "not_checked_original_deficit"
