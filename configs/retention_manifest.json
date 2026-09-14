@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/probe_sa_capacity_native.py", "role": "reproducibility", "purpose": "Frozen PP capacity-label discrimination, size-matched controls and physical candidate deduplication."},
+    {"path": "tests/evaluation/test_sa_capacity_native.py", "role": "reproducibility", "contract": "No duplicate raw/filtered action trials, input-order selection and control-aware continuation gate."},
     {"path": "experiments/capacity_release.py", "role": "reproducibility", "purpose": "Input-only time-dependent blocker proposals and necessary capacity relaxation tests."},
     {"path": "scripts/probe_sa_capacity_release.py", "role": "reproducibility", "purpose": "Bounded paired external-path release and augmented-capacity diagnosis, no native solver."},
     {"path": "tests/evaluation/test_capacity_release.py", "role": "reproducibility", "contract": "Monotonic release, immutable states, outsider membership and deterministic proposals."},
