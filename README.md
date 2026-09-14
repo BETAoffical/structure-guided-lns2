@@ -23,6 +23,10 @@ See the [Chinese report outline and claim boundaries](docs/WAREHOUSE_REPAIR_REPO
 and the [research decision review](docs/RESEARCH_DECISION_REVIEW_ZH.md) for the
 current conclusions and requirements before any new experiment.
 
+The latest bounded SA diagnostic found certified multi-agent capacity shortages
+under fixed outsider paths, but no promoted controller or new TTF result. See
+the [capacity follow-up and paired intervention report](docs/SA_CAPACITY_FOLLOWUP_RESULTS_ZH.md).
+
 ## Layout
 
 ```text
