@@ -29,6 +29,9 @@ the [capacity follow-up and paired intervention report](docs/SA_CAPACITY_FOLLOWU
 The [bounded outsider-release follow-up](docs/SA_CAPACITY_RELEASE_RESULTS_ZH.md)
 finds input-derived candidates that remove some capacity contradictions; it
 does not establish native repair success or authorize an online controller.
+The [history-controlled native discrimination](docs/SA_CAPACITY_NATIVE_RESULTS_ZH.md)
+completed 264 paired diagnostic repairs without a qualifying capacity-label
+benefit. Longer continuation and online deployment remain stopped.
 
 ## Layout
 
