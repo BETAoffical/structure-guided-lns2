@@ -3,7 +3,8 @@ import random
 from experiments.temporal_slot_scan import viable_layers,forced_event
 from experiments.goal_slot_certificate import goal_slot
 from experiments.local_path_search import at
-from scripts.validate_sa_certificate_generalization import choose_episodes,candidate_sets
+from scripts.validate_sa_certificate_generalization import choose_episodes,candidate_sets,process_jobs,replacement_allowed
+from experiments.repair_collection import _job_label
 
 
 def test_all_time_scan_matches_registered_single_tick_definition():
@@ -48,3 +49,19 @@ def test_replacement_preserves_size_and_all_current_conflict_endpoints():
     assert all(len(r["members"])==3 and {1,2}<=set(r["members"]) for r in rows)
     assert next(r["members"] for r in rows if r["id"]=="certificate-4")==[1,2,4]
     assert candidate_sets(dict(case,certificate=dict(blockers=list(range(10,20)))),"add")==[]
+
+
+def test_process_adapter_supplies_scheduler_identity_without_changing_request():
+    job=dict(id="post-case-0",file="source.json")
+    prepared=process_jobs([job])[0]
+    assert _job_label(prepared)==job["id"]
+    assert {k:v for k,v in prepared.items() if k!="job_id"}==job
+    assert "job_id" not in job
+
+
+def test_replacement_gate_rejects_censored_or_control_only_gain():
+    base=dict(case_id="a",trial=0,after=5,censored=False,candidate=dict(id="baseline",kind="baseline"))
+    action=dict(base,after=4,candidate=dict(id="hint",kind="certificate"))
+    assert replacement_allowed([base,action])
+    assert not replacement_allowed([base,dict(action,censored=True)])
+    assert not replacement_allowed([base,dict(action,candidate=dict(id="random",kind="control"))])

@@ -17,7 +17,7 @@ from experiments.nonmonotonic_repair import validate_transition
 from generators.models import MapData,TaskData
 from generators.io import write_movingai_map,write_movingai_scen
 
-OUT=ROOT/"build/sa-certificate-generalization-v1"
+OUT=ROOT/"build/sa-certificate-generalization-v2"
 PARENT="build/sa-training-readiness-v1/plan.json"
 OLD="build/sa-certificate-results-v1/report.json"
 
@@ -208,6 +208,11 @@ def replacement_allowed(rows):
                and r["after"]<baselines[(r["case_id"],r["trial"])]["after"] for r in rows)
 
 
+def process_jobs(jobs):
+    # The shared scheduler reads job_id before registering the child for cleanup.
+    return [dict(job,job_id=job["id"]) for job in jobs]
+
+
 def schedule(plan,stage):
     if stage=="scan": return [dict(j,id="unseen-"+j["job_id"]) for j in plan["jobs"]]
     if stage=="post":
@@ -257,7 +262,7 @@ def collect(stage,resume=False):
             io.write(folder/"receipts"/(row["id"]+".json"),dict(binding=plan["binding"],job=io.semantic_fingerprint(lookup[row["id"]]),sha=io.sha256_file(path)))
             print(stage,row["id"],row["status"],flush=True)
         io.write(folder/"schedule.json",dict(binding=plan["binding"],jobs=jobs))
-        rows=q._run_jobs(scan_episode if stage=="scan" else scan_post if stage=="post" else probe,pending,
+        rows=q._run_jobs(scan_episode if stage=="scan" else scan_post if stage=="post" else probe,process_jobs(pending),
             workers=20,phase=stage,output_root=folder/"progress",run_fingerprint=plan["binding"],timeout_seconds=180.,
             failure_result=failed,on_result=save,stop_on_failure=True)
         io.require(len(rows)==len(pending) and all(r["status"]=="ok" for r in rows),"phase incomplete; inspect errors")
