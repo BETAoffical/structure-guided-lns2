@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/joint_slot_capacity.py", "role": "reproducibility", "purpose": "Necessary instantaneous multi-agent capacity certificates, not complete path planning."},
+    {"path": "scripts/diagnose_sa_joint_slot_capacity.py", "role": "reproducibility", "purpose": "Bounded all-pair and Hall-capacity coverage follow-up on unproved states."},
+    {"path": "tests/evaluation/test_joint_slot_capacity.py", "role": "reproducibility", "contract": "Maximum matching deficiency against exhaustive small assignments."},
     {"path": "experiments/temporal_slot_scan.py", "role": "reproducibility", "purpose": "Bounded all-time necessary hard-outsider occupancy certificates; no production policy."},
     {"path": "scripts/validate_sa_certificate_generalization.py", "role": "reproducibility", "purpose": "Input-selected excluded-map and post-intervention certificate diagnostics with frozen PP."},
     {"path": "tests/evaluation/test_temporal_slot_scan.py", "role": "reproducibility", "contract": "All-time certificate equivalence, blind cohort selection and bounded same-size replacement."},
