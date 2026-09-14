@@ -14,7 +14,7 @@ from scripts import diagnose_sa_pair_compatibility as source
 from scripts.diagnose_sa_external_obstruction import reachable_prefix
 from experiments.pair_compatibility import diagnose
 from experiments import local_path_search as ref
-from experiments.diagnostic_integrity import pair_absent,verify_inputs,snapshot_sources
+from experiments.diagnostic_integrity import pair_absent,read_bound_plan,snapshot_sources
 
 io=source.io
 OUT=ROOT/"build/sa-certificate-augmentation-v1"
@@ -80,20 +80,13 @@ def prepare(certificate_file="build/sa-external-obstruction-v1/report.json"):
                native_jobs=sum(len(c["candidates"])*4 for c in cases),workers=20))
 
 
-def verify(evidence_only=False):
-    plan=io.read(OUT/"plan.json")
-    io.require(plan["binding"]==io.semantic_fingerprint({k:v for k,v in plan.items() if k!="binding"}),"plan changed")
-    verify_inputs(ROOT,plan["inputs"],OUT/"registered_sources" if evidence_only else None)
-    return plan
-
-
 def jobs(plan,stage):
     return [dict(id=f"{c['id']}-{a['id']}-{trial}",case_id=c["id"],candidate=a,trial=trial)
             for c in plan["cases"] for a in c["candidates"] for trial in (range(4) if stage=="native" else [-1])]
 
 
 def worker(stage,job_id):
-    plan=verify()
+    plan=read_bound_plan(ROOT,OUT)
     job=next(j for j in jobs(plan,stage) if j["id"]==job_id)
     case=next(c for c in plan["cases"] if c["id"]==job["case_id"])
     members=job["candidate"]["agents"]
@@ -145,7 +138,7 @@ def read_stage(plan,stage):
 
 
 def collect(stage):
-    plan=verify()
+    plan=read_bound_plan(ROOT,OUT)
     folder=OUT/stage
     io.require(not folder.exists(),"preserve previous stage")
     folder.mkdir(parents=True)

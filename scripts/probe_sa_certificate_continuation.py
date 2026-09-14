@@ -45,7 +45,7 @@ def paired_action(case,target,trial,offset,pool,index,arm,added):
 
 def prepare():
     io.require(not (OUT/"plan.json").exists(),"plan exists")
-    p=previous.verify()
+    p=previous.read_bound_plan(ROOT,previous.OUT)
     rows=previous.read_stage(p,"native")
     cases=[]
     plateau=io.read(ROOT/"build/sa-plateau-candidate-audit-v1/plan.json")

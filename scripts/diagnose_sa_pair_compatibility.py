@@ -12,17 +12,14 @@ sys.path.insert(0, str(ROOT))
 from scripts import diagnose_pbs_repair as io
 from scripts import run_pbs_repair_mechanism as prior
 from experiments.pair_compatibility import diagnose
-from experiments.diagnostic_integrity import verify_inputs
+from experiments.diagnostic_integrity import read_bound_plan
 
 OUT = ROOT / "build/sa-pair-compatibility-v1"
 SOURCE_SHA = "fa69839b63a9af7bec13672bc978d4a01a5deefbbbf021794d255e107bea5c74"
 
 
 def verify(evidence_only=False):
-    plan = io.read(OUT / "plan.json")
-    io.require(plan["binding"] == io.semantic_fingerprint({k:v for k,v in plan.items() if k != "binding"}), "plan changed")
-    verify_inputs(ROOT,plan["inputs"],OUT/"registered_sources" if evidence_only else None)
-    return plan
+    return read_bound_plan(ROOT,OUT,evidence_only)
 
 
 def prepare():
