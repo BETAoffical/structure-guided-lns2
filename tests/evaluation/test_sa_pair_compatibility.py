@@ -125,3 +125,20 @@ def test_astar_gate_does_not_retry_proved_cases(monkeypatch):
     monkeypatch.setattr(runner,"read_stage",lambda *a:{str(i):dict(result=dict(status=s))
                         for i,s in enumerate(["feasible","unknown","infeasible"])})
     assert runner.jobs_for(dict(jobs=jobs),"astar") == [jobs[1]]
+
+
+def test_completed_resume_never_reseals_changed_rows(tmp_path,monkeypatch):
+    monkeypatch.setattr(runner,"OUT",tmp_path)
+    job=dict(id="one")
+    plan=dict(binding="identity",jobs=[job])
+    monkeypatch.setattr(runner,"verify",lambda **kw:plan)
+    path=tmp_path/"bfs/jobs/one.json"
+    runner.io.write(path,dict(status="ok",binding="identity",job=job,backend="bfs",result={}))
+    manifest=tmp_path/"bfs/manifest.json"
+    runner.io.write(manifest,dict(binding="identity",files={"one":runner.io.sha256_file(path)}))
+    old=manifest.read_bytes()
+    runner.collect("bfs",True)
+    assert manifest.read_bytes()==old
+    runner.io.write(path,{"changed":True})
+    with pytest.raises(ValueError,match="result changed"): runner.collect("bfs",True)
+    assert manifest.read_bytes()==old

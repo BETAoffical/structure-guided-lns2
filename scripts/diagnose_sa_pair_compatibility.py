@@ -12,16 +12,16 @@ sys.path.insert(0, str(ROOT))
 from scripts import diagnose_pbs_repair as io
 from scripts import run_pbs_repair_mechanism as prior
 from experiments.pair_compatibility import diagnose
+from experiments.diagnostic_integrity import verify_inputs
 
 OUT = ROOT / "build/sa-pair-compatibility-v1"
 SOURCE_SHA = "fa69839b63a9af7bec13672bc978d4a01a5deefbbbf021794d255e107bea5c74"
 
 
-def verify():
+def verify(evidence_only=False):
     plan = io.read(OUT / "plan.json")
     io.require(plan["binding"] == io.semantic_fingerprint({k:v for k,v in plan.items() if k != "binding"}), "plan changed")
-    for name, sha in plan["inputs"].items():
-        io.require(io.sha256_file(ROOT / name) == sha, "registered input changed: " + name)
+    verify_inputs(ROOT,plan["inputs"],OUT/"registered_sources" if evidence_only else None)
     return plan
 
 
@@ -33,6 +33,7 @@ def prepare():
     source_cases = prior.tail_cases()
     cases, inputs, jobs = [], {}, []
     names = ["scripts/diagnose_sa_pair_compatibility.py", "experiments/pair_compatibility.py",
+             "experiments/diagnostic_integrity.py",
              "experiments/local_path_search.py", "experiments/state_analysis.py",
              "tests/evaluation/test_sa_pair_compatibility.py", "docs/SA_PAIR_COMPATIBILITY_PROTOCOL_ZH.md",
              "build/pbs-repair-mechanism-v1/summary.json", "build/pbs-repair-mechanism-v1/tail/registration.json",
@@ -96,8 +97,14 @@ def worker(backend, job_id):
 
 
 def collect(backend, resume):
-    plan = verify()
     folder = OUT / backend
+    if (folder/"manifest.json").exists():
+        io.require(resume,"completed stage exists; use explicit resume")
+        plan=verify(evidence_only=True)
+        rows=read_stage(plan,backend)
+        print(dict(stage=backend,verified_existing=len(rows),rerun_jobs=0))
+        return
+    plan = verify()
     folder.mkdir(parents=True, exist_ok=True)
     lock = folder / "RUNNING.lock"
     fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -108,6 +115,10 @@ def collect(backend, resume):
             path = folder / "jobs" / (job["id"] + ".json")
             if path.exists():
                 io.require(resume, "result exists; use explicit resume")
+                receipt=folder/"receipts"/(job["id"]+".json")
+                io.require(receipt.exists(),"unsealed result requires manual audit")
+                seal=io.read(receipt)
+                io.require(seal["binding"]==plan["binding"] and seal["sha256"]==io.sha256_file(path),"resume result changed")
                 row = io.read(path)
                 io.require(row["binding"] == plan["binding"] and row["job"] == job
                            and row["backend"] == backend and row["status"] == "ok", "invalid resume")
@@ -125,6 +136,7 @@ def collect(backend, resume):
                     proc.wait()
                     code = "external_timeout"
             io.require(code == 0 and path.exists(), f"worker error {job['id']}: {code}")
+            io.write(folder/"receipts"/(job["id"]+".json"),dict(binding=plan["binding"],sha256=io.sha256_file(path)))
         with ThreadPoolExecutor(max_workers=min(plan["workers"], max(1,len(jobs)))) as pool:
             list(pool.map(execute, jobs))
         io.write(folder / "manifest.json", dict(binding=plan["binding"], files={j["id"]:
@@ -137,7 +149,7 @@ def collect(backend, resume):
 
 
 def analyze(native=False):
-    plan = verify()
+    plan = verify(evidence_only=True)
     bfs, astar = read_stage(plan,"bfs"), read_stage(plan,"astar")
     rows = {**bfs,**astar}
     final = []

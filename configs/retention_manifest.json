@@ -18,6 +18,12 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/goal_slot_certificate.py", "role": "reproducibility", "purpose": "Exact goal-conditioned temporal occupancy certificates with a complete static tail."},
+    {"path": "scripts/diagnose_sa_goal_slot.py", "role": "reproducibility", "purpose": "Independent late goal-access obstruction evidence, without native search."},
+    {"path": "tests/evaluation/test_sa_goal_slot.py", "role": "reproducibility", "contract": "No artificial arrival deadline, persistent goals and temporal backward reachability."},
+    {"path": "experiments/diagnostic_integrity.py", "role": "shared", "purpose": "Read-only frozen source verification and canonical conflict-edge membership."},
+    {"path": "scripts/audit_sa_certificate_results.py", "role": "reproducibility", "purpose": "Independent full-trajectory audit and corrected derived certificate summaries."},
+    {"path": "tests/evaluation/test_diagnostic_integrity.py", "role": "shared", "contract": "Tuple/list edge identity, source snapshots and strict execution/native identity boundaries."},
     {"path": "scripts/probe_sa_certificate_continuation.py", "role": "reproducibility", "purpose": "One proof-derived membership intervention with exact-prefix frozen policy continuation."},
     {"path": "tests/evaluation/test_sa_certificate_continuation.py", "role": "reproducibility", "contract": "First-only membership intervention, conflict endpoint preservation and paired random streams."},
     {"path": "scripts/diagnose_sa_external_obstruction.py", "role": "reproducibility", "purpose": "Independent exact prefix certificate for necessary external coordination."},

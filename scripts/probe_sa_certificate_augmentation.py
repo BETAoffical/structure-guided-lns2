@@ -14,6 +14,7 @@ from scripts import diagnose_sa_pair_compatibility as source
 from scripts.diagnose_sa_external_obstruction import reachable_prefix
 from experiments.pair_compatibility import diagnose
 from experiments import local_path_search as ref
+from experiments.diagnostic_integrity import pair_absent,verify_inputs,snapshot_sources
 
 io=source.io
 OUT=ROOT/"build/sa-certificate-augmentation-v1"
@@ -32,46 +33,57 @@ def candidates(case, blockers):
     return [dict(id=name,agents=sorted(selected|set(extra)),added=extra,kind=kind) for name,extra,kind in entries]
 
 
-def prepare():
+def prepare(certificate_file="build/sa-external-obstruction-v1/report.json"):
     io.require(not (OUT/"plan.json").exists(),"plan exists")
-    old=source.verify()
-    certificate_path=ROOT/"build/sa-external-obstruction-v1/report.json"
+    old=source.verify(evidence_only=True)
+    certificate_path=ROOT/certificate_file
     certificate=io.read(certificate_path)
     for name,sha in certificate["inputs"].items():
         io.require(io.sha256_file(ROOT/name)==sha,"certificate input changed")
     plateau=io.read(ROOT/"build/sa-plateau-candidate-audit-v1/plan.json")
     cases=[]
     for proof in certificate["proofs"]:
-        if proof["status"] != "forced_prefix_collision":
+        if proof["status"] not in ("forced_prefix_collision","forced_goal_slot"):
             continue
         case=next(c for c in old["cases"] if c["id"]==proof["job"]["case_id"])
         graph,agents=ref.validate_state(case["state"])
         fixed={aid:a["path"] for aid,a in agents.items() if aid not in case["selected"]}
         pair=proof["job"]["pair"]
-        prefixes=[reachable_prefix(graph,agents[a]["start"],fixed,proof["event"]["time"]) for a in pair]
-        io.require(prefixes==proof["prefixes"],"certificate reconstruction mismatch")
+        if proof["status"]=="forced_prefix_collision":
+            prefixes=[reachable_prefix(graph,agents[a]["start"],fixed,proof["event"]["time"]) for a in pair]
+            io.require(prefixes==proof["prefixes"],"certificate reconstruction mismatch")
+        else:
+            from experiments.goal_slot_certificate import prove_goal_slot
+            io.require(prove_goal_slot(case["state"],case["selected"],pair,proof["event"]["time"])==proof["certificate"],"goal certificate reconstruction mismatch")
         target=next(t for t in plateau["targets"] if t["job_id"]==case["id"])
         cases.append(dict(**case,pair=pair,candidates=candidates(case,proof["blocker_candidates"]),
                           temperature=target["temperature"]))
-    io.require(bool(cases),"no certified early obstruction")
-    inputs={**old["inputs"],certificate_path.relative_to(ROOT).as_posix():io.sha256_file(certificate_path)}
+    io.require(bool(cases),"no certified obstruction")
+    inputs={name:io.sha256_file(ROOT/name) for name in old["inputs"]}
+    inputs[certificate_path.relative_to(ROOT).as_posix()]=io.sha256_file(certificate_path)
     for name in ("scripts/probe_sa_certificate_augmentation.py","scripts/diagnose_sa_external_obstruction.py",
                  "tests/evaluation/test_sa_external_obstruction.py","docs/SA_CERTIFICATE_AUGMENTATION_PROTOCOL_ZH.md",
                  "build/sa-plateau-candidate-audit-v1/plan.json","scripts/probe_sa_rejection_branches.py"):
         inputs[name]=io.sha256_file(ROOT/name)
+    for name in ("experiments/diagnostic_integrity.py","experiments/goal_slot_certificate.py",
+                 "scripts/diagnose_sa_pair_compatibility.py","build/sa-pair-compatibility-v1/plan.json"):
+        inputs[name]=io.sha256_file(ROOT/name)
+    if any(p["status"]=="forced_goal_slot" for p in certificate["proofs"]):
+        name="docs/SA_GOAL_CERTIFICATE_AUGMENTATION_PROTOCOL_ZH.md"
+        inputs[name]=io.sha256_file(ROOT/name)
     plan=dict(schema="lns2.sa_certificate_augmentation.v1",cases=cases,inputs=inputs,workers=20,
               reference_seconds=45.,reference_nodes=250000,pp_seconds=5.,fuse=90,trials=4,no_ttf=True)
     plan["binding"]=io.semantic_fingerprint(plan)
+    snapshot_sources(ROOT,inputs,OUT/"registered_sources")
     io.write(OUT/"plan.json",plan)
     print(dict(cases=len(cases),reference_jobs=sum(len(c["candidates"]) for c in cases),
                native_jobs=sum(len(c["candidates"])*4 for c in cases),workers=20))
 
 
-def verify():
+def verify(evidence_only=False):
     plan=io.read(OUT/"plan.json")
     io.require(plan["binding"]==io.semantic_fingerprint({k:v for k,v in plan.items() if k!="binding"}),"plan changed")
-    for name,sha in plan["inputs"].items():
-        io.require(io.sha256_file(ROOT/name)==sha,"input changed: "+name)
+    verify_inputs(ROOT,plan["inputs"],OUT/"registered_sources" if evidence_only else None)
     return plan
 
 
@@ -112,7 +124,7 @@ def worker(stage,job_id):
         sa.validate_transition(before,after,metrics,members,"annealed",case["temperature"],uniform)
         result=dict(before=before["num_of_colliding_pairs"],after=after["num_of_colliding_pairs"],
                     feasible=after["feasible"],strict_drop=after["num_of_colliding_pairs"]<before["num_of_colliding_pairs"],
-                    target_pair_cleared=list(case["pair"]) not in after["conflict_edges"],metrics=metrics,final_state=after,
+                    target_pair_cleared=pair_absent(after["conflict_edges"],case["pair"]),metrics=metrics,final_state=after,
                     censored=metrics["pp_failure_reason"]=="time_limit",
                     generated=after["low_level"]["generated"]-before["low_level"]["generated"])
     io.write(OUT/stage/"jobs"/(job_id+".json"),dict(binding=plan["binding"],job=job,stage=stage,status="ok",result=result))
@@ -141,7 +153,8 @@ def collect(stage):
     def execute(job):
         path=folder/(job["id"]+".log")
         with path.open("w") as log:
-            proc=subprocess.Popen([sys.executable,"-B",str(Path(__file__)),stage,"--worker",job["id"]],
+            proc=subprocess.Popen([sys.executable,"-B",str(Path(__file__)),stage,"--worker",job["id"],
+                                   "--output",OUT.relative_to(ROOT).as_posix()],
                 cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,start_new_session=True,
                 env={**os.environ,"OMP_NUM_THREADS":"1","OPENBLAS_NUM_THREADS":"1"})
             try:
@@ -162,10 +175,14 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage",choices=("prepare","reference","native"))
     parser.add_argument("--worker")
+    parser.add_argument("--output",default="build/sa-certificate-augmentation-v1")
+    parser.add_argument("--certificate",default="build/sa-external-obstruction-v1/report.json")
     args=parser.parse_args()
+    OUT=ROOT/args.output
+    io.require(OUT.resolve().is_relative_to((ROOT/"build").resolve()),"output must remain inside build")
     if args.worker:
         worker(args.stage,args.worker)
     elif args.stage=="prepare":
-        prepare()
+        prepare(args.certificate)
     else:
         collect(args.stage)
