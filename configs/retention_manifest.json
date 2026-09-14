@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/temporal_slot_scan.py", "role": "reproducibility", "purpose": "Bounded all-time necessary hard-outsider occupancy certificates; no production policy."},
+    {"path": "scripts/validate_sa_certificate_generalization.py", "role": "reproducibility", "purpose": "Input-selected excluded-map and post-intervention certificate diagnostics with frozen PP."},
+    {"path": "tests/evaluation/test_temporal_slot_scan.py", "role": "reproducibility", "contract": "All-time certificate equivalence, blind cohort selection and bounded same-size replacement."},
     {"path": "tests/evaluation/test_sa_certificate_result_audit.py", "role": "reproducibility", "contract": "Derived evidence decisions distinguish local recovery, controls and complete feasibility."},
     {"path": "experiments/goal_slot_certificate.py", "role": "reproducibility", "purpose": "Exact goal-conditioned temporal occupancy certificates with a complete static tail."},
     {"path": "scripts/diagnose_sa_goal_slot.py", "role": "reproducibility", "purpose": "Independent late goal-access obstruction evidence, without native search."},
