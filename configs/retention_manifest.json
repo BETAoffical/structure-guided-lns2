@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_paired_sampling.py", "role": "reproducibility", "purpose": "Score-blind challenger and occurrence sampling for a bounded paired-completion pilot."},
+    {"path": "scripts/run_sa_paired_completion_pilot.py", "role": "reproducibility", "purpose": "Registered paired-completion data correction, isolated frozen-policy continuations and development-only map-held-out fitting."},
+    {"path": "tests/evaluation/test_sa_paired_completion_pilot.py", "role": "reproducibility", "contract": "Score/outcome-blind sampling, occurrence isolation, bounded jobs, complete receipts and held-label-independent fitting."},
     {"path": "scripts/prepare_official_sa_pressure.py", "role": "reproducibility", "purpose": "Frozen Official plus SA pressure supplement preparation and comparison."},
     {"path": "tests/evaluation/test_official_sa_pressure.py", "role": "reproducibility", "contract": "Official SA source pairing, supplementary schedule and baseline identity."},
     {"path": "experiments/sa_history_selector.py", "role": "reproducibility", "purpose": "Causal pre-action history features and observational selector pilot."},
