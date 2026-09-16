@@ -1,9 +1,14 @@
 import unittest
 
-from scripts.preflight_sa_history_candidate_bridge import select_roots,choice,describe,admission
+from scripts.preflight_sa_history_candidate_bridge import select_roots,choice,describe,admission,history_equal
 
 
 class BridgeTests(unittest.TestCase):
+    def test_history_float_tolerance_not_semantic_change(self):
+        self.assertTrue(history_equal({"x":.2},{"x":.2+1e-16}))
+        self.assertFalse(history_equal({"x":.2},{"x":.200001}))
+        self.assertFalse(history_equal({}, {"x":.2}))
+
     def test_blind_selection_and_input_order(self):
         targets=[dict(map_id=f"m{m}",id=f"{m}-{s}-{i}",stratum=s,decision=32)
                  for m in range(8) for s in ("history_exact","progress") for i in range(2)]

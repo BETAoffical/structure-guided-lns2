@@ -1,6 +1,7 @@
 """Outcome-blind roots and map-held-out candidate contrast before new rollouts."""
 from concurrent.futures import ProcessPoolExecutor
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -39,6 +40,10 @@ def features(profile,row):
     return matched_features(row,profile) if profile=="temporal_bag" else profile_features(row,profile)
 
 
+def history_equal(expected,actual):
+    return all(k in expected and math.isclose(expected[k],v,rel_tol=1e-12,abs_tol=1e-12) for k,v in actual.items())
+
+
 def root_rows(job):
     cfg,source_plan,target=job
     source=ROOT/source_plan["config"]["source"]/"episodes"/target["item"]["job_id"]
@@ -61,7 +66,7 @@ def root_rows(job):
     rows=[]
     for c,base in zip(root["candidates"],root["feature_rows"]):
         hf=history.features(state,c,root["control_event"]["temperature"])
-        require(all(base[k]==v for k,v in hf.items()),"history mismatch")
+        require(history_equal(base,hf),"history mismatch")
         rows.append(dict(id=target["id"]+"/"+c["candidate_id"],state_id=target["id"],map_id=target["map_id"],
                          episode=target["item"]["job_id"],base=base,records=ordered.records(state,c),
                          candidate_id=c["candidate_id"],agents=c["agents"]))
@@ -119,7 +124,7 @@ def main():
     for n in ("OMP_NUM_THREADS","OPENBLAS_NUM_THREADS","MKL_NUM_THREADS"): os.environ[n]="1"
     cfg=read_json(CONFIG)
     out=ROOT/cfg["output"]
-    require(not (out/"preflight.json").exists(),"preflight exists; preserve frozen predictions")
+    require(not out.exists(),"preflight output exists; preserve previous attempt")
     info,source=verify_information()
     sampling=verify_sampling(ROOT/cfg["sampling_config"])
     require(sha256_file(source/"report.json")==cfg["information_report_sha"],"information report changed")

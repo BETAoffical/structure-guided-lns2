@@ -1,6 +1,6 @@
 {
   "schema": "sa-history-candidate-bridge-v1",
-  "output": "build/sa-history-candidate-bridge-v1",
+  "output": "build/sa-history-candidate-bridge-v1b",
   "information_report_sha": "1ffdca0ced13d71ce575cccfa692906afc97854c5041b4e27e2b217ce58cbd69",
   "matched_report_sha": "a685553fb627dfeb4fd2a2945959e0b8e68c4b58697977c2abbe27aa762d88db",
   "sampling_config": "configs/sa_history_selector_corrected.json",

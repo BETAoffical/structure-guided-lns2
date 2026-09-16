@@ -48,3 +48,7 @@ MultiValue的8到16trial扩展没有恢复排序稳定性；改变H本身不是�
 
 配置固定于`configs/sa_history_candidate_bridge.json`；分阶段独立提交协议与实现，再执行对应阶段。
 预检查入口：`python scripts/preflight_sa_history_candidate_bridge.py`。
+
+准备阶段v1因Linux/Python3.10与Windows/Python3.12历史均值累加的1e-16级差异停止，未产生预测或分支。
+v1b允许历史浮点汇总1e-12误差，状态指纹仍严格一致，使用原始保存特征不改数值；旧v1清单保留。
+根选择、参数和所有科学门槛不变，正式输出使用`build/sa-history-candidate-bridge-v1b`。
