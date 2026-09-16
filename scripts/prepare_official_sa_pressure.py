@@ -196,11 +196,16 @@ def check_admission(r):
 
 
 def spec_for(r, item, anchors, folder=None):
-    return q.spec_for(r, item, anchors[q.admission_key(item)], folder or OUT/"episodes"/item["job_id"])
+    return q.spec_for(r, item, anchors[anchor_key(item)], folder or OUT/"episodes"/item["job_id"])
+
+
+def anchor_key(item):
+    # Smoke changes only the execution budget, not the registered reset identity.
+    return q.admission_key(dict(item, budget_seconds=120.))
 
 
 def inspect(r, item, anchors, spec):
-    return q.inspect_episode(ROOT, spec["case"], item, Path(spec["output"]), spec["binding"], anchors[q.admission_key(item)])
+    return q.inspect_episode(ROOT, spec["case"], item, Path(spec["output"]), spec["binding"], anchors[anchor_key(item)])
 
 
 def workload(folder):

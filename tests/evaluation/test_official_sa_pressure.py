@@ -39,6 +39,16 @@ def test_official_sa_does_not_request_learned_runtime(tmp_path):
     assert original == t
 
 
+def test_smoke_budget_keeps_original_reset_anchor(tmp_path, monkeypatch):
+    original = s.schedule(cases())[0]
+    item = dict(original, budget_seconds=2.)
+    a = {s.q.admission_key(original): {'state_fingerprint':'frozen-reset'}}
+    assert s.anchor_key(item) == s.q.admission_key(original)
+    monkeypatch.setattr(s.q, 'spec_for', lambda r,i,anchor,folder:dict(anchor=anchor,output=str(folder)))
+    spec = s.spec_for({},item,a,tmp_path)
+    assert spec['anchor']['state_fingerprint']=='frozen-reset'
+
+
 def test_zero_conflict_official_sa_native(tmp_path, monkeypatch):
     if os.environ.get('LNS2_SA_PATH_NATIVE_TESTS') != '1':
         pytest.skip('explicit frozen native check required')
