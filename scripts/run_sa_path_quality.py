@@ -107,7 +107,7 @@ def verify(native=False):
 
 
 def worker_job(case,item,template,folder,binding):
-    mapped = dict(item,controller="official_adaptive" if item["controller"] == "official_adaptive" else "dual16")
+    mapped = dict(item,controller="official_adaptive" if item["controller"] in {"official_adaptive", "official_sa"} else "dual16")
     job = execution.controller_job(ROOT,case,mapped,template,folder,binding)
     job.update(sa_controller=item["controller"],sa_proposal=deepcopy(template["proposal"]),
                sa_case_id=f"{case['task_id']}-seed{item['solver_seed']}")
@@ -155,7 +155,7 @@ def first_phase(job, *, path_observer):
             draw = acceptance_draw(seed(case["case_id"],0,iterations,"accept"))
             before = state
             raw = (env.step_experimental_pp(action,remaining,"annealed",temp,draw)
-                   if arm == "dual16_sa" else env.step_with_time_limit(action,remaining))
+                   if arm in {"dual16_sa", "official_sa"} else env.step_with_time_limit(action,remaining))
             step = _plain(raw)
             completed = time.perf_counter()
             state,m = step["observation"],step["metrics"]
@@ -255,7 +255,7 @@ def audit_trace(spec):
         if (e["temperature"],e["uniform"])!=(temperature(d),acceptance_draw(seed(case["case_id"],0,d,"accept"))):
             raise ValueError("SA draw changed")
         validate_transition(state,after,e["metrics"],e["metrics"]["neighborhood"],
-            "annealed" if arm=="dual16_sa" else "standard",e["temperature"],e["uniform"])
+            "annealed" if arm in {"dual16_sa", "official_sa"} else "standard",e["temperature"],e["uniform"])
         state=after
         count+=1
     terminal=execution.read_artifact(folder/"terminal.json",spec["binding"])
