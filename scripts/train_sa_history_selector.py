@@ -172,6 +172,7 @@ def save_branch(env, state, event, target, candidate, trial, plan, path, weights
         pp_seed = int(json_fingerprint([plan["config"]["seed"], target["id"], trial, "pp"])[:7], 16)
         draw_seed = int(json_fingerprint([plan["config"]["seed"], target["id"], trial, "accept"])[:7], 16)
         action = event["action"] if trial == -1 else dict(mode="explicit_neighborhood", agents=candidate["agents"], random_seed=pp_seed)
+        pp_seed = action.get("random_seed")
         uniform = event["uniform"] if trial == -1 else random.Random(draw_seed).random()
         raw = q._plain(env.step_experimental_pp(action, plan["config"]["pp_seconds"], "annealed", event["temperature"], uniform))
         after, metrics = raw["observation"], raw["metrics"]
@@ -183,6 +184,7 @@ def save_branch(env, state, event, target, candidate, trial, plan, path, weights
             require(q.state_fingerprint(after) == q.state_fingerprint(q.apply_state_delta(state, event["delta"])), "original action mismatch")
         row = dict(status="ok", binding=plan["binding"], target_id=target["id"], candidate_id=candidate["candidate_id"],
                    trial=trial, members=candidate["agents"], pp_seed=pp_seed, uniform=uniform,
+                   requested_action=action,
                    target=targets(state, after, weights, metrics), metrics=metrics,
                    delta=q.encode_state_delta(state, after), final_fingerprint=q.state_fingerprint(after))
     except Exception as exc:

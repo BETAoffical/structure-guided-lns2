@@ -92,4 +92,6 @@ Temporal-anchor 原始报告保留在 `build/stride-temporal-anchor-incremental-
 `python scripts/train_sa_history_selector.py prepare` 创建冻结清单。
 WSL指定原native后运行 `collect --limit 1` 做第一根完整性检查，再 `collect --resume`。
 Windows现有scikit-learn 1.5.0运行 `train`；最多8个单线程折进程，不安装依赖。
-输出均在 `build/sa-history-selector-pilot-v1`。无研究结果进入旧collection，也不改旧报告。
+输出均在 `build/sa-history-selector-pilot-v1b`。无研究结果进入旧collection，也不改旧报告。
+
+首根v1重放及24个trial通过，但审查发现control的`pp_seed`元数据误记为派生种子，实际执行的是历史action种子。v1保留为实现smoke，不进入训练；v1b明确保存实际种子和完整请求动作，重新登记后从同一盲选清单采集。不改变样本选择、模型或门槛。

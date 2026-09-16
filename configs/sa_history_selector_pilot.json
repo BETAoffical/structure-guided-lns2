@@ -2,7 +2,7 @@
   "schema": "lns2.sa_history_selector_pilot.v1",
   "name": "sa-history-transition-v1",
   "source": "build/sa-pressure-first-feasible-v1",
-  "output": "build/sa-history-selector-pilot-v1",
+  "output": "build/sa-history-selector-pilot-v1b",
   "decisions": [0, 16, 64],
   "states_per_map_per_decision": 2,
   "max_states": 48,
