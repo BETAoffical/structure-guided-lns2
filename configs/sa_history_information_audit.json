@@ -1,0 +1,22 @@
+{
+  "schema": "sa-history-information-audit-v1",
+  "source": "build/sa-pressure-first-feasible-v1",
+  "output": "build/sa-history-information-audit-v1",
+  "reference_plan": "build/sa-history-selector-sampling-v2/plan.json",
+  "reference_plan_sha": "20d8810c403ab41495b8f5cfa8ae7fd6563ab82534723fc585c2b9b443807193",
+  "decisions": [16, 32, 64, 128, 256, 512],
+  "history_window": 32,
+  "future_horizon": 32,
+  "sustain": 8,
+  "profiles": ["dynamic", "aggregate", "resource_bag", "ordered", "resource_ordered", "shuffled_0", "shuffled_1", "shuffled_2", "shuffled_3", "shuffled_4"],
+  "targets": ["sustained_progress", "completion"],
+  "model": {"max_iter": 100, "max_leaf_nodes": 7, "min_samples_leaf": 10, "learning_rate": 0.05, "l2_regularization": 0.1, "early_stopping": false, "random_state": 20260916},
+  "workers": 20,
+  "bootstrap": 5000,
+  "seed": 20260917,
+  "minimum": {"maps": 8, "episodes": 40, "positives": 20, "negatives": 20},
+  "signal_relative_brier_improvement": 0.05,
+  "development_only": true,
+  "runtime_integration_allowed": false,
+  "timing_authorized": false
+}
