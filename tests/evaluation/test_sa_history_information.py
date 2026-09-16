@@ -5,7 +5,7 @@ import unittest
 
 from experiments.sa_history_information import (OrderedHistory, TEMPORAL, RESOURCE,
     bag_features, ordered_features, future_labels, profile_features, episode_weights, metric, peers)
-from scripts.audit_sa_history_information import fit_fold, comparison, atomic, save_result, receipt_result
+from scripts.audit_sa_history_information import fit_fold, comparison, atomic, save_result, receipt_result, source_finished
 
 
 def state():
@@ -25,6 +25,12 @@ def rows():
 
 
 class InformationTests(unittest.TestCase):
+    def test_valid_unsolved_source_retained(self):
+        self.assertTrue(source_finished({"status":"completed"}))
+        self.assertTrue(source_finished({"status":"no_feasible_solution"}))
+        self.assertFalse(source_finished({"status":"error"}))
+        self.assertFalse(source_finished({"status":"running"}))
+
     def test_prefix_order_separates_same_bag(self):
         r=records()
         self.assertEqual(bag_features(r),bag_features(list(reversed(r))))

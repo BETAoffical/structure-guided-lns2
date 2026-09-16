@@ -25,6 +25,10 @@ def require(ok, message):
         raise ValueError(message)
 
 
+def source_finished(receipt):
+    return receipt["status"] in ("completed", "no_feasible_solution")
+
+
 def atomic(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -56,7 +60,7 @@ def prepare():
         if item["controller"] != "dual16_sa":
             continue
         receipt = manifest["jobs"][item["job_id"]]
-        require(receipt["status"] == "completed", "source episode not complete")
+        require(source_finished(receipt), "source episode not complete")
         files = {}
         for name in ("initial.json", "first_phase/trace.jsonl", "result.json"):
             path = source/"episodes"/item["job_id"]/name
