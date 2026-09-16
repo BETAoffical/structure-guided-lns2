@@ -1,0 +1,23 @@
+{
+  "schema": "lns2.sa_history_selector_pilot.v1",
+  "name": "sa-history-transition-v1",
+  "source": "build/sa-pressure-first-feasible-v1",
+  "output": "build/sa-history-selector-pilot-v1",
+  "decisions": [0, 16, 64],
+  "states_per_map_per_decision": 2,
+  "max_states": 48,
+  "max_candidates": 6,
+  "trials": 4,
+  "seed": 20260916,
+  "workers": 20,
+  "pp_seconds": 5.0,
+  "branch_fuse_seconds": 90.0,
+  "replay_pp_seconds": 30.0,
+  "history_window": 32,
+  "quality_tolerance_pairs": 1.0,
+  "bootstrap_samples": 5000,
+  "model": {"max_iter": 100, "max_leaf_nodes": 7, "min_samples_leaf": 10, "learning_rate": 0.05, "l2_regularization": 0.1, "early_stopping": false, "random_state": 20260916},
+  "development_only": true,
+  "runtime_integration_allowed": false,
+  "timing_authorized": false
+}
