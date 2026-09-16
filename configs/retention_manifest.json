@@ -2977,6 +2977,21 @@
       "path": "tests/evaluation/test_sa_pressure_300s.py",
       "role": "reproducibility",
       "contract": "Protect symmetric failure selection, fixed budget and timing-independent trajectory comparisons."
+    },
+    {
+      "path": "experiments/sa_completion_contract.py",
+      "role": "reproducibility",
+      "purpose": "Read-only full versus counter-free trajectory identity and exhaustive split diagnostics."
+    },
+    {
+      "path": "scripts/audit_sa_completion_contract.py",
+      "role": "reproducibility",
+      "purpose": "Audit existing paired H32 labels without solver calls, new labels or training."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_contract.py",
+      "role": "reproducibility",
+      "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
     }
   ]
 }
