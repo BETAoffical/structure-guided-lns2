@@ -1,0 +1,12 @@
+{
+  "schema": "sa-paired-completion-prototype-v1",
+  "output": "build/sa-paired-completion-prototype-v1",
+  "source_report_sha256": "61219e286381976663e42e3aa0e1c6d08bef9aae7641e9b31db61a84e9290006",
+  "feature_profile": "dynamic",
+  "horizon": 32,
+  "trials": 8,
+  "source_role": "diagnostic_only",
+  "new_solver_calls": 0,
+  "fit_historical_bridge": false,
+  "runtime_integration_allowed": false
+}
