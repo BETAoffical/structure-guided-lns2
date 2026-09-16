@@ -137,6 +137,10 @@ class InformationTests(unittest.TestCase):
         self.assertEqual(a,fit_fold(job))
 
     def test_episode_leakage_rejected(self):
+        try:
+            import sklearn  # noqa: F401
+        except ImportError:
+            self.skipTest("sklearn unavailable")
         r=rows()
         r[-1]["episode"]=r[0]["episode"]
         with self.assertRaisesRegex(ValueError,"episode leakage"):
