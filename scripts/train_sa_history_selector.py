@@ -24,13 +24,13 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def locations():
-    config = read_json(CONFIG)
+def locations(config_path=None):
+    config = read_json(config_path or CONFIG)
     return config, ROOT / config["output"], ROOT / config["source"]
 
 
-def prepare():
-    cfg, out, source = locations()
+def prepare(config_path=None):
+    cfg, out, source = locations(config_path)
     require(not (out / "plan.json").exists(), "plan exists; preserve it")
     reg = read_json(source / "registration.json")
     require(reg["fingerprint"] == json_fingerprint({k: v for k, v in reg.items() if k != "fingerprint"}), "source registration corrupt")
@@ -39,6 +39,8 @@ def prepare():
     cases = {c["task_id"]: c for c in reg["cases"]}
     available = []
     inputs = {}
+    scan_jobs = []
+    stratified = cfg.get("sampling", {}).get("mode") == "history_stratified"
     for item in reg["schedule"]:
         if item["controller"] != "dual16_sa":
             continue
@@ -48,6 +50,11 @@ def prepare():
             path = folder / name
             require(sha256_file(path) == receipt["files"][name], "source bytes changed")
             inputs[path.relative_to(ROOT).as_posix()] = receipt["files"][name]
+        if stratified:
+            scan_jobs.append(dict(root=str(ROOT), item=item, map_id=cases[item["task_id"]]["map_id"], config=cfg,
+                initial=(folder/"initial.json").relative_to(ROOT).as_posix(), initial_sha=receipt["files"]["initial.json"],
+                trace=(folder/"first_phase/trace.jsonl").relative_to(ROOT).as_posix(), trace_sha=receipt["files"]["first_phase/trace.jsonl"]))
+            continue
         with (folder / "first_phase/trace.jsonl").open(encoding="utf-8") as stream:
             for line in stream:
                 e = json.loads(line)
@@ -60,11 +67,15 @@ def prepare():
     chosen = []
     coverage = []
     for map_id in sorted({c["map_id"] for c in reg["cases"]}):
-        for decision in cfg["decisions"]:
+        for decision in cfg.get("decisions", []):
             pool = [t for t in available if t["map_id"] == map_id and t["decision"] == decision]
             selected = sorted(pool, key=lambda t: json_fingerprint([cfg["seed"], t["id"]]))[:cfg["states_per_map_per_decision"]]
             chosen.extend(selected)
             coverage.append(dict(map_id=map_id, decision=decision, available=len(pool), selected=len(selected)))
+    admission = {}
+    if stratified:
+        from experiments.sa_history_sampling import build_history_sample
+        chosen, coverage, admission = build_history_sample(scan_jobs, cfg, {c["map_id"] for c in reg["cases"]})
     require(0 < len(chosen) <= cfg["max_states"], "state budget")
     # Inventory all retained reports; the prose review distinguishes deep reading from inventory.
     inventory = []
@@ -74,9 +85,12 @@ def prepare():
                               title=content.splitlines()[0] if content else "",
                               failure_terms_found=any(w in content.lower() for w in ("failed", "not promoted", "no_go", "未通过", "停止"))))
     write_json(out / "history_inventory.json", inventory)
-    names = [CONFIG.relative_to(ROOT).as_posix(), "experiments/sa_history_selector.py",
+    names = [Path(config_path or CONFIG).resolve().relative_to(ROOT).as_posix(), "experiments/sa_history_selector.py",
              "scripts/train_sa_history_selector.py", "tests/evaluation/test_sa_history_selector.py",
              "docs/SA_HISTORY_SELECTOR_PILOT_ZH.md"]
+    names += cfg.get("extra_registered", [])
+    if cfg.get("protocol"):
+        names.append(cfg["protocol"])
     names += [(source / n).relative_to(ROOT).as_posix() for n in ("registration.json", "manifest.json")]
     # Pin current dependencies independently; original-action replay verifies historical equivalence.
     for directory in ("experiments", "lns2_selector", "scripts"):
@@ -95,16 +109,18 @@ def prepare():
     plan = dict(schema=cfg["schema"], config=cfg, targets=chosen, coverage=coverage, inputs=inputs,
                 source_commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 development_only=True, no_ttf=True, native_file=reg["native_file"], native_sha256=reg["native_sha256"],
-                historical_reports_inventoried=len(inventory), original_control_required=True)
+                historical_reports_inventoried=len(inventory), original_control_required=True,
+                sampling_admission=admission)
     plan["binding"] = json_fingerprint(plan)
     write_json(out / "plan.json", plan)
     return dict(states=len(chosen), maps=len({t["map_id"] for t in chosen}),
                 max_new_trials=len(chosen)*cfg["max_candidates"]*cfg["trials"],
-                original_controls=len(chosen), prefix_steps=sum(t["decision"] for t in chosen), workers=cfg["workers"])
+                original_controls=len(chosen), prefix_steps=sum(t["decision"] for t in chosen), workers=cfg["workers"],
+                sampling_admission=admission, coverage=coverage if stratified else None)
 
 
-def verify():
-    cfg, out, _ = locations()
+def verify(config_path=None):
+    cfg, out, _ = locations(config_path)
     plan = read_json(out / "plan.json")
     require(plan["binding"] == json_fingerprint({k:v for k,v in plan.items() if k != "binding"}), "plan changed")
     require(plan["config"] == cfg, "config changed")
@@ -198,8 +214,9 @@ def root_worker(job):
     from scripts.probe_sa_rejection_branches import check_attempt
     from scripts.run_feedback_exploration_diagnostics import validate_final
     from experiments.online_feature_engine import OnlineFeatureEngine
-    cfg, out, source = locations()
     plan, t = job["plan"], job["target"]
+    cfg = plan["config"]
+    out, source = ROOT/cfg["output"], ROOT/cfg["source"]
     folder = out / "states" / t["id"]
     receipt_path = folder / "receipt.json"
     if receipt_path.exists():
@@ -234,7 +251,19 @@ def root_worker(job):
     source_case = dict(case_id=worker["sa_case_id"], task_id=case["task_id"], solver_seed=worker["solver_seed"], proposal=worker["sa_proposal"])
     index, pool = q.SingleFullCheckPool(source_case).select(env, state, t["decision"])
     require((index, pool) == (event["selected_index"], event["pool"]), "candidate replay mismatch")
-    indices = choose_candidates(pool, index, [cfg["seed"], t["id"]], cfg["max_candidates"])
+    sampling_features = None
+    if cfg.get("sampling"):
+        from experiments.sa_history_sampling import candidate_history, choose_history_candidates, classify
+        require(classify(history, state, pool, cfg) == t["stratum"], "sampling stratum changed")
+        sampling_features = candidate_history(history, state, pool, event["temperature"])
+        indices = choose_history_candidates(pool, index, [cfg["seed"], t["id"]], sampling_features, cfg["max_candidates"])
+        preflight = t["preflight"]
+        require(preflight["state_fingerprint"] == q.state_fingerprint(state), "preflight state mismatch")
+        require(preflight["pool_sha"] == json_fingerprint(pool) and preflight["selected_index"] == index, "preflight pool mismatch")
+        require(preflight["candidate_ids"] == [pool[i]["candidate_id"] for i in indices], "sampled candidates changed")
+        require(preflight["history_features"] == [sampling_features[i] for i in indices], "causal history features changed")
+    else:
+        indices = choose_candidates(pool, index, [cfg["seed"], t["id"]], cfg["max_candidates"])
     candidates = [pool[i] for i in indices]
     engine = OnlineFeatureEngine(state, backend="native")
     feature_rows, _ = engine.realized_rows(candidates, state_hash=q.state_fingerprint(state))
@@ -284,10 +313,11 @@ def root_worker(job):
     return dict(status="ok", id=t["id"], trials=len(candidates)*cfg["trials"])
 
 
-def collect(resume=False, limit=None):
+def collect(resume=False, limit=None, config_path=None):
     from scripts import run_sa_path_quality as q
-    plan = verify()
-    _, out, _ = locations()
+    plan = verify(config_path)
+    require(all(plan.get("sampling_admission", {}).values()), "sampling coverage failed; no new labels")
+    _, out, _ = locations(config_path)
     require(resume or not (out / "states").exists(), "existing collection requires resume")
     jobs = [dict(job_id=t["id"], target=t, plan=plan, parent_pid=os.getpid()) for t in plan["targets"][:limit]]
     with q._CollectionRunLock(out, plan["binding"], "history-counterfactual"):
@@ -301,7 +331,7 @@ def collect(resume=False, limit=None):
 
 
 def index_rows(plan):
-    _, out, _ = locations()
+    out = ROOT / plan["config"]["output"]
     data, excluded = [], []
     for t in plan["targets"]:
         folder = out / "states" / t["id"]
@@ -316,6 +346,7 @@ def index_rows(plan):
                 state_rows = []
                 break
             state_rows.append(dict(state_id=t["id"], map_id=t["map_id"], decision=t["decision"],
+                                   stratum=t.get("stratum", "fixed_decision"),
                                    candidate_id=candidate["candidate_id"], size=len(candidate["agents"]),
                                    initial_conflicts=root["state"]["num_of_colliding_pairs"], features=features,
                                    labels=labels, old_selected=candidate["candidate_id"] == root["old_selected_id"],
@@ -413,15 +444,16 @@ def evaluate(rows, predictions, cfg):
                 estimand="equal_state_means_on_states_with_all_candidate_trials_complete")
 
 
-def train():
+def train(config_path=None):
     import numpy as np
     import pickle
     import sklearn
     from sklearn.ensemble import HistGradientBoostingRegressor
     from concurrent.futures import ProcessPoolExecutor
     from threadpoolctl import threadpool_limits
-    plan = verify()
-    cfg, out, _ = locations()
+    plan = verify(config_path)
+    require(all(plan.get("sampling_admission", {}).values()), "sampling coverage failed; no training")
+    cfg, out, _ = locations(config_path)
     directory = out / "training"
     require(not directory.exists(), "training already attempted; preserve it")
     directory.mkdir()
@@ -437,6 +469,9 @@ def train():
         predictions = [p for fold in folds for p in fold]
         write_jsonl(directory / "oof_predictions.jsonl", predictions)
         report = evaluate(data, predictions, cfg)
+        if cfg.get("sampling"):
+            report["by_stratum"] = {s:evaluate([r for r in data if r["stratum"] == s], predictions, cfg)
+                                    for s in sorted({r["stratum"] for r in data})}
         names = sorted(data[0]["features"])
         require(all(set(r["features"]) == set(names) for r in data), "feature schema drift")
         counts = Counter(r["state_id"] for r in data)
@@ -477,10 +512,11 @@ def main():
     parser.add_argument("phase", choices=("prepare", "verify", "collect", "train"))
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--config", type=Path, default=CONFIG)
     args = parser.parse_args()
     if args.limit is not None and args.limit <= 0:
         parser.error("positive limit required")
-    result = collect(args.resume, args.limit) if args.phase == "collect" else globals()[args.phase]()
+    result = collect(args.resume, args.limit, args.config) if args.phase == "collect" else globals()[args.phase](args.config)
     print(json.dumps(result if args.phase != "verify" else {"verified": True}, ensure_ascii=False, indent=2))
 
 
