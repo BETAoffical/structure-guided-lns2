@@ -1,0 +1,13 @@
+{
+  "schema": "sa-history-objective-factorial-v1",
+  "output": "build/sa-history-objective-factorial-v1",
+  "bridge_report_sha256": "61219e286381976663e42e3aa0e1c6d08bef9aae7641e9b31db61a84e9290006",
+  "profiles": ["dynamic", "ordered", "temporal_bag"],
+  "targets": ["sustained_progress", "completion"],
+  "workers": 20,
+  "bootstrap": 5000,
+  "seed": 20260917,
+  "post_hoc": true,
+  "new_solver_calls": 0,
+  "runtime_integration_allowed": false
+}
