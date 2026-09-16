@@ -1,0 +1,22 @@
+{
+  "schema": "sa-history-candidate-bridge-v1",
+  "output": "build/sa-history-candidate-bridge-v1",
+  "information_report_sha": "1ffdca0ced13d71ce575cccfa692906afc97854c5041b4e27e2b217ce58cbd69",
+  "matched_report_sha": "a685553fb627dfeb4fd2a2945959e0b8e68c4b58697977c2abbe27aa762d88db",
+  "sampling_config": "configs/sa_history_selector_corrected.json",
+  "seed": 20260918,
+  "states": 8,
+  "history_states": 4,
+  "max_candidates": 3,
+  "trials": 8,
+  "horizon": 32,
+  "sustain": 8,
+  "workers": 20,
+  "pp_seconds": 5.0,
+  "branch_seconds": 120.0,
+  "branch_fuse_seconds": 180.0,
+  "node_budget": 25000000,
+  "bootstrap": 5000,
+  "no_ttf": true,
+  "runtime_integration_allowed": false
+}
