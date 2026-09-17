@@ -1,6 +1,7 @@
 {
   "schema": "lns2.sa.linear_closed_loop.v1",
-  "output": "build/sa-linear-closed-loop-v1",
+  "output": "build/sa-linear-closed-loop-v1a",
+  "recovery_source": "build/sa-linear-closed-loop-v1",
   "source": "build/sa-low-complexity-ranker-v1",
   "training_index": "build/sa-spatiotemporal-model-probe-v1/development_index.json",
   "dataset_base": "build/stride-warehouse-dual16-very-high-confirmation-v2/dataset_config.json",

@@ -46,11 +46,29 @@ def prepare():
         ROOT/"scripts/run_sa_low_complexity_ranker.py",ROOT/"scripts/run_sa_paired_closed_loop.py"]
     for p in paths:
         inputs[p.relative_to(ROOT).as_posix()]=sha256_file(p)
-    history=historical_inventory(exclude=out)
+    recovery=ROOT/cfg["recovery_source"] if cfg.get("recovery_source") else None
+    if recovery:
+        previous=read_json(recovery/"plan.json")
+        require(previous["binding"]==json_fingerprint({k:v for k,v in previous.items() if k!="binding"}),"previous registration changed")
+        require(not (recovery/"episodes").exists() and not (recovery/"qualification.json").exists(),"recovery must precede policy results")
+        require({k:v for k,v in cfg.items() if k not in {"output","recovery_source"}}==
+                {k:v for k,v in previous["config"].items() if k!="output"},"recovery changed scientific settings")
+        history=previous["history"]
+        for name in ("plan.json","cases.json","model/receipt.json","reset-progress/collection_progress.json"):
+            path=recovery/name
+            inputs[path.relative_to(ROOT).as_posix()]=sha256_file(path)
+        for name,digest in check_seal(read_json(recovery/"model/receipt.json"))["files"].items():
+            path=recovery/"model"/name
+            require(sha256_file(path)==digest,"previous model changed")
+            inputs[path.relative_to(ROOT).as_posix()]=digest
+    else:
+        history=historical_inventory(exclude=out)
     inputs.update(history["manifests"])
     rng=random.Random(cfg["master_seed"])
     masters=[rng.randrange(1,2**31) for _ in range(cfg["maps"])]
     require(len(set(masters))==8 and not set(masters)&set(history["seeds"]),"master seed overlap")
+    if recovery:
+        require(masters==previous["map_masters"],"recovery cannot redraw maps")
     require(cfg["arms"]==list(ARMS) and not cfg["formal_ttf"] and cfg["workers"]<=20,"protocol scope")
     for name,digest in inputs.items():
         require(sha256_file(ROOT/name)==digest,"source changed: "+name)
@@ -95,6 +113,14 @@ def freeze():
     if (out/"model/receipt.json").exists():
         return dict(resumed=True,receipt=model_receipt(p,out))
     require(not (out/"model").exists(),"partial model publication; audit required")
+    if p["config"].get("recovery_source"):
+        source=ROOT/p["config"]["recovery_source"]/"model"
+        receipt=check_seal(read_json(source/"receipt.json"))
+        for name,digest in receipt["files"].items():
+            once(out/"model"/name,read_json(source/name))
+            require(sha256_file(out/"model"/name)==digest,"recovery altered model bytes")
+        once(out/"model/receipt.json",sealed(dict(binding=p["binding"],files=receipt["files"])))
+        return dict(reused_frozen_models=True,new_fits=0,model_sha256=receipt["files"])
     data=read_json(ROOT/p["config"]["training_index"])
     linear,gbdt=fit_full(data)
     payload=portable_payload(gbdt)
@@ -176,6 +202,14 @@ def generate():
     v=read_json(out/"model-verification-native-portable-tree.json")
     require(v["binding"]==p["binding"] and v["receipt_sha256"]==sha256_file(out/"model/receipt.json"),"native model check missing")
     once(out/"generation_registration.json",dict(binding=p["binding"],model_receipt_sha256=sha256_file(out/"model/receipt.json")))
+    if cfg.get("recovery_source"):
+        previous=check_seal(read_json(ROOT/cfg["recovery_source"]/"cases.json"))
+        for name,digest in previous["files"].items():
+            require(sha256_file(ROOT/name)==digest,"recovery case changed")
+        restored={k:v for k,v in previous.items() if k not in {"integrity","binding","cases"}}
+        restored.update(binding=p["binding"],cases=[runtime_case(c) for c in previous["cases"]])
+        once(out/"cases.json",sealed(restored))
+        return dict(reused_maps=8,reused_tasks=16,new_generation=0,only_case_status_added=True)
     with ProcessPoolExecutor(max_workers=8) as pool:
         shards=list(pool.map(generate_one,[dict(plan=p,index=i) for i in range(8)]))
     rows=[r for s in shards for r in s["rows"]]
@@ -187,9 +221,9 @@ def generate():
     cases=[]
     for r in rows:
         audit=audit_task(ROOT/r["map_file"],ROOT/r["scenario_file"],ROOT/r["task_file"],r["agent_count"])
-        cases.append(dict(task_id=r["task_id"],map_id=r["map_id"],family="warehouse",solver_seeds=cfg["solver_seeds"],
+        cases.append(runtime_case(dict(task_id=r["task_id"],map_id=r["map_id"],family="warehouse",solver_seeds=cfg["solver_seeds"],
             static_audit=audit,files={k:r[k] for k in ("map_file","scenario_file","task_file")},
-            density=r.get("agent_density"),task_variant=r["task_variant"]))
+            density=r.get("agent_density"),task_variant=r["task_variant"])))
     once(out/"cases.json",sealed(dict(binding=p["binding"],cases=cases,files={k:v for s in shards for k,v in s["files"].items()},
         map_sha256=hashes,map_seeds=sorted({r["map_seed"] for r in rows}),task_seeds=sorted({r["task_seed"] for r in rows}))))
     return dict(maps=8,tasks=16,seed_overlap=0,geometry_overlap=0)
@@ -205,6 +239,16 @@ def cases_verified(p,out):
     return r["cases"]
 
 
+def runtime_case(case):
+    require(case.get("status","static_ready_runtime_unverified")=="static_ready_runtime_unverified","unexpected case status")
+    return dict(case,status="static_ready_runtime_unverified")
+
+
+def job_failure(job,status,error):
+    # The generic collector's default callback expects its own dataset-row jobs.
+    return dict(status=status,job_id=job["job_id"],error=error)
+
+
 def qualify():
     from experiments.repair_collection import _run_jobs,_CollectionRunLock
     p,out=verify()
@@ -215,7 +259,7 @@ def qualify():
     jobs=[dict(job_id=k,case=c,solver_seed=s,plan=p) for c,s,k in paired_tasks(cases,cfg)]
     with _CollectionRunLock(out,p["binding"],"linear-reset"):
         results=_run_jobs(reset_worker,jobs,cfg["workers"],phase="reset",output_root=out/"reset-progress",
-            run_fingerprint=p["binding"],timeout_seconds=cfg["fuse_seconds"],stop_on_failure=True)
+            run_fingerprint=p["binding"],timeout_seconds=cfg["fuse_seconds"],stop_on_failure=True,failure_result=job_failure)
         active=[r for r in results if r.get("conflicts",0)>0]
         passed=len(results)==32 and all(r["status"]=="ok" for r in results) and len(active)>=cfg["minimum_active_episodes"] and len({r["map_id"] for r in active})>=cfg["minimum_active_maps"]
         r=sealed(dict(binding=p["binding"],passed=passed,results=results,active=len(active),active_maps=len({r["map_id"] for r in active})))
@@ -347,7 +391,7 @@ def collect(resume=False,limit=None):
                         f.write(json.dumps(row)+"\n")
                     print("EPISODE",row,flush=True)
                 result=_run_jobs(episode_worker,batch,cfg["workers"],phase=f"batch{offset}",output_root=out/f"progress/{offset}",
-                    run_fingerprint=p["binding"],timeout_seconds=cfg["fuse_seconds"],stop_on_failure=True,on_result=record)
+                    run_fingerprint=p["binding"],timeout_seconds=cfg["fuse_seconds"],stop_on_failure=True,on_result=record,failure_result=job_failure)
                 require(len(result)==len(batch) and all(r["status"]=="ok" for r in result),"batch error; no automatic retry")
             completed=sum((out/"episodes"/f"{key}-{arm}"/"receipt.json").exists() for _,_,key in paired_tasks(cases,cfg) for arm in ARMS)
             atomic(out/"run_status.json",dict(status="completed" if completed==96 else "paused",completed=completed,binding=p["binding"]))

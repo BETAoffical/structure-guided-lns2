@@ -34,6 +34,22 @@ def episodes():
 
 
 class LinearLoopTests(unittest.TestCase):
+    def test_case_adapter_and_job_error_preserve_identity(self):
+        from scripts.run_sa_linear_closed_loop import runtime_case,job_failure
+        from lns2_selector.evaluation.path_quality_execution import controller_job
+        case=dict(task_id="t",map_id="m",family="warehouse",static_audit=dict(agent_count=2),
+            files=dict(map_file="a.map",scenario_file="a.scen",task_file="a.json"))
+        ready=runtime_case(case)
+        self.assertNotIn("status",case)
+        self.assertEqual({k:v for k,v in ready.items() if k!="status"},case)
+        template=dict(proposal={},environment=dict(replan_algorithm="PP",use_sipp=True),frozen_models="frozen",model_registration={})
+        job=controller_job(Path("."),ready,dict(controller="official_adaptive",task_id="t",solver_seed=7,budget_seconds=1),template,Path("out"),"binding")
+        self.assertEqual(job["row"]["agent_count"],2)
+        self.assertEqual(job_failure(dict(job_id="test"),"error","original cause"),
+                         dict(job_id="test",status="error",error="original cause"))
+        with self.assertRaises(ValueError):
+            runtime_case(dict(case,status="quarantined"))
+
     def test_full_training_matches_registered_fold_recipe(self):
         d=fixture()
         old=prepare_matrix(d,"held","linear_difference")
