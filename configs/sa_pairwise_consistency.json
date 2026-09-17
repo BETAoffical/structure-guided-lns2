@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.sa.pairwise_consistency.v1",
+  "output": "build/sa-pairwise-consistency-v1",
+  "source": "build/sa-continuation-value-v1",
+  "source_report_sha256": "91ffea44b9d856c185a795000484f503145b8a750fd0fa72325a86de8891c662",
+  "workers": 20,
+  "bootstrap": 5000,
+  "seed": 2026091723,
+  "expected_labeled_states": 31,
+  "expected_continuation_decisions": 5910,
+  "new_solver_calls": 0,
+  "training": false,
+  "promotion": false
+}
