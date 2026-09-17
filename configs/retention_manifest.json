@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_state_coverage.py", "role": "reproducibility", "purpose": "Final bounded independent-episode coverage comparison of two fixed H32 selector designs."},
+    {"path": "scripts/run_sa_state_coverage.py", "role": "reproducibility", "purpose": "Frozen old-fold models, blind new-state collection and map-isolated coverage evaluation."},
+    {"path": "tests/evaluation/test_sa_state_coverage.py", "role": "reproducibility", "contract": "Blind episode sampling, old/new separation, held-label-free fitting and fixed decision gates."},
     {"path": "experiments/sa_paired_sampling.py", "role": "reproducibility", "purpose": "Score-blind challenger and occurrence sampling for a bounded paired-completion pilot."},
     {"path": "scripts/run_sa_paired_completion_pilot.py", "role": "reproducibility", "purpose": "Registered paired-completion data correction, isolated frozen-policy continuations and development-only map-held-out fitting."},
     {"path": "tests/evaluation/test_sa_paired_completion_pilot.py", "role": "reproducibility", "contract": "Score/outcome-blind sampling, occurrence isolation, bounded jobs, complete receipts and held-label-independent fitting."},
