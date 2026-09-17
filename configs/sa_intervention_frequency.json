@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.intervention_frequency.v1",
+  "output": "build/sa-intervention-frequency-v1",
+  "source_output": "build/sa-paired-closed-loop-v1",
+  "source_report_sha256": "0af61ea3822a9fae93e1491f3f1c006cde7bea8ccacd7a3be8123337e0e4db50",
+  "source_binding": "70141ff19799ff9de5e8b283896099005db747f178236115a0ed05ac48cf1269",
+  "expected_pairs": 32,
+  "expected_maps": 8,
+  "workers": 20,
+  "bootstrap": 5000,
+  "seed": 2026091721,
+  "horizon": 32,
+  "new_arm": "single",
+  "selection": "first_model_disagreement_then_frozen",
+  "formal_ttf": false,
+  "automatic_promotion": false,
+  "training": false
+}
