@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.continuation_value.v1",
+  "output": "build/sa-continuation-value-v1",
+  "source": "build/sa-unbalanced-coverage-v1",
+  "model_source": "build/sa-paired-closed-loop-v1",
+  "bundle_sha256": "2444e1827a70e9b8feea9bcf086ea354c9071a64fcd0e264827e0e4fa5d7347a",
+  "selection_seed": 2026091722,
+  "support_ranges": {"decision": [4, 128], "agents": [223, 484], "conflicts": [1, 200]},
+  "roots": 8,
+  "trials": 8,
+  "candidates": 4,
+  "horizon": 32,
+  "workers": 20,
+  "bootstrap": 5000,
+  "formal_ttf": false,
+  "training": false,
+  "automatic_promotion": false
+}
