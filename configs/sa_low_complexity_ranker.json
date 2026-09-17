@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.low_complexity_ranker.v1",
+  "output": "build/sa-low-complexity-ranker-v1",
+  "source": "build/sa-spatiotemporal-model-probe-v1",
+  "workers": 20,
+  "seed": 2026091801,
+  "bootstrap": 5000,
+  "ridge_alpha": 1.0,
+  "svm_C": 1.0,
+  "svm_tol": 0.0000001,
+  "svm_max_iter": 10000,
+  "states": 47,
+  "maps": 8,
+  "expected_gbdt_rate": 0.5453125,
+  "new_solver_calls": 0,
+  "automatic_promotion": false,
+  "role": "previously_viewed_development"
+}
