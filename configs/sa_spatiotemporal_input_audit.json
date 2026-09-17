@@ -1,0 +1,27 @@
+{
+  "schema": "sa-spatiotemporal-input-audit-v1",
+  "output": "build/sa-spatiotemporal-input-audit-v1",
+  "workers": 20,
+  "expected_states": 47,
+  "expected_maps": 8,
+  "new_solver_calls": 0,
+  "model_fits": 0,
+  "runtime_integration_allowed": false,
+  "source_role": "previously_viewed_development",
+  "sources": [
+    {
+      "name": "old16",
+      "directory": "build/sa-paired-completion-pilot-v1",
+      "states": 16,
+      "index_sha256": "03dd1bf3412678c864000cbe5941bd9078939c64a5f84bdb7ba69cfdcf52d10b",
+      "plan_sha256": "5d9223d79d2fb48a0925e031275e1dbda3f0418f907a2557546f30e4459faa76"
+    },
+    {
+      "name": "new31",
+      "directory": "build/sa-unbalanced-coverage-v1",
+      "states": 31,
+      "index_sha256": "e7d17a10d0533e1758ba180b220ac66587125f2d926040d0d8af0a46663d8fe2",
+      "plan_sha256": "d1602fd4f2c33203a939711d7b495018ba73e5015ba5615f086f971e695dc00e"
+    }
+  ]
+}
