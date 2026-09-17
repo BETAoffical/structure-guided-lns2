@@ -1,5 +1,6 @@
 """Post-hoc description only; never selects models or alters rollout labels."""
 import argparse
+import gzip
 import json
 from itertools import combinations
 from pathlib import Path
@@ -44,6 +45,34 @@ def describe_root(root, rows, label, new_choice):
             "updated": target[new_choice], "uniform": sum(target.values())/len(ids),
             "sample_oracle": max(target.values())},
         training_updated_best=target[new_choice] == max(target.values()))
+
+
+def coverage(roots, episodes, out):
+    names = sorted(roots[0]["features"][0])
+    bounds = {n:(min(f[n] for r in roots for f in r["features"]),
+                 max(f[n] for r in roots for f in r["features"])) for n in names}
+    total = late = budget_outside = different = outside_values = values = 0
+    for episode in episodes:
+        if episode["arm"] != "updated":
+            continue
+        folder = out/"evaluation"/episode["job_id"]
+        for name, digest in episode["files"].items():
+            require(sha256_file(folder/name) == digest, "evaluation trace changed")
+        with gzip.open(folder/"trace.jsonl.gz", "rt", encoding="utf8") as stream:
+            for line in stream:
+                e = json.loads(line)
+                fs = e["features"]
+                total += 1
+                late += int(e["decision"] > max(r["decision"] for r in roots))
+                budget_outside += int(any(not bounds[n][0] <= fs[0][n] <= bounds[n][1]
+                                          for n in names if n.startswith("budget.")))
+                different += int(e["ranking"]["selected"] != e["anchor_id"])
+                outside_values += sum(not bounds[n][0] <= f[n] <= bounds[n][1] for f in fs for n in names)
+                values += len(fs)*len(names)
+    return dict(decisions=total, after_latest_training_decision=late,
+        outside_training_budget_range=budget_outside, deviations_from_anchor=different,
+        coordinate_outside_fraction=outside_values/values if values else None,
+        causal_attribution=False)
 
 
 def main():
@@ -99,10 +128,11 @@ def main():
     evidence = {p.relative_to(ROOT).as_posix():sha256_file(p) for p in evidence_paths}
     payload = dict(binding=plan["binding"], evidence=evidence, summary=summary, roots=rows,
         evaluation=report["summary"], contrasts=report["contrasts"],
+        updated_coverage=coverage(roots, report["episodes"], out),
         diagnostics_source_sha256=sha256_file(Path(__file__)),
         post_hoc=True, independent_confirmation=False, model_selection=False, no_ttf=True)
     once(out/"diagnostics.json", sealed(payload))
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(dict(summary=summary, updated_coverage=payload["updated_coverage"]), indent=2))
 
 
 if __name__ == "__main__":
