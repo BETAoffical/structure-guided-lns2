@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_paired_closed_loop.py", "role": "reproducibility", "purpose": "Frozen old-sixteen paired completion model and bounded closed-loop decision rules."},
+    {"path": "scripts/run_sa_paired_closed_loop.py", "role": "reproducibility", "purpose": "New-map, three-arm non-timing pilot with portable parity, atomic episodes and safe batch stop."},
+    {"path": "tests/evaluation/test_sa_paired_closed_loop.py", "role": "reproducibility", "contract": "Pre-action features, frozen training, native scalar parity, subset identity and conservative gates."},
     {"path": "experiments/sa_unbalanced_coverage.py", "role": "reproducibility", "purpose": "Map-balanced training weights and summaries for the fixed 31-state H32 cohort."},
     {"path": "scripts/run_sa_unbalanced_coverage.py", "role": "reproducibility", "purpose": "Isolated 31-state collection and paired old-versus-augmented training; retains the failed quota plan."},
     {"path": "tests/evaluation/test_sa_unbalanced_coverage.py", "role": "reproducibility", "contract": "Exact cohort, map weights, frozen balanced-model equivalence, label isolation and unchanged gates."},
