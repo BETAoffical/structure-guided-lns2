@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.sa.unbalanced_coverage.v1",
+  "previous_plan": "build/sa-state-coverage-v1/plan.json",
+  "previous_plan_sha256": "a003c4d83de719559566a6470bfec83e6fd0baf9fd9aa580ab35371750cf2368",
+  "root_cohort_sha256": "4f2eddf89e6282004807a0597d4e8073a4d43529cf0fd9b7ceb663fecbc6e3fa",
+  "output": "build/sa-unbalanced-coverage-v1",
+  "states": 31,
+  "map_counts": {
+    "very_high_confirm_v2_station_centric_0000": 4,
+    "very_high_confirm_v2_station_centric_0001": 4,
+    "very_high_confirm_v2_station_centric_0002": 4,
+    "very_high_confirm_v2_station_centric_0003": 4,
+    "very_high_confirm_v2_station_centric_0004": 4,
+    "very_high_confirm_v2_station_centric_0005": 3,
+    "very_high_confirm_v2_station_centric_0006": 4,
+    "very_high_confirm_v2_station_centric_0007": 4
+  },
+  "training_weight": "map_equal_state_equal_within_map_total_state_count",
+  "primary_aggregation": "map_equal",
+  "promotion_allowed": false
+}
