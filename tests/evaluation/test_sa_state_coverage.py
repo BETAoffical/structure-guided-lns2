@@ -3,9 +3,13 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import patch
 
 from experiments.sa_state_coverage import choose_new_roots, merge_data, fit_models, predict, signal_gate
 from tests.evaluation.test_sa_paired_completion_pilot import target, training_fixture
+from scripts import run_sa_state_coverage as runner
+from experiments._common import write_json
 
 
 class StateCoverageTests(unittest.TestCase):
@@ -95,6 +99,31 @@ class StateCoverageTests(unittest.TestCase):
     def test_wrong_map_prediction_rejected_before_inference(self):
         with self.assertRaisesRegex(ValueError,'held-map leakage'):
             predict(dict(held='x',train_maps=['y']),dict(map_id='y'))
+
+    def test_failed_admission_blocks_all_expensive_stages(self):
+        with patch.object(runner,'verify',return_value=(dict(admission=False),Path('unused'))):
+            for operation in (runner.collect,runner.analyze,runner.fit_evaluate):
+                with self.assertRaisesRegex(ValueError,'no solver collection or training'):
+                    operation()
+
+    def test_only_unsealed_failed_preflight_may_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'out'
+            runner.allow_preparation_output(out,False)
+            write_json(out/'coverage.json',dict(admission=False))
+            with self.assertRaisesRegex(ValueError,'unsealed'):
+                runner.allow_preparation_output(out,False)
+            runner.allow_preparation_output(out,True)
+            write_json(out/'plan.json',{})
+            with self.assertRaisesRegex(ValueError,'unsealed'):
+                runner.allow_preparation_output(out,True)
+
+    def test_source_shortage_cannot_borrow_another_maps_episode(self):
+        rows=[target(f'{m}-{i}-{p}',m,p,f'{m}-{i}') for m,n in (('a',3),('b',8))
+              for i in range(n) for p in ('early','continuing')]
+        roots,coverage=choose_new_roots(rows,{'a','b'},set(),1)
+        self.assertEqual(len(roots),7)
+        self.assertEqual([(c['selected'],c['admitted']) for c in coverage],[(3,False),(4,True)])
 
 
 if __name__=='__main__':

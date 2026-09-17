@@ -33,11 +33,23 @@ def freeze_fold(job):
                 train_ids=model['train_ids'], train_maps=model['train_maps'])
 
 
-def prepare():
+def allow_preparation_output(out, resume):
+    if not out.exists():
+        return
+    require(resume and {p.name for p in out.iterdir()} == {'coverage.json'} and
+            read_json(out/'coverage.json').get('admission') is False,
+            'output exists; only an unsealed failed preflight may be resumed')
+
+
+def require_admission(plan):
+    require(plan['admission'], 'insufficient source coverage; no solver collection or training authorized')
+
+
+def prepare(resume=False):
     old_plan, old_out = pilot.verify()
     cfg = read_json(CONFIG)
     out = ROOT / cfg['output']
-    require(not out.exists(), 'output exists; preserve prior preparation')
+    allow_preparation_output(out, resume)
     require((cfg['maps'], cfg['states'], cfg['max_candidates'], cfg['trials'], cfg['horizon'], cfg['workers']) ==
             (8, 32, 4, 8, 32, 20), 'fixed coverage budget changed')
     old = read_json(old_out / 'training_index.json')
@@ -57,17 +69,36 @@ def prepare():
         available = [r for rows in pool.map(pilot.scan_source, jobs) for r in rows]
     roots, coverage = choose_new_roots(available, maps, excluded, cfg['seed'])
     admission = len(roots) == cfg['states'] and len(maps) == cfg['maps'] and all(c['admitted'] for c in coverage)
-    write_json(out / 'coverage.json', dict(admission=admission, coverage=coverage))
-    if not admission:
-        return dict(admission=False, coverage=coverage, collection_allowed=False)
-    with ProcessPoolExecutor(max_workers=min(cfg['workers'], len(maps))) as pool:
-        frozen = list(pool.map(freeze_fold, [(old, m, str(out / 'old_fold_models')) for m in sorted(maps)]))
+    pilot.save_once(out / 'coverage.json', dict(admission=admission, coverage=coverage))
+    frozen = []
+    if admission:
+        with ProcessPoolExecutor(max_workers=min(cfg['workers'], len(maps))) as pool:
+            frozen = list(pool.map(freeze_fold, [(old, m, str(out / 'old_fold_models')) for m in sorted(maps)]))
     inputs = dict(old_plan['inputs'])
     files = [CONFIG, Path(__file__), ROOT / 'experiments/sa_state_coverage.py',
              ROOT / 'tests/evaluation/test_sa_state_coverage.py', ROOT / 'docs/SA_STATE_COVERAGE_PROTOCOL_ZH.md',
              ROOT / 'experiments/sa_completion_contract.py', old_out / 'plan.json',
              old_out / 'training_index.json', old_out / 'training_receipt.json', old_out / 'model_report.json',
              ROOT / 'build/sa-history-selector-sampling-v2/plan.json', out / 'coverage.json']
+    # Outcome summaries only explain coverage after selection is frozen; they
+    # never enter choose_new_roots or authorize replacing an episode.
+    manifest = read_json(ROOT / cfg['source'] / 'manifest.json')
+    inventory = []
+    for job in jobs:
+        item = job['item']
+        folder = ROOT / cfg['source'] / 'episodes' / item['job_id']
+        path = folder / 'first_phase_result.json'
+        require(sha256_file(path) == manifest['jobs'][item['job_id']]['files']['first_phase_result.json'], 'source phase changed')
+        phase = read_json(path)['payload']
+        require(phase['trace_sha256'] == old_plan['inputs'][(folder/'first_phase/trace.jsonl').relative_to(ROOT).as_posix()], 'phase trace identity')
+        found = [r for r in available if r['item']['job_id'] == item['job_id']]
+        inventory.append(dict(episode=item['job_id'], map_id=job['map_id'], solver_seed=item['solver_seed'],
+            eligible_decisions=sorted(r['decision'] for r in found),
+            repair_iterations=phase['summary']['repair_iterations'], source_stop=phase['stop_reason'],
+            initial_conflicts=read_json(folder/'initial.json')['payload']['observation']['num_of_colliding_pairs']))
+        files.append(path)
+    write_json(out/'source_inventory.json',inventory)
+    files.append(out/'source_inventory.json')
     files += [ROOT / f['file'] for f in frozen]
     for p in files:
         inputs[p.relative_to(ROOT).as_posix()] = sha256_file(p)
@@ -76,10 +107,19 @@ def prepare():
     plan = dict(config=cfg, roots=roots, coverage=coverage, inputs=inputs, frozen_folds=frozen,
                 excluded_episodes=sorted(excluded), old_output=old_out.relative_to(ROOT).as_posix(),
                 native_file=old_plan['native_file'], native_sha256=old_plan['native_sha256'], model=MODEL_PARAMS,
-                admission=True, commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip())
+                admission=admission, commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip())
     plan['binding'] = json_fingerprint(plan)
     write_json(out / 'plan.json', plan)
-    return dict(admission=True, binding=plan['binding'], budget=work_budget(roots,cfg), coverage=coverage)
+    if not admission:
+        report = dict(binding=plan['binding'], decision='insufficient_independent_episode_coverage',
+                      coverage=coverage, source_episodes=len(inventory),
+                      eligible_source_episodes=sum(bool(r['eligible_decisions']) for r in inventory),
+                      executed_new_branches=0, real_data_fits=0, collection_allowed=False, promotion_allowed=False)
+        write_json(out/'admission_report.json',report)
+        write_json(out/'run_status.json',dict(status='not_admitted',binding=plan['binding'],decision=report['decision']))
+    return dict(admission=admission, binding=plan['binding'],
+                proposed_budget=work_budget(roots,cfg), authorized_branch_jobs=work_budget(roots,cfg)['branch_jobs'] if admission else 0,
+                coverage=coverage)
 
 
 def verify():
@@ -94,9 +134,9 @@ def verify():
 
 
 def collect(resume=False, limit=None):
-    from scripts import run_sa_path_quality as q
     plan, out = verify()
-    require(plan['admission'], 'coverage failed')
+    require_admission(plan)
+    from scripts import run_sa_path_quality as q
     require(resume or not (out / 'roots').exists(), 'existing output requires resume')
     require(limit is None or 0 < limit <= len(plan['roots']), 'invalid limit')
     with q._CollectionRunLock(out, plan['binding'], 'state-coverage'):
@@ -152,6 +192,7 @@ def index_root(job):
 
 def analyze():
     plan, out = verify()
+    require_admission(plan)
     with ProcessPoolExecutor(max_workers=plan['config']['workers']) as pool:
         states = list(pool.map(index_root, [(plan,r) for r in plan['roots']]))
     names = sorted(states[0]['candidates'][0]['features'])
@@ -248,8 +289,9 @@ def _fit_evaluate(plan,out):
 
 
 def fit_evaluate():
-    from scripts import run_sa_path_quality as q
     plan,out=verify()
+    require_admission(plan)
+    from scripts import run_sa_path_quality as q
     with q._CollectionRunLock(out,plan['binding'],'state-coverage-training'):
         write_json(out/'training_status.json',dict(status='running',binding=plan['binding']))
         try:
@@ -269,7 +311,7 @@ def main():
     parser.add_argument('--resume',action='store_true')
     parser.add_argument('--limit',type=int)
     args=parser.parse_args()
-    if args.phase=='prepare': result=prepare()
+    if args.phase=='prepare': result=prepare(args.resume)
     elif args.phase=='collect': result=collect(args.resume,args.limit)
     elif args.phase=='analyze': result=analyze()
     elif args.phase=='fit-evaluate': result=fit_evaluate()
@@ -279,7 +321,9 @@ def main():
             write_json(out/'STOP_AFTER_ROOT',dict(binding=plan['binding'],requested=True))
             result=dict(stop_after_current_root=True)
         else:
-            result=dict(binding=plan['binding'],admission=plan['admission'],budget=work_budget(plan['roots'],plan['config']))
+            result=dict(binding=plan['binding'],admission=plan['admission'],
+                        proposed_budget=work_budget(plan['roots'],plan['config']),
+                        authorized_branch_jobs=work_budget(plan['roots'],plan['config'])['branch_jobs'] if plan['admission'] else 0)
     print(json.dumps(result,indent=2),flush=True)
 
 
