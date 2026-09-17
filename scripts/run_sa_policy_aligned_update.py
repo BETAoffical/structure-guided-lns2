@@ -163,6 +163,19 @@ def check_result(folder, plan):
     return row
 
 
+def load_updated_model(out, plan, native=True):
+    manifest = check_seal(read_json(out/"model/receipt.json"))
+    training_path = out/"model/training.json"
+    training = check_seal(read_json(training_path))
+    require(manifest["binding"] == training["binding"] == plan["binding"], "updated model identity")
+    require(manifest["training_sha256"] == sha256_file(training_path), "training receipt changed")
+    require(manifest["files"] == training["files"] and manifest["parity_verified"], "model parity receipt")
+    path = out/"model/bundle.json"
+    require(sha256_file(path) == manifest["files"]["bundle.json"], "updated bundle changed")
+    # The bundle names are delta/mean columns; the ranker needs base candidate names.
+    return portable_model(read_json(path), training["feature_names"], native=native)
+
+
 def worker(job):
     from scripts.train_sa_history_selector import die_with_parent
     from scripts import run_sa_path_quality as q
@@ -190,12 +203,7 @@ def worker(job):
     old_model = models["gbdt"]
     model = old_model
     if job["arm"] == "updated":
-        manifest = check_seal(read_json(ROOT/cfg["output"]/"model/receipt.json"))
-        require(manifest["binding"] == p["binding"], "updated model identity")
-        path = ROOT/cfg["output"]/"model/bundle.json"
-        require(sha256_file(path) == manifest["files"]["bundle.json"], "updated bundle changed")
-        payload = read_json(path)
-        model = portable_model(payload, payload["feature_names"])
+        model = load_updated_model(ROOT/cfg["output"], p)
     require(old_model.estimator.model.inference_backend == "native-portable-tree", "native portable inference required")
     selector = q.SingleFullCheckPool(case)
     engine = OnlineFeatureEngine(state, backend="native")
@@ -360,8 +368,7 @@ def audit_job(job):
     require(result["initial_fingerprint"] == q.state_fingerprint(state), "initial audit identity")
     model = source_loop.models_load(ROOT/cfg["source"])["gbdt"]
     if job["arm"] == "updated":
-        payload = read_json(ROOT/cfg["output"]/"model/bundle.json")
-        model = portable_model(payload, payload["feature_names"])
+        model = load_updated_model(ROOT/cfg["output"], p)
     engine = OnlineFeatureEngine(state, backend="native")
     count = 0
     with gzip.open(folder/"trace.jsonl.gz", "rt", encoding="utf8") as stream:
