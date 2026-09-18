@@ -1,0 +1,17 @@
+{
+  "schema": "lns2.sa.source_matched_resource_recovery.v1",
+  "original": "build/sa-source-matched-collection-v1",
+  "original_plan_sha256": "7a0e5417a126f0b68fb10b4fccf07078d5e03fd3b6574d222c73db8eebd326d9",
+  "original_report_sha256": "07ea00d46584542beee22ed4dea4685bf78b0aca503a563986971f24101ede97",
+  "original_records_sha256": "2ef447a357baad1362c81887315669b79edef61b6d41818db31d5481b95d4120",
+  "output": "build/sa-source-matched-resource-recovery-v1",
+  "root_id": "79dabce7543644320295a204-d0128",
+  "unknown_jobs": 16,
+  "control_trial": 0,
+  "workers": 4,
+  "trial_seconds": 180.0,
+  "pp_seconds": 5.0,
+  "horizon": 32,
+  "no_ttf": true,
+  "training_allowed": false
+}
