@@ -1,0 +1,22 @@
+{
+  "schema": "lns2.sa.late_state_signal.v1",
+  "output": "build/sa-late-state-signal-v1",
+  "parent": "build/sa-policy-aligned-update-evaluation-v1b",
+  "source": "build/sa-linear-closed-loop-v1a",
+  "phase_seed": 2026091805,
+  "root_decisions": [32, 64, 96],
+  "trials": 16,
+  "discovery_trials": [0, 1, 2, 3, 4, 5, 6, 7],
+  "confirmation_trials": [8, 9, 10, 11, 12, 13, 14, 15],
+  "continuations": ["frozen"],
+  "max_decisions": 128,
+  "node_budget": 25000000,
+  "pp_seconds": 20.0,
+  "branch_seconds": 300.0,
+  "fuse_seconds": 480.0,
+  "workers": 20,
+  "bootstrap": 5000,
+  "model_fits": 0,
+  "formal_ttf": false,
+  "role": "train_only_development"
+}
