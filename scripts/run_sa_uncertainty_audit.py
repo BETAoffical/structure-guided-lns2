@@ -14,13 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from experiments._common import read_json, sha256_file, json_fingerprint, contained_file
 from experiments.sa_paired_completion import require, validate_dataset, MODEL_PARAMS
-from experiments.sa_uncertainty_audit import fit_member, map_draws, state_result, summarize
+from experiments.sa_uncertainty_audit import (
+    fit_member, map_draws, training_matrix, ensemble_prediction, state_result, summarize,
+)
 from scripts.run_sa_paired_closed_loop import once, sealed, check_seal
 from scripts.audit_sa_history_information import atomic
 
 CONFIG = ROOT / "configs/sa_uncertainty_audit.json"
 CODE = ["experiments/sa_uncertainty_audit.py", "scripts/run_sa_uncertainty_audit.py",
-        "tests/evaluation/test_sa_uncertainty_audit.py", "docs/SA_UNCERTAINTY_AUDIT_PROTOCOL_ZH.md"]
+        "tests/evaluation/test_sa_uncertainty_audit.py", "tests/evaluation/test_sa_uncertainty_integrity.py",
+        "docs/SA_UNCERTAINTY_AUDIT_PROTOCOL_ZH.md"]
 
 
 def prepare():
@@ -78,6 +81,14 @@ def check_fit(plan, data, held, member, row):
     require(row["train_ids"] == sorted(s["state_id"] for s in data["states"] if s["map_id"] in draws), "training leakage")
     require([r["state_id"] for r in row["predictions"]] == sorted(s["state_id"] for s in data["states"] if s["map_id"] == held),
             "held prediction coverage")
+    matrix = training_matrix(data, held, member, plan["config"])
+    require(row["state_weights"] == matrix["state_weights"] and row["sklearn"] == "1.5.0"
+            and type(row["constant_targets"]) is bool
+            and row["constant_targets"] == (len(set(matrix["y"])) == 1), "fit metadata mismatch")
+    states = {s["state_id"]: s for s in data["states"]}
+    for prediction in row["predictions"]:
+        ensemble_prediction(states[prediction["state_id"]], [prediction])
+        require(prediction.get("calibrated_confidence") is False, "invalid confidence claim")
     if member == -1:
         old = check_seal(read_json(ROOT / plan["baseline"][held]))
         require(old["binding"] == plan["baseline_binding"] and old["held"] == held, "baseline binding")
@@ -139,9 +150,10 @@ def train(resume=False):
     return dict(done=done, total=len(keys), new_solver_calls=0)
 
 
-def analyze():
-    plan, out = verify()
-    require(check_seal(read_json(out / "training.complete.json"))["binding"] == plan["binding"], "training incomplete")
+def build_report(plan, out):
+    complete = check_seal(read_json(out / "training.complete.json"))
+    require(complete["binding"] == plan["binding"] and complete["fits"] == len(plan["maps"])*(plan["config"]["members"]+1),
+            "training incomplete")
     data = read_json(ROOT / plan["config"]["dataset"])
     rows, files = [], {}
     for held in plan["maps"]:
@@ -158,6 +170,20 @@ def analyze():
     report = summarize(rows, plan["config"])
     require(abs(report["means"]["gbdt"]-plan["config"]["expected_baseline"]) < 1e-12, "historical aggregate mismatch")
     report.update(binding=plan["binding"], files=files, fits=len(files))
+    return report
+
+
+def verify_outputs(plan, out):
+    report = check_seal(read_json(out / "report.json"))
+    require(report == sealed(build_report(plan, out)), "saved report or output digest mismatch")
+    verify()
+    return dict(binding=plan["binding"], registered_files=len(plan["inputs"]),
+                fits_verified=report["fits"], report_recomputed=True)
+
+
+def analyze():
+    plan, out = verify()
+    report = build_report(plan, out)
     verify()
     once(out / "report.json", sealed(report))
     return {k: v for k, v in report.items() if k not in {"rows", "files", "per_map"}}
@@ -175,8 +201,8 @@ def main():
     elif args.phase == "analyze":
         result = analyze()
     else:
-        plan, _ = verify()
-        result = dict(binding=plan["binding"], registered_files=len(plan["inputs"]))
+        plan, out = verify()
+        result = verify_outputs(plan, out)
     print(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2))
 
 

@@ -1,6 +1,6 @@
 {
   "schema": "lns2.sa.uncertainty_audit.v1",
-  "output": "build/sa-uncertainty-audit-v1",
+  "output": "build/sa-uncertainty-audit-v1a",
   "source": "build/sa-low-complexity-ranker-v1",
   "dataset": "build/sa-spatiotemporal-model-probe-v1/development_index.json",
   "states": 47,
