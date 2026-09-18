@@ -1,0 +1,15 @@
+{
+  "schema": "lns2.sa.matched_training_coverage.v1",
+  "role": "viewed_development_coverage_not_confirmation",
+  "output": "build/sa-matched-training-coverage-v1",
+  "reconstruction_evidence": "artifacts/sa-recent-model-reconstruction-v1/evidence.json",
+  "reconstruction_evidence_sha256": "b4b453ec70b8ad2befb12006f0800eebcb2bc348e44a055b4f0267600eb6da7d",
+  "old_collections": ["build/sa-paired-completion-pilot-v1", "build/sa-unbalanced-coverage-v1"],
+  "matched_collection": "build/sa-source-matched-collection-v1",
+  "maximum_workers": 20,
+  "solver_calls": 0,
+  "model_fits": 0,
+  "automatic_training_allowed": false,
+  "automatic_collection_allowed": false,
+  "formal_ttf_allowed": false
+}
