@@ -1,0 +1,16 @@
+{
+  "schema": "lns2.sa.source_matched_frozen_prediction.v1",
+  "output": "build/sa-source-matched-frozen-prediction-v1",
+  "recovery_evidence": "artifacts/sa-source-matched-recovery-v1/evidence.json",
+  "recovery_evidence_sha256": "ac7cfdf3569f5b40a02babeac72b452815cae7359ab21400295f72bcd9539e68",
+  "preparation_config": "configs/sa_source_matched_preparation.json",
+  "historical_fold_plan": "build/sa-unbalanced-coverage-v1/plan.json",
+  "historical_fold_plan_sha256": "d1602fd4f2c33203a939711d7b495018ba73e5015ba5615f086f971e695dc00e",
+  "feature_workers": 20,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609183,
+  "training_allowed": false,
+  "solver_calls": 0,
+  "no_ttf": true,
+  "role": "posthoc_frozen_prediction_development"
+}
