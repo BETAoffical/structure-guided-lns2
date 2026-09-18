@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.sa.source_matched_recovery_evidence.v1",
+  "role": "posthoc_resource_recovery_development",
+  "preregister_commit": "90e6b7c1192dd752c0d6d12903ec3b20f6163a0c",
+  "binding": "3da59e4af83e2e792fc35abf59c9decff968fb79b5d3b9f728bac4ccf2e02426",
+  "files": {
+    "build/sa-source-matched-resource-recovery-v1/plan.json": "d2fb7d635d6095d2d6ba46e3f402273e95c0934f960a4b6e67e4fa39aa02c757",
+    "build/sa-source-matched-resource-recovery-v1/report.json": "c27b3cff00da0748280b026e116802c0bc034918de8e6b96a90ac65349521d49",
+    "build/sa-source-matched-resource-recovery-v1/analysis_records.json": "8b3745ea7e90c0f1b667fa477ee7477938cc22fe5bd415b67750d64fd072abce",
+    "build/sa-source-matched-resource-recovery-v1/phase_records.json": "6ba53c158dd98a146b35820c958ca809d0ba15e7184cc0f82e20e3e758163f16",
+    "build/sa-source-matched-collection-v1/report.json": "07ea00d46584542beee22ed4dea4685bf78b0aca503a563986971f24101ede97",
+    "build/sa-source-matched-collection-v1/analysis_records.json": "2ef447a357baad1362c81887315669b79edef61b6d41818db31d5481b95d4120"
+  },
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "model_sha256": "b6afff3bf436c8a2acb5571094817ce94aef71b5aa0cb1c2369de1c0e1d3abe2",
+  "registered_input_files": 1604,
+  "recovered_labels": 16,
+  "remaining_censors": 0,
+  "exact_controls": 3,
+  "original_observed_labels_unchanged": 360,
+  "effective_labels": 376,
+  "h32_feasible": 230,
+  "h32_nonfeasible": 146,
+  "states": 16,
+  "maps": 8,
+  "crossfit_gain": 0.017299107142857144,
+  "crossfit_ci95": [-0.020089285714285712, 0.06417410714285714],
+  "crossfit_positive_negative_zero_states": [3, 3, 10],
+  "decision": "missing_labels_resolved_local_signal_not_predictability_proof",
+  "training_performed": false,
+  "ttf_performed": false,
+  "automatic_promotion": false
+}
