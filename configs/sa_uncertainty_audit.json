@@ -1,0 +1,17 @@
+{
+  "schema": "lns2.sa.uncertainty_audit.v1",
+  "output": "build/sa-uncertainty-audit-v1",
+  "source": "build/sa-low-complexity-ranker-v1",
+  "dataset": "build/sa-spatiotemporal-model-probe-v1/development_index.json",
+  "states": 47,
+  "maps": 8,
+  "members": 20,
+  "seed": 2026091805,
+  "workers": 20,
+  "bootstrap": 5000,
+  "high_agreement": 0.75,
+  "expected_baseline": 0.5453125,
+  "new_solver_calls": 0,
+  "automatic_promotion": false,
+  "role": "previously_viewed_development"
+}
