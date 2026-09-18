@@ -1,0 +1,22 @@
+{
+  "schema": "lns2.sa.recent_model_reconstruction.v1",
+  "role": "fixed_procedure_reconstruction_development",
+  "output": "build/sa-recent-model-reconstruction-v1",
+  "source_plan": "build/sa-spatiotemporal-model-probe-v1/plan.json",
+  "source_plan_sha256": "589217a375983a626fa30e49f441c84dfe08751a44ce97dc6ad01fb80c038ad7",
+  "source_receipt_sha256": "c1ed526caeb3306b3b9aebf13cb388e43ea431828ab9a609b942ff0544bd669c",
+  "training_index_sha256": "16a0b511e8e28cfcf0e24befd6da90f577a5dd1533e2b8c04d9685b87fa11e36",
+  "previous_prediction_plan_sha256": "9027317dc53fa30cbd49238071d6914857399f2dd305353f461853a76c4a768a",
+  "previous_report_sha256": "c9b2a95137ac491c42a45d1ec22c25bbc7a5b256e4d6de13ad56b7f2d600b9a7",
+  "workers": 20,
+  "expected_states": 47,
+  "expected_maps": 8,
+  "expected_features": 127,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609183,
+  "new_labels_allowed_in_fit": false,
+  "hyperparameter_changes_allowed": false,
+  "solver_calls": 0,
+  "formal_ttf_allowed": false,
+  "promotion_allowed": false
+}
