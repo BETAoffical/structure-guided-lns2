@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.source_matched_collection.v1",
+  "preparation": "build/sa-source-matched-preparation-v1/plan.json",
+  "preparation_sha256": "84e0250e278171cb36ad58d9b4dd5fde2831a4f439c58fe43ed03a6641b46f4e",
+  "output": "build/sa-source-matched-collection-v1",
+  "source": "build/sa-pressure-first-feasible-v1",
+  "seed": 202609182,
+  "trials": 8,
+  "horizon": 32,
+  "sustain": 8,
+  "workers": 20,
+  "pp_seconds": 5.0,
+  "trial_seconds": 180.0,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609183,
+  "no_ttf": true,
+  "training_allowed": false
+}
