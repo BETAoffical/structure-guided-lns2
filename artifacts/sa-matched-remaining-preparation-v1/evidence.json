@@ -1,0 +1,32 @@
+{
+  "schema": "lns2.sa.matched_remaining_preparation_evidence.v1",
+  "role": "viewed_development_preparation_not_confirmation",
+  "protocol_commit": "49075117335ce5a2cef8db7d937a3536d0a737a0",
+  "binding": "5b110865528e2d8dd8781de12b5d61dbaade046ffa92a693060d45f603e038e3",
+  "files": {
+    "build/sa-matched-remaining-preparation-v1/plan.json": "a4d5c1e370ac56cefd67d83b991c4948bf81f05f6064813ba1fee76509ac6820",
+    "build/sa-matched-remaining-preparation-v1/job_manifest.json": "c72cce954d23e06178a660a21edfaa5c35742b225fa30bb15f7db77e957a2997",
+    "build/sa-matched-remaining-preparation-v1/report.json": "f814407eb5079d2a3f5be7a78607781c3b8a9e4b8263dbb06d2ba47185507693"
+  },
+  "registered_inputs": 1077,
+  "existing_development_roots": 47,
+  "excluded_previously_matched_roots": 16,
+  "prepared_roots": 31,
+  "maps": 8,
+  "prepared_candidates": 62,
+  "prepared_trial_jobs": 496,
+  "paired_trial_positions": 248,
+  "extra_anchor_jobs": 0,
+  "maximum_prefix_replay_repairs": 5440,
+  "maximum_h32_repairs": 15872,
+  "batch_timeout_budget_seconds_excluding_scheduler": 6840,
+  "new_model_fits": 0,
+  "new_solver_calls": 0,
+  "new_labels": 0,
+  "native_replay_performed": false,
+  "collection_ready": false,
+  "formal_ttf_performed": false,
+  "automatic_promotion": false,
+  "independent_confirmation": false,
+  "next_required": "register_pair_only_staged_collector_and_validate_native_replay_before_labels"
+}
