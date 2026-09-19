@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/validate_sa_matched_aggregation.py", "role": "reproducibility", "purpose": "One fixed H32 grouped-label GBDT fit per held map after the completed matched-pair collection."},
+    {"path": "tests/evaluation/test_sa_matched_aggregation.py", "role": "reproducibility", "contract": "Protect group-only labels, root and map weights, frozen parameters, pre-action features and held-map evaluation."},
     {"path": "scripts/collect_sa_matched_remaining.py", "role": "reproducibility", "purpose": "Two-candidate staged H32 collection and pair-only descriptive analysis using the frozen PP/SA worker."},
     {"path": "tests/evaluation/test_sa_matched_remaining_collection.py", "role": "reproducibility", "contract": "Frozen schedule, native preflight admission, safe batch pause/resume, censoring and unsampled-anchor semantics."},
     {"path": "scripts/prepare_sa_matched_remaining.py", "role": "reproducibility", "purpose": "Outcome-blind pair-only preparation of the remaining 31 viewed development roots, without solver or fitting."},

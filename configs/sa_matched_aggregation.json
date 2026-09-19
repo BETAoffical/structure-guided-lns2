@@ -1,0 +1,38 @@
+{
+  "schema": "lns2.sa.matched_aggregation.v1",
+  "role": "previously_viewed_development_not_confirmation",
+  "output": "build/sa-matched-aggregation-v1",
+  "evidence": {
+    "artifacts/sa-matched-remaining-collection-v1/evidence.json": "1a3476287a7291262222be2d0c536d6a7710ac8b31e83d8849e6213f67e8ca66",
+    "artifacts/sa-matched-training-coverage-v1/evidence.json": "c4461bfa1c47efda6140471e82ddc77327098a37fe6ca31aaa83f2de2a0a68eb",
+    "artifacts/sa-recent-model-reconstruction-v1/evidence.json": "b4b453ec70b8ad2befb12006f0800eebcb2bc348e44a055b4f0267600eb6da7d"
+  },
+  "model": {
+    "learning_rate": 0.05,
+    "max_iter": 100,
+    "max_leaf_nodes": 7,
+    "min_samples_leaf": 10,
+    "l2_regularization": 0.1,
+    "early_stopping": false,
+    "random_state": 20260916
+  },
+  "workers": 20,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609183,
+  "expected_roots": 47,
+  "expected_maps": 8,
+  "expected_groups": 94,
+  "expected_unordered_pairs": 329,
+  "feature_count": 127,
+  "trials": 8,
+  "horizon": 32,
+  "solver_calls": 0,
+  "new_collection_allowed": false,
+  "formal_ttf_allowed": false,
+  "automatic_promotion": false,
+  "hyperparameter_search": false,
+  "primary_group": "matched_pair",
+  "secondary_group": "old_grid",
+  "weight_contract": "map_balanced_root_budget_then_equal_groups_then_equal_unordered_pairs",
+  "methods": ["uniform", "frozen_pool", "frozen_h32", "aggregated_h32", "empirical_best"]
+}
