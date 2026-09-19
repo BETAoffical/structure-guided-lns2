@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.sa.matched_remaining_collection.v1",
+  "preparation": "build/sa-matched-remaining-preparation-v1/plan.json",
+  "preparation_sha256": "a4d5c1e370ac56cefd67d83b991c4948bf81f05f6064813ba1fee76509ac6820",
+  "output": "build/sa-matched-remaining-collection-v1",
+  "source": "build/sa-pressure-first-feasible-v1",
+  "seed": 202609182,
+  "trials": 8,
+  "horizon": 32,
+  "sustain": 8,
+  "workers": 20,
+  "pp_seconds": 5.0,
+  "trial_seconds": 180.0,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609183,
+  "preflight_workers": 4,
+  "no_ttf": true,
+  "training_allowed": false,
+  "automatic_promotion": false,
+  "role": "previously_viewed_development"
+}
