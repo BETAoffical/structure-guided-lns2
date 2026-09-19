@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/prepare_sa_matched_remaining.py", "role": "reproducibility", "purpose": "Outcome-blind pair-only preparation of the remaining 31 viewed development roots, without solver or fitting."},
+    {"path": "tests/evaluation/test_sa_matched_remaining_preparation.py", "role": "reproducibility", "contract": "Exact complement, frozen member selection, two-candidate scheduling, stream separation and preparation-only boundaries."},
     {"path": "experiments/sa_paired_closed_loop.py", "role": "reproducibility", "purpose": "Frozen old-sixteen paired completion model and bounded closed-loop decision rules."},
     {"path": "scripts/run_sa_paired_closed_loop.py", "role": "reproducibility", "purpose": "New-map, three-arm non-timing pilot with portable parity, atomic episodes and safe batch stop."},
     {"path": "tests/evaluation/test_sa_paired_closed_loop.py", "role": "reproducibility", "contract": "Pre-action features, frozen training, native scalar parity, subset identity and conservative gates."},
