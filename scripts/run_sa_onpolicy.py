@@ -79,8 +79,12 @@ def verify():
     out = ROOT / cfg["output"]
     plan = read_json(out / "plan.json")
     require(plan["config"] == cfg and plan["binding"] == json_fingerprint({k: v for k, v in plan.items() if k != "binding"}), "plan binding")
-    for name, digest in plan["inputs"].items():
-        require(sha256_file(contained_file(ROOT, name, field="registered input")) == digest, "changed input: " + name)
+    changes = {name: sha256_file(contained_file(ROOT, name, field="registered input"))
+               for name, digest in plan["inputs"].items()
+               if sha256_file(contained_file(ROOT, name, field="registered input")) != digest}
+    if changes:
+        from scripts.register_sa_onpolicy_audit_fix import validate_amendment
+        validate_amendment(ROOT, plan, out, changes)
     return plan, out
 
 
@@ -490,7 +494,11 @@ def audit_worker(job):
         history.observe(state, event, after)
         state = after
     validate_final(state)
-    require(q.state_fingerprint(state) == result["final_fingerprint"] and state == read_json(folder / "final.json"), "audit final paths")
+    final = read_json(folder / "final.json")
+    # Deltas deliberately omit wall time and external context, not solver data.
+    require(q.state_fingerprint(state) == q.state_fingerprint(final) == result["final_fingerprint"] and
+            {k: v for k, v in state.items() if k not in {"runtime", "context"}} ==
+            {k: v for k, v in final.items() if k not in {"runtime", "context"}}, "audit final paths")
     require(history.decision == result["decisions"] and state["low_level"]["generated"] - initial_nodes == result["generated"], "audit work")
     require(state["num_of_colliding_pairs"] == result["final_conflicts"] and state["feasible"] == result["success"], "audit outcome")
     terminal_return(result, max_decisions=p["proposal"]["max_decisions"], node_budget=p["proposal"]["node_budget"])
