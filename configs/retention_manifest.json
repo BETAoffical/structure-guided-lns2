@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/diagnose_sa_onpolicy_batch.py", "role": "reproducibility", "purpose": "Read-only censored-batch and initial-normalization diagnosis without fits, new trajectories or admission."},
+    {"path": "tests/evaluation/test_sa_onpolicy_diagnostic.py", "role": "reproducibility", "contract": "Separate hidden saturation from loss of candidate distinctions in on-policy inputs."},
+    {"path": "scripts/register_sa_onpolicy_audit_fix.py", "role": "reproducibility", "purpose": "Exact-source audit-only amendment retaining original on-policy plan, policies and trajectories."},
+    {"path": "tests/evaluation/test_sa_onpolicy_audit_fix.py", "role": "reproducibility", "contract": "Reject collection or training changes and compare all deterministic final state fields without runtime/context."},
     {"path": "experiments/sa_onpolicy_actor.py", "role": "reproducibility", "purpose": "Isolated bounded episodic residual actor, portable numpy inference and one-step torch policy gradients."},
     {"path": "scripts/run_sa_onpolicy.py", "role": "reproducibility", "purpose": "Bounded on-policy collection, snapshot parity, audits and map-held development evaluation; no TTF."},
     {"path": "tests/evaluation/test_sa_onpolicy_runtime.py", "role": "reproducibility", "contract": "Frozen schedules, on-policy gradients, probability replay, stream separation, pause/resume and no silent retries."},
