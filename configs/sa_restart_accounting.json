@@ -1,0 +1,34 @@
+{
+  "schema": "lns2.sa_restart_accounting.v1",
+  "evidence_role": "retrospective_conditional_log_accounting_not_runtime_confirmation",
+  "source_commit": "4a137ae957aa1a5bf996a275df62d6562e2447d2",
+  "budget_seconds": 120,
+  "cutoff_seconds": 60,
+  "seed_orders": [[61, 62], [62, 61]],
+  "expected_tasks": 48,
+  "expected_maps": 8,
+  "bootstrap_replicates": 5000,
+  "bootstrap_seed": 20260921,
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "output": "build/sa-restart-accounting-v1",
+  "sources": [
+    {
+      "root": "build/sa-pressure-first-feasible-v1",
+      "controllers": ["official_adaptive", "dual16", "dual16_sa"],
+      "pins": {
+        "analysis/report.json": "16a16a350e1ffa61e384ab5ba6a6f24f896c5e73d4382a34905c5226238e611a",
+        "manifest.json": "c2c6e1b925f11e622a1a68772868abb4b7447a0f5c9c18c74d1970aa9552e4a8",
+        "registration.json": "c313b9b9c3420375ec6191ecc0d5d3be0f3b4c00411e194d235a48cb2d4baefb"
+      }
+    },
+    {
+      "root": "build/official-sa-pressure-supplement-v1",
+      "controllers": ["official_sa"],
+      "pins": {
+        "analysis/report.json": "bc34b2750328a030011192fb0adabe197a0cb5f159fd8b9f0cf0deaf4aab6003",
+        "manifest.json": "8e1ae8b68ace39c7cdfc858eb0d05d5bbc341f0c2851b4d6f26dc0cb4f91c8a2",
+        "registration.json": "c56008aa9fac9d3a54ee4441c277f72b38dfb77dcac9e95127bc90c411f66279"
+      }
+    }
+  ]
+}
