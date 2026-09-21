@@ -1,0 +1,23 @@
+{
+  "schema": "lns2.sa.structural_focus_continuation.v1",
+  "focus": "build/sa-structural-focus-v1",
+  "focus_binding": "82142cd1a04e36dbad4d5e37a08a9f0a54b95f330b257a676050f0d1636909f8",
+  "focus_report_sha256": "3bcd748039a54d9aa78fd0ba8d3f04048e699a788a4a30567e54f8eeccd97212",
+  "runtime_plan": "build/sa-matched-remaining-collection-v1/plan.json",
+  "source": "build/sa-pressure-first-feasible-v1",
+  "output": "build/sa-structural-focus-continuation-v1",
+  "seed": 202609211,
+  "trials": 8,
+  "horizon": 32,
+  "sustain": 8,
+  "workers": 20,
+  "preflight_workers": 4,
+  "pp_seconds": 5.0,
+  "trial_seconds": 180.0,
+  "bootstrap": 5000,
+  "bootstrap_seed": 202609212,
+  "no_ttf": true,
+  "training_allowed": false,
+  "automatic_promotion": false,
+  "role": "previously_viewed_development"
+}
