@@ -61,9 +61,9 @@ def select_representative_neighborhood_groups(
         agents = tuple(sorted(int(value) for value in group["agents"]))
         if not agents or len(agents) != len(set(agents)):
             raise ValueError("proposal agents must be a non-empty unique set")
-        record = by_agents.setdefault(
-            agents,
-            {
+        record = by_agents.get(agents)
+        if record is None:
+            record = {
                 "candidate_id": candidate_id(agents),
                 "agents": list(agents),
                 "proposal_count_by_family": collections.Counter(),
@@ -71,8 +71,8 @@ def select_representative_neighborhood_groups(
                 "seed_agents": set(),
                 "selection_families": set(),
                 "selection_rank_by_family": {},
-            },
-        )
+            }
+            by_agents[agents] = record
         sources = list(group.get("sources", []))
         if not sources:
             raise ValueError("proposal group has no source requests")
@@ -97,9 +97,10 @@ def select_representative_neighborhood_groups(
         if value is None:
             left_set = agent_sets[left]
             right_set = agent_sets[right]
-            union_size = len(left_set | right_set)
+            intersection_size = len(left_set & right_set)
+            union_size = len(left_set) + len(right_set) - intersection_size
             value = 1.0 - (
-                len(left_set & right_set) / union_size if union_size else 1.0
+                intersection_size / union_size if union_size else 1.0
             )
             distance_cache[key] = value
         return value
