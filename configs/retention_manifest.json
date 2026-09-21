@@ -18,6 +18,12 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_onpolicy_actor.py", "role": "reproducibility", "purpose": "Isolated bounded episodic residual actor, portable numpy inference and one-step torch policy gradients."},
+    {"path": "scripts/run_sa_onpolicy.py", "role": "reproducibility", "purpose": "Bounded on-policy collection, snapshot parity, audits and map-held development evaluation; no TTF."},
+    {"path": "tests/evaluation/test_sa_onpolicy_runtime.py", "role": "reproducibility", "contract": "Frozen schedules, on-policy gradients, probability replay, stream separation, pause/resume and no silent retries."},
+    {"path": "experiments/sa_onpolicy_contract.py", "role": "reproducibility", "purpose": "Complete-episode training contract with map weights, replica baselines and censored-batch rejection."},
+    {"path": "scripts/check_sa_onpolicy_contract.py", "role": "reproducibility", "purpose": "Read-only historical-evidence and budget preflight for the new learning design."},
+    {"path": "tests/evaluation/test_sa_onpolicy_contract.py", "role": "reproducibility", "contract": "Policy-version isolation, complete replicas, terminal semantics, probabilities and map weighting."},
     {"path": "scripts/audit_candidate_allocations.py", "role": "reproducibility", "purpose": "Bounded exact candidate allocation audit against frozen Git code and restored path snapshots; no PP or TTF."},
     {"path": "tests/runtime/test_candidate_allocations.py", "role": "reproducibility", "contract": "Frozen representative equivalence, provenance, duplicate allocation, Jaccard ties and invalid input compatibility."},
     {"path": "scripts/audit_sa_restart_accounting.py", "role": "reproducibility", "purpose": "Fixed two-seed conditional budget accounting of sealed first-feasible summaries; no solver or cutoff search."},

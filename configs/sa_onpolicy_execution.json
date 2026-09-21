@@ -1,0 +1,13 @@
+{
+  "schema": "lns2.sa.onpolicy_execution.v1",
+  "design": "configs/sa_onpolicy_contract.json",
+  "output": "build/sa-onpolicy-execution-v1",
+  "source_cases": "build/sa-linear-closed-loop-v1a/cases.json",
+  "source_cases_sha256": "c6ca0aee28cbb0667292ecb126ea765aa55821613d0395e7a5b98750a5f3b273",
+  "network_seed": 2026092201,
+  "stream_seed": 2026092202,
+  "workers": 20,
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "formal_ttf": false,
+  "automatic_promotion": false
+}
