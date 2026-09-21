@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/recover_sa_onpolicy.py", "role": "reproducibility", "purpose": "Reference-preserving resource recovery, exact prefix checks and one bounded on-policy update; no TTF."},
+    {"path": "tests/evaluation/test_sa_onpolicy_recovery.py", "role": "reproducibility", "contract": "Frozen scientific budget, narrow resource change, prefix equality, source integrity and no process-probing locks."},
     {"path": "scripts/diagnose_sa_onpolicy_batch.py", "role": "reproducibility", "purpose": "Read-only censored-batch and initial-normalization diagnosis without fits, new trajectories or admission."},
     {"path": "tests/evaluation/test_sa_onpolicy_diagnostic.py", "role": "reproducibility", "contract": "Separate hidden saturation from loss of candidate distinctions in on-policy inputs."},
     {"path": "scripts/register_sa_onpolicy_audit_fix.py", "role": "reproducibility", "purpose": "Exact-source audit-only amendment retaining original on-policy plan, policies and trajectories."},

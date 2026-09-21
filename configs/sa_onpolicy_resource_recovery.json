@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.onpolicy_resource_recovery.v1",
+  "source_output": "build/sa-onpolicy-execution-v1",
+  "source_plan_sha256": "35b5b512afb809cc69004d8e7681c95f3e667cf051c80e9c1ef785bc940e59f6",
+  "source_audit_sha256": "f9da40d85e660563b13b777d01cc82f723afd129278da0d4bb9e5b594b28d6d7",
+  "source_actor_sha256": "7413bea77ca58e4604bce1fa0d6cfe923bb8668885ff9fc700db7804e2e240b2",
+  "censored_job_id": "9fe297aded2ebeceeef5eade",
+  "output": "build/sa-onpolicy-resource-recovery-v1",
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 960.0,
+  "workers": 20,
+  "expected_reused": 79,
+  "expected_new": 17,
+  "maximum_updates_this_stage": 1,
+  "change_normalizer": false,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}
