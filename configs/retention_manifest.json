@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/audit_sa_onpolicy_gradient.py", "role": "reproducibility", "purpose": "Read-only first-update gradient reconstruction and all fixed replica splits; no optimizer, solver or heldout data."},
+    {"path": "tests/evaluation/test_sa_onpolicy_gradient.py", "role": "reproducibility", "contract": "Autograd score identity, map-equal weighting, zero-return signal, replica splits and Train-only boundaries."},
     {"path": "scripts/recover_sa_onpolicy.py", "role": "reproducibility", "purpose": "Reference-preserving resource recovery, exact prefix checks and one bounded on-policy update; no TTF."},
     {"path": "tests/evaluation/test_sa_onpolicy_recovery.py", "role": "reproducibility", "contract": "Frozen scientific budget, narrow resource change, prefix equality, source integrity and no process-probing locks."},
     {"path": "scripts/diagnose_sa_onpolicy_batch.py", "role": "reproducibility", "purpose": "Read-only censored-batch and initial-normalization diagnosis without fits, new trajectories or admission."},
