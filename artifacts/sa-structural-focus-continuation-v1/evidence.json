@@ -1,0 +1,817 @@
+{
+  "auditor_sha256": "8e53e53df273dda519c5de16695237e323827e01867929938e5b0cddbc8946d4",
+  "automatic_promotion": false,
+  "binding": "0b610df89de42e7300c8d5dc77994cc592ebbf272fce91d64d5ec28aa41f2f29",
+  "files": {
+    "build/sa-structural-focus-continuation-v1/analysis_records.json": "47e975f2ff794aab8fd2d95dcfea38c6ad0fb6d719bb284dcf0deacd446509a1",
+    "build/sa-structural-focus-continuation-v1/plan.json": "88fa94c4585530358eb0b869e7e78c47a4245a607936c4c9d166dcbde74bbe97",
+    "build/sa-structural-focus-continuation-v1/preflight.json": "e940d3939d6eecd866eb33764e7bebe5b24d1c82e0609fd0be6b72476dab8f7a",
+    "build/sa-structural-focus-continuation-v1/report.json": "4902f0552747174fb0849a511b6e45feb0564ce086a1b61f98e8de8f9d6486e5",
+    "build/sa-structural-focus-continuation-v1/run_status.json": "f2531bb4ce5dcd2d38e0cda44675dbd5b5bb76c407196b7883baf475626fb86f",
+    "build/sa-structural-focus-continuation-v1/trial_details.json": "7ac018e908ebbfddbc9b974c9727d26c84ba9fd6ea00c5e0f29c5718b4212f11"
+  },
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "no_ttf": true,
+  "pinned_inputs": 1102,
+  "posthoc": {
+    "added": [
+      300,
+      317
+    ],
+    "aggregates": {
+      "alternate": {
+        "generated": 278745122,
+        "last8_constant_nonzero": 8,
+        "mean_final_conflicts": 15.958333333333334,
+        "mean_first_conflicts": 65.03333333333333,
+        "remaining_1_to_3": 25,
+        "repairs": 3450
+      },
+      "anchor": {
+        "generated": 271406917,
+        "last8_constant_nonzero": 2,
+        "mean_final_conflicts": 16.725,
+        "mean_first_conflicts": 66.5,
+        "remaining_1_to_3": 19,
+        "repairs": 3377
+      }
+    },
+    "branches": [
+      {
+        "final_pairs": [
+          [
+            81,
+            164
+          ],
+          [
+            229,
+            237
+          ]
+        ],
+        "last8_accepted": 8,
+        "last8_distinct_paths_by_member": {
+          "0": 6,
+          "1": 6,
+          "2": 8,
+          "3": 8,
+          "4": 8,
+          "5": 8,
+          "6": 5,
+          "7": 2,
+          "8": 8,
+          "9": 8,
+          "10": 8,
+          "11": 8,
+          "81": 7,
+          "164": 7,
+          "229": 7,
+          "237": 8
+        },
+        "last8_path_snapshots": 8,
+        "last8_selected_ids": {
+          "neighborhood-6c5ac59f5e24eca5": 8
+        },
+        "members": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          81,
+          164,
+          229,
+          237
+        ],
+        "trial": 0
+      },
+      {
+        "final_pairs": [
+          [
+            29,
+            150
+          ],
+          [
+            71,
+            150
+          ],
+          [
+            128,
+            310
+          ],
+          [
+            150,
+            249
+          ],
+          [
+            168,
+            310
+          ]
+        ],
+        "last8_accepted": 8,
+        "last8_distinct_paths_by_member": {
+          "55": 2,
+          "65": 2,
+          "70": 2,
+          "122": 4,
+          "128": 8,
+          "150": 3,
+          "168": 2,
+          "199": 2,
+          "205": 3,
+          "209": 3,
+          "220": 3,
+          "247": 2,
+          "268": 2,
+          "308": 4,
+          "310": 2,
+          "356": 2
+        },
+        "last8_path_snapshots": 8,
+        "last8_selected_ids": {
+          "neighborhood-03ce9ffe98af5dec": 1,
+          "neighborhood-383e3c496e12cd90": 1,
+          "neighborhood-4305d3adc25e50e2": 2,
+          "neighborhood-7a3afa106e91997d": 1,
+          "neighborhood-894be4088c8ec570": 1,
+          "neighborhood-b769aab1a51f63b8": 2
+        },
+        "members": [
+          55,
+          65,
+          70,
+          122,
+          128,
+          150,
+          168,
+          199,
+          205,
+          209,
+          220,
+          247,
+          268,
+          308,
+          310,
+          356
+        ],
+        "trial": 2
+      },
+      {
+        "final_pairs": [
+          [
+            81,
+            164
+          ],
+          [
+            229,
+            237
+          ]
+        ],
+        "last8_accepted": 8,
+        "last8_distinct_paths_by_member": {
+          "0": 7,
+          "1": 7,
+          "2": 8,
+          "3": 8,
+          "4": 8,
+          "5": 8,
+          "6": 7,
+          "7": 1,
+          "8": 8,
+          "9": 8,
+          "10": 8,
+          "11": 8,
+          "81": 8,
+          "164": 8,
+          "229": 8,
+          "237": 8
+        },
+        "last8_path_snapshots": 8,
+        "last8_selected_ids": {
+          "neighborhood-6c5ac59f5e24eca5": 8
+        },
+        "members": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          81,
+          164,
+          229,
+          237
+        ],
+        "trial": 5
+      },
+      {
+        "final_pairs": [
+          [
+            81,
+            164
+          ],
+          [
+            229,
+            237
+          ]
+        ],
+        "last8_accepted": 8,
+        "last8_distinct_paths_by_member": {
+          "0": 7,
+          "1": 8,
+          "2": 8,
+          "3": 7,
+          "4": 8,
+          "5": 8,
+          "6": 6,
+          "7": 1,
+          "8": 8,
+          "9": 8,
+          "10": 8,
+          "11": 8,
+          "81": 6,
+          "164": 8,
+          "229": 8,
+          "237": 7
+        },
+        "last8_path_snapshots": 8,
+        "last8_selected_ids": {
+          "neighborhood-6c5ac59f5e24eca5": 8
+        },
+        "members": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          81,
+          164,
+          229,
+          237
+        ],
+        "trial": 6
+      },
+      {
+        "final_pairs": [
+          [
+            81,
+            164
+          ],
+          [
+            229,
+            237
+          ]
+        ],
+        "last8_accepted": 8,
+        "last8_distinct_paths_by_member": {
+          "0": 7,
+          "1": 8,
+          "2": 8,
+          "3": 7,
+          "4": 8,
+          "5": 8,
+          "6": 4,
+          "7": 1,
+          "8": 8,
+          "9": 8,
+          "10": 8,
+          "11": 8,
+          "81": 8,
+          "164": 8,
+          "229": 8,
+          "237": 8
+        },
+        "last8_path_snapshots": 8,
+        "last8_selected_ids": {
+          "neighborhood-6c5ac59f5e24eca5": 8
+        },
+        "members": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          81,
+          164,
+          229,
+          237
+        ],
+        "trial": 7
+      }
+    ],
+    "first_better_but_completion_lost": 8,
+    "first_better_pairs": 58,
+    "first_worse_but_completion_gained": 2,
+    "removed": [
+      198,
+      223
+    ],
+    "used_for_selection": false,
+    "worst_root": "af41defd15b848f64ffaf816-d0016"
+  },
+  "preregistration_commit": "46a5f3b4aa990e01a1dd2b83bfd2d415aae2c0af",
+  "schema": "lns2.sa.structural_focus_evidence.v1",
+  "stops": {
+    "feasible": 70,
+    "horizon": 170
+  },
+  "summary": {
+    "arms": {
+      "alternate": {
+        "feasible": 33,
+        "horizon_nonfeasible": 87,
+        "unknown": 0
+      },
+      "anchor": {
+        "feasible": 37,
+        "horizon_nonfeasible": 83,
+        "unknown": 0
+      }
+    },
+    "by_map": {
+      "very_high_confirm_v2_station_centric_0000": {
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "roots": 2
+      },
+      "very_high_confirm_v2_station_centric_0001": {
+        "delta_bounds": [
+          -0.5,
+          -0.5
+        ],
+        "roots": 1
+      },
+      "very_high_confirm_v2_station_centric_0002": {
+        "delta_bounds": [
+          -0.1875,
+          -0.1875
+        ],
+        "roots": 2
+      },
+      "very_high_confirm_v2_station_centric_0003": {
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "roots": 2
+      },
+      "very_high_confirm_v2_station_centric_0004": {
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "roots": 1
+      },
+      "very_high_confirm_v2_station_centric_0005": {
+        "delta_bounds": [
+          0.041666666666666664,
+          0.041666666666666664
+        ],
+        "roots": 3
+      },
+      "very_high_confirm_v2_station_centric_0006": {
+        "delta_bounds": [
+          0.08333333333333333,
+          0.08333333333333333
+        ],
+        "roots": 3
+      },
+      "very_high_confirm_v2_station_centric_0007": {
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "roots": 1
+      }
+    },
+    "controller_promotion": false,
+    "decision": "mixed_or_inconclusive_development",
+    "map_balanced_delta_bounds": [
+      -0.0703125,
+      -0.0703125
+    ],
+    "map_bootstrap_ci95": [
+      -0.2109375,
+      0.031249999999999997
+    ],
+    "maps": 8,
+    "no_ttf": true,
+    "paired_trials": {
+      "gains": 9,
+      "losses": 13,
+      "unknown": 0
+    },
+    "root_weighted_delta_bounds": [
+      -0.03333333333333333,
+      -0.03333333333333333
+    ],
+    "roots": 15,
+    "rows": [
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0000",
+        "removed_members": 16,
+        "state_id": "15224f10c341c56599aa06a9-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0000",
+        "removed_members": 6,
+        "state_id": "ee17e2efcf2a698f68df700b-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 3,
+          "horizon_nonfeasible": 5,
+          "rate_lower": 0.375,
+          "rate_upper": 0.375,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 7,
+          "horizon_nonfeasible": 1,
+          "rate_lower": 0.875,
+          "rate_upper": 0.875,
+          "unknown": 0
+        },
+        "decision": 16,
+        "delta_bounds": [
+          -0.5,
+          -0.5
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0001",
+        "removed_members": 2,
+        "state_id": "af41defd15b848f64ffaf816-d0016"
+      },
+      {
+        "alternate": {
+          "feasible": 1,
+          "horizon_nonfeasible": 7,
+          "rate_lower": 0.125,
+          "rate_upper": 0.125,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 2,
+          "horizon_nonfeasible": 6,
+          "rate_lower": 0.25,
+          "rate_upper": 0.25,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          -0.125,
+          -0.125
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0002",
+        "removed_members": 3,
+        "state_id": "846334fb0e75ca95e7783ccf-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 4,
+          "horizon_nonfeasible": 4,
+          "rate_lower": 0.5,
+          "rate_upper": 0.5,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 6,
+          "horizon_nonfeasible": 2,
+          "rate_lower": 0.75,
+          "rate_upper": 0.75,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          -0.25,
+          -0.25
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0002",
+        "removed_members": 2,
+        "state_id": "aff05eb8ebb638dc5a6cd5cf-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 2,
+          "horizon_nonfeasible": 6,
+          "rate_lower": 0.25,
+          "rate_upper": 0.25,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 1,
+          "horizon_nonfeasible": 7,
+          "rate_lower": 0.125,
+          "rate_upper": 0.125,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0.125,
+          0.125
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0003",
+        "removed_members": 2,
+        "state_id": "10439d6737f6767cafdf6f65-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 1,
+          "horizon_nonfeasible": 7,
+          "rate_lower": 0.125,
+          "rate_upper": 0.125,
+          "unknown": 0
+        },
+        "decision": 32,
+        "delta_bounds": [
+          -0.125,
+          -0.125
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0003",
+        "removed_members": 2,
+        "state_id": "cada7ed0bced8649f093174b-d0032"
+      },
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0004",
+        "removed_members": 2,
+        "state_id": "14a31b05314fbb289154152a-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 8,
+          "horizon_nonfeasible": 0,
+          "rate_lower": 1,
+          "rate_upper": 1,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 6,
+          "horizon_nonfeasible": 2,
+          "rate_lower": 0.75,
+          "rate_upper": 0.75,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0.25,
+          0.25
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0005",
+        "removed_members": 2,
+        "state_id": "0968a67a6963b637e15b21f2-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 7,
+          "horizon_nonfeasible": 1,
+          "rate_lower": 0.875,
+          "rate_upper": 0.875,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 8,
+          "horizon_nonfeasible": 0,
+          "rate_lower": 1,
+          "rate_upper": 1,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          -0.125,
+          -0.125
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0005",
+        "removed_members": 2,
+        "state_id": "09c1b4f9a91ded098e046111-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0005",
+        "removed_members": 3,
+        "state_id": "a5fb0f9f336f2f48e4f1c8cd-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 1,
+          "horizon_nonfeasible": 7,
+          "rate_lower": 0.125,
+          "rate_upper": 0.125,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 32,
+        "delta_bounds": [
+          0.125,
+          0.125
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0006",
+        "removed_members": 2,
+        "state_id": "2a44b4996b932ed16a2c785e-d0032"
+      },
+      {
+        "alternate": {
+          "feasible": 1,
+          "horizon_nonfeasible": 7,
+          "rate_lower": 0.125,
+          "rate_upper": 0.125,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0.125,
+          0.125
+        ],
+        "family": "structpool-spatiotemporal-hotspot:16",
+        "map_id": "very_high_confirm_v2_station_centric_0006",
+        "removed_members": 3,
+        "state_id": "9ae0e10dcf9cb51f8b1385e1-d0004"
+      },
+      {
+        "alternate": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 0,
+          "horizon_nonfeasible": 8,
+          "rate_lower": 0,
+          "rate_upper": 0,
+          "unknown": 0
+        },
+        "decision": 32,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0006",
+        "removed_members": 8,
+        "state_id": "e151315d376dc92800127770-d0032"
+      },
+      {
+        "alternate": {
+          "feasible": 6,
+          "horizon_nonfeasible": 2,
+          "rate_lower": 0.75,
+          "rate_upper": 0.75,
+          "unknown": 0
+        },
+        "anchor": {
+          "feasible": 6,
+          "horizon_nonfeasible": 2,
+          "rate_lower": 0.75,
+          "rate_upper": 0.75,
+          "unknown": 0
+        },
+        "decision": 4,
+        "delta_bounds": [
+          0,
+          0
+        ],
+        "family": "structpool-conflict-component:16",
+        "map_id": "very_high_confirm_v2_station_centric_0007",
+        "removed_members": 3,
+        "state_id": "3e32338e6c58cb4866106bd2-d0004"
+      }
+    ],
+    "training_allowed": false
+  },
+  "training_allowed": false
+}
