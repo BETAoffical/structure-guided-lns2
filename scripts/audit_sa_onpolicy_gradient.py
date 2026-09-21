@@ -19,7 +19,7 @@ from scripts import run_sa_onpolicy as run
 from experiments.sa_onpolicy_actor import NumpyActor, vectorize
 from experiments.sa_paired_completion import require
 
-OUTPUT = "build/sa-onpolicy-gradient-audit-v1"
+OUTPUT = "build/sa-onpolicy-gradient-audit-v1b"
 PINS = {
     "report.json": "cdd4ad9cc812871dae2738fab10611d146c8f31710166db66e21428f8f926c80",
     "update-0.json": "a2813cddabf87b6ad427e847bc23d6101225d6b2af9c74f8cf54b26a31af3485",

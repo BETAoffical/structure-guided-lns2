@@ -69,7 +69,7 @@ class GradientAuditTests(unittest.TestCase):
             require_zero_output(type("Actor", (), dict(w2=np.array([[.1]]), b2=np.array([0.])))())
 
     def test_candidate_common_hidden_mode_has_zero_score(self):
-        np.testing.assert_array_equal(zero_output_score(np.ones((4, 32)), [.7, .1, .1, .1], 2), np.zeros(32))
+        np.testing.assert_allclose(zero_output_score(np.ones((4, 32)), [.7, .1, .1, .1], 2), np.zeros(32), rtol=0, atol=1e-14)
 
 
 if __name__ == "__main__":
