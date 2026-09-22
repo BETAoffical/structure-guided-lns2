@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_uncapped_training_contract.py", "role": "reproducibility", "purpose": "Uncapped terminal completion credit and skip-retraining gate without changing historical labels."},
+    {"path": "scripts/recover_sa_uncapped_training.py", "role": "reproducibility", "purpose": "Train-only 16-episode recovery and at most one frozen-parameter terminal policy update."},
+    {"path": "tests/evaluation/test_sa_uncapped_training.py", "role": "reproducibility", "contract": "Uncapped terminal semantics, equal map weights, Train isolation, information gate and fixed update scope."},
     {"path": "experiments/sa_uncapped_runtime.py", "role": "reproducibility", "purpose": "Frozen-policy evaluation without a decision stopping limit; preserve legacy feature scaling and native repair."},
     {"path": "scripts/compare_sa_uncapped.py", "role": "reproducibility", "purpose": "Isolated 80-episode no-decision-cap rerun with exact old prefixes, atomic resume and full trajectory audits."},
     {"path": "tests/evaluation/test_sa_uncapped.py", "role": "reproducibility", "contract": "No hidden decision cutoff, frozen RNG/features, real 300-step loop, native micro and safe resume."},
