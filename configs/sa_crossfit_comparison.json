@@ -1,0 +1,33 @@
+{
+  "schema": "lns2.sa.crossfit_comparison.v1",
+  "output": "build/sa-crossfit-comparison-v1",
+  "phase": "crossfit-comparison",
+  "workers": 20,
+  "replicas": 2,
+  "conditions": 8,
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 960.0,
+  "formal_ttf": false,
+  "automatic_promotion": false,
+  "arms": ["official_sa", "dual16_sa", "untrained_exploration", "bounded_condition", "bounded_state"],
+  "models": {
+    "untrained_exploration": {
+      "path": "build/sa-onpolicy-resource-recovery-v1/models/actor-0.json",
+      "file_sha256": "7413bea77ca58e4604bce1fa0d6cfe923bb8668885ff9fc700db7804e2e240b2",
+      "policy_sha256": "094be5af960bbd415722a792aff300428514784c2746c38738dbc8b5f072dc63",
+      "iteration": 0
+    },
+    "bounded_condition": {
+      "path": "build/sa-onpolicy-crossfit-v1/models/bounded_condition.json",
+      "file_sha256": "2b2c43708ffff6f16c79bc74714d65a5f76af7d6480cf07d3a9032a6e4caf2df",
+      "policy_sha256": "13c6e59919e584edfe025ab17d88bb773585221bc119a7dfb0367a4e61f66ce6",
+      "iteration": 1
+    },
+    "bounded_state": {
+      "path": "build/sa-onpolicy-crossfit-v1/models/bounded_state.json",
+      "file_sha256": "11e46ee52337fe28cc42e86644c2720f2cc7968f4ad34ef30660870893310b06",
+      "policy_sha256": "5a3bca783055e2521a90e8cd3ddef998e79972b2f0ffd243a9f54804a638e143",
+      "iteration": 1
+    }
+  }
+}
