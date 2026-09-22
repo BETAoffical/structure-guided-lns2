@@ -1,0 +1,38 @@
+{
+  "schema": "lns2.sa.second_onpolicy_batch.v1",
+  "output": "build/sa-second-onpolicy-batch-v1",
+  "source_training": "build/sa-uncapped-training-recovery-v1",
+  "update_sha256": "0e90c7abb7fe2f9c9b4b26c6f9fecc21492c0759bc0f6b56851544824214a007",
+  "phase": "train-1-new-conditions",
+  "solver_seeds": [233, 239],
+  "replicas": 4,
+  "conditions": 24,
+  "expected_jobs": 192,
+  "arms": ["untrained_exploration", "uncapped_condition"],
+  "models": {
+    "untrained_exploration": {
+      "path": "build/sa-uncapped-training-recovery-v1/models/actor-0.json",
+      "file_sha256": "7413bea77ca58e4604bce1fa0d6cfe923bb8668885ff9fc700db7804e2e240b2",
+      "policy_sha256": "094be5af960bbd415722a792aff300428514784c2746c38738dbc8b5f072dc63",
+      "iteration": 0
+    },
+    "uncapped_condition": {
+      "path": "build/sa-uncapped-training-recovery-v1/models/actor-1.json",
+      "file_sha256": "cedb680158d1b8c6b720fd86f5546f8b4f921253c2e5ff4bdaa509195fb74d8b",
+      "policy_sha256": "129d30ed61e68db939068cd65e2a57b257a054d2e0db81539236004f2f8b51f1",
+      "iteration": 1
+    }
+  },
+  "max_decisions": null,
+  "decision_feature_reference": 256,
+  "node_budget": 25000000,
+  "pp_safety_seconds": 20.0,
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 960.0,
+  "qualification_fuse_seconds": 180.0,
+  "workers": 20,
+  "maximum_updates_this_stage": 0,
+  "formal_ttf": false,
+  "heldout_evaluation": false,
+  "automatic_promotion": false
+}
