@@ -13,10 +13,11 @@ from scripts import run_sa_onpolicy as run
 from scripts import recover_sa_onpolicy as recovery
 from scripts import run_sa_crossfit_update as crossfit
 from experiments.sa_paired_completion import require
+from experiments import sa_onpolicy_noop_runtime as noop
 
 CONFIG = "configs/sa_crossfit_comparison.json"
 CODE = (CONFIG, "scripts/compare_sa_crossfit.py", "tests/evaluation/test_sa_crossfit_comparison.py",
-        "docs/SA_CROSSFIT_COMPARISON_PROTOCOL_ZH.md")
+        "docs/SA_CROSSFIT_COMPARISON_PROTOCOL_ZH.md", "experiments/sa_onpolicy_noop_runtime.py")
 ARMS = ("official_sa", "dual16_sa", "untrained_exploration", "bounded_condition", "bounded_state")
 
 
@@ -76,6 +77,21 @@ def prepare():
              source["proposal"]["pp_safety_seconds"]) == (256, 25000000, 20.), "scientific work budget")
     source_plan, source_out = run.verify()
     inputs = {name: run.sha256_file(ROOT/name) for name in CODE}
+    previous = ROOT/cfg["supersedes"]
+    require(run.sha256_file(previous/"registration.json") == cfg["superseded_registration_sha256"], "previous registration")
+    old = run.check_seal(run.read_json(previous/"registration.json"))
+    inputs[(previous/"registration.json").relative_to(ROOT).as_posix()] = cfg["superseded_registration_sha256"]
+    prior_count = 0
+    for job in old["jobs"]:
+        folder = folder_for(old["config"], job)
+        if not (folder/"result.json").exists():
+            require(not folder.exists(), "unexplained partial previous episode")
+            continue
+        prior = read_result(old, source, job)
+        for name in ("result.json", "comparison_receipt.json", *prior["files"]):
+            inputs[(folder/name).relative_to(ROOT).as_posix()] = run.sha256_file(folder/name)
+        prior_count += 1
+    require(prior_count == 20, "expected first batch only")
     for name in ("registration.json", "update.json", "parity.json", "torch-parity.json"):
         inputs[(cross_out/name).relative_to(ROOT).as_posix()] = run.sha256_file(cross_out/name)
     parity = run.check_seal(run.read_json(cross_out/"parity.json"))
@@ -158,7 +174,7 @@ def read_result(reg, source, job):
 
 
 def comparison_worker(job):
-    summary = run.episode_worker(job)
+    summary = noop.episode_worker(job)
     folder = folder_for(job["comparison_config"], job)
     run.once(folder/"comparison_receipt.json", run.sealed(dict(comparison_binding=job["comparison_binding"],
              comparison_arm=job["comparison_arm"], result_sha256=run.sha256_file(folder/"result.json"))))
@@ -237,9 +253,18 @@ def audit_worker(job):
     expected = expected_policy(job["comparison_config"], job)
     require(result["rng_stream_id"] == run.json_fingerprint([job["plan"]["config"]["stream_seed"],
             job["phase"],job["pair_id"],job["replica"]]), "RNG identity")
+    state = run.read_json(folder/"initial.json")
+    q = run.native_runtime(job["plan"])
+    noops = 0
     for event in run.trace_read(folder):
         require(event["policy_sha256"] == expected, "trace model changed")
-    return row
+        after = q.apply_state_delta(state, event["delta"])
+        incomplete = noop.pp_incomplete(state, after, event["metrics"])
+        if incomplete:
+            require(event["decision"] + 1 == result["decisions"] and result["stop"] == "incomplete_pp", "continued incomplete PP")
+        noops += event["metrics"]["pp_failure_reason"] == "not_run"
+        state = after
+    return dict(row, legal_noops=noops)
 
 
 def audit():
@@ -260,6 +285,33 @@ def audit():
         run.once(out/("audit.json" if not missing else f"audit-partial-{len(rows)}.json"),run.sealed(
             dict(binding=reg["binding"],results=rows,missing=missing)))
     return dict(audited=len(rows),missing=len(missing))
+
+
+def prefix_audit(reg, source):
+    old = run.check_seal(run.read_json(ROOT/reg["config"]["supersedes"]/"registration.json"))
+    current = {j["job_id"]:j for j in reg["jobs"]}
+    rows = []
+    for j in old["jobs"]:
+        folder = folder_for(old["config"],j)
+        if not (folder/"result.json").exists(): continue
+        prior = read_result(old,source,j)
+        new_folder = folder_for(reg["config"],current[j["job_id"]])
+        events = iter(run.trace_read(new_folder))
+        count = 0
+        for event in run.trace_read(folder):
+            new = next(events,None)
+            require(new is not None and recovery.event_projection(event) == recovery.event_projection(new), "changed old action/path prefix")
+            count += 1
+        now = read_result(reg,source,current[j["job_id"]])
+        if prior["status"] == "ok":
+            require(next(events,None) is None and all(prior[k] == now[k] for k in
+                ("stop","success","decisions","generated","final_fingerprint","soc","makespan","wait_steps")), "unchanged arm diverged")
+        else:
+            require(prior["stop"] == "incomplete_pp" and event["metrics"]["pp_failure_reason"] == "not_run", "unexpected prior censor")
+            require(now["decisions"] > prior["decisions"], "legal no-op was not continued")
+        rows.append(dict(job_id=j["job_id"],prefix_steps=count,previous_status=prior["status"]))
+    require(len(rows)==20,"missing prior prefixes")
+    return rows
 
 
 def value(row):
@@ -316,6 +368,8 @@ def report():
     body=dict(binding=reg["binding"],schema="lns2.sa.crossfit_comparison_report.v1",no_ttf=True,
               role="viewed_development_holdout",independent_generalization=False,automatic_promotion=False,
               summaries=summaries,comparisons=comparisons,
+              prefix_equivalence=prefix_audit(reg,source),
+              legal_noops=sum(r["legal_noops"] for r in receipt["results"]),
               episodes=[dict(comparison_arm=a,**r) for a,rows in data.items() for r in rows.values()],
               decision="bounded_development_comparison_only")
     with recovery.strict_lock(out,reg["binding"],"comparison-report"):

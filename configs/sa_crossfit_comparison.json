@@ -1,6 +1,8 @@
 {
-  "schema": "lns2.sa.crossfit_comparison.v1",
-  "output": "build/sa-crossfit-comparison-v1",
+  "schema": "lns2.sa.crossfit_comparison.v2",
+  "output": "build/sa-crossfit-comparison-v2",
+  "supersedes": "build/sa-crossfit-comparison-v1",
+  "superseded_registration_sha256": "c2c0f89fead5f03882d38c35943cc4c79389a00c7e9a908932614920d5f4b770",
   "phase": "crossfit-comparison",
   "workers": 20,
   "replicas": 2,

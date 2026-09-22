@@ -1,4 +1,6 @@
 from copy import deepcopy
+import ast
+import inspect
 from pathlib import Path
 import tempfile
 import unittest
@@ -134,12 +136,48 @@ class ComparisonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp,patch.object(compare,"ROOT",Path(tmp)):
             folder=compare.folder_for(cfg,j)
             run.once(folder/"result.json",dict(arm="trained_actor"))
-            with patch.object(run,"episode_worker",return_value=dict(status="ok",job_id=j["job_id"])) as mocked:
+            with patch.object(compare.noop,"episode_worker",return_value=dict(status="ok",job_id=j["job_id"])) as mocked:
                 r=compare.comparison_worker(j)
             self.assertEqual(mocked.call_args.args[0]["arm"],"trained_actor")
             self.assertEqual(r["comparison_arm"],"bounded_state")
             receipt=run.check_seal(run.read_json(folder/"comparison_receipt.json"))
             self.assertEqual(receipt["comparison_arm"],"bounded_state")
+
+    def test_copied_loop_only_changes_interruption_classification(self):
+        original=ast.parse(inspect.getsource(run.episode_loop))
+        current=ast.parse(inspect.getsource(compare.noop.episode_loop))
+        class Restore(ast.NodeTransformer):
+            def visit_Assign(self,node):
+                if any(isinstance(t,ast.Name) and t.id=="incomplete" for t in node.targets): return None
+                return self.generic_visit(node)
+            def visit_If(self,node):
+                if isinstance(node.test,ast.Name) and node.test.id=="incomplete":
+                    node.test=ast.parse('metrics["pp_failure_reason"] == "time_limit" or not metrics["acceptance_evaluated"]',mode="eval").body
+                return self.generic_visit(node)
+        self.assertEqual(ast.dump(original),ast.dump(Restore().visit(current)))
+
+    def test_legal_noop_counts_decision_but_not_search_work(self):
+        before=dict(iteration=2,agents=[dict(id=17,conflict_degree=0,path=[1,2])],low_level=dict(generated=30),
+                    conflict_edges=[[0,1]],sum_of_costs=1,num_of_colliding_pairs=1)
+        after=deepcopy(before)
+        after["iteration"]=3
+        metrics=dict(pp_failure_reason="not_run",acceptance_evaluated=False,action_valid=True,step_applied=True,
+                     pp_attempted_agent_count=0,pp_inserted_agent_count=0,pp_rolled_back=False,repair_order=[],
+                     neighborhood=[17],generated=True)
+        self.assertFalse(compare.noop.pp_incomplete(before,after,metrics))
+        for key,val in (("pp_attempted_agent_count",1),("pp_rolled_back",True),("neighborhood",[99])):
+            broken=dict(metrics,**{key:val})
+            with self.assertRaises(ValueError): compare.noop.pp_incomplete(before,after,broken)
+        bad=deepcopy(after)
+        bad["low_level"]["generated"]+=1
+        with self.assertRaises(ValueError): compare.noop.pp_incomplete(before,bad,metrics)
+        before["agents"][0]["conflict_degree"]=1
+        after=deepcopy(before)
+        after["iteration"]+=1
+        with self.assertRaises(ValueError): compare.noop.pp_incomplete(before,after,metrics)
+        self.assertFalse(compare.noop.pp_incomplete(before,after,dict(metrics,generated=False)))
+        self.assertTrue(compare.noop.pp_incomplete(before,after,dict(metrics,pp_failure_reason="time_limit")))
+        self.assertTrue(compare.noop.pp_incomplete(before,after,dict(metrics,pp_failure_reason="other_failure")))
 
 
 if __name__=="__main__":unittest.main()

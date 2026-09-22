@@ -70,4 +70,24 @@ python scripts/compare_sa_crossfit.py report
 
 collect/audit 使用已固定 native 的 WSL `/usr/bin/python3`。
 prepare 前保存代码检查点；正式执行前登记配置、输入、模型、代码 SHA。
-输出 `build/sa-crossfit-comparison-v1`，不进入 Git。保留所有旧数据。
+输出 `build/sa-crossfit-comparison-v2`，不进入 Git。保留所有旧数据。
+
+## v2 运行器修正登记
+
+首个 v1 批次 20 条：16 条完整，4 条 Official+SA 被旧 Python 运行器
+错误标成 incomplete_pp。原生返回 not_run、尝试 agent 数 0、冲突及路径不变，
+不是 20 秒 PP 超时。源码 `InitLNS::step` 在生成邻域没有任何冲突边时，
+更新 Adaptive 权重、计一次 iteration，然后合法返回；不需要执行 PP 或接受判断。
+旧运行器的 `not acceptance_evaluated` 判定漏掉了这个合法分支。
+
+v1 登记、20 条记录和提交 607fd3a 保留，不作为性能证据。v2 完整重跑 80 条，
+不只重跑某个方法的失败；使用相同 phase 和 RNG，不更换模型、任务或资源预算。
+新运行器仅改变中断分类：not_run 必须满足合法动作、没有 PP 尝试、没有回滚，
+路径、冲突及低层计数完全不变；已生成邻域必须不触及冲突 agent。
+这样的空操作仍计一次决策，仍保留 native 的 Adaptive 更新，不人为强制成功。
+真正 time_limit 或 PP 未完整结束仍是未知，不能用该修复掩盖。
+
+原 hash-frozen 训练代码不修改；新引擎副本用 AST 测试证明只增加这一分类调用，
+其余循环语法树与旧版完全一致。最终要求 20 条旧记录的动作/路径前缀完全一致，
+16 条原本完整记录最终结果也完全一致。旧正式 TTF 使用另一运行器，不能据此
+宣称旧 TTF 失败均来自此问题；本轮另记录影响范围。

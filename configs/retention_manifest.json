@@ -18,6 +18,7 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_onpolicy_noop_runtime.py", "role": "reproducibility", "purpose": "Versioned interruption classifier preserving legitimate official conflict-free no-ops; AST-checked engine equivalence."},
     {"path": "scripts/compare_sa_crossfit.py", "role": "reproducibility", "purpose": "Five-arm bounded development completion comparison of frozen actor-0 forks; no training or TTF."},
     {"path": "tests/evaluation/test_sa_crossfit_comparison.py", "role": "reproducibility", "contract": "Model fork identity, 80 paired jobs, unknown bounds, safe batch stop and no silent retries."},
     {"path": "experiments/sa_crossfit_update.py", "role": "reproducibility", "purpose": "Action-independent cross-fit value baseline and one KL-guarded actor-0 policy-gradient fork."},
