@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/compare_sa_uncapped_update.py", "role": "reproducibility", "purpose": "Frozen uncapped actor development comparison with 16 new episodes and 80 SHA-verified baseline references."},
+    {"path": "tests/evaluation/test_sa_uncapped_update_comparison.py", "role": "reproducibility", "contract": "Paired scope and RNG, no decision limit, complete evidence, descriptive net gains and safe resume."},
     {"path": "experiments/sa_uncapped_training_contract.py", "role": "reproducibility", "purpose": "Uncapped terminal completion credit and skip-retraining gate without changing historical labels."},
     {"path": "scripts/recover_sa_uncapped_training.py", "role": "reproducibility", "purpose": "Train-only 16-episode recovery and at most one frozen-parameter terminal policy update."},
     {"path": "tests/evaluation/test_sa_uncapped_training.py", "role": "reproducibility", "contract": "Uncapped terminal semantics, equal map weights, Train isolation, information gate and fixed update scope."},
