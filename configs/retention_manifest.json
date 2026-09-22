@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_uncapped_runtime.py", "role": "reproducibility", "purpose": "Frozen-policy evaluation without a decision stopping limit; preserve legacy feature scaling and native repair."},
+    {"path": "scripts/compare_sa_uncapped.py", "role": "reproducibility", "purpose": "Isolated 80-episode no-decision-cap rerun with exact old prefixes, atomic resume and full trajectory audits."},
+    {"path": "tests/evaluation/test_sa_uncapped.py", "role": "reproducibility", "contract": "No hidden decision cutoff, frozen RNG/features, real 300-step loop, native micro and safe resume."},
     {"path": "scripts/register_sa_crossfit_report_fix.py", "role": "reproducibility", "purpose": "Strict report-only projection amendment after completed collection; descriptive first-action divergence audit."},
     {"path": "tests/evaluation/test_sa_crossfit_report_fix.py", "role": "reproducibility", "contract": "Constrain amendment scope and preserve Official and learned trajectory fields without solver changes."},
     {"path": "experiments/sa_onpolicy_noop_runtime.py", "role": "reproducibility", "purpose": "Versioned interruption classifier preserving legitimate official conflict-free no-ops; AST-checked engine equivalence."},
