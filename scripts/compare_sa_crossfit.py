@@ -141,8 +141,12 @@ def verify():
     require(reg["binding"] == run.json_fingerprint({k:v for k,v in reg.items() if k not in ("binding", "integrity")}), "registration hash")
     require(reg["config"] == cfg and reg["scientific_binding"] == source["binding"] and
             reg["crossfit_binding"] == cross_reg["binding"], "comparison identity")
-    for name, digest in reg["inputs"].items():
-        require(run.sha256_file(run.contained_file(ROOT, name, field="comparison input")) == digest, "changed input: "+name)
+    changes = {name: run.sha256_file(run.contained_file(ROOT, name, field="comparison input"))
+               for name, digest in reg["inputs"].items()
+               if run.sha256_file(run.contained_file(ROOT, name, field="comparison input")) != digest}
+    if changes:
+        from scripts.register_sa_crossfit_report_fix import validate_amendment
+        validate_amendment(ROOT, reg, out, changes)
     require([{k:v for k,v in j.items() if k != "expected_initial"} for j in reg["jobs"]] == schedule(source, cfg), "schedule changed")
     for arm in cfg["models"]:
         bundle = check_model(cfg, arm, source["binding"])
@@ -300,7 +304,7 @@ def prefix_audit(reg, source):
         count = 0
         for event in run.trace_read(folder):
             new = next(events,None)
-            require(new is not None and recovery.event_projection(event) == recovery.event_projection(new), "changed old action/path prefix")
+            require(new is not None and {k:v for k,v in event.items() if k != "metrics"} == {k:v for k,v in new.items() if k != "metrics"}, "changed old action/path prefix")
             count += 1
         now = read_result(reg,source,current[j["job_id"]])
         if prior["status"] == "ok":

@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/register_sa_crossfit_report_fix.py", "role": "reproducibility", "purpose": "Strict report-only projection amendment after completed collection; descriptive first-action divergence audit."},
+    {"path": "tests/evaluation/test_sa_crossfit_report_fix.py", "role": "reproducibility", "contract": "Constrain amendment scope and preserve Official and learned trajectory fields without solver changes."},
     {"path": "experiments/sa_onpolicy_noop_runtime.py", "role": "reproducibility", "purpose": "Versioned interruption classifier preserving legitimate official conflict-free no-ops; AST-checked engine equivalence."},
     {"path": "scripts/compare_sa_crossfit.py", "role": "reproducibility", "purpose": "Five-arm bounded development completion comparison of frozen actor-0 forks; no training or TTF."},
     {"path": "tests/evaluation/test_sa_crossfit_comparison.py", "role": "reproducibility", "contract": "Model fork identity, 80 paired jobs, unknown bounds, safe batch stop and no silent retries."},
