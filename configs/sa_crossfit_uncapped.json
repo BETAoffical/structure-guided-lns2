@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.sa.crossfit_uncapped.v1",
+  "source": "build/sa-crossfit-comparison-v2",
+  "output": "build/sa-crossfit-no-decision-cap-v1",
+  "max_decisions": null,
+  "decision_feature_reference": 256,
+  "node_budget": 25000000,
+  "pp_safety_seconds": 20.0,
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 960.0,
+  "workers": 20,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}
