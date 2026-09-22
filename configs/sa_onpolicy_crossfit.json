@@ -1,0 +1,15 @@
+{
+  "schema": "lns2.sa.onpolicy_crossfit.v1",
+  "output": "build/sa-onpolicy-crossfit-v1",
+  "workers": 20,
+  "replica_folds": [0, 1, 2, 3],
+  "critic": {"kind": "standardized_ridge", "alpha": 1.0, "clip": [0.0, 1.0]},
+  "update": {"initial_l2": 0.25, "backtracks": 12, "mean_kl": 0.002, "mean_trajectory_kl": 0.1, "max_state_kl": 0.02},
+  "arms": ["bounded_condition", "bounded_state"],
+  "maximum_updates_per_arm": 1,
+  "fork_from": "actor-0",
+  "normalizer_unchanged": true,
+  "solver_calls": 0,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}

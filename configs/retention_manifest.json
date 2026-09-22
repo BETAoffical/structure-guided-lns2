@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_crossfit_update.py", "role": "reproducibility", "purpose": "Action-independent cross-fit value baseline and one KL-guarded actor-0 policy-gradient fork."},
+    {"path": "scripts/run_sa_crossfit_update.py", "role": "reproducibility", "purpose": "Train-only baseline and update ablation with frozen input receipts; no solver or TTF."},
+    {"path": "tests/evaluation/test_sa_crossfit_update.py", "role": "reproducibility", "contract": "Episode cross-fit isolation, action-independent state inputs, masked probabilities, gradients and KL budget."},
     {"path": "scripts/audit_sa_onpolicy_gradient.py", "role": "reproducibility", "purpose": "Read-only first-update gradient reconstruction and all fixed replica splits; no optimizer, solver or heldout data."},
     {"path": "tests/evaluation/test_sa_onpolicy_gradient.py", "role": "reproducibility", "contract": "Autograd score identity, map-equal weighting, zero-return signal, replica splits and Train-only boundaries."},
     {"path": "scripts/recover_sa_onpolicy.py", "role": "reproducibility", "purpose": "Reference-preserving resource recovery, exact prefix checks and one bounded on-policy update; no TTF."},
