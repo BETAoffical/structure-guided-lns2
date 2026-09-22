@@ -18,6 +18,8 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "scripts/compare_sa_second_update.py", "role": "reproducibility", "purpose": "Frozen actor-2, parent, exploration and Dual16 paired completion on unused development streams without a decision cap or retraining."},
+    {"path": "tests/evaluation/test_sa_second_update.py", "role": "reproducibility", "contract": "Frozen arms, unused paired streams, uncapped execution, safe resume and net-gain evidence boundaries."},
     {"path": "experiments/sa_parent_update.py", "role": "reproducibility", "purpose": "Fixed-prior nonzero-parent policy gradient and parent-relative probability protection; historical actor-0 updater stays frozen."},
     {"path": "scripts/train_sa_parent_update.py", "role": "reproducibility", "purpose": "One terminal-credit actor-1 continuation from audited Train data with numerical and portable parity; no solver calls."},
     {"path": "tests/evaluation/test_sa_parent_update.py", "role": "reproducibility", "contract": "Nonzero-parent probabilities, gradients, lineage, fixed scope, training isolation and repeat-update rejection."},
