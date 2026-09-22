@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_parent_update.py", "role": "reproducibility", "purpose": "Fixed-prior nonzero-parent policy gradient and parent-relative probability protection; historical actor-0 updater stays frozen."},
+    {"path": "scripts/train_sa_parent_update.py", "role": "reproducibility", "purpose": "One terminal-credit actor-1 continuation from audited Train data with numerical and portable parity; no solver calls."},
+    {"path": "tests/evaluation/test_sa_parent_update.py", "role": "reproducibility", "contract": "Nonzero-parent probabilities, gradients, lineage, fixed scope, training isolation and repeat-update rejection."},
     {"path": "scripts/collect_sa_second_batch.py", "role": "reproducibility", "purpose": "Train-only actor-1 terminal sampling on new initial solver seeds, paired with a frozen exploration control; no update or TTF."},
     {"path": "tests/evaluation/test_sa_second_batch.py", "role": "reproducibility", "contract": "Train isolation, initial-path novelty, paired streams, uncapped terminal credit and safe resumable batches."},
     {"path": "scripts/compare_sa_fresh_stream.py", "role": "reproducibility", "purpose": "Frozen five-policy fresh RNG repeat on viewed development maps, without a decision limit or fitting."},

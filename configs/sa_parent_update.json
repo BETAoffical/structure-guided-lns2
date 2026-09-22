@@ -1,0 +1,20 @@
+{
+  "schema": "lns2.sa.nonzero_parent_update.v1",
+  "source": "build/sa-second-onpolicy-batch-v1",
+  "source_report_sha256": "869ae98b2fbbd3b7d9f1aa014f46576a11b8e9599fd118d91b206d4cbea628c1",
+  "output": "build/sa-nonzero-parent-update-v1",
+  "training_arm": "uncapped_condition",
+  "output_arm": "second_condition",
+  "parent_iteration": 1,
+  "output_iteration": 2,
+  "expected_episodes": 96,
+  "workers": 20,
+  "max_decisions": null,
+  "node_budget": 25000000,
+  "maximum_updates": 1,
+  "update": {"initial_l2": 0.25, "backtracks": 12, "mean_kl": 0.002, "mean_trajectory_kl": 0.1, "max_state_kl": 0.02},
+  "solver_calls": 0,
+  "formal_ttf": false,
+  "heldout_evaluation": false,
+  "automatic_promotion": false
+}
