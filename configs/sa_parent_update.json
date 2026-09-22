@@ -2,7 +2,7 @@
   "schema": "lns2.sa.nonzero_parent_update.v1",
   "source": "build/sa-second-onpolicy-batch-v1",
   "source_report_sha256": "869ae98b2fbbd3b7d9f1aa014f46576a11b8e9599fd118d91b206d4cbea628c1",
-  "output": "build/sa-nonzero-parent-update-v1",
+  "output": "build/sa-nonzero-parent-update-v2",
   "training_arm": "uncapped_condition",
   "output_arm": "second_condition",
   "parent_iteration": 1,

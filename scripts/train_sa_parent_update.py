@@ -20,6 +20,7 @@ from experiments.sa_onpolicy_actor import NumpyActor, torch_actor, torch_distrib
 from experiments.sa_parent_update import padded_with_prior, log_distribution, guarded_parent_update
 
 CONFIG = "configs/sa_parent_update.json"
+REGISTRATION = "training_registration.json"
 CODE = (CONFIG, "scripts/train_sa_parent_update.py", "experiments/sa_parent_update.py",
         "tests/evaluation/test_sa_parent_update.py", "docs/SA_PARENT_UPDATE_PROTOCOL_ZH.md",
         "experiments/sa_crossfit_update.py", "experiments/sa_onpolicy_actor.py",
@@ -89,7 +90,7 @@ def prepare():
     body["binding"] = run.json_fingerprint(body)
     with recovery.strict_lock(out, body["binding"], "parent-update-prepare"):
         run.publish_actor(out, source, actor, dict(copied_not_trained=True, registration_binding=body["binding"]))
-        run.once(out/"registration.json", run.sealed(body))
+        run.once(out/REGISTRATION, run.sealed(body))
         run.write_json(out/"run_status.json", dict(status="registered", binding=body["binding"]))
     return dict(registered=True, binding=body["binding"], episodes=96, updates_allowed=1, no_solver=True)
 
@@ -97,7 +98,7 @@ def prepare():
 def verify():
     cfg, source_reg, source, report, actor, entries = evidence()
     out = ROOT/cfg["output"]
-    reg = run.check_seal(run.read_json(out/"registration.json"))
+    reg = run.check_seal(run.read_json(out/REGISTRATION))
     run.require(reg["binding"] == run.json_fingerprint({k: v for k, v in reg.items() if k not in ("binding", "integrity")}), "registration hash")
     run.require(reg["config"] == cfg and reg["entries"] == entries and reg["source_binding"] == source_reg["binding"] and
         reg["scientific_binding"] == source["binding"] and reg["parent_policy"] == run.validate_bundle(actor) and
@@ -326,7 +327,7 @@ def main():
             result = globals()[args.phase]()
     except BaseException as error:
         out = ROOT/run.read_json(ROOT/CONFIG)["output"]
-        if (out/"registration.json").exists():
+        if (out/REGISTRATION).exists():
             run.write_json(out/"run_status.json", dict(status="needs_inspection", error=repr(error), no_retry=True))
         raise
     print(json.dumps(result, indent=2), flush=True)

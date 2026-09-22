@@ -39,7 +39,16 @@
 CLI：`scripts/train_sa_parent_update.py prepare|verify|extract|check|train|parity`，Torch侧parity增加`--torch`。
 Windows现有Torch环境训练，WSL仅做portable校验，不安装依赖。
 部分提取、重复更新或输入变化均拒绝继续，需要先检查；阶段状态原子写入，所有结果留在新忽略目录
-`build/sa-nonzero-parent-update-v1`。训练前后保存本地Git bundle及紧凑证据备份。
+`build/sa-nonzero-parent-update-v2`。训练前后保存本地Git bundle及紧凑证据备份。
+
+### 训练前的登记修正
+
+v1仅完成准备，没有提取缓存、训练或求解。训练登记中的旧任务编号被历史采集器的
+`sa-*/registration.json` 新任务查重误认为再次采集，提取前即停止。
+原文件按原字节保留为 `blocked-training-registration.json`，原状态和父模型副本不变。
+新版本使用专用 `training_registration.json`，明确它是已有数据的训练谱系，不是新增采集。
+不修改历史采集器、输入文件、查重条件或研究门槛；另增测试确保真正的重复采集仍被拒绝。
+这不是一次训练失败，也不消耗唯一更新机会。修正提交后才在v2目录重新准备。
 
 ## 结果解释
 

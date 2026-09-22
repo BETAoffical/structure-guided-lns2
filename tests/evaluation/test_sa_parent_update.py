@@ -15,6 +15,19 @@ from scripts import train_sa_parent_update as driver
 
 
 class ScopeTests(unittest.TestCase):
+    def test_training_lineage_is_not_a_new_collection_registration(self):
+        self.assertEqual(driver.REGISTRATION, "training_registration.json")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root/"build"/"sa-training-copy"
+            reference = dict(entries=[dict(episode=dict(pair_id="existing-train-condition"))])
+            driver.run.write_json(folder/driver.REGISTRATION, reference)
+            with patch.object(driver.collection, "ROOT", root):
+                driver.collection.require_unused([dict(pair_id="existing-train-condition")], root/"build"/"sa-source")
+                driver.run.write_json(folder/"registration.json", reference)
+                with self.assertRaises(ValueError):
+                    driver.collection.require_unused([dict(pair_id="existing-train-condition")], root/"build"/"sa-source")
+
     def test_frozen_scope_rejects_cap_control_training_or_extra_update(self):
         cfg = driver.run.read_json(driver.ROOT/driver.CONFIG)
         driver.fixed_scope(cfg)
