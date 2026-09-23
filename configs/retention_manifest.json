@@ -3162,6 +3162,16 @@
       "path": "tests/evaluation/test_sa_terminal_candidates.py",
       "role": "reproducibility",
       "contract": "Protect first-pair selection, fork isolation, paired seeds, complete witnesses and safe resume."
+    },
+    {
+      "path": "scripts/audit_sa_terminal_resources.py",
+      "role": "reproducibility",
+      "purpose": "Read-only spacetime conflict attribution and historical certificate scope comparison."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_resources.py",
+      "role": "reproducibility",
+      "contract": "Separate arrival from final holding, audit conflict identities and preserve branch denominators."
     }
   ]
 }
