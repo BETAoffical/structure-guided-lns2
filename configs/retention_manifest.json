@@ -3142,6 +3142,16 @@
       "path": "tests/evaluation/test_sa_terminal_budget.py",
       "role": "reproducibility",
       "contract": "Separate feature and stop budgets, preserve old results and reject incomplete trial evidence."
+    },
+    {
+      "path": "scripts/audit_sa_terminal_budget.py",
+      "role": "reproducibility",
+      "purpose": "Supplement pre-launch Git identity and preserve independent audit attempts without changing the collector."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_budget_identity.py",
+      "role": "reproducibility",
+      "contract": "Reject changed runtime dependencies and retain failed-then-successful audit attempts."
     }
   ]
 }
