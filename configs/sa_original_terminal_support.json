@@ -1,0 +1,19 @@
+{
+  "schema": "lns2.sa.original_terminal_support.v1",
+  "output": "build/sa-original-terminal-support-v1",
+  "source": "build/sa-second-onpolicy-batch-v1",
+  "actor": "build/sa-uncapped-training-recovery-v1/models/actor-1.json",
+  "actor_sha256": "cedb680158d1b8c6b720fd86f5546f8b4f921253c2e5ff4bdaa509195fb74d8b",
+  "threshold": 10,
+  "roots_per_map": 1,
+  "trials": 4,
+  "workers": 20,
+  "node_budget": 25000000,
+  "max_decisions": null,
+  "phase": "original-terminal-support-v1",
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 1860.0,
+  "training": false,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}

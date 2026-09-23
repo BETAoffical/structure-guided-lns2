@@ -3109,6 +3109,16 @@
       "contract": "Keep complete Train-only terminal credit, equal condition weights and fresh original-task evaluation isolated."
     },
     {
+      "path": "scripts/probe_sa_original_terminal_support.py",
+      "role": "reproducibility",
+      "purpose": "Full-task terminal-state support diagnostic with inherited work, history and frozen actor."
+    },
+    {
+      "path": "tests/evaluation/test_sa_original_terminal_support.py",
+      "role": "reproducibility",
+      "contract": "Preserve full tasks, causal first crossings, no decision cap and no replenished budget."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
