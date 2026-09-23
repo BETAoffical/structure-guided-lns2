@@ -19,7 +19,10 @@ class AuditFixTests(unittest.TestCase):
         loop = next(n for n in worker.body if isinstance(n, ast.For) and ast.unparse(n.target) == 'event')
         calls = [ast.unparse(n) for n in loop.body]
         refresh = calls.index('engine.prepare(state)')
-        extraction = next(i for i, v in enumerate(calls) if v.startswith('feature_rows, _ ='))
+        extraction = next(i for i, n in enumerate(loop.body) if isinstance(n, ast.Assign)
+                          and isinstance(n.targets[0], ast.Tuple)
+                          and isinstance(n.targets[0].elts[0], ast.Name)
+                          and n.targets[0].elts[0].id == 'feature_rows')
         self.assertLess(refresh, extraction)
 
     def test_original_collector_ast_unchanged(self):
