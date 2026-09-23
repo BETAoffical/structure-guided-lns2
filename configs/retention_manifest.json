@@ -3084,6 +3084,21 @@
       "contract": "Verify precise report seal failure cause, canonical roundtrip and rejection of numerical tampering."
     },
     {
+      "path": "experiments/sa_terminal_transition.py",
+      "role": "reproducibility",
+      "purpose": "Outcome-blind stratified OD-preserving Train subset and terminal information scope."
+    },
+    {
+      "path": "scripts/probe_sa_terminal_transition.py",
+      "role": "reproducibility",
+      "purpose": "Single fixed difficulty-transition data probe with frozen actor and uncapped complete trajectories."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_transition.py",
+      "role": "reproducibility",
+      "contract": "Protect OD mapping, exact stratification, Train scope, terminal signal boundaries and JSON roundtrip."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
