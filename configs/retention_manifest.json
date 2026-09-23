@@ -3074,6 +3074,16 @@
       "contract": "Protect exact Train scope, original official RNG, replica accounting and evidence-bounded reference decisions."
     },
     {
+      "path": "scripts/repair_sa_hard_reference_report.py",
+      "role": "reproducibility",
+      "purpose": "Normalize integer-key report serialization with unchanged scientific data and preserved original evidence."
+    },
+    {
+      "path": "tests/evaluation/test_sa_hard_reference_report.py",
+      "role": "reproducibility",
+      "contract": "Verify precise report seal failure cause, canonical roundtrip and rejection of numerical tampering."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
