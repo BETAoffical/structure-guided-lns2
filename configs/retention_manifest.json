@@ -3132,6 +3132,16 @@
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
+    },
+    {
+      "path": "scripts/probe_sa_terminal_budget.py",
+      "role": "reproducibility",
+      "purpose": "Single M04 work-budget continuation with frozen features, streams and complete prefix replay."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_budget.py",
+      "role": "reproducibility",
+      "contract": "Separate feature and stop budgets, preserve old results and reject incomplete trial evidence."
     }
   ]
 }

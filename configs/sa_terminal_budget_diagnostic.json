@@ -1,0 +1,16 @@
+{
+  "schema": "lns2.sa.terminal_budget_diagnostic.v1",
+  "output": "build/sa-terminal-budget-diagnostic-v1",
+  "source": "build/sa-original-terminal-support-v1",
+  "root_episode": "1c74ef13214cbca2b765b49c",
+  "original_node_budget": 25000000,
+  "node_budget": 30000000,
+  "max_decisions": null,
+  "trials": 4,
+  "workers": 4,
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 1860.0,
+  "training": false,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}
