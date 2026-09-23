@@ -3099,6 +3099,16 @@
       "contract": "Protect OD mapping, exact stratification, Train scope, terminal signal boundaries and JSON roundtrip."
     },
     {
+      "path": "scripts/run_sa_curriculum_update.py",
+      "role": "reproducibility",
+      "purpose": "One fixed terminal curriculum fork and unreduced-task three-model comparison."
+    },
+    {
+      "path": "tests/evaluation/test_sa_curriculum_update.py",
+      "role": "reproducibility",
+      "contract": "Keep complete Train-only terminal credit, equal condition weights and fresh original-task evaluation isolated."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
