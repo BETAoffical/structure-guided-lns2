@@ -3152,6 +3152,16 @@
       "path": "tests/evaluation/test_sa_terminal_budget_identity.py",
       "role": "reproducibility",
       "contract": "Reject changed runtime dependencies and retain failed-then-successful audit attempts."
+    },
+    {
+      "path": "scripts/probe_sa_terminal_candidates.py",
+      "role": "reproducibility",
+      "purpose": "Full-task terminal feasibility of existing candidates at distinct M04 single-conflict pairs."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_candidates.py",
+      "role": "reproducibility",
+      "contract": "Protect first-pair selection, fork isolation, paired seeds, complete witnesses and safe resume."
     }
   ]
 }

@@ -1,0 +1,16 @@
+{
+  "schema": "lns2.sa.terminal_candidates.v1",
+  "output": "build/sa-terminal-candidates-v1",
+  "source": "build/sa-terminal-budget-diagnostic-v1",
+  "source_report_sha256": "58dff03f566ebec61b3485bf112d5a4604ee1949781e6c36f119b694a2b2be41",
+  "seed_namespace": "m04-terminal-candidates-v1",
+  "trials": 4,
+  "workers": 20,
+  "pp_seconds": 20.0,
+  "branch_fuse_seconds": 90.0,
+  "group_fuse_seconds": 1860.0,
+  "max_decisions": null,
+  "training": false,
+  "formal_ttf": false,
+  "automatic_expansion": false
+}
