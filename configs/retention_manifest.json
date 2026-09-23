@@ -3049,6 +3049,21 @@
       "purpose": "Audit existing paired H32 labels without solver calls, new labels or training."
     },
     {
+      "path": "experiments/sa_terminal_sampler.py",
+      "role": "reproducibility",
+      "purpose": "Separate non-trainable mixture sampler identity and terminal coverage interpretation."
+    },
+    {
+      "path": "scripts/probe_sa_terminal_sampling.py",
+      "role": "reproducibility",
+      "purpose": "Train-only paired sampling diagnostic reusing sealed controls without changing historical runtimes."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_sampling.py",
+      "role": "reproducibility",
+      "contract": "Protect mixture support, process-scoped policy adapter, no decision cap and unbiased coverage accounting."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
