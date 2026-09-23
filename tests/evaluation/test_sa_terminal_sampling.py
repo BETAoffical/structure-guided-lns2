@@ -105,6 +105,15 @@ class SamplingTests(unittest.TestCase):
         self.assertEqual(r["last50_conflicts"],[4,6,2])
         self.assertEqual(r["nonanchor"],3)
 
+    def test_float_roundoff_is_not_a_selection_mismatch(self):
+        samples = [dict(job_id=str(i),decision=0,selections=["a","b"],probabilities_sha256="a") for i in range(48)]
+        a = dict(binding="test",max_error=1.11e-16,samples=samples)
+        b = dict(binding="test",max_error=0.,samples=[dict(s,probabilities_sha256="b") for s in samples])
+        current.check_parity([a,b],"test")
+        with self.assertRaises(ValueError): current.check_parity([dict(a,max_error=2e-12),b],"test")
+        b["samples"][0]["selections"] = ["b","a"]
+        with self.assertRaises(ValueError): current.check_parity([a,b],"test")
+
     def test_batch_safe_stop_resume_and_partial_refusal(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)

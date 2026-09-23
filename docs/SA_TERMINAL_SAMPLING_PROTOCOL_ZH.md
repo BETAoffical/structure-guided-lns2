@@ -74,3 +74,10 @@ python scripts/probe_sa_terminal_sampling.py stop
 parity需在Windows与WSL分别执行；collect/audit使用冻结WSL native。
 本轮不重跑全套数小时历史实验、CTest或TTF，C++及默认控制器没有改动。
 Git推送当前未重新授权，仅本地提交及备份，不重试此前被拒绝的远端操作。
+
+## 采集前数值校验修正
+
+初版登记没有启动solver。64个Train状态、512次抽样中Windows/WSL选择完全一致，
+11个状态的概率JSON哈希因约1e-16舍入差而不同。直接比较浮点JSON哈希过严，不是策略不一致。
+v2输出目录保留相同模型、任务、规则和预算，重新登记检查器：两端相对同一封存概率的最大误差之和
+不得超过1e-12，所有候选选择必须完全一致。初版登记及两份parity记录原样保留，不混算。

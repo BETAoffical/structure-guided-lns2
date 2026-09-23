@@ -124,12 +124,22 @@ def audit_worker(job):
         return runtime.audit_worker(job)
 
 
+def check_parity(receipts, binding):
+    run.require(len(receipts) == 2 and all(r["binding"] == binding and 0 <= r["max_error"] <= 1e-12 for r in receipts),
+                "cross-platform sampler parity required")
+    # Both errors are measured against the same sealed WSL parent probabilities.
+    # Their sum bounds cross-platform error without requiring equal float JSON hashes.
+    run.require(sum(r["max_error"] for r in receipts) <= 1e-12,"cross-platform probability tolerance")
+    def projected(r):
+        return [{k:s[k] for k in ("job_id","decision","selections")} for s in r["samples"]]
+    run.require(projected(receipts[0]) == projected(receipts[1]) and len(receipts[0]["samples"]) >= 48,
+                "cross-platform candidate selections differ")
+
+
 def collect(resume=False):
     reg,source,out,_ = verify()
     receipts = [run.check_seal(run.read_json(out/f"parity-{platform}.json")) for platform in ("windows","wsl")]
-    run.require(all(r["binding"] == reg["binding"] and r["max_error"] <= 1e-12 for r in receipts) and
-                receipts[0]["samples"] == receipts[1]["samples"] and len(receipts[0]["samples"]) >= 48,
-                "cross-platform sampler parity required")
+    check_parity(receipts,reg["binding"])
     with recovery.strict_lock(out,reg["binding"],"terminal-sampling-collect"):
         done = batch.execute_batches(reg,out,[compare.augmented(reg,source,j) for j in reg["jobs"]],worker,
             lambda j:compare.prior.folder_for(reg["config"],j),lambda j:compare.read_result(reg,source,j),
