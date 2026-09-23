@@ -3119,6 +3119,16 @@
       "contract": "Preserve full tasks, causal first crossings, no decision cap and no replenished budget."
     },
     {
+      "path": "scripts/register_sa_support_audit_fix.py",
+      "role": "reproducibility",
+      "purpose": "Explicit audit-only code amendment with unchanged collector AST and retained traces."
+    },
+    {
+      "path": "tests/evaluation/test_sa_original_terminal_support_audit.py",
+      "role": "reproducibility",
+      "contract": "Reject scientific changes and require state refresh before audit scoring."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."

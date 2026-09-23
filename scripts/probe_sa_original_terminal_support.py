@@ -119,7 +119,12 @@ def verify():
     run.require(reg["config"] == cfg and reg["binding"] == run.json_fingerprint(
         {k: v for k, v in reg.items() if k not in ("binding", "integrity")}), "registration")
     for p, sha in reg["inputs"].items():
-        run.require(run.sha256_file(run.contained_file(ROOT, p, field="support input")) == sha, "input changed: " + p)
+        actual = run.sha256_file(run.contained_file(ROOT, p, field="support input"))
+        if p == CODE[1] and actual != sha:
+            from scripts.register_sa_support_audit_fix import check_amendment
+            check_amendment(reg, out, actual)
+        else:
+            run.require(actual == sha, "input changed: " + p)
     run.require(select_roots(reg["records"], reg["source"]["split"]["train_maps"]) == reg["roots"], "root selection")
     run.require(run.validate_bundle(run.read_json(ROOT / cfg["actor"])) == reg["parent_policy"], "model semantics")
     return reg, out
@@ -321,6 +326,7 @@ def audit_worker(j):
         run.require(set(event["proposal_order"]) == set(ids) and len(event["proposal_order"]) == len(ids), "proposal order")
         by_id = {c["candidate_id"]: c for c in pool}
         original = [by_id[cid] for cid in event["proposal_order"]]
+        engine.prepare(state)
         feature_rows, _ = engine.realized_rows(original, state_hash=event["before"])
         index, scores, _ = score_online_candidates(feature_rows, model)
         run.require(original[index]["candidate_id"] == event["anchor_id"] and
@@ -393,7 +399,11 @@ def analyze():
                 {r["job_id"]: r["result_sha256"] for r in results} == complete["files"], "audit identity")
         else:
             results = _run_jobs(audit_worker, jobs, reg["config"]["workers"], phase="support-audit",
-                output_root=out / "audit-progress", run_fingerprint=reg["binding"], timeout_seconds=960.)
+                output_root=out / "audit-progress-v2", run_fingerprint=reg["binding"], timeout_seconds=960.,
+                failure_result=lambda j, status, error: dict(job_id=j["job_id"], status=status, error=error))
+            run.once(out / "audit-attempt-v2.json", run.sealed(dict(binding=reg["binding"], results=results)))
+            if any(r["status"] != "ok" for r in results):
+                run.write_json(out / "run_status.json", dict(status="audit_failed", binding=reg["binding"]))
             run.require(len(results) == len(jobs) and all(r["status"] == "ok" for r in results), "full trace audit")
             run.once(audit_path, run.sealed(dict(binding=reg["binding"], results=results)))
         rows = [read_result(j) for j in jobs]
