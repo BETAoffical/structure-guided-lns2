@@ -3064,6 +3064,16 @@
       "contract": "Protect mixture support, process-scoped policy adapter, no decision cap and unbiased coverage accounting."
     },
     {
+      "path": "scripts/probe_sa_hard_official_reference.py",
+      "role": "reproducibility",
+      "purpose": "Paired same-initial Official+SA reference reusing frozen uncapped runtime and historical controls."
+    },
+    {
+      "path": "tests/evaluation/test_sa_hard_official_reference.py",
+      "role": "reproducibility",
+      "contract": "Protect exact Train scope, original official RNG, replica accounting and evidence-bounded reference decisions."
+    },
+    {
       "path": "tests/evaluation/test_sa_completion_contract.py",
       "role": "reproducibility",
       "contract": "Protect audit-only identities, all split partitions, paired variance and strict-state consistency."
