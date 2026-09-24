@@ -3192,6 +3192,16 @@
       "path": "tests/evaluation/test_sa_terminal_joint_reference.py",
       "role": "reproducibility",
       "contract": "Validate all selected agents, fixed outsiders, reference budgets and scoped infeasibility."
+    },
+    {
+      "path": "scripts/audit_sa_work_clock.py",
+      "role": "reproducibility",
+      "purpose": "Read-only work-budget cooling exposure across complete Train trajectories; no new policy claims."
+    },
+    {
+      "path": "tests/evaluation/test_sa_work_clock.py",
+      "role": "reproducibility",
+      "contract": "Preserve successful absorption, crossing-action clocks, source identity and paired denominators."
     }
   ]
 }
