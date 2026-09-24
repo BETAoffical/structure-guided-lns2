@@ -3182,6 +3182,16 @@
       "path": "tests/evaluation/test_sa_terminal_augmentation.py",
       "role": "reproducibility",
       "contract": "Preserve original members, paired seeds, full-task feasibility and immutable diagnostic scope."
+    },
+    {
+      "path": "scripts/check_sa_terminal_joint_reference.py",
+      "role": "reproducibility",
+      "purpose": "One bounded five-agent hard-constraint CBS reference; never production PP replacement."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_joint_reference.py",
+      "role": "reproducibility",
+      "contract": "Validate all selected agents, fixed outsiders, reference budgets and scoped infeasibility."
     }
   ]
 }
