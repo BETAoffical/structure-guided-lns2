@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.sa.raw_runtime.v1",
+  "output": "build/sa-raw-residual-runtime-v1",
+  "phase": "raw-terminal-train-20260925",
+  "comparison_phase": "raw-terminal-compare-20260925",
+  "source": "build/sa-second-onpolicy-batch-v1",
+  "contract": "build/sa-raw-residual-contract-v1",
+  "train_replicas": 4,
+  "comparison_replicas": 2,
+  "conditions": 24,
+  "workers": 20,
+  "max_decisions": null,
+  "node_budget": 25000000,
+  "pp_safety_seconds": 20.0,
+  "episode_safety_seconds": 900.0,
+  "process_fuse_seconds": 960.0,
+  "maximum_updates": 1,
+  "formal_ttf": false,
+  "heldout_evaluation": false,
+  "automatic_promotion": false
+}

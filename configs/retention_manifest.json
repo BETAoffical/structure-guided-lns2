@@ -18,6 +18,10 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path": "experiments/sa_raw_residual_runtime.py", "role": "reproducibility", "purpose": "Process-local raw actor adapter preserving historical runtime and native PP/SA."},
+    {"path": "experiments/sa_raw_residual_update.py", "role": "reproducibility", "purpose": "Single complete-terminal raw-logit gradient with immediate-parent KL guard; no dense reward."},
+    {"path": "scripts/run_sa_raw_residual.py", "role": "reproducibility", "purpose": "Frozen raw actor native admission, new Train batch, one update and fresh-stream paired comparison."},
+    {"path": "tests/evaluation/test_sa_raw_residual_runtime.py", "role": "reproducibility", "contract": "Adapter isolation, behavior replay, terminal trajectory sums, ragged padding, zero-action weights and fixed sampling scope."},
     {"path": "experiments/sa_raw_residual_actor.py", "role": "reproducibility", "purpose": "Isolated exact-parent raw-logit policy and immediate-behavior KL contract; no optimizer or default controller integration."},
     {"path": "scripts/check_sa_raw_residual_contract.py", "role": "reproducibility", "purpose": "Train-input-only zero-update replay and cross-platform constructive expressivity checks, without fitting or solver calls."},
     {"path": "tests/evaluation/test_sa_raw_residual_actor.py", "role": "reproducibility", "contract": "Exact parent behavior, raw expressivity, local KL versus global limits, immutable lineage, gradients and portable parity."},
