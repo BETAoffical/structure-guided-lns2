@@ -3172,6 +3172,16 @@
       "path": "tests/evaluation/test_sa_terminal_resources.py",
       "role": "reproducibility",
       "contract": "Separate arrival from final holding, audit conflict identities and preserve branch denominators."
+    },
+    {
+      "path": "scripts/probe_sa_terminal_augmentation.py",
+      "role": "reproducibility",
+      "purpose": "Bounded targeted versus equal-size random additions with frozen PP and reused original trials."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_augmentation.py",
+      "role": "reproducibility",
+      "contract": "Preserve original members, paired seeds, full-task feasibility and immutable diagnostic scope."
     }
   ]
 }

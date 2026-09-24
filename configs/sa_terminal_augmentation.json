@@ -1,0 +1,18 @@
+{
+  "schema": "lns2.sa.terminal_augmentation.v1",
+  "output": "build/sa-terminal-augmentation-v1",
+  "source_report_sha256": "0174a93e33f4787fea6cc48f01bb00462a6890699d5a5bdeac3197ca37f6f702",
+  "resource_report_sha256": "c0edebf7b7469b749783df0ef45433e6b8e59632e9ac879b6622d9460170ca0d",
+  "target_ids": ["0484f3f95b249d4a0f7733f8", "c90002429cf7b40f6ff4d32f"],
+  "resource_agents": [94, 249, 388],
+  "random_namespace": "m04-terminal-augmentation-v1",
+  "trials": 4,
+  "workers": 20,
+  "pp_seconds": 20.0,
+  "branch_fuse_seconds": 90.0,
+  "group_fuse_seconds": 1860.0,
+  "max_decisions": null,
+  "training": false,
+  "formal_ttf": false,
+  "automatic_expansion": false
+}
