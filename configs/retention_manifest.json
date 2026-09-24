@@ -3202,6 +3202,21 @@
       "path": "tests/evaluation/test_sa_work_clock.py",
       "role": "reproducibility",
       "contract": "Preserve successful absorption, crossing-action clocks, source identity and paired denominators."
+    },
+    {
+      "path": "experiments/sa_budget_cooling.py",
+      "role": "reproducibility",
+      "purpose": "Isolated fixed work-clock cooling diagnostic; formal PP, actors and default SA unchanged."
+    },
+    {
+      "path": "scripts/probe_sa_budget_cooling.py",
+      "role": "reproducibility",
+      "purpose": "Paired complete-episode Train comparison with old-clock trace parity and no training."
+    },
+    {
+      "path": "tests/evaluation/test_sa_budget_cooling.py",
+      "role": "reproducibility",
+      "contract": "Protect the frozen schedule, actual-temperature features, node accounting and paired gains/losses."
     }
   ]
 }
