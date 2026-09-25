@@ -68,7 +68,11 @@ def selected_jobs(old_jobs, c):
     for arm in rt.ARMS:
         group = [j for j in jobs if j['comparison_arm'] == arm]
         require(sorted(Counter(j['case']['map_id'] for j in group).values()) == [2]*6 and
-                sorted(Counter(j['case']['density'] for j in group).values()) == [6, 6], 'map/density coverage')
+                Counter(j['case']['task_variant'] for j in group) ==
+                {'bottleneck_d20':6, 'bottleneck_d25':6}, 'map/density coverage')
+        for map_id in {j['case']['map_id'] for j in group}:
+            require({j['case']['task_variant'] for j in group if j['case']['map_id']==map_id} ==
+                    {'bottleneck_d20','bottleneck_d25'}, 'unpaired map densities')
     return jobs
 
 

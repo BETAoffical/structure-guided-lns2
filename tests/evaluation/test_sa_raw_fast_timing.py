@@ -23,7 +23,8 @@ def old_jobs():
                     for arm in ('raw_parent','raw_updated','dual16_sa','official_sa'):
                         jobs.append(dict(pair_id=f'm{m}-{d}-s{seed}',solver_seed=seed,replica=replica,
                             comparison_arm=arm,job_id=f'{m}-{d}-{seed}-{replica}-{arm}',
-                            case=dict(map_id=f'm{m}',density=d),model={'sha':'frozen'} if arm.startswith('raw_') else None,
+                            case=dict(map_id=f'm{m}',density=None,task_variant=f'bottleneck_d{round(d*100)}'),
+                            model={'sha':'frozen'} if arm.startswith('raw_') else None,
                             phase='original-stream',budget_seconds=120.))
     return jobs
 
