@@ -1,0 +1,23 @@
+{
+  "schema": "lns2.sa_raw_ttf.config.v1",
+  "output": "build/sa-raw-serial-ttf-v1",
+  "source": "build/sa-raw-independent-confirmation-v1",
+  "source_report_sha256": "ae957f127dcf448a4a0be41a81c5d3a10fffe53d44b3f6d8516f76563a418489",
+  "budget_seconds": 120.0,
+  "process_fuse_seconds": 240.0,
+  "workers": 1,
+  "audit_workers": 20,
+  "preflight_steps": 3,
+  "preflight_fuse_seconds": 300.0,
+  "audit_fuse_seconds": 900.0,
+  "max_decisions": null,
+  "execution_node_budget": null,
+  "feature_decision_reference": 256,
+  "feature_node_reference": 25000000,
+  "bootstrap": 5000,
+  "bootstrap_seed": 2026092603,
+  "no_training": true,
+  "automatic_promotion": false,
+  "protocol": "first_feasible_delivery",
+  "step_seconds": [0.5, 1.0, 2.0]
+}
