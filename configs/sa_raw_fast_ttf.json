@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.sa_raw_fast_ttf.config.v1",
+  "output": "build/sa-raw-fast-serial-ttf-v1",
+  "engineering_report_sha256": "55e835d6ad89e869450e68a3aaf96cab970d2ec59d561dad696f4c480f18a8fc",
+  "source_report_sha256": "3995070a223e787817ef4cc9cf72f95ab60f5c2a392b9794e6857474e9f26f69",
+  "solver_seed": 251,
+  "replica": 0,
+  "budget_seconds": 120.0,
+  "process_fuse_seconds": 240.0,
+  "workers": 1,
+  "audit_workers": 20,
+  "preflight_steps": 3,
+  "preflight_fuse_seconds": 300.0,
+  "audit_fuse_seconds": 900.0,
+  "max_decisions": null,
+  "execution_node_budget": null,
+  "bootstrap": 5000,
+  "bootstrap_seed": 2026092507,
+  "no_training": true,
+  "automatic_promotion": false
+}
