@@ -3331,6 +3331,21 @@
       "path": "tests/evaluation/test_sa_shared_feature_timing.py",
       "role": "reproducibility",
       "contract": "Protect frozen streams, timer bindings, arm identities, input hashes and uncapped decisions."
+    },
+    {
+      "path": "experiments/sa_lean_timing.py",
+      "role": "reproducibility",
+      "purpose": "Five-arm timer with scientific validation and evidence serialization outside the solver clock."
+    },
+    {
+      "path": "scripts/run_sa_lean_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Separately registered lean clock; preserve historical timings and safe stop/resume."
+    },
+    {
+      "path": "tests/evaluation/test_sa_lean_timing.py",
+      "role": "reproducibility",
+      "contract": "Check deferred audit clock boundaries, native path equality, immutable traces and no decision cap."
     }
   ]
 }

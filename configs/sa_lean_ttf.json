@@ -1,0 +1,22 @@
+{
+  "schema": "lns2.sa_lean_ttf.config.v1",
+  "output": "build/sa-lean-ttf-v1",
+  "timing_mode": "deferred_scientific_audit_v1",
+  "engineering_report_sha256": "430d1ea8a3c2fbf72efddf7c46f7409643379c5cdccd106756882ce2596e7965",
+  "source_report_sha256": "ad815c22a65eee5c9e125d811f40c06e3d77ea3a6ed0c5691bb9b05cb1367c21",
+  "solver_seeds": [251, 257],
+  "replicas": [0, 1],
+  "budget_seconds": 120.0,
+  "process_fuse_seconds": 240.0,
+  "workers": 1,
+  "audit_workers": 20,
+  "preflight_steps": 3,
+  "preflight_fuse_seconds": 300.0,
+  "audit_fuse_seconds": 900.0,
+  "max_decisions": null,
+  "execution_node_budget": null,
+  "bootstrap": 5000,
+  "bootstrap_seed": 2026092617,
+  "no_training": true,
+  "automatic_promotion": false
+}
