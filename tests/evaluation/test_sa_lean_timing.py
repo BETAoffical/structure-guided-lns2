@@ -1,4 +1,5 @@
 from copy import deepcopy
+from collections import Counter
 import gzip
 import json
 import os
@@ -150,29 +151,73 @@ class LeanTimingTests(unittest.TestCase):
         saved = deepcopy(original)
         jobs = cli.selected_jobs(original, cli.config())
         self.assertEqual(original, saved)
-        self.assertEqual(len(jobs), 240)
+        self.assertEqual(len(jobs), 192)
+        self.assertEqual(set(j['comparison_arm'] for j in jobs), set(rt.ARMS))
+        self.assertNotIn('raw_reference', rt.WORKERS)
         self.assertTrue({j['job_id'] for j in original}.isdisjoint(j['job_id'] for j in jobs))
-        for before, after in zip(original, jobs):
+        source = {j['job_id']: j for j in original}
+        for after in jobs:
+            before = source[after['source_shared_job_id']]
             for key in ('model', 'phase', 'pair_id', 'replica', 'solver_seed', 'case', 'comparison_arm'):
                 self.assertEqual(before[key], after[key])
             self.assertEqual(after['timing_mode'], rt.TIMING_MODE)
-        self.assertEqual(len(cli.phase_jobs(dict(jobs=jobs, binding='b'), 'pair')), 48)
+        self.assertEqual(cli.phase_jobs(dict(jobs=jobs, binding='b'), 'pair'), [])
+        with patch.object(rt, 'pair_worker', side_effect=AssertionError('unnecessary engineering recheck')):
+            self.assertTrue(cli.phase('pair')['skipped'])
         self.assertIs(cli.collect.__code__, cli.old.collect.__code__)
         self.assertIs(cli.collect.__globals__['rt'], rt)
         self.assertIs(rt.WORKERS['official'].__globals__['transition'], rt.previous.standard_transition)
         self.assertIs(rt.WORKERS['official_sa'].__globals__['transition'], rt.reference.transition)
         self.assertIs(rt.previous.WORKERS['official_sa'], rt.reference.timed_worker)
 
+    def test_four_method_schedule_balances_positions_and_predecessors(self):
+        original = cli.old.selected_jobs(old_jobs(), cli.old.config())
+        jobs = cli.selected_jobs(original, cli.config())
+        self.assertEqual(jobs, cli.selected_jobs(reversed(original), cli.config()))
+        self.assertEqual([j['schedule_index'] for j in jobs], list(range(192)))
+        positions, edges, coverage = Counter(), Counter(), Counter()
+        for i in range(0, len(jobs), 4):
+            group = jobs[i:i+4]
+            self.assertEqual(len({(j['pair_id'], j['replica']) for j in group}), 1)
+            self.assertEqual({j['comparison_arm'] for j in group}, set(rt.ARMS))
+            names = [j['comparison_arm'] for j in group]
+            positions.update((a, position) for position, a in enumerate(names))
+            edges.update(zip(names, names[1:]))
+            coverage.update((j['case']['map_id'], j['comparison_arm']) for j in group)
+        self.assertEqual(len(positions), 16)
+        self.assertEqual(set(positions.values()), {12})
+        self.assertEqual(len(edges), 12)
+        self.assertEqual(set(edges.values()), {12})
+        self.assertEqual(len(coverage), 24)
+        self.assertEqual(set(coverage.values()), {8})
+        with self.assertRaisesRegex(ValueError, 'missing source arm'):
+            cli.selected_jobs(original[:-1], cli.config())
+        with self.assertRaisesRegex(ValueError, 'duplicate source arm'):
+            cli.selected_jobs(original+[original[0]], cli.config())
+
     def test_summary_rejects_old_clock(self):
         with self.assertRaisesRegex(ValueError, 'mixed timing'):
             rt.summarize(rows(), 20, 1)
-        values = [r | {'timing_mode': rt.TIMING_MODE} for r in rows()]
-        self.assertTrue(rt.summarize(values, 20, 1)['scientific_audit_outside_ttf'])
+        values = [r | {'timing_mode': rt.TIMING_MODE} for r in rows() if r['comparison_arm'] in rt.ARMS]
+        result = rt.summarize(values, 20, 1)
+        self.assertTrue(result['scientific_audit_outside_ttf'])
+        self.assertTrue(result['engineering_comparison_reused_not_rerun'])
+        self.assertNotIn('same_raw_model', result)
+        self.assertNotIn('raw_reference', result['contrasts'])
+        self.assertEqual(set(result['arms']), set(rt.ARMS))
+        prior = rt.previous.summarize(rows(), 20, 1)
+        for arm in ('official', 'official_sa', 'dual16_sa'):
+            self.assertEqual(result['contrasts'][arm], prior['contrasts'][arm])
+        self.assertEqual(result['official_sa_vs_official'], prior['official_sa_vs_official'])
+        with self.assertRaisesRegex(ValueError, 'missing arm'):
+            rt.summarize(values[:-1], 20, 1)
+        with self.assertRaisesRegex(ValueError, 'unknown comparison_arm'):
+            rt.summarize([r | {'timing_mode': rt.TIMING_MODE} for r in rows()], 20, 1)
 
 
 @unittest.skipUnless(os.environ.get('LNS2_LEAN_NATIVE_SMOKE') == '1', 'opt-in frozen native prefix check')
 class NativeLeanTimingTests(unittest.TestCase):
-    def test_five_arms_same_actions_paths_and_deferred_trace(self):
+    def test_active_arms_same_actions_paths_and_deferred_trace(self):
         registration = rt.run.read_json(rt.run.ROOT/'build/sa-shared-feature-ttf-v1/registration.json')
         source = {arm:dict(next(j for j in registration['jobs'] if j['comparison_arm']==arm),
                            timing_binding=registration['binding']) for arm in rt.ARMS}
@@ -224,8 +269,8 @@ class NativeLeanTimingTests(unittest.TestCase):
                 outputs.append(result)
             self.assertEqual(*outputs, arm)
             signatures[arm] = rt.run.json_fingerprint(outputs[0])
-        rt.run.write_json(rt.run.ROOT/'build/sa-lean-timing-verification-v1/native-prefix.json',
-                          dict(passed=True, native_repairs=30, arms=signatures, no_ttf_claim=True))
+        rt.run.write_json(rt.run.ROOT/'build/sa-lean-timing-verification-v1/native-prefix-four-arm.json',
+                          dict(passed=True, native_repairs=6*len(rt.ARMS), arms=signatures, no_ttf_claim=True))
 
 
 if __name__ == '__main__':

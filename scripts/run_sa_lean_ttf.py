@@ -1,4 +1,4 @@
-"""Fresh five-arm collection with scientific checks outside the search clock."""
+"""Four-method timing confirmation; reuse the completed engineering comparison."""
 from pathlib import Path
 import sys
 
@@ -20,15 +20,31 @@ def config():
     c = run.read_json(ROOT/CONFIG)
     expected = old.config() | dict(schema='lns2.sa_lean_ttf.config.v1',
         output='build/sa-lean-ttf-v1', timing_mode=rt.TIMING_MODE,
+        comparison_arms=list(rt.ARMS), repeat_engineering_comparison=False,
         source_report_sha256='ad815c22a65eee5c9e125d811f40c06e3d77ea3a6ed0c5691bb9b05cb1367c21')
     require(c == expected, 'lean timing scope changed')
     return c
 
 
 def selected_jobs(jobs, c):
-    return [dict(j, job_id=run.json_fingerprint(['lean-ttf-v1', j['job_id']])[:24],
-                 output=c['output'], timing_mode=rt.TIMING_MODE,
-                 source_shared_job_id=j['job_id']) for j in jobs]
+    groups = {}
+    for j in jobs:
+        g = groups.setdefault((j['pair_id'], j['replica']), {})
+        arm = j['comparison_arm']
+        require(arm not in g, 'duplicate source arm')
+        g[arm] = j
+    require(len(groups) == 48, 'expected 48 paired conditions')
+    result = []
+    # Four Williams orders balance positions and within-condition predecessors.
+    orders = [tuple(rt.ARMS[(x+shift) % 4] for x in (0, 1, 3, 2)) for shift in range(4)]
+    for i, (_, g) in enumerate(sorted(groups.items())):
+        require(set(g) == set(old.rt.ARMS), 'missing source arm')
+        for arm in orders[i % 4]:
+            j = g[arm]
+            result.append(dict(j, job_id=run.json_fingerprint(['lean-ttf-four-arm-v1', j['job_id']])[:24],
+                output=c['output'], timing_mode=rt.TIMING_MODE,
+                source_shared_job_id=j['job_id'], schedule_index=len(result)))
+    return result
 
 
 def prepare():
@@ -69,24 +85,29 @@ def verify():
     return r, out
 
 
-phase_jobs = old.phase_jobs
-phase = _bind(old.phase, verify=verify, rt=rt)
+def phase_jobs(r, name):
+    return [] if name == 'pair' else old.first.source.jobs_for(r)
+
+
+def phase(name):
+    if name == 'pair':
+        return dict(phase=name, skipped=True, reason='engineering equivalence already verified')
+    require(name in ('preflight', 'audit'), 'unknown lean phase')
+    return _bind(old.phase, verify=verify, rt=rt, phase_jobs=phase_jobs)(name)
+
+
 collect = _bind(old.collect, verify=verify, rt=rt)
 
 
 def report():
     r, out = verify()
     jobs = old.first.source.jobs_for(r)
-    for name in ('collect', 'audit', 'pair'):
+    for name in ('collect', 'audit'):
         old.first.source.check_complete(r, out, name, phase_jobs(r, name))
     rows = [old.first.source.read_result(r, out, j) for j in jobs]
     for j in jobs:
         proof = run.check_seal(run.read_json(out/'audit'/(j['job_id']+'.json')))
         require(proof['result_sha256'] == run.sha256_file(out/'episodes'/j['job_id']/'result.json'), 'stale audit')
-    for j in phase_jobs(r, 'pair'):
-        proof = run.check_seal(run.read_json(out/'pair'/(j['job_id']+'.json')))
-        require(proof['result_hashes'] == [run.sha256_file(out/'episodes'/x/'result.json') for x in j['runtime_jobs']],
-                'stale runtime pair')
     result = rt.summarize(rows, r['config']['bootstrap'], r['config']['bootstrap_seed'])
     cases = {j['case']['task_id']: j['case']['task_variant'] for j in jobs}
     result.update(schema='lns2.sa_lean_ttf.report.v1', binding=r['binding'], episodes=rows,

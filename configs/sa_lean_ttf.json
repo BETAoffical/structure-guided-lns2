@@ -2,6 +2,8 @@
   "schema": "lns2.sa_lean_ttf.config.v1",
   "output": "build/sa-lean-ttf-v1",
   "timing_mode": "deferred_scientific_audit_v1",
+  "comparison_arms": ["official", "official_sa", "dual16_sa", "raw_fast"],
+  "repeat_engineering_comparison": false,
   "engineering_report_sha256": "430d1ea8a3c2fbf72efddf7c46f7409643379c5cdccd106756882ce2596e7965",
   "source_report_sha256": "ad815c22a65eee5c9e125d811f40c06e3d77ea3a6ed0c5691bb9b05cb1367c21",
   "solver_seeds": [251, 257],

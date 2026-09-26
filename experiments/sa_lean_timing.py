@@ -1,16 +1,16 @@
-"""Deferred scientific auditing for the frozen five-arm first-feasible runtime."""
+"""Deferred scientific auditing for the frozen four-arm first-feasible runtime."""
 import gzip
 import json
 import time
 
 from experiments import sa_raw_timed_runtime as reference
 from experiments import sa_shared_feature_timing as previous
-from experiments.sa_raw_selection_fast import _bind, FastPolicy
+from experiments.sa_raw_selection_fast import _bind
 from experiments.sa_shared_features import SharedFeaturePolicy
 from scripts import run_sa_onpolicy as run
 
-ARMS = previous.ARMS
-LABELS = previous.LABELS
+ARMS = ('official', 'official_sa', 'dual16_sa', 'raw_fast')
+LABELS = {arm: previous.LABELS[arm] for arm in ARMS}
 TIMING_MODE = 'deferred_scientific_audit_v1'
 Policy = reference.Policy
 prepare_environment = reference.prepare_environment
@@ -168,8 +168,7 @@ def lean_worker(job):
                 ttf=ttf, delivery=delivery, decisions=d)
 
 
-WORKERS = {'raw_reference': _bind(lean_worker, Policy=FastPolicy),
-           'raw_fast': _bind(lean_worker, Policy=SharedFeaturePolicy),
+WORKERS = {'raw_fast': _bind(lean_worker, Policy=SharedFeaturePolicy),
            'dual16_sa': lean_worker, 'official_sa': lean_worker,
            'official': _bind(lean_worker, Policy=previous.OfficialPolicy,
                             prepare_environment=previous.standard_environment,
@@ -192,7 +191,11 @@ def audit_worker(job):
 def summarize(rows, bootstrap, seed):
     rows = list(rows)
     run.require(all(r.get('timing_mode') == TIMING_MODE for r in rows), 'mixed timing semantics')
-    return previous.summarize(rows, bootstrap, seed) | {
+    result = _bind(previous.summarize, ARMS=ARMS, LABELS=LABELS)(rows, bootstrap, seed)
+    result.pop('same_raw_model')
+    result.pop('reference_is_existing_fast_policy')
+    return result | {
         'timing_mode': TIMING_MODE, 'scientific_audit_outside_ttf': True,
         'evidence_export_outside_delivery': True,
+        'engineering_comparison_reused_not_rerun': True,
         'snapshot_buffer_overhead_included': True}
