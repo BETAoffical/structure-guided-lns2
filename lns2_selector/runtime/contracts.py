@@ -13,6 +13,12 @@ CONTROLLER_IDS = (
 )
 
 
+def require(condition, message):
+    """Fail closed without coercing or replacing the caller's diagnostic."""
+    if not condition:
+        raise ValueError(message)
+
+
 def require_bool(value: Any, *, field: str) -> bool:
     """Return a JSON boolean while rejecting truthy substitutes."""
 

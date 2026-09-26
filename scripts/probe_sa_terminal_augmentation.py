@@ -1,6 +1,4 @@
 """Fixed posthoc set augmentation, with paired PP seeds and reused controls."""
-import argparse
-import json
 import os
 from pathlib import Path
 import sys
@@ -269,20 +267,8 @@ def analyze():
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("prepare", "verify", "dry-run", "collect", "analyze", "stop"))
-    parser.add_argument("--resume", action="store_true")
-    args = parser.parse_args()
-    if args.phase == "prepare": result = prepare()
-    elif args.phase == "collect": result = collect(args.resume)
-    elif args.phase == "analyze": result = analyze()
-    else:
-        reg, out = verify()
-        if args.phase == "stop":
-            run.write_json(out / "STOP_AFTER_JOB", dict(requested=True))
-            result = dict(safe_stop_after_current_jobs=True)
-        else: result = dry_run(reg)
-    print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+    return source.main(dict(prepare=prepare, collect=collect, analyze=analyze,
+                            verify=verify, dry_run=dry_run), description=__doc__)
 
 
 if __name__ == "__main__": main()

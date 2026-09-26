@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from tests.native_support import isolated_sa_native
 from unittest.mock import patch
 
 from experiments.sa_raw_confirmation import ARMS
@@ -40,6 +41,7 @@ class TimedRuntimeTests(unittest.TestCase):
         self.assertEqual(run.budget_features({},1000,30000000,fp['proposal']),{
             'budget.remaining_decision_fraction':0.,'budget.remaining_node_fraction':0.})
 
+    @isolated_sa_native
     def test_four_frozen_arms_native_micro_and_artifact_audit(self):
         try:import lns2_env
         except ImportError:self.skipTest('frozen WSL native needed')
@@ -72,6 +74,12 @@ class TimedRuntimeTests(unittest.TestCase):
                 self.assertGreaterEqual(row['delivery_seconds'],row['ttf_seconds'])
                 self.assertIsNone(row['execution_node_budget'])
                 self.assertEqual(rt.audit_worker(job)['status'],'ok')
+                for changes in ({'task_id':'wrong'}, {'files':{}}, {'initial_conflicts':999},
+                                {'final_conflicts':999}, {'native_pp_seconds':999.}):
+                    bad={k:v for k,v in row.items() if k!='integrity'}
+                    run.write_json(root/'episodes'/a/'result.json',run.sealed(dict(bad,**changes)))
+                    with self.assertRaises(ValueError):rt.audit_worker(job)
+                run.write_json(root/'episodes'/a/'result.json',row)
                 deadline_job=dict(job,job_id=a+'-deadline',budget_seconds=1e-9)
                 with patch.object(rt,'prepare_environment',return_value=(q,env,ctx)):
                     rt.timed_worker(deadline_job)

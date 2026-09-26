@@ -19,14 +19,10 @@ from experiments.sa_paired_completion import MODEL_PARAMS, PairedCompletionModel
 from experiments.sa_unbalanced_coverage import state_weights
 from scripts import audit_sa_source_matched_prediction as previous
 from scripts.audit_sa_history_information import atomic
-from scripts.run_sa_paired_closed_loop import once
+from scripts.run_sa_paired_closed_loop import once, sealed
 
 CONFIG = ROOT / "configs/sa_recent_model_reconstruction.json"
 RECENT = "reconstructed_47_state_lomo_gbdt"
-
-
-def sealed(value):
-    return value | {"integrity": json_fingerprint(value)}
 
 
 def check_contract(cfg):

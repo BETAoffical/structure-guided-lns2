@@ -29,9 +29,7 @@ def write(path, value):
     os.replace(tmp, path)
 
 
-def require(condition, message):
-    if not condition:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def prepare():

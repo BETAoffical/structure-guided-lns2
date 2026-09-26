@@ -79,13 +79,8 @@ def prepare():
 
 
 def verify():
-    cfg = read_json(CONFIG)
-    out = ROOT / cfg["output"]
-    plan = read_json(out / "plan.json")
-    require(plan["config"] == cfg and plan["binding"] == json_fingerprint({k:v for k,v in plan.items() if k != "binding"}), "plan identity")
-    for name, digest in plan["files"].items():
-        require(sha256_file(ROOT / name) == digest, "registered input changed: " + name)
-    return plan, out
+    from experiments._common import verify_registered_plan
+    return verify_registered_plan(ROOT, CONFIG)
 
 
 def check_prefix(event, before, after, paired, frozen, at_intervention):

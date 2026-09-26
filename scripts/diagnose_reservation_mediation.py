@@ -25,9 +25,7 @@ REG = ROOT / 'artifacts/initlns-reservation-mediation-v1/registration.json'
 ARMS = ('original16', 'compressed12', 'compressed11')
 
 
-def require(ok, message):
-    if not ok:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def query_seed(trial, index):

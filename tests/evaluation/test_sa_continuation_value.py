@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from experiments._common import read_json
+from experiments._common import read_json, json_fingerprint, sha256_file, write_json, verify_registered_plan
 from experiments.sa_continuation_value import select_roots, best, state_summary, summarize
 from scripts.run_sa_continuation_value import record, read_record, branch_jobs
 
@@ -14,6 +14,20 @@ def fixture():
 
 
 class ContinuationValueTests(unittest.TestCase):
+    def test_shared_plan_reader_binds_config_and_input_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            config=dict(output='out')
+            write_json(root/'config.json',config)
+            write_json(root/'input.json',{'value':1})
+            plan=dict(config=config,files={'input.json':sha256_file(root/'input.json')})
+            plan['binding']=json_fingerprint(plan)
+            write_json(root/'out/plan.json',plan)
+            self.assertEqual(verify_registered_plan(root,root/'config.json'),(plan,root/'out'))
+            write_json(root/'input.json',{'value':2})
+            with self.assertRaisesRegex(ValueError,'registered input changed'):
+                verify_registered_plan(root,root/'config.json')
+
     def test_selection_outcome_blind_and_order_invariant(self):
         rows = [dict(map_id=f"m{i}", phase=p, id=f"{i}-{p}-{j}", decision=4 if p == "early" else 16,
                      agents=300, conflicts=4, completed=j%2) for i in range(8) for p in ("early", "continuing") for j in range(2)]

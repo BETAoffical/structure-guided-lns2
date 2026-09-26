@@ -2,6 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 import tempfile
 import unittest
+from tests.native_support import isolated_sa_native
 from unittest.mock import patch
 
 from experiments.sa_raw_confirmation import ARMS, schedule, summarize
@@ -71,6 +72,7 @@ class ConfirmationTests(unittest.TestCase):
         self.assertIsNone(result['proposal']['max_decisions'])
         self.assertIsNone(runtime.work_stop(False,10**9,100,result['proposal']))
 
+    @isolated_sa_native
     def test_frozen_native_four_arms_micro(self):
         try:import lns2_env
         except ImportError:self.skipTest('frozen WSL native required')

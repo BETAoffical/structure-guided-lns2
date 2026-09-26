@@ -1,4 +1,5 @@
 import copy
+import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -12,6 +13,7 @@ from tests.evaluation.test_sa_low_complexity_ranker import fixture
 
 
 class IntegrityTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('sklearn'), 'registered sklearn environment required')
     def test_resealed_wrong_fit_metadata_is_rejected(self):
         data = fixture()
         plan = dict(binding=json_fingerprint("test"), config=dict(members=20, seed=4))

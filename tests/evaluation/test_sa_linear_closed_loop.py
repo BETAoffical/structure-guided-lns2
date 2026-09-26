@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from tests.native_support import isolated_sa_native
 from unittest.mock import patch
 
 import numpy as np
@@ -129,7 +130,7 @@ class LinearLoopTests(unittest.TestCase):
             self.assertEqual(model.rank(s)["selected"],"0")
             self.assertEqual(p.rank(s),gbdt.rank(s))
 
-    @unittest.skipUnless(importlib.util.find_spec("lns2_env"),"frozen WSL native")
+    @isolated_sa_native
     def test_micro_episode_trace_audit_resume_and_zero_conflict(self):
         import lns2_env
         from scripts import run_sa_linear_closed_loop as runner

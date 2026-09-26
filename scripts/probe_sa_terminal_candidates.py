@@ -401,20 +401,21 @@ def analyze():
     return {k: report[k] for k in ("counterfactuals", "controls", "feasible_counterfactuals", "decision")}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(actions=None, description=None):
+    actions = actions or dict(prepare=prepare, collect=collect, analyze=analyze, verify=verify, dry_run=dry_run)
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument("phase", choices=("prepare", "verify", "dry-run", "collect", "analyze", "stop"))
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
-    if args.phase == "prepare": result = prepare()
-    elif args.phase == "collect": result = collect(args.resume)
-    elif args.phase == "analyze": result = analyze()
+    if args.phase == "prepare": result = actions['prepare']()
+    elif args.phase == "collect": result = actions['collect'](args.resume)
+    elif args.phase == "analyze": result = actions['analyze']()
     else:
-        reg, out = verify()
+        reg, out = actions['verify']()
         if args.phase == "stop":
             run.write_json(out / "STOP_AFTER_JOB", dict(requested=True))
             result = dict(safe_stop_after_current_jobs=True)
-        else: result = dry_run(reg)
+        else: result = actions['dry_run'](reg)
     print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
 
 

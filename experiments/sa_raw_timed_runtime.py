@@ -7,6 +7,7 @@ import time
 from scripts import run_sa_onpolicy as run
 from experiments.sa_raw_residual_runtime import RuntimeActor
 from experiments.sa_uncapped_runtime import feature_plan
+from lns2_selector.evaluation.raw_ttf_artifacts import validate_raw_ttf_identity, validate_raw_ttf_outcome
 
 
 def prepare_environment(job):
@@ -219,11 +220,12 @@ def audit_worker(job):
     from experiments.compact_controller_model import load_controller_bundle
     folder = run.ROOT/job['output']/'episodes'/job['job_id']
     row = run.check_seal(run.read_json(folder/'result.json'))
-    run.require(row['binding'] == job['timing_binding'] and row['job_id'] == job['job_id'], 'timing identity')
+    validate_raw_ttf_identity(row, job, job['timing_binding'])
     for name, digest in row['files'].items():
         run.require(run.sha256_file(run.contained_file(folder,name,field='timing artifact')) == digest, 'changed timing file')
     q = run.native_runtime(job['plan'])
     state = run.read_json(folder/'initial.json')
+    initial = state
     initial_nodes = state['low_level']['generated']
     run.require(q.state_fingerprint(state) == row['initial_fingerprint'] == job['expected_initial'], 'audit initial')
     policy = Policy(job, q, dict(task_id=job['case']['task_id'], solver_seed=job['solver_seed'],
@@ -232,6 +234,7 @@ def audit_worker(job):
     anchor = load_controller_bundle(run.ROOT/'artifacts/initlns-closed-loop-controller-v2').main_models['realized_dynamic'] if policy.selector else None
     engine = OnlineFeatureEngine(state,backend='native') if policy.selector else None
     count, noops, last_pp_reason = 0, 0, None
+    pp_seconds = 0.0
     last_time = row['reset_seconds']
     feasible_time = last_time if state['feasible'] else None
     for event in run.trace_read(folder):
@@ -277,11 +280,16 @@ def audit_worker(job):
         last_time = event['elapsed_seconds']
         if after['feasible']:feasible_time = last_time
         noops += event['metrics']['pp_failure_reason'] == 'not_run'
+        step_pp = event['metrics']['native_replan_seconds']
+        run.require(type(step_pp) in (int, float) and math.isfinite(step_pp) and step_pp >= 0,
+                    'invalid trace PP time')
+        pp_seconds += step_pp
         last_pp_reason = event['metrics']['pp_failure_reason']
         state = after
         count += 1
     final = run.read_json(folder/'final.json')
     validate_final(final)
+    validate_raw_ttf_outcome(row, initial, final, pp_seconds)
     run.require(q.state_fingerprint(state) == q.state_fingerprint(final) == row['final_fingerprint'], 'final mismatch')
     run.require(count == row['decisions'] and noops == row['legal_noops'] and count-noops == row['pp_calls'], 'work counts')
     run.require(row['generated'] == state['low_level']['generated']-initial_nodes and row['feasible'] == state['feasible'], 'outcome counts')

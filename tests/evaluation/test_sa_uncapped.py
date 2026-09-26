@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
+from tests.native_support import isolated_sa_native
 from unittest.mock import patch
 
 from experiments import sa_uncapped_runtime as runtime
@@ -125,6 +126,7 @@ class UncappedTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"partial episode"):
                     compare.collect(True)
 
+    @isolated_sa_native
     def test_frozen_native_micro(self):
         try:
             import lns2_env

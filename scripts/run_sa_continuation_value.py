@@ -12,7 +12,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from experiments._common import read_json, sha256_file, json_fingerprint
+from experiments._common import read_json, sha256_file, json_fingerprint, verify_registered_plan
 from experiments.sa_paired_completion import require
 from experiments.sa_continuation_value import select_roots, state_summary, summarize
 from experiments.sa_paired_closed_loop import portable_model, choose, subset
@@ -103,13 +103,7 @@ def prepare():
 
 
 def verify():
-    cfg = read_json(CONFIG)
-    out = ROOT/cfg["output"]
-    plan = read_json(out/"plan.json")
-    require(plan["config"] == cfg and plan["binding"] == json_fingerprint({k:v for k,v in plan.items() if k != "binding"}), "plan identity")
-    for name, digest in plan["files"].items():
-        require(sha256_file(ROOT/name) == digest, "registered input changed: " + name)
-    return plan, out
+    return verify_registered_plan(ROOT, CONFIG)
 
 
 def replay_root(plan, entry):

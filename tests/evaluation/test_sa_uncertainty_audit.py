@@ -1,4 +1,5 @@
 import copy
+import importlib.util
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
@@ -121,6 +122,7 @@ class UncertaintyTests(unittest.TestCase):
         self.assertEqual(report["positive_point_estimates"], ["ensemble_mean", "vote_expectation"])
         self.assertIsNone(report["agreement_groups"]["low"]["anchor_gain"])
 
+    @unittest.skipUnless(importlib.util.find_spec('sklearn'), 'registered sklearn environment required')
     def test_fit_deterministic(self):
         import sklearn
         if sklearn.__version__ != "1.5.0":

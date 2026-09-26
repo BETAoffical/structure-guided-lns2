@@ -16,9 +16,11 @@ from scripts import run_sa_onpolicy as run
 from scripts import recover_sa_onpolicy as recovery
 from experiments import sa_raw_timed_runtime as rt
 from experiments.sa_raw_confirmation import ARMS
+from lns2_selector.evaluation.raw_ttf_artifacts import validate_raw_ttf_identity
 
 CONFIG = 'configs/sa_raw_serial_ttf.json'
 CODE = (CONFIG,'scripts/run_sa_raw_ttf.py','experiments/sa_raw_timed_runtime.py',
+        'lns2_selector/evaluation/raw_ttf_artifacts.py','lns2_selector/runtime/contracts.py',
         'experiments/sa_raw_timing_metrics.py','tests/evaluation/test_sa_raw_timing_metrics.py',
         'tests/evaluation/test_sa_raw_timed_runtime.py','docs/SA_RAW_SERIAL_TTF_PROTOCOL_ZH.md')
 require = run.require
@@ -132,10 +134,7 @@ def check_complete(r,out,name,jobs):
 
 def read_result(r,out,j):
     row=run.check_seal(run.read_json(out/'episodes'/j['job_id']/'result.json'))
-    require(row['binding']==r['binding'] and all(row[k]==j[k] for k in
-        ('job_id','pair_id','replica','comparison_arm','budget_seconds')) and
-        row['initial_fingerprint']==j['expected_initial'] and row['map_id']==j['case']['map_id'],'timed result identity')
-    require(row['policy_sha256']==(j['model']['policy_sha256'] if j['model'] else j['arm']),'model identity')
+    validate_raw_ttf_identity(row,j,r['binding'])
     for n,h in row['files'].items():
         require(run.sha256_file(run.contained_file(out/'episodes'/j['job_id'],n,field='timed output'))==h,'timed output changed')
     return row

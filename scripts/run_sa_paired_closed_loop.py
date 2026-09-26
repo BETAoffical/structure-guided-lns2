@@ -34,6 +34,7 @@ def sealed(value):
 
 
 def check_seal(value):
+    require(isinstance(value, dict), "artifact must be a JSON object")
     require(value["integrity"]==json_fingerprint({k:v for k,v in value.items() if k!="integrity"}),"artifact integrity")
     return value
 

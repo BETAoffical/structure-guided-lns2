@@ -26,9 +26,7 @@ TIMED = ROOT/'build/path-quality-pressure-deadline-recovery-v1'
 LOCAL = ROOT/'build/initlns-local-path-compatibility-v1-final'
 
 
-def require(ok, message):
-    if not ok:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def edges(agents):

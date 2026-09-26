@@ -5,8 +5,23 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 from scripts import probe_sa_terminal_augmentation as p
+
+
+class SharedDispatchTests(unittest.TestCase):
+    def test_shared_cli_uses_augmentation_callbacks_not_source_actions(self):
+        for phase, key in (('prepare','prepare'),('collect','collect'),('analyze','analyze'),
+                           ('verify','dry_run'),('dry-run','dry_run'),('stop','verify')):
+            actions={k:Mock(return_value={}) for k in ('prepare','collect','analyze','dry_run')}
+            actions['verify']=Mock(return_value=({'binding':'test'},Path('unused')))
+            with self.subTest(phase=phase),patch.object(sys,'argv',['probe',phase,'--resume']), \
+                 patch('builtins.print'),patch.object(p.run,'write_json') as write:
+                p.source.main(actions, description='test dispatch')
+                actions[key].assert_called_once()
+                if phase=='collect':actions[key].assert_called_once_with(True)
+                if phase=='stop':write.assert_called_once_with(Path('unused/STOP_AFTER_JOB'),dict(requested=True))
 
 
 def fixture():

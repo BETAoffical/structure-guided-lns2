@@ -1,6 +1,4 @@
-import ast
 from copy import deepcopy
-import inspect
 import math
 from pathlib import Path
 import tempfile
@@ -27,9 +25,13 @@ def coefficients(rows, groups=None):
 
 
 class UncappedTrainingTests(unittest.TestCase):
-    def test_credit_algorithm_preserves_historical_ast(self):
-        self.assertEqual(ast.dump(ast.parse(inspect.getsource(previous.gradient_coefficients))),
-                         ast.dump(ast.parse(inspect.getsource(credit.gradient_coefficients))))
+    def test_shared_credit_preserves_weights_with_distinct_terminal_contracts(self):
+        rows=[episode(),episode(replica=1,success=False)]
+        self.assertEqual(coefficients(rows),previous.gradient_coefficients(
+            rows,policy_sha256='a'*64,expected_groups={'p':'m'},replicas=2,max_decisions=256,node_budget=100))
+        with self.assertRaises(ValueError):
+            credit.gradient_coefficients(rows,policy_sha256='a'*64,expected_groups={'p':'m'},
+                                         replicas=2,max_decisions=256,node_budget=100)
 
     def test_no_decision_limit_or_length_reweighting(self):
         rows=[episode(decisions=1),episode(replica=1,success=False,decisions=300)]

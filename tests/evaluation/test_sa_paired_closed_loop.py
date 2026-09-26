@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from tests.native_support import isolated_sa_native
 
 from experiments._common import read_json, json_fingerprint
 from experiments.sa_paired_closed_loop import choose, subset, gate, stop_reason, portable_model, portable_payload
@@ -113,7 +114,7 @@ class ClosedLoopTests(unittest.TestCase):
         self.assertEqual(cfg["candidate_limit"],4)
         self.assertEqual(cfg["arms"],["frozen","uniform","paired"])
 
-    @unittest.skipUnless(importlib.util.find_spec("lns2_env"),"frozen WSL native fixture")
+    @isolated_sa_native
     def test_native_micro_paths_and_each_arm(self):
         import lns2_env
         from experiments.online_feature_engine import OnlineFeatureEngine

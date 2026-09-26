@@ -19,9 +19,7 @@ from experiments.sa_history_selector import History, choose_candidates, targets,
 CONFIG = ROOT / "configs/sa_history_selector_pilot.json"
 
 
-def require(condition, message):
-    if not condition:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def locations(config_path=None):

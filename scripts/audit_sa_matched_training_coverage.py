@@ -1,6 +1,6 @@
 """Read-only label coverage, stream grouping and fold accounting; never fit."""
 import argparse
-from collections import Counter, defaultdict
+from collections import Counter
 from itertools import combinations
 import json
 import math

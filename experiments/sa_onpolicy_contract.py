@@ -61,12 +61,13 @@ def terminal_return(row, *, max_decisions, node_budget):
 
 
 def gradient_coefficients(episodes, *, policy_sha256, expected_groups, replicas,
-                          max_decisions, node_budget):
+                          max_decisions, node_budget, terminal_validator=None):
     """Map-equal episode weights with independent leave-one-replica-out baselines.
 
     Each coefficient multiplies SUM(log pi(a_t | s_t)) for one complete episode.
     This validates declared metadata, not native paths or recomputed probabilities.
     """
+    terminal_validator = terminal_return if terminal_validator is None else terminal_validator
     require(_sha(policy_sha256), "policy SHA required")
     strict_int(replicas, field="replicas", minimum=2)
     require(expected_groups and all(isinstance(k, str) and k and isinstance(v, str) and v
@@ -84,7 +85,7 @@ def gradient_coefficients(episodes, *, policy_sha256, expected_groups, replicas,
         require(_sha(row["initial_fingerprint"]) and _sha(row["rng_stream_id"]), "initial/RNG identity required")
         strict_int(row["replica"], field="replica")
         require(row["replica"] < replicas, "replica out of range")
-        value = terminal_return(row, max_decisions=max_decisions, node_budget=node_budget)
+        value = terminal_validator(row, max_decisions=max_decisions, node_budget=node_budget)
         require(value is not None, "censored batch: do not drop or impute episodes")
         require(len(row["steps"]) == row["decisions"], "missing trajectory steps")
         for decision, step in enumerate(row["steps"]):

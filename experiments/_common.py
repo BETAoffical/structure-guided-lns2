@@ -248,6 +248,20 @@ def canonical_json(value: Any) -> str:
     )
 
 
+def verify_registered_plan(root: Path, config_path: Path):
+    """Validate a files-based plan before executing its registered code."""
+    config = read_json(config_path)
+    output = root / config["output"]
+    plan = read_json(output / "plan.json")
+    if plan["config"] != config or plan["binding"] != json_fingerprint(
+            {k: v for k, v in plan.items() if k != "binding"}):
+        raise ValueError("plan identity")
+    for name, digest in plan["files"].items():
+        if sha256_file(contained_file(root, name, field="registered input")) != digest:
+            raise ValueError("registered input changed: " + name)
+    return plan, output
+
+
 def json_fingerprint(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 

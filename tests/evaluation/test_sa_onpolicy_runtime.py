@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+from tests.native_support import isolated_sa_native
 from unittest.mock import patch
 
 import numpy as np
@@ -149,8 +150,8 @@ class ActorTests(unittest.TestCase):
             validate_bundle(b)
 
 
-@unittest.skipUnless(importlib.util.find_spec("lns2_env"), "explicit frozen WSL native required")
 class NativeIntegrationTests(unittest.TestCase):
+    @isolated_sa_native
     def test_real_pool_state_streams_and_censoring(self):
         import lns2_env
         from experiments.online_feature_engine import OnlineFeatureEngine

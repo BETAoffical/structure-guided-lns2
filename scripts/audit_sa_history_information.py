@@ -20,9 +20,7 @@ from experiments.sa_history_information import OrderedHistory, future_labels, pr
 CONFIG = ROOT / "configs/sa_history_information_audit.json"
 
 
-def require(ok, message):
-    if not ok:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def source_finished(receipt):

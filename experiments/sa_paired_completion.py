@@ -11,9 +11,7 @@ MODEL_PARAMS = dict(learning_rate=0.05, max_iter=100, max_leaf_nodes=7,
                     early_stopping=False, random_state=20260916)
 
 
-def require(condition, message):
-    if not condition:
-        raise ValueError(message)
+from lns2_selector.runtime.contracts import require
 
 
 def _integer(value, minimum=0):

@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from scripts import run_sa_spatiotemporal_model_probe as probe
-from experiments._common import json_fingerprint, read_json, sha256_file, write_json
+from experiments._common import read_json, sha256_file, write_json
 from experiments.sa_paired_completion import MODEL_PARAMS, require
 from experiments.sa_spatiotemporal_model import select
 import numpy as np
