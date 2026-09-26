@@ -1,0 +1,20 @@
+{
+  "schema": "lns2.sa_raw_fast_remaining.config.v1",
+  "output": "build/sa-raw-fast-remaining-ttf-v1",
+  "first_batch": "build/sa-raw-fast-serial-ttf-v1",
+  "first_report_sha256": "5ff48bc57d20d9fbaf36f4b68779331a4e03d6c12f614102ab4deaa8af3bae06",
+  "conditions": [[251, 1], [257, 0], [257, 1]],
+  "budget_seconds": 120.0,
+  "process_fuse_seconds": 240.0,
+  "workers": 1,
+  "audit_workers": 20,
+  "preflight_steps": 3,
+  "preflight_fuse_seconds": 300.0,
+  "audit_fuse_seconds": 900.0,
+  "max_decisions": null,
+  "execution_node_budget": null,
+  "bootstrap": 5000,
+  "bootstrap_seed": 2026092607,
+  "no_training": true,
+  "automatic_promotion": false
+}
