@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path":"experiments/sa_shared_features.py","role":"active","purpose":"Opt-in same-decision native feature sharing, preserving frozen raw and GBDT decisions."},
+    {"path":"scripts/audit_sa_shared_features.py","role":"reproducibility","purpose":"Frozen replay and component-only benchmark for shared raw features, not TTF or training."},
+    {"path":"tests/evaluation/test_sa_shared_features.py","role":"active","purpose":"Projection, stale snapshot, candidate identity and native feature equivalence regressions."},
     {"path":"experiments/sa_bootstrap_closed_loop.py","role":"reproducibility","purpose":"Pure map-bootstrap models and selection; no solver or experiment runner."},
     {"path":"experiments/sa_continuation_value.py","role":"reproducibility","purpose":"Policy-conditional candidate value diagnostics; no training or promotion."},
     {"path":"experiments/sa_intervention_frequency.py","role":"reproducibility","purpose":"Bounded one-intervention ablation, not a deployable gating policy."},
