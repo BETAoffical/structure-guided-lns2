@@ -3316,6 +3316,21 @@
       "path": "tests/evaluation/test_sa_budget_cooling.py",
       "role": "reproducibility",
       "contract": "Protect the frozen schedule, actual-temperature features, node accounting and paired gains/losses."
+    },
+    {
+      "path": "experiments/sa_shared_feature_timing.py",
+      "role": "reproducibility",
+      "purpose": "Opt-in existing-fast versus shared-feature raw timer with unchanged native and Dual16 baseline."
+    },
+    {
+      "path": "scripts/run_sa_shared_feature_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Frozen paired serial timing, safe episode-boundary stop and full trajectory audits."
+    },
+    {
+      "path": "tests/evaluation/test_sa_shared_feature_timing.py",
+      "role": "reproducibility",
+      "contract": "Protect frozen streams, timer bindings, arm identities, input hashes and uncapped decisions."
     }
   ]
 }
