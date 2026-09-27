@@ -1,6 +1,6 @@
 {
   "schema": "lns2.sa_terminal_efficiency_ttf.config.v1",
-  "output": "build/sa-terminal-efficiency-ttf-v1",
+  "output": "build/sa-terminal-efficiency-ttf-v2",
   "source": "build/sa-terminal-efficiency-v1",
   "source_report_sha256": "32ae46e4fefa4dfc1cbe5860684f0f6db1a389a1f2e7352d7bafd32847d06a7a",
   "parent_sha256": "fad8c8c64d68aefbd19bcfa620eb36f479fbd95d835d819ca9fd30ae2021fe84",

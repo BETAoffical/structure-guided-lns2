@@ -9,7 +9,6 @@ sys.path.insert(0, str(ROOT))
 from scripts import run_sa_terminal_efficiency as training
 from scripts import run_sa_lean_ttf as lean
 from scripts import run_sa_raw_fast_ttf as first
-from scripts import run_sa_shared_feature_ttf as shared
 from scripts import run_sa_onpolicy as run
 from experiments import sa_terminal_efficiency_timing as rt
 from experiments.sa_raw_selection_fast import _bind
@@ -32,7 +31,7 @@ def config():
                  no_training=True, automatic_promotion=False)
     require(all(c[k] == v for k, v in fixed.items()), 'terminal timing scope changed')
     require(c['schema'] == 'lns2.sa_terminal_efficiency_ttf.config.v1' and
-            c['output'] == 'build/sa-terminal-efficiency-ttf-v1' and
+            c['output'] == 'build/sa-terminal-efficiency-ttf-v2' and
             c['source'] == 'build/sa-terminal-efficiency-v1', 'terminal timing identity changed')
     return c
 
@@ -144,7 +143,19 @@ def phase(name):
     if name == 'pair':
         return dict(skipped=True, reason='different models; engineering equivalence already verified')
     require(name in ('preflight', 'audit'), 'unknown timing phase')
-    return _bind(shared.phase, verify=verify, rt=rt, phase_jobs=phase_jobs)(name)
+    r, out = verify()
+    jobs = phase_jobs(r, name)
+    if name == 'audit':
+        first.source.check_complete(r, out, 'collect', jobs)
+    worker = rt.preflight_worker if name == 'preflight' else rt.audit_worker
+    with first.recovery.strict_lock(out, r['binding'], 'terminal-'+name):
+        require(not (out/name).exists(), 'phase already attempted; inspect')
+        rows = first.source.execute(r, out, jobs, worker, name, r['config']['audit_workers'],
+            r['config']['preflight_fuse_seconds' if name == 'preflight' else 'audit_fuse_seconds'])
+        require(len(rows) == len(jobs), 'incomplete phase')
+        run.once(out/(name+'.complete.json'), run.sealed(dict(binding=r['binding'], jobs=len(jobs),
+            files={j['job_id']: run.sha256_file(out/name/(j['job_id']+'.json')) for j in jobs})))
+    return dict(phase=name, verified=len(rows))
 
 
 collect = _bind(first.collect, verify=verify, rt=rt)

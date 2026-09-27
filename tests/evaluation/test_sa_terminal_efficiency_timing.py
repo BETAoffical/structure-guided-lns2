@@ -1,5 +1,7 @@
 from collections import Counter
 from copy import deepcopy
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -79,6 +81,23 @@ class TerminalEfficiencyTimingTests(unittest.TestCase):
         for worker in (rt.timed_worker, rt.preflight_worker, rt.audit_worker):
             with self.assertRaisesRegex(ValueError, 'unknown'):
                 worker({'comparison_arm':'completion_work'})
+
+    def test_admission_does_not_require_irrelevant_pair_worker(self):
+        self.assertFalse(hasattr(rt, 'pair_worker'))
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            reg = {'binding':'test', 'config':cli.config(), 'jobs':[{'job_id':'one'}]}
+            def execute(r, output, js, worker, phase, workers, timeout):
+                self.assertIs(worker, rt.preflight_worker)
+                self.assertEqual((phase, workers), ('preflight', 20))
+                result = {'status':'ok', 'job_id':'one', 'prefix_steps':3}
+                cli.run.once(output/phase/'one.json', cli.run.sealed(result))
+                return [result]
+            with patch.object(cli, 'verify', return_value=(reg,out)), \
+                 patch.object(cli.first.source, 'execute', side_effect=execute):
+                self.assertEqual(cli.phase('preflight')['verified'], 1)
+            self.assertTrue((out/'preflight.complete.json').is_file())
+        self.assertTrue(cli.phase('pair')['skipped'])
 
     def test_model_loading_requires_frozen_sha_and_iteration(self):
         from scripts.run_sa_raw_residual import load_model

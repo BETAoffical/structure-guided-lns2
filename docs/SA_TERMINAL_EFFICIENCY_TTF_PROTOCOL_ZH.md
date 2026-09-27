@@ -64,4 +64,12 @@ python scripts/run_sa_terminal_efficiency_ttf.py audit
 python scripts/run_sa_terminal_efficiency_ttf.py report
 ```
 
-数据输出 `build/sa-terminal-efficiency-ttf-v1`，不覆盖历史节点预算和TTF结果。
+数据输出 `build/sa-terminal-efficiency-ttf-v2`，不覆盖历史节点预算和TTF结果。
+
+## 准入前接线修正
+
+初版登记保留在 `build/sa-terminal-efficiency-ttf-v1`。准入入口复用了含同模型pair阶段的调度函数，
+其字典构造提前访问本轮不存在的pair_worker，导致AttributeError。
+错误发生在调度任何准入作业和计时之前，初版没有episode结果。
+修正为只选择当前preflight/audit worker，并补充实际调用phase的回归测试。
+新目录v2另行登记；模型、任务、随机流、统计规则及计时循环不变。
