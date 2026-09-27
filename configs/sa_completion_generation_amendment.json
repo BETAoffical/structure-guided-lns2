@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.sa_completion_endpoint_amendment.v1",
+  "source": "build/sa-completion-independent-ttf-v1",
+  "output": "build/sa-completion-independent-ttf-v2",
+  "failed_shards": [7, 10],
+  "method": "capacity_matching_v1",
+  "matching_attempts": 16,
+  "replace_maps": false,
+  "redraw_task_seed": false,
+  "change_completed_tasks": false,
+  "change_controller": false,
+  "analysis_excluding_amended_tasks": true,
+  "analysis_excluding_amended_maps": true
+}
