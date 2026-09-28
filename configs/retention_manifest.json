@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path":"experiments/sa_expanded_timing.py","role":"active","purpose":"Four frozen policies on new maps using the existing deferred-audit timing engine."},
+    {"path":"scripts/run_sa_expanded_ttf.py","role":"active","purpose":"Registered 72-condition new-map confirmation with serial timing, safe stop and endpoint matching provenance."},
+    {"path":"tests/evaluation/test_sa_expanded_timing.py","role":"active","purpose":"Four-arm pairing, balanced schedule, unchanged worker dispatch and raw timing statistics."},
     {"path":"experiments/sa_shared_features.py","role":"active","purpose":"Opt-in same-decision native feature sharing, preserving frozen raw and GBDT decisions."},
     {"path":"scripts/audit_sa_shared_features.py","role":"reproducibility","purpose":"Frozen replay and component-only benchmark for shared raw features, not TTF or training."},
     {"path":"tests/evaluation/test_sa_shared_features.py","role":"active","purpose":"Projection, stale snapshot, candidate identity and native feature equivalence regressions."},
