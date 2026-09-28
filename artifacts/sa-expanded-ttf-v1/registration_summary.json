@@ -1,0 +1,26 @@
+{
+  "schema": "lns2.sa_expanded_ttf.registration_summary.v1",
+  "preregistered_commit": "24c2722713c796db4c3051f437f8e60122918dc9",
+  "output": "build/sa-expanded-four-arm-ttf-v1",
+  "binding": "0e329d510e10119c8f12fd8481c34545033e0d6ec0e9e1a32c2d88bdfe4c6a6e",
+  "maps": 12,
+  "tasks": 24,
+  "conditions": 72,
+  "episodes": 288,
+  "qualification_valid": 72,
+  "qualification_errors": 0,
+  "nonzero_initial_states": 72,
+  "amended_endpoint_tasks": 0,
+  "source_training_permitted": false,
+  "timing_results_observed": false,
+  "preflight_required_before_collection": true,
+  "native_sha256": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "parent_sha256": "fad8c8c64d68aefbd19bcfa620eb36f479fbd95d835d819ca9fd30ae2021fe84",
+  "completion_sha256": "81727429f423734aef544c1e12ad61fae965a2118898fadafeab699dd9307062",
+  "files": {
+    "design.json": "2286be5be9b20c415e47436412e235f6d699fd238e9c46e63114b587393293cb",
+    "cases.json": "21db5f991e9acf9254804d712105e895eaed3e2688c0e4703ed0df68e5f12199",
+    "qualification.json": "3b411feb7e201e69a2ec1da92c9fe3f814e8f064c27d53c92c5c801980ee0997",
+    "registration.json": "a5acd6031c7d5e2bb9ffa7626f32627c9b3965c30a89e3c687aad61f0a2a1f43"
+  }
+}
