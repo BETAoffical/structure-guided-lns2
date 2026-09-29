@@ -3364,6 +3364,21 @@
       "path": "tests/evaluation/test_sa_expanded_trace_diagnostic.py",
       "role": "reproducibility",
       "contract": "Separate repeated members, paths and conflicts; verify occupancy phases and paired trace accounting."
+    },
+    {
+      "path": "experiments/sa_completion_acceptance.py",
+      "role": "reproducibility",
+      "purpose": "Frozen A acceptance-only ablation on identical complete PP with unchanged actor temperature input."
+    },
+    {
+      "path": "scripts/run_sa_completion_acceptance.py",
+      "role": "reproducibility",
+      "purpose": "Paired serial acceptance ablation with immutable source data, deferred audit and safe episode stop."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_acceptance.py",
+      "role": "reproducibility",
+      "contract": "Freeze model, acceptance modes, paired streams, uncapped runtime and the existing timer."
     }
   ]
 }
