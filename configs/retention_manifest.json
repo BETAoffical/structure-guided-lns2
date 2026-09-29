@@ -3349,6 +3349,21 @@
       "path": "tests/evaluation/test_sa_lean_timing.py",
       "role": "reproducibility",
       "contract": "Check deferred audit clock boundaries, native path equality, immutable traces and no decision cap."
+    },
+    {
+      "path": "experiments/sa_expanded_trace_diagnostic.py",
+      "role": "reproducibility",
+      "purpose": "Read-only recurrence, SA exposure and paired choice divergence descriptors for frozen expanded TTF traces."
+    },
+    {
+      "path": "scripts/audit_sa_expanded_traces.py",
+      "role": "reproducibility",
+      "purpose": "Hash-bound parallel analysis of 288 completed episodes; never calls a solver or changes a policy."
+    },
+    {
+      "path": "tests/evaluation/test_sa_expanded_trace_diagnostic.py",
+      "role": "reproducibility",
+      "contract": "Separate repeated members, paths and conflicts; verify occupancy phases and paired trace accounting."
     }
   ]
 }

@@ -1,0 +1,3822 @@
+{
+  "decision": "preserve_frozen_models_no_duplicate_cooling_or_neighborhood_tabu",
+  "diagnostic_report": {
+    "path": "build/sa-expanded-tail-diagnostic-v1/report.json",
+    "sha256": "0886bbccc9f46514369eb7fca95b4f8ffae04a0267a76525d868e15e8a4f53a6"
+  },
+  "discordant_actor_pairs": [
+    {
+      "arms": {
+        "completion": {
+          "anchor": "neighborhood-5e286ff3346a5daa",
+          "anchor_probability": 0.9047648605765216,
+          "conflicts_after": 76,
+          "conflicts_before": 73,
+          "draw": 0.9899522067837665,
+          "families": [
+            "structpool-spatiotemporal-hotspot:16"
+          ],
+          "final_conflicts": 0,
+          "selected": "neighborhood-a868114aecb04d6e",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005131995475490074,
+          "temperature": 327.7227574378037,
+          "ttf": 97.92977110899938
+        },
+        "parent": {
+          "anchor": "neighborhood-5e286ff3346a5daa",
+          "anchor_probability": 0.9043120713635726,
+          "conflicts_after": 73,
+          "conflicts_before": 73,
+          "draw": 0.9899522067837665,
+          "families": [
+            "target:4"
+          ],
+          "final_conflicts": 8,
+          "selected": "neighborhood-dfd8658dc6bc6595",
+          "selected_is_anchor": false,
+          "selected_probability": 0.0050471406634718255,
+          "temperature": 327.7227574378037,
+          "ttf": null
+        }
+      },
+      "first_divergence": {
+        "completion_members": [
+          25,
+          30,
+          92,
+          132,
+          135,
+          136,
+          139,
+          162,
+          163,
+          193,
+          243,
+          248,
+          271,
+          315,
+          373,
+          439
+        ],
+        "decision": 111,
+        "kind": "selection",
+        "parent_members": [
+          165,
+          240,
+          448,
+          486
+        ],
+        "same_draw": true,
+        "same_pool": true,
+        "same_pp_seed": true
+      },
+      "not_single_action_counterfactual": true,
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s281",
+      "probability_total_variation": 0.0006445858950906574,
+      "success": {
+        "completion": true,
+        "official": false,
+        "official_sa": false,
+        "parent": false
+      }
+    },
+    {
+      "arms": {
+        "completion": {
+          "anchor": "neighborhood-f6084b2ff0aa56b5",
+          "anchor_probability": 0.903854813423147,
+          "conflicts_after": 215,
+          "conflicts_before": 214,
+          "draw": 0.0452945425519673,
+          "families": [
+            "random:8"
+          ],
+          "final_conflicts": 0,
+          "selected": "neighborhood-0e7875d971e25454",
+          "selected_is_anchor": false,
+          "selected_probability": 0.00523027873935619,
+          "temperature": 860.0583546412885,
+          "ttf": 101.89798261299984
+        },
+        "parent": {
+          "anchor": "neighborhood-f6084b2ff0aa56b5",
+          "anchor_probability": 0.9044730191221187,
+          "conflicts_after": 207,
+          "conflicts_before": 214,
+          "draw": 0.0452945425519673,
+          "families": [
+            "collision:16"
+          ],
+          "final_conflicts": 12,
+          "selected": "neighborhood-0f0c44eacd846baa",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005041192123932485,
+          "temperature": 860.0583546412885,
+          "ttf": null
+        }
+      },
+      "first_divergence": {
+        "completion_members": [
+          13,
+          46,
+          60,
+          68,
+          83,
+          120,
+          125,
+          143
+        ],
+        "decision": 15,
+        "kind": "selection",
+        "parent_members": [
+          8,
+          20,
+          25,
+          27,
+          92,
+          94,
+          120,
+          125,
+          137,
+          145,
+          181,
+          196,
+          228,
+          230,
+          333,
+          359
+        ],
+        "same_draw": true,
+        "same_pool": true,
+        "same_pp_seed": true
+      },
+      "not_single_action_counterfactual": true,
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s293",
+      "probability_total_variation": 0.0017628880654528907,
+      "success": {
+        "completion": true,
+        "official": false,
+        "official_sa": true,
+        "parent": false
+      }
+    },
+    {
+      "arms": {
+        "completion": {
+          "anchor": "neighborhood-881572f83e17583f",
+          "anchor_probability": 0.9049434955813849,
+          "conflicts_after": 35,
+          "conflicts_before": 35,
+          "draw": 0.030856773213547295,
+          "families": [
+            "target:4"
+          ],
+          "final_conflicts": 0,
+          "selected": "neighborhood-115b5d8833f7ebcb",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005036378643335783,
+          "temperature": 605.0060671375363,
+          "ttf": 89.63386177200027
+        },
+        "parent": {
+          "anchor": "neighborhood-881572f83e17583f",
+          "anchor_probability": 0.9003354228200187,
+          "conflicts_after": 36,
+          "conflicts_before": 35,
+          "draw": 0.030856773213547295,
+          "families": [
+            "collision:16"
+          ],
+          "final_conflicts": 10,
+          "selected": "neighborhood-0b0834143fc7850d",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005250536969220575,
+          "temperature": 605.0060671375363,
+          "ttf": null
+        }
+      },
+      "first_divergence": {
+        "completion_members": [
+          151,
+          180,
+          187,
+          300
+        ],
+        "decision": 50,
+        "kind": "selection",
+        "parent_members": [
+          6,
+          22,
+          76,
+          94,
+          171,
+          206,
+          234,
+          242,
+          243,
+          305,
+          372,
+          385,
+          449,
+          494,
+          498,
+          524
+        ],
+        "same_draw": true,
+        "same_pool": true,
+        "same_pp_seed": true
+      },
+      "not_single_action_counterfactual": true,
+      "pair_id": "sa_expanded_v1_m07_station_centric_0000__task_0001-s281",
+      "probability_total_variation": 0.004652073974982924,
+      "success": {
+        "completion": true,
+        "official": true,
+        "official_sa": true,
+        "parent": false
+      }
+    },
+    {
+      "arms": {
+        "completion": {
+          "anchor": "neighborhood-015277b64b54d351",
+          "anchor_probability": 0.9050899285634311,
+          "conflicts_after": 226,
+          "conflicts_before": 218,
+          "draw": 0.9406221580872575,
+          "families": [
+            "target:8"
+          ],
+          "final_conflicts": 0,
+          "selected": "neighborhood-0acd545e2a83562d",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005141064085894873,
+          "temperature": 860.0583546412885,
+          "ttf": 74.495969642001
+        },
+        "parent": {
+          "anchor": "neighborhood-015277b64b54d351",
+          "anchor_probability": 0.9063796791022202,
+          "conflicts_after": 221,
+          "conflicts_before": 218,
+          "draw": 0.9406221580872575,
+          "families": [
+            "target:8"
+          ],
+          "final_conflicts": 30,
+          "selected": "neighborhood-08b03e6d3583405c",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005199690171570346,
+          "temperature": 860.0583546412885,
+          "ttf": null
+        }
+      },
+      "first_divergence": {
+        "completion_members": [
+          45,
+          130,
+          167,
+          199,
+          255,
+          314,
+          327,
+          337
+        ],
+        "decision": 15,
+        "kind": "selection",
+        "parent_members": [
+          20,
+          26,
+          27,
+          52,
+          74,
+          113,
+          143,
+          273
+        ],
+        "same_draw": true,
+        "same_pool": true,
+        "same_pp_seed": true
+      },
+      "not_single_action_counterfactual": true,
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s281",
+      "probability_total_variation": 0.002362128589474997,
+      "success": {
+        "completion": true,
+        "official": false,
+        "official_sa": false,
+        "parent": false
+      }
+    },
+    {
+      "arms": {
+        "completion": {
+          "anchor": "neighborhood-2dbeb8c942dee0d8",
+          "anchor_probability": 0.9023949251725975,
+          "conflicts_after": 472,
+          "conflicts_before": 480,
+          "draw": 0.045789608322613584,
+          "families": [
+            "random:4"
+          ],
+          "final_conflicts": 4,
+          "selected": "neighborhood-0ca0d83f16991490",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005170696754570732,
+          "temperature": 941.480149401,
+          "ttf": null
+        },
+        "parent": {
+          "anchor": "neighborhood-2dbeb8c942dee0d8",
+          "anchor_probability": 0.9061184336638475,
+          "conflicts_after": 468,
+          "conflicts_before": 480,
+          "draw": 0.045789608322613584,
+          "families": [
+            "target:16"
+          ],
+          "final_conflicts": 0,
+          "selected": "neighborhood-0ee7f918f197a931",
+          "selected_is_anchor": false,
+          "selected_probability": 0.005048847669677398,
+          "temperature": 941.480149401,
+          "ttf": 77.03647726000054
+        }
+      },
+      "first_divergence": {
+        "completion_members": [
+          14,
+          78,
+          130,
+          200
+        ],
+        "decision": 6,
+        "kind": "selection",
+        "parent_members": [
+          20,
+          26,
+          40,
+          85,
+          86,
+          115,
+          120,
+          139,
+          188,
+          233,
+          238,
+          254,
+          290,
+          358,
+          377,
+          436
+        ],
+        "same_draw": true,
+        "same_pool": true,
+        "same_pp_seed": true
+      },
+      "not_single_action_counterfactual": true,
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s293",
+      "probability_total_variation": 0.0039980281412889535,
+      "success": {
+        "completion": false,
+        "official": true,
+        "official_sa": true,
+        "parent": true
+      }
+    }
+  ],
+  "divergences": {
+    "identical_until_stop": 4,
+    "selection": 68
+  },
+  "episode_receipts_verified": 288,
+  "failures": [
+    {
+      "all": {
+        "accepted": 410,
+        "conflict_decreased": 211,
+        "conflict_increased": 155,
+        "decisions": 424,
+        "failure_reasons": {
+          "acceptance_rejected": 14,
+          "none": 410
+        },
+        "full_conflict_endpoint_coverage": 26,
+        "generated": 50213961,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.9034519610523586,
+        "mean_max_probability": 0.9034519610523586,
+        "mean_out_of_range_fraction": 0.15012203550170342,
+        "path_changed_without_conflict_count_change": 44,
+        "pp_seconds": 92.327216529,
+        "selected_anchor": 393,
+        "sizes": {
+          "15": 1,
+          "16": 381,
+          "4": 15,
+          "8": 27
+        },
+        "temperatures": [
+          1000.0,
+          14.245815478382218
+        ],
+        "top_neighborhood_fraction": 0.007075471698113208,
+        "unchanged_paths": 14,
+        "unique_neighborhoods": 411,
+        "unique_path_states": 410,
+        "worsening_accepted": 155,
+        "worsening_attempts": 169
+      },
+      "arm": "parent",
+      "best_at_seconds": 114.72906929700002,
+      "best_conflicts": 6,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 13,
+      "final_events": {
+        "events": 35,
+        "first_time": 1,
+        "goal_hold_pairs": [],
+        "last_time": 10,
+        "pairs": 13,
+        "swap_events": 1,
+        "vertex_events": 34
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 114.49921666199953,
+        "20": 110.52959176799959,
+        "3": null
+      },
+      "initial_conflicts": 371,
+      "initial_path_identity": "9adae2e80aeeb733f9dab39d030255d8a4c77c7295188b74d8d055929168c75e",
+      "integrity": "b4e1ac0eeef35b116ca0b7978d7179db451170bbadd7dc9d3cd728479e328db2",
+      "job_id": "0e2072643e021591943ab03d",
+      "last_30s": {
+        "accepted": 122,
+        "conflict_decreased": 55,
+        "conflict_increased": 46,
+        "decisions": 132,
+        "failure_reasons": {
+          "acceptance_rejected": 10,
+          "none": 122
+        },
+        "full_conflict_endpoint_coverage": 26,
+        "generated": 12224539,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.9036489711489083,
+        "mean_max_probability": 0.9036489711489083,
+        "mean_out_of_range_fraction": 0.17594390456997555,
+        "path_changed_without_conflict_count_change": 21,
+        "pp_seconds": 22.212424547,
+        "selected_anchor": 122,
+        "sizes": {
+          "16": 123,
+          "4": 6,
+          "8": 3
+        },
+        "temperatures": [
+          53.1467635277924,
+          14.245815478382218
+        ],
+        "top_neighborhood_fraction": 0.022727272727272728,
+        "unchanged_paths": 10,
+        "unique_neighborhoods": 123,
+        "unique_path_states": 122,
+        "worsening_accepted": 46,
+        "worsening_attempts": 56
+      },
+      "last_32_decisions": {
+        "accepted": 29,
+        "conflict_decreased": 10,
+        "conflict_increased": 14,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 3,
+          "none": 29
+        },
+        "full_conflict_endpoint_coverage": 23,
+        "generated": 1723976,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.9029033772868158,
+        "mean_max_probability": 0.9029033772868158,
+        "mean_out_of_range_fraction": 0.19824667652658778,
+        "path_changed_without_conflict_count_change": 5,
+        "pp_seconds": 2.819078695,
+        "selected_anchor": 29,
+        "sizes": {
+          "16": 28,
+          "4": 2,
+          "8": 2
+        },
+        "temperatures": [
+          19.453434285172516,
+          14.245815478382218
+        ],
+        "top_neighborhood_fraction": 0.0625,
+        "unchanged_paths": 3,
+        "unique_neighborhoods": 29,
+        "unique_path_states": 29,
+        "worsening_accepted": 14,
+        "worsening_attempts": 17
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 424,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 13,
+          "last_returned_seconds": 119.96525087000009
+        },
+        "30": {
+          "decisions": 114,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 51,
+          "last_returned_seconds": 29.735060719000103
+        },
+        "60": {
+          "decisions": 210,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 32,
+          "last_returned_seconds": 59.74075151899888
+        },
+        "90": {
+          "decisions": 292,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 37,
+          "last_returned_seconds": 89.68847214599919
+        }
+      },
+      "seconds_after_last_new_best": 5.281493387999944,
+      "success": false,
+      "unique_path_states": 411
+    },
+    {
+      "all": {
+        "accepted": 479,
+        "conflict_decreased": 238,
+        "conflict_increased": 190,
+        "decisions": 498,
+        "failure_reasons": {
+          "acceptance_rejected": 19,
+          "none": 479
+        },
+        "full_conflict_endpoint_coverage": 58,
+        "generated": 48135094,
+        "longest_same_conflict_edges": 5,
+        "longest_same_neighborhood": 5,
+        "mean_anchor_probability": 0.903285575251704,
+        "mean_max_probability": 0.903285575251704,
+        "mean_out_of_range_fraction": 0.1393780480278246,
+        "path_changed_without_conflict_count_change": 51,
+        "pp_seconds": 89.034106525,
+        "selected_anchor": 446,
+        "sizes": {
+          "16": 441,
+          "4": 19,
+          "8": 38
+        },
+        "temperatures": [
+          1000.0,
+          6.771606527899754
+        ],
+        "top_neighborhood_fraction": 0.02208835341365462,
+        "unchanged_paths": 19,
+        "unique_neighborhoods": 475,
+        "unique_path_states": 479,
+        "worsening_accepted": 190,
+        "worsening_attempts": 209
+      },
+      "arm": "parent",
+      "best_at_seconds": 103.40740629299944,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 12,
+      "final_events": {
+        "events": 44,
+        "first_time": 45,
+        "goal_hold_pairs": [
+          [
+            29,
+            117
+          ],
+          [
+            29,
+            380
+          ],
+          [
+            114,
+            238
+          ],
+          [
+            117,
+            161
+          ],
+          [
+            225,
+            323
+          ],
+          [
+            227,
+            318
+          ]
+        ],
+        "last_time": 117,
+        "pairs": 12,
+        "swap_events": 2,
+        "vertex_events": 42
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 103.40740629299944,
+        "10": 92.58208175599975,
+        "20": 75.80069979099972,
+        "3": 98.93681118699988
+      },
+      "initial_conflicts": 356,
+      "initial_path_identity": "1de2799a754166038b0c752378852b455c419302b8a7f6be28d98218d045fead",
+      "integrity": "5d746ca3837f72323936bc6d1a1999518e1411577f6075b3fdd84bf40b396ced",
+      "job_id": "1814afe511a0a6d7e6b4bd7e",
+      "last_30s": {
+        "accepted": 100,
+        "conflict_decreased": 46,
+        "conflict_increased": 43,
+        "decisions": 110,
+        "failure_reasons": {
+          "acceptance_rejected": 10,
+          "none": 100
+        },
+        "full_conflict_endpoint_coverage": 58,
+        "generated": 11438867,
+        "longest_same_conflict_edges": 5,
+        "longest_same_neighborhood": 5,
+        "mean_anchor_probability": 0.9005435936995082,
+        "mean_max_probability": 0.9005435936995082,
+        "mean_out_of_range_fraction": 0.18231766873137742,
+        "path_changed_without_conflict_count_change": 11,
+        "pp_seconds": 23.649724875,
+        "selected_anchor": 98,
+        "sizes": {
+          "16": 93,
+          "4": 9,
+          "8": 8
+        },
+        "temperatures": [
+          20.251421078849283,
+          6.771606527899754
+        ],
+        "top_neighborhood_fraction": 0.045454545454545456,
+        "unchanged_paths": 10,
+        "unique_neighborhoods": 103,
+        "unique_path_states": 100,
+        "worsening_accepted": 43,
+        "worsening_attempts": 53
+      },
+      "last_32_decisions": {
+        "accepted": 26,
+        "conflict_decreased": 13,
+        "conflict_increased": 13,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 6,
+          "none": 26
+        },
+        "full_conflict_endpoint_coverage": 11,
+        "generated": 4342583,
+        "longest_same_conflict_edges": 5,
+        "longest_same_neighborhood": 5,
+        "mean_anchor_probability": 0.9012842081339695,
+        "mean_max_probability": 0.9012842081339695,
+        "mean_out_of_range_fraction": 0.1853605671154631,
+        "path_changed_without_conflict_count_change": 0,
+        "pp_seconds": 9.460211616,
+        "selected_anchor": 29,
+        "sizes": {
+          "16": 29,
+          "4": 1,
+          "8": 2
+        },
+        "temperatures": [
+          9.246996270269165,
+          6.771606527899754
+        ],
+        "top_neighborhood_fraction": 0.15625,
+        "unchanged_paths": 6,
+        "unique_neighborhoods": 27,
+        "unique_path_states": 26,
+        "worsening_accepted": 13,
+        "worsening_attempts": 19
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s293",
+      "progress": {
+        "120": {
+          "decisions": 498,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 12,
+          "last_returned_seconds": 119.98076343499997
+        },
+        "30": {
+          "decisions": 135,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 64,
+          "last_returned_seconds": 29.87168267099969
+        },
+        "60": {
+          "decisions": 258,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 28,
+          "last_returned_seconds": 59.93882004999978
+        },
+        "90": {
+          "decisions": 388,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 19,
+          "last_returned_seconds": 89.78422737599976
+        }
+      },
+      "seconds_after_last_new_best": 16.675167191000583,
+      "success": false,
+      "unique_path_states": 480
+    },
+    {
+      "all": {
+        "accepted": 771,
+        "conflict_decreased": 323,
+        "conflict_increased": 185,
+        "decisions": 1521,
+        "failure_reasons": {
+          "acceptance_rejected": 504,
+          "none": 771,
+          "not_run": 245,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 185,
+        "generated": 61667245,
+        "longest_same_conflict_edges": 456,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 263,
+        "pp_seconds": 99.454853668,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 4,
+          "8": 1517
+        },
+        "temperatures": [
+          1000.0,
+          0.00023200416860368262
+        ],
+        "top_neighborhood_fraction": 0.0026298487836949377,
+        "unchanged_paths": 750,
+        "unique_neighborhoods": 1514,
+        "unique_path_states": 772,
+        "worsening_accepted": 185,
+        "worsening_attempts": 689
+      },
+      "arm": "official_sa",
+      "best_at_seconds": 86.25413554999977,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 13,
+        "first_time": 1,
+        "goal_hold_pairs": [],
+        "last_time": 13,
+        "pairs": 1,
+        "swap_events": 0,
+        "vertex_events": 13
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 86.25413554999977,
+        "10": 64.1172645000006,
+        "20": 60.12264594000044,
+        "3": 77.00543403099982
+      },
+      "initial_conflicts": 488,
+      "initial_path_identity": "be38d030c678c32add7c261781b7f78fa4d565c09ac1a1b4528d324d2aa36806",
+      "integrity": "79b7f166e95461f7bd60698ee23957d583a230225e4f6780ca7ec73dddc37b9a",
+      "job_id": "1acf548a2ef2c9d19fc7f889",
+      "last_30s": {
+        "accepted": 52,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 496,
+        "failure_reasons": {
+          "acceptance_rejected": 286,
+          "none": 52,
+          "not_run": 157,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 176,
+        "generated": 14775378,
+        "longest_same_conflict_edges": 456,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 52,
+        "pp_seconds": 24.054367038,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 496
+        },
+        "temperatures": [
+          0.03357951834791479,
+          0.00023200416860368262
+        ],
+        "top_neighborhood_fraction": 0.0020161290322580645,
+        "unchanged_paths": 444,
+        "unique_neighborhoods": 496,
+        "unique_path_states": 53,
+        "worsening_accepted": 0,
+        "worsening_attempts": 286
+      },
+      "last_32_decisions": {
+        "accepted": 2,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 17,
+          "none": 2,
+          "not_run": 12,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 11,
+        "generated": 817431,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 2,
+        "pp_seconds": 1.305836458,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          0.0003168142851960035,
+          0.00023200416860368262
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 30,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 3,
+        "worsening_accepted": 0,
+        "worsening_attempts": 17
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 1520,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.92674085900035
+        },
+        "30": {
+          "decisions": 282,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 77,
+          "last_returned_seconds": 29.94971672199972
+        },
+        "60": {
+          "decisions": 644,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 23,
+          "last_returned_seconds": 59.96849980499974
+        },
+        "90": {
+          "decisions": 1025,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 89.99827648500104
+        }
+      },
+      "seconds_after_last_new_best": 33.759950177000064,
+      "success": false,
+      "unique_path_states": 772
+    },
+    {
+      "all": {
+        "accepted": 380,
+        "conflict_decreased": 196,
+        "conflict_increased": 155,
+        "decisions": 399,
+        "failure_reasons": {
+          "acceptance_rejected": 18,
+          "none": 380,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 49903787,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.903717925344642,
+        "mean_max_probability": 0.903717925344642,
+        "mean_out_of_range_fraction": 0.1302068410520385,
+        "path_changed_without_conflict_count_change": 29,
+        "pp_seconds": 95.069722152,
+        "selected_anchor": 361,
+        "sizes": {
+          "16": 357,
+          "4": 14,
+          "8": 28
+        },
+        "temperatures": [
+          1000.0,
+          18.315022217166756
+        ],
+        "top_neighborhood_fraction": 0.007518796992481203,
+        "unchanged_paths": 19,
+        "unique_neighborhoods": 384,
+        "unique_path_states": 381,
+        "worsening_accepted": 155,
+        "worsening_attempts": 173
+      },
+      "arm": "completion",
+      "best_at_seconds": 76.8848315260002,
+      "best_conflicts": 12,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 40,
+      "final_events": {
+        "events": 100,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            17,
+            223
+          ],
+          [
+            50,
+            346
+          ],
+          [
+            71,
+            236
+          ],
+          [
+            80,
+            208
+          ],
+          [
+            143,
+            323
+          ],
+          [
+            180,
+            410
+          ],
+          [
+            244,
+            327
+          ],
+          [
+            277,
+            453
+          ],
+          [
+            323,
+            332
+          ]
+        ],
+        "last_time": 117,
+        "pairs": 40,
+        "swap_events": 2,
+        "vertex_events": 98
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": null,
+        "20": 51.17199580400029,
+        "3": null
+      },
+      "initial_conflicts": 317,
+      "initial_path_identity": "23324fe414f6a0a12cde811d67368d360455556f565d9c943aeb6208e9d3a4c6",
+      "integrity": "2c19aa5ab2a2d9e24f10bfe9de27dd2b7abd959bd48d35ff6377e8d01ee40347",
+      "job_id": "1d86c4b3cb2fbf88d6a2d7eb",
+      "last_30s": {
+        "accepted": 63,
+        "conflict_decreased": 33,
+        "conflict_increased": 26,
+        "decisions": 72,
+        "failure_reasons": {
+          "acceptance_rejected": 8,
+          "none": 63,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 12191632,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.9031087841535981,
+        "mean_max_probability": 0.9031087841535981,
+        "mean_out_of_range_fraction": 0.15635086585973978,
+        "path_changed_without_conflict_count_change": 4,
+        "pp_seconds": 25.704279707,
+        "selected_anchor": 67,
+        "sizes": {
+          "16": 61,
+          "4": 2,
+          "8": 9
+        },
+        "temperatures": [
+          37.38596830031274,
+          18.315022217166756
+        ],
+        "top_neighborhood_fraction": 0.027777777777777776,
+        "unchanged_paths": 9,
+        "unique_neighborhoods": 69,
+        "unique_path_states": 64,
+        "worsening_accepted": 26,
+        "worsening_attempts": 34
+      },
+      "last_32_decisions": {
+        "accepted": 28,
+        "conflict_decreased": 14,
+        "conflict_increased": 11,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 3,
+          "none": 28,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 4560236,
+        "longest_same_conflict_edges": 2,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.902867184124238,
+        "mean_max_probability": 0.902867184124238,
+        "mean_out_of_range_fraction": 0.16228771419828641,
+        "path_changed_without_conflict_count_change": 3,
+        "pp_seconds": 9.634265198,
+        "selected_anchor": 29,
+        "sizes": {
+          "16": 24,
+          "4": 1,
+          "8": 7
+        },
+        "temperatures": [
+          25.010156959690534,
+          18.315022217166756
+        ],
+        "top_neighborhood_fraction": 0.0625,
+        "unchanged_paths": 4,
+        "unique_neighborhoods": 31,
+        "unique_path_states": 29,
+        "worsening_accepted": 11,
+        "worsening_attempts": 14
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 398,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 40,
+          "last_returned_seconds": 119.59667118500056
+        },
+        "30": {
+          "decisions": 132,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 82,
+          "last_returned_seconds": 29.978092510999886
+        },
+        "60": {
+          "decisions": 244,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 27,
+          "last_returned_seconds": 59.67163693200018
+        },
+        "90": {
+          "decisions": 327,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 41,
+          "last_returned_seconds": 89.97844339400035
+        }
+      },
+      "seconds_after_last_new_best": 43.1342942250003,
+      "success": false,
+      "unique_path_states": 381
+    },
+    {
+      "all": {
+        "accepted": 1065,
+        "conflict_decreased": 317,
+        "conflict_increased": 197,
+        "decisions": 2485,
+        "failure_reasons": {
+          "acceptance_rejected": 867,
+          "none": 1065,
+          "not_run": 553
+        },
+        "full_conflict_endpoint_coverage": 768,
+        "generated": 55541310,
+        "longest_same_conflict_edges": 471,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 551,
+        "pp_seconds": 89.00233558,
+        "selected_anchor": 0,
+        "sizes": {
+          "6": 2,
+          "7": 1,
+          "8": 2482
+        },
+        "temperatures": [
+          1000.0,
+          1.4382135639448175e-08
+        ],
+        "top_neighborhood_fraction": 0.0008048289738430583,
+        "unchanged_paths": 1420,
+        "unique_neighborhoods": 2480,
+        "unique_path_states": 1066,
+        "worsening_accepted": 197,
+        "worsening_attempts": 1064
+      },
+      "arm": "official_sa",
+      "best_at_seconds": 59.269415970999944,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 2,
+        "first_time": 1,
+        "goal_hold_pairs": [],
+        "last_time": 2,
+        "pairs": 1,
+        "swap_events": 0,
+        "vertex_events": 2
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 59.269415970999944,
+        "10": 55.8508255630004,
+        "20": 52.10608985700037,
+        "3": 58.12127188500017
+      },
+      "initial_conflicts": 340,
+      "initial_path_identity": "666df25cd3a4990a33d59e17d5594fd4360741bbaae74371a7e7d0b16843a606",
+      "integrity": "6bbac6b531586ea57c938873a101b6a3d4ab7d0d0867b8a6b499f1848c27c0ca",
+      "job_id": "2022385430ec47e51acef3e5",
+      "last_30s": {
+        "accepted": 97,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 782,
+        "failure_reasons": {
+          "acceptance_rejected": 437,
+          "none": 97,
+          "not_run": 248
+        },
+        "full_conflict_endpoint_coverage": 276,
+        "generated": 12750032,
+        "longest_same_conflict_edges": 392,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 97,
+        "pp_seconds": 20.887561049,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 782
+        },
+        "temperatures": [
+          3.68753711035136e-05,
+          1.4382135639448175e-08
+        ],
+        "top_neighborhood_fraction": 0.0012787723785166241,
+        "unchanged_paths": 685,
+        "unique_neighborhoods": 782,
+        "unique_path_states": 98,
+        "worsening_accepted": 0,
+        "worsening_attempts": 437
+      },
+      "last_32_decisions": {
+        "accepted": 2,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 22,
+          "none": 2,
+          "not_run": 8
+        },
+        "full_conflict_endpoint_coverage": 13,
+        "generated": 563331,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 2,
+        "pp_seconds": 0.944886787,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          1.963958686443798e-08,
+          1.4382135639448175e-08
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 30,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 3,
+        "worsening_accepted": 0,
+        "worsening_attempts": 22
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 2484,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.95890234600029
+        },
+        "30": {
+          "decisions": 332,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 90,
+          "last_returned_seconds": 29.93650218699986
+        },
+        "60": {
+          "decisions": 805,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 59.98441459100013
+        },
+        "90": {
+          "decisions": 1702,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 89.97131855299995
+        }
+      },
+      "seconds_after_last_new_best": 60.73664354399989,
+      "success": false,
+      "unique_path_states": 1066
+    },
+    {
+      "all": {
+        "accepted": 474,
+        "conflict_decreased": 139,
+        "conflict_increased": 0,
+        "decisions": 2006,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1382,
+          "none": 474,
+          "not_run": 149,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 59591843,
+        "longest_same_conflict_edges": 77,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 335,
+        "pp_seconds": 94.489932526,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 6,
+          "8": 2000
+        },
+        "temperatures": [
+          1000.0,
+          1.7724139848810384e-06
+        ],
+        "top_neighborhood_fraction": 0.013459621136590228,
+        "unchanged_paths": 1532,
+        "unique_neighborhoods": 1814,
+        "unique_path_states": 475,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 113.44270102999963,
+      "best_conflicts": 5,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 5,
+      "final_events": {
+        "events": 21,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            58,
+            322
+          ]
+        ],
+        "last_time": 100,
+        "pairs": 5,
+        "swap_events": 0,
+        "vertex_events": 21
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 65.85458148199996,
+        "20": 37.463449674,
+        "3": null
+      },
+      "initial_conflicts": 340,
+      "initial_path_identity": "666df25cd3a4990a33d59e17d5594fd4360741bbaae74371a7e7d0b16843a606",
+      "integrity": "8453e694aac73821b367e9f41069cdd99319f79ded9bd9ef6ba751d348bd4d05",
+      "job_id": "42fe09328fbfec6d9cf19e3e",
+      "last_30s": {
+        "accepted": 88,
+        "conflict_decreased": 4,
+        "conflict_increased": 0,
+        "decisions": 516,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 400,
+          "none": 88,
+          "not_run": 27,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 13847395,
+        "longest_same_conflict_edges": 62,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 84,
+        "pp_seconds": 23.480183882,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 6,
+          "8": 510
+        },
+        "temperatures": [
+          0.00031364614234404345,
+          1.7724139848810384e-06
+        ],
+        "top_neighborhood_fraction": 0.015503875968992248,
+        "unchanged_paths": 428,
+        "unique_neighborhoods": 472,
+        "unique_path_states": 89,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 8,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 23,
+          "none": 8,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 863625,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 8,
+        "pp_seconds": 1.428288018,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          2.420327501316169e-06,
+          1.7724139848810384e-06
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 24,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 9,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 2005,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 5,
+          "last_returned_seconds": 119.98337177699977
+        },
+        "30": {
+          "decisions": 401,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 32,
+          "last_returned_seconds": 29.90788446100032
+        },
+        "60": {
+          "decisions": 931,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 13,
+          "last_returned_seconds": 59.940947148000305
+        },
+        "90": {
+          "decisions": 1489,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 9,
+          "last_returned_seconds": 89.96726850100004
+        }
+      },
+      "seconds_after_last_new_best": 6.5693138250007905,
+      "success": false,
+      "unique_path_states": 475
+    },
+    {
+      "all": {
+        "accepted": 591,
+        "conflict_decreased": 92,
+        "conflict_increased": 0,
+        "decisions": 2278,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1115,
+          "none": 591,
+          "not_run": 571,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 459,
+        "generated": 54984424,
+        "longest_same_conflict_edges": 1492,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 499,
+        "pp_seconds": 91.970716413,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 287,
+          "8": 1991
+        },
+        "temperatures": [
+          1000.0,
+          1.1516966368392826e-07
+        ],
+        "top_neighborhood_fraction": 0.004389815627743635,
+        "unchanged_paths": 1687,
+        "unique_neighborhoods": 2135,
+        "unique_path_states": 592,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 40.41074180800024,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 8,
+        "first_time": 104,
+        "goal_hold_pairs": [
+          [
+            193,
+            335
+          ]
+        ],
+        "last_time": 111,
+        "pairs": 1,
+        "swap_events": 0,
+        "vertex_events": 8
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 40.41074180800024,
+        "10": 16.400109765000252,
+        "20": 12.16948048300037,
+        "3": 20.375943761000144
+      },
+      "initial_conflicts": 159,
+      "initial_path_identity": "410819fb918a55249aa9aced1a35ba5444dea5ec9cc2749e43c3a11b9ca127e6",
+      "integrity": "93e0b4f38e9a3b5df300502595eaf3ccd9e72d024dc9df87550cba1ca2de96ea",
+      "job_id": "4541e40bee39b38b9aff7317",
+      "last_30s": {
+        "accepted": 106,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 573,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 292,
+          "none": 106,
+          "not_run": 174,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 189,
+        "generated": 13194652,
+        "longest_same_conflict_edges": 573,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 106,
+        "pp_seconds": 23.26608109,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 93,
+          "8": 480
+        },
+        "temperatures": [
+          3.6141551218553676e-05,
+          1.1516966368392826e-07
+        ],
+        "top_neighborhood_fraction": 0.005235602094240838,
+        "unchanged_paths": 467,
+        "unique_neighborhoods": 561,
+        "unique_path_states": 107,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 8,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 8,
+          "none": 8,
+          "not_run": 15,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 7,
+        "generated": 518165,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 8,
+        "pp_seconds": 0.930061183,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 7,
+          "8": 25
+        },
+        "temperatures": [
+          1.5727042706123465e-07,
+          1.1516966368392826e-07
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 24,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 9,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m03_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m03_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 2277,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.9496724530004
+        },
+        "30": {
+          "decisions": 572,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 29.917517040000348
+        },
+        "60": {
+          "decisions": 1121,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 59.95044905900022
+        },
+        "90": {
+          "decisions": 1705,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 89.93433807600013
+        }
+      },
+      "seconds_after_last_new_best": 79.60399115200016,
+      "success": false,
+      "unique_path_states": 592
+    },
+    {
+      "all": {
+        "accepted": 620,
+        "conflict_decreased": 135,
+        "conflict_increased": 0,
+        "decisions": 2383,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1361,
+          "none": 620,
+          "not_run": 401,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 59006293,
+        "longest_same_conflict_edges": 216,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 485,
+        "pp_seconds": 91.493598513,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 6,
+          "8": 2377
+        },
+        "temperatures": [
+          1000.0,
+          4.008976692678568e-08
+        ],
+        "top_neighborhood_fraction": 0.004616030214015947,
+        "unchanged_paths": 1763,
+        "unique_neighborhoods": 2308,
+        "unique_path_states": 621,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 114.46248310800001,
+      "best_conflicts": 4,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 4,
+      "final_events": {
+        "events": 11,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            35,
+            46
+          ]
+        ],
+        "last_time": 89,
+        "pairs": 4,
+        "swap_events": 0,
+        "vertex_events": 11
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 66.30381107300036,
+        "20": 46.2186730630001,
+        "3": null
+      },
+      "initial_conflicts": 356,
+      "initial_path_identity": "1de2799a754166038b0c752378852b455c419302b8a7f6be28d98218d045fead",
+      "integrity": "2e20d7b8574e8f103893c9f2dd5c9567418dd6612ed1016c1b5f3874c8290c17",
+      "job_id": "5b7b6292923761d861e1a45e",
+      "last_30s": {
+        "accepted": 181,
+        "conflict_decreased": 5,
+        "conflict_increased": 0,
+        "decisions": 833,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 363,
+          "none": 181,
+          "not_run": 288,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 12773978,
+        "longest_same_conflict_edges": 216,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 176,
+        "pp_seconds": 20.564888905,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 2,
+          "8": 831
+        },
+        "temperatures": [
+          0.00017161357014378156,
+          4.008976692678568e-08
+        ],
+        "top_neighborhood_fraction": 0.003601440576230492,
+        "unchanged_paths": 652,
+        "unique_neighborhoods": 826,
+        "unique_path_states": 182,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 6,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 25,
+          "none": 6,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 767039,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 6,
+        "pp_seconds": 1.238110727,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          5.47447527733016e-08,
+          4.008976692678568e-08
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 26,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 7,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s293",
+      "progress": {
+        "120": {
+          "decisions": 2382,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 119.97491909300061
+        },
+        "30": {
+          "decisions": 453,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 38,
+          "last_returned_seconds": 29.95950079100021
+        },
+        "60": {
+          "decisions": 981,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 13,
+          "last_returned_seconds": 59.95592761700027
+        },
+        "90": {
+          "decisions": 1550,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 9,
+          "last_returned_seconds": 89.98888448600064
+        }
+      },
+      "seconds_after_last_new_best": 5.549352881000232,
+      "success": false,
+      "unique_path_states": 621
+    },
+    {
+      "all": {
+        "accepted": 765,
+        "conflict_decreased": 113,
+        "conflict_increased": 0,
+        "decisions": 2168,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1072,
+          "none": 765,
+          "not_run": 330,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 226,
+        "generated": 56967099,
+        "longest_same_conflict_edges": 404,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 652,
+        "pp_seconds": 91.635024125,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 2,
+          "8": 2166
+        },
+        "temperatures": [
+          1000.0,
+          3.4790982456788243e-07
+        ],
+        "top_neighborhood_fraction": 0.008763837638376383,
+        "unchanged_paths": 1403,
+        "unique_neighborhoods": 2140,
+        "unique_path_states": 766,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 103.63679000800005,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 1,
+        "first_time": 1,
+        "goal_hold_pairs": [],
+        "last_time": 1,
+        "pairs": 1,
+        "swap_events": 1,
+        "vertex_events": 0
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 103.63679000800005,
+        "10": 41.69439843200007,
+        "20": 27.333791892000022,
+        "3": 76.94018328699997
+      },
+      "initial_conflicts": 324,
+      "initial_path_identity": "b5e8549d091f42ed15cd235c4375d828ef4ecfc0832238f608903273e85daa24",
+      "integrity": "f44bda22014a3cf6c1eeed199c82b171241381dc7f0ec85df5d32929784ace0d",
+      "job_id": "84197b888897d47e30bb93de",
+      "last_30s": {
+        "accepted": 216,
+        "conflict_decreased": 1,
+        "conflict_increased": 0,
+        "decisions": 523,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 220,
+          "none": 216,
+          "not_run": 86,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 226,
+        "generated": 13905187,
+        "longest_same_conflict_edges": 242,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 215,
+        "pp_seconds": 23.463421798,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 523
+        },
+        "temperatures": [
+          6.605339023325348e-05,
+          3.4790982456788243e-07
+        ],
+        "top_neighborhood_fraction": 0.0038240917782026767,
+        "unchanged_paths": 307,
+        "unique_neighborhoods": 522,
+        "unique_path_states": 217,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 19,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 6,
+          "none": 19,
+          "not_run": 6,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 25,
+        "generated": 875236,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 19,
+        "pp_seconds": 1.455710247,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          4.7508974966491646e-07,
+          3.4790982456788243e-07
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 13,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 20,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m00_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m00_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 2167,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.916646087
+        },
+        "30": {
+          "decisions": 406,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 17,
+          "last_returned_seconds": 29.966247222999982
+        },
+        "60": {
+          "decisions": 999,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 6,
+          "last_returned_seconds": 59.96308177100002
+        },
+        "90": {
+          "decisions": 1645,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 89.99155791300007
+        }
+      },
+      "seconds_after_last_new_best": 16.37820383399992,
+      "success": false,
+      "unique_path_states": 766
+    },
+    {
+      "all": {
+        "accepted": 478,
+        "conflict_decreased": 233,
+        "conflict_increased": 199,
+        "decisions": 510,
+        "failure_reasons": {
+          "acceptance_rejected": 31,
+          "none": 478,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 26,
+        "generated": 49187473,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 4,
+        "mean_anchor_probability": 0.9032420468281092,
+        "mean_max_probability": 0.9032420468281092,
+        "mean_out_of_range_fraction": 0.1428271107164476,
+        "path_changed_without_conflict_count_change": 46,
+        "pp_seconds": 88.908976729,
+        "selected_anchor": 464,
+        "sizes": {
+          "16": 460,
+          "4": 10,
+          "8": 40
+        },
+        "temperatures": [
+          1000.0,
+          6.002249583544526
+        ],
+        "top_neighborhood_fraction": 0.00784313725490196,
+        "unchanged_paths": 32,
+        "unique_neighborhoods": 483,
+        "unique_path_states": 479,
+        "worsening_accepted": 199,
+        "worsening_attempts": 230
+      },
+      "arm": "parent",
+      "best_at_seconds": 81.71682320700074,
+      "best_conflicts": 5,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 8,
+      "final_events": {
+        "events": 68,
+        "first_time": 37,
+        "goal_hold_pairs": [
+          [
+            11,
+            411
+          ],
+          [
+            71,
+            236
+          ],
+          [
+            126,
+            143
+          ],
+          [
+            275,
+            285
+          ],
+          [
+            276,
+            395
+          ]
+        ],
+        "last_time": 117,
+        "pairs": 8,
+        "swap_events": 1,
+        "vertex_events": 67
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 72.12558021400037,
+        "20": 39.56646738000018,
+        "3": null
+      },
+      "initial_conflicts": 340,
+      "initial_path_identity": "666df25cd3a4990a33d59e17d5594fd4360741bbaae74371a7e7d0b16843a606",
+      "integrity": "0785e53c4417056803ff7d67529dba4c1bc5e180d9d602ddee27096803c5ac5f",
+      "job_id": "85b525b1c1ce730bc9763d92",
+      "last_30s": {
+        "accepted": 52,
+        "conflict_decreased": 22,
+        "conflict_increased": 24,
+        "decisions": 71,
+        "failure_reasons": {
+          "acceptance_rejected": 18,
+          "none": 52,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 11,
+        "generated": 12292855,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 4,
+        "mean_anchor_probability": 0.9028447374963942,
+        "mean_max_probability": 0.9028447374963942,
+        "mean_out_of_range_fraction": 0.17326127306474506,
+        "path_changed_without_conflict_count_change": 6,
+        "pp_seconds": 26.006468249,
+        "selected_anchor": 67,
+        "sizes": {
+          "16": 65,
+          "4": 1,
+          "8": 5
+        },
+        "temperatures": [
+          12.129710294652202,
+          6.002249583544526
+        ],
+        "top_neighborhood_fraction": 0.056338028169014086,
+        "unchanged_paths": 19,
+        "unique_neighborhoods": 55,
+        "unique_path_states": 53,
+        "worsening_accepted": 24,
+        "worsening_attempts": 42
+      },
+      "last_32_decisions": {
+        "accepted": 21,
+        "conflict_decreased": 9,
+        "conflict_increased": 9,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 10,
+          "none": 21,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 2,
+        "generated": 5449779,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 4,
+        "mean_anchor_probability": 0.9038141824329026,
+        "mean_max_probability": 0.9038141824329026,
+        "mean_out_of_range_fraction": 0.1639033387732898,
+        "path_changed_without_conflict_count_change": 3,
+        "pp_seconds": 11.614307017,
+        "selected_anchor": 31,
+        "sizes": {
+          "16": 28,
+          "4": 1,
+          "8": 3
+        },
+        "temperatures": [
+          8.196397602782058,
+          6.002249583544526
+        ],
+        "top_neighborhood_fraction": 0.125,
+        "unchanged_paths": 11,
+        "unique_neighborhoods": 23,
+        "unique_path_states": 22,
+        "worsening_accepted": 9,
+        "worsening_attempts": 19
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 509,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 8,
+          "last_returned_seconds": 119.74335612899995
+        },
+        "30": {
+          "decisions": 152,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 46,
+          "last_returned_seconds": 29.951137187000313
+        },
+        "60": {
+          "decisions": 320,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 33,
+          "last_returned_seconds": 59.90177165800014
+        },
+        "90": {
+          "decisions": 439,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 11,
+          "last_returned_seconds": 89.69112219100043
+        }
+      },
+      "seconds_after_last_new_best": 38.300162225999884,
+      "success": false,
+      "unique_path_states": 479
+    },
+    {
+      "all": {
+        "accepted": 894,
+        "conflict_decreased": 326,
+        "conflict_increased": 188,
+        "decisions": 1483,
+        "failure_reasons": {
+          "acceptance_rejected": 467,
+          "none": 894,
+          "not_run": 121,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 24,
+        "generated": 60517370,
+        "longest_same_conflict_edges": 149,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 380,
+        "pp_seconds": 101.22571339,
+        "selected_anchor": 0,
+        "sizes": {
+          "6": 1,
+          "7": 6,
+          "8": 1476
+        },
+        "temperatures": [
+          1000.0,
+          0.00033990565780331756
+        ],
+        "top_neighborhood_fraction": 0.004720161834120027,
+        "unchanged_paths": 589,
+        "unique_neighborhoods": 1462,
+        "unique_path_states": 895,
+        "worsening_accepted": 188,
+        "worsening_attempts": 655
+      },
+      "arm": "official_sa",
+      "best_at_seconds": 107.11407021600007,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 1,
+        "first_time": 110,
+        "goal_hold_pairs": [],
+        "last_time": 110,
+        "pairs": 1,
+        "swap_events": 0,
+        "vertex_events": 1
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 107.11407021600007,
+        "10": 67.77842991299985,
+        "20": 50.891451038000014,
+        "3": 101.25552510099988
+      },
+      "initial_conflicts": 317,
+      "initial_path_identity": "23324fe414f6a0a12cde811d67368d360455556f565d9c943aeb6208e9d3a4c6",
+      "integrity": "c4fe182ff9cbc44f74df12a6e6a55f7e1f22e616ade8526faabfc4764eee317b",
+      "job_id": "8a7795d862306b09b511a239",
+      "last_30s": {
+        "accepted": 153,
+        "conflict_decreased": 3,
+        "conflict_increased": 0,
+        "decisions": 376,
+        "failure_reasons": {
+          "acceptance_rejected": 174,
+          "none": 153,
+          "not_run": 48,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 24,
+        "generated": 13772594,
+        "longest_same_conflict_edges": 149,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 150,
+        "pp_seconds": 25.340804346,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 4,
+          "8": 372
+        },
+        "temperatures": [
+          0.014728564449742444,
+          0.00033990565780331756
+        ],
+        "top_neighborhood_fraction": 0.018617021276595744,
+        "unchanged_paths": 223,
+        "unique_neighborhoods": 369,
+        "unique_path_states": 154,
+        "worsening_accepted": 0,
+        "worsening_attempts": 174
+      },
+      "last_32_decisions": {
+        "accepted": 15,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 11,
+          "none": 15,
+          "not_run": 5,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 8,
+        "generated": 1155892,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 15,
+        "pp_seconds": 2.116866144,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 1,
+          "8": 31
+        },
+        "temperatures": [
+          0.0004641596254892728,
+          0.00033990565780331756
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 17,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 16,
+        "worsening_accepted": 0,
+        "worsening_attempts": 11
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 1482,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.98025070499989
+        },
+        "30": {
+          "decisions": 359,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 60,
+          "last_returned_seconds": 29.94773494799938
+        },
+        "60": {
+          "decisions": 742,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 13,
+          "last_returned_seconds": 59.95242597699962
+        },
+        "90": {
+          "decisions": 1106,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 89.88482980899971
+        }
+      },
+      "seconds_after_last_new_best": 12.899768788999609,
+      "success": false,
+      "unique_path_states": 895
+    },
+    {
+      "all": {
+        "accepted": 422,
+        "conflict_decreased": 217,
+        "conflict_increased": 164,
+        "decisions": 439,
+        "failure_reasons": {
+          "acceptance_rejected": 16,
+          "none": 422,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 25,
+        "generated": 50582021,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.902699580832128,
+        "mean_max_probability": 0.902699580832128,
+        "mean_out_of_range_fraction": 0.1501136525456012,
+        "path_changed_without_conflict_count_change": 41,
+        "pp_seconds": 91.75258764,
+        "selected_anchor": 408,
+        "sizes": {
+          "15": 1,
+          "16": 397,
+          "4": 13,
+          "8": 28
+        },
+        "temperatures": [
+          1000.0,
+          12.25223262086081
+        ],
+        "top_neighborhood_fraction": 0.00683371298405467,
+        "unchanged_paths": 17,
+        "unique_neighborhoods": 425,
+        "unique_path_states": 423,
+        "worsening_accepted": 164,
+        "worsening_attempts": 180
+      },
+      "arm": "completion",
+      "best_at_seconds": 116.00111202600056,
+      "best_conflicts": 4,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 18,
+      "final_events": {
+        "events": 62,
+        "first_time": 1,
+        "goal_hold_pairs": [],
+        "last_time": 15,
+        "pairs": 18,
+        "swap_events": 0,
+        "vertex_events": 62
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 115.50695630500013,
+        "20": 111.04999790799957,
+        "3": null
+      },
+      "initial_conflicts": 371,
+      "initial_path_identity": "9adae2e80aeeb733f9dab39d030255d8a4c77c7295188b74d8d055929168c75e",
+      "integrity": "1375f45e79b71d098a6ceeeef8d2303d28dc8ba775072f8d8d2ac1b30549b231",
+      "job_id": "9066e06193788fe29171946c",
+      "last_30s": {
+        "accepted": 129,
+        "conflict_decreased": 59,
+        "conflict_increased": 53,
+        "decisions": 142,
+        "failure_reasons": {
+          "acceptance_rejected": 12,
+          "none": 129,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 25,
+        "generated": 11778110,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.9017467042710828,
+        "mean_max_probability": 0.9017467042710828,
+        "mean_out_of_range_fraction": 0.17400270656989675,
+        "path_changed_without_conflict_count_change": 17,
+        "pp_seconds": 21.451327305,
+        "selected_anchor": 132,
+        "sizes": {
+          "16": 134,
+          "4": 4,
+          "8": 4
+        },
+        "temperatures": [
+          50.54204329931879,
+          12.25223262086081
+        ],
+        "top_neighborhood_fraction": 0.02112676056338028,
+        "unchanged_paths": 13,
+        "unique_neighborhoods": 132,
+        "unique_path_states": 130,
+        "worsening_accepted": 53,
+        "worsening_attempts": 65
+      },
+      "last_32_decisions": {
+        "accepted": 28,
+        "conflict_decreased": 11,
+        "conflict_increased": 12,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 3,
+          "none": 28,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 25,
+        "generated": 1513012,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.8981741026977664,
+        "mean_max_probability": 0.8981741026977664,
+        "mean_out_of_range_fraction": 0.19506005201958385,
+        "path_changed_without_conflict_count_change": 5,
+        "pp_seconds": 2.542553677,
+        "selected_anchor": 31,
+        "sizes": {
+          "16": 31,
+          "4": 1
+        },
+        "temperatures": [
+          16.731088683427902,
+          12.25223262086081
+        ],
+        "top_neighborhood_fraction": 0.09375,
+        "unchanged_paths": 4,
+        "unique_neighborhoods": 29,
+        "unique_path_states": 29,
+        "worsening_accepted": 12,
+        "worsening_attempts": 15
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 438,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 18,
+          "last_returned_seconds": 119.94244215899926
+        },
+        "30": {
+          "decisions": 116,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 63,
+          "last_returned_seconds": 29.925277327000003
+        },
+        "60": {
+          "decisions": 215,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 41,
+          "last_returned_seconds": 59.83490345499922
+        },
+        "90": {
+          "decisions": 297,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 41,
+          "last_returned_seconds": 89.969822310999
+        }
+      },
+      "seconds_after_last_new_best": 4.015650386998459,
+      "success": false,
+      "unique_path_states": 423
+    },
+    {
+      "all": {
+        "accepted": 487,
+        "conflict_decreased": 133,
+        "conflict_increased": 0,
+        "decisions": 1854,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 965,
+          "none": 487,
+          "not_run": 402
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 59109406,
+        "longest_same_conflict_edges": 345,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 354,
+        "pp_seconds": 95.726086893,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 3,
+          "8": 1851
+        },
+        "temperatures": [
+          1000.0,
+          8.166116835969333e-06
+        ],
+        "top_neighborhood_fraction": 0.005933117583603021,
+        "unchanged_paths": 1367,
+        "unique_neighborhoods": 1839,
+        "unique_path_states": 488,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 57.66255812700001,
+      "best_conflicts": 2,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 2,
+      "final_events": {
+        "events": 18,
+        "first_time": 89,
+        "goal_hold_pairs": [
+          [
+            120,
+            358
+          ],
+          [
+            203,
+            242
+          ]
+        ],
+        "last_time": 105,
+        "pairs": 2,
+        "swap_events": 0,
+        "vertex_events": 18
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 34.21064346099956,
+        "20": 30.75876925599914,
+        "3": 55.40445313300006
+      },
+      "initial_conflicts": 488,
+      "initial_path_identity": "be38d030c678c32add7c261781b7f78fa4d565c09ac1a1b4528d324d2aa36806",
+      "integrity": "aad5433e442a22e0bbb7423aaacb26e9a100007a37739dc01ed36a787563539c",
+      "job_id": "9896cf8a51e0e1b0a9b9c821",
+      "last_30s": {
+        "accepted": 86,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 500,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 262,
+          "none": 86,
+          "not_run": 152
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 13630736,
+        "longest_same_conflict_edges": 189,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 86,
+        "pp_seconds": 23.872659463,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 500
+        },
+        "temperatures": [
+          0.0012304202926058634,
+          8.166116835969333e-06
+        ],
+        "top_neighborhood_fraction": 0.016,
+        "unchanged_paths": 414,
+        "unique_neighborhoods": 491,
+        "unique_path_states": 87,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 5,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 18,
+          "none": 5,
+          "not_run": 9
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 905471,
+        "longest_same_conflict_edges": 25,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 5,
+        "pp_seconds": 1.57479311,
+        "selected_anchor": 0,
+        "sizes": {
+          "8": 32
+        },
+        "temperatures": [
+          1.1151275788643774e-05,
+          8.166116835969333e-06
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 27,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 6,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 1853,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 119.89898735599854
+        },
+        "30": {
+          "decisions": 352,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 22,
+          "last_returned_seconds": 29.973293404998913
+        },
+        "60": {
+          "decisions": 889,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 59.94907315399905
+        },
+        "90": {
+          "decisions": 1353,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 89.88608697899872
+        }
+      },
+      "seconds_after_last_new_best": 62.37213622099989,
+      "success": false,
+      "unique_path_states": 488
+    },
+    {
+      "all": {
+        "accepted": 404,
+        "conflict_decreased": 123,
+        "conflict_increased": 0,
+        "decisions": 1716,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1021,
+          "none": 404,
+          "not_run": 290,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 57030331,
+        "longest_same_conflict_edges": 201,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 281,
+        "pp_seconds": 97.055059111,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 5,
+          "8": 1711
+        },
+        "temperatures": [
+          1000.0,
+          3.268577108507256e-05
+        ],
+        "top_neighborhood_fraction": 0.007575757575757576,
+        "unchanged_paths": 1312,
+        "unique_neighborhoods": 1693,
+        "unique_path_states": 405,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 72.36780164799893,
+      "best_conflicts": 4,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 4,
+      "final_events": {
+        "events": 18,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            9,
+            120
+          ],
+          [
+            103,
+            138
+          ]
+        ],
+        "last_time": 119,
+        "pairs": 4,
+        "swap_events": 0,
+        "vertex_events": 18
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 42.38574135499948,
+        "20": 27.939561047998723,
+        "3": null
+      },
+      "initial_conflicts": 371,
+      "initial_path_identity": "9adae2e80aeeb733f9dab39d030255d8a4c77c7295188b74d8d055929168c75e",
+      "integrity": "c21aae4d78415940d5620e34de29648dee8bbdf74b4c52c9a7be5dd864a212f4",
+      "job_id": "9dbe205843176a5cd8ccb56b",
+      "last_30s": {
+        "accepted": 55,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 511,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 322,
+          "none": 55,
+          "not_run": 133,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 13216210,
+        "longest_same_conflict_edges": 201,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 55,
+        "pp_seconds": 23.547336916,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 3,
+          "8": 508
+        },
+        "temperatures": [
+          0.0055005927243473906,
+          3.268577108507256e-05
+        ],
+        "top_neighborhood_fraction": 0.0019569471624266144,
+        "unchanged_paths": 456,
+        "unique_neighborhoods": 511,
+        "unique_path_states": 56,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 1,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 19,
+          "none": 1,
+          "not_run": 11,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 866495,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 1,
+        "pp_seconds": 1.632775942,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 1,
+          "8": 31
+        },
+        "temperatures": [
+          4.4634194569524175e-05,
+          3.268577108507256e-05
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 31,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 2,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 1715,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 119.9249675430001
+        },
+        "30": {
+          "decisions": 349,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 17,
+          "last_returned_seconds": 29.985052504998748
+        },
+        "60": {
+          "decisions": 773,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 8,
+          "last_returned_seconds": 59.95549815099912
+        },
+        "90": {
+          "decisions": 1205,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 89.93704492899997
+        }
+      },
+      "seconds_after_last_new_best": 47.651811774001544,
+      "success": false,
+      "unique_path_states": 405
+    },
+    {
+      "all": {
+        "accepted": 410,
+        "conflict_decreased": 197,
+        "conflict_increased": 146,
+        "decisions": 419,
+        "failure_reasons": {
+          "acceptance_rejected": 8,
+          "none": 410,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 234,
+        "generated": 45442172,
+        "longest_same_conflict_edges": 6,
+        "longest_same_neighborhood": 5,
+        "mean_anchor_probability": 0.8934300769311369,
+        "mean_max_probability": 0.8934300769311369,
+        "mean_out_of_range_fraction": 0.17679205073917087,
+        "path_changed_without_conflict_count_change": 67,
+        "pp_seconds": 93.484835819,
+        "selected_anchor": 387,
+        "sizes": {
+          "13": 1,
+          "16": 383,
+          "4": 9,
+          "8": 26
+        },
+        "temperatures": [
+          1000.0,
+          14.979983733668105
+        ],
+        "top_neighborhood_fraction": 0.011933174224343675,
+        "unchanged_paths": 9,
+        "unique_neighborhoods": 390,
+        "unique_path_states": 411,
+        "worsening_accepted": 146,
+        "worsening_attempts": 154
+      },
+      "arm": "parent",
+      "best_at_seconds": 40.941224632999365,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 10,
+      "final_events": {
+        "events": 85,
+        "first_time": 80,
+        "goal_hold_pairs": [
+          [
+            16,
+            474
+          ],
+          [
+            34,
+            326
+          ],
+          [
+            59,
+            212
+          ]
+        ],
+        "last_time": 125,
+        "pairs": 10,
+        "swap_events": 1,
+        "vertex_events": 84
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 40.941224632999365,
+        "10": 17.53202541199971,
+        "20": 15.630718794999666,
+        "3": 33.17396738699972
+      },
+      "initial_conflicts": 219,
+      "initial_path_identity": "50120c47675ad78750703d34369ca0bbb905fb6bf58a9edb6a1fc8d927066b7a",
+      "integrity": "969ac7fd2ccb5b11f3b9a4f0a29c617170401b152eccd25c9904542538c56ee5",
+      "job_id": "a1256231e80e3c52a4ff822e",
+      "last_30s": {
+        "accepted": 73,
+        "conflict_decreased": 35,
+        "conflict_increased": 33,
+        "decisions": 79,
+        "failure_reasons": {
+          "acceptance_rejected": 5,
+          "none": 73,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 49,
+        "generated": 10812485,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.8991155187838381,
+        "mean_max_probability": 0.8991155187838381,
+        "mean_out_of_range_fraction": 0.19438734785480366,
+        "path_changed_without_conflict_count_change": 5,
+        "pp_seconds": 25.29206603,
+        "selected_anchor": 74,
+        "sizes": {
+          "16": 75,
+          "4": 1,
+          "8": 3
+        },
+        "temperatures": [
+          32.806973148697416,
+          14.979983733668105
+        ],
+        "top_neighborhood_fraction": 0.0379746835443038,
+        "unchanged_paths": 6,
+        "unique_neighborhoods": 75,
+        "unique_path_states": 74,
+        "worsening_accepted": 33,
+        "worsening_attempts": 38
+      },
+      "last_32_decisions": {
+        "accepted": 26,
+        "conflict_decreased": 15,
+        "conflict_increased": 10,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 5,
+          "none": 26,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 22,
+        "generated": 4422253,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.8999024600530101,
+        "mean_max_probability": 0.8999024600530101,
+        "mean_out_of_range_fraction": 0.19604214832948003,
+        "path_changed_without_conflict_count_change": 1,
+        "pp_seconds": 10.661850417,
+        "selected_anchor": 31,
+        "sizes": {
+          "16": 31,
+          "8": 1
+        },
+        "temperatures": [
+          20.45598088772655,
+          14.979983733668105
+        ],
+        "top_neighborhood_fraction": 0.09375,
+        "unchanged_paths": 6,
+        "unique_neighborhoods": 28,
+        "unique_path_states": 27,
+        "worsening_accepted": 10,
+        "worsening_attempts": 15
+      },
+      "map_id": "sa_expanded_v1_m07_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m07_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 418,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 10,
+          "last_returned_seconds": 119.77397402299994
+        },
+        "30": {
+          "decisions": 102,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 11,
+          "last_returned_seconds": 29.999894450999818
+        },
+        "60": {
+          "decisions": 253,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 59.83668683799988
+        },
+        "90": {
+          "decisions": 340,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 27,
+          "last_returned_seconds": 89.79356431399992
+        }
+      },
+      "seconds_after_last_new_best": 79.07482489500035,
+      "success": false,
+      "unique_path_states": 411
+    },
+    {
+      "all": {
+        "accepted": 340,
+        "conflict_decreased": 181,
+        "conflict_increased": 134,
+        "decisions": 353,
+        "failure_reasons": {
+          "acceptance_rejected": 12,
+          "none": 340,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 7,
+        "generated": 52334481,
+        "longest_same_conflict_edges": 2,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.9020466281558577,
+        "mean_max_probability": 0.9020466281558577,
+        "mean_out_of_range_fraction": 0.14404008205139268,
+        "path_changed_without_conflict_count_change": 25,
+        "pp_seconds": 97.27861684,
+        "selected_anchor": 325,
+        "sizes": {
+          "16": 319,
+          "4": 11,
+          "8": 23
+        },
+        "temperatures": [
+          1000.0,
+          29.079604685802657
+        ],
+        "top_neighborhood_fraction": 0.0056657223796034,
+        "unchanged_paths": 13,
+        "unique_neighborhoods": 345,
+        "unique_path_states": 341,
+        "worsening_accepted": 134,
+        "worsening_attempts": 146
+      },
+      "arm": "parent",
+      "best_at_seconds": 91.81413436700132,
+      "best_conflicts": 7,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 30,
+      "final_events": {
+        "events": 96,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            242,
+            332
+          ],
+          [
+            253,
+            425
+          ],
+          [
+            287,
+            351
+          ],
+          [
+            366,
+            386
+          ],
+          [
+            368,
+            470
+          ]
+        ],
+        "last_time": 119,
+        "pairs": 30,
+        "swap_events": 1,
+        "vertex_events": 95
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 88.09875602300053,
+        "20": 77.93445705900012,
+        "3": null
+      },
+      "initial_conflicts": 488,
+      "initial_path_identity": "be38d030c678c32add7c261781b7f78fa4d565c09ac1a1b4528d324d2aa36806",
+      "integrity": "ada83f75842c80f6d87abf0b2881d509a254ec65152c98229fc416cd2946485e",
+      "job_id": "ba3fff206f9a6b02d40038f0",
+      "last_30s": {
+        "accepted": 67,
+        "conflict_decreased": 32,
+        "conflict_increased": 28,
+        "decisions": 73,
+        "failure_reasons": {
+          "acceptance_rejected": 5,
+          "none": 67,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 3,
+        "generated": 12584833,
+        "longest_same_conflict_edges": 2,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.9032652192306678,
+        "mean_max_probability": 0.9032652192306678,
+        "mean_out_of_range_fraction": 0.16291784734215276,
+        "path_changed_without_conflict_count_change": 7,
+        "pp_seconds": 25.783128289,
+        "selected_anchor": 66,
+        "sizes": {
+          "16": 66,
+          "4": 1,
+          "8": 6
+        },
+        "temperatures": [
+          59.95901467146544,
+          29.079604685802657
+        ],
+        "top_neighborhood_fraction": 0.0273972602739726,
+        "unchanged_paths": 6,
+        "unique_neighborhoods": 69,
+        "unique_path_states": 68,
+        "worsening_accepted": 28,
+        "worsening_attempts": 33
+      },
+      "last_32_decisions": {
+        "accepted": 30,
+        "conflict_decreased": 16,
+        "conflict_increased": 10,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 1,
+          "none": 30,
+          "time_limit": 1
+        },
+        "full_conflict_endpoint_coverage": 0,
+        "generated": 5726805,
+        "longest_same_conflict_edges": 2,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.905089649105435,
+        "mean_max_probability": 0.905089649105435,
+        "mean_out_of_range_fraction": 0.16043706650346798,
+        "path_changed_without_conflict_count_change": 4,
+        "pp_seconds": 11.870988867,
+        "selected_anchor": 27,
+        "sizes": {
+          "16": 30,
+          "8": 2
+        },
+        "temperatures": [
+          39.70977861200674,
+          29.079604685802657
+        ],
+        "top_neighborhood_fraction": 0.0625,
+        "unchanged_paths": 2,
+        "unique_neighborhoods": 31,
+        "unique_path_states": 31,
+        "worsening_accepted": 10,
+        "worsening_attempts": 11
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s281",
+      "progress": {
+        "120": {
+          "decisions": 352,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 30,
+          "last_returned_seconds": 119.88182945000153
+        },
+        "30": {
+          "decisions": 104,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 78,
+          "last_returned_seconds": 29.8203243500011
+        },
+        "60": {
+          "decisions": 190,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 71,
+          "last_returned_seconds": 59.72559420700054
+        },
+        "90": {
+          "decisions": 280,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 17,
+          "last_returned_seconds": 89.89194935400155
+        }
+      },
+      "seconds_after_last_new_best": 28.20539047099919,
+      "success": false,
+      "unique_path_states": 341
+    },
+    {
+      "all": {
+        "accepted": 670,
+        "conflict_decreased": 99,
+        "conflict_increased": 0,
+        "decisions": 2409,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 1219,
+          "none": 670,
+          "not_run": 520
+        },
+        "full_conflict_endpoint_coverage": 560,
+        "generated": 63181571,
+        "longest_same_conflict_edges": 663,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 571,
+        "pp_seconds": 94.194820995,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 48,
+          "8": 2361
+        },
+        "temperatures": [
+          1000.0,
+          3.0870850238897514e-08
+        ],
+        "top_neighborhood_fraction": 0.012038190120381901,
+        "unchanged_paths": 1739,
+        "unique_neighborhoods": 2362,
+        "unique_path_states": 671,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "arm": "official",
+      "best_at_seconds": 62.936523527000645,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 1,
+      "final_events": {
+        "events": 1,
+        "first_time": 100,
+        "goal_hold_pairs": [
+          [
+            34,
+            312
+          ]
+        ],
+        "last_time": 100,
+        "pairs": 1,
+        "swap_events": 0,
+        "vertex_events": 1
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 62.936523527000645,
+        "10": 18.225985224000397,
+        "20": 13.073466521000228,
+        "3": 52.14266245500039
+      },
+      "initial_conflicts": 283,
+      "initial_path_identity": "cb5a8a1e8feadf38c94cb809315edd6ade0cea9369a9bf3571ec2c3529fb7976",
+      "integrity": "411753f415b267382647ee2f037c0c7ff4d6679cb05cfec1dc83b68e7bd8f4e5",
+      "job_id": "c00612ec647411d326f21620",
+      "last_30s": {
+        "accepted": 145,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 592,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 253,
+          "none": 145,
+          "not_run": 194
+        },
+        "full_conflict_endpoint_coverage": 254,
+        "generated": 14511653,
+        "longest_same_conflict_edges": 416,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 145,
+        "pp_seconds": 23.992690538,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 37,
+          "8": 555
+        },
+        "temperatures": [
+          1.1725964735189786e-05,
+          3.0870850238897514e-08
+        ],
+        "top_neighborhood_fraction": 0.0016891891891891893,
+        "unchanged_paths": 447,
+        "unique_neighborhoods": 592,
+        "unique_path_states": 146,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "last_32_decisions": {
+        "accepted": 10,
+        "conflict_decreased": 0,
+        "conflict_increased": 0,
+        "decisions": 32,
+        "failure_reasons": {
+          "conflict_bound_exceeded": 12,
+          "none": 10,
+          "not_run": 10
+        },
+        "full_conflict_endpoint_coverage": 13,
+        "generated": 784851,
+        "longest_same_conflict_edges": 32,
+        "longest_same_neighborhood": 1,
+        "mean_anchor_probability": null,
+        "mean_max_probability": null,
+        "mean_out_of_range_fraction": null,
+        "path_changed_without_conflict_count_change": 10,
+        "pp_seconds": 1.2580998349999999,
+        "selected_anchor": 0,
+        "sizes": {
+          "7": 3,
+          "8": 29
+        },
+        "temperatures": [
+          4.215582164187866e-08,
+          3.0870850238897514e-08
+        ],
+        "top_neighborhood_fraction": 0.03125,
+        "unchanged_paths": 22,
+        "unique_neighborhoods": 32,
+        "unique_path_states": 11,
+        "worsening_accepted": 0,
+        "worsening_attempts": 0
+      },
+      "map_id": "sa_expanded_v1_m06_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m06_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 2408,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 119.99257817500074
+        },
+        "30": {
+          "decisions": 539,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 7,
+          "last_returned_seconds": 29.98249204900003
+        },
+        "60": {
+          "decisions": 1269,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 2,
+          "last_returned_seconds": 59.97966685100073
+        },
+        "90": {
+          "decisions": 1817,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 1,
+          "last_returned_seconds": 89.95732242500071
+        }
+      },
+      "seconds_after_last_new_best": 57.06608682499973,
+      "success": false,
+      "unique_path_states": 671
+    },
+    {
+      "all": {
+        "accepted": 517,
+        "conflict_decreased": 245,
+        "conflict_increased": 197,
+        "decisions": 530,
+        "failure_reasons": {
+          "acceptance_rejected": 13,
+          "none": 517
+        },
+        "full_conflict_endpoint_coverage": 111,
+        "generated": 50186646,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 6,
+        "mean_anchor_probability": 0.9017027344192937,
+        "mean_max_probability": 0.9017027344192937,
+        "mean_out_of_range_fraction": 0.1583533055006,
+        "path_changed_without_conflict_count_change": 75,
+        "pp_seconds": 86.659104218,
+        "selected_anchor": 476,
+        "sizes": {
+          "16": 468,
+          "4": 25,
+          "8": 37
+        },
+        "temperatures": [
+          1000.0,
+          4.909281575571157
+        ],
+        "top_neighborhood_fraction": 0.018867924528301886,
+        "unchanged_paths": 13,
+        "unique_neighborhoods": 498,
+        "unique_path_states": 517,
+        "worsening_accepted": 197,
+        "worsening_attempts": 210
+      },
+      "arm": "completion",
+      "best_at_seconds": 80.62183215500045,
+      "best_conflicts": 2,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 4,
+      "final_events": {
+        "events": 10,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            81,
+            220
+          ]
+        ],
+        "last_time": 104,
+        "pairs": 4,
+        "swap_events": 0,
+        "vertex_events": 10
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": null,
+        "10": 78.19593956000062,
+        "20": 48.40468741099903,
+        "3": 79.64911034299985
+      },
+      "initial_conflicts": 632,
+      "initial_path_identity": "953a722826d0db3fb4530f4fa7fec4b60627941714dc3105376f7488c19be161",
+      "integrity": "dfef0927c7ab5978616cd8a4be72c6ad2597f63562525f83ef49423a8bfb908f",
+      "job_id": "ee6c75fc7ad84756292c6d3f",
+      "last_30s": {
+        "accepted": 119,
+        "conflict_decreased": 44,
+        "conflict_increased": 45,
+        "decisions": 126,
+        "failure_reasons": {
+          "acceptance_rejected": 7,
+          "none": 119
+        },
+        "full_conflict_endpoint_coverage": 96,
+        "generated": 11919537,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 6,
+        "mean_anchor_probability": 0.9011350634726487,
+        "mean_max_probability": 0.9011350634726487,
+        "mean_out_of_range_fraction": 0.18310933089254863,
+        "path_changed_without_conflict_count_change": 30,
+        "pp_seconds": 22.581917742,
+        "selected_anchor": 114,
+        "sizes": {
+          "16": 113,
+          "4": 7,
+          "8": 6
+        },
+        "temperatures": [
+          17.24322985330079,
+          4.909281575571157
+        ],
+        "top_neighborhood_fraction": 0.07936507936507936,
+        "unchanged_paths": 7,
+        "unique_neighborhoods": 99,
+        "unique_path_states": 119,
+        "worsening_accepted": 45,
+        "worsening_attempts": 52
+      },
+      "last_32_decisions": {
+        "accepted": 28,
+        "conflict_decreased": 11,
+        "conflict_increased": 8,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 4,
+          "none": 28
+        },
+        "full_conflict_endpoint_coverage": 25,
+        "generated": 2198922,
+        "longest_same_conflict_edges": 4,
+        "longest_same_neighborhood": 4,
+        "mean_anchor_probability": 0.9021638322637259,
+        "mean_max_probability": 0.9021638322637259,
+        "mean_out_of_range_fraction": 0.18639430051226258,
+        "path_changed_without_conflict_count_change": 9,
+        "pp_seconds": 4.199820095,
+        "selected_anchor": 29,
+        "sizes": {
+          "16": 26,
+          "4": 4,
+          "8": 2
+        },
+        "temperatures": [
+          6.703890462620756,
+          4.909281575571157
+        ],
+        "top_neighborhood_fraction": 0.125,
+        "unchanged_paths": 4,
+        "unique_neighborhoods": 23,
+        "unique_path_states": 28,
+        "worsening_accepted": 8,
+        "worsening_attempts": 12
+      },
+      "map_id": "sa_expanded_v1_m10_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m10_station_centric_0000__task_0001-s293",
+      "progress": {
+        "120": {
+          "decisions": 530,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 4,
+          "last_returned_seconds": 119.99659943799998
+        },
+        "30": {
+          "decisions": 139,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 35,
+          "last_returned_seconds": 29.9493883920004
+        },
+        "60": {
+          "decisions": 270,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 20,
+          "last_returned_seconds": 59.713072587999704
+        },
+        "90": {
+          "decisions": 404,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 13,
+          "last_returned_seconds": 89.72025656599908
+        }
+      },
+      "seconds_after_last_new_best": 39.380567026999415,
+      "success": false,
+      "unique_path_states": 518
+    },
+    {
+      "all": {
+        "accepted": 489,
+        "conflict_decreased": 240,
+        "conflict_increased": 190,
+        "decisions": 512,
+        "failure_reasons": {
+          "acceptance_rejected": 23,
+          "none": 489
+        },
+        "full_conflict_endpoint_coverage": 117,
+        "generated": 50878361,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.9030234805522966,
+        "mean_max_probability": 0.9030234805522966,
+        "mean_out_of_range_fraction": 0.14976217013180562,
+        "path_changed_without_conflict_count_change": 59,
+        "pp_seconds": 89.193330768,
+        "selected_anchor": 459,
+        "sizes": {
+          "16": 459,
+          "4": 15,
+          "6": 1,
+          "8": 37
+        },
+        "temperatures": [
+          1000.0,
+          5.882804816831991
+        ],
+        "top_neighborhood_fraction": 0.005859375,
+        "unchanged_paths": 23,
+        "unique_neighborhoods": 490,
+        "unique_path_states": 489,
+        "worsening_accepted": 190,
+        "worsening_attempts": 213
+      },
+      "arm": "parent",
+      "best_at_seconds": 109.599778926,
+      "best_conflicts": 1,
+      "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+      "changed_path_revisits": 0,
+      "final_conflicts": 9,
+      "final_events": {
+        "events": 21,
+        "first_time": 1,
+        "goal_hold_pairs": [
+          [
+            253,
+            385
+          ]
+        ],
+        "last_time": 97,
+        "pairs": 9,
+        "swap_events": 1,
+        "vertex_events": 20
+      },
+      "first_at_most_conflicts": {
+        "0": null,
+        "1": 109.599778926,
+        "10": 74.50113757700001,
+        "20": 51.61339240699999,
+        "3": 102.35865780200038
+      },
+      "initial_conflicts": 317,
+      "initial_path_identity": "23324fe414f6a0a12cde811d67368d360455556f565d9c943aeb6208e9d3a4c6",
+      "integrity": "98685baa1ddab7771c6fa497aaabd766a224f5a3a9ef1f2652c4c0f9e6cba158",
+      "job_id": "f53d6fcc7734fa7b411c5fdc",
+      "last_30s": {
+        "accepted": 130,
+        "conflict_decreased": 59,
+        "conflict_increased": 52,
+        "decisions": 144,
+        "failure_reasons": {
+          "acceptance_rejected": 14,
+          "none": 130
+        },
+        "full_conflict_endpoint_coverage": 91,
+        "generated": 11882491,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 3,
+        "mean_anchor_probability": 0.9025291561760665,
+        "mean_max_probability": 0.9025291561760665,
+        "mean_out_of_range_fraction": 0.18388132709753136,
+        "path_changed_without_conflict_count_change": 19,
+        "pp_seconds": 21.713680539,
+        "selected_anchor": 128,
+        "sizes": {
+          "16": 125,
+          "4": 5,
+          "8": 14
+        },
+        "temperatures": [
+          24.760055390093626,
+          5.882804816831991
+        ],
+        "top_neighborhood_fraction": 0.020833333333333332,
+        "unchanged_paths": 14,
+        "unique_neighborhoods": 131,
+        "unique_path_states": 130,
+        "worsening_accepted": 52,
+        "worsening_attempts": 66
+      },
+      "last_32_decisions": {
+        "accepted": 26,
+        "conflict_decreased": 12,
+        "conflict_increased": 9,
+        "decisions": 32,
+        "failure_reasons": {
+          "acceptance_rejected": 6,
+          "none": 26
+        },
+        "full_conflict_endpoint_coverage": 21,
+        "generated": 2153393,
+        "longest_same_conflict_edges": 3,
+        "longest_same_neighborhood": 2,
+        "mean_anchor_probability": 0.903801127349325,
+        "mean_max_probability": 0.903801127349325,
+        "mean_out_of_range_fraction": 0.1850392696858425,
+        "path_changed_without_conflict_count_change": 5,
+        "pp_seconds": 3.660247163,
+        "selected_anchor": 27,
+        "sizes": {
+          "16": 28,
+          "4": 1,
+          "8": 3
+        },
+        "temperatures": [
+          8.033289290486696,
+          5.882804816831991
+        ],
+        "top_neighborhood_fraction": 0.0625,
+        "unchanged_paths": 6,
+        "unique_neighborhoods": 26,
+        "unique_path_states": 26,
+        "worsening_accepted": 9,
+        "worsening_attempts": 15
+      },
+      "map_id": "sa_expanded_v1_m05_station_centric_0000",
+      "pair_id": "sa_expanded_v1_m05_station_centric_0000__task_0001-s283",
+      "progress": {
+        "120": {
+          "decisions": 511,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 12,
+          "last_returned_seconds": 119.83426798799974
+        },
+        "30": {
+          "decisions": 144,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 63,
+          "last_returned_seconds": 29.93306157799998
+        },
+        "60": {
+          "decisions": 254,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 27,
+          "last_returned_seconds": 59.8522458489997
+        },
+        "90": {
+          "decisions": 368,
+          "feasible_by_t": false,
+          "last_returned_conflicts": 16,
+          "last_returned_seconds": 89.98524652299966
+        }
+      },
+      "seconds_after_last_new_best": 10.406650281999646,
+      "success": false,
+      "unique_path_states": 490
+    }
+  ],
+  "no_controller_change": true,
+  "no_solver_calls": true,
+  "no_training": true,
+  "registration": {
+    "binding": "f6e0a7c9b21188882a906796ccf14181ba1e1750fe87e3dee2361cd4af1bf2b1",
+    "inputs": {
+      "docs/SA_BOUNDED_REHEAT_RESULTS_ZH.md": "1f763d69b56eddb955095613105531ea67b7ee938667c6048efbe50f957da2e2",
+      "docs/SA_BUDGET_COOLING_RESULT_ZH.md": "879c0ddfe7cfac69eb36eb075664eefff1ab29919ca7240543914aa9be7f84fc",
+      "docs/SA_COMPLETION_INDEPENDENT_TTF_RESULT_ZH.md": "818b38364a24818a2304fc54a9045d9724a9e2266d271b903af1ee028e3bbfc7",
+      "docs/SA_EXPANDED_TAIL_PROTOCOL_ZH.md": "87a14d47eb6f170f8e37847cd57cd06e57af62f296325a312d0685dc3b585069",
+      "docs/SA_TAIL_MEMBERSHIP_AUDIT_ZH.md": "4bfc502c674cba358985f715865d33b147288a23714b4e5ce506b6036bcba7c8",
+      "docs/SA_TERMINAL_EFFICIENCY_RESULT_ZH.md": "f0293a4d7edb6232e9da72b52495cf9369d6af7bb36ac57c3f7ec59e0f3af2c0",
+      "docs/SA_WORK_CLOCK_RESULT_ZH.md": "0fcbe32994ff0d301e26c825c15945464331bdcbf70754334eb61366570e3f02",
+      "experiments/sa_expanded_trace_diagnostic.py": "0647941b6c4f2e2ffdfc3866bddc00b9db35b7f59c774a476914de92b988216e",
+      "scripts/audit_sa_expanded_traces.py": "5cca157e55d18a9991b9caf10a95247bea0da85f63433cec4d8cf860a022c802",
+      "source_report": "4130102b16d29460cd5de76e2373f1140161af8dd9b90539a6aa3f3dbde0b86a",
+      "tests/evaluation/test_sa_expanded_trace_diagnostic.py": "e6b69e5f0c1cfcb05f754a39f5db5ab60ec2e8245f114156c1428eab80dfdd04"
+    },
+    "observational": true
+  },
+  "same_draw_at_selection_divergence": 68,
+  "same_pool_at_selection_divergence": 68,
+  "same_pp_seed_at_selection_divergence": 68,
+  "schema": "lns2.sa_expanded_tail_evidence.v1",
+  "source_report": {
+    "path": "build/sa-expanded-four-arm-ttf-v1/report.json",
+    "sha256": "4130102b16d29460cd5de76e2373f1140161af8dd9b90539a6aa3f3dbde0b86a"
+  },
+  "summary": {
+    "completion/failure": {
+      "changed_path_revisits": 0,
+      "decisions": 1368,
+      "episodes": 3,
+      "final_goal_hold_pairs": 10,
+      "final_pairs": 62,
+      "late_decisions": 340,
+      "late_worsening_accepted": 124,
+      "late_worsening_attempts": 151,
+      "unchanged_paths": 49
+    },
+    "completion/success": {
+      "changed_path_revisits": 0,
+      "decisions": 8067,
+      "episodes": 69,
+      "final_goal_hold_pairs": 0,
+      "final_pairs": 0,
+      "late_decisions": 6169,
+      "late_worsening_accepted": 1783,
+      "late_worsening_attempts": 1823,
+      "unchanged_paths": 52
+    },
+    "official/failure": {
+      "changed_path_revisits": 0,
+      "decisions": 14814,
+      "episodes": 7,
+      "final_goal_hold_pairs": 8,
+      "final_pairs": 18,
+      "late_decisions": 4048,
+      "late_worsening_accepted": 0,
+      "late_worsening_attempts": 0,
+      "unchanged_paths": 10803
+    },
+    "official/success": {
+      "changed_path_revisits": 0,
+      "decisions": 36469,
+      "episodes": 65,
+      "final_goal_hold_pairs": 0,
+      "final_pairs": 0,
+      "late_decisions": 25883,
+      "late_worsening_accepted": 0,
+      "late_worsening_attempts": 0,
+      "unchanged_paths": 22723
+    },
+    "official_sa/failure": {
+      "changed_path_revisits": 0,
+      "decisions": 5489,
+      "episodes": 3,
+      "final_goal_hold_pairs": 0,
+      "final_pairs": 3,
+      "late_decisions": 1654,
+      "late_worsening_accepted": 0,
+      "late_worsening_attempts": 897,
+      "unchanged_paths": 2759
+    },
+    "official_sa/success": {
+      "changed_path_revisits": 0,
+      "decisions": 30495,
+      "episodes": 69,
+      "final_goal_hold_pairs": 0,
+      "final_pairs": 0,
+      "late_decisions": 23914,
+      "late_worsening_accepted": 4686,
+      "late_worsening_attempts": 6693,
+      "unchanged_paths": 4900
+    },
+    "parent/failure": {
+      "changed_path_revisits": 0,
+      "decisions": 2716,
+      "episodes": 6,
+      "final_goal_hold_pairs": 20,
+      "final_pairs": 82,
+      "late_decisions": 609,
+      "late_worsening_accepted": 226,
+      "late_worsening_attempts": 288,
+      "unchanged_paths": 110
+    },
+    "parent/success": {
+      "changed_path_revisits": 0,
+      "decisions": 7674,
+      "episodes": 66,
+      "final_goal_hold_pairs": 0,
+      "final_pairs": 0,
+      "late_decisions": 6143,
+      "late_worsening_accepted": 1726,
+      "late_worsening_attempts": 1753,
+      "unchanged_paths": 31
+    }
+  }
+}
