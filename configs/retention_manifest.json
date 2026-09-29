@@ -3379,6 +3379,16 @@
       "path": "tests/evaluation/test_sa_completion_acceptance.py",
       "role": "reproducibility",
       "contract": "Freeze model, acceptance modes, paired streams, uncapped runtime and the existing timer."
+    },
+    {
+      "path": "scripts/run_sa_completion_continuation.py",
+      "role": "reproducibility",
+      "purpose": "One completion-only on-policy continuation from frozen A with independent development streams."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_continuation.py",
+      "role": "reproducibility",
+      "contract": "Freeze lineage, terminal objective, data isolation, private reuse and uncapped decisions."
     }
   ]
 }
