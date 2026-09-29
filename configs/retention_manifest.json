@@ -3389,6 +3389,21 @@
       "path": "tests/evaluation/test_sa_completion_continuation.py",
       "role": "reproducibility",
       "contract": "Freeze lineage, terminal objective, data isolation, private reuse and uncapped decisions."
+    },
+    {
+      "path": "experiments/sa_frozen_confirmation_timing.py",
+      "role": "reproducibility",
+      "purpose": "Explicit frozen A/A2 identities on the unchanged serial deferred-audit timer."
+    },
+    {
+      "path": "scripts/run_sa_frozen_confirmation_ttf.py",
+      "role": "reproducibility",
+      "purpose": "Fresh map paired Official, Official+SA, A and A2 confirmation without retraining."
+    },
+    {
+      "path": "tests/evaluation/test_sa_frozen_confirmation_timing.py",
+      "role": "reproducibility",
+      "contract": "Protect fixed identities, independent seeds, balanced schedule and unchanged timing boundaries."
     }
   ]
 }
