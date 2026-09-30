@@ -3404,6 +3404,16 @@
       "path": "tests/evaluation/test_sa_frozen_confirmation_timing.py",
       "role": "reproducibility",
       "contract": "Protect fixed identities, independent seeds, balanced schedule and unchanged timing boundaries."
+    },
+    {
+      "path": "scripts/review_sa_frozen_confirmation_tails.py",
+      "role": "reproducibility",
+      "purpose": "Posthoc read-only failed-condition review with all four paired controls; no new solver calls."
+    },
+    {
+      "path": "tests/evaluation/test_sa_frozen_confirmation_tail_review.py",
+      "role": "reproducibility",
+      "contract": "Retain paired successes and reject incomplete or duplicate failure-review arms."
     }
   ]
 }

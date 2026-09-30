@@ -1,0 +1,267 @@
+{
+  "backup": {
+    "bytes": 543429531,
+    "files": 2333,
+    "path": "build/sa-frozen-confirmation-complete-20260930.zip",
+    "sha256": "3974f282b8ee1383f3e33088915511ce22920a94868a0e7da82c813652424865"
+  },
+  "binding": "03ec91e1ee3851c4321d2b898c889dd3b138d69b23088d61afec149f4c4526d5",
+  "episodes": 288,
+  "files": {
+    "build/sa-frozen-confirmation-ttf-v1/audit.complete.json": "f81a954123d1cf55f149e6ae670dc9aaf9e05957c38ba04e6ded69e46758539e",
+    "build/sa-frozen-confirmation-ttf-v1/cases.json": "80138f278f6b14b76310d937e349bad18b4b521cf97dd1ce3b55fd11f65e940a",
+    "build/sa-frozen-confirmation-ttf-v1/collect.complete.json": "440cc2cac625f3a3c6ab6203e1c41eeec2a3bb7b0841f93b92e27182ad80ec60",
+    "build/sa-frozen-confirmation-ttf-v1/collect.status.json": "2b6438b797f7eb133dc3eb0d120136bd1e95f53527b2df4fc333e4a22b669d95",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/00/receipt.json": "a100e78cb1629537a63b3ef2f593eebc18e1fdf3cde08d80fd0f5ca2a1a7a79c",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/01/receipt.json": "784e60312b08a8d0f1e401ac1ad01d3aac114bca51f1295cdfdaf62e54bbde4a",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/02/receipt.json": "dc01330e9adc2e041670063270c887f2daa181810ae9c689c5238929762ae1b8",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/03/receipt.json": "545468c28d450cfd022305b67f5cbb900e1314e128c888271953753a99af8244",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/04/receipt.json": "7deb6c7db18e1c221b36dd0c2a6024d3d1c0c76ed5605c031be8e30fc0aec1a3",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/05/receipt.json": "629df084f4e6efdc0f346f5be47792be3f379e23ba28c25029c3694f033cb5e4",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/06/receipt.json": "bef7a8c7013bb8af68a3dafec2e5a68090e1bb744f06cc1d2067063bfcd14e02",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/07/receipt.json": "b511d140d4e6f1196d4f41b4d6c9acf6288ff19d1a1642e26487c6a577704e23",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/08/receipt.json": "ed4d705a9265167a1c3582517361dc4f518ad4bf6c738c8b6b31edc8f9f87c94",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/09/receipt.json": "b778fdbf40d20dd456876b05c06eb805933fec6b9b4ec3a01047de877dd30207",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/10/receipt.json": "8e580c00d7eae357e4861bff8e2cd9f12f56ad6d4e952f30e7ca1cfa8f47fc8d",
+    "build/sa-frozen-confirmation-ttf-v1/dataset/shards/11/receipt.json": "d416087299860cab469e96f16a679ac86d28f1622612a8495e947a34e6251d6f",
+    "build/sa-frozen-confirmation-ttf-v1/design.json": "c84cd12747ab9f4c57cdcd46b095ca9c870532b213feeb2a5f639971b35472f0",
+    "build/sa-frozen-confirmation-ttf-v1/environment.json": "67f153888c1ae40fd09f7915bc608392bf1e81475b237aea030878c27c917a2f",
+    "build/sa-frozen-confirmation-ttf-v1/episodes.csv": "f5c9a92579a30704225cb22e06808f33dc7ee0a62516cbf5915a796c1bd8dc3a",
+    "build/sa-frozen-confirmation-ttf-v1/generation_sensitivity.json": "5ec333dfcce255be28741339e9752c1b0e1c4455949f67f31ab1241f6c1b6d8b",
+    "build/sa-frozen-confirmation-ttf-v1/preflight.complete.json": "315a9ecc67e2ec383837e6b1e45fbc9338714753577148b7835671ab196cf113",
+    "build/sa-frozen-confirmation-ttf-v1/qualification.complete.json": "b428a76cafbe277b37a4aed1bc9c87fe18f8ec2885d448eb0ca08ebb876f2236",
+    "build/sa-frozen-confirmation-ttf-v1/qualification.json": "e3194814817a9180a22f4f859efcff44a7af9c3bbe8cccce154fd5472c543d84",
+    "build/sa-frozen-confirmation-ttf-v1/registration.json": "09d30b2fdd80d264664111189de1f1abdb29536a9f46043919e94d0db1029cca",
+    "build/sa-frozen-confirmation-ttf-v1/report.json": "b624b0328acf10d6ca6880165c4110f299f437b18b354fb310b7befe3aef7d49",
+    "build/sa-frozen-confirmation-ttf-v1/run_status.json": "9f36ed7e9859d3bd522c8e6d5f105dfcd5d316f9f131235ecc40c4f3228b1c69"
+  },
+  "integrity": "52faf98069fcbd7961e382c8c2efede906f378a54c56e768c6479fb4b034223a",
+  "models": {
+    "completion": {
+      "iteration": 3,
+      "model": {
+        "path": "build/sa-completion-continuation-v1/models/completion.json",
+        "policy_sha256": "7170f5706b1105ec5d09ac447a8d12a227869b5ccd29f4df7dd9b341726e97a0",
+        "sha256": "9ba2192c53f02563c02b8f09637d69a5448ccfb7d847f1f88de4f642784d15a9"
+      }
+    },
+    "parent": {
+      "iteration": 2,
+      "model": {
+        "path": "build/sa-terminal-efficiency-v1/models/completion.json",
+        "policy_sha256": "ea4b937e0be2d0cf8ca4c7a6e00d983c8d13013a77af19d31ffd9d19d06a2108",
+        "sha256": "81727429f423734aef544c1e12ad61fae965a2118898fadafeab699dd9307062"
+      }
+    }
+  },
+  "native": "5b1b2af1a8a388e76567c3f1e874674ef8c2701775c3706d0a1e4d9678d1925d",
+  "phase": "complete",
+  "registration_sha256": "09d30b2fdd80d264664111189de1f1abdb29536a9f46043919e94d0db1029cca",
+  "result_summary": {
+    "exploratory_a2_vs_a_ttf": {
+      "bootstrap_empty_draws": 0,
+      "ci95": [
+        -3.8664049083300824,
+        1.4602623478434098
+      ],
+      "completion": {
+        "count": 65,
+        "max": 119.25420712100004,
+        "mean": 21.354317574015454,
+        "p50": 14.023691688999861,
+        "p95": 80.8507115976004,
+        "total": 1388.0306423110046
+      },
+      "count": 65,
+      "difference": {
+        "count": 65,
+        "max": 46.61022384,
+        "mean": -0.8405100087537121,
+        "p50": 0.07568313099989155,
+        "p95": 18.183122838400003,
+        "total": -54.63315056899128
+      },
+      "losses": 36,
+      "parent": {
+        "count": 65,
+        "max": 106.40933149500052,
+        "mean": 22.194827582769168,
+        "p50": 14.466071057999216,
+        "p95": 71.78149948580003,
+        "total": 1442.663792879996
+      },
+      "ties": 0,
+      "wins": 29
+    },
+    "four_arm_common_success": {
+      "arms": {
+        "completion": {
+          "makespan": {
+            "count": 61,
+            "max": 278,
+            "mean": 146.40983606557376,
+            "p50": 144.0,
+            "p95": 176.0,
+            "total": 8931.0
+          },
+          "soc": {
+            "count": 61,
+            "max": 43832,
+            "mean": 33489.737704918036,
+            "p50": 31816.0,
+            "p95": 42559.0,
+            "total": 2042874.0
+          },
+          "ttf_seconds": {
+            "count": 61,
+            "max": 119.25420712100004,
+            "mean": 17.861972978180393,
+            "p50": 13.230096524999993,
+            "p95": 53.367341832999955,
+            "total": 1089.580351669004
+          }
+        },
+        "official": {
+          "makespan": {
+            "count": 61,
+            "max": 213,
+            "mean": 140.75409836065575,
+            "p50": 138.0,
+            "p95": 170.0,
+            "total": 8586.0
+          },
+          "soc": {
+            "count": 61,
+            "max": 43654,
+            "mean": 32993.03278688525,
+            "p50": 31827.0,
+            "p95": 42023.0,
+            "total": 2012575.0
+          },
+          "ttf_seconds": {
+            "count": 61,
+            "max": 92.39921058599975,
+            "mean": 21.34437099496712,
+            "p50": 13.673593793999316,
+            "p95": 74.90698699700079,
+            "total": 1302.0066306929943
+          }
+        },
+        "official_sa": {
+          "makespan": {
+            "count": 61,
+            "max": 211,
+            "mean": 139.4262295081967,
+            "p50": 137.0,
+            "p95": 170.0,
+            "total": 8505.0
+          },
+          "soc": {
+            "count": 61,
+            "max": 43503,
+            "mean": 33339.62295081967,
+            "p50": 32328.0,
+            "p95": 42273.0,
+            "total": 2033717.0
+          },
+          "ttf_seconds": {
+            "count": 61,
+            "max": 118.93324133200008,
+            "mean": 27.055820915327843,
+            "p50": 21.141682618999766,
+            "p95": 75.77241981199995,
+            "total": 1650.4050758349983
+          }
+        },
+        "parent": {
+          "makespan": {
+            "count": 61,
+            "max": 181,
+            "mean": 144.19672131147541,
+            "p50": 144.0,
+            "p95": 175.0,
+            "total": 8796.0
+          },
+          "soc": {
+            "count": 61,
+            "max": 43444,
+            "mean": 33486.50819672131,
+            "p50": 32204.0,
+            "p95": 42275.0,
+            "total": 2042677.0
+          },
+          "ttf_seconds": {
+            "count": 61,
+            "max": 82.42076199400003,
+            "mean": 18.934748948557303,
+            "p50": 13.161355973000354,
+            "p95": 42.514620054999796,
+            "total": 1155.0196858619954
+          }
+        }
+      },
+      "count": 61
+    },
+    "no_model_promotion": true,
+    "pairs": 72,
+    "primary_gate_pass": true,
+    "primary_ttf": {
+      "bootstrap_empty_draws": 0,
+      "ci95": [
+        -11.581209244349166,
+        -4.369507865594219
+      ],
+      "completion": {
+        "count": 63,
+        "max": 106.40933149500052,
+        "mean": 21.626263180603114,
+        "p50": 14.466071057999216,
+        "p95": 72.21274138340003,
+        "total": 1362.4545803779963
+      },
+      "count": 63,
+      "difference": {
+        "count": 63,
+        "max": 19.984413576000065,
+        "mean": -7.688433603603207,
+        "p50": -2.9990241079999578,
+        "p95": 8.769199083000238,
+        "total": -484.3713170270021
+      },
+      "losses": 18,
+      "parent": {
+        "count": 63,
+        "max": 118.93324133200008,
+        "mean": 29.314696784206323,
+        "p50": 22.10022552999999,
+        "p95": 90.80975635900002,
+        "total": 1846.8258974049984
+      },
+      "ties": 0,
+      "wins": 45
+    },
+    "successes": {
+      "completion": 67,
+      "official": 63,
+      "official_sa": 66,
+      "parent": 66
+    }
+  },
+  "runtime_labels": {
+    "completion": "Frozen A2 + SA (iteration 3; exploratory)",
+    "official": "Official Adaptive, standard PP acceptance",
+    "official_sa": "Official Adaptive + same SA",
+    "parent": "Frozen A + SA (iteration 2)"
+  },
+  "schema": "lns2.sa_frozen_confirmation.snapshot.v1",
+  "source_commit": "f87485abd2bb0cc96ea6909f6366288a66afd6ed",
+  "tail_review": {
+    "changed_path_revisits": 0,
+    "episodes": 44,
+    "not_a_causal_intervention": true,
+    "pairs": 11,
+    "path": "build/sa-frozen-confirmation-tail-review-v1/report.json",
+    "retrospective": true,
+    "sha256": "19c4e8cba8effb8ac08b8e45757274a93667eb186bc671ace8d99135110db9ef"
+  }
+}
