@@ -1,0 +1,80 @@
+{
+  "backup": {
+    "bytes": 584808973,
+    "files": 1730,
+    "path": "build/sa-completion-map-coverage-complete-20260930.zip",
+    "sha256": "0654d78332c7b6e67a39d6cec59d2de07aa53c22b008e537c063024f5003648f"
+  },
+  "binding": "1d6ae4a1b5e4465d0f8f13706b9b0958f271f9aad0ad5614825de01222dc93c9",
+  "credit": {
+    "all_failure_conditions": 3,
+    "all_success_conditions": 33,
+    "conditions": 48,
+    "credited_episodes": 48,
+    "credited_maps": [
+      "sa_map_coverage_v1_m00_station_centric_0000",
+      "sa_map_coverage_v1_m01_station_centric_0000",
+      "sa_map_coverage_v1_m03_station_centric_0000",
+      "sa_map_coverage_v1_m05_station_centric_0000",
+      "sa_map_coverage_v1_m09_station_centric_0000",
+      "sa_map_coverage_v1_m10_station_centric_0000",
+      "sa_map_coverage_v1_m11_station_centric_0000"
+    ],
+    "decisions": 19703,
+    "episodes": 192,
+    "mixed_conditions": [
+      "sa_map_coverage_v1_m00_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m01_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m01_station_centric_0000__task_0001-s331",
+      "sa_map_coverage_v1_m03_station_centric_0000__task_0001-s331",
+      "sa_map_coverage_v1_m05_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m05_station_centric_0000__task_0001-s331",
+      "sa_map_coverage_v1_m09_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m09_station_centric_0000__task_0001-s331",
+      "sa_map_coverage_v1_m10_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m10_station_centric_0000__task_0001-s331",
+      "sa_map_coverage_v1_m11_station_centric_0000__task_0001-s317",
+      "sa_map_coverage_v1_m11_station_centric_0000__task_0001-s331"
+    ],
+    "successes": 155,
+    "update_allowed": true
+  },
+  "decision": "no_development_gain_keep_A",
+  "files": {
+    "build/sa-completion-map-coverage-v1/cases.json": "a3a69f772d9d453d479df1d88c7316b0563ea975e491c462e9e4f8608562b269",
+    "build/sa-completion-map-coverage-v1/comparison.audit.json": "ab47616950eecdd4da381c4e42c7aefeaa00f218f14dec78626fb72550265b9c",
+    "build/sa-completion-map-coverage-v1/comparison.complete.json": "1b1cc5edd25be46bb5eadc17bfb79b9b7198b8b8ba90f14d06cf1862b2a3aab7",
+    "build/sa-completion-map-coverage-v1/comparison.csv": "8912d2cb92213733cbc982c9a41d5d47255dbdc43c69610ece4b284ef55ed4a7",
+    "build/sa-completion-map-coverage-v1/comparison.status.json": "8dc6034c217ef44eb3c67ce241bdb1270fdf8078d7c170d2999e761e3c380f5a",
+    "build/sa-completion-map-coverage-v1/credit.json": "b13b1d8863ce01cc752dbe27dc9c3abe19e64d65ca29203ed60f9afdbe9d382d",
+    "build/sa-completion-map-coverage-v1/design.json": "09700cf09a6f23fd35df04f07a533e03adfb786d1fb87f8e3582b0e08d90e3e9",
+    "build/sa-completion-map-coverage-v1/diagnostic.json": "6ba3c65c14122256f29cf234211a0acca62a6b459a0d161db4e4fe6d7946961b",
+    "build/sa-completion-map-coverage-v1/parity.windows.json": "0a1c64e17996735f935f2b74e0c4749a7346dd31d789723e9275cad714b7658e",
+    "build/sa-completion-map-coverage-v1/parity.wsl.json": "504ad44c29fb6672b4f90cbefcc5f435de9240755407ba6c01e671cb2cedbbcb",
+    "build/sa-completion-map-coverage-v1/progress.jsonl": "42e5b350364a15c92672e7febcf1874ad2eb91578e79a41b780bc522547049a3",
+    "build/sa-completion-map-coverage-v1/qualification.complete.json": "606cf7d38e14dc329449cf4a0c9f9a9c77d43aecedf976bc3705f76aefc575cf",
+    "build/sa-completion-map-coverage-v1/qualification.json": "ea1a68f8ed1a1603cb5ca28f3455a0406362b3fd0766889f59df19ffddf3175d",
+    "build/sa-completion-map-coverage-v1/registration.json": "00451d388156ac21d94f730053b4df6f08722a3795907806762ec6dd0b72d0d1",
+    "build/sa-completion-map-coverage-v1/report.json": "c30ee05d1828dcce2f4aa014c7ee99ea04780d87573913a8614d30c53b53624f",
+    "build/sa-completion-map-coverage-v1/run_status.json": "4f7650a009b46bff73f31e003285118bc8497c1c87abb2902a38584497289a34",
+    "build/sa-completion-map-coverage-v1/train.audit.json": "eceb5435e2d0c04878cda56095030161d586b4f479770a31c5cc756b5ecb33b9",
+    "build/sa-completion-map-coverage-v1/train.complete.json": "c4ac585e18eaaee0d05593e583ddab21cb0fd441fe495be56193c7c26830231f",
+    "build/sa-completion-map-coverage-v1/train.status.json": "8dc6034c217ef44eb3c67ce241bdb1270fdf8078d7c170d2999e761e3c380f5a",
+    "build/sa-completion-map-coverage-v1/update.completion.json": "2bffee79588daa6e4db43da485688e0d2a92fbdc2e5ccafd60a6cc8750d0c520"
+  },
+  "integrity": "19d995d6753e8b0cc326f44f4e9b6a5439e25bd8a448ba262da65ed3564590b3",
+  "models": {
+    "parent": "81727429f423734aef544c1e12ad61fae965a2118898fadafeab699dd9307062",
+    "reference": "9ba2192c53f02563c02b8f09637d69a5448ccfb7d847f1f88de4f642784d15a9"
+  },
+  "no_ttf": true,
+  "phase": "complete",
+  "registration_sha256": "00451d388156ac21d94f730053b4df6f08722a3795907806762ec6dd0b72d0d1",
+  "schema": "lns2.sa_completion_map_coverage.snapshot.v1",
+  "source_commit": "9c018b4f803bab3f49c6a33105dabf6148c1df9a",
+  "successes": {
+    "completion": 45,
+    "parent": 46,
+    "reference": 46
+  }
+}

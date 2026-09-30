@@ -3424,6 +3424,16 @@
       "path": "tests/evaluation/test_sa_completion_map_coverage.py",
       "role": "reproducibility",
       "contract": "Protect new-map isolation, uncapped paired streams and completion-only credit coverage."
+    },
+    {
+      "path": "scripts/analyze_sa_completion_map_coverage.py",
+      "role": "reproducibility",
+      "purpose": "Completed fresh-map comparison CSV and read-only path recurrence diagnostics; no solver calls or model update."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_map_coverage_analysis.py",
+      "role": "reproducibility",
+      "contract": "Protect read-only help, path recurrence semantics, noncontinuous agent IDs and changed-evidence rejection."
     }
   ]
 }
