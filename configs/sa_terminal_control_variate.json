@@ -1,0 +1,14 @@
+{
+  "schema": "lns2.sa_terminal_control_variate.v1",
+  "output": "build/sa-terminal-control-variate-v1",
+  "source": "build/sa-completion-credit-replicability-v1",
+  "source_report_sha256": "18466f108adfbf051bed14059c94074458510643a6ed6c83bff0fa8627fff923",
+  "workers": 20,
+  "methods": ["mean", "score_squared"],
+  "partitions": "all_balanced_complement_deduplicated",
+  "minimum_second_moment_reduction": 0.1,
+  "maximum_condition_increase": 0.1,
+  "maximum_parameter_updates": 0,
+  "formal_ttf": false,
+  "new_solver_calls": 0
+}

@@ -3464,6 +3464,21 @@
       "path": "tests/evaluation/test_sa_completion_replicability.py",
       "role": "reproducibility",
       "contract": "Uncapped atomic work budget, complete independent replicas, Train isolation and no-training scope."
+    },
+    {
+      "path": "experiments/sa_terminal_control_variate.py",
+      "role": "reproducibility",
+      "purpose": "Complete terminal-score crossfit control variates; read-only moments, no optimizer or length weighting."
+    },
+    {
+      "path": "scripts/audit_sa_terminal_control_variate.py",
+      "role": "reproducibility",
+      "purpose": "Frozen Train score diagnostic with opposite-half fitting and exhaustive partitions; no solver or model update."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_control_variate.py",
+      "role": "reproducibility",
+      "contract": "Crossfit independence, Gram correctness, zero terminal credit, oracle exclusion and read-only scope."
     }
   ]
 }
