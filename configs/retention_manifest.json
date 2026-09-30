@@ -3414,6 +3414,16 @@
       "path": "tests/evaluation/test_sa_frozen_confirmation_tail_review.py",
       "role": "reproducibility",
       "contract": "Retain paired successes and reject incomplete or duplicate failure-review arms."
+    },
+    {
+      "path": "scripts/run_sa_completion_map_coverage.py",
+      "role": "reproducibility",
+      "purpose": "Fresh Train-map terminal credit and one guarded update from frozen A; paired A/A2 development."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_map_coverage.py",
+      "role": "reproducibility",
+      "contract": "Protect new-map isolation, uncapped paired streams and completion-only credit coverage."
     }
   ]
 }
