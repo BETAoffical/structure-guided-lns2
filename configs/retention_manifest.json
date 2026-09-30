@@ -3449,6 +3449,21 @@
       "path": "tests/evaluation/test_sa_completion_credit_transfer.py",
       "role": "reproducibility",
       "contract": "Nonzero tanh score, padding, trajectory sum, transfer sign, zero credit, same-parent reconstruction and no heldout."
+    },
+    {
+      "path": "experiments/sa_completion_replicability.py",
+      "role": "reproducibility",
+      "purpose": "Conditional terminal score replication and correctly rebaselined replica bootstrap without model update."
+    },
+    {
+      "path": "scripts/run_sa_completion_replicability.py",
+      "role": "reproducibility",
+      "purpose": "Frozen A fresh random streams on four fixed Train conditions, sixteen replicas each; no TTF."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_replicability.py",
+      "role": "reproducibility",
+      "contract": "Uncapped atomic work budget, complete independent replicas, Train isolation and no-training scope."
     }
   ]
 }
