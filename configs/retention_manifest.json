@@ -3434,6 +3434,21 @@
       "path": "tests/evaluation/test_sa_completion_map_coverage_analysis.py",
       "role": "reproducibility",
       "contract": "Protect read-only help, path recurrence semantics, noncontinuous agent IDs and changed-evidence rejection."
+    },
+    {
+      "path": "experiments/sa_completion_credit_transfer.py",
+      "role": "reproducibility",
+      "purpose": "Nonzero-head complete terminal score and same-parent cross-batch gradient transfer; no update."
+    },
+    {
+      "path": "scripts/audit_sa_completion_credit_transfer.py",
+      "role": "reproducibility",
+      "purpose": "Read-only existing Train batches with frozen inputs, atomic shards and independent Torch checks."
+    },
+    {
+      "path": "tests/evaluation/test_sa_completion_credit_transfer.py",
+      "role": "reproducibility",
+      "contract": "Nonzero tanh score, padding, trajectory sum, transfer sign, zero credit, same-parent reconstruction and no heldout."
     }
   ]
 }

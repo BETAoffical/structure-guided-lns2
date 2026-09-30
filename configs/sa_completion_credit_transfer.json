@@ -1,0 +1,21 @@
+{
+  "schema": "lns2.sa_completion_credit_transfer.v1",
+  "output": "build/sa-completion-credit-transfer-v1",
+  "batches": {
+    "A2": {"source": "build/sa-completion-continuation-v1", "episodes": 96, "maps": 6},
+    "A-wide": {"source": "build/sa-completion-map-coverage-v1", "episodes": 192, "maps": 12}
+  },
+  "parent_sha256": "81727429f423734aef544c1e12ad61fae965a2118898fadafeab699dd9307062",
+  "models": {
+    "A2": {"path": "build/sa-completion-continuation-v1/models/completion.json", "sha256": "9ba2192c53f02563c02b8f09637d69a5448ccfb7d847f1f88de4f642784d15a9"},
+    "A-wide": {"path": "build/sa-completion-map-coverage-v1/models/completion.json", "sha256": "b47d9fefa7bbd204e07a27260cc1a6b5a1dc98a1d8af86e05c0d859fa567985f"}
+  },
+  "workers": 20,
+  "bootstrap": 5000,
+  "bootstrap_seed": 2026093023,
+  "train_only": true,
+  "model_update": false,
+  "solver_calls": false,
+  "formal_ttf": false,
+  "automatic_promotion": false
+}

@@ -3,3 +3,8 @@ docs/path_quality_results_v1/** -text
 docs/path_quality_results_v1/*.csv whitespace=cr-at-eol
 artifacts/sa-independent-confirmation-v1/ttf_details.csv -text whitespace=cr-at-eol
 scripts/analyze_sa_completion_map_coverage.py text eol=lf
+experiments/sa_completion_credit_transfer.py text eol=lf
+scripts/audit_sa_completion_credit_transfer.py text eol=lf
+configs/sa_completion_credit_transfer.json text eol=lf
+docs/SA_COMPLETION_CREDIT_TRANSFER_PROTOCOL_ZH.md text eol=lf
+tests/evaluation/test_sa_completion_credit_transfer.py text eol=lf
