@@ -1,0 +1,24 @@
+{
+  "schema": "lns2.sa_terminal_control_variate_confirmation.preregistration.v1",
+  "binding": "394365bbbedbf73bba30ce29b30cf4bd9a8678ac8fdfd7521ba14b509b2c9b15",
+  "registration": "build/sa-terminal-control-variate-confirmation-v1/registration.json",
+  "registration_sha256": "a700cfc64f8fb2ea300c336edfdf19e74ac513d47a3b4c063ebc935dfff243f9",
+  "code_commit": "36db440db358e87f7eddabb3282d4f743d65b83a",
+  "fit_report_sha256": "18466f108adfbf051bed14059c94074458510643a6ed6c83bff0fa8627fff923",
+  "prior_diagnostic_sha256": "6669c6eb8941f5b88011525c316449d9a62eda1ea647d3e90a2a4956c54c2bb3",
+  "parent_model_sha256": "81727429f423734aef544c1e12ad61fae965a2118898fadafeab699dd9307062",
+  "phase": "terminal-control-variate-confirmation-20261001",
+  "episodes": 64,
+  "workers": 20,
+  "max_decisions": null,
+  "baseline_values": {
+    "sa_linear_v1_m01_station_centric_0000__task_0000-s233": {"mean": 1.0, "score_squared": 0.9999999999999998},
+    "sa_linear_v1_m00_station_centric_0000__task_0001-s239": {"mean": 0.1875, "score_squared": 0.030015768859559373},
+    "sa_linear_v1_m02_station_centric_0000__task_0001-s233": {"mean": 1.0, "score_squared": 1.0},
+    "sa_linear_v1_m04_station_centric_0000__task_0000-s233": {"mean": 0.8125, "score_squared": 0.6404500494469754}
+  },
+  "no_refit": true,
+  "no_training": true,
+  "no_ttf": true,
+  "no_promotion": true
+}
