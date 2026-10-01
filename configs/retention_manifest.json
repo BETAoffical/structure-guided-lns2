@@ -3479,6 +3479,21 @@
       "path": "tests/evaluation/test_sa_terminal_control_variate.py",
       "role": "reproducibility",
       "contract": "Crossfit independence, Gram correctness, zero terminal credit, oracle exclusion and read-only scope."
+    },
+    {
+      "path": "experiments/sa_terminal_control_variate_confirmation.py",
+      "role": "reproducibility",
+      "purpose": "Prior-batch frozen terminal baselines on independent streams; no refitting or optimizer."
+    },
+    {
+      "path": "scripts/confirm_sa_terminal_control_variate.py",
+      "role": "reproducibility",
+      "purpose": "Frozen A fresh-stream collection, native audit and fixed-baseline confirmation on four Train conditions."
+    },
+    {
+      "path": "tests/evaluation/test_sa_terminal_control_variate_confirmation.py",
+      "role": "reproducibility",
+      "contract": "Frozen fit, independent streams, exact identities, whole-trajectory moments and no model promotion."
     }
   ]
 }
