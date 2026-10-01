@@ -1,0 +1,41 @@
+{
+  "schema": "lns2.sa_terminal_control_variate_confirmation.evidence.v1",
+  "binding": "394365bbbedbf73bba30ce29b30cf4bd9a8678ac8fdfd7521ba14b509b2c9b15",
+  "report": "build/sa-terminal-control-variate-confirmation-v1/report.json",
+  "report_sha256": "e86b22e7bd5c2f0307455ed94ff31c6263d23accb3b1d72714ec48cfba016c29",
+  "scores_sha256": "f58e7e26bf5d421f1f0cf75990e2496d3e061a13cc9e1b8c5caf4e36db7db858",
+  "native_audit_sha256": "fbecbd30657e74d988a96cd3a4926414addb9bc6013301649cfe57168a4511ba",
+  "complete_sha256": "579b3579f4bf0a729aa0ab58895f18f0e462672c1c025f772ba42f60cec12aaa",
+  "decision": "fixed_baseline_signal_not_repeated_keep_A",
+  "episodes": 64,
+  "successes": 45,
+  "errors": 0,
+  "censored": 0,
+  "condition_equal_second_moment": {
+    "mean": 222.98791968012856,
+    "score_squared": 251.54723050962048,
+    "relative_change": 0.12807559651867972
+  },
+  "relative_change_ci95": [-0.16428164035799978, 0.463390932374617],
+  "numerical_note": "M01 strict zero guard is triggered only by 2.27e-30 roundoff; ignoring it does not change the aggregate or M00 failure.",
+  "no_refit": true,
+  "no_training": true,
+  "no_ttf": true,
+  "no_promotion": true,
+  "backups": {
+    "ready": {
+      "path": "build/sa-terminal-control-variate-confirmation-ready-20261001.zip",
+      "sha256": "1fc95c964627671ed364bc69c0da028c32e6f4028ad674032a1b439fa46175a4"
+    },
+    "collected": {
+      "path": "build/sa-terminal-control-variate-confirmation-collected-20261001.zip",
+      "sha256": "cfa2936ceb12e3da0e0d00cfacbd78f67ceeb457709b30ff1a034d8b104b2bda"
+    },
+    "complete": {
+      "path": "build/sa-terminal-control-variate-confirmation-complete-20261001.zip",
+      "files": 269,
+      "bytes": 182950057,
+      "sha256": "c1e7bdd8425afaf75f4e306dbf8cf051c8dcdccd43a9905b703e978b63e9914e"
+    }
+  }
+}
