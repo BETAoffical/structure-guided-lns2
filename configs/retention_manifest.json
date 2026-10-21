@@ -18,6 +18,9 @@
     "pytest_pattern": "tests/**/test_*.py"
   },
   "entries": [
+    {"path":"experiments/sa_direct_confirmation.py","role":"active","purpose":"Frozen five-method paired schedule; default-deny timing adapter with separate authorization and qualification gates."},
+    {"path":"scripts/prepare_sa_direct_confirmation.py","role":"active","purpose":"Preparation-only fresh warehouse generation, frozen model copies and 360-job schedule; no timing CLI."},
+    {"path":"tests/evaluation/test_sa_direct_confirmation.py","role":"active","purpose":"Pure five-method Williams balance, paired task coverage and fail-closed execution/CLI guards."},
     {"path":"experiments/sa_expanded_timing.py","role":"active","purpose":"Four frozen policies on new maps using the existing deferred-audit timing engine."},
     {"path":"scripts/run_sa_expanded_ttf.py","role":"active","purpose":"Registered 72-condition new-map confirmation with serial timing, safe stop and endpoint matching provenance."},
     {"path":"tests/evaluation/test_sa_expanded_timing.py","role":"active","purpose":"Four-arm pairing, balanced schedule, unchanged worker dispatch and raw timing statistics."},
